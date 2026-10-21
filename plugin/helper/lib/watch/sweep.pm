@@ -21,6 +21,7 @@ use watch::io;
 use watch::json;
 use watch::rows;
 use watch::spec;
+use watch::hturn;
 
 our $RUN_BYTES = 5 << 20;
 our $MAX_LINE = 2 << 20;
@@ -72,9 +73,9 @@ sub _new_carry { return { line => 0, prompts => 0, b_seq => 0, rapid_run => 0, s
 sub scan_file {
     my ($ctx, $path, $state, $budget, $soft, $actor, $is_main, $outward) = @_;
     my %res = (file => _basename($path), actor => $actor, events => [], boundaries => [],
-               bad_lines => 0, oversize_lines => 0, partial => 0, restarted => 0,
+               bad_lines => 0, oversize_lines => 0, partial => 0, restarted => 0, handoff_turn => [],
                turns => { prompts => 0, tool_batches => 0, tool_calls => 0, classes => {}, errors => {},
-                          askq => { answered => 0, rejected => 0, timed_out => 0 }, plugin_origin_rows => 0, continues => 0, outward => {},
+                          askq => { answered => 0, rejected => 0, timed_out => 0 }, plugin_origin_rows => 0, continues => 0, handoff_turns => 0, outward => {},
                           nudges => 0, task_status => 0 });
     my @st = stat $path;
     unless (@st && -r _) { $res{unreadable} = 1; return \%res }
@@ -87,9 +88,10 @@ sub scan_file {
             $res{restarted} = 1;
             my $last = $state->{last_uuid};
             $skip_until = $last if defined $last && _file_has($path, $last);
-            my $seen = $carry->{seen_b};
+            my ($seen, $used) = ($carry->{seen_b}, $carry->{ht_used});
             $carry = _new_carry();
             $carry->{seen_b} = $seen if ref $seen eq 'ARRAY';
+            $carry->{ht_used} = $used if ref $used eq 'HASH';
         }
         $off = 0;
         $carry->{line} = 0;
@@ -266,7 +268,18 @@ sub _analyze {
     }
     return unless $is_main;
 
-    if ($k eq 'prompt' || $k eq 'continue' || $k eq 'plugin_prompt') {
+    # M-17 (DP-14): the plugin-submitted handoff turn is a plugin-origin `user` row like a
+    # continue; an open ht record (handoff-turn/<ht>.json, one submit per ht) makes it a
+    # `handoff_turn`. It is a turn, not a continue: no continue event, no A-19/A-27 input.
+    my $ht;
+    if ($k eq 'continue') {
+        $ht = watch::hturn::submit_for($ctx, $f->{ts}, $c->{ht_used} ||= {});
+        if ($ht) {
+            $c->{ht_used}{ $ht->{ht} } = 1;
+            $k = 'handoff_turn';
+        }
+    }
+    if ($k eq 'prompt' || $k eq 'continue' || $k eq 'handoff_turn' || $k eq 'plugin_prompt') {
         $c->{prompts}++;
         $t->{prompts}++;
         $c->{last_rel} = 'prompt';
@@ -282,6 +295,11 @@ sub _analyze {
         } else {
             $t->{plugin_origin_rows}++;
             $t->{continues}++ if $k eq q(continue);
+        }
+        if ($k eq 'handoff_turn') {
+            $t->{handoff_turns}++;
+            push @{ $res->{handoff_turn} }, { ht => $ht->{ht}, line => $line };
+            _ev($res, k => 'handoff_turn', line => $line, ts => $f->{ts}, uuid => $f->{uuid}, ht => $ht->{ht});
         }
         if ($k eq 'continue') {
             my $lb = $c->{last_main_b} || {};
@@ -440,6 +458,7 @@ sub rows_for {
                 to_off => $res->{to_off}, partial => watch::ctx::B($res->{partial}),
                 restarted => watch::ctx::B($res->{restarted}), bad_lines => $res->{bad_lines},
                 oversize_lines => $res->{oversize_lines});
+    $base{handoff_turn} = $res->{handoff_turn} if @{ $res->{handoff_turn} || [] };
     my @rows;
     my @cur;
     my $first = 1;

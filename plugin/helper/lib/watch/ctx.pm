@@ -49,6 +49,7 @@ my %DEFAULTS = (
     evidence_quota_mb           => 500,
     triggers                    => 'true',
     deny_class_patterns         => '',
+    handoff_turn                => 'halt',
 );
 
 my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));

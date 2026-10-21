@@ -18,6 +18,7 @@ use watch::cache;
 use watch::ctx;
 use watch::io;
 use watch::spec;
+use watch::hturn;
 
 my %OKV = map { $_ => 1 } qw(ok ok-trailer);
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
@@ -30,7 +31,9 @@ our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_e
                 copy_mismatch dispatch handoff_publish heal keyset_change order_anomaly postcompact
                 precompact precompute_or_failed resume_inject resume_receipt stop_failure sweep_partial
                 thrash trigger_disabled_small_window trigger_unknown triggers_off version_change
-                warn_quota watch_error);
+                warn_quota watch_error
+                handoff_export handoff_mode handoff_race handoff_skipped handoff_turn_open
+                handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched);
 my %KIND = map { $_ => 1 } @KINDS;
 our %MISSED;
 
@@ -480,6 +483,9 @@ sub _event_rules {
             my $healed = grep { ($_->{item} // '') eq $e->{stop_id} && ($_->{result} // '') =~ /\Aok/ } rows_of($S, 'heal');
             $R->(rule => 'A-20', severity => 'critical', id_parts => [$e->{win_uuid}, $e->{line}],
                  evidence => { line => $e->{line} }) unless $healed;
+        } elsif ($k eq 'handoff_turn') {
+            # M-17: the submit of this ht was swept; the Stop now running ends that turn or a later one.
+            $sess->{ht_seen}{ $e->{ht} } = 1 if defined $e->{ht};
         } elsif ($k eq 'continue') {
             my $pos;
             if (defined $e->{b_uuid}) {
@@ -488,6 +494,10 @@ sub _event_rules {
             if (defined $pos && $pos >= 1 && !$OKV{ $vh->[$pos][1] // '' } && !$OKV{ $vh->[$pos - 1][1] // '' }) {
                 $R->(rule => 'A-19', severity => 'critical', id_parts => ['halt', $e->{uuid} // $e->{line}],
                      evidence => { continue_after_halt_cond => \1, line => $e->{line} });
+            }
+            if ($max_cont == 0 && !rows_of($S, 'continue')) {
+                $R->(rule => 'A-19', severity => 'critical', id_parts => ['cap0', $e->{uuid} // $e->{line}],
+                     evidence => { cap => 0, line => $e->{line} });
             }
             if (defined $e->{b_uuid} && !$e->{b_nudged}) {
                 $R->(rule => 'A-27', severity => 'warn', id_parts => [$e->{uuid} // $e->{line}],
@@ -589,13 +599,34 @@ sub _session_rules {
         $R->(rule => 'A-17', severity => 'critical', id_parts => ['rejected', $rej[0]{ts}],
              evidence => { failed => 'rejected', count => scalar @rej });
     }
-    # A-18: auto-continue stopped by a halt with no handoff written that turn.
+    # A-18: auto-continue stopped by a halt with no handoff written that turn, or in the
+    # plugin-submitted handoff turn of the same ht (DP-14: in a last cycle the handoff is
+    # published in its own turn, after the nudged one). Nothing is raised while that outcome
+    # is open: the handoff turn is still to come (no ht yet, inside the grace period, and the
+    # mod has not said it skipped) or has not been seen finishing.
+    my $handoff_on = lc($ctx->{settings}{handoff_turn} // 'halt') ne 'off';
     for my $r (rows_of($S, 'continue')) {
         next unless ($r->{result} // '') =~ /\Ahalt:/;
         my $rt = _t($r) // next;
         my $from = defined $last_stop && $last_stop < $rt ? $last_stop : $rt - 3600;
+        my $ht = watch::hturn::opened_after($ctx, $rt);
         my $wrote = grep { ($_->{result} // '') =~ /\Awrote/ && defined _t($_) && _t($_) >= $from }
                     rows_of($S, 'handoff_publish');
+        $wrote ||= ($ht && $ht->{published}) ? 1 : 0;
+        $wrote ||= ($ht && grep { ($_->{result} // q()) =~ /\Awrote/ && ($_->{ht} // q()) eq $ht->{ht} } rows_of($S, q(handoff_publish))) ? 1 : 0;
+        unless ($wrote) {
+            my $settled;
+            if ($ht) {
+                $settled = $sess->{ht_seen}{ $ht->{ht} }
+                    || grep { ($_->{ht} // '') eq $ht->{ht} } rows_of($S, 'handoff_user_interjected'), rows_of($S, 'handoff_skipped');
+            } else {
+                $settled = !$handoff_on
+                    || ($ctx->{now} - $rt) >= $watch::hturn::OPEN_AFTER_ROW_S
+                    || grep { defined _t($_) && _t($_) >= $rt - $watch::hturn::SKEW_S && _t($_) <= $rt + $watch::hturn::OPEN_AFTER_ROW_S }
+                      rows_of($S, q(handoff_skipped));
+            }
+            next unless $settled;
+        }
         $R->(rule => 'A-18', severity => 'warn', id_parts => [$r->{ts}], evidence => { result => $r->{result} })
             unless $wrote;
     }
