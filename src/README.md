@@ -12,14 +12,14 @@ When a Claude Code session compacts, {{plugin}} asks Claude Code's own summarize
 - **Keeps a copy of every summary.** Each copy is written once, read-only, with frontmatter taken from the plugin's own records (session, branch, commit, trigger, verdict), never from the summary text.
 - **Checks the result.** A one-time marker at the top of the summary and a sentinel at the end show whether the summary is complete and in handoff form. The result is one verdict per compaction.
 - **Delivers the resume block once.** After a compaction, the next turn gets one short block: the saved copy's path, a fresh git and project-state measurement, and a fallback note when the summary is not in handoff form.
-- **Copies evidence.** Temp files that the session cited are copied to a dated disposable folder, with caps and secret checks, so they outlive the compaction.
+- **Copies evidence.** Temp files that the session cited are copied to a dated disposable folder, with caps and secret checks, so nothing the next window needs lives only in a temp folder.
 - **Watches, never acts.** A shadow watcher writes content-free rows for every compaction, nudge, continue and resume, and raises alerts in `/{{plugin}}:status`.
 
 ## How it works
 
 ```mermaid
 flowchart TD
-  A["Compaction starts<br/>native auto, /compact, or the plugin at a turn end"] --> B["Mod hook on session.compact<br/>appends the handoff instructions<br/>with a one-time marker and records it"]
+  A["Compaction starts<br/>native auto, /compact, or the plugin at a turn end"] --> B["Mod adds the handoff instructions<br/>session.compact hook, or its own compact call<br/>with a one-time marker, recorded first"]
   A -.->|mod hook held by policy| C
   B --> C{"Classic PreCompact hook:<br/>our marker with a record?"}
   C -- yes --> D["prints nothing"]
@@ -31,7 +31,7 @@ flowchart TD
 ```
 
 1. **Trigger.** Claude Code compacts on its own, you run `/compact`, or the plugin compacts at a clean turn end once the context passes `compact_target_tokens`.
-2. **Shaping by the mod.** The plugin's module (a Claude Code mod) appends the handoff instructions to the compaction request. They carry a marker with a fresh nonce, and the plugin records that nonce before the summarizer runs.
+2. **Shaping by the mod.** The plugin's module (a Claude Code mod) appends the handoff instructions to the compaction request; for the compactions it starts itself, it passes them in its own compact call, because Claude Code skips the caller's hook for those. They carry a marker with a fresh nonce, and the plugin records that nonce before the summarizer runs.
 3. **Classic fallback.** A classic `PreCompact` command hook runs on every compaction. If it finds the marker and its record, it stays silent. Otherwise it prints the same instructions with its own nonce, so the summary is shaped even when the mod's hook did not run.
 4. **Summary.** Claude Code's own summarizer writes the summary. The plugin never edits a summary and never blocks a compaction.
 5. **Copy and verdict.** The `PostCompact` hook saves the copy first; the mod saves it only if that did not happen. Both use the same file name, so there is one copy. The marker and sentinel give the verdict: `ok`, `ok-trailer`, `truncated`, `unshaped`, `scope-leak` or `stale`.
@@ -40,7 +40,7 @@ flowchart TD
 ## Requirements
 
 - Claude Code **2.1.287** or newer (mods). The one-line install below needs **2.1.292** or newer. This version was tested against **2.1.306**; the `PermissionDenied` and `StopFailure` hooks are not yet checked on older versions.
-- **Perl 5.28** or newer, using only modules that ship with every perl. It is already on macOS, on Debian and Ubuntu (slim images too), and on Windows with Git for Windows. On Alpine, run `apk add perl` first.
+- **Perl 5.28** or newer, using only modules that ship with every perl. It is already on macOS, on Debian and Ubuntu (slim images too), and on Windows with Git for Windows. On Alpine, run `apk add perl` first; on a minimal Fedora image, `dnf install perl-interpreter`.
 - `git` for the git measurements. On a Mac without the Command Line Tools, the plugin skips git rather than open the install dialog.
 - Claude Code in a terminal, or a local session of the desktop app. claude.ai and Cowork do not install plugins that contain a `bin/` folder, and this plugin's helper lives in `bin/`.
 
@@ -91,7 +91,7 @@ Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evid
 | Skill | Use it for |
 |---|---|
 | `/{{plugin}}:handoff [ticket-or-topic] [note]` | Write a handoff file that a fresh session can resume from: before `/clear`, before a break, or when the session is getting long. The model writes intent, decisions, findings and next steps; the helper measures git state, background work and evidence, lints the draft, scans it for secrets and publishes it. |
-| `/{{plugin}}:resume [path or ticket] [instructions]` | Resume from a handoff or a saved compaction copy. It finds the newest fitting file, checks its claims against the live state, reports drift and restarts background work only where the handoff allows it, then continues with the next step. Right after a compaction it takes a light path of at most three checks. |
+| `/{{plugin}}:resume [path or ticket] [instructions]` | Resume from a handoff or a saved compaction copy. It finds the newest fitting file, checks its claims against the live state, reports drift and restarts background work only where the handoff allows it, then continues with the next step. Right after a compaction, when you have not invoked it yourself, the model follows a light path instead: at most three tool calls before real work. |
 | `/{{plugin}}:status` | Show effective thresholds, the last five compactions (trigger, verdict, copy path, how they were shaped), open escalations and alerts, auto-continue and halt state. It shows no summary content. |
 
 The handoff and the compaction instructions share one format, so `/{{plugin}}:resume` reads both.
@@ -150,8 +150,8 @@ Every clamped value is logged, and `/{{plugin}}:status` marks it.
 
 | Where (defaults) | What | Written by |
 |---|---|---|
-| `~/.claude/handoffs/<repo>/<bucket>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
-| `~/.claude/handoffs/<repo>/<bucket>/` | Handoff files, with their judged evidence under `evidence/<stem>/` and refused drafts under `.staging/` | `/{{plugin}}:handoff` |
+| `~/.claude/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
+| `~/.claude/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/` and refused drafts under `.staging/` | `/{{plugin}}:handoff` |
 | `~/.claude/handoffs/.sessions/` | Session pins, `/clear` lineage, and one small record per session start and end | hooks and skills |
 | `~/.claude/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |
 | `~/.claude/trash-staging/<YYYY-MM-DD>/` | Automatic evidence copies, one folder per compaction, each with a `MANIFEST.tsv`; disposable items of a handoff | evidence sweep after a compaction; `/{{plugin}}:handoff` |
@@ -161,7 +161,7 @@ It registers one mod module and eight classic command hooks: `PreCompact`, `Post
 
 Files are private (folders 0700, files 0600, copies 0400). The plugin refuses to write copies or evidence into a git work tree (unless that path is git-ignored, which it then logs) or into a `.planning/` folder.
 
-**Cleanup is manual.** The plugin deletes nothing: not copies, not evidence, not logs. Remove what you no longer need, for example old dated folders under `disposable_root`. To see them first:
+**Cleanup is manual.** The plugin deletes nothing on its own: not copies, not evidence, not logs. Remove what you no longer need, for example old dated folders under `disposable_root`. To see them first:
 
 ```
 ls -ld ~/.claude/trash-staging/*/
@@ -173,7 +173,7 @@ With `watcher: shadow` (the default) the plugin keeps a local record of how comp
 
 | File | Holds |
 |---|---|
-| `<session>.jsonl` | Mod events: dispatches, compactions started, nudges, continues, halts, resume deliveries, settings in effect |
+| `<session>.jsonl` | Mod events: dispatches, compaction results, nudges, continues, halts, resume deliveries, settings in effect |
 | `<session>.classic.jsonl` | Hook and helper events: shaped or fallback, copy results, verdicts, evidence counts, sweep counts, permission denials (tool name and class only) |
 | `<session>.alerts.jsonl` | Alerts raised for this session |
 | `<session>/compactions.jsonl` | One summary row per compaction |
@@ -182,11 +182,11 @@ With `watcher: shadow` (the default) the plugin keeps a local record of how comp
 | `<session>/pending/` | The raw summary text handed between hooks so the copy can be written |
 | `evidence-index.tsv`, `heal/`, `version.json` | Evidence dedupe index, restart counters of the resume skill, last seen Claude Code version |
 
-Rows hold ids, counts, sizes, times, classes and rule ids. The files under `pending/` and the copies under `compact/` hold summary text; treat them like the summaries themselves.
+Rows hold ids, counts, sizes, times, classes and rule ids. The files under `pending/` and the copies under `compact/` hold summary text, and the files under `checkpoint/` hold the measured git file list and project-state lines; treat them like the summaries themselves.
 
 Alerts are listed in `/{{plugin}}:status` with their seven-day counts. In this version they are not shown in the chat.
 
-**Retention.** Nothing under `.watch/` is pruned automatically. `{{plugin}}-store watch prune --days 30` removes the watcher's own per-session files older than 30 days when you run it. `watcher: off` stops new watcher rows; the records the copies, resume and status need are still written.
+**Retention.** Nothing under `.watch/` is pruned automatically. Running `! {{plugin}}-store watch prune --days 30` in a session removes the watcher's own per-session files older than 30 days. `watcher: off` stops new watcher rows; the records the copies, resume and status need are still written.
 
 ## Privacy
 
@@ -207,19 +207,19 @@ Some managed setups hold plugin hooks on compaction and prompt context for user-
 | Plugin compactions, nudge, auto-continue | yes | yes |
 | Resume block | prompt context | `SessionStart`, else the continue text |
 | Summary copy | `PostCompact`, mod as backup | `PostCompact`, mod as backup for its own compactions |
-| Evidence before a compaction | at every main compaction | only before the plugin's own; other compactions get the sweep right after |
+| Evidence before a compaction | before each main manual, auto or plugin compaction | only before the plugin's own; other compactions get the sweep right after |
 | Measured facts to the summarizer | when `measured_block` is on | only on the plugin's own compactions |
 
 `/{{plugin}}:status` shows how each compaction was shaped and the policy flags it read at session start.
 
-If a policy stops the mod from loading at all, the classic hooks still shape, save and resume, but plugin compactions, the nudge and auto-continue stop. If a policy also allows only managed hooks, the classic hooks do not run. With the mod hook held as well, a turn-end compaction without auto-continue then has no channel for its resume block, and `/{{plugin}}:status` reports it as undelivered.
+If a policy stops the mod from loading at all, the classic hooks still shape, save and resume, but plugin compactions, the nudge and auto-continue stop. If a policy allows only managed hooks, the classic hooks do not run. When the mod hook is held as well, a turn-end compaction without auto-continue has no channel left for its resume block, and `/{{plugin}}:status` reports it as undelivered.
 
 The managed-machine path is built and tested offline. It has not yet been run on a managed machine.
 
 ## Limits
 
 - **claude.ai and Cowork** do not install plugins with a `bin/` folder, so the plugin is for Claude Code sessions on your own machine.
-- **No usable perl** (Alpine without `apk add perl`, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/{{plugin}}:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
+- **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/{{plugin}}:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
 - **Subagents** get shaped summaries and copies, but no resume block.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
 - **Not yet run live:** the end-to-end runs in a real session, on a managed machine, and the week-long shadow run.
