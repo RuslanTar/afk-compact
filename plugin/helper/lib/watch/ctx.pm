@@ -199,7 +199,13 @@ sub write_row {
 
 sub log_row {
     my ($ctx, $ev, $fields, %o) = @_;
-    return write_row($ctx, $o{file} || classic_log($ctx), row($ctx, $ev, $fields, %o));
+    my $path = $o{file} || classic_log($ctx);
+    my $r = row($ctx, $ev, $fields, %o);
+    return 1 if write_row($ctx, $path, $r);
+    # A row that could not be written (too large, unwritable) leaves a trace.
+    my $class = length(watch::json::encode($r)) + 1 > $watch::io::MAX_ROW ? 'row-too-large' : 'write-failed';
+    write_row($ctx, classic_log($ctx), row($ctx, 'watch_error', { stage => $ev, error_class => $class })) if $ev ne 'watch_error';
+    return 0;
 }
 
 # One content-free error row: stage and class only.
