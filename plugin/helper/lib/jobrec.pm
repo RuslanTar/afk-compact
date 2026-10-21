@@ -74,7 +74,7 @@ sub caller_ok {
 }
 
 # cwd_slug(path) -> the project folder name Claude Code uses: every character that is not
-# a letter or a digit becomes '-' (/Users/a/.claude -> -Users-a--claude)
+# a letter or a digit becomes '-' (/srv/a/.claude -> -srv-a--claude)
 sub cwd_slug { my ($p) = @_; (my $s = $p // '') =~ s/[^A-Za-z0-9]/-/g; return $s }
 
 # Candidate readers (P-D1-6). Each returns an absolute path or undef.
