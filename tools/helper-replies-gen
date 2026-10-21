@@ -24,6 +24,10 @@ SID = "5e55a001-0c0f-4f1e-9a00-00000000a001"
 NONCE = "1a2b3c4d"
 NOW = "2026-10-21T14:05:12+03:00"
 CLAUDE_PID = "424242:Tue Oct 21 09:00:00 2026"
+# D-18 handoff-turn ids (8 lowercase hex): open/supersede/superseded, none, staged with a draft,
+# staged with no safe finish command, published, and one never opened.
+HT_OPEN, HT_NONE, HT_DRAFT, HT_NOFINISH, HT_PUBLISHED, HT_UNKNOWN = (
+    "0a0b0c01", "0a0b0c02", "0a0b0c03", "0a0b0c04", "0a0b0c05", "0a0b0c09")
 
 
 def brand():
@@ -37,6 +41,24 @@ def summary(name):
             "## Resume here\nStatus: active\n⟪/{0} n={1}⟫\n</summary>\n").format(name, NONCE)
 
 
+def ht_setup(tmp, home):
+    """Files `begin` and `publish` (WP-skills) write for a bound ht, written here directly so the
+    recorded `handoff-state` replies cover every form (core lib/handoff_turn.pm)."""
+    root = os.path.join(home, ".claude", "handoffs")
+    d = os.path.join(root, ".watch", SID, "handoff-turn")
+    bucket = os.path.join(root, "repo", "LAB-42")
+    stages = {HT_DRAFT: os.path.join(bucket, ".staging", "5e55a001-0a0b0c03"),
+              HT_NOFINISH: os.path.join(bucket, ".staging", "it's-0a0b0c04")}
+    for ht, st in stages.items():
+        os.makedirs(st)
+        with open(os.path.join(st, "body.md"), "w", encoding="utf-8") as f:
+            f.write("# LAB-42 retry\n" if ht == HT_DRAFT else "")
+        with open(os.path.join(d, ht + ".stage"), "w", encoding="utf-8") as f:
+            f.write(st + "\n")
+    with open(os.path.join(d, HT_PUBLISHED + ".published"), "w", encoding="utf-8") as f:
+        f.write(os.path.join(bucket, "2026-10-21_14-05-12_5e55a001_retry.md") + "\n")
+
+
 def calls(tmp):
     row = json.dumps({"v": 1, "ev": "nudge", "sid": SID, "actor": "main", "writer": "mod"}, separators=(",", ":"))
     prow = json.dumps({"v": 1, "ev": "temp_path", "path": "$TMP/out.log"}, separators=(",", ":"))
@@ -44,6 +66,11 @@ def calls(tmp):
             "--channel", "mod-hook", "--resume-pref", "prompt.context", "--tags", "midturn",
             "--midturn", "true", "--instr-sha8", "9f2c01ab", "--instr-bytes", "3994",
             "--cc-version", "2.1.306", "--load-id", "l0ad0001"]
+    hto = lambda ht: ["handoff-turn", "open", "--sid", SID, "--ht", ht, "--reason", "cap", "--max-calls", "34",
+                      "--max-tokens", "64000"]
+    hts = lambda ht: ["handoff-state", "--sid", SID, "--ht", ht]
+    job = json.dumps({"kind": "job", "task_id": "b1x2y3", "command": "rg -n retry src", "cwd": "$TMP/work",
+                      "is_read_only": True, "backgrounded": "flag"}, separators=(",", ":"))
     save = ["save-copy", "--sid", SID, "--nonce", NONCE, "--from", tmp + "/summary.txt", "--writer", "mod",
             "--scope", "main", "--tokens", "612345,41000"]
     return [
@@ -61,6 +88,22 @@ def calls(tmp):
         ("measure", ["measure", "--sid", SID, "--compact"]),
         ("log", ["log", "--sid", SID, "--json", row]),
         ("log-paths", ["log", "--sid", SID, "--stream", "paths", "--json", prow]),
+        # D-18 B8 and Dev-1 D1 (needs/mod-to-build.md §1)
+        ("handoff-turn-open", hto(HT_OPEN)),
+        ("handoff-turn-open-exists", hto(HT_OPEN)),
+        ("handoff-turn-supersede", ["handoff-turn", "supersede", "--sid", SID, "--ht", HT_OPEN, "--nonce", NONCE]),
+        ("handoff-turn-supersede-exists", ["handoff-turn", "supersede", "--sid", SID, "--ht", HT_OPEN, "--nonce", NONCE]),
+        ("handoff-turn-supersede-no-ht", ["handoff-turn", "supersede", "--sid", SID, "--ht", HT_UNKNOWN, "--nonce", NONCE]),
+        (None, hto(HT_DRAFT)),
+        (None, hto(HT_NOFINISH)),
+        (None, ht_setup),
+        ("handoff-state-none", hts(HT_NONE)),
+        ("handoff-state-staged", hts(HT_DRAFT)),
+        ("handoff-state-staged-no-finish", hts(HT_NOFINISH)),
+        ("handoff-state-published", hts(HT_PUBLISHED)),
+        ("handoff-state-superseded", hts(HT_OPEN)),
+        ("log-jobs-caller", ["log", "--sid", SID, "--stream", "jobs", "--stdin"], job + "\n"),
+        ("dispatch-handoff-ht", [a if a != NONCE else "2b3c4d5e" for a in disp] + ["--handoff-ht", HT_OPEN]),
     ]
 
 
@@ -89,8 +132,15 @@ def record():
         env = {"HOME": home, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TZ": "Etc/GMT-3", "TMPDIR": tmp,
                "STORE_TEST_MODE": "1", "STORE_TEST_NOW": NOW, "STORE_TEST_CLAUDE_PID": CLAUDE_PID}
         rows = []
-        for label, argv in calls(tmp):
-            r = subprocess.run([launcher] + argv, cwd=work, env=env, capture_output=True, timeout=60)
+        for label, argv, *stdin in calls(tmp):
+            if callable(argv):
+                argv(tmp, home)
+                continue
+            data = stdin[0].replace("$TMP", tmp).encode("utf-8") if stdin else None
+            r = subprocess.run([launcher] + argv, cwd=work, env=env, capture_output=True, timeout=60,
+                               input=data, stdin=None if stdin else subprocess.DEVNULL)
+            if label is None:   # a set-up call, not recorded
+                continue
             out = r.stdout.decode("utf-8", "replace")
             if label == "checkpoint" and r.returncode == 0:
                 # step timings vary per run; zero them so the module is reproducible
@@ -100,8 +150,12 @@ def record():
             rows.append({"name": label, "argv": [portable(a, tmp, home, name) for a in argv],
                          "exitCode": r.returncode, "stdout": portable(out, tmp, home, name)})
         inputs = {"$TMP/summary.txt": text.split(name)}
+        stdins = {lab: s[0].split(name) for lab, _a, *s in calls(tmp) if s and lab}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    for r in rows:
+        if r["name"] in stdins:
+            r["stdin"] = stdins[r["name"]]
     return render(rows, inputs)
 
 
@@ -110,7 +164,7 @@ def render(rows, inputs):
             "// Strings are kept in parts split at the plugin name: join the parts with a name.\n"
             "// $TMP stands for the run's temp dir and ~ for its HOME.\n\n"
             "export type RecordedReply = { name: string; argv: readonly (readonly string[])[]; exitCode: number;"
-            " stdout: readonly string[] }\n\n"
+            " stdout: readonly string[]; stdin?: readonly string[] }\n\n"
             "export const REPLY_SID = " + json.dumps(SID) + "\n"
             "export const REPLY_NONCE = " + json.dumps(NONCE) + "\n\n"
             "/** Files the calls read, by recorded path (parts split at the name). */\n"

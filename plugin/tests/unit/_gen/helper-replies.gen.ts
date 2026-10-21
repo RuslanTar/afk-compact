@@ -2,7 +2,7 @@
 // Strings are kept in parts split at the plugin name: join the parts with a name.
 // $TMP stands for the run's temp dir and ~ for its HOME.
 
-export type RecordedReply = { name: string; argv: readonly (readonly string[])[]; exitCode: number; stdout: readonly string[] }
+export type RecordedReply = { name: string; argv: readonly (readonly string[])[]; exitCode: number; stdout: readonly string[]; stdin?: readonly string[] }
 
 export const REPLY_SID = "5e55a001-0c0f-4f1e-9a00-00000000a001"
 export const REPLY_NONCE = "1a2b3c4d"
@@ -534,6 +534,436 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   "exitCode": 0,
   "stdout": [
    ""
+  ]
+ },
+ {
+  "name": "handoff-turn-open",
+  "argv": [
+   [
+    "handoff-turn"
+   ],
+   [
+    "open"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c01"
+   ],
+   [
+    "--reason"
+   ],
+   [
+    "cap"
+   ],
+   [
+    "--max-calls"
+   ],
+   [
+    "34"
+   ],
+   [
+    "--max-tokens"
+   ],
+   [
+    "64000"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "ok\n"
+  ]
+ },
+ {
+  "name": "handoff-turn-open-exists",
+  "argv": [
+   [
+    "handoff-turn"
+   ],
+   [
+    "open"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c01"
+   ],
+   [
+    "--reason"
+   ],
+   [
+    "cap"
+   ],
+   [
+    "--max-calls"
+   ],
+   [
+    "34"
+   ],
+   [
+    "--max-tokens"
+   ],
+   [
+    "64000"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "EXISTS\n"
+  ]
+ },
+ {
+  "name": "handoff-turn-supersede",
+  "argv": [
+   [
+    "handoff-turn"
+   ],
+   [
+    "supersede"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c01"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "1a2b3c4d"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "ok\n"
+  ]
+ },
+ {
+  "name": "handoff-turn-supersede-exists",
+  "argv": [
+   [
+    "handoff-turn"
+   ],
+   [
+    "supersede"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c01"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "1a2b3c4d"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "EXISTS\n"
+  ]
+ },
+ {
+  "name": "handoff-turn-supersede-no-ht",
+  "argv": [
+   [
+    "handoff-turn"
+   ],
+   [
+    "supersede"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c09"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "1a2b3c4d"
+   ]
+  ],
+  "exitCode": 3,
+  "stdout": [
+   "REFUSED: no-ht\n"
+  ]
+ },
+ {
+  "name": "handoff-state-none",
+  "argv": [
+   [
+    "handoff-state"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c02"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "none\n"
+  ]
+ },
+ {
+  "name": "handoff-state-staged",
+  "argv": [
+   [
+    "handoff-state"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c03"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "staged ~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=",
+   "-store publish --stage '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
+  ]
+ },
+ {
+  "name": "handoff-state-staged-no-finish",
+  "argv": [
+   [
+    "handoff-state"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c04"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "staged ~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04 draft=0 finish=none\n"
+  ]
+ },
+ {
+  "name": "handoff-state-published",
+  "argv": [
+   [
+    "handoff-state"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c05"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "published ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
+  ]
+ },
+ {
+  "name": "handoff-state-superseded",
+  "argv": [
+   [
+    "handoff-state"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c01"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "superseded 1a2b3c4d\n"
+  ]
+ },
+ {
+  "name": "log-jobs-caller",
+  "argv": [
+   [
+    "log"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--stream"
+   ],
+   [
+    "jobs"
+   ],
+   [
+    "--stdin"
+   ]
+  ],
+  "exitCode": 3,
+  "stdout": [
+   "REFUSED: jobs-caller\n"
+  ],
+  "stdin": [
+   "{\"kind\":\"job\",\"task_id\":\"b1x2y3\",\"command\":\"rg -n retry src\",\"cwd\":\"$TMP/work\",\"is_read_only\":true,\"backgrounded\":\"flag\"}\n"
+  ]
+ },
+ {
+  "name": "dispatch-handoff-ht",
+  "argv": [
+   [
+    "dispatch"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "2b3c4d5e"
+   ],
+   [
+    "--actor"
+   ],
+   [
+    "main"
+   ],
+   [
+    "--trigger"
+   ],
+   [
+    "auto"
+   ],
+   [
+    "--channel"
+   ],
+   [
+    "mod-hook"
+   ],
+   [
+    "--resume-pref"
+   ],
+   [
+    "prompt.context"
+   ],
+   [
+    "--tags"
+   ],
+   [
+    "midturn"
+   ],
+   [
+    "--midturn"
+   ],
+   [
+    "true"
+   ],
+   [
+    "--instr-sha8"
+   ],
+   [
+    "9f2c01ab"
+   ],
+   [
+    "--instr-bytes"
+   ],
+   [
+    "3994"
+   ],
+   [
+    "--cc-version"
+   ],
+   [
+    "2.1.306"
+   ],
+   [
+    "--load-id"
+   ],
+   [
+    "l0ad0001"
+   ],
+   [
+    "--handoff-ht"
+   ],
+   [
+    "0a0b0c01"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "ok\n"
   ]
  }
 ]
