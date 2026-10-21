@@ -4,7 +4,7 @@
 Port of the design-phase assembler (compaction DESIGN-NOTES §2 grammar, HK-39 / AT-P-07
 budgets, SIZE-CHECK worst cases), reading src/assets/.
 
-Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--goldens]
+Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--goldens | --check]
   --name      plugin name filled into {{plugin}} (default: brand.json name)
   --path-len  length of the worst-case previous-copy path (default 141)
   --dir       asset folder (default src/assets)
@@ -12,6 +12,8 @@ Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--goldens]
               tag combination, with the runtime values of tests/fixtures/assembly/runtime.json
               when that file exists (else the worst-case values below), and the same
               texts as plugin/tests/unit/_gen/goldens.gen.ts for the U half of BT-04
+  --check     compare those files with a fresh render instead of writing them, byte for byte
+              (CRLF drift and stray .txt files count; BUILD-PLAN §4 X-gen, BH-5)
 
 Build step: strip <!-- ... --> comments, fill {{plugin}}. Runtime: fill @tokens@ with
 worst-case values. A line starting "[tag] " is kept (tag stripped) only when the tag is
@@ -48,6 +50,12 @@ for flag in ("--name", "--path-len", "--dir"):
 if "--goldens" in args:
     GOLDENS = True
     args.remove("--goldens")
+CHECK = False
+if "--check" in args:
+    CHECK = True
+    args.remove("--check")
+if GOLDENS and CHECK:
+    sys.exit("assemble: --goldens and --check exclude each other")
 if args:
     sys.exit("assemble: unknown arguments {}\n{}".format(args, __doc__))
 
@@ -189,61 +197,86 @@ def heading_checks():
     return bad
 
 
-def write_goldens():
+GOLDENS_MODULE = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "goldens.gen.ts")
+
+
+def render_goldens():
+    """{absolute path: text} for every golden .txt and for goldens.gen.ts (nothing written)."""
     runtime = dict(RUNTIME)
     if os.path.exists(RUNTIME_JSON):
         with open(RUNTIME_JSON, encoding="utf-8") as f:
             runtime.update(json.load(f))
     saved = dict(RUNTIME)
     RUNTIME.update(runtime)
-    os.makedirs(GOLDEN_DIR, exist_ok=True)
-    written = set()
+    out = {}
+    rows = []
     try:
         for asset, fname in FILES.items():
             stem = fname[:-4]
             for tags in combos(asset):
-                out = "{}__{}.txt".format(stem, "+".join(tags) or "base")
-                with open(os.path.join(GOLDEN_DIR, out), "w", encoding="utf-8", newline="\n") as f:
-                    f.write(assemble(TEXT[asset], tags))
-                written.add(out)
+                text = assemble(TEXT[asset], tags)
+                out[os.path.join(GOLDEN_DIR, "{}__{}.txt".format(stem, "+".join(tags) or "base"))] = text
+                rows.append({"asset": stem, "tags": tags, "parts": text.split(NAME)})
     finally:
         RUNTIME.clear()
         RUNTIME.update(saved)
+    out[GOLDENS_MODULE] = goldens_module(runtime, rows)
+    return out
+
+
+def write_goldens():
+    files = render_goldens()
+    os.makedirs(GOLDEN_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(GOLDENS_MODULE), exist_ok=True)
+    for path, text in files.items():
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
     for f in os.listdir(GOLDEN_DIR):
-        if f.endswith(".txt") and f not in written:
+        if f.endswith(".txt") and os.path.join(GOLDEN_DIR, f) not in files:
             os.unlink(os.path.join(GOLDEN_DIR, f))
-    print("goldens: {} files in {}".format(len(written), os.path.relpath(GOLDEN_DIR, REPO)))
-    write_goldens_module(runtime)
+    print("goldens: {} files in {}".format(len(files) - 1, os.path.relpath(GOLDEN_DIR, REPO)))
+    print("goldens module: {} goldens in {}".format(len(files) - 1, os.path.relpath(GOLDENS_MODULE, REPO)))
 
 
-def write_goldens_module(runtime):
+def check_goldens():
+    """True when a golden or goldens.gen.ts differs from a fresh render (bytes), is missing,
+    or a .txt in expected/ is no golden's."""
+    files = render_goldens()
+    bad = False
+    for path, text in sorted(files.items()):
+        rel = os.path.relpath(path, REPO)
+        if not os.path.isfile(path):
+            print("missing " + rel)
+            bad = True
+            continue
+        with open(path, "rb") as f:
+            if f.read() != text.encode("utf-8"):
+                print("differs " + rel)
+                bad = True
+    if os.path.isdir(GOLDEN_DIR):
+        for f in sorted(os.listdir(GOLDEN_DIR)):
+            if f.endswith(".txt") and os.path.join(GOLDEN_DIR, f) not in files:
+                print("stale " + os.path.relpath(os.path.join(GOLDEN_DIR, f), REPO))
+                bad = True
+    print("GOLDENS CHECK: " + ("FAIL (run tools/assemble --goldens)" if bad else "PASS ({} files)".format(len(files))))
+    return bad
+
+
+def goldens_module(runtime, rows):
     """plugin/tests/unit/_gen/goldens.gen.ts: the goldens for the TS half of BT-04 (the kit has no fs).
 
     Each golden is kept in parts split at the plugin name it was rendered with, so the module
     holds no name (the rename drill copies _gen unchanged) and a test joins the parts with the
     name it assembles for. ASCII escapes keep marker shapes out of the plain text of plugin/.
     """
-    rows = []
-    for asset, fname in FILES.items():
-        stem = fname[:-4]
-        for tags in combos(asset):
-            path = os.path.join(GOLDEN_DIR, "{}__{}.txt".format(stem, "+".join(tags) or "base"))
-            with open(path, encoding="utf-8", newline="") as f:
-                text = f.read()
-            rows.append({"asset": stem, "tags": tags, "parts": text.split(NAME)})
     rt = {k: v for k, v in sorted(runtime.items())}
-    out = ("// GEN by tools/assemble --goldens from tests/fixtures/assembly (runtime.json, expected/).\n"
-           "// Do not edit; edit the assets or runtime.json and run tools/assemble --goldens.\n"
-           "// Each golden is split at the plugin name it was rendered with: join the parts with a name.\n\n"
-           "export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = "
-           + json.dumps(rt, ensure_ascii=True, indent=1) + "\n\n"
-           "export type Golden = { asset: string; tags: readonly string[]; parts: readonly string[] }\n\n"
-           "export const GOLDENS: readonly Golden[] = " + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
-    dest = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "goldens.gen.ts")
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    with open(dest, "w", encoding="utf-8", newline="\n") as f:
-        f.write(out)
-    print("goldens module: {} goldens in {}".format(len(rows), os.path.relpath(dest, REPO)))
+    return ("// GEN by tools/assemble --goldens from tests/fixtures/assembly (runtime.json, expected/).\n"
+            "// Do not edit; edit the assets or runtime.json and run tools/assemble --goldens.\n"
+            "// Each golden is split at the plugin name it was rendered with: join the parts with a name.\n\n"
+            "export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = "
+            + json.dumps(rt, ensure_ascii=True, indent=1) + "\n\n"
+            "export type Golden = { asset: string; tags: readonly string[]; parts: readonly string[] }\n\n"
+            "export const GOLDENS: readonly Golden[] = " + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
 
 
 BLOCK = "x" * 3000  # worst-case measured block (header + facts <= 3,000 B)
@@ -279,5 +312,7 @@ bad |= step_checks()
 bad |= heading_checks()
 if GOLDENS:
     write_goldens()
+if CHECK:
+    bad |= check_goldens()
 print("RESULT:", "FAIL" if bad else "PASS")
 sys.exit(1 if bad else 0)
