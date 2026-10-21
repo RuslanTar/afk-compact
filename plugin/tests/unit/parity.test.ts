@@ -35,7 +35,7 @@ describe('BT-04 TS assembler vs the goldens', () => {
 
 describe('AT-C-03 TS detector vs expected.tsv', () => {
   test('every corpus file gives the expected tuple', () => {
-    expect(CORPUS.length).toBe(40)
+    expect(CORPUS.length).toBe(41)
     for (const c of CORPUS) {
       const ctx: DetectContext = {}
       if (c.dispatch === 'none') ctx.noDispatch = true
