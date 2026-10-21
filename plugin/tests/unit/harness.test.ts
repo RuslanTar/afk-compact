@@ -3,7 +3,7 @@
 // test hooks answer every `$` call the mod makes, and a fake helper answers `$.process.run`
 // by subcommand, with the stdout forms of BUILD-PLAN §3.1. Synthetic values only.
 import type { On, SessionCompactResult, SessionMessage } from 'claude-code'
-import type { MockClock } from 'claude-code/testing'
+import type { Engine, MockClock } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 import { detectSummary } from '../../hooks/lib/detect'
 
@@ -101,7 +101,35 @@ export class World {
     on('turn.start', (_$, e) => ({ turnId: e.turnId }))
     on('turn.complete', () => ({ text: '' }))
     on('prompt.context', (_$, e) => ({ blocks: e.blocks }))
+    on('tool.call', (_$, e) => this.toolAnswer(String(e.tool)) as never)
     return this
+  }
+
+  /** How the bottom answers a tool call (a promise holds the call open). */
+  toolAnswer: (tool: string) => unknown = () => ({ result: {} })
+
+  // ---- driving the session as the engine would
+
+  async start($: Engine): Promise<void> {
+    await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  }
+
+  private turnNo = 0
+
+  /** A main turn starts (a user prompt, or our own continue when `text` says so). */
+  async turnStart($: Engine, text = 'next step please'): Promise<void> {
+    this.turnNo++
+    await $.turn.start({ text, turnId: 't' + String(this.turnNo) })
+  }
+
+  async turnEnd($: Engine, answer = 'Done with that step.', reason: 'answer' | 'aborted' = 'answer'): Promise<void> {
+    await $.turn.complete({ answer, durationMs: 1000, isAborted: reason === 'aborted', turnId: 't' + String(this.turnNo), reason })
+  }
+
+  /** One main tool call; returns its result as the model would read it. */
+  async tool($: Engine, agentId?: string): Promise<{ context?: readonly string[]; deny?: string }> {
+    const e = { tool: 'Bash', command: 'ls', ...(agentId ? { agentId } : {}) }
+    return (await $.tool.call(e as never)) as { context?: readonly string[]; deny?: string }
   }
 
   /** The summary message a compliant (or not) summarizer would install for these instructions. */
