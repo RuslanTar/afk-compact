@@ -79,9 +79,29 @@ sub cap {
     return join("\n", @keep);
 }
 
-# Latest evidence rows of this session's newest checkpoint for a nonce, or none.
+our %SCAN_STATUS = (full => 'copied', redacted => 'redacted', excerpt => 'redacted', 'ref-only' => 'ref-only', withheld => 'withheld');
+
+# Rows of the sweep that claimed swept/<nonce6> for this nonce, from its MANIFEST.tsv.
+sub _sweep_rows {
+    my ($sid_dir, $nonce) = @_;
+    my $claim = util::read_file("$sid_dir/swept/" . substr($nonce, 0, 6)) // return undef;
+    my ($n, $dest) = $claim =~ /^([0-9a-f]{8})?\t([^\n]+)/ or return undef;
+    return undef unless defined $n && $n eq $nonce && -d $dest;
+    my $m = util::read_file("$dest/MANIFEST.tsv") // return [];
+    my @rows;
+    for my $l (split /\n/, $m) {
+        my ($copy, $origin, undef, undef, undef, undef, undef, $scan) = split /\t/, $l;
+        next unless defined $scan && $SCAN_STATUS{$scan} && $copy ne 'copy_path';
+        push @rows, { origin => $origin, copy => ($copy eq '-' ? undef : $copy), status => $SCAN_STATUS{$scan} };
+    }
+    return \@rows;
+}
+
+# Evidence rows of this compaction: its checkpoint, else its sweep (the after-step's or
+# PostCompact's); with no nonce, this session's newest checkpoint.
 sub _evidence_rows {
     my ($sid_dir, $nonce) = @_;
+    if ($nonce && !-f "$sid_dir/checkpoint/$nonce.json") { return _sweep_rows($sid_dir, $nonce) // [] }
     my @files = $nonce ? ("$sid_dir/checkpoint/$nonce.json") : map { "$sid_dir/checkpoint/$_" }
                 reverse sort { (stat "$sid_dir/checkpoint/$a")[9] <=> (stat "$sid_dir/checkpoint/$b")[9] }
                 grep { /\.json$/ } util::list_dir("$sid_dir/checkpoint");
