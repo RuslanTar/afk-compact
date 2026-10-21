@@ -252,7 +252,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "refused_re": "^REFUSED: .+$"
   },
   "secret_rules": [
-    {"id": "pem", "class": "HARD", "re": "-----BEGIN [A-Z0-9 ]+-----"},
+    {"id": "pem", "class": "HARD", "re": "-----BEGIN ([A-Z0-9 ]+)-----(?:(?:(?!-----BEGIN )[\\s\\S])*?-----END \\1-----|(?:(?:\\r?\\n|(?:\\\\r)?\\\\n)[ \\t]*(?:[A-Za-z0-9+/=]+|(?:Proc-Type|DEK-Info|Version|Comment|Hash|Charset): [^\\r\\n\\\\\"]*)?(?=[\\r\\n\\\\\"']|$))*)"},
     {"id": "aws-key-id", "class": "HARD", "re": "\\b(AKIA|ASIA)[0-9A-Z]{16}\\b"},
     {"id": "github-token", "class": "HARD", "re": "\\bgh[pousr]_[A-Za-z0-9]{36,}"},
     {"id": "github-pat", "class": "HARD", "re": "\\bgithub_pat_[A-Za-z0-9_]{50,}"},
