@@ -1,0 +1,49 @@
+#!/usr/bin/python3
+"""tools/typecheck: tsc --noEmit -p tsconfig.json against the Claude Code type declarations (E-5).
+
+CC_TYPES_DIR names the folder holding claude-code.d.ts (the cached 2.1.305 types for this
+build). It is copied to .types/ (git-ignored), which tsconfig.json includes. Without
+CC_TYPES_DIR the copy already in .types/ is used. node is taken from $NODE or PATH; tsc from
+node_modules/.bin (npm install at the repo root, or a node_modules symlink in a worktree).
+"""
+import os, shutil, subprocess, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+DTS = "claude-code.d.ts"
+
+
+def die(msg):
+    print("typecheck: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def main():
+    dest_dir = os.path.join(REPO, ".types")
+    dest = os.path.join(dest_dir, DTS)
+    src_dir = os.environ.get("CC_TYPES_DIR")
+    if src_dir:
+        src = os.path.join(src_dir, DTS)
+        if not os.path.isfile(src):
+            die("no {} in CC_TYPES_DIR={}".format(DTS, src_dir))
+        os.makedirs(dest_dir, exist_ok=True)
+        shutil.copyfile(src, dest)
+    elif not os.path.isfile(dest):
+        die("set CC_TYPES_DIR to the folder holding {} (nothing in .types/ yet)".format(DTS))
+    with open(dest, encoding="utf-8") as f:
+        print("types: " + f.readline().strip().lstrip("/ "))
+    tsc = os.path.join(REPO, "node_modules", "typescript", "bin", "tsc")
+    if not os.path.isfile(tsc):
+        die("node_modules/typescript missing: run npm install at the repo root")
+    node = os.environ.get("NODE") or shutil.which("node")
+    if not node:
+        die("node not found: put it on PATH or set NODE")
+    r = subprocess.run([node, tsc, "--version"], capture_output=True, text=True)
+    print("tsc: " + r.stdout.strip())
+    r = subprocess.run([node, tsc, "--noEmit", "-p", os.path.join(REPO, "tsconfig.json")], cwd=REPO)
+    print("TYPECHECK: " + ("PASS" if r.returncode == 0 else "FAIL"))
+    return r.returncode
+
+
+if __name__ == "__main__":
+    sys.exit(main())

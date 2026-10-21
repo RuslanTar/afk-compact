@@ -1,0 +1,251 @@
+#!/usr/bin/python3
+"""tools/assemble: assemble every compaction asset per path and check its budget.
+
+Port of the design-phase assembler (compaction DESIGN-NOTES §2 grammar, HK-39 / AT-P-07
+budgets, SIZE-CHECK worst cases), reading src/assets/.
+
+Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--goldens]
+  --name      plugin name filled into {{plugin}} (default: brand.json name)
+  --path-len  length of the worst-case previous-copy path (default 141)
+  --dir       asset folder (default src/assets)
+  --goldens   also write tests/fixtures/assembly/expected/<asset>__<tags|base>.txt for every
+              tag combination, with the runtime values of tests/fixtures/assembly/runtime.json
+              when that file exists (else the worst-case values below)
+
+Build step: strip <!-- ... --> comments, fill {{plugin}}. Runtime: fill @tokens@ with
+worst-case values. A line starting "[tag] " is kept (tag stripped) only when the tag is
+active on the path, else dropped. [measured] lines and @remeasure@ belong to the block budget,
+not the static core. Extra checks: no `<!--` survives; CDN Review item 9 (cited step numbers
+exist and still name the same step; [queue]/[halt] lines reference only kept lines); heading
+literals equal the spec-literals block of handoff-spec.md once that file exists.
+Exit 1 when a hard budget is exceeded or any check fails.
+"""
+import itertools, json, os, re, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+DIR = os.path.join(REPO, "src", "assets")
+GOLDEN_DIR = os.path.join(REPO, "tests", "fixtures", "assembly", "expected")
+RUNTIME_JSON = os.path.join(REPO, "tests", "fixtures", "assembly", "runtime.json")
+with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
+    NAME = json.load(f)["name"]
+PATH_LEN = 141   # longest real handoff path in the corpus (~-abbreviated; median 100, p90 116)
+GOLDENS = False
+args = sys.argv[1:]
+for flag in ("--name", "--path-len", "--dir"):
+    if flag in args:
+        i = args.index(flag)
+        if i + 1 >= len(args):
+            sys.exit("assemble: {} needs a value".format(flag))
+        if flag == "--name":
+            NAME = args[i + 1]
+        elif flag == "--path-len":
+            PATH_LEN = int(args[i + 1])
+        else:
+            DIR = os.path.abspath(args[i + 1])
+        del args[i:i + 2]
+if "--goldens" in args:
+    GOLDENS = True
+    args.remove("--goldens")
+if args:
+    sys.exit("assemble: unknown arguments {}\n{}".format(args, __doc__))
+
+PREV = "~/.claude/handoffs/example-repo/LAB-123/" + "p" * (PATH_LEN - len("~/.claude/handoffs/example-repo/LAB-123/"))
+RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-21T04:40:00+03:00",
+           "session_id": "00000000-0000-4000-8000-000000000000", "saved_copy": PREV, "tokens": "612,345",
+           "queue_add": "queue-cmd add --lane example-repo/LAB-123", "measured_facts": "", "remeasure": ""}
+TAG = re.compile(r"^\[([a-z-]+)\] ")
+FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
+         "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt"}
+# Tags per asset, in the order DESIGN-NOTES §2 lists them (golden file names use this order).
+TAGS = {"main": ["midturn", "auto", "chain", "measured"], "sub": ["fallback"],
+        "res": ["midturn", "nonok"], "nudge": ["continue", "halt", "queue"]}
+# CDN Review item 9: a cited step must exist and still start with the same word.
+STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
+              ("res", 3): "Background"}
+# CDN Review item 9: a kept [tag] line refers to these lines, which must be kept too.
+TAG_NEEDS = {("nudge", "halt"): ["Checkpoint: "], ("nudge", "queue"): ["Questions: "]}
+
+
+def load(name):
+    with open(os.path.join(DIR, name), encoding="utf-8") as f:
+        return re.sub(r"[ \t]*<!--.*?-->", "", f.read(), flags=re.S).replace("{{plugin}}", NAME)
+
+
+def assemble(text, tags, drop=()):
+    out = []
+    for line in text.splitlines():
+        m = TAG.match(line)
+        if m:
+            if m.group(1) not in tags or m.group(1) in drop:
+                continue
+            line = line[m.end():]
+        if any(f"@{d}@" in line for d in drop):
+            continue
+        out.append(line)
+    s = "\n".join(out).strip() + "\n"
+    return re.sub(r"@([a-z_]+)@", lambda m: RUNTIME.get(m.group(1), m.group(0)), s)
+
+
+def check(label, s, budget=None, unit="chars", soft=False):
+    n = len(s) if unit == "chars" else len(s.encode())
+    leftovers = re.findall(r"^\[[a-z-]+\] |@[a-z_]+@|\{\{[^}]*\}\}|<!--", s, flags=re.M)
+    over = budget is not None and n > budget
+    flag = ("OVER" if not soft else "over (soft)") if over else "ok"
+    print(f"{label:44} {n:6} {unit:5} budget={budget if budget else '-':>5}  {flag}" + (f"  LEFTOVER {leftovers}" if leftovers else ""))
+    return (over and not soft) or bool(leftovers)
+
+
+TEXT = {k: load(v) for k, v in FILES.items()}
+main, sub, res, nudge = TEXT["main"], TEXT["sub"], TEXT["res"], TEXT["nudge"]
+
+
+def static(text, tags, drop=()):
+    """HK-39 static core: build-time text only; runtime @tokens@ count toward the channel total, not here."""
+    saved = dict(RUNTIME)
+    RUNTIME.update({k: "" for k in RUNTIME})
+    try:
+        return assemble(text, tags, drop)
+    finally:
+        RUNTIME.update(saved)
+
+
+def combos(asset):
+    tags = TAGS[asset]
+    for r in range(len(tags) + 1):
+        for c in itertools.combinations(tags, r):
+            yield list(c)
+
+
+def step_checks():
+    """CDN Review item 9 over every tag combination of the nudge and the resume block."""
+    bad = False
+    for asset in ("nudge", "res"):
+        for tags in combos(asset):
+            s = assemble(TEXT[asset], tags)
+            lines = s.splitlines()
+            steps = {}
+            for line in lines:
+                m = re.match(r"^(\d+)\. (\S+)", line)
+                if m:
+                    steps[int(m.group(1))] = m.group(2).rstrip(",:")
+            label = "{} {}".format(asset, "+".join(tags) or "base")
+            nums = sorted(steps)
+            if nums != list(range(1, len(nums) + 1)):
+                print(f"step check {label:32} FAIL steps not 1..n: {nums}")
+                bad = True
+            for m in re.finditer(r"\bstep[ -](\d+)\b", s):
+                n = int(m.group(1))
+                want = STEP_NAMES.get((asset, n))
+                if n not in steps:
+                    print(f"step check {label:32} FAIL cites step {n}, which is not in the text")
+                    bad = True
+                elif want and steps[n] != want:
+                    print(f"step check {label:32} FAIL cites step {n}, now '{steps[n]}', expected '{want}'")
+                    bad = True
+            for tag in tags:
+                if not re.search(r"^\[{}\] ".format(re.escape(tag)), TEXT[asset], flags=re.M):
+                    continue
+                for need in TAG_NEEDS.get((asset, tag), []):
+                    if not any(line.startswith(need) for line in lines):
+                        print(f"step check {label:32} FAIL [{tag}] line refers to '{need.strip()}', which is dropped")
+                        bad = True
+    print("CDN Review item 9 (step refs, [queue]/[halt] refs)  " + ("FAIL" if bad else "ok"))
+    return bad
+
+
+def heading_checks():
+    spec_md = os.path.join(DIR, "handoff-spec.md")
+    if not os.path.exists(spec_md):
+        print("heading literals vs handoff-spec.md               skip (no handoff-spec.md yet)")
+        return False
+    text = load("handoff-spec.md")
+    m = re.search(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", text, re.S | re.M)
+    if not m:
+        print("heading literals vs handoff-spec.md               FAIL (no ```json spec-literals block)")
+        return True
+    spec = json.loads(m.group(1))
+    bad = False
+    for key, asset, tags in (("sections_main", "main", ["chain"]), ("sections_subagent", "sub", [])):
+        heads = spec.get(key)
+        if not isinstance(heads, list):
+            print(f"heading literals {key:32} FAIL (missing in spec)")
+            bad = True
+            continue
+        lines = [ln for ln in assemble(TEXT[asset], tags).splitlines() if ln.startswith("#")]
+        pos = []
+        for h in heads:
+            idx = next((i for i, ln in enumerate(lines) if ln.startswith(h)), None)
+            if idx is None:
+                print(f"heading literals {key:32} FAIL '{h}' not at the start of a # line")
+                bad = True
+            pos.append(idx)
+        found = [p for p in pos if p is not None]
+        if found != sorted(found):
+            print(f"heading literals {key:32} FAIL order differs from the spec")
+            bad = True
+    print("heading literals vs handoff-spec.md               " + ("FAIL" if bad else "ok"))
+    return bad
+
+
+def write_goldens():
+    runtime = dict(RUNTIME)
+    if os.path.exists(RUNTIME_JSON):
+        with open(RUNTIME_JSON, encoding="utf-8") as f:
+            runtime.update(json.load(f))
+    saved = dict(RUNTIME)
+    RUNTIME.update(runtime)
+    os.makedirs(GOLDEN_DIR, exist_ok=True)
+    written = set()
+    try:
+        for asset, fname in FILES.items():
+            stem = fname[:-4]
+            for tags in combos(asset):
+                out = "{}__{}.txt".format(stem, "+".join(tags) or "base")
+                with open(os.path.join(GOLDEN_DIR, out), "w", encoding="utf-8", newline="\n") as f:
+                    f.write(assemble(TEXT[asset], tags))
+                written.add(out)
+    finally:
+        RUNTIME.clear()
+        RUNTIME.update(saved)
+    for f in os.listdir(GOLDEN_DIR):
+        if f.endswith(".txt") and f not in written:
+            os.unlink(os.path.join(GOLDEN_DIR, f))
+    print("goldens: {} files in {}".format(len(written), os.path.relpath(GOLDEN_DIR, REPO)))
+
+
+BLOCK = "x" * 3000  # worst-case measured block (header + facts <= 3,000 B)
+bad = False
+print(f"assets: {os.path.relpath(DIR, REPO)}  plugin name length: {len(NAME)}  runtime path length: {PATH_LEN}")
+for tags in ([], ["midturn"], ["chain"], ["midturn", "chain"]):
+    bad |= check(f"main mod static core {'+'.join(tags) or 'base'}", static(main, tags, drop=("measured",)), 4000)
+for tags in (["auto"], ["auto", "chain"]):
+    bad |= check(f"main classic static core {'+'.join(tags)}", static(main, tags, drop=("measured",)), 4000)
+RUNTIME["measured_facts"] = BLOCK
+for tags in (["midturn", "chain", "measured"], ["chain", "measured"]):
+    bad |= check(f"mod channel total {'+'.join(tags)} (hard, B)", assemble(main, tags), 8192, "bytes")
+RUNTIME["measured_facts"] = ""
+bad |= check("subagent mod", assemble(sub, []), 900, soft=True)
+bad |= check("subagent classic +fallback", assemble(sub, ["fallback"]), 1100, soft=True)
+classic_total = assemble(main, ["auto", "chain"], drop=("measured",)) + assemble(sub, ["fallback"])
+bad |= check("classic channel total main+sub (hard, B)", classic_total, 8192, "bytes")
+for tags in ([], ["midturn"], ["nonok"], ["midturn", "nonok"]):
+    bad |= check(f"resume protocol {'+'.join(tags) or 'base'}",
+                 assemble(res, tags, drop=("measured_at", "remeasure")), 2000)
+for tags in (["continue"], ["halt"], ["continue", "queue"], ["halt", "queue"]):
+    bad |= check(f"nudge {'+'.join(tags)}", assemble(nudge, tags), 2200, soft=True)
+leftover = False
+for asset in FILES:
+    for tags in combos(asset):
+        s = assemble(TEXT[asset], tags)
+        if re.search(r"^\[[a-z-]+\] |@[a-z_]+@|\{\{|<!--", s, flags=re.M):
+            print(f"leftover in {asset} {'+'.join(tags) or 'base'}")
+            leftover = True
+print("every tag combination: no [tag] / @token@ / {{ / <!-- left   " + ("FAIL" if leftover else "ok"))
+bad |= leftover
+bad |= step_checks()
+bad |= heading_checks()
+if GOLDENS:
+    write_goldens()
+print("RESULT:", "FAIL" if bad else "PASS")
+sys.exit(1 if bad else 0)

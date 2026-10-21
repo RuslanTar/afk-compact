@@ -1,0 +1,251 @@
+#!/usr/bin/python3
+"""tools/build: render src/ into the installable plugin (BUILD-PLAN §1, §4.6).
+
+Usage:
+  tools/build                       render into the repo (GEN files), update tools/build.state
+  tools/build --check               render in memory and diff against the committed GEN files
+  tools/build --name N --out DIR    render a full copy under DIR (rename drill; repo untouched)
+
+Build-time rules (compaction DESIGN-NOTES §2, BUILD-PLAN §3.4): strip
+`[ \\t]*<!--.*?-->` (multi-line) and fill `{{plugin}}`. Manifests also take
+`{{marketplace}}`, `{{version}}` and `{{description}}` from brand.json.
+"""
+import json, os, re, shutil, stat, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+STATE = "tools/build.state"
+COMMENT = re.compile(r"[ \t]*<!--.*?-->", re.S)
+SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S | re.M)
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+EXEC = 0o755
+PLAIN = 0o644
+
+
+def die(msg):
+    print("build: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def read(rel):
+    with open(os.path.join(REPO, rel), encoding="utf-8") as f:
+        return f.read()
+
+
+def strip(text):
+    return COMMENT.sub("", text)
+
+
+def render(text, name):
+    return strip(text).replace("{{plugin}}", name)
+
+
+def render_manifest(text, brand):
+    out = text.replace("{{plugin}}", brand["name"]).replace("{{marketplace}}", brand["marketplace"])
+    out = out.replace("{{version}}", json.dumps(brand["version"])[1:-1])
+    out = out.replace("{{description}}", json.dumps(brand["description"], ensure_ascii=False)[1:-1])
+    json.loads(out)  # must stay valid JSON
+    return out
+
+
+def ts_header(src):
+    return "// GEN by tools/build from {}. Do not edit; edit the source and run tools/build.\n".format(src)
+
+
+def files_under(rel):
+    base = os.path.join(REPO, rel)
+    out = []
+    for d, dirs, files in os.walk(base):
+        dirs.sort()
+        for f in sorted(files):
+            if f.startswith(".") and f != ".gitkeep":
+                continue
+            out.append(os.path.relpath(os.path.join(d, f), REPO))
+    return out
+
+
+def plan(brand):
+    """Return {repo-relative path: (text, mode)} for every GEN file of tools/build."""
+    name = brand["name"]
+    out = {}
+    out["plugin/.claude-plugin/plugin.json"] = (render_manifest(read("src/plugin.json"), brand), PLAIN)
+    out[".claude-plugin/marketplace.json"] = (render_manifest(read("src/marketplace.json"), brand), PLAIN)
+    out["plugin/hooks/hooks.json"] = (render_manifest(render(read("src/hooks.json"), name), brand), PLAIN)
+
+    # Assets: rendered files for the helper, and the same text for the mod.
+    asset_parts = {}
+    spec = None
+    for rel in files_under("src/assets"):
+        base = os.path.basename(rel)
+        text = read(rel)
+        out["plugin/assets/" + base] = (render(text, name), PLAIN)
+        if base.endswith(".txt"):
+            asset_parts[base[:-4]] = strip(text).split("{{plugin}}")
+        if base == "handoff-spec.md":
+            m = SPEC_BLOCK.search(render(text, name))
+            if not m:
+                die("src/assets/handoff-spec.md has no ```json spec-literals block")
+            try:
+                spec = json.loads(m.group(1))
+            except ValueError as e:
+                die("spec-literals block is not valid JSON: {}".format(e))
+    if spec is not None:
+        out["plugin/assets/handoff-spec.json"] = (json.dumps(spec, indent=2, ensure_ascii=False) + "\n", PLAIN)
+
+    lines = [ts_header("src/assets/*.txt (review markers stripped)"),
+             "// Each asset is kept in parts split at the plugin name; assetText joins them\n",
+             "// with the name the mod reads at run time ($.plugin.name).\n",
+             "const parts = {\n"]
+    for key in sorted(asset_parts):
+        lines.append("  {}: {},\n".format(json.dumps(key), json.dumps(asset_parts[key], ensure_ascii=False)))
+    lines.append("} as const\n\n")
+    lines.append("export type AssetName = keyof typeof parts\n\n")
+    lines.append("export const ASSET_NAMES = Object.keys(parts) as AssetName[]\n\n")
+    lines.append("export function assetText(name: AssetName, plugin: string): string {\n")
+    lines.append("  return parts[name].join(plugin)\n}\n")
+    out["plugin/hooks/lib/assets.gen.ts"] = ("".join(lines), PLAIN)
+
+    if spec is None:
+        spec_ts = (ts_header("src/assets/handoff-spec.md (not present yet)") +
+                   "export const SPEC_PRESENT = false as const\n\nexport const SPEC = {} as const\n")
+    else:
+        spec_ts = (ts_header("the ```json spec-literals block of src/assets/handoff-spec.md") +
+                   "export const SPEC_PRESENT = true as const\n\nexport const SPEC = " +
+                   json.dumps(spec, indent=2, ensure_ascii=False) + " as const\n")
+    out["plugin/hooks/lib/spec.gen.ts"] = (spec_ts, PLAIN)
+    out["plugin/hooks/lib/meta.gen.ts"] = (ts_header("brand.json") + "export const PLUGIN_VERSION = " +
+                                           json.dumps(brand["version"]) + "\n", PLAIN)
+
+    for rel in files_under("src/skills"):
+        out["plugin/skills/" + os.path.relpath(rel, "src/skills")] = (render(read(rel), name), PLAIN)
+
+    out["plugin/bin/{}-store".format(name)] = (render(read("src/launcher.tmpl"), name), EXEC)
+
+    if os.path.exists(os.path.join(REPO, "src/README.md")):
+        readme = render(read("src/README.md"), name)
+    else:
+        readme = "# {}\n\n{}\n".format(name, brand["description"])
+    if os.path.exists(os.path.join(REPO, "LICENSE")):
+        out["plugin/LICENSE"] = (read("LICENSE"), PLAIN)
+    out["README.md"] = (readme, PLAIN)
+    out["plugin/README.md"] = (readme, PLAIN)
+    return out
+
+
+def state_text(brand, gen):
+    return json.dumps({"name": brand["name"], "files": sorted(gen)}, indent=2) + "\n"
+
+
+def load_state():
+    p = os.path.join(REPO, STATE)
+    if not os.path.exists(p):
+        return {"name": None, "files": []}
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_file(root, rel, text, mode):
+    p = os.path.join(root, rel)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    os.chmod(p, mode)
+
+
+def main(argv):
+    check = False
+    name = None
+    out_dir = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--check":
+            check = True
+        elif a == "--name" and i + 1 < len(argv):
+            name = argv[i + 1]
+            i += 1
+        elif a == "--out" and i + 1 < len(argv):
+            out_dir = argv[i + 1]
+            i += 1
+        else:
+            die("unknown argument " + a + "\n" + __doc__)
+        i += 1
+    brand = json.loads(read("brand.json"))
+    for k in ("name", "marketplace", "version", "description"):
+        if not isinstance(brand.get(k), str) or not brand[k]:
+            die("brand.json lacks " + k)
+    if name is not None:
+        if brand["marketplace"] == brand["name"]:
+            brand["marketplace"] = name
+        brand["name"] = name
+    if not NAME_RE.match(brand["name"]):
+        die("plugin name must be kebab-case: " + brand["name"])
+    if name is not None and out_dir is None and not check:
+        die("--name needs --out (rename the repo by editing brand.json)")
+
+    gen = plan(brand)
+    old = load_state()
+
+    if check:
+        problems = []
+        for rel, (text, mode) in sorted(gen.items()):
+            p = os.path.join(REPO, rel)
+            if not os.path.exists(p):
+                problems.append("missing " + rel)
+                continue
+            with open(p, encoding="utf-8") as f:
+                if f.read() != text:
+                    problems.append("differs " + rel)
+            if bool(os.stat(p).st_mode & stat.S_IXUSR) != bool(mode & stat.S_IXUSR):
+                problems.append("mode " + rel)
+        for rel in old["files"]:
+            if rel not in gen and os.path.exists(os.path.join(REPO, rel)):
+                problems.append("stale " + rel)
+        for d in ("plugin/skills", "plugin/bin"):
+            for rel in files_under(d):
+                if rel not in gen:
+                    problems.append("stale " + rel)
+        st = os.path.join(REPO, STATE)
+        if not os.path.exists(st) or open(st, encoding="utf-8").read() != state_text(brand, gen):
+            problems.append("differs " + STATE)
+        for p in problems:
+            print(p)
+        print("BUILD CHECK: " + ("FAIL ({} problems)".format(len(problems)) if problems else "PASS"))
+        return 1 if problems else 0
+
+    if out_dir is not None:
+        root = os.path.abspath(out_dir)
+        if root == REPO or REPO.startswith(root + os.sep):
+            die("--out must not be the repo or one of its parents")
+        if os.path.exists(root):
+            shutil.rmtree(root)
+        old_gen = set(old["files"])
+        for rel in files_under("plugin"):
+            if rel in old_gen or rel.startswith("plugin/.claude-plugin/types/"):
+                continue
+            if rel.startswith("plugin/bin/") or rel.startswith("plugin/skills/"):
+                continue
+            src = os.path.join(REPO, rel)
+            dst = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+        for rel, (text, mode) in gen.items():
+            write_file(root, rel, text, mode)
+        print("built {} files for {} into {}".format(len(gen), brand["name"], root))
+        return 0
+
+    for rel in old["files"]:
+        if rel not in gen:
+            p = os.path.join(REPO, rel)
+            if os.path.exists(p):
+                os.unlink(p)
+                print("removed stale " + rel)
+    for rel, (text, mode) in gen.items():
+        write_file(REPO, rel, text, mode)
+    write_file(REPO, STATE, state_text(brand, gen), PLAIN)
+    print("built {} files for {}".format(len(gen), brand["name"]))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

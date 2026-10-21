@@ -1,0 +1,199 @@
+#!/usr/bin/python3
+"""tools/gates: grep gates over built output (AT-P-05, BT-01, BT-08; BUILD-PLAN §4 X-gates, X-name).
+
+Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only GATE]
+  TARGET        a folder (scanned recursively) or a file, e.g. plugin and README.md
+  --names FILE  the competitor-name list, kept outside the repo (E-7); missing = FAIL
+  --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
+  --no-git-log  skip the attribution gate over `git log --format=%B`
+  --only GATE   report only one gate (names, user-path, markers, attribution, stale-name)
+
+Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
+  names        every list entry, case-insensitive, as a whole token (letters, digits, `_`, `-`
+               do not continue it); generic words are kept off the list by its curator (E-7)
+  user-path    `/Users/`, `/home/`, this machine's login name (case-sensitive whole token),
+               the git user.email, and the name of the folder that holds the repo
+  markers      `<!--` and `{{`
+  attribution  `Co-Authored-By`, `Generated with`, `noreply@anthropic.com`, `claude.ai/code`
+               in files and in every commit message reachable from HEAD
+  stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status`, `X-store`, `X:handoff skill`
+               and manifest names have X equal to the brand; no other A-1 candidate
+               (`compactseam`, `wheelover`, `hold-thread`) and no `compact-handoff`
+Exit 0 when every gate has 0 hits, else 1.
+"""
+import getpass, json, os, re, subprocess, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+B = r"(?<![A-Za-z0-9_-])"
+E = r"(?![A-Za-z0-9_-])"
+ATTRIBUTION = re.compile(r"Co-Authored-By|Generated with|noreply@anthropic\.com|claude\.ai/code", re.I)
+MARKERS = re.compile(r"<!--|\{\{")
+OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff"]
+NAME_SHAPES = [
+    re.compile(r"⟪/?([^\s⟫/]+) (?:v1|n=)"),
+    re.compile(B + r"/([A-Za-z0-9_{}@<>-]+):(?:handoff|resume|status)\b"),
+    re.compile(B + r"([A-Za-z0-9_{}@<>]+(?:-[A-Za-z0-9_{}@<>]+)*)-store" + E),
+    re.compile(B + r"([A-Za-z0-9_{}@<>-]+):handoff skill"),
+]
+SKIP_DIRS = {".git", "node_modules", ".types"}
+
+
+def die(msg):
+    print("gates: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def files_of(target):
+    if os.path.isfile(target):
+        yield target
+        return
+    for d, dirs, files in os.walk(target):
+        dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS and
+                         not (x == "types" and os.path.basename(d) == ".claude-plugin"))
+        for f in sorted(files):
+            yield os.path.join(d, f)
+
+
+def text_of(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    if b"\0" in data[:8192]:
+        return None
+    return data.decode("utf-8", errors="replace")
+
+
+def load_names(path):
+    names = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                names.append(line)
+    return names
+
+
+def main(argv):
+    names_file = None
+    brand = None
+    git_log = True
+    only = None
+    targets = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--names" and i + 1 < len(argv):
+            names_file = argv[i + 1]
+            i += 1
+        elif a == "--brand" and i + 1 < len(argv):
+            brand = argv[i + 1]
+            i += 1
+        elif a == "--only" and i + 1 < len(argv):
+            only = argv[i + 1]
+            i += 1
+        elif a == "--no-git-log":
+            git_log = False
+        elif a.startswith("--"):
+            die("unknown flag " + a + "\n" + __doc__)
+        else:
+            targets.append(a)
+        i += 1
+    if not targets:
+        die("no target\n" + __doc__)
+    hits = []
+
+    def hit(gate, where, text):
+        hits.append((gate, where, text))
+
+    if not names_file or not os.path.isfile(names_file):
+        hit("names", names_file or "--names", "competitor-name list missing (E-7)")
+        names = []
+    else:
+        names = load_names(names_file)
+        if not names:
+            hit("names", names_file, "competitor-name list is empty")
+    if brand is None:
+        with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
+            brand = json.load(f)["name"]
+
+    name_res = [(n, re.compile(B + re.escape(n) + E, re.I)) for n in names]
+    user_res = [("/Users/", re.compile(r"/Users/")), ("/home/", re.compile(r"/home/"))]
+    login = getpass.getuser()
+    if login:
+        user_res.append(("login", re.compile(B + re.escape(login) + E)))
+    email = subprocess.run(["git", "-C", REPO, "config", "user.email"], capture_output=True, text=True).stdout.strip()
+    if email:
+        user_res.append(("email", re.compile(re.escape(email), re.I)))
+    common = subprocess.run(["git", "-C", REPO, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True).stdout.strip()
+    main_repo = os.path.dirname(common) if common else REPO
+    parent = os.path.basename(os.path.dirname(main_repo))
+    if parent:
+        user_res.append(("projects folder", re.compile(B + re.escape(parent) + E)))
+    other_res = [(n, re.compile(B + re.escape(n) + E, re.I)) for n in OTHER_NAMES]
+
+    count = 0
+    for target in targets:
+        if not os.path.exists(target):
+            hit("target", target, "missing")
+            continue
+        for path in files_of(target):
+            text = text_of(path)
+            if text is None:
+                continue
+            count += 1
+            rel = os.path.relpath(path)
+            for no, line in enumerate(text.splitlines(), 1):
+                where = "{}:{}".format(rel, no)
+                for n, rx in name_res:
+                    if rx.search(line):
+                        hit("names", where, n)
+                for label, rx in user_res:
+                    if rx.search(line):
+                        hit("user-path", where, label)
+                if MARKERS.search(line):
+                    hit("markers", where, MARKERS.search(line).group(0))
+                m = ATTRIBUTION.search(line)
+                if m:
+                    hit("attribution", where, m.group(0))
+                for rx in NAME_SHAPES:
+                    for m in rx.finditer(line):
+                        if m.group(1) != brand:
+                            hit("stale-name", where, m.group(0))
+                for n, rx in other_res:
+                    if rx.search(line):
+                        hit("stale-name", where, n)
+            base = os.path.basename(path)
+            if base in ("plugin.json", "marketplace.json") and os.path.basename(os.path.dirname(path)) == ".claude-plugin":
+                try:
+                    doc = json.loads(text)
+                except ValueError:
+                    hit("stale-name", rel, "not valid JSON")
+                    continue
+                found = [doc.get("name")] if base == "plugin.json" else [p.get("name") for p in doc.get("plugins", [])]
+                for n in found:
+                    if n != brand:
+                        hit("stale-name", rel, '"name": {}'.format(json.dumps(n)))
+
+    if git_log:
+        r = subprocess.run(["git", "-C", REPO, "log", "--format=%H%n%B"], capture_output=True, text=True)
+        sha = None
+        for line in r.stdout.splitlines():
+            if re.fullmatch(r"[0-9a-f]{40}", line):
+                sha = line[:10]
+                continue
+            m = ATTRIBUTION.search(line)
+            if m:
+                hit("attribution", "commit " + str(sha), m.group(0))
+
+    if only:
+        hits = [h for h in hits if h[0] in (only, "target")]
+    for gate, where, text in hits:
+        print("GATE {} {}: {}".format(gate, where, text))
+    print("GATES: {} ({} files, {} names, brand {}, {} hits)".format(
+        "FAIL" if hits else "PASS", count, len(names), brand, len(hits)))
+    return 1 if hits else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

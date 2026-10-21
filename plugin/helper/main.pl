@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# helper/main.pl: entry of the plugin helper, started by bin/<name>-store.
+# helper/main.pl: entry of the plugin helper, started by the launcher in bin/.
 # Owner: WP-core. Phase 0 stub dispatcher (BUILD-PLAN §3.1).
 #
 # The guard below must stay parsable by perl 5.8: it runs before any other
@@ -36,7 +36,7 @@ my %KNOWN = map { $_ => 1 } qw(
 
 my $sub = shift @ARGV;
 if (!defined $sub || !$KNOWN{$sub}) {
-    print STDERR "usage: <name>-store <subcommand> [args]\n";
+    print STDERR "usage: <subcommand> [args]\n";
     exit 64;
 }
 

@@ -1,0 +1,91 @@
+#!/usr/bin/python3
+"""tools/owners-check: fail when a branch touches a path its work package does not own.
+
+Usage: tools/owners-check WP [BASE]      (BASE defaults to main)
+  Lists `git diff --name-only BASE...HEAD` plus uncommitted and untracked changes, maps each
+  path through OWNERS.tsv (first matching row wins) and fails on any path owned by another WP
+  or by none. WP ids: build text fix core skills watch mod docs.
+"""
+import os, re, subprocess, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+WPS = {"build", "text", "fix", "core", "skills", "watch", "mod", "docs"}
+
+
+def expand(glob):
+    m = re.search(r"\{([^{}]*)\}", glob)
+    if not m:
+        return [glob]
+    out = []
+    for alt in m.group(1).split(","):
+        out.extend(expand(glob[:m.start()] + alt + glob[m.end():]))
+    return out
+
+
+def to_regex(glob):
+    out = ""
+    i = 0
+    while i < len(glob):
+        if glob.startswith("**", i):
+            out += ".*"
+            i += 2
+        elif glob[i] == "*":
+            out += "[^/]*"
+            i += 1
+        else:
+            out += re.escape(glob[i])
+            i += 1
+    return re.compile(out + r"\Z")
+
+
+def load_owners():
+    rules = []
+    with open(os.path.join(REPO, "OWNERS.tsv"), encoding="utf-8") as f:
+        for no, line in enumerate(f, 1):
+            line = line.rstrip("\n")
+            if not line.strip() or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2 or parts[1] not in WPS:
+                sys.exit("owners-check: OWNERS.tsv line {} is not '<glob>\\t<wp>'".format(no))
+            for g in expand(parts[0]):
+                rules.append((to_regex(g), parts[1], parts[0]))
+    return rules
+
+
+def owner_of(rules, path):
+    for rx, wp, glob in rules:
+        if rx.match(path):
+            return wp, glob
+    return None, None
+
+
+def git(*args):
+    r = subprocess.run(["git", "-C", REPO] + list(args), capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit("owners-check: git {} failed: {}".format(" ".join(args), r.stderr.strip()))
+    return [ln for ln in r.stdout.splitlines() if ln]
+
+
+def main(argv):
+    if not argv or argv[0] not in WPS or len(argv) > 2:
+        sys.exit(__doc__)
+    wp = argv[0]
+    base = argv[1] if len(argv) > 1 else "main"
+    rules = load_owners()
+    paths = set(git("diff", "--name-only", "{}...HEAD".format(base)))
+    paths |= set(git("diff", "--name-only", "HEAD"))
+    paths |= set(git("ls-files", "--others", "--exclude-standard"))
+    bad = 0
+    for p in sorted(paths):
+        owner, glob = owner_of(rules, p)
+        if owner != wp:
+            bad += 1
+            print("NOT OWNED {}  (owner: {}{})".format(p, owner or "none", ", rule " + glob if glob else ""))
+    print("OWNERS: {} ({} paths changed vs {}, WP {})".format("FAIL" if bad else "PASS", len(paths), base, wp))
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
