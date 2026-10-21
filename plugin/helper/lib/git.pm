@@ -34,11 +34,12 @@ sub cmd {
                      env => { GIT_OPTIONAL_LOCKS => '0', LC_ALL => 'C', GIT_TERMINAL_PROMPT => '0' });
 }
 
-# 1 ignored, 0 not ignored, undef unknown (no git / error)
+# 1 ignored, 0 not ignored, -1 timed out, undef unknown (no git / error)
 sub check_ignore {
-    my ($wt, $path) = @_;
-    my $r = cmd($wt, ['check-ignore', '-q', '--no-index', $path], 2000);
-    return undef if $r->{unavailable} || $r->{timed_out};
+    my ($wt, $path, $timeout_ms) = @_;
+    my $r = cmd($wt, ['check-ignore', '-q', '--no-index', $path], $timeout_ms // 2000);
+    return -1 if $r->{timed_out};
+    return undef if $r->{unavailable};
     return 1 if $r->{exit} == 0;
     return 0 if $r->{exit} == 1;
     return undef;

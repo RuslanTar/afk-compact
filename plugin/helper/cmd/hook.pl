@@ -65,6 +65,9 @@ sub run {
         };
         return 0;
     }
+    # root checks (git check-ignore) share one short budget: PreCompact's fallback makes no
+    # git call of its own and must print well inside its 5 s timeout
+    local $roots::DEADLINE = $t0 + ($event eq 'PreCompact' ? 500 : 1500);
     rc::init(sid => $sid, writer => 'classic');
     my $out = '';
     my $extra = {};
