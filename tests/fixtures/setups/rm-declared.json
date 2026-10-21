@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "id": "rm-declared",
+  "ruling": "D-12 §1.5.2, §1.5.5",
+  "tests": [
+    "AT-RM-01",
+    "AT-RM-02",
+    "AT-RM-03",
+    "AT-RM-07",
+    "AT-RM-08",
+    "AT-RM-09"
+  ],
+  "note": "A main checkout on feature/LAB-42-retry with a valid, committed declaration (root .claude/handoffs) and a source file the export rewrite touches (src/a.rb). Nothing is accepted yet: add settings/repo-roots-main.json for acceptance.",
+  "expect": {
+    "toplevel": "$TMP/example-repo",
+    "mode_without_acceptance": "private (not-accepted)",
+    "mode_with_main_accepted": "repo (accepted)",
+    "tracked_files": [
+      "README.md",
+      "src/a.rb",
+      ".claude/handoffs.json"
+    ],
+    "status_porcelain": ""
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "# example-repo\n\nFixture repository.\n",
+              "src/a.rb": "class A\n  def run\n    :ok\n  end\nend\n"
+            },
+            "msg": "seed"
+          },
+          {
+            "files": {
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+            },
+            "msg": "declare repo mode"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    }
+  ]
+}

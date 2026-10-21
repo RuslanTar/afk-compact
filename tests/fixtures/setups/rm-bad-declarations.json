@@ -1,0 +1,145 @@
+{
+  "v": 1,
+  "id": "rm-bad-declarations",
+  "ruling": "D-12 §1.5.2",
+  "tests": [
+    "AT-RM-04"
+  ],
+  "note": "Seven repositories, each with one invalid declaration, each listed as its own directory so one settings value can accept all of them: r-escape (root ../x), r-abs (/abs), r-dotdot (a/../../x), r-git (.git/x), r-planning (.planning/x), r-json (invalid JSON), r-version (version 2). Every one must give private mode with its reason code and no write under the repository. A repository r-ok with an unknown extra key is the control: it stays repo mode and logs decl_unknown_keys.",
+  "accept": "$TMP/r-escape;$TMP/r-abs;$TMP/r-dotdot;$TMP/r-git;$TMP/r-planning;$TMP/r-json;$TMP/r-version;$TMP/r-ok",
+  "expect": {
+    "reasons": {
+      "r-escape": "repo-decl-invalid",
+      "r-abs": "repo-decl-invalid",
+      "r-dotdot": "repo-decl-invalid",
+      "r-git": "repo-decl-invalid",
+      "r-planning": "repo-decl-invalid",
+      "r-json": "repo-decl-invalid",
+      "r-version": "repo-decl-invalid",
+      "r-ok": "repo (accepted)"
+    },
+    "note": "D-12 §1.5.2 puts ../x, /abs, a/../../x, .git/x and .planning/x in the declaration check, so every one of them is repo-decl-invalid (the status line reads `private (repo-decl-invalid)`); the unknown key of r-ok is ignored with a decl_unknown_keys note."
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \"../x\"}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-escape"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \"/abs\"}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-abs"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \"a/../../x\"}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-dotdot"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".git/x\"}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-git"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".planning/x\"}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-planning"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\",\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-json"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 2, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-version"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "r\n",
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\", \"later\": true}\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/r-ok"
+    }
+  ]
+}

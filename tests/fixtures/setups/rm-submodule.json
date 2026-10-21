@@ -1,0 +1,78 @@
+{
+  "v": 1,
+  "id": "rm-submodule",
+  "ruling": "D-12 §1.5.3 item 5",
+  "tests": [
+    "AT-RM-04"
+  ],
+  "note": "A repository with a submodule at vendor/lib (source repo example-repo-sub-src, added over the file protocol) and a declaration whose root lies inside the submodule: vendor/lib/.git is a file, so the root is a nested repository and repo mode is refused with repo-root-nested. Nothing is written under the toplevel.",
+  "expect": {
+    "mode": "private (repo-root-nested)",
+    "submodule": "vendor/lib",
+    "nested_git_file": "vendor/lib/.git",
+    "writes_under_toplevel": 0
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "main",
+        "commits": [
+          {
+            "files": {
+              "lib.rb": "module Lib\nend\n"
+            },
+            "msg": "submodule source"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo-sub-src"
+    },
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "# example-repo\n\nFixture repository.\n",
+              "src/a.rb": "class A\n  def run\n    :ok\n  end\nend\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    },
+    {
+      "git": [
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        "-q",
+        "$TMP/example-repo-sub-src",
+        "vendor/lib"
+      ],
+      "cwd": "$TMP/example-repo"
+    },
+    {
+      "write": "$TMP/example-repo/.claude/handoffs.json",
+      "content": "{\"version\": 1, \"mode\": \"repo\", \"root\": \"vendor/lib/handoffs\"}\n"
+    },
+    {
+      "git": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$TMP/example-repo"
+    },
+    {
+      "git": [
+        "commit",
+        "-q",
+        "-m",
+        "add the submodule and declare repo mode"
+      ],
+      "cwd": "$TMP/example-repo"
+    }
+  ]
+}
