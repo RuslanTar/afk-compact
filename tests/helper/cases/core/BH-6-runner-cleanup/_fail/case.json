@@ -1,0 +1,7 @@
+{
+ "id": "BH-6-inner-fail",
+ "tmp_base": "repo",
+ "argv": ["hook", "StopFailure"],
+ "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "StopFailure", "error": "rate_limit"},
+ "expect": {"exit": 99}
+}

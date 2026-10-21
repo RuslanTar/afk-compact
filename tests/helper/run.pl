@@ -192,8 +192,38 @@ for my $cf (@CASES) {
 print "1..$N\n";
 print "# passed " . ($N - $FAILED - $SKIPPED) . ", failed $FAILED, skipped $SKIPPED\n";
 print "# failed: @FAIL_IDS\n" if @FAIL_IDS;
-print "# work dir: $RUN_TMP (left in place; the OS temp cleaner removes it)\n" if $KEEP || $VERBOSE;
+# BH-6: the work dirs (under the system temp folder, and under the repo's tmp/ for
+# tmp_base "repo" cases, which no OS cleaner visits) go at the end of a passing run;
+# --keep or a failed case keeps them for a look.
+{
+    my @work = grep { defined } ($RUN_TMP, $REPO_TMP);
+    if ($KEEP || $FAILED) {
+        print "# work dirs kept: @work\n";
+    } else {
+        remove_tree($_) for @work;
+        print "# work dirs removed\n" if $VERBOSE;
+    }
+}
 exit($FAILED ? 1 : 0);
+
+# remove_tree(dir): only a work dir this runner made (store-h-<pid>-<hex>); links are
+# removed, never followed; folders a case made read-only are opened up first.
+sub remove_tree {
+    my ($d) = @_;
+    return unless defined $d && util::basename($d) =~ /\Astore-h-\d+-[0-9a-f]{6}\z/ && -d $d && !-l $d;
+    _rm_tree($d);
+}
+
+sub _rm_tree {
+    my ($p) = @_;
+    if (-l $p || !-d _) { unlink $p; return }
+    chmod 0700, $p;
+    opendir(my $dh, $p) or return;
+    my @e = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+    closedir $dh;
+    _rm_tree("$p/$_") for @e;
+    rmdir $p;
+}
 
 # ---------------------------------------------------------------- one case
 sub run_case {
@@ -549,6 +579,8 @@ sub setup {
         my $left = $s->{bytes} // 0;
         my $chunk = ($s->{fill} // 'b') x 65536;
         while ($left > 0) { my $n = $left < 65536 ? $left : 65536; print $fh substr($chunk, 0, $n); $left -= $n }
+        # "tail": text after the filler (a value past the first scan window, RRP-06)
+        if (defined $s->{tail}) { my $t = $s->{tail}; utf8::encode($t) if utf8::is_utf8($t); print $fh $t }
         close $fh;
         return;
     }
@@ -945,6 +977,36 @@ sub builtin {
             push @e, "name $nm->{name}: " . ($got ? 'withheld' : 'copied') . ", want $nm->{expect}" if $got != $want;
         }
         push @e, 'no corpus entries' unless $n;
+        return @e;
+    }
+    if ($name eq 'runner_cleanup') {
+        # BH-6: run this runner on a passing and on a failing tmp_base "repo" case (case-local
+        # _pass and _fail, which discovery skips). After the passing run no store-h-* work dir
+        # of it is left, neither under its TMPDIR nor under the repo's tmp/; the failing run
+        # keeps both (then removed here).
+        my $base = "$REPO/tmp";
+        my $dirs = sub {
+            my ($d) = @_;
+            return map { "$d/$_" } grep { /\Astore-h-\d+-[0-9a-f]{6}\z/ && -d "$d/$_" } util::list_dir($d);
+        };
+        for my $t (['pass', 0], ['fail', 1]) {
+            my $td = ($a->{tmp} // die "runner_cleanup: no tmp\n") . "/childtmp-$t->[0]";
+            util::mkdir_p($td);
+            my %before = map { ($_ => 1) } $dirs->($base);
+            my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", "$cdir/_$t->[0]"], timeout_ms => 180000,
+                              env => { TMPDIR => $td });
+            my @new_repo = grep { !$before{$_} } $dirs->($base);
+            my @new_tmp = $dirs->($td);
+            push @e, "$t->[0] run: exit $r->{exit}" if ($r->{exit} != 0 ? 1 : 0) != $t->[1];
+            if ($t->[1]) {
+                push @e, "failing run: no work dir kept under its TMPDIR" unless @new_tmp;
+                push @e, "failing run: no work dir kept under the repo tmp/" unless @new_repo;
+                remove_tree($_) for @new_tmp, @new_repo;
+            } else {
+                push @e, "passing run: left $_" for @new_tmp, @new_repo;
+                remove_tree($_) for @new_tmp, @new_repo;
+            }
+        }
         return @e;
     }
     if ($name eq 'live_peers') {
