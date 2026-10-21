@@ -1,7 +1,8 @@
 # cmd/inventory.pl: `inventory` subcommand (BUILD-PLAN §3.1). Owner: WP-skills.
-# Phase 0 stub: not implemented, exit 70. Only the owner edits this file.
+# The logic lives in lib/skills/inventory.pm; exit codes per §3.1 (0, 3, 64, 70).
 use strict;
 use warnings;
+use skills::cli;
+use skills::inventory;
 
-print STDERR "inventory: not implemented\n";
-exit 70;
+exit skills::cli::main('inventory', \&skills::inventory::run, @ARGV);
