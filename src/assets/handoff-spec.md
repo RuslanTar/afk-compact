@@ -176,7 +176,8 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 
 - **Blocking**: `headings` · `meta-in-draft` · `update-heading` · `resume-lines` · `step1-mismatch` · `none-form` · `ephemeral-path` · `live-asof` · `unprinted-time` · `time-format` · `id-range` · `carry-provenance` · `carry-approval` · `private-path` · `recipe-placeholder` · `recipe-script` · `recipe-spawn` · `secret-hard`.
 - **Advisory**: `size` · `section-cap` · `code-block` · `log-lines` · `hash-lines` · `must-read` · `changes` · `overlap` · `recipe-mismatch` · `secret-warn`.
-- `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside lines carried byte-identical from the base.
+- `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside carried lines.
+- Carried lines, which `unprinted-time` and `time-format` skip: a line byte-identical to a line of the base or of the own chain's file, and a line with a carried-line tag whose ledger content (bullet, id and carried-line tags removed) equals that of a foreign-base line. So a foreign line keeps its `checked` and `verified` times when it is carried.
 - `carry-provenance`: a `U-`, `D-` or `X-` line whose content occurs in the foreign base and not in the own base, with no carried-line tag. `carry-approval`: a tagged approval line without `context only, not valid here; re-ask`, or with `used` / `not yet used` on it.
 - `private-path` (repo mode only, fix or report): a line that still holds a machine-private path after the export rewrite of D-12 §1.5.5 (the user's home is already `~/`): `~/.claude/projects/`, a `.jsonl` file under `~/.claude/`, another user's home, or an in-flight probe path (`/private/tmp/claude-*`, `/tmp/claude-*`, `$TMPDIR/claude-*`). It may fire on the same line as `ephemeral-path`: that rule accepts a durable copy or a `Volatile:` line, this one never does, because the path would reach git.
 
