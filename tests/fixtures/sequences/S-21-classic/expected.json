@@ -1,0 +1,52 @@
+{
+  "id": "S-21-classic",
+  "spec": "MOD-SPEC §2.4 scope proof, §5.3, §5.4; ROOT-RULINGS F2-1",
+  "observed_order": [
+    "mod session.compact before (writes the dispatch record; mod variant only)",
+    "PreCompact",
+    "SubagentStop: summarizer fork (agent_type empty)",
+    "SessionStart(compact)",
+    "PostCompact",
+    "mod session.compact after (+40 ms; not run in H)",
+    "compact_boundary row lands in the main transcript (+12-42 ms after the mod after-step), then the isCompactSummary row (its timestamp is earlier: stamped when built, written later)",
+    "next hook: Stop (+26 s) or SubagentStop (+7.5 s), the first to see the boundary"
+  ],
+  "observed_transcript": "main transcript at SessionStart(compact) and PostCompact: 0 compact_boundary and 0 isCompactSummary rows in both live runs; 1 and 1 at the next hook",
+  "not_modelled": "rows the live transcript gained between PreCompact and SessionStart that are neither boundary nor summary rows; the background subagent of the probe (background_tasks is empty here); SessionStart stdin key scratchpad_dir (seen live on 2.1.306, absent from the 2.1.305 d.ts)",
+  "step_asserts": [
+    {
+      "after_step": 4,
+      "why": "F2-1: no scope proof inside PostCompact (a classic dispatch is not P1, an s=main marker with a classic dispatch is not P2, and P3 is not counted there): the summary is stashed and the save deferred to reconcile; no main-slot copy and no sweep",
+      "files": [
+        {
+          "path": "$ROOT/example-repo/general/compact/*.md",
+          "count": 0
+        },
+        {
+          "path": "$WATCH/$SID/pending/*.post.md",
+          "count": 1
+        }
+      ],
+      "absent_rows": [
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "sweep_evidence"
+        }
+      ]
+    },
+    {
+      "after_step": 5,
+      "why": "F2-1: the next Stop (reconcile) sees the new boundary row: P3-main with no subagent signal proves main, and the deferred summary is saved in the main slot",
+      "files": [
+        {
+          "path": "$ROOT/example-repo/general/compact/*_c1-*.md",
+          "count": 1
+        },
+        {
+          "path": "$ROOT/example-repo/general/compact/subagents/*.md",
+          "count": 0
+        }
+      ]
+    }
+  ]
+}

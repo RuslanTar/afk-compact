@@ -12,6 +12,7 @@ Every file here is synthetic. No row, summary or payload comes from a real sessi
 | `$TMP`, `$HOME`, `$ROOT`, `$WATCH`, `$SID` | case runner | the case's temp dir, fresh HOME, handoff root, watch dir, `ids.json` `sid.S1` |
 | `$FIXTURES` | case runner | absolute path of `tests/fixtures` |
 | `$SECRET{<id>}` | case runner only | the joined fragments of `secrets/corpus.json` entry `<id>` |
+| `$NONCE` (any `$<VAR>` a step captured) | case runner | the value an earlier step's `capture` took from its stdout (`sequences/S-21-classic`) |
 
 A file holding `$SECRET{` is never copied into a generated module.
 
@@ -32,6 +33,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `transcripts/<case>/main.jsonl`, `subagents/agent-<id>.jsonl` | transcript rows, TF Q3 §1a shapes | AT-C-08, M3-02, M3-12, M4-03, T-01..T-25 |
 | `transcripts/scope-cases.json` | the scope-proof table: dispatch, summary, transcript dir, count seed, expected scope | AT-C-08, AT-M4-03 |
 | `watcher/T-NN/` | `input.json` (seeds, ordered hook steps), `payloads/`, `seed/`, `expected.json` | WATCH §9 T-01..T-25 |
+| `sequences/<id>/`, `transcripts/<id>/` | ordered hook steps with the main transcript's state per step: `S-21-classic`, `S-21-mod` (the live S-21 event order) | F2-1 regression, AT-C-08, AT-M4-03 |
 | `secrets/corpus.json` | secret values as fragments (with per-line and per-value parts), file-name deny-list cases, sweep files | AT-E-04, E-06, S-10 |
 | `tempfiles/<case>.json` | large or many-line files the runner creates at run time | AT-E-02, E-05, E-07, E-08 |
 | `repos/<case>.json` | git repo recipes the runner materialises as `$TMP/<dir>` | AT-M5-02, E-01, E-09, HT-B-02, D-12 |
@@ -57,6 +59,11 @@ Groups worth knowing: 01–05, 11, 27, 29 and 38 share one normalized body (Post
 **Transcripts.** The runner copies `main.jsonl` to the payload's `transcript_path`, and `subagents/` to `<session dir>/subagents/`, where the session dir is the transcript path without `.jsonl`. `main.part-NN.jsonl` files are appended in step order, so turn ends (Stop events) fall between rows (T-12, T-25). Timestamps are UTC (`Z`). The case clock is +03:00. One line in `T-16/main.jsonl` is malformed on purpose.
 
 **Watcher cases.** `input.json` holds: `seed` (files to copy before the first step; `to` starts with `$WATCH` or `$ROOT`), `repo` (a recipe), `transcripts`, optional `transcript_mode` and `unreadable` (paths to create with mode 000), and `steps`. Each step has `now`, `argv`, `stdin`, an optional `transcript_append`, and `expect` (`exit`, plus `stdout`; `null` means not asserted). `expected.json` quotes the WATCH §9 row, names the v1 scope (BUILD-PLAN §5.2), and lists `asserts` in the §3.5 case vocabulary: `rows` (file, `ev`, `fields`, `count`), `absent_rows`, `files`, `grep_absent`. `metrics` gives the spec's metric values for fields that WATCH §6.3 does not name on a row. WP-watch maps those.
+
+**Sequences.** `sequences/<id>/input.json` uses the watcher `input.json` keys plus three. `transcript_state` (`{boundaries, summaries}`) is the main transcript's `compact_boundary` and `isCompactSummary` row count when that step's hook fires, after its `transcript_append`, which is appended before the step runs. `capture` is the runner's `{VAR: "re:<regex>"}` from the step's stdout, used as `$VAR` in later payloads and transcript parts. `"order": "S-21"` makes `--check` require that SessionStart(compact) and PostCompact see no boundary row newer than PreCompact. `expected.json` gives `observed_order`, and `step_asserts` (`after_step` plus `files`, `rows`, `absent_rows` in the §3.5 vocabulary, each with a `why`).
+- The S-21 order (lab `E1/probes/S-21-S-26.md` §3, 2.1.306, one manual and one auto run): mod before-step, PreCompact, the summarizer fork's SubagentStop (`agent_type` empty), SessionStart(compact), PostCompact, mod after-step. Only then do the boundary row and the summary row reach the main transcript, so both hooks see 0 of each. The next Stop is the first hook that sees them. `transcripts/S-21-*/main.part-02.jsonl` is what lands after PostCompact. The summary row's own timestamp is earlier than SessionStart, so row timestamps cannot order writes against hooks.
+- `S-21-classic`: no mod, so PreCompact writes a classic dispatch and the summary carries its nonce (`$NONCE`, captured from PreCompact stdout). Inside PostCompact there is no proof (F2-1), so the asserts are: no main-slot copy and no sweep, the stash is kept, and after Stop the summary is in the main slot (P3 at reconcile).
+- `S-21-mod`: the mod's dispatch `1a2b3c4d` is seeded, P1 proves main inside PostCompact, and after Stop there is still exactly one copy.
 
 **Repo recipes.** `{v, id, dir, git, branch, author, commits: [{message, files}], dirty, untracked, ignored_files, note}`; `git: false` recipes have `files` only. A `.gitignore` in the first commit holds the ignored patterns. Commits use the fixed author and date in the recipe.
 
