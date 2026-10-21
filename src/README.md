@@ -175,7 +175,7 @@ Edge cases:
 
 - A message you type during the delay cancels the handoff turn. A message you type during the turn lifts the plugin's limits, and you lead from there.
 - If native compaction fires during the turn, the summary is complete anyway. The resume block says a draft exists and gives the exact command that publishes it.
-- A handoff written in the last 15 minutes is reused. Nothing new is published, and the compaction uses the full summary text.
+- A handoff the session wrote in the last 15 minutes is reused only when nothing has changed since: the same commit, the same working-tree state, and no new decision or background change. Then nothing new is published, and the compaction uses the full summary text. Otherwise the turn writes and publishes a new handoff.
 - There are at most two handoff turns per session in a rolling hour.
 - There is no handoff turn on the turn-end compaction at `compact_target_tokens`, for subagents, or in a cycle that will auto-continue.
 - Windows too small for plugin compactions get no nudge, so no handoff turn.
