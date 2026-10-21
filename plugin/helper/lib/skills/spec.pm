@@ -97,6 +97,34 @@ sub regex {
 sub marker_re   { return regex('marker_re') }
 sub sentinel_re { return regex('sentinel_re') }
 sub fold_line_re { return regex('fold_line_re') }
+sub id_range_re { return regex('id_range_re') }
+sub time_re     { return regex('time_re') }
+
+# claim_tags.verified_re (the `[verified HH:MM: <cmd>]` tag).
+sub verified_re {
+    my $t = load()->{claim_tags};
+    my $v = ref $t eq 'HASH' ? $t->{verified_re} : undef;
+    return undef unless defined $v && !ref $v;
+    return eval { qr/$v/ };
+}
+
+# One clutter class by id → {re, max_lines, min_run}, or undef when the block
+# has no such class. List form [{id, re, max_lines?, min_run?}] or {id => re}.
+sub clutter_class {
+    my ($id) = @_;
+    my $v = load()->{clutter_classes};
+    my $e;
+    if (ref $v eq 'ARRAY') {
+        ($e) = grep { ref $_ eq 'HASH' && ($_->{id} // '') eq $id } @$v;
+    } elsif (ref $v eq 'HASH' && defined $v->{$id}) {
+        $e = ref $v->{$id} eq 'HASH' ? $v->{$id} : { re => $v->{$id} };
+    }
+    return undef unless $e && defined $e->{re} && !ref $e->{re};
+    my $re = eval { qr/$e->{re}/ } or return undef;
+    my %c = (re => $re);
+    for my $k (qw(max_lines min_run)) { $c{$k} = $e->{$k} if defined $e->{$k} && $e->{$k} =~ /\A\d+\z/ }
+    return \%c;
+}
 
 # Outward / destructive command classes (WATCH D-03) → [{class, re}]
 sub outward_classes {

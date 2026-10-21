@@ -1,0 +1,152 @@
+{
+ "id": "HT-SS-02",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "stash <path> runs the secret gate before the copy (TPL §5, HK-44; PRIV-06): a redact verdict (a log or JSON file with any hit, another file with a WARN hit) writes a redacted copy and names the rule ids, never the values: WARN as `ADVISORY secret-warn rules=<ids>` (D-13), HARD as `ADVISORY secret-hard rules=<ids>`; the copy path stays the last line; the source is untouched; a HARD hit in another file is refused (withheld)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$TMP/repo/.planning/STATE.md",
+   "content_parts": [
+    "Phase 2 of 5\nDB_PASS",
+    "WORD=hunter2",
+    "fixture\nnext: retry window\n"
+   ]
+  },
+  {
+   "write": "$TMP/repo/server.log",
+   "content_parts": [
+    "GET /a 200\nAuthorization: Bearer eyJhbGciOiJIUzI1NiJ9",
+    ".eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+    ".c2lnbmF0dXJlLXZhbHVl\nGET /b 200\n"
+   ]
+  },
+  {
+   "write": "$TMP/repo/app.json",
+   "content_parts": [
+    "{\"tok",
+    "en\": \"abcdefghij123\", \"auth\": \"Bearer eyJhbGciOiJIUzI1NiJ9",
+    ".eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+    ".c2lnbmF0dXJlLXZhbHVl\", \"n\": 1}\n"
+   ]
+  },
+  {
+   "write": "$TMP/repo/notes.md",
+   "content_parts": [
+    "token eyJhbGciOiJIUzI1NiJ9",
+    ".eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+    ".c2lnbmF0dXJlLXZhbHVl\n"
+   ]
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "stash",
+  "$TMP/repo/.planning/STATE.md"
+ ],
+ "expect": {
+  "exit": 0,
+  "stdout": "ADVISORY secret-warn rules=key-value\n$DISP/2026-10-21/stash/2026-10-21_14-05-12_STATE.md\n",
+  "files": [
+   {
+    "path": "$DISP/2026-10-21/stash/2026-10-21_14-05-12_STATE.md",
+    "mode": "0600",
+    "has": [
+     "\\APhase 2 of 5\\nDB_\\[redacted:key-value\\]\\nnext: retry window\\n\\z"
+    ],
+    "lacks": [
+     "hunter2"
+    ]
+   },
+   {
+    "path": "$TMP/repo/.planning/STATE.md",
+    "has": [
+     "hunter2fixture"
+    ]
+   }
+  ]
+ },
+ "then": [
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stash",
+    "$TMP/repo/server.log"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ADVISORY secret-hard rules=auth-header,jwt\n$DISP/2026-10-21/stash/2026-10-21_14-05-12_server.log\n",
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/stash/2026-10-21_14-05-12_server.log",
+      "mode": "0600",
+      "has": [
+       "^GET /a 200$",
+       "\\[redacted:jwt\\]",
+       "^GET /b 200$"
+      ],
+      "lacks": [
+       "eyJzdWIi",
+       "c2lnbmF0dXJl"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stash",
+    "$TMP/repo/app.json"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ADVISORY secret-hard rules=auth-header,jwt\nADVISORY secret-warn rules=key-value\n$DISP/2026-10-21/stash/2026-10-21_14-05-12_app.json\n",
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/stash/2026-10-21_14-05-12_app.json",
+      "mode": "0600",
+      "has": [
+       "\\[redacted:jwt\\]",
+       "\\[redacted:key-value\\]"
+      ],
+      "lacks": [
+       "abcdefghij123",
+       "eyJzdWIi"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stash",
+    "$TMP/repo/notes.md"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: withheld\n",
+    "absent": [
+     "$DISP/2026-10-21/stash/*notes.md"
+    ]
+   }
+  }
+ ]
+}
