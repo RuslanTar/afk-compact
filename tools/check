@@ -4,7 +4,8 @@
 Usage: tools/check PHASE [--names FILE] [--no-drill]
   PHASE    phase0       X-validate (skeleton), X-test, X-types, X-gen, X-assemble, X-gates,
                         X-name, X-tools, BT-02 rename drill
-           integration  the same with every skill required, plus X-H (every helper case:
+           integration  the same with every skill required, plus X-variants (the E-1 H11 builds
+                        skills-only and triggers-off, each validated) and X-H (every helper case:
                         tests/helper/run.* over tests/helper/cases, then the WP-watch driver;
                         only the KNOWN_RED cases may fail, each for its stated reason)
            selftest     X-tools alone
@@ -25,7 +26,7 @@ only GEN tools write, other candidate names inside longer words, npm manifests o
 node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md
 description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
 AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
-self-heal table and resume SKILL size), a resume protocol over its DP-8 hard cap (assemble),
+self-heal table and resume SKILL size), a resume protocol over its DP-8 hard cap (assemble), AT-WD-02 manifest defaults,
 a cross-WP `git mv` (owners-check) and a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run).
 
@@ -293,6 +294,16 @@ def probes(name):
                 "|---|---|---|---|---|"] + ["| {} | f | s | a | b |".format(r) for r in ("1", "2a", "2b", "3", "4", "5", "6", "7")]
         append(d, "plugin/skills/resume/references/self-heal.md", "\n" + "\n".join(rows) + "\n")
 
+    def config_defaults(d):
+        p = os.path.join(d, "plugin", ".claude-plugin", "plugin.json")
+        with open(p, encoding="utf-8") as f:
+            doc = json.load(f)
+        uc = doc["userConfig"]
+        uc["watcher"]["default"] = "off"
+        uc["disposable_keep_days"]["default"] = 30
+        uc["watch_keep_days"] = {"type": "number", "title": "x", "description": "x", "default": 30}
+        write_text(p, json.dumps(doc, indent=2) + "\n")
+
     def resume_hard(d):
         append(d, "src/assets/resume-context.txt", "x" * 600 + "\n")
 
@@ -375,6 +386,10 @@ def probes(name):
         ("self-heal", "AT-J-13", gates_only("self-heal"), self_heal,
          [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 20480$",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows"], None),
+        ("config-defaults", "AT-WD-02", gates_only("config-defaults"), config_defaults,
+         [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days"], None),
         ("resume-hard", "DP-8", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
         ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
@@ -536,6 +551,36 @@ def bt02(phase, names):
           "no {} left; committed tree unchanged)".format(DRILL_NAME, phase, old))
 
 
+# ---------------------------------------------------------------- X-variants
+
+VARIANTS_DIR = os.path.join(REPO, "tmp", "variants")
+
+
+def x_variants(name):
+    """E-1 H11 arms (E1-plan-changes finding 2): tools/build --variant renders both; each must pass
+    strict validation; skills-only has no hooks/ or tests/, triggers-off pins triggers false."""
+    for v in ("skills-only", "triggers-off"):
+        out = os.path.join(VARIANTS_DIR, v)
+        run([os.path.join(REPO, "tools", "build"), "--variant", v, "--out", out], "X-variants build " + v, capture=True)
+        plugin_dir = os.path.join(out, "plugin")
+        run(["claude", "plugin", "validate", plugin_dir, "--strict"], "X-variants validate " + v, capture=True)
+        run(["claude", "plugin", "validate", out, "--strict"], "X-variants validate marketplace " + v, capture=True)
+        with open(os.path.join(plugin_dir, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
+            doc = json.load(f)
+        if doc.get("name") != name:
+            raise Fail("X-variants: {} manifest name {}".format(v, doc.get("name")))
+        trig = doc["userConfig"]["triggers"]["default"]
+        has = [x for x in ("hooks", "tests") if os.path.exists(os.path.join(plugin_dir, x))]
+        if v == "skills-only" and (has or not os.path.isfile(os.path.join(plugin_dir, "bin", name + "-store"))):
+            raise Fail("X-variants: skills-only has {} or no launcher".format(has))
+        if v == "skills-only" and trig is not True:
+            raise Fail("X-variants: skills-only changed triggers")
+        if v == "triggers-off" and (trig is not False or "hooks" not in has):
+            raise Fail("X-variants: triggers-off has triggers {} / hooks {}".format(trig, "hooks" in has))
+    shutil.rmtree(VARIANTS_DIR)
+    print("X-variants: PASS (skills-only, triggers-off)")
+
+
 # ---------------------------------------------------------------- X-H
 
 # Helper cases accepted as failing until a named later merge, each with the regex one line of
@@ -628,6 +673,8 @@ def main(argv):
         steps.append("X-name")
         gates(["plugin", "README.md"], names, name, only="stale-name")
         if phase == "integration":
+            steps.append("X-variants")
+            x_variants(name)
             steps.append("X-H")
             runners = [f for f in os.listdir(os.path.join(REPO, "tests", "helper"))
                        if f.startswith("run.")] if os.path.isdir(os.path.join(REPO, "tests", "helper")) else []

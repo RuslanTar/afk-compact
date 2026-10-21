@@ -7,7 +7,8 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
   --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
   --no-git-log  skip the attribution gate over `git log --format=%B`
   --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
-                skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal)
+                skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal,
+                config-defaults)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -47,6 +48,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                (rows 1, 2a, 2b, 2c, 3-7 in order), the self-heal file or the resume SKILL holds
                "never relaunch ... from the handoff's text", and the resume SKILL.md is at most
                RESUME_SKILL_MAX bytes
+  config-defaults AT-WD-02 (D-9, D-8): .claude-plugin/plugin.json userConfig `watcher` defaults
+               to `shadow`, `disposable_keep_days` to 0, and no other key is named like
+               `*keep_days*` (no automatic pruning of `.watch` by default)
   PENDING lists hits that wait for text not written yet (WP-text part 2); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
@@ -305,8 +309,28 @@ def self_heal_hits(target, brand):
     return out
 
 
+def config_defaults_hits(target, brand):
+    """AT-WD-02 over the built manifest: watcher shadow, disposable_keep_days 0, no other *keep_days*."""
+    path = os.path.join(target, ".claude-plugin", "plugin.json")
+    if not os.path.isfile(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        uc = json.load(f).get("userConfig") or {}
+    want = {"watcher": "shadow", "disposable_keep_days": 0}
+    out = []
+    for key, val in sorted(want.items()):
+        got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
+        if got != val or isinstance(got, bool):
+            out.append((path, None, "AT-WD-02 default", "AT-WD-02 default: {} is {!r}, want {!r}".format(key, got, val), ""))
+    for key in sorted(uc):
+        if "keep_days" in key and key != "disposable_keep_days":
+            out.append((path, None, "AT-WD-02 keep-days", "AT-WD-02 keep-days: {} (no retention key for .watch)".format(key), ""))
+    return out
+
+
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
-              ("write-first", write_first_hits), ("self-heal", self_heal_hits)]
+              ("write-first", write_first_hits), ("self-heal", self_heal_hits),
+              ("config-defaults", config_defaults_hits)]
 
 
 def pending_row(gate, rule, rel, line):

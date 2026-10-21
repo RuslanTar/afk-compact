@@ -7,12 +7,18 @@ Usage:
                                     byte for byte (CRLF drift counts), and report any other
                                     file in a folder only GEN tools write as stale
   tools/build --name N --out DIR    render a full copy under DIR (rename drill; repo untouched)
+  tools/build --variant V --out DIR render a lab variant under DIR (E-1 H11 arms; repo untouched):
+                                    skills-only   same name, skills, helper and assets; no hooks/
+                                                  (no hooks.json, no mod) and no plugin/tests/
+                                    triggers-off  the full build with userConfig triggers
+                                                  defaulting to false
+                                    It prints a tree sha256 (paths, modes and bytes) for FROZEN.md.
 
 Build-time rules (compaction DESIGN-NOTES §2, BUILD-PLAN §3.4): strip
 `[ \\t]*<!--.*?-->` (multi-line) and fill `{{plugin}}`. Manifests also take
 `{{marketplace}}`, `{{version}}` and `{{description}}` from brand.json.
 """
-import json, os, re, shutil, stat, sys
+import hashlib, json, os, re, shutil, stat, sys
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -35,6 +41,7 @@ OTHER_GEN = {
     "plugin/tests/unit/_gen/helper-replies.gen.ts": "tools/helper-replies-gen",
 }
 IGNORED_FILES = {".DS_Store"}
+VARIANTS = ("skills-only", "triggers-off")   # E1-plan-changes finding 2 (H11 arms)
 
 
 def die(msg):
@@ -187,10 +194,37 @@ def write_file(root, rel, text, mode):
     os.chmod(p, mode)
 
 
+def apply_variant(gen, variant):
+    """The E-1 H11 arms. skills-only: drop the hooks (classic hooks.json and the mod) so nothing
+    runs at compaction; the skills and their helper stay. triggers-off: pin triggers to false."""
+    if variant == "skills-only":
+        return {rel: v for rel, v in gen.items() if not rel.startswith(("plugin/hooks/", "plugin/tests/"))}
+    if variant == "triggers-off":
+        rel = "plugin/.claude-plugin/plugin.json"
+        doc = json.loads(gen[rel][0])
+        doc["userConfig"]["triggers"]["default"] = False
+        return dict(gen, **{rel: (json.dumps(doc, indent=2, ensure_ascii=False) + "\n", gen[rel][1])})
+    die("unknown variant " + variant)
+
+
+def tree_sha(root):
+    """sha256 over every file under root: relative path, exec bit and bytes, in sorted order."""
+    h = hashlib.sha256()
+    for d, dirs, files in os.walk(root):
+        dirs.sort()
+        for f in sorted(files):
+            p = os.path.join(d, f)
+            h.update(os.path.relpath(p, root).encode("utf-8") + b"\0")
+            h.update(b"x" if os.stat(p).st_mode & stat.S_IXUSR else b"-")
+            h.update(read_bytes(p) + b"\0")
+    return h.hexdigest()
+
+
 def main(argv):
     check = False
     name = None
     out_dir = None
+    variant = None
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -201,6 +235,9 @@ def main(argv):
             i += 1
         elif a == "--out" and i + 1 < len(argv):
             out_dir = argv[i + 1]
+            i += 1
+        elif a == "--variant" and i + 1 < len(argv) and argv[i + 1] in VARIANTS:
+            variant = argv[i + 1]
             i += 1
         else:
             die("unknown argument " + a + "\n" + __doc__)
@@ -217,6 +254,8 @@ def main(argv):
         die("plugin name must be kebab-case: " + brand["name"])
     if name is not None and out_dir is None and not check:
         die("--name needs --out (rename the repo by editing brand.json)")
+    if variant is not None and (out_dir is None or check):
+        die("--variant needs --out (a variant never replaces the repo's build)")
 
     gen = plan(brand)
     old = load_state()
@@ -262,13 +301,20 @@ def main(argv):
                 continue
             if rel.startswith("plugin/bin/") or rel.startswith("plugin/skills/"):
                 continue
+            if variant == "skills-only" and rel.startswith(("plugin/hooks/", "plugin/tests/")):
+                continue
             src = os.path.join(REPO, rel)
             dst = os.path.join(root, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy2(src, dst)
+        if variant is not None:
+            gen = apply_variant(gen, variant)
         for rel, (text, mode) in gen.items():
             write_file(root, rel, text, mode)
-        print("built {} files for {} into {}".format(len(gen), brand["name"], root))
+        print("built {} files for {} into {}{}".format(len(gen), brand["name"], root,
+                                                       " (variant {})".format(variant) if variant else ""))
+        if variant is not None:
+            print("tree sha256 {} {}".format(tree_sha(os.path.join(root, "plugin")), variant))
         return 0
 
     for rel in old["files"]:
