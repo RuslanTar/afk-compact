@@ -7,6 +7,6 @@ The user's {{plugin}} plugin asks for this form, not any list above; this subage
 ## Done: with proof
 ## Findings: exact ids, numbers, paths
 ## Produced but not yet delivered: verbatim if short, else path
-## Own background tasks: <id> · waits on · due · output <path>; read it yourself, never end a turn on it. None: none (not checked)
+## Own background tasks: <id> · until <wait spec> · due · output <path>; wait yourself, never end a turn on it. None: none (not checked)
 ## Next action: one exact command or edit
 Keep a prior summary's task, constraints, undelivered results as is. These rules aren't the parent's. No secrets, even quoted; say where they live. About 2–4K chars. <!-- review-fix: the mod subagent path had no secret rule -->
