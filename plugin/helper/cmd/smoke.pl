@@ -4,6 +4,10 @@
 # this plugin, C8 binary string counts and C9 type-declaration hashes against
 # assets/canary-baseline.json. Then `SMOKE PASS <version>` (exit 0; clears smokeDue
 # in <watch>/version.json) or `SMOKE FAIL <check>` (exit 1). Never starts a session.
+# A check whose input is missing (no claude binary for C8, no type declarations for
+# C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14).
+# --skip-cli (tests) skips the checks that run or read the claude binary: validate,
+# test and C8.
 use strict;
 use warnings;
 
@@ -110,7 +114,8 @@ sub run {
         $check->('test', $t->{exit} == 0 ? 1 : 0, "exit $t->{exit}");
     }
     if (ref $base eq 'HASH' && ref $base->{c8} eq 'HASH' && ref $base->{c8}{counts} eq 'HASH') {
-        if (!$bin) { $check->('c8', undef, 'no binary') }
+        if ($opt->{'skip-cli'}) { $check->('c8', undef, 'skipped by flag') }
+        elsif (!$bin) { $check->('c8', 0, 'claude binary not found') }
         else {
             my @s = sort keys %{ $base->{c8}{counts} };
             my $n = count_strings($bin, \@s);
@@ -121,7 +126,7 @@ sub run {
     if (ref $base eq 'HASH' && ref $base->{c9} eq 'HASH') {
         my $tf = $opt->{types} // "$root/.claude-plugin/types/claude-code.d.ts";
         my $traw = -f $tf ? util::read_file($tf) : undef;
-        if (!defined $traw) { $check->('c9', undef, 'no type declarations; load the plugin once to write them') }
+        if (!defined $traw) { $check->('c9', 0, 'no type declarations; load the plugin once to write them') }
         else {
             my @tl = split /\n/, $traw;
             my @diff;

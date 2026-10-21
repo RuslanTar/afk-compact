@@ -31,7 +31,8 @@
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
-#   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES
+#   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
+#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -64,6 +65,11 @@ my $HOSTNAME = (POSIX::uname())[1];
 my $CLAUDE_BIN = find_claude_bin();
 my $DEFAULT_SID = '11111111-2222-4333-8444-555555555555';
 my $DEFAULT_PID = '424242:Tue Oct 21 09:00:00 2026';
+
+# The Claude Code type declarations (tools/typecheck: CC_TYPES_DIR, else the repo's .types/ copy).
+sub types_file {
+    return $ENV{CC_TYPES_DIR} ? "$ENV{CC_TYPES_DIR}/claude-code.d.ts" : "$REPO/.types/claude-code.d.ts";
+}
 
 sub find_claude_bin {
     my $vdir = util::home() . '/.local/share/claude/versions';
@@ -165,7 +171,8 @@ for my $cf (@CASES) {
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
-                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv") } @{ $case->{needs} || [] };
+                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv")
+                      || ($_ eq 'types' && !-f types_file()) } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -202,6 +209,7 @@ sub run_case {
     $V{HOST} = $HOSTNAME;
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
     $V{LSTART1} = $LSTART1;
+    $V{TYPES} = types_file();
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";

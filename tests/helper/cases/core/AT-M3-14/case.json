@@ -1,0 +1,158 @@
+{
+ "id": "AT-M3-14",
+ "needs": [
+  "types"
+ ],
+ "note": "MOD-SPEC §5.6 and AT-M3-14 (F): smoke --skip-cli (validate, test and C8 skipped by flag) with the C9 type declarations of the tested version passes, writes smoke_pass and clears smokeDue; declarations that differ from one baseline hash fail C9 and keep smokeDue; missing declarations fail C9 too (never a pass that compared nothing)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "the tested version: pass",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.306",
+      "smokeDue": "2.1.306"
+     }
+    }
+   ],
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok baseline \\(Claude Code 2\\.1\\.306\\)$",
+     "^skip validate \\(skipped by flag\\)$",
+     "^skip c8 \\(skipped by flag\\)$",
+     "^ok c9 \\(6 declarations\\)$",
+     "^SMOKE PASS \\S+\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "keys_absent": [
+       "smokeDue"
+      ],
+      "keys": [
+       "lastSmokePass"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_pass",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "one declaration altered: C9 fails, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.306",
+      "smokeDue": "2.1.306"
+     }
+    },
+    {
+     "copy": "$TYPES",
+     "to": "$TMP/types/claude-code.d.ts"
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "-pi",
+    "-e",
+    "s/^(\\s*export type SessionCompactInput = \\{)$/$1 altered_by_test?: 1;/",
+    "$TMP/types/claude-code.d.ts"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--types",
+    "$TMP/types/claude-code.d.ts"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(changed: SessionCompactInput\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.306"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 1,
+      "fields": {
+       "check": "c9"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_pass",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "no type declarations: C9 fails, smokeDue kept",
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--types",
+    "$TMP/none/claude-code.d.ts"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations; load the plugin once to write them\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.306"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 2
+     }
+    ]
+   }
+  }
+ ]
+}
