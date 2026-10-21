@@ -1,0 +1,320 @@
+{
+ "id": "HT-LO-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "locate: tiers 1-6 of resume R1, ordered by frontmatter date (not file name); lineage up to 3 hops, same chain (A-6), a 4th hop is not followed; relation from session ids; integrity ok / ok-trailer copy is ok (not unshaped) / unshaped / possibly truncated / legacy / s=sub with its parent; .staging/ drafts last and never picked (D-15); newer files and foreign state files reported",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$TMP/repo/.planning/HANDOFF.json",
+   "content": "{}\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_a.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a0b0c0d⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_b.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T10:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a0b0c0d⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/compact/2026-10-21_11-30-00_11111111_c1-0c0c0c.md",
+   "content": "---\nwriter: mod\nnonce: 0c0c0c0c\ndate: 2026-10-21T11:30:00+03:00\nsession_id: $SID\nactor: main\nverdict: ok-trailer\n---\n⟪$BRAND v1 n=0c0c0c0c s=main⟫\n# LAB-7 — work\n⟪/$BRAND n=0c0c0c0c⟫\ntrailing words\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/compact/2026-10-21_11-40-00_11111111_c2-0d0d0d.md",
+   "content": "---\nwriter: mod\nnonce: 0d0d0d0d\ndate: 2026-10-21T11:40:00+03:00\nsession_id: $SID\nactor: main\nverdict: unshaped\n---\n# LAB-7 — work\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/compact/subagents/2026-10-21_11-50-00_11111111_c3-0e0e0e.md",
+   "content": "---\nwriter: mod\nnonce: 0e0e0e0e\ndate: 2026-10-21T11:50:00+03:00\nsession_id: $SID\nactor: main\nverdict: ok\n---\n⟪$BRAND v1 n=0e0e0e0e s=sub⟫\n# LAB-7 — work\n⟪/$BRAND n=0e0e0e0e⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/2026-10-21_07-00-00_11111111_trunc.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 01010101\ndate: 2026-10-21T07:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=01010101 s=manual⟫\n# LAB-7 — work\n"
+  },
+  {
+   "write": "$ROOT/repo/misc/2026-10-19_08-00-00_legacy.md",
+   "content": "# old handoff without marker\nsome text\n"
+  },
+  {
+   "write": "$ROOT/repo/misc/2026-10-20_08-00-00_55555555_t.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 02020202\ndate: 2026-10-20T08:00:00+03:00\nsession_id: 55555555-5555-4555-8555-555555555555\nactor: main\n---\n⟪$BRAND v1 n=02020202 s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=02020202⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/pay-12/2026-10-18_08-00-00_cccccccc_p.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 03030303\ndate: 2026-10-18T08:00:00+03:00\nsession_id: dddddddd-dddd-4ddd-8ddd-dddddddddddd\nactor: main\n---\n⟪$BRAND v1 n=03030303 s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=03030303⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/misc/2026-10-17_08-00-00_bbbbbbbb_q4.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 04040404\ndate: 2026-10-17T08:00:00+03:00\nsession_id: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\nactor: main\n---\n⟪$BRAND v1 n=04040404 s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=04040404⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/.staging/11111111-0a0a0a0a/body.md",
+   "content": "# draft\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/.staging/11111111-0a0a0a0a/settings.json",
+   "content": "{\"session_id\": \"$SID\", \"date\": \"2026-10-21T13:50:00+03:00\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/22222222-2222-4222-8222-222222222222.lineage.json",
+   "content": "{\"previous_session_id\": \"33333333-3333-4333-8333-333333333333\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/33333333-3333-4333-8333-333333333333.lineage.json",
+   "content": "{\"previous_session_id\": \"44444444-4444-4444-8444-444444444444\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/44444444-4444-4444-8444-444444444444.lineage.json",
+   "content": "{\"previous_session_id\": \"55555555-5555-4555-8555-555555555555\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/55555555-5555-4555-8555-555555555555.lineage.json",
+   "content": "{\"previous_session_id\": \"66666666-6666-4666-8666-666666666666\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/77777777-7777-4777-8777-777777777777.lineage.json",
+   "content": "{\"previous_session_id\": \"88888888-8888-4888-8888-888888888888\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/88888888-8888-4888-8888-888888888888.lineage.json",
+   "content": "{\"previous_session_id\": \"99999999-9999-4999-8999-999999999999\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/99999999-9999-4999-8999-999999999999.lineage.json",
+   "content": "{\"previous_session_id\": \"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\", \"lineage_reason\": \"clear\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.lineage.json",
+   "content": "{\"previous_session_id\": \"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\", \"lineage_reason\": \"clear\"}"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "locate",
+  "--sid",
+  "$SID",
+  "--cwd",
+  "$TMP/repo",
+  "--arg",
+  ""
+ ],
+ "expect": {
+  "exit": 0,
+  "stdout_has": [
+   "\\Atier: 3\\npick: $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_a.md\\nrelation: same-session\\nage: 2h T1\\nintegrity: ok\\ndate: 2026-10-21T12:00:00\\+03:00\\nsession: 11111111\\n",
+   "^state-file: $TMP/repo/.planning/HANDOFF.json$",
+   "^draft: $ROOT/repo/LAB-7/.staging/11111111-0a0a0a0a/body.md · 2026-10-21T13:50:00\\+03:00 · 11111111 · unpublished draft, never picked\\n\\z"
+  ],
+  "stdout_lacks": [
+   "^candidate:"
+  ]
+ },
+ "then": [
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_b.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 1\\npick: $ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_b.md\\nrelation: same-session\\n",
+     "^warn: newer superseding file $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_a.md ",
+     "^newer: $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_a.md · "
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-7/compact/2026-10-21_11-30-00_11111111_c1-0c0c0c.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 2\\npick: $ROOT/repo/LAB-7/compact/2026-10-21_11-30-00_11111111_c1-0c0c0c.md\\n",
+     "^integrity: ok$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-7/compact/2026-10-21_11-40-00_11111111_c2-0d0d0d.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^integrity: unshaped$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-7/compact/subagents/2026-10-21_11-50-00_11111111_c3-0e0e0e.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^integrity: s=sub$",
+     "^parent: $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_a.md$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-7/2026-10-21_07-00-00_11111111_trunc.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^integrity: possibly truncated$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/misc/2026-10-19_08-00-00_legacy.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 1\\n",
+     "^integrity: legacy$",
+     "^relation: other$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "22222222-2222-4222-8222-222222222222",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $ROOT/repo/misc/2026-10-20_08-00-00_55555555_t.md\\nrelation: successor\\nage: 1d T2\\n"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "77777777-7777-4777-8777-777777777777",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 6\\npick: none\\nrelation: unselected\\n",
+     "^candidate: "
+    ],
+    "stdout_lacks": [
+     "^pick: \\S+q4.md"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "pay-12"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 5\\npick: $ROOT/repo/pay-12/2026-10-18_08-00-00_cccccccc_p.md\\nrelation: other\\nage: 3d T2\\n"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 6\\npick: none\\nrelation: unselected\\n",
+     "^candidate: $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_a.md · 2026-10-21T12:00:00\\+03:00 · LAB-7 — work · 11111111$"
+    ],
+    "stdout_lacks": [
+     "^candidate: \\S+/\\.staging/",
+     "^candidate: \\S+/subagents/"
+    ]
+   }
+  }
+ ]
+}

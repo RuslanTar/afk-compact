@@ -16,7 +16,7 @@
 #           time so no file holds a whole secret-shaped string), mode} (+) |
 #           {mkdir} (+) | {repo: {branch, commits: [{files, msg}], dirty,
 #           untracked, ignored}, at} (+, inline recipe) | {run: argv, env,
-#           cwd, capture} (+, a helper call) | {git: argv, cwd} (+) |
+#           cwd, capture} (+, a helper call) | {git: argv, cwd, env, var} (+, var keeps stdout) |
 #           {age: path, minutes} (+, set mtime) | {bigfile, bytes, fill} (+)]
 #   expect: exit, stdout, stdout_re, stdout_max_bytes, stdout_has (+),
 #           stdout_lacks (+), json_keys (+), json (+, dotted path → value or
@@ -200,8 +200,9 @@ sub setup_step {
     } elsif (exists $st->{repo}) {
         make_repo($st->{repo}, $st->{at}, $env);
     } elsif (exists $st->{git}) {
-        my $r = run_env(['git', @{ $st->{git} }], $env, $st->{cwd} // $vars->{TMP});
+        my $r = run_env(['git', @{ $st->{git} }], { %$env, %{ $st->{env} || {} } }, $st->{cwd} // $vars->{TMP});
         push @$err, "setup git @{ $st->{git} }: exit $r->{rc}" if $r->{rc} != 0;
+        ($vars->{ $st->{var} } = $r->{out}) =~ s/\s+\z// if $st->{var};
     } elsif (exists $st->{run}) {
         my %e = (%$env, %{ $st->{env} || {} });
         my $r = helper($st->{run}, \%e, $st->{cwd} // $vars->{TMP}, '');

@@ -95,7 +95,7 @@ sub with {
         my $row = { v => 1, ts => skills::util::iso_local(), ev => 'lock_stale', sid => $owner->{sid}, actor => $owner->{actor},
                     writer => 'helper', pid => $$, path => $path };
         my $watch = $ENV{SKILLS_DOUBLE_WATCH};
-        skills::util::append_line("$watch/$owner->{sid}.classic.jsonl", skills::util::json_encode($row) . "\n") if $watch;
+        if ($watch) { skills::util::mkdir_p($watch); skills::util::append_line("$watch/$owner->{sid}.classic.jsonl", skills::util::json_encode($row) . "\n") }
     }
     seek($fh, 0, 0); truncate($fh, 0);
     syswrite($fh, skills::util::json_encode($owner));

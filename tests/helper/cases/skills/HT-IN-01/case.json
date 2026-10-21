@@ -1,0 +1,81 @@
+{
+ "id": "HT-IN-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "inventory <handoff>: last sidecar slot and its task outputs (size, mtime); In-flight rows with class; probe paths; recorded pids matched by start time (live / start-differs); leftover pid and port; recipes with script state; heal counters; no task tools (OD-19)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_in.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-1 · wf_7a1 | workflow · review · main | 15:10 · review.json | `ls $TMP/run/review.json` | summarise | /clear, exit | ask · restart/B-1.md |\n| B-2 · b8890 | shell · test suite · main | 14:40 · exit code | `tail -n 3 $TMP/run/b8890.output` | record | /clear, exit | auto · restart/B-2.md |\nLeftover: 999999 · 54321 · started 10:00 · owner gone · binary and cwd exist? no\n⟪/$BRAND n=0a0b0c0d⟫\n"
+  },
+  {
+   "write": "$TMP/run/b8890.output",
+   "content": "ok 1\n"
+  },
+  {
+   "write": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-2.json",
+   "content": "{\"ts\": \"2026-10-21T13:00:00+03:00\", \"tasks\": []}"
+  },
+  {
+   "age": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-2.json",
+   "minutes": 60
+  },
+  {
+   "write": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-3.json",
+   "content": "{\"ts\": \"2026-10-21T13:59:00+03:00\", \"tasks\": [{\"id\": \"b8890\", \"kind\": \"shell\", \"status\": \"running\", \"output\": \"$TMP/run/b8890.output\"}]}"
+  },
+  {
+   "write": "$ROOT/.sessions/by-pid/1-1792580000.live-22222222.json",
+   "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"22222222-2222-4222-8222-222222222222\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/by-pid/1-978300000.live-22222222.json",
+   "content": "{\"pid\": 1, \"pid_lstart\": \"Mon Jan  1 00:00:00 2001\", \"session_id\": \"22222222-2222-4222-8222-222222222222\", \"cwd\": \"$TMP/repo\"}"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/evidence/2026-10-21_12-00-00_22222222_in/restart/B-2.md",
+   "content": "item: B-2 · runtime id b8890 · class auto\nscript: none\ncommand: bin/test\n"
+  },
+  {
+   "write": "$WATCH/heal/22222222-2222-4222-8222-222222222222/b8890.count",
+   "content": "{\"chain\": 1, \"by_resume\": {\"x\": 1}}"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "inventory",
+  "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_in.md"
+ ],
+ "expect": {
+  "exit": 0,
+  "stdout_has": [
+   "^sidecar: $WATCH/22222222-2222-4222-8222-222222222222/bg/slot-3.json ts=2026-10-21T13:59:00\\+03:00 tasks=1$",
+   "^task: b8890 · shell · running · $TMP/run/b8890.output 5 B mtime ",
+   "^row: B-1 · wf_7a1 · workflow · class ask$",
+   "^row: B-2 · b8890 · shell · class auto$",
+   "^path: $TMP/run/review.json missing$",
+   "^leftover pid: 999999 alive=no",
+   "^port: 54321 listening=no$",
+   "^pid: 1 session 22222222 live=yes$",
+   "^pid: 1 session 22222222 live=start-differs$",
+   "^recipe: B-2 · runtime id b8890 · class auto · $ROOT/repo/LAB-7/evidence/2026-10-21_12-00-00_22222222_in/restart/B-2.md · script sha none$",
+   "^counter: b8890 chain=1$"
+  ]
+ }
+}

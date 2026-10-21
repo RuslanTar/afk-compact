@@ -1,0 +1,102 @@
+{
+ "id": "HT-SS-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "stash <path>: copies into today's <disposable_root>/<YYYY-MM-DD>/ (here stash/) with 0700/0600, prints the copy path, never moves; a deny-listed file is refused (withheld)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$TMP/repo/.planning/STATE.md",
+   "content": "Phase 2 of 5\n"
+  },
+  {
+   "write": "$TMP/repo/.env",
+   "content": "A=1\n"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "stash",
+  "$TMP/repo/.planning/STATE.md"
+ ],
+ "expect": {
+  "exit": 0,
+  "stdout": "$DISP/2026-10-21/stash/2026-10-21_14-05-12_STATE.md\n",
+  "files": [
+   {
+    "path": "$DISP/2026-10-21/stash/2026-10-21_14-05-12_STATE.md",
+    "mode": "0600",
+    "has": [
+     "\\APhase 2 of 5\\n\\z"
+    ]
+   },
+   {
+    "path": "$DISP/2026-10-21",
+    "mode": "0700"
+   },
+   {
+    "path": "$DISP/2026-10-21/stash",
+    "mode": "0700"
+   },
+   {
+    "path": "$TMP/repo/.planning/STATE.md",
+    "has": [
+     "\\APhase 2 of 5\\n\\z"
+    ]
+   }
+  ]
+ },
+ "then": [
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stash",
+    "$TMP/repo/.planning/STATE.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "$DISP/2026-10-21/stash/2026-10-21_14-05-12_STATE-2.md\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stash",
+    "$TMP/repo/.env"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: withheld\n",
+    "absent": [
+     "$DISP/2026-10-21/stash/*.env"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stash",
+    "$TMP/repo/missing.md"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: not-found\n"
+   }
+  }
+ ]
+}

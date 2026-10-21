@@ -89,9 +89,13 @@ sub run {
     # Counter: {chain: n, by_resume: {key: n}}; one resume = one Claude Code
     # process (pid and start time), so a --resume in a new process counts anew.
     my $key = $id->{pid} ? "pid:$id->{pid}:" . ($id->{lstart} // '') : $id->{sid};
+    # One counter per recipe item, whichever handle (B-n or runtime id) was given.
+    my $ckey = $recipe->{rid} // $recipe->{bn};
+    $ckey =~ s/[^A-Za-z0-9._:-]/_/g;
+    $row->{item} = $ckey;
     my $dir = "$ctx->{watch}/heal/$origin";
     skills::util::mkdir_p($dir);
-    my $file = "$dir/$item.count";
+    my $file = "$dir/$ckey.count";
     my ($ok, $res) = skills::core::with_lock("$file.lock", skills::core::lock_owner($id->{sid}, 'main'), sub {
         my $c = eval { skills::util::json_decode(skills::util::read_file($file, 65536)) };
         $c = {} unless ref $c eq 'HASH';

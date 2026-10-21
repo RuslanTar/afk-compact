@@ -1,0 +1,147 @@
+{
+ "id": "HT-RC-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "receipt: one content-free resume_receipt row (relation, tier, calls, drift[], bg{}, questions, adopt, handoff relative to the root), prints nothing; bad enums are usage errors",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+   "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+  }
+ ],
+ "argv": [
+  "receipt",
+  "--handoff",
+  "$ROOT/repo/LAB-7/x.md",
+  "--relation",
+  "successor",
+  "--tier",
+  "T2",
+  "--calls",
+  "7",
+  "--drift",
+  "git,remote",
+  "--bg",
+  "RUNNING=1,LOST=2",
+  "--questions",
+  "2",
+  "--adopt",
+  "adopted"
+ ],
+ "env": {
+  "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+ },
+ "expect": {
+  "exit": 0,
+  "stdout": "",
+  "rows": [
+   {
+    "file": "$WATCH/$SID.classic.jsonl",
+    "ev": "resume_receipt",
+    "count": 1,
+    "fields": {
+     "handoff": "repo/LAB-7/x.md",
+     "relation": "successor",
+     "tier": "T2",
+     "calls": 7,
+     "drift": [
+      "git",
+      "remote"
+     ],
+     "bg": {
+      "LOST": 2,
+      "RUNNING": 1
+     },
+     "questions": 2,
+     "adopt": "adopted",
+     "writer": "helper",
+     "sid": "$SID"
+    }
+   }
+  ]
+ },
+ "then": [
+  {
+   "argv": [
+    "receipt",
+    "--handoff",
+    "$TMP/elsewhere.md",
+    "--relation",
+    "unselected",
+    "--tier",
+    "T1",
+    "--calls",
+    "3",
+    "--drift",
+    "none",
+    "--bg",
+    "none",
+    "--questions",
+    "0",
+    "--adopt",
+    "none"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_receipt",
+      "fields": {
+       "handoff": "external",
+       "drift": [],
+       "bg": {},
+       "adopt": "none"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "receipt",
+    "--relation",
+    "friend",
+    "--tier",
+    "T1",
+    "--calls",
+    "1",
+    "--questions",
+    "0"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 64
+   }
+  },
+  {
+   "argv": [
+    "receipt",
+    "--relation",
+    "other",
+    "--tier",
+    "T1",
+    "--calls",
+    "1",
+    "--questions",
+    "0",
+    "--drift",
+    "Free text here"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 64
+   }
+  }
+ ]
+}
