@@ -106,7 +106,9 @@ sub run {
     push @out, 'last hook row: ' . ($last_row // 'none');
 
     # watcher lines (WP-watch)
+    # The seam returns [line] (lib/watch.pm); a plain list is taken too.
     my @wl = eval { require "watch.pm"; watch::status_lines($sid) };
+    @wl = map { ref $_ eq 'ARRAY' ? @$_ : $_ } @wl;
     push @out, grep { defined && !ref } @wl;
     args::out(@out);
     return 0;
