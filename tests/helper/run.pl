@@ -9,7 +9,8 @@
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form of §3.5 (argv, stdin, setup, expect, then).
 # Step: {"argv", "stdin" (file in the case dir or tests/fixtures/), "stdin_json", "stdin_text",
-#   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N, "expect": {...}}
+#   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N (+ "kill_signal", default KILL),
+#   "expect": {...}}
 # Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir,
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
@@ -27,7 +28,13 @@
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
 #   expect: stdout_has / stdout_lacks (regexes, /m); json_keys; json {dotted path: value |
-#     {re} | {null} | {len} | {present}}; files has / lacks (regexes, /m)
+#     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
+# Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
+#   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
+#     write + jsonl_repeat {row, count} (then any jsonl rows);
+#     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
+#   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
+#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -55,11 +62,16 @@ while (@ARGV) {
 }
 @ARGS = ("$HERE/cases") unless @ARGS;
 
-my $BRAND = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); $b->{name} };
+my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
 my $HOSTNAME = (POSIX::uname())[1];
 my $CLAUDE_BIN = find_claude_bin();
 my $DEFAULT_SID = '11111111-2222-4333-8444-555555555555';
 my $DEFAULT_PID = '424242:Tue Oct 21 09:00:00 2026';
+
+# The Claude Code type declarations (tools/typecheck: CC_TYPES_DIR, else the repo's .types/ copy).
+sub types_file {
+    return $ENV{CC_TYPES_DIR} ? "$ENV{CC_TYPES_DIR}/claude-code.d.ts" : "$REPO/.types/claude-code.d.ts";
+}
 
 sub find_claude_bin {
     my $vdir = util::home() . '/.local/share/claude/versions';
@@ -161,7 +173,8 @@ for my $cf (@CASES) {
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
-                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv") } @{ $case->{needs} || [] };
+                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv")
+                      || ($_ eq 'types' && !-f types_file()) } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -198,6 +211,7 @@ sub run_case {
     $V{HOST} = $HOSTNAME;
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
     $V{LSTART1} = $LSTART1;
+    $V{TYPES} = types_file();
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
@@ -223,12 +237,12 @@ sub run_case {
             push @errs, map { "$label: $_" } @le;
             next;
         }
-        if (!$st->{argv} && !$st->{setup} && is_setup_action($st)) {
+        if (!$st->{argv} && !$st->{exec} && !$st->{setup} && is_setup_action($st)) {
             my $e = eval { setup($st, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; return @errs }
             next;
         }
-        next unless $st->{argv};
+        next unless $st->{argv} || $st->{exec};
         my $res = invoke($st, $case, \%V, $cdir, $i);
         push @errs, map { "$label: $_" } check($st->{expect} || {}, $res, \%V, $st);
         capture($st->{capture}, $res->[0]{out}, \%V) if $st->{capture} && @$res;
@@ -239,9 +253,26 @@ sub run_case {
     return @errs;
 }
 
+my %SECRET;
+# The joined fragments of tests/fixtures/secrets/corpus.json entry <id> (fixtures README).
+sub secret_value {
+    my ($id) = @_;
+    if (!%SECRET) {
+        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) } || {};
+        $SECRET{ $_->{id} } = join('', @{ $_->{fragments} || [] }) for @{ $c->{entries} || [] };
+    }
+    die "no secret corpus entry $id\n" unless exists $SECRET{$id};
+    return $SECRET{$id};
+}
+
 sub subst {
     my ($s, $V) = @_;
     return $s unless defined $s && !ref $s;
+    # Fixture placeholders (tests/fixtures/README.md): $SECRET{<id>}, {{plugin}}, {{marketplace}}, $FIXTURES.
+    $s =~ s/\$SECRET\{([a-z0-9-]+)\}/secret_value($1)/ge;
+    $s =~ s/\{\{plugin\}\}/$BRAND/g;
+    $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
+    $s =~ s/\$FIXTURES\b/$REPO\/tests\/fixtures/g;
     $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
     # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
@@ -259,6 +290,7 @@ sub subst_deep {
 
 sub src_file {
     my ($name, $cdir) = @_;
+    return $name if $name =~ m{^/} && -e $name;
     return "$cdir/$name" if -e "$cdir/$name";
     return "$REPO/tests/fixtures/$name" if -e "$REPO/tests/fixtures/$name";
     die "no file $name in the case dir or tests/fixtures\n";
@@ -319,7 +351,98 @@ sub make_repo {
 
 sub is_setup_action {
     my ($s) = @_;
-    return scalar grep { exists $s->{$_} } qw(write copy mkdir stub repo dispatch transcript run git bigfile age);
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir stub repo dispatch transcript run git bigfile age
+                                               tempfiles secret_files repo_fixture paths);
+}
+
+# ---------------------------------------------------------------- fixture recipes (tests/fixtures/README.md)
+# The rows the mod's tool.call handler would have sent through `log --stream paths`.
+sub record_paths {
+    my ($V, $sid, @paths) = @_;
+    $sid //= $V->{SID};
+    my $f = "$V->{WATCH}/$sid/paths.jsonl";
+    util::mkdir_p(util::dirname($f));
+    open(my $fh, '>>:raw', $f) or die "paths: $!\n";
+    for my $p (@paths) {
+        my $row = jsonc::encode_bytes(jsonc::obj(v => 1, ts => util::iso(time), ev => 'path', sid => $sid, actor => 'main',
+                                                  writer => 'mod', path => $p, tool => 'Bash'));
+        print $fh "$row\n";
+    }
+    close $fh;
+}
+
+# {"tempfiles": "<recipe>.json", "tmp": "<dir>"?, "record": true?}: tests/fixtures/tempfiles/<recipe>
+# materialised; "tmp" stands in for $TMP inside the recipe (a temp dir the sweep scope
+# covers on every OS); "record" appends the recipe's paths_log as paths.jsonl rows.
+sub fixture_tempfiles {
+    my ($s, $V, $cdir) = @_;
+    my $rc = jsonc::decode(util::read_file(src_file("tempfiles/$s->{tempfiles}", $cdir)));
+    my %W = (%$V, (defined $s->{tmp} ? (TMP => $s->{tmp}) : ()));
+    for my $f (@{ $rc->{files} || [] }) {
+        my $p = subst($f->{path}, \%W);
+        util::mkdir_p(util::dirname($p));
+        open(my $fh, '>:raw', $p) or die "tempfiles $p: $!\n";
+        if (defined $f->{lines}) {
+            my $line = $f->{line} // 'line {n}';
+            for my $n (1 .. $f->{lines}) { (my $l = $line) =~ s/\{n\}/$n/g; print $fh "$l\n" }
+        } else {
+            my $fill = $f->{fill} // 'x';
+            my $chunk = $fill x (int(65536 / length($fill)) + 1);
+            my $left = $f->{bytes} // 0;
+            while ($left > 0) { my $n = $left < length($chunk) ? $left : length($chunk); print $fh substr($chunk, 0, $n); $left -= $n }
+        }
+        close $fh;
+        chmod 0600, $p;
+    }
+    record_paths($V, $s->{sid}, map { subst($_, \%W) } @{ $rc->{paths_log} || [] }) if $s->{record};
+}
+
+# {"secret_files": "<dir>", "record": true?}: the sweep files of tests/fixtures/secrets/corpus.json,
+# their $SECRET{} tokens joined from fragments at run time, written under <dir> (the
+# recipe's $TMP/sweep); "record" appends their paths as paths.jsonl rows.
+sub fixture_secret_files {
+    my ($s, $V, $cdir) = @_;
+    my $c = jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json"));
+    my @rec;
+    for my $f (@{ $c->{files} || [] }) {
+        (my $rel = $f->{path}) =~ s{^\$TMP/sweep/}{} or die "secret file $f->{path} is not under \$TMP/sweep\n";
+        my $p = "$s->{secret_files}/$rel";
+        write_text($p, join("\n", map { subst($_, $V) } @{ $f->{content} || [] }) . "\n", '0600');
+        push @rec, $p;
+    }
+    record_paths($V, $s->{sid}, @rec) if $s->{record};
+}
+
+# {"repo_fixture": "<recipe>.json", "at": "<dir>"}: tests/fixtures/repos/<recipe> as a git repo
+# (fixed author and date; the first commit's .gitignore holds the ignore patterns), then
+# its dirty, untracked and ignored files.
+sub fixture_repo {
+    my ($s, $V, $cdir) = @_;
+    my $rc = jsonc::decode(util::read_file(src_file("repos/$s->{repo_fixture}", $cdir)));
+    my $at = $s->{at} // die "repo_fixture needs at\n";
+    util::mkdir_p($at);
+    my %env = %{ git_env($V) };
+    if (my $au = $rc->{author}) {
+        @env{qw(GIT_AUTHOR_NAME GIT_COMMITTER_NAME)} = ($au->{name}) x 2 if $au->{name};
+        @env{qw(GIT_AUTHOR_EMAIL GIT_COMMITTER_EMAIL)} = ($au->{email}) x 2 if $au->{email};
+        @env{qw(GIT_AUTHOR_DATE GIT_COMMITTER_DATE)} = ($au->{date}) x 2 if $au->{date};
+    }
+    my $git = util::which('git') // '/usr/bin/git';
+    my $g = sub { my $r = util::run([$git, '-C', $at, @_], timeout_ms => 20000, env => \%env); die "git @_ failed in $at\n" unless $r->{exit} == 0 };
+    my @ign = sort keys %{ $rc->{ignored_files} || {} };
+    if (!defined $rc->{git} || $rc->{git}) {
+        $g->('init', '-q', '-b', $rc->{branch} // 'main');
+        for my $cm (@{ $rc->{commits} || [] }) {
+            write_text("$at/$_", $cm->{files}{$_}) for sort keys %{ $cm->{files} || {} };
+            $g->('add', '-A');
+            $g->('commit', '-q', '--allow-empty', '-m', $cm->{message} // 'fixture');
+        }
+    } else {
+        write_text("$at/$_", $rc->{files}{$_}) for sort keys %{ $rc->{files} || {} };
+    }
+    write_text("$at/$_", $rc->{dirty}{$_}) for sort keys %{ $rc->{dirty} || {} };
+    write_text("$at/$_", $rc->{untracked}{$_}) for sort keys %{ $rc->{untracked} || {} };
+    write_text("$at/$_", $rc->{ignored_files}{$_}) for @ign;
 }
 
 # Dotted path into decoded JSON: (found, value)
@@ -374,11 +497,17 @@ sub setup {
         elsif (exists $s->{lines}) { $text = join('', map { "line $_ of the output\n" } 1 .. $s->{lines}) }
         else { $text = $s->{text} // '' }
         if ($s->{jsonl}) { $text = join('', map { jsonc::encode($_) . "\n" } @{ $s->{jsonl} }) }
+        # jsonl_repeat {row, count}: one row many times (a long session's stream), then the jsonl rows
+        if ($s->{jsonl_repeat}) { $text = (jsonc::encode($s->{jsonl_repeat}{row}) . "\n") x $s->{jsonl_repeat}{count} . ($s->{jsonl} ? $text : '') }
         write_text($p, $text, $s->{mode});
         if (defined $s->{mtime_ago_s}) { my $t = time - $s->{mtime_ago_s}; utime($t, $t, $p) }
         return;
     }
-    if (exists $s->{copy}) { my $src = src_file($s->{copy}, $cdir); util::mkdir_p(util::dirname($s->{to})); util::copy_file($src, $s->{to}, mode => 0600); return }
+    if (exists $s->{copy}) { my $src = src_file($s->{copy}, $cdir); util::mkdir_p(util::dirname($s->{to})); util::copy_file($src, $s->{to}, mode => oct($s->{mode} // '0600')); return }
+    if (exists $s->{tempfiles}) { fixture_tempfiles($s, $V, $cdir); return }
+    if (exists $s->{secret_files}) { fixture_secret_files($s, $V, $cdir); return }
+    if (exists $s->{repo_fixture}) { fixture_repo($s, $V, $cdir); return }
+    if (exists $s->{paths}) { record_paths($V, $s->{sid}, @{ $s->{paths} }); return }
     if (exists $s->{mkdir}) { util::mkdir_p($s->{mkdir}); chmod(oct($s->{mode}), $s->{mkdir}) if $s->{mode}; return }
     if (exists $s->{stub}) {
         my $dir = $s->{dir} // "$V->{TMP}/bin";
@@ -533,7 +662,7 @@ sub spawn {
 sub invoke {
     my ($st, $case, $V, $cdir, $i) = @_;
     my $env = child_env($st, $case, $V, $i);
-    my @argv = ("$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} });
+    my @argv = ("$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} || [] });
     @argv = map { subst($_, $V) } @{ $st->{exec} } if $st->{exec};
     my $stdin = stdin_of($st, $V, $cdir);
     my @inputs = $st->{parallel_inputs} ? @{ $st->{parallel_inputs} } : ((undef) x ($st->{parallel} // 1));
@@ -556,7 +685,7 @@ sub invoke {
     }
     if (defined $st->{kill_after_ms}) {
         util::sleep_ms($st->{kill_after_ms});
-        kill 'KILL', $_->{pid} for @procs;
+        kill $st->{kill_signal} // 'KILL', $_->{pid} for @procs;
     }
     my $limit = ($st->{timeout_s} // 60) * 1000;
     for my $p (@procs) {
@@ -881,6 +1010,11 @@ sub check {
                         push @e, "json $p not null" if exists $w->{null} && $ok && defined $v;
                         push @e, "json $p length, want $w->{len}" if exists $w->{len} && !(ref $v eq 'ARRAY' && @$v == $w->{len});
                         push @e, "json $p missing" if exists $w->{present} && !$ok;
+                        if (exists $w->{max_bytes}) {
+                            my $b = defined $v && !ref $v ? $v : '';
+                            utf8::encode($b) if utf8::is_utf8($b);
+                            push @e, "json $p is " . length($b) . " bytes > $w->{max_bytes}" if !$ok || !defined $v || length($b) > $w->{max_bytes};
+                        }
                     } elsif (scalar_text($v) ne scalar_text($w)) {
                         push @e, "json $p = " . scalar_text($v) . ", want " . scalar_text($w);
                     }

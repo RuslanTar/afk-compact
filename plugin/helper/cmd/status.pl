@@ -67,17 +67,21 @@ sub run {
     # escalations
     my %n;
     for my $r (@all) { my $e = $r->{ev} // ''; $n{$e}++ if grep { $_ eq $e } @ESCALATIONS }
+    # The classic saver has no mod stream: its EXISTS sha-differs (a second summary under one
+    # nonce, which is not saved) counts as copy_mismatch; the mod logs its own for writer mod.
+    $n{copy_mismatch} += grep { ($_->{ev} // '') eq 'copy' && ($_->{result} // '') eq 'mismatch' && ($_->{writer} // '') ne 'mod' } @$classic;
     my @esc = map { "$_ $n{$_}" } grep { $n{$_} } @ESCALATIONS;
     push @out, 'escalations: ' . (@esc ? join(', ', @esc) : 'none');
 
-    # halt and continues
+    # halt and continues (the mod writes halt.json as {active, reason, since})
     my $hraw = util::read_file("$d/halt.json");
     my $h = defined $hraw ? eval { jsonc::decode($hraw) } : undef;
+    my $halted = ref $h eq 'HASH' && ($h->{active} || $h->{halted}) ? 1 : 0;
     my $now = util::now();
     my $cont = grep { ($_->{ev} // '') eq 'continue' && ($_->{result} // '') eq 'submitted'
                       && $now - (util::parse_iso($_->{ts} // '') // 0) <= 3600 } @$mod;
     push @out, sprintf('halt: %s · continues this hour: %d of %s',
-                       (ref $h eq 'HASH' && $h->{halted} ? 'on (' . ($h->{reason} // 'unknown') . ')' : 'off'),
+                       ($halted ? 'on (' . ($h->{reason} // 'unknown') . ')' : 'off'),
                        $cont, rc::val('max_auto_continues_per_hour'));
 
     # version / smoke

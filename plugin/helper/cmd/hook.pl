@@ -41,8 +41,19 @@ sub _watch_call {
     if (!$ok && $err !~ /not implemented/) { rc::emit('watch_error', [stage => $stage, error_class => _error_class($err)]) }
 }
 
+# Stop (8 s hook timeout): reconcile and the watcher share one budget from hook start,
+# on the real clock (STORE_TEST_NOW fixes the clock, never a budget).
+our $STOP_BUDGET_MS = 7000;
+our $WATCH_HARD_S = 3;
+
+# SessionStart (5 s hook timeout): the compact block is measured within this budget from
+# hook start, so it is printed and claimed before the hook is killed.
+our $SESSION_COMPACT_MS = 3500;
+our $T0;
+
 sub run {
     my ($event) = @_;
+    my $t0 = $T0 = util::clock_ms();
     my $raw = do { local $/; <STDIN> };
     return 0 unless defined $event && $EVENTS{$event};
     my $p = defined $raw && $raw =~ /\S/ ? eval { jsonc::decode($raw) } : undef;
@@ -54,6 +65,9 @@ sub run {
         };
         return 0;
     }
+    # root checks (git check-ignore) share one short budget: PreCompact's fallback makes no
+    # git call of its own and must print well inside its 5 s timeout
+    local $roots::DEADLINE = $t0 + ($event eq 'PreCompact' ? 500 : 1500);
     rc::init(sid => $sid, writer => 'classic');
     my $out = '';
     my $extra = {};
@@ -70,8 +84,12 @@ sub run {
         eval { rc::emit('watch_error', [stage => "hook.$event", error_class => _error_class($e)]) };
     }
     if ($event eq 'Stop') {
-        my $deadline = util::now() + 6;
-        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $deadline) });
+        # Relative seconds (watch.on_stop reads a small value as "from now" on its own clock):
+        # at most the 3 s hard stop of WATCH W9, less when reconcile used the shared budget.
+        my $left = ($STOP_BUDGET_MS - (util::clock_ms() - $t0)) / 1000;
+        $left = $WATCH_HARD_S if $left > $WATCH_HARD_S;
+        $left = 0.2 if $left < 0.2;
+        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $left) });
     } else {
         _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra)) });
     }
@@ -103,14 +121,20 @@ sub on_PreCompact {
     my @tags = (($trigger eq 'auto' ? ('auto') : ()), (defined $prev ? ('chain') : ()));
     my $bytes = do { my $c = $text; utf8::encode($c); length $c };
     if (defined(my $w = rc::watch())) {
-        my $c = rc::claude();
-        my $rec = dispatch::record(nonce => $nonce, session_id => $sid, actor => 'unknown', trigger => $trigger,
-                                   channel => 'classic', resume_pref => 'sessionstart', midturn => 0, tags => \@tags,
-                                   instructions_sha8 => substr(sha::hex256($text), 0, 8), instructions_bytes => $bytes,
-                                   cc_version => rc::cc_version(), load_id => undef, pid => $c->{pid}, pid_lstart => $c->{lstart});
-        dispatch::write($w, $sid, $rec);
-        rc::emit('dispatch', [nonce => $nonce, trigger => $trigger, agent_id => undef, compaction_seq => undef, channel => 'classic',
-                              resume_pref => 'sessionstart', midturn => jsonc::false(), tags => \@tags, instructions_bytes => $bytes]);
+        # A record that cannot be written (an unwritable root or watch dir) must not cost
+        # the shaping: the fallback text is still printed (MOD-SPEC §3.2).
+        my $ok = eval {
+            my $c = rc::claude();
+            my $rec = dispatch::record(nonce => $nonce, session_id => $sid, actor => 'unknown', trigger => $trigger,
+                                       channel => 'classic', resume_pref => 'sessionstart', midturn => 0, tags => \@tags,
+                                       instructions_sha8 => substr(sha::hex256($text), 0, 8), instructions_bytes => $bytes,
+                                       cc_version => rc::cc_version(), load_id => undef, pid => $c->{pid}, pid_lstart => $c->{lstart});
+            dispatch::write($w, $sid, $rec);
+            rc::emit('dispatch', [nonce => $nonce, trigger => $trigger, agent_id => undef, compaction_seq => undef, channel => 'classic',
+                                  resume_pref => 'sessionstart', midturn => jsonc::false(), tags => \@tags, instructions_bytes => $bytes]);
+            1;
+        };
+        rc::emit('watch_error', [stage => 'hook.PreCompact.dispatch', error_class => _error_class($@)]) unless $ok;
     }
     rc::emit('precompact_fallback', [nonce => $nonce, trigger => $trigger, bytes => $bytes, chain => jsonc::bool(defined $prev),
                                      orphan => jsonc::bool($d->{found})]);
@@ -190,7 +214,9 @@ sub session_compact {
         return ('', {});
     }
     my $block = resumeblock::build(sid => $sid, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
-                                   measured_at => util::iso($now), remeasure => measure::compact($sid, $p->{cwd}, $nonce));
+                                   measured_at => util::iso($now),
+                                   remeasure => measure::compact($sid, $p->{cwd}, $nonce,
+                                                                 budget_ms => $SESSION_COMPACT_MS - (util::clock_ms() - ($T0 // util::clock_ms()))));
     my ($r) = resumeblock::claim($sid, $nonce, 'sessionstart', bytes => length($block), nonok_note => jsonc::bool($nonok));
     return ('', { dispatch => $nonce }) unless $r eq 'CLAIMED';
     my $json = jsonc::encode(jsonc::obj(hookSpecificOutput => jsonc::obj(hookEventName => 'SessionStart', additionalContext => $block)));
@@ -279,11 +305,13 @@ sub _turn_kind {
         }
         return 0;
     };
-    my $rolls = rollup::rows($d);
+    # Only the newest row of each kind matters, and PermissionDenied has 2 s: read the
+    # stream tails (256 KB) and decode only the rows asked for.
+    my $rolls = rollup::stream_rows("$d/compactions.jsonl", tail => 256 * 1024);
     return 'post-compaction' if grep { ($_->{actor} // '') eq 'main' && (util::parse_iso($_->{ts} // '') // 0) > $last } @$rolls;
-    my $classic = rollup::stream_rows(rc::stream_path('classic'));
+    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => ['resume_receipt'], tail => 256 * 1024);
     return 'resume' if $newer->($classic, qr/^resume_receipt$/);
-    my $mod = rollup::stream_rows(rc::stream_path('mod'));
+    my $mod = rollup::stream_rows(rc::stream_path('mod'), evs => ['nudge'], tail => 256 * 1024);
     return 'nudge' if $newer->($mod, qr/^nudge$/);
     return 'other';
 }

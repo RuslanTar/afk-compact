@@ -1,0 +1,178 @@
+{
+ "id": "AT-E-04",
+ "note": "MOD-SPEC §10 AT-E-04 (HK-44, S-10): the sweep files of tests/fixtures/secrets/corpus.json (values joined from fragments at run time): HARD hits in plain files are withheld, a log or JSON with a hit and a WARN hit are copied redacted, .env is withheld by name, .env.example and the control file are copied; the row lists rule ids, and no secret value reaches the log, the disposable root or the handoff root",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "secret_files": "$TMP/tmpdir/sweep",
+     "record": true
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^withheld\\t\\S+/sweep/key-material\\.txt\\t-\\t",
+     "^withheld\\t\\S+/sweep/token\\.txt\\t-\\t",
+     "^redacted\\t\\S+/sweep/request\\.log\\t\\S+/request\\.log\\t",
+     "^withheld\\t\\S+/sweep/provider\\.md\\t-\\t",
+     "^withheld\\t\\S+/sweep/db\\.txt\\t-\\t",
+     "^redacted\\t\\S+/sweep/notes\\.txt\\t\\S+/notes\\.txt\\t",
+     "^redacted\\t\\S+/sweep/blob\\.txt\\t\\S+/blob\\.txt\\t",
+     "^redacted\\t\\S+/sweep/config\\.json\\t\\S+/config\\.json\\t",
+     "^withheld\\t\\S+/sweep/\\.env\\t-\\t",
+     "^copied\\t\\S+/sweep/\\.env\\.example\\t\\S+\\t",
+     "^copied\\t\\S+/sweep/plain\\.txt\\t\\S+/plain\\.txt\\t",
+     "^TOTAL copied=2 dup=0 ref_only=0 redacted=4 withheld=5 referenced_budget=0$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/.env",
+      "count": 0
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/key-material.txt",
+      "count": 0
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/MANIFEST.tsv",
+      "has": [
+       "\\t\\S+/sweep/\\.env\\t.*\\twithheld\\t",
+       "\\t\\S+/sweep/request\\.log\\t.*\\tredacted\\t"
+      ]
+     },
+     {
+      "path": "$WATCH/$SID.classic.jsonl",
+      "has": [
+       "\"ev\":\"sweep_evidence\".*\"rules\":\\[\"[a-z]"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1,
+      "fields": {
+       "copied": 2,
+       "redacted": 4,
+       "withheld": 5
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{pem-rsa}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{pem-rsa}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{pem-rsa}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{jwt-hs256}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{jwt-hs256}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{jwt-hs256}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{bearer}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{bearer}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{bearer}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{github-token}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{github-token}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{github-token}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{url-userinfo-postgres}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{url-userinfo-postgres}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{url-userinfo-postgres}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{kv-password}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{kv-password}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{kv-password}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{high-entropy}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{high-entropy}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{high-entropy}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{kv-client-secret}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{kv-client-secret}"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "$SECRET{kv-client-secret}"
+     }
+    ]
+   }
+  }
+ ]
+}

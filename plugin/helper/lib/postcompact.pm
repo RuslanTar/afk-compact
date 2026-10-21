@@ -11,12 +11,24 @@ sub _resolved {
     my ($sid_dir, $classic) = @_;
     my %r;
     for my $row (@{ rollup::rows($sid_dir) }) { $r{ $row->{nonce} } = 1 if defined $row->{nonce} }
-    for my $row (@{ rollup::stream_rows($classic) }) {
+    for my $row (@{ rollup::stream_rows($classic, evs => [qw(copy copy_deferred)]) }) {
         next unless ($row->{ev} // '') =~ /^(copy|copy_deferred)$/ && defined $row->{nonce};
         next if ($row->{ev} eq 'copy') && ($row->{result} // '') =~ /^failed/;
         $r{ $row->{nonce} } = 1;
     }
     return \%r;
+}
+
+# Nonces of mod dispatches that will get no after-step: the mod logged the
+# $.session.compact call as rejected, or the compaction as skipped (compacted skip=<class>).
+sub _mod_closed {
+    my %c;
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compact_rejected compacted)]) }) {
+        my $ev = $row->{ev} // '';
+        next unless defined $row->{nonce} && !ref $row->{nonce};
+        $c{ $row->{nonce} } = 1 if $ev eq 'compact_rejected' || ($ev eq 'compacted' && defined $row->{skip});
+    }
+    return \%c;
 }
 
 sub seat_state {
@@ -71,8 +83,9 @@ sub run {
     my @all = dispatch::all($watch, $sid);
     my $classic_path = rc::stream_path('classic');
     my $resolved = _resolved($sid_dir, $classic_path);
-    my ($tjoin) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && $_->{_epoch} >= $now - 120 && $_->{_epoch} <= $now + 5 }
-                  reverse @all;
+    my $closed = _mod_closed();
+    my ($tjoin) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && !$closed->{ $_->{nonce} }
+                         && $_->{_epoch} >= $now - 120 && $_->{_epoch} <= $now + 5 } reverse @all;
     my $drec = $rec // $tjoin;
     my $join = $rec ? 'nonce' : $tjoin ? 'time' : undef;
 
@@ -95,11 +108,15 @@ sub run {
     my $precomputed = $boundary && $boundary->{precomputed} ? 1 : 0;
     my $tokens = $boundary ? [$boundary->{pre}, $boundary->{post}] : undef;
 
-    # defer rule: no marker, and an unresolved mod-hook/mod-self dispatch <= 600 s old
+    # defer rule (MOD-SPEC §5.3 step 2): no marker, and an unresolved mod-hook/mod-self
+    # dispatch <= 600 s old that can still get its after-step. The newest open dispatch
+    # decides: a newer classic one (a PreCompact fallback) means this compaction is the
+    # classic one; a dispatch the mod logged as rejected or skipped gets no after-step.
     my $deferred;
     if (!defined $mn) {
-        ($deferred) = grep { dispatch::is_mod($_) && ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} }
-                             && $_->{_epoch} >= $now - 600 } reverse @all;
+        my ($open) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && !$closed->{ $_->{nonce} }
+                            && $_->{_epoch} >= $now - 600 } reverse @all;
+        $deferred = $open if $open && dispatch::is_mod($open);
     }
     eval {
         util::write_excl("$sid_dir/pending/$id6.post.json", jsonc::encode_bytes(jsonc::obj(

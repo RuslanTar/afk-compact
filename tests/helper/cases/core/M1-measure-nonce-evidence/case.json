@@ -1,0 +1,106 @@
+{
+ "id": "M1-measure-nonce-evidence",
+ "note": "MOD-SPEC §2.6 measure --compact ('evidence map ... from this compaction's checkpoint or sweep'), §3.4 @remeasure@: for a compaction with no checkpoint (a trigger:plugin call of another plugin, or a native one), measure --nonce N lists the evidence of N's own sweep, never another compaction's newer checkpoint",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "the after-step sweep of 1a2b3c4d",
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "tempfiles": "at-e-07-dup.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true
+    },
+    {
+     "write": "$WATCH/$SID/checkpoint/9a9a9a9a.json",
+     "json": {
+      "measured_block": null,
+      "lane": null,
+      "gsd": [],
+      "inventory": [],
+      "evidence_map": [
+       {
+        "origin": "/tmp/other-compaction-result.txt",
+        "copy": "~/.claude/trash-staging/x/other-compaction-result.txt",
+        "status": "copied"
+       }
+      ],
+      "checkpoint_ms": {
+       "inventory": 0,
+       "git": 0,
+       "gsd": 0,
+       "lane": 0,
+       "evidence": 0,
+       "total": 0
+      },
+      "timeouts": []
+     },
+     "mode": "0600"
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/scratch/shared-result\\.txt\\t"
+    ]
+   }
+  },
+  {
+   "name": "measure for 1a2b3c4d: its own sweep",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Evidence \\(automatic copies\\):$",
+     "^  \\S+/scratch/shared-result\\.txt → \\S+/shared-result\\.txt \\(copied\\)$"
+    ],
+    "stdout_lacks": [
+     "other-compaction-result"
+    ]
+   }
+  },
+  {
+   "name": "measure for a nonce with neither checkpoint nor sweep: no evidence lines",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--nonce",
+    "2b3c4d5e",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^Evidence",
+     "other-compaction-result",
+     "shared-result"
+    ]
+   }
+  }
+ ]
+}

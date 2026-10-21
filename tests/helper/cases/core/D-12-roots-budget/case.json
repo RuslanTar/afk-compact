@@ -1,0 +1,90 @@
+{
+ "id": "D-12-roots-budget",
+ "note": "BUILD-PLAN §3.3 PreCompact row (no git call of its own; 5 s timeout), D-12: handoff_root, log_dir and disposable_root inside a git-ignored folder of a work tree, with a git that takes 3 s per call: the root checks share one 500 ms budget, PreCompact prints the fallback text in well under 5 s, and a check that ran out of time is never reported as root-in-git; with a normal git the same roots are ignored-and-ok (positive control)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/example-repo/.local-handoffs/h",
+  "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/example-repo/.local-handoffs/d"
+ },
+ "steps": [
+  {
+   "name": "slow git",
+   "setup": [
+    {
+     "repo_fixture": "root-in-git.json",
+     "at": "$TMP/example-repo"
+    },
+    {
+     "copy": "bin/git-slow",
+     "to": "$TMP/bin/git",
+     "mode": "0755"
+    }
+   ],
+   "path_prepend": [
+    "$TMP/bin"
+   ],
+   "env": {
+    "GIT_SLOW_SECONDS": "3"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "ms_max": 2500,
+    "stderr_empty": true,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "files": [
+     {
+      "path": "$TMP/example-repo/.local-handoffs/h/.watch/$SID.classic.jsonl",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "normal git: the ignored roots are used",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "rows": [
+     {
+      "file": "$TMP/example-repo/.local-handoffs/h/.watch/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 3,
+      "fields": {
+       "ignored": true
+      }
+     },
+     {
+      "file": "$TMP/example-repo/.local-handoffs/h/.watch/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

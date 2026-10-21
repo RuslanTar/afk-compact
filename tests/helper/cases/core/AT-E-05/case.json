@@ -1,0 +1,60 @@
+{
+ "id": "AT-E-05",
+ "note": "MOD-SPEC §10 AT-E-05: a 5,000-line tasks/x.output (tests/fixtures/tempfiles/at-e-05-task-output.json) is copied as a redacted head/tail excerpt of at most 80 lines: 40 head lines, the marker line, 39 tail lines",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "tempfiles": "at-e-05-task-output.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^redacted\\t\\S+/tasks/x\\.output\\t\\S+/x\\.output\\t\\d+\\t[0-9a-f]{8}$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/x.output",
+      "mode": "0600",
+      "max_lines": 80,
+      "lines": 80,
+      "has": [
+       "\\Aline 1 of fixture task output",
+       "^line 40 of fixture",
+       "^\\[… 4921 lines not copied …\\]$",
+       "^line 4962 of fixture",
+       "^line 5000 of fixture task output CANARY-TEXT-task-output$"
+      ],
+      "lacks": [
+       "^line 41 of fixture",
+       "^line 4961 of fixture"
+      ]
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/MANIFEST.tsv",
+      "has": [
+       "\\t\\S+/tasks/x\\.output\\t\\d+\\t[0-9a-f]{64}\\t.*\\texcerpt\\t"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

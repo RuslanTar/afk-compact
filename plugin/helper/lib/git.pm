@@ -34,11 +34,12 @@ sub cmd {
                      env => { GIT_OPTIONAL_LOCKS => '0', LC_ALL => 'C', GIT_TERMINAL_PROMPT => '0' });
 }
 
-# 1 ignored, 0 not ignored, undef unknown (no git / error)
+# 1 ignored, 0 not ignored, -1 timed out, undef unknown (no git / error)
 sub check_ignore {
-    my ($wt, $path) = @_;
-    my $r = cmd($wt, ['check-ignore', '-q', '--no-index', $path], 2000);
-    return undef if $r->{unavailable} || $r->{timed_out};
+    my ($wt, $path, $timeout_ms) = @_;
+    my $r = cmd($wt, ['check-ignore', '-q', '--no-index', $path], $timeout_ms // 2000);
+    return -1 if $r->{timed_out};
+    return undef if $r->{unavailable};
     return 1 if $r->{exit} == 0;
     return 0 if $r->{exit} == 1;
     return undef;
@@ -73,7 +74,7 @@ sub where {
 }
 
 # measure(cwd, budget_ms) -> {status: ok|timeout|unavailable|not-git, branch, head,
-#   porcelain => [first 20], count, ahead, behind, ms, op}
+#   porcelain => [first 20], count, ahead, behind, ms, op, toplevel}
 sub measure {
     my ($cwd, $budget_ms) = @_;
     my $t0 = util::clock_ms();
@@ -100,16 +101,20 @@ sub measure {
     my $h = cmd($cwd, ['rev-parse', '--short=12', 'HEAD'], $left->());
     return { status => 'timeout', ms => $ms->() } if $h->{timed_out};
     my $head = $h->{exit} == 0 ? ($h->{out} =~ /^(\S+)/)[0] : undef;
-    my $gd = cmd($cwd, ['rev-parse', '--absolute-git-dir'], $left->());
-    my $op;
-    if ($gd->{exit} == 0 && $gd->{out} =~ /^(\S.*?)\s*$/) {
-        my $d = $1;
-        $op = 'merge' if -e "$d/MERGE_HEAD";
-        $op = 'rebase' if -d "$d/rebase-merge" || -d "$d/rebase-apply";
+    # one call for the git dir and the work-tree top, so a caller needs no second git::where
+    my $gd = cmd($cwd, ['rev-parse', '--absolute-git-dir', '--show-toplevel'], $left->());
+    my ($op, $top);
+    if ($gd->{exit} == 0) {
+        my ($d, $t) = split /\n/, $gd->{out};
+        if (defined $d && $d =~ /\S/) {
+            $op = 'merge' if -e "$d/MERGE_HEAD";
+            $op = 'rebase' if -d "$d/rebase-merge" || -d "$d/rebase-apply";
+        }
+        $top = $t if defined $t && $t =~ m{^/};
     }
     my $count = scalar @lines;
     return { status => 'ok', branch => $branch, head => $head, porcelain => [@lines[0 .. ($count > 20 ? 19 : $count - 1)]],
-             count => $count, ahead => 0 + ($ahead // 0), behind => 0 + ($behind // 0), op => $op, ms => $ms->() };
+             count => $count, ahead => 0 + ($ahead // 0), behind => 0 + ($behind // 0), op => $op, toplevel => $top, ms => $ms->() };
 }
 
 1;

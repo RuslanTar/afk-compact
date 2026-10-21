@@ -367,6 +367,12 @@ sub run {
         POSIX::_exit(127);
     }
     close $out_w;
+    # Killed while we wait (a hook timeout): take the child's process group along, so no
+    # git or queue_cmd process outlives the helper.
+    my $reap = sub { kill 'TERM', -$pid; kill 'TERM', $pid; POSIX::_exit(128 + 15) };
+    local $SIG{TERM} = $reap;
+    local $SIG{HUP} = $reap;
+    local $SIG{INT} = $reap;
     if (defined $stdin) {
         close $in_r;
         local $SIG{PIPE} = 'IGNORE';

@@ -35,8 +35,9 @@ sub _excerpt {
     my @l = split /\n/, $raw, -1;
     pop @l if @l && $l[-1] eq '';
     return ($raw, scalar @l) if @l <= 2 * $n;
-    my $skipped = @l - 2 * $n;
-    return (join("\n", @l[0 .. $n - 1], "[… $skipped lines not copied …]", @l[$#l - $n + 1 .. $#l]) . "\n", 2 * $n);
+    # n head lines + the marker line + n-1 tail lines: the excerpt is at most 2n lines (AT-E-05)
+    my $skipped = @l - (2 * $n - 1);
+    return (join("\n", @l[0 .. $n - 1], "[… $skipped lines not copied …]", @l[$#l - $n + 2 .. $#l]) . "\n", 2 * $n);
 }
 
 sub _unique {

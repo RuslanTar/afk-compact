@@ -12,6 +12,8 @@ package reconcile;
 use strict;
 use warnings;
 
+our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered);
+
 sub _before_epoch {
     my ($rows) = @_;
     my $min;
@@ -29,7 +31,10 @@ sub run {
     my $deadline = $t0 + ($a{budget_ms} // 2000);
     my $now = util::now();
     my %n = (late => 0, unresolved => 0, precompute_not_reused => 0, order_anomaly => 0, undelivered => 0);
-    my $classic = rollup::stream_rows(rc::stream_path('classic'));
+    # only the rows reconcile reads (its own rows, copies, PreCompact rows): a long
+    # session's other rows are skipped before the decode (the Stop budget)
+    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => [@OWN_ROWS, qw(copy precompact precompact_shaped
+                                                                                            precompact_marker_orphan precompact_fallback)]);
     my $rolls = rollup::rows($sid_dir);
     my (%copied, %logged, %rolled_id6, %rolled_nonce);
     for my $r (@$classic) {
@@ -47,8 +52,11 @@ sub run {
     my @disp = dispatch::all($watch, $sid);
     my %disp = map { $_->{nonce} => $_ } @disp;
 
-    # 1. stashes without a copy
-    for my $f (util::list_dir("$sid_dir/pending")) {
+    # 1. stashes without a copy. Not while handoff_root is refused (MOD-SPEC §1.2): every
+    # save would be refused again and log another failed copy row at each Stop; the
+    # stashes wait for a later Stop with a safe root (the refusal row is once per session).
+    my @pending = rc::root_ok('handoff_root') ? util::list_dir("$sid_dir/pending") : ();
+    for my $f (@pending) {
         last if util::clock_ms() > $deadline;
         my ($id6, $kind, $nonce);
         if ($f =~ /^([0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md$/) { ($id6, $kind) = ($1, 'post') }
@@ -66,12 +74,15 @@ sub run {
         }
         my $s = detect::scan($text);
         my $mn = $nonce // $m{nonce} // $s->{nonce};
-        my $drec = defined $mn ? $disp{$mn} : (defined $m{deferred} ? $disp{ $m{deferred} } : undef);
-        # a deferred stash belongs to its pending mod dispatch: save it under that nonce
+        # P1 (MOD-SPEC §2.4): the record of the nonce in the mod stash name or the summary marker
+        my $p1 = defined $mn ? $disp{$mn} : undef;
+        my $drec = $p1 // (defined $m{deferred} ? $disp{ $m{deferred} } : undef);
+        # a deferred stash is named under its pending mod dispatch (as the after-step would
+        # save it), but that dispatch is no scope proof: the scope stays the stash's own
         if (!defined $mn && $drec && dispatch::is_mod($drec)) { $mn = $drec->{nonce} }
         my $scope = $m{scope} // 'unknown';
-        if ($drec && dispatch::is_mod($drec)) { $scope = defined $drec->{agent_id} ? 'sub' : 'main' }
-        my $agent = $m{agent} // ($drec ? $drec->{agent_id} : undef);
+        if ($p1 && dispatch::is_mod($p1)) { $scope = defined $p1->{agent_id} ? 'sub' : 'main' }
+        my $agent = $m{agent} // ($p1 ? $p1->{agent_id} : undef);
         my $exists = defined $mn && $copied{ 'n:' . $mn };
         next if $exists;
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn,
@@ -98,9 +109,13 @@ sub run {
         }
     }
 
+    # The transcript scan reads the whole file: not started once the budget is spent
+    # (steps 2 and 3 need its boundaries, so both wait for the next Stop).
+    my $in_time = util::clock_ms() <= $deadline;
+
     # 2. unresolved and precompute dispatches (> 10 min old)
-    my $bounds = defined $a{transcript} ? transcript::boundaries($a{transcript}) : [];
-    for my $d (@disp) {
+    my $bounds = $in_time && defined $a{transcript} ? transcript::boundaries($a{transcript}) : [];
+    for my $d ($in_time ? @disp : ()) {
         last if util::clock_ms() > $deadline;
         next unless $d->{_epoch} && $now - $d->{_epoch} > 600 && $now - $d->{_epoch} < 7 * 86400;
         my $nn = $d->{nonce};
@@ -119,7 +134,7 @@ sub run {
 
     # 3. order canary C6 (only for boundaries after this session's first record)
     my $cutoff = $a{cutoff};
-    if (defined $cutoff) {
+    if (defined $cutoff && $in_time) {
         for my $b (@$bounds) {
             last if util::clock_ms() > $deadline;
             next unless $b->{epoch} >= $cutoff && $now - $b->{epoch} > 15;

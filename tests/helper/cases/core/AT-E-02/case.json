@@ -1,0 +1,152 @@
+{
+ "id": "AT-E-02",
+ "note": "MOD-SPEC §10 AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (ref-only by the 50 MB cap, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "tempfiles": "at-e-02-sizes.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/scratch/small\\.txt\\t\\S+/small\\.txt\\t1024\\t[0-9a-f]{8}$",
+     "^ref-only\\t\\S+/scratch/big-12mb\\.bin\\t\\S+\\.ref\\.txt\\t12582912\\t[0-9a-f]{8}$",
+     "^ref-only\\t\\S+/scratch/big-30mb-a\\.bin\\t\\S+\\.ref\\.txt\\t31457280\\t[0-9a-f]{8}$",
+     "^ref-only\\t\\S+/scratch/big-30mb-b\\.bin\\t\\S+\\.ref\\.txt\\t31457280\\t[0-9a-f]{8}$",
+     "^TOTAL copied=1 dup=0 ref_only=3 redacted=0 withheld=0 referenced_budget=0$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/small.txt",
+      "mode": "0600"
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/big-*.bin",
+      "count": 0
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/big-*.bin.ref.txt",
+      "count": 3,
+      "has": [
+       "^bytes: \\d+$",
+       "^sha256: [0-9a-f]{64}$",
+       "^mtime: \\d{4}-\\d\\d-\\d\\dT"
+      ]
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/MANIFEST.tsv",
+      "has": [
+       "^\\S+/small\\.txt\\t\\S+/scratch/small\\.txt\\t1024\\t[0-9a-f]{64}\\t\\d{4}-\\d\\d-\\d\\dT\\S+\\t",
+       "^\\S+/big-12mb\\.bin\\.ref\\.txt\\t\\S+/scratch/big-12mb\\.bin\\t12582912\\t[0-9a-f]{64}\\t\\d{4}-\\d\\d-\\d\\dT\\S+\\t.*\\tref-only\\t",
+       "^\\S+/big-30mb-a\\.bin\\.ref\\.txt\\t\\S+/scratch/big-30mb-a\\.bin\\t31457280\\t[0-9a-f]{64}\\t"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1,
+      "fields": {
+       "copied": 1,
+       "ref_only": 3,
+       "bytes": 1024
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "50 MB per compaction",
+   "setup": [
+    {
+     "bigfile": "$TMP/tmpdir/cap/part-1.bin",
+     "bytes": 9437184,
+     "fill": "cap filler 1\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/cap/part-2.bin",
+     "bytes": 9437184,
+     "fill": "cap filler 2\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/cap/part-3.bin",
+     "bytes": 9437184,
+     "fill": "cap filler 3\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/cap/part-4.bin",
+     "bytes": 9437184,
+     "fill": "cap filler 4\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/cap/part-5.bin",
+     "bytes": 9437184,
+     "fill": "cap filler 5\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/cap/part-6.bin",
+     "bytes": 9437184,
+     "fill": "cap filler 6\n"
+    },
+    {
+     "paths": [
+      "$TMP/tmpdir/cap/part-1.bin",
+      "$TMP/tmpdir/cap/part-2.bin",
+      "$TMP/tmpdir/cap/part-3.bin",
+      "$TMP/tmpdir/cap/part-4.bin",
+      "$TMP/tmpdir/cap/part-5.bin",
+      "$TMP/tmpdir/cap/part-6.bin"
+     ],
+     "sid": "12222222-2222-4333-8444-555555555555"
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "12222222-2222-4333-8444-555555555555",
+    "--nonce",
+    "2b3c4d5e",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/cap/part-1\\.bin\\t",
+     "^(ref-only|referenced-budget)\\t\\S+/cap/part-6\\.bin\\t"
+    ],
+    "stdout_lacks": [
+     "^copied\\t\\S+/cap/part-6\\.bin\\t"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/*_12222222-2b3c4d-evidence/part-6.bin",
+      "count": 0
+     }
+    ],
+    "absent": [
+     "$DISP/2026-10-21/*_12222222-2b3c4d-evidence/part-*.bin:count>5"
+    ]
+   }
+  }
+ ]
+}

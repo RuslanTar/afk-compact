@@ -66,15 +66,16 @@ sub run {
     return { exit => 3, lines => ['REFUSED: ' . (rc::root_reason('disposable_root') // 'root-unsafe')], totals => \%tot, rows => [] }
         unless rc::root_ok('disposable_root');
     return { exit => 3, lines => ['REFUSED: no-watch'], totals => \%tot, rows => [] } unless defined $sid_dir;
-    my $claimed = eval { util::write_excl("$sid_dir/swept/$a{id6}", ($a{nonce} // '') . "\n", 0600) };
+    my $disp = rc::paths()->{disposable};
+    my $dest = "$disp/" . util::day(util::now()) . "/$a{stem}-evidence";
+    # The claim also names the destination, so `measure --nonce` finds this sweep's MANIFEST.
+    my $claimed = eval { util::write_excl("$sid_dir/swept/$a{id6}", ($a{nonce} // '') . "\t$dest\n", 0600) };
     if (!$claimed) {
         return { exit => 0, lines => [$total_line->()], totals => \%tot, rows => [], skipped => 'swept' };
     }
     util::trace('sweep');
     my $t0 = util::clock_ms();
     my $deadline = $t0 + ($a{budget_ms} // 8000);
-    my $disp = rc::paths()->{disposable};
-    my $dest = "$disp/" . util::day(util::now()) . "/$a{stem}-evidence";
     my $index = rc::watch() . '/evidence-index.tsv';
     my $used = 0;
     my (@rows, %rules, $bytes);

@@ -1,0 +1,201 @@
+{
+ "id": "M3-reconcile-refused-root",
+ "note": "MOD-SPEC §1.2 unsafe roots, §2.5 content-free rows, §5.4 (reconcile <= 2 s): while handoff_root is refused (inside a git work tree, not ignored), PostCompact logs one failed copy row and keeps the stash; Stops under the refused root do not retry the save (no extra copy row per Stop); a Stop with a safe root saves the stash late",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/repo/hr",
+  "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/w1"
+ },
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nplain native summary\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "failed:root-in-git"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$TMP/w1/$SID/pending/h*.post.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop 1 under the refused root",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop 2 under the refused root",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop 3 under the refused root",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop once the root is safe: the stash is saved late",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/safe"
+   },
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy_late",
+      "count": 1
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 2
+     }
+    ],
+    "files": [
+     {
+      "path": "$TMP/safe/work/general/compact/unattributed/*_${SID8}_h*.md",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

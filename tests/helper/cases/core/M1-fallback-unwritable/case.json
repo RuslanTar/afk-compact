@@ -1,0 +1,113 @@
+{
+ "id": "M1-fallback-unwritable",
+ "note": "MOD-SPEC §3.2 ('an unshaped seated compaction is the worse failure'), BUILD-PLAN §3.1 ('shaping still runs'): classic PreCompact prints the fallback text even when its dispatch record cannot be written, (a) the handoff root itself is read-only, (b) only the watch dir is read-only; exit 0, nothing on stderr",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/r"
+ },
+ "steps": [
+  {
+   "name": "(a) read-only handoff root",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "mkdir": "$TMP/r",
+     "mode": "0500"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫[\\s\\S]*\\n\\z",
+    "absent": [
+     "$TMP/r/.watch"
+    ]
+   }
+  },
+  {
+   "name": "(b) read-only watch dir",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/r2"
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/r2/.watch",
+     "mode": "0500"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫[\\s\\S]*\\n\\z"
+   }
+  },
+  {
+   "name": "positive control: a writable root keeps the record",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/r3"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫[\\s\\S]*\\n\\z",
+    "files": [
+     {
+      "path": "$TMP/r3/.watch/$SID/dispatch/*.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "cleanup: the temp cleaner can remove the folders again",
+   "exec": [
+    "chmod",
+    "-R",
+    "u+w",
+    "$TMP/r",
+    "$TMP/r2"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  }
+ ]
+}

@@ -1,0 +1,86 @@
+{
+ "id": "AT-E-07",
+ "note": "MOD-SPEC §10 AT-E-07: the same temp file (tests/fixtures/tempfiles/at-e-07-dup.json) swept in two compactions of two sessions in two buckets: one copy; the second sweep's row is dup and points at the first copy (evidence-index.tsv)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/repo-a"
+    },
+    {
+     "mkdir": "$TMP/repo-b"
+    },
+    {
+     "tempfiles": "at-e-07-dup.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/repo-a"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/scratch/shared-result\\.txt\\t",
+     "^TOTAL copied=1 dup=0 "
+    ]
+   }
+  },
+  {
+   "name": "second compaction, other session and bucket",
+   "setup": [
+    {
+     "tempfiles": "at-e-07-dup.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true,
+     "sid": "12222222-2222-4333-8444-555555555555"
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "12222222-2222-4333-8444-555555555555",
+    "--nonce",
+    "2b3c4d5e",
+    "--cwd",
+    "$TMP/repo-b"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^dup\\t\\S+/scratch/shared-result\\.txt\\t\\S+/2026-10-21_14-05-12_11111111-1a2b3c-evidence/shared-result\\.txt\\t2048\\t",
+     "^TOTAL copied=0 dup=1 "
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/*-evidence/shared-result.txt",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/evidence-index.tsv",
+      "lines": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "fields": {
+       "copied": 0,
+       "dup": 1
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

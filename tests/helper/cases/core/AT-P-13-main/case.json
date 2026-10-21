@@ -1,0 +1,171 @@
+{
+ "id": "AT-P-13-main",
+ "note": "BUILD-PLAN §3.1 exit codes ('2 is never used; hook <Event> always exits 0'), ROOT-RULINGS R-2: a plugin copy with no helper/main.pl (partial install or interrupted update) takes the launcher fallback: hook PreCompact and Stop exit 0 with no output and one helper_runtime_missing row each, another subcommand refuses with exit 3; a main.pl that dies with errno ENOENT (perl's own exit 2) or does not compile still gives a hook exit 0 and nothing on stdout or stderr",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "no main.pl: PreCompact",
+   "setup": [
+    {
+     "copy": "$PLUGIN/bin/$BRAND-store",
+     "to": "$TMP/p1/bin/$BRAND-store",
+     "mode": "0755"
+    },
+    {
+     "copy": "$PLUGIN/.claude-plugin/plugin.json",
+     "to": "$TMP/p1/.claude-plugin/plugin.json"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "$TMP/p1/bin/$BRAND-store",
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "no main.pl: Stop",
+   "exec": [
+    "/bin/sh",
+    "$TMP/p1/bin/$BRAND-store",
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": true
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "no main.pl: other subcommand",
+   "exec": [
+    "/bin/sh",
+    "$TMP/p1/bin/$BRAND-store",
+    "ident",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: helper-runtime\n"
+   }
+  },
+  {
+   "name": "main.pl dies with ENOENT",
+   "setup": [
+    {
+     "copy": "$PLUGIN/bin/$BRAND-store",
+     "to": "$TMP/p2/bin/$BRAND-store",
+     "mode": "0755"
+    },
+    {
+     "copy": "$PLUGIN/.claude-plugin/plugin.json",
+     "to": "$TMP/p2/.claude-plugin/plugin.json"
+    },
+    {
+     "write": "$TMP/p2/helper/main.pl",
+     "text": "$! = 2; die \"lost a file\\n\";\n",
+     "mode": "0644"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "$TMP/p2/bin/$BRAND-store",
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": true
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "main.pl does not compile",
+   "setup": [
+    {
+     "copy": "$PLUGIN/bin/$BRAND-store",
+     "to": "$TMP/p3/bin/$BRAND-store",
+     "mode": "0755"
+    },
+    {
+     "copy": "$PLUGIN/.claude-plugin/plugin.json",
+     "to": "$TMP/p3/.claude-plugin/plugin.json"
+    },
+    {
+     "write": "$TMP/p3/helper/main.pl",
+     "text": "sub {\n",
+     "mode": "0644"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "$TMP/p3/bin/$BRAND-store",
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "positive control: the same ENOENT main.pl outside a hook keeps perl's exit code",
+   "exec": [
+    "/bin/sh",
+    "$TMP/p2/bin/$BRAND-store",
+    "ident",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 2
+   }
+  }
+ ]
+}

@@ -1,0 +1,143 @@
+{
+ "id": "M1-sessionstart-budget",
+ "note": "BUILD-PLAN §3.3 SessionStart (5 s) row, MOD-SPEC §3.4: with a git that takes 3 s per call and a queue_cmd that takes 10 s, SessionStart(compact) still prints and claims its block well inside the 5 s hook timeout (one budget for git, the work-tree lookup and the queue call; a step with too little time left is skipped). A helper killed with TERM while it waits for queue_cmd takes the queue_cmd process group along",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "path_prepend": [
+  "$TMP/bin"
+ ],
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/slowq"
+ },
+ "steps": [
+  {
+   "name": "slow git and slow queue_cmd",
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/example-repo"
+    },
+    {
+     "copy": "bin/git-slow",
+     "to": "$TMP/bin/git",
+     "mode": "0755"
+    },
+    {
+     "stub": "slowq",
+     "dir": "$TMP",
+     "script": "echo $$ > \"$TMP/slowq.pid\"\nsleep 10\necho '{}'"
+    },
+    {
+     "dispatch": {
+      "nonce": "3c4d5e6f",
+      "actor": "unknown",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 30,
+      "resume_pref": "sessionstart"
+     }
+    }
+   ],
+   "env": {
+    "GIT_SLOW_SECONDS": "3"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "SessionStart",
+    "source": "compact",
+    "model": "claude-opus-4-5"
+   },
+   "expect": {
+    "exit": 0,
+    "ms_max": 4800,
+    "stderr_empty": true,
+    "context_contains": [
+     "git: not measured (timeout)"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-claimed/3c4d5e6f",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "TERM while the helper waits for queue_cmd",
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "4d5e6f70",
+    "--cwd",
+    "$TMP/nogit"
+   ],
+   "setup": [
+    {
+     "mkdir": "$TMP/nogit"
+    },
+    {
+     "write": "$TMP/slowq.pid",
+     "text": ""
+    }
+   ],
+   "env": {
+    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"
+   },
+   "kill_after_ms": 1500,
+   "kill_signal": "TERM",
+   "expect": {
+    "exit": 143
+   }
+  },
+  {
+   "name": "give the signal a moment",
+   "exec": [
+    "sleep",
+    "1"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "read the queue_cmd pid",
+   "exec": [
+    "cat",
+    "$TMP/slowq.pid"
+   ],
+   "capture": {
+    "QPID": "re:(\\d+)"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A\\d+\\n\\z"
+   }
+  },
+  {
+   "name": "the queue_cmd process is gone",
+   "exec": [
+    "kill",
+    "-0",
+    "$QPID"
+   ],
+   "expect": {
+    "exit": 1
+   }
+  }
+ ]
+}

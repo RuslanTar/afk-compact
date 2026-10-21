@@ -79,9 +79,29 @@ sub cap {
     return join("\n", @keep);
 }
 
-# Latest evidence rows of this session's newest checkpoint for a nonce, or none.
+our %SCAN_STATUS = (full => 'copied', redacted => 'redacted', excerpt => 'redacted', 'ref-only' => 'ref-only', withheld => 'withheld');
+
+# Rows of the sweep that claimed swept/<nonce6> for this nonce, from its MANIFEST.tsv.
+sub _sweep_rows {
+    my ($sid_dir, $nonce) = @_;
+    my $claim = util::read_file("$sid_dir/swept/" . substr($nonce, 0, 6)) // return undef;
+    my ($n, $dest) = $claim =~ /^([0-9a-f]{8})?\t([^\n]+)/ or return undef;
+    return undef unless defined $n && $n eq $nonce && -d $dest;
+    my $m = util::read_file("$dest/MANIFEST.tsv") // return [];
+    my @rows;
+    for my $l (split /\n/, $m) {
+        my ($copy, $origin, undef, undef, undef, undef, undef, $scan) = split /\t/, $l;
+        next unless defined $scan && $SCAN_STATUS{$scan} && $copy ne 'copy_path';
+        push @rows, { origin => $origin, copy => ($copy eq '-' ? undef : $copy), status => $SCAN_STATUS{$scan} };
+    }
+    return \@rows;
+}
+
+# Evidence rows of this compaction: its checkpoint, else its sweep (the after-step's or
+# PostCompact's); with no nonce, this session's newest checkpoint.
 sub _evidence_rows {
     my ($sid_dir, $nonce) = @_;
+    if ($nonce && !-f "$sid_dir/checkpoint/$nonce.json") { return _sweep_rows($sid_dir, $nonce) // [] }
     my @files = $nonce ? ("$sid_dir/checkpoint/$nonce.json") : map { "$sid_dir/checkpoint/$_" }
                 reverse sort { (stat "$sid_dir/checkpoint/$a")[9] <=> (stat "$sid_dir/checkpoint/$b")[9] }
                 grep { /\.json$/ } util::list_dir("$sid_dir/checkpoint");
@@ -95,21 +115,29 @@ sub _evidence_rows {
     return [];
 }
 
-# compact(sid, cwd, nonce, %o{git => result, lane => result}) -> text (<= 3,000 B)
+# compact(sid, cwd, nonce, %o{git => result, lane => result, budget_ms => N}) -> text (<= 3,000 B)
+# One budget for every step that waits (git 2 s, queue 3 s at most): a step that would
+# start with too little time left is skipped (git reads `not measured (timeout)`, the
+# Queued: line is left out), so a hook caller stays inside its own timeout.
+our $BUDGET_MS = 7000;
+
 sub compact {
     my ($sid, $cwd, $nonce, %o) = @_;
     my $t0 = util::clock_ms();
+    my $deadline = $t0 + ($o{budget_ms} // $BUDGET_MS);
+    my $left = sub { my ($cap) = @_; my $l = $deadline - util::clock_ms(); return $l > $cap ? $cap : $l };
     util::trace('measure');
     my $sid_dir = rc::sid_dir();
-    my $g = $o{git} || git::measure($cwd, 2000);
+    my $g = $o{git} || ($left->(2000) >= 200 ? git::measure($cwd, $left->(2000)) : { status => 'timeout' });
     my @l = git_lines($g);
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);
     push @l, evidence_lines($o{evidence_rows} || (defined $sid_dir ? _evidence_rows($sid_dir, $nonce) : []));
-    my $wt = $o{worktree} // (git::where($cwd)->{toplevel});
+    my $wt = $o{worktree} // $g->{toplevel};
+    $wt //= git::where($cwd, $left->(2000))->{toplevel} if $g->{status} eq 'ok' && $left->(2000) >= 200;
     push @l, gsd_lines(gsd::read($wt));
     my $lane = $o{lane};
-    if (!$lane && defined rc::val('queue_cmd') && rc::val('queue_cmd') ne '') {
-        $lane = queue::lane($sid, rc::val('queue_cmd'), 3000);
+    if (!$lane && defined rc::val('queue_cmd') && rc::val('queue_cmd') ne '' && $left->(3000) >= 200) {
+        $lane = queue::lane($sid, rc::val('queue_cmd'), $left->(3000));
     }
     push @l, $lane->{queued_line} if $lane && $lane->{queued_line};
     my $text = cap(\@l, $o{max} // $MAX);
