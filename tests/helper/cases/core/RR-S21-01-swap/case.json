@@ -1,0 +1,191 @@
+{
+ "id": "RR-S21-01-swap",
+ "note": "RR-S21-01 (ROOT-RULINGS F2-1, MOD-SPEC §2.4 P3): a classic-only session; a main compaction and an unproven subagent compaction whose PostCompact comes 1.3 s after the main one, after the main boundary row landed. P3 takes as a main row's PostCompact only one at or before the row (the stash time has milliseconds), so the main summary goes to compact/ and the subagent summary to compact/subagents/, never swapped",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "ts": "2026-10-21T14:04:40+03:00"
+       }
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID/subagents/agent-x7.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "ts": "2026-10-21T14:04:41+03:00"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "main PreCompact (classic fallback)",
+   "now": "2026-10-21T14:04:48.478+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "manual",
+    "custom_instructions": null
+   },
+   "capture": {
+    "N": "re:n=([0-9a-f]{8}) s=main"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "subagent PreCompact (classic fallback, same sid, no agent_id)",
+   "now": "2026-10-21T14:04:50.000+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "main PostCompact (s=main marker of the classic dispatch: unproven, deferred)",
+   "now": "2026-10-21T14:05:00.813+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "manual",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=$N s=main⟫\n# LAB-42 RRMAINBODY\n## Resume here\nStatus: active\n⟪/{{plugin}} n=$N⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "subagent PostCompact 1.3 s later (unshaped: unproven, deferred); the main boundary row landed in between",
+   "now": "2026-10-21T14:05:02.100+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:00.865+03:00",
+        "trigger": "manual",
+        "pre": 37896,
+        "post": 4537,
+        "duration_ms": 12100,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n## Task as assigned: \"RRSUBBODY count the rows\"\n## Report: text to parent\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the next Stop: P3",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID/subagents/agent-x7.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:02.150+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 1,
+      "has": [
+       "RRMAINBODY"
+      ]
+     },
+     {
+      "path": "$ROOT/work/general/compact/subagents/*.md",
+      "count": 1,
+      "has": [
+       "RRSUBBODY"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

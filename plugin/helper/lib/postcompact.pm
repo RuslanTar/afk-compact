@@ -160,7 +160,7 @@ sub run {
         util::write_excl("$sid_dir/pending/$id6.post.json", jsonc::encode_bytes(jsonc::obj(
             id6 => $id6, nonce => $emn, scope => $scope, agent => $agent, trigger => $p->{trigger}, cwd => $cwd,
             transcript => $tp, tokens => $tokens, precomputed => jsonc::bool($precomputed),
-            ts => util::iso($now), dispatch => ($drec ? $drec->{nonce} : undef), deferred => ($deferred ? $deferred->{nonce} : undef),
+            ts => util::iso_ms($now), dispatch => ($drec ? $drec->{nonce} : undef), deferred => ($deferred ? $deferred->{nonce} : undef),
             scope_deferred => jsonc::bool($scope_deferred), stale => jsonc::bool($stale), marker => $mn,
             join => $join)) . "\n", 0600);
     };

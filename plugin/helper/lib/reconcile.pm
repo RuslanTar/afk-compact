@@ -33,7 +33,10 @@ our $READ_MAX = 32 * 1024 * 1024;   # bytes read from one file per Stop; the res
 our $SETTLE_S = 10;                 # an unproven PostCompact younger than this waits
 our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long after its PostCompact
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
-our $TOL_S = 2;                     # stash times have whole seconds
+our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
+# A main boundary row's PostCompact is one at or before the row, never after it (RR-S21-01):
+# the row is written after PostCompact and the mod after-step (S-21), and the stash time
+# has milliseconds, so a later PostCompact (an unproven subagent one) cannot take its place.
 
 # ---------------------------------------------------------------- state
 sub _load {
@@ -160,7 +163,7 @@ sub _match {
     for my $bd (@{ $st->{sbounds} }) { my $it = defined $bd->{by} ? $by{ $bd->{by} } : undef; $it->{sb} = $bd if $it }
     for my $bd (sort { $a->{e} <=> $b->{e} } grep { !defined $_->{by} } @{ $st->{bounds} }) {
         my @c = grep { !$_->{mb} && !$_->{sb} && $_->{scope} ne 'sub'
-                       && $_->{e} <= $bd->{e} + $TOL_S && $bd->{e} - $_->{e} <= $MAIN_WINDOW_S } @$pool;
+                       && $_->{e} <= $bd->{e} && $bd->{e} - $_->{e} <= $MAIN_WINDOW_S } @$pool;
         my @proven = grep { $_->{scope} eq 'main' } @c;
         my ($it) = sort { $b->{e} <=> $a->{e} } (@proven ? @proven : @c);
         next unless $it;
