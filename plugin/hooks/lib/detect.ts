@@ -1,6 +1,7 @@
 // Marker/sentinel detector, verdict table (MOD-SPEC §5.1) and the unanchored instruction-marker
-// search (MOD-SPEC §2.2). Literals come from the spec-literals block (spec.gen.ts); until that
-// block exists the grammar falls back to MOD-SPEC §2.2 with the run-time plugin name.
+// search (MOD-SPEC §2.2). Literals come from the spec-literals block (spec.gen.ts) when it holds
+// them for the run-time plugin name; otherwise (no block yet, or another name, as in tests) the
+// grammar is MOD-SPEC §2.2 with the run-time name.
 import { SPEC } from './spec.gen'
 import { strip } from './normalize'
 import { sha256 } from './normalize'
@@ -55,9 +56,14 @@ export type Grammar = {
 
 export function grammar(plugin: string): Grammar {
   const p = esc(plugin)
-  const marker = specString('marker_re') ?? '^' + OPEN + p + ' v1 n=([0-9a-f]{8}) s=(main|sub|manual)' + CLOSE + '$'
-  const sentinel = specString('sentinel_re') ?? '^' + OPEN + '/' + p + ' n=([0-9a-f]{8})' + CLOSE + '$'
-  const instr = specString('instr_marker_re') ?? OPEN + p + ' v1 n=([0-9a-f]{8}) s=(main|sub)' + CLOSE
+  // The spec block's regexes hold the brand they were built for; they apply only to that name.
+  const forName = (key: string) => {
+    const v = specString(key)
+    return v !== undefined && (v.includes(plugin) || v.includes(p)) ? v : undefined
+  }
+  const marker = forName('marker_re') ?? '^' + OPEN + p + ' v1 n=([0-9a-f]{8}) s=(main|sub|manual)' + CLOSE + '$'
+  const sentinel = forName('sentinel_re') ?? '^' + OPEN + '/' + p + ' n=([0-9a-f]{8})' + CLOSE + '$'
+  const instr = forName('instr_marker_re') ?? OPEN + p + ' v1 n=([0-9a-f]{8}) s=(main|sub)' + CLOSE
   return { marker: new RegExp(marker), sentinel: new RegExp(sentinel), instr }
 }
 
