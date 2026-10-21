@@ -354,7 +354,7 @@ The managed-machine path is built and tested offline. It has not yet been run on
 - **Automatic relaunch covers read-only jobs only.** `relaunch_allow` has no effect yet, and a job whose output file could not be confirmed asks.
 - **Repo mode exports only.** There is no command that accepts a repository for you, and the plugin never stages or commits an export.
 - **Handoff turn limits are advice.** The plugin adds notes to tool results and denies nothing, so a model that ignores a note can run past its budget. Native auto-compaction is the backstop.
-- **Not yet run live:** the end-to-end runs in a real session, on a managed machine, the handoff turn, the wait helper in a subagent, and the week-long shadow run.
+- **Not yet run live:** the end-to-end runs in a real session, on a managed machine, the handoff turn, and the week-long shadow run. The wait helper in a subagent has been run live (Claude Code 2.1.306).
 
 ## License
 
