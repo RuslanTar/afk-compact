@@ -399,8 +399,13 @@ export const SPEC = {
       {
         "id": "runtime",
         "re": "^\\[exited with code (-?[0-9]+)\\]$",
-        "active": false,
-        "gate": "P-D1-2"
+        "active": true
+      },
+      {
+        "id": "killed",
+        "re": "^\\[killed\\]$",
+        "active": true,
+        "means": "killed"
       }
     ],
     "end_suffix": "; echo \"__exit $?\"",

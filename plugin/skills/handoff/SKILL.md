@@ -24,7 +24,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 | D | An evidence row is `withheld` | Never copy it another way or retry. If a resume needs it, add an Open question naming where it lives. |
 | E | The user must decide something | Record it in Open questions with a recommendation. No interactive question tool here: it holds the turn open and blocks compaction. |
 | F | Newer handoffs from other sessions, foreign commits, another live session on this checkout, a lane or pin held elsewhere | Still write your own new file. Record it under Ownership, stay read-only on their resource; if Step 1 touches it, status `blocked`. |
-| G | Session-bound work is running (shells, monitors, scheduled tasks, workflows, agents) | Do not wait. Gate line `stay in this session: <ids> die on /clear or exit`, and the report's insurance line. |
+| G | Session-bound work is running (shells, monitors, scheduled tasks, workflows, agents) | Do not wait. Gate line `stay in this session: <ids> die on /clear or exit` (background shells: `die on exit`), and the report's insurance line. |
 | H | Call budget spent | Stop probing; tag what is not re-checked `[unverified]`; continue at Step 3. |
 
 Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edit STATE.md; delete or move files; give the helper transcripts, session logs, shell history, environment dumps or credentials; read the transcript; act outward (push, merge, deploy, post, comment), commit just to clean the tree, or `git add` a repository export; restart, wake or stop background work (healing is the resume's job); spawn verification agents; sleep or poll; route around a permission or guard denial (record it under Guards in force; retry a classifier outage once).
@@ -108,7 +108,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 1. The receipt, verbatim, and the export line under it when printed.
 2. `Resume with: /compactinue:resume <path>`
 3. Status word and Step 1.
-4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` Otherwise `nothing running (checked <stamp>)` or `nothing running known (not checked)`.
+4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` (Background shells survive `/clear`: `lost on session end`.) Otherwise `nothing running (checked <stamp>)` or `nothing running known (not checked)`.
 5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder).
 6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
