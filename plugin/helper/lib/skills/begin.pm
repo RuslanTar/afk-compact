@@ -2,6 +2,11 @@ package skills::begin;
 # lib/skills/begin.pm: `begin` (HDN §6; BUILD-PLAN §3.1 row; D-14, RV-18,
 # RV-19, RV-26, RV-28, OD-16). Prints one JSON object of at most 3 KB and
 # creates the stage <bucket>/.staging/<sid8>-<nonce>/ (0700) with settings.json.
+# 2026-10-21 rulings: the carry base is the newest handoff in the bucket, whoever
+# wrote it, with previous_kind own|chain|foreign (small-rulings §2.1; a document with
+# imported_from is never the base, DP-6); an open plugin handoff turn of this session
+# is bound to the stage, and a second begin for it returns that stage (D-18 B7);
+# the D-12 mode and, in repo mode, the export target are printed.
 use strict;
 use warnings;
 use Cwd ();
@@ -14,9 +19,11 @@ use skills::gitfacts;
 use skills::store;
 
 # The HDN §6 keys, plus reuse_window_min (D-14). Exactly these are printed.
+# handoff_turn and resumed only when a plugin handoff turn is open (D-18 B8).
 our @KEYS = qw(checked_at session repo worktree branch head porcelain ahead behind in_progress
-               bucket stem stage nonce previous_handoff own_latest newer_foreign ownership gsd
-               queued_line inflight_measured tmp_candidates config reuse_window_min);
+               bucket stem stage nonce previous_handoff previous_kind previous_sid8 previous_stamp
+               own_previous_handoff carry_notice next_ids own_latest newer_foreign ownership gsd
+               queued_line inflight_measured tmp_candidates config reuse_window_min mode export_target);
 our $REUSE_WINDOW_MIN = 15;
 our $MAX_BYTES = 3072;
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
@@ -78,29 +85,73 @@ sub run {
             }
         }
     }
+    # D-18 B7: the open handoff turn of this session; a stage already bound to it is
+    # returned as it is (one handoff per ht), never a second one.
+    my $sid_dir = skills::core::sid_dir();
+    my $ht = skills::core::ht_open_for_begin($sid_dir);
+    my ($nonce, $stage, $stem, $resumed);
+    if ($ht) {
+        my $bound = skills::core::ht_stage_of($sid_dir, $ht->{ht});
+        my $old = _stage_meta($bound);
+        if ($old) {
+            ($stage, $nonce, $stem, $resumed) = ($bound, $old->{nonce}, $old->{stem}, 1);
+            %bucket = (path => $old->{bucket}, source => $old->{bucket_source} // $bucket{source});
+        }
+    }
     my $bucket = $bucket{path};
 
     # Stage <bucket>/.staging/<sid8>-<nonce>/
-    my ($nonce, $stage);
-    for (1 .. 5) {
-        $nonce = skills::core::nonce($sid);
-        $stage = "$bucket/.staging/$id->{sid8}-$nonce";
-        last unless -e $stage;
-        undef $stage;
+    if (!$stage) {
+        for (1 .. 5) {
+            $nonce = skills::core::nonce($sid);
+            $stage = "$bucket/.staging/$id->{sid8}-$nonce";
+            last unless -e $stage;
+            undef $stage;
+        }
+        die "stage: no free nonce\n" unless $stage;
+        skills::util::mkdir_p("$bucket/.staging");
+        mkdir($stage, 0700) or die "stage $stage: $!\n";
+        chmod 0700, $stage;
+        $stem = skills::util::stem_time($now) . '_' . $id->{sid8} . '_' . ($topic // slug(File::Basename::basename($bucket)) // 'handoff');
+        if ($ht) {
+            my ($bound, $was) = skills::core::ht_bind_stage($sid_dir, $ht->{ht}, $stage);
+            my $old = $was ? _stage_meta($bound) : undef;
+            if ($old) {
+                # Another begin bound this ht first: use its stage; ours stays empty.
+                ($stage, $nonce, $stem, $resumed) = ($bound, $old->{nonce}, $old->{stem}, 1);
+                %bucket = (path => $old->{bucket}, source => $old->{bucket_source} // $bucket{source});
+                $bucket = $bucket{path};
+            }
+        }
     }
-    die "stage: no free nonce\n" unless $stage;
-    skills::util::mkdir_p("$bucket/.staging");
-    mkdir($stage, 0700) or die "stage $stage: $!\n";
-    chmod 0700, $stage;
 
-    my $stem = skills::util::stem_time($now) . '_' . $id->{sid8} . '_' . ($topic // slug(File::Basename::basename($bucket)) // 'handoff');
-
-    # Own chain (RV-19): same sid, or proven by lineage. Foreign files only go
-    # to newer_foreign.
-    my $docs = [ grep { skills::store::is_handoff($_) } @{ skills::store::docs_in($bucket) } ];
-    my @own = grep { ($_->{fm}{session_id} // '') eq $sid } @$docs;
-    my @pred = grep { $chain_sids{ $_->{fm}{session_id} // '' } } @$docs;
-    my $prev = $own[0] // $pred[0];
+    # Carry base (small-rulings §2.1, RV-19 refined): the newest handoff in the bucket by
+    # frontmatter date, name as tiebreak, whoever wrote it; never one with imported_from.
+    # own_chain = this session or a lineage predecessor (A-6, 3 hops).
+    my $docs = [ sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) || $b->{path} cmp $a->{path} }
+                 grep { skills::store::is_handoff($_) } @{ skills::store::docs_in($bucket) } ];
+    my $is_own = sub { ($_[0]{fm}{session_id} // '') eq $sid };
+    my $is_pred = sub { $chain_sids{ $_[0]{fm}{session_id} // '' } ? 1 : 0 };
+    my @cands = grep { !skills::store::imported($_) } @$docs;
+    my @own = grep { $is_own->($_) } @cands;
+    my @pred = grep { $is_pred->($_) } @cands;
+    my @own_chain = grep { $is_own->($_) || $is_pred->($_) } @cands;
+    my $base = $cands[0];
+    my $kind = !$base ? undef : $is_own->($base) ? 'own' : $is_pred->($base) ? 'chain' : 'foreign';
+    my $own_prev = ($kind // '') eq 'foreign' ? $own_chain[0] : undef;
+    my $prev = $own_chain[0];    # the own chain's latest file: the commit base (D-21)
+    my %carry = (
+        previous_kind        => $kind,
+        previous_sid8        => ($base ? skills::ctx::sid8($base->{fm}{session_id}) : undef),
+        previous_stamp       => ($base ? _doc_stamp($base) : undef),
+        own_previous_handoff => ($own_prev ? $own_prev->{path} : undef),
+        carry_notice         => undef,
+        next_ids             => next_ids(grep { defined } $base, $own_prev),
+    );
+    if (($kind // '') eq 'foreign') {
+        $carry{carry_notice} = sprintf("not your chain: the newest handoff here is %s's (%s)", $carry{previous_sid8} || 'unknown', $carry{previous_stamp} // 'undated')
+            . ($own_prev ? sprintf('; yours is %s (%s)', skills::store::stem_of($own_prev->{path}), _doc_stamp($own_prev) // 'undated') : '');
+    }
     my $own_latest;
     if ($own[0]) {
         my $d = $own[0];
@@ -115,15 +166,19 @@ sub run {
         $own_latest = { path => $d->{path}, date => $d->{fm}{date}, age_min => $age,
                         unchanged => ($unchanged ? \1 : \0) };
     }
+    # newer_foreign: other sessions' files newer than the own chain's latest, minus the
+    # base, which is read in full (up to 2 more when the base is foreign).
     my $since = $own[0] ? $own[0]{epoch} : ($prev ? $prev->{epoch} : undef);
     my @foreign = grep {
         my $s = $_->{fm}{session_id} // '';
         $s ne $sid && !$chain_sids{$s} && (!defined $since || ($_->{epoch} // 0) > $since)
+            && !($base && $_->{path} eq $base->{path})
     } @$docs;
+    my $nf_max = ($kind // '') eq 'foreign' ? 1 : 2;
     my @newer_foreign = map {
         { path => $_->{path}, date => $_->{fm}{date}, sid8 => skills::ctx::sid8($_->{fm}{session_id}),
           inflight_line => _inflight_line($_) }
-    } @foreign[0 .. ($#foreign < 2 ? $#foreign : 2)];
+    } @foreign[0 .. ($#foreign < $nf_max ? $#foreign : $nf_max)];
 
     # Ownership: foreign commits since the chain's last git_commit, live peers
     # from the per-process records, the pin lock.
@@ -132,7 +187,7 @@ sub run {
         $ownership{live_peers} = [ map { { sid8 => $_->{sid8}, pid => $_->{pid} } }
                                    @{ skills::ctx::live_peers($ctx, $g->{worktree}, $sid) } ];
         if ($prev && $prev->{fm}{git_commit}) {
-            $ownership{foreign_commits} = _foreign_commits($ctx, $g, $prev, [ @own, @pred ], $id);
+            $ownership{foreign_commits} = _foreign_commits($ctx, $g, $prev, [ @own_chain ], $id);
         }
     }
     if ($repin) { $ownership{repin} = $repin }
@@ -156,6 +211,12 @@ sub run {
                    previous_session_id => $lin->{previous_session_id}, lineage_reason => $lin->{lineage_reason} // 'none');
     $session{identity} = "degraded ($id->{degraded})" if $id->{degraded};
 
+    # D-12: the handoff-root mode of this worktree; in repo mode, where publish exports.
+    my $m = skills::core::mode($cwd);
+    my %mode = (mode => $m->{mode}, reason => $m->{reason});
+    my $export_target = ($m->{mode} eq 'repo' && defined $m->{root_rel})
+        ? "$m->{root_rel}/" . File::Basename::basename($bucket) . "/$stem.md" : undef;
+
     my $wh_now = $g->{in_git} ? skills::gitfacts::work_hash($g->{worktree}) : undef;
     my %out = (
         checked_at        => skills::util::stamp($now),
@@ -172,7 +233,8 @@ sub run {
         stem              => $stem,
         stage             => $stage,
         nonce             => $nonce,
-        previous_handoff  => ($prev ? $prev->{path} : undef),
+        previous_handoff  => ($base ? $base->{path} : undef),
+        %carry,
         own_latest        => $own_latest,
         newer_foreign     => \@newer_foreign,
         ownership         => \%ownership,
@@ -182,7 +244,13 @@ sub run {
         tmp_candidates    => $tmp,
         config            => \%config,
         reuse_window_min  => $REUSE_WINDOW_MIN,
+        mode              => \%mode,
+        export_target     => $export_target,
     );
+    if ($ht) {
+        $out{handoff_turn} = { ht => $ht->{ht}, max_calls => $ht->{max_calls} };
+        $out{resumed} = \1 if $resumed;
+    }
 
     my %stage_settings = (
         v => 1, session_id => $sid, sid8 => $id->{sid8}, actor => 'main', nonce => $nonce, stem => $stem,
@@ -191,16 +259,48 @@ sub run {
         repo => $g->{repo}, worktree => $g->{worktree}, branch => $g->{branch}, head => $g->{head_full},
         work_hash => $wh_now, cwd => $cwd,
         previous_session_id => $lin->{previous_session_id}, lineage_reason => $lin->{lineage_reason} // 'none',
-        previous_handoff => $out{previous_handoff}, queue_lane => $queue_lane,
+        previous_handoff => $out{previous_handoff}, previous_kind => $carry{previous_kind},
+        previous_sid8 => $carry{previous_sid8}, previous_stamp => $carry{previous_stamp},
+        own_previous_handoff => $carry{own_previous_handoff}, queue_lane => $queue_lane,
+        handoff_ht => ($ht ? $ht->{ht} : undef), slug => $topic,
+        mode => $m->{mode}, mode_reason => $m->{reason},
         gsd_state => ($gsd && $g->{worktree} && -f "$g->{worktree}/.planning/STATE.md" ? "$g->{worktree}/.planning/STATE.md" : undef),
         identity_degraded => $id->{degraded},
         settings => { map { $_ => $ctx->{settings}{$_} } grep { !/\A_/ } keys %{ $ctx->{settings} } },
     );
-    skills::util::write_excl("$stage/settings.json", skills::util::json_encode(\%stage_settings) . "\n", 0600)
-        or die "stage settings exist\n";
+    if (!$resumed) {
+        skills::util::write_excl("$stage/settings.json", skills::util::json_encode(\%stage_settings) . "\n", 0600)
+            or die "stage settings exist\n";
+    }
 
     skills::cli::say(_fit(\%out));
     return 0;
+}
+
+# The settings.json of a stage that begin made, or undef.
+sub _stage_meta {
+    my ($stage) = @_;
+    return undef unless defined $stage && -d $stage;
+    my $d = eval { skills::util::json_decode(skills::util::read_file("$stage/settings.json", 262144)) };
+    return (ref $d eq 'HASH' && $d->{nonce} && $d->{stem} && $d->{bucket}) ? $d : undef;
+}
+
+# A document's frontmatter date as a stamp (RV-24), or its raw date.
+sub _doc_stamp {
+    my ($d) = @_;
+    return defined $d->{epoch} ? skills::util::stamp($d->{epoch}) : $d->{fm}{date};
+}
+
+# next_ids(docs) -> {U, D, X}: the highest id of each prefix over the documents plus 1,
+# so the model never does id arithmetic (small-rulings §2.1).
+sub next_ids {
+    my (@docs) = @_;
+    my %max = (U => 0, D => 0, X => 0);
+    for my $d (@docs) {
+        my $t = $d->{body} // $d->{text} // '';
+        while ($t =~ /(?<![A-Za-z0-9])([UDX])-([0-9]{1,6})(?![0-9])/g) { $max{$1} = $2 if $2 > $max{$1} }
+    }
+    return { map { $_ => $max{$_} + 1 } keys %max };
 }
 
 sub _rel {
@@ -296,14 +396,12 @@ sub queue_listing {
     return { lane => $lane, label => (defined $d->{label} && !ref $d->{label} ? $d->{label} : undef), open => \@ids };
 }
 
-# Last background sidecar slot of this session (MOD §7 ring).
+# Last background sidecar slot of this session (MOD §7 ring): the highest seq, never the
+# newest mtime (DP-13; sidecar::newest).
 sub _inflight {
     my ($ctx, $sid, $g) = @_;
-    my $dir = "$ctx->{watch}/$sid/bg";
-    my @slots = grep { /\Aslot-\d+\.json\z/ } skills::util::list_dir($dir);
-    return { sidecar => undef, tasks => [] } unless @slots;
-    my ($newest) = sort { (stat "$dir/$b")[9] <=> (stat "$dir/$a")[9] || $b cmp $a } @slots;
-    my $d = eval { skills::util::json_decode(skills::util::read_file("$dir/$newest", 262144)) } || {};
+    my ($d, $path) = skills::core::sidecar_newest("$ctx->{watch}/$sid");
+    return { sidecar => undef, tasks => [] } unless $d && $path;
     my @tasks;
     for my $t (@{ sidecar_tasks($d) }) {
         my %r = (id => $t->{id}, kind => $t->{kind}, status => $t->{status});
@@ -316,7 +414,7 @@ sub _inflight {
         push @tasks, \%r;
         last if @tasks >= 8;
     }
-    return { sidecar => "$dir/$newest", ts => $d->{ts}, tasks => \@tasks };
+    return { sidecar => $path, ts => $d->{ts}, tasks => \@tasks };
 }
 
 # Normalise a sidecar slot → [{id, kind, status, output}] (shape assumed).
@@ -331,7 +429,7 @@ sub sidecar_tasks {
             next unless ref $t eq 'HASH';
             push @out, {
                 id     => $t->{id} // $t->{task_id} // $t->{runtime_id},
-                kind   => $t->{kind} // ($key =~ /cron/ ? 'cron' : 'shell'),
+                kind   => $t->{kind} // $t->{type} // ($key =~ /cron/ ? 'cron' : 'shell'),
                 status => $t->{status},
                 output => $t->{output} // $t->{output_path} // $t->{output_file},
             };

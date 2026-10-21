@@ -116,6 +116,10 @@ sub docs_in {
 
 sub is_handoff { my ($d) = @_; return (($d->{fm}{kind} // '') eq 'handoff') ? 1 : 0 }
 
+# A private copy of a repository export (`project copy --from repo`, D-12 §1.5.9): never the
+# carry base (DP-6), and its recipes are not local.
+sub imported { my ($d) = @_; return (defined $d->{fm}{imported_from} && $d->{fm}{imported_from} ne '') ? 1 : 0 }
+
 # Refused or unpublished drafts in <bucket>/.staging/ (D-15).
 sub drafts_in {
     my ($bucket) = @_;
