@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Code review 2026-10-22, DP-27: with a foreign carry base, a ledger line carried with its [from <sid8> · <base id> · …] tag keeps the base line's [verified …]/checked stamps and is not unprinted-time; an edited stamp, a tag naming another base line or another session is still unprinted-time; [unverified] is always accepted",
+ "note": "Code review 2026-10-22, DP-27: with a foreign carry base, a ledger line carried with its [from <sid8> · <base id> · …] tag keeps the base line's [verified …]/checked stamps and is not unprinted-time; an edited stamp is still unprinted-time; [unverified] is always accepted (tag forms: HT-PB-06)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -90,54 +90,6 @@
     ]
    },
    "name": "a carried line whose stamp was edited"
-  },
-  {
-   "write": "$STAGE/body.md",
-   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- X-6: refuted \"r\" — dup [verified 2026-10-20 10:00 +0300: rg -c dup log] [from 99999999 · X-3 · 2026-10-21 12:00 +0300]\n- X-7: refuted \"q\" — clean (checked 2026-10-20 09:00 +0300) [from 99999999 · X-3 · 2026-10-21 12:00 +0300]\n- X-8: refuted \"s\" — gone [unverified] [from 99999999 · X-4 · 2026-10-21 12:00 +0300]\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
-  },
-  {
-   "cwd": "$TMP/repo",
-   "argv": [
-    "publish",
-    "--stage",
-    "$STAGE",
-    "--slug",
-    "retry",
-    "--status",
-    "in-progress"
-   ],
-   "expect": {
-    "exit": 3,
-    "stdout_has": [
-     "^LINT unprinted-time line [0-9]+$",
-     "^REFUSED: lint \\(1 blocking\\)"
-    ]
-   },
-   "name": "a tag that names another base line"
-  },
-  {
-   "write": "$STAGE/body.md",
-   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- X-6: refuted \"r\" — dup [verified 2026-10-20 10:00 +0300: rg -c dup log] [from ab12cd34 · X-2 · 2026-10-21 12:00 +0300]\n- X-7: refuted \"q\" — clean (checked 2026-10-20 09:00 +0300) [from 99999999 · X-3 · 2026-10-21 12:00 +0300]\n- X-8: refuted \"s\" — gone [unverified] [from 99999999 · X-4 · 2026-10-21 12:00 +0300]\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
-  },
-  {
-   "cwd": "$TMP/repo",
-   "argv": [
-    "publish",
-    "--stage",
-    "$STAGE",
-    "--slug",
-    "retry",
-    "--status",
-    "in-progress"
-   ],
-   "expect": {
-    "exit": 3,
-    "stdout_has": [
-     "^LINT unprinted-time line [0-9]+$",
-     "^REFUSED: lint \\(1 blocking\\)"
-    ]
-   },
-   "name": "a tag that names another session"
   },
   {
    "write": "$STAGE/body.md",

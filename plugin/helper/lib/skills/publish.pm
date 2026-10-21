@@ -87,7 +87,7 @@ sub run {
     my $ev = skills::stage::evidence_rows($dir);
     my $res = eval { skills::lint::lint({
         body => $body, recipes => \%recipes, extra => \%extra, previous => $prev_text,
-        previous_kind => $s->{previous_kind}, previous_sid8 => $s->{previous_sid8}, own_previous => $own_text,
+        previous_kind => $s->{previous_kind}, own_previous => $own_text,
         repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
         jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
         brand => $ctx->{brand},
