@@ -1,0 +1,354 @@
+{
+ "id": "HT-JV-04 (DP-24 (b), (c); AT-J-04 rows 2a, 2b, 3)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "DP-24 (c) (P-D1-3): background shells survive /clear, so in a successor after /clear (the origin's process is alive and now runs C, lineage C -> origin, clear) a job with no end marker is RUNNING (V2 fails: owner process still live after /clear), REFUSED: running with no ask-command, never LOST or relaunched. DP-24 (b) (P-D1-2): the runtime trailer `[exited with code N]`, written without a newline, is an end marker (rc 0 -> DONE-UNREPORTED, collect); `[killed]` (TaskStop or the stop at exit) is KILLED: REFUSED: killed with the recorded ask-command, also with a recorded stop and also after an exit. wait exit: prints rc= for the trailer and `killed` for `[killed]`",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/repo/app"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2001-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-66666666.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"66666666-6666-4666-8666-666666666666\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2099-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/66666666-6666-4666-8666-666666666666.lineage.json",
+     "json": {
+      "previous_session_id": "$SID",
+      "lineage_reason": "clear"
+     }
+    },
+    {
+     "write": "$WATCH/$SID/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b5\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"command_sha256\": \"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/b5.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b6\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9f75fc6b9e15290ea1fc2fa75f7605acb43190976edb272494f226acbcb649f7\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": null, \"output_path_source\": \"none\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"command_sha256\": \"54703843d2e117a445593b679d2fbe56354b35955c85ca8c8e2915b972995223\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/b3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b4\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"command_sha256\": \"16ed68b993237f37fc578039217e623e0c2a7f37b2a71e62ef255c6a81a6266f\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/b4.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bl\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Sat Jan  6 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la tmp; echo \\\"__exit $?\\\"\", \"command_sha256\": \"32395034684507e5d02b8f688cb3f2e0a18d966c4326171253f2325fa4ae2040\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bl.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bs\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la log; echo \\\"__exit $?\\\"\", \"command_sha256\": \"d3dc4c4707f11a9d415349484ef38960a8e5065e8b131c64cd5f62ed31742174\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bs.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bo\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9edab38589c804560099c89c07c66adb7b86d9ae64a95211d2e898c5d1e7bd37\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bo.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bu\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh scripts/t.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"4f25ea8f1632610f378c083d0bb915f1e41262dc6b13b7c25a5c025f1c12a45b\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bu.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bf\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la forged; echo \\\"__exit $?\\\"\", \"command_sha256\": \"71cb0dc6412f26f49d1fd7d0eb872dfa7c1acd3a17060becb0846ac21f8c59fa\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bf.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bw\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": null, \"command_sha256\": \"765d8720d11c28c72dc7a5880c1a811aceabbbee5ee259b2c3f116d297e3de13\", \"command_withheld\": [\"pem\"], \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bw.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:20:00.000+03:00\", \"ev\": \"stop\", \"sid\": \"$SID\", \"kind\": \"stop\", \"task_id\": \"bs\"}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bk\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"command_sha256\": \"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bk.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bt\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"command_sha256\": \"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bt.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bks\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"command_sha256\": \"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bks.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:02.000+03:00\", \"ev\": \"stop\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"stop\", \"task_id\": \"bks\"}\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_00\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_00\", \"content\": \"Command running in background with ID: b5.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b5\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: b6.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b6\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: b3.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b3\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: b4.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b4\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_04\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la tmp; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_04\", \"content\": \"Command running in background with ID: bl.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bl\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_05\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la log; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_05\", \"content\": \"Command running in background with ID: bs.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bs\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_06\", \"name\": \"Bash\", \"input\": {\"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_06\", \"content\": \"Command running in background with ID: bo.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bo\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_07\", \"name\": \"Bash\", \"input\": {\"command\": \"sh scripts/t.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_07\", \"content\": \"Command running in background with ID: bu.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bu\"}}\n"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-6.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 7, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"b5\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"b6\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"b3\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"b4\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bl\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bs\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bo\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bu\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bf\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bw\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-5.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 6, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/out/b5.output",
+     "content": "listing\n"
+    },
+    {
+     "age": "$TMP/out/b5.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/b3.output",
+     "content": "x\n__exit 0\n"
+    },
+    {
+     "age": "$TMP/out/b3.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/b4.output",
+     "content": "x\n__exit 2\n"
+    },
+    {
+     "age": "$TMP/out/b4.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bl.output",
+     "content": "still writing\n"
+    },
+    {
+     "write": "$TMP/out/bs.output",
+     "content": "stopped\n"
+    },
+    {
+     "age": "$TMP/out/bs.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bo.output",
+     "content": "pushing\n"
+    },
+    {
+     "age": "$TMP/out/bo.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bu.output",
+     "content": "tests\n"
+    },
+    {
+     "age": "$TMP/out/bu.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bf.output",
+     "content": "f\n"
+    },
+    {
+     "age": "$TMP/out/bf.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bw.output",
+     "content": "w\n"
+    },
+    {
+     "age": "$TMP/out/bw.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bk.output",
+     "content": "listing\n\n[killed]"
+    },
+    {
+     "age": "$TMP/out/bk.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bt.output",
+     "content": "listing\n\n[exited with code 0]"
+    },
+    {
+     "age": "$TMP/out/bt.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bks.output",
+     "content": "\n[killed]"
+    },
+    {
+     "age": "$TMP/out/bks.output",
+     "minutes": 60
+    }
+   ]
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "DP-24 (c): after /clear the job may still run: RUNNING, never LOST",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V2 owner-ended fail \\(owner process still live after /clear 2099-01-01 03:00 \\+0300\\)$",
+     "^verdict: RUNNING ",
+     "^REFUSED: running$"
+    ],
+    "stdout_lacks": [
+     "^verdict: LOST",
+     "^ask-command:",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "DP-24 (c): an end marker still wins after /clear",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b3"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: DONE-UNREPORTED ",
+     "^REFUSED: done-unreported$",
+     "^collect: $TMP/out/b3\\.output$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "DP-24 (b): the runtime trailer without a newline is an end marker",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bt"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V4 no-completion fail \\(exit marker rc=0\\)$",
+     "^verdict: DONE-UNREPORTED ",
+     "^collect: $TMP/out/bt\\.output$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "DP-24 (b): [killed] asks with the recorded command",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bk"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V4 no-completion fail \\(killed\\)$",
+     "^verdict: KILLED ",
+     "^REFUSED: killed$",
+     "^ask-command: ls -la app; echo \"__exit \\$\\?\"$",
+     "^ask-source: recorded$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "DP-24 (b): [killed] with a recorded stop still asks",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bks"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: KILLED ",
+     "^REFUSED: killed$",
+     "^ask-command: "
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "wait exit: reads the runtime trailer",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/out/bt.output",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done exit:$TMP/out/bt.output after 0s rc=0 line=3\n"
+   }
+  },
+  {
+   "name": "wait exit: prints killed for [killed]",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/out/bk.output",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done exit:$TMP/out/bk.output after 0s killed line=3\n"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.ended-11111111.json",
+     "content": "{\"session_id\": \"$SID\", \"reason\": \"prompt_input_exit\", \"ts\": \"2099-01-01T00:00:00+00:00\"}"
+    }
+   ]
+  },
+  {
+   "name": "DP-24 (b): after an exit, [killed] (the stop at exit) still asks, never LOST",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bk"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V2 owner-ended pass ",
+     "^verdict: KILLED ",
+     "^REFUSED: killed$",
+     "^ask-command: "
+    ],
+    "stdout_lacks": [
+     "^verdict: LOST"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  }
+ ]
+}
