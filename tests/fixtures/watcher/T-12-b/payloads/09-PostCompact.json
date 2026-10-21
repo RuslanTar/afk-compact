@@ -1,0 +1,9 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "PostCompact",
+  "trigger": "auto",
+  "compact_summary": "<summary>\n1. Primary Request and Intent:\n   The user asked for the retry worker fix.\n\n2. Pending Tasks:\n   - fix the flaky spec\n</summary>"
+}

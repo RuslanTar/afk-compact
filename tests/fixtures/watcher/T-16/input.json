@@ -1,0 +1,54 @@
+{
+  "id": "T-16",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-16",
+  "unreadable": [
+    "$TMP/unreadable/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl"
+  ],
+  "seed": [],
+  "steps": [
+    {
+      "now": "2026-10-21T14:06:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-16/payloads/01-Stop.invalid",
+      "note": "malformed JSON on stdin",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:10+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-16/payloads/02-Stop.json",
+      "note": "the transcript holds one malformed JSON line",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:20+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-16/payloads/03-Stop.json",
+      "note": "transcript_path names a file the runner creates with mode 000",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

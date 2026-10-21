@@ -1,0 +1,7 @@
+#!/bin/sh
+# AT-E-01: a git that answers after GIT_SLOW_SECONDS (default 3), past the 2 s git budget.
+# Install it as `git` in a directory first on PATH; it then runs the next git on PATH.
+sleep "${GIT_SLOW_SECONDS:-3}"
+self_dir=$(cd "$(dirname "$0")" && pwd -P)
+rest=$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" != "$self_dir" ] && printf '%s:' "$d"; done)
+PATH=${rest%:} exec git "$@"

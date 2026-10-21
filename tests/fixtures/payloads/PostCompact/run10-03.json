@@ -1,0 +1,9 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "PostCompact",
+  "trigger": "auto",
+  "compact_summary": "<summary>\n⟪{{plugin}} v1 n=5654d7a2 s=sub⟫\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n⟪/{{plugin}} n=5654d7a2⟫\n</summary>\n"
+}

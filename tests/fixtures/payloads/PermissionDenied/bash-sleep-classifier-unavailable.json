@@ -1,0 +1,15 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "PermissionDenied",
+  "permission_mode": "auto",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "sleep 120 && bin/check SECRET_CANARY_7f3",
+    "description": "wait for the job"
+  },
+  "tool_use_id": "toolu_fixture_bash_sleep_classifier_unavailable",
+  "reason": "The permission classifier is temporarily unavailable, so this action was denied."
+}

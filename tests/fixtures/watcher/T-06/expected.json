@@ -1,0 +1,31 @@
+{
+  "id": "T-06",
+  "spec": "WATCHER-SPEC §9 T-06",
+  "spec_input": "4 compactions, 1 copy note",
+  "spec_expected": "`save_gap:3`; A-01 ×3",
+  "v1_scope": "three A-01 alert rows (save_gap aggregate is W13)",
+  "deferred": "save_gap aggregate (W13 report)",
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-01",
+          "severity": "critical"
+        },
+        "count": 3
+      }
+    ]
+  },
+  "metrics": {
+    "M-14": {
+      "copy": [
+        "saved",
+        "missing",
+        "missing",
+        "missing"
+      ]
+    }
+  }
+}

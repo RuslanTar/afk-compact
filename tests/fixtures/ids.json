@@ -1,0 +1,66 @@
+{
+  "v": 1,
+  "note": "Synthetic ids only. Every payload, record and transcript in tests/fixtures uses these values.",
+  "now": "2026-10-21T14:05:12+03:00",
+  "tz": "Etc/GMT-3",
+  "cc_version": "2.1.306",
+  "sid": {
+    "S1": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+    "S2": "5e55a002-0c0f-4f1e-9a00-00000000a002",
+    "S3": "5e55a003-0c0f-4f1e-9a00-00000000a003"
+  },
+  "sid8": {
+    "S1": "5e55a001",
+    "S2": "5e55a002",
+    "S3": "5e55a003"
+  },
+  "agent": {
+    "A1": "a9a00b3f363327444",
+    "A2": "a5c0ffee0a1b2c3d4",
+    "A3": "a7d00d1e5e6f7a8b9"
+  },
+  "agent8": {
+    "A1": "a9a00b3f",
+    "A2": "a5c0ffee",
+    "A3": "a7d00d1e"
+  },
+  "pid": {
+    "P": 43210,
+    "P2": 43299
+  },
+  "pid_lstart": {
+    "P": "Wed Oct 21 09:00:00 2026",
+    "P_other": "Wed Oct 21 08:15:00 2026"
+  },
+  "pid_lstart_epoch": {
+    "P": 1792562400,
+    "P_other": 1792559700
+  },
+  "store_test_claude_pid": {
+    "P": "43210:Wed Oct 21 09:00:00 2026",
+    "P2": "43299:Wed Oct 21 09:00:00 2026"
+  },
+  "nonce": {
+    "main": "1a2b3c4d",
+    "self": "2b3c4d5e",
+    "classic": "3c4d5e6f",
+    "pre": "4d5e6f70",
+    "sub1": "5e6f7081",
+    "sub2": "6f708192",
+    "sub3": "708192a3",
+    "defer": "8192a3b4",
+    "old": "5ca1ab1e",
+    "orphan": "0badf00d",
+    "unres": "9a0b1c2d",
+    "preold": "ab0c1d2e",
+    "classic2": "bc1d2e3f",
+    "manual": "cd2e3f40"
+  },
+  "repo_dir": "example-repo",
+  "cwd": "$TMP/example-repo",
+  "transcript_dir": "$TMP/projects/-tmp-example-repo",
+  "canary": {
+    "mod_spec": "SECRET_CANARY_7f3",
+    "watcher_prefix": "CANARY-TEXT-"
+  }
+}

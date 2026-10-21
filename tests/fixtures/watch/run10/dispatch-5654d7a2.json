@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "nonce": "5654d7a2",
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "actor": "a9a00b3f363327444",
+  "agent_id": "a9a00b3f363327444",
+  "trigger": "auto",
+  "channel": "mod-hook",
+  "resume_pref": "none",
+  "midturn": false,
+  "tags": [],
+  "instructions_sha8": "0e4d9b21",
+  "instructions_bytes": 897,
+  "cc_version": "2.1.306",
+  "load_id": "l0ad0001",
+  "pid": 43210,
+  "pid_lstart": "Wed Oct 21 09:00:00 2026",
+  "ts": "2026-10-21T10:29:50+03:00"
+}

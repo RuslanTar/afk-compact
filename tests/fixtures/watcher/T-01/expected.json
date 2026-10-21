@@ -1,0 +1,30 @@
+{
+  "id": "T-01",
+  "spec": "WATCHER-SPEC §9 T-01",
+  "spec_input": "native auto boundary with the summary 2–3 rows after it, behind `session_context`/`date` attachments",
+  "spec_expected": "summary found by content; `trigger:auto`",
+  "v1_scope": "sweep rows: summary found by content",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "fields": {
+          "partial": false
+        },
+        "boundary": {
+          "uuid": "a3174946-fc25-4839-890d-15f11969b215",
+          "line": 5,
+          "trigger": "auto",
+          "summary_line": 8
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "M-01": {
+      "trigger": "auto"
+    }
+  }
+}

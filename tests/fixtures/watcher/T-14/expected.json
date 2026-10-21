@@ -1,0 +1,37 @@
+{
+  "id": "T-14",
+  "spec": "WATCHER-SPEC §9 T-14",
+  "spec_input": "foreign marker header in `custom_instructions` and the summary",
+  "spec_expected": "`verdict:unshaped`, `ci_foreign_header:true`; never `ok`",
+  "v1_scope": "foreign header",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "precompact",
+        "fields": {
+          "ci_foreign_header": true,
+          "ci_has_nonce": false
+        }
+      },
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "postcompact",
+        "fields": {
+          "verdict": "unshaped"
+        }
+      }
+    ],
+    "absent_rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "postcompact",
+        "fields": {
+          "verdict": "ok"
+        }
+      }
+    ]
+  },
+  "metrics": {}
+}

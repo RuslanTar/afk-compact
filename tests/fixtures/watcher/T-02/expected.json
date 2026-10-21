@@ -1,0 +1,40 @@
+{
+  "id": "T-02",
+  "spec": "WATCHER-SPEC §9 T-02",
+  "spec_input": "mod-driven compaction: summary row right after the boundary, `postTokens` after `preservedMessages`",
+  "spec_expected": "parsed by key; `trigger:plugin` from the self-call dispatch",
+  "v1_scope": "rollup trigger: plugin",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID/compactions.jsonl",
+        "fields": {
+          "nonce": "2b3c4d5e",
+          "trigger": "plugin",
+          "channel": "mod-self",
+          "seat_state": "mod-self"
+        }
+      },
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "boundary": {
+          "uuid": "8f84e61f-8e7d-4398-81e4-259218d317ad",
+          "pre": 410000,
+          "post": 31000,
+          "summary_line": 6
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "M-01": {
+      "trigger": "plugin"
+    },
+    "M-02": {
+      "tokens_before": 410000,
+      "tokens_after": 31000
+    }
+  }
+}

@@ -1,0 +1,25 @@
+<summary>
+This summary covers the conversation so far.
+
+1. Primary Request and Intent:
+   The user asked to make the retry worker drain the queue without changing its public API.
+
+2. Key Technical Concepts:
+   - exponential backoff
+   - idempotent jobs keyed by request id
+
+3. Files and Code Sections:
+   - lib/retry_worker.rb: perform now backs off up to 5 tries
+
+4. Errors and fixes:
+   - one flaky spec at spec/workers/retry_worker_spec.rb:42
+
+5. Pending Tasks:
+   - fix the flaky spec
+
+6. Current Work:
+   Investigating the wall-clock rounding in the flaky spec.
+
+7. Optional Next Step:
+   Run bin/test spec/workers/retry_worker_spec.rb:42 five times.
+</summary>

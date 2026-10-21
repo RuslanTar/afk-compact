@@ -1,0 +1,11 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "handoff_root": "${user_config.handoff_root}",
+        "log_dir": "",
+        "evidence_quota_mb": "${user_config.evidence_quota_mb}"
+      }
+    }
+  }
+}

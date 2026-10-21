@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "id": "AT-E-08",
+  "env": {
+    "CLAUDE_PLUGIN_OPTION_EVIDENCE_QUOTA_MB": "1"
+  },
+  "files": [
+    {
+      "path": "$ROOT/example-repo/general/evidence/older-run/blob.bin",
+      "bytes": 2097152,
+      "fill": "fixture quota filler\n"
+    },
+    {
+      "path": "$TMP/scratch/new-result.txt",
+      "bytes": 4096,
+      "fill": "fixture new result\n"
+    }
+  ],
+  "paths_log": [
+    "$TMP/scratch/new-result.txt"
+  ],
+  "expect": "WARN quota; copies still made"
+}

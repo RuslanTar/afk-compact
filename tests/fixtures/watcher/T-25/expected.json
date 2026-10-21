@@ -1,0 +1,41 @@
+{
+  "id": "T-25",
+  "spec": "WATCHER-SPEC §9 T-25",
+  "spec_input": "auto boundary right after a prompt row vs after a tool_use with no Stop",
+  "spec_expected": "`auto-turnstart` vs `auto-midturn`",
+  "v1_scope": "sweep rows: auto-midturn vs turnstart",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "boundary": {
+          "uuid": "ba41d00c-ee55-4a7e-8718-a102d31ca46c",
+          "trigger_detail": "auto-turnstart"
+        }
+      },
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "boundary": {
+          "uuid": "181c5076-ba36-4bb6-8176-3ffb9af06e4b",
+          "trigger_detail": "auto-midturn"
+        }
+      }
+    ],
+    "note": "trigger_detail is M-01's field; WATCH §6.3 does not list it among the sweep boundary fields"
+  },
+  "metrics": {
+    "M-01": [
+      {
+        "uuid": "ba41d00c-ee55-4a7e-8718-a102d31ca46c",
+        "trigger_detail": "auto-turnstart"
+      },
+      {
+        "uuid": "181c5076-ba36-4bb6-8176-3ffb9af06e4b",
+        "trigger_detail": "auto-midturn"
+      }
+    ]
+  }
+}

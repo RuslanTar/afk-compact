@@ -1,0 +1,30 @@
+⟪{{plugin}} v1 n=1a2b3c4d s=main⟫
+# LAB-123 — retry worker drains, one flaky spec open
+## Resume here
+Status: active · State: retry worker implemented, one flaky spec left (checkpoint: clean)
+Step 1: `bin/test spec/workers/retry_worker_spec.rb:42` — for "make the retry worker drain the queue"
+Gate: none · Don't: re-run the full suite before the flaky spec is fixed
+Live: nothing running known (not checked)
+## User constraints
+U-1 "keep the public API of RetryWorker unchanged" — scope lib/retry_worker.rb; ask: open
+U-2 "no new gems" — scope Gemfile; ask: done
+## Decisions and do-not-re-raise
+D-1 exponential backoff capped at 5 tries — because the upstream rate limit resets in 60 s (user)
+D-2 the job stays idempotent by request id — because duplicates were seen in staging (agent)
+X-1 rejected a global mutex — it serialised unrelated queues
+## In flight
+Nothing in flight as of the last message (not checked)
+## Live state
+none beyond git (not checked)
+## Open questions
+Q-1 drop the legacy retry flag now or next release · blocks nothing · options now, next · recommendation next · raised by agent · unasked
+## Location
+worktree example-repo, branch feature/LAB-123-retry, cwd example-repo
+## Work done and findings
+RetryWorker backoff: implemented — lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`
+Finding: the flaky spec depends on wall-clock rounding — spec/workers/retry_worker_spec.rb:42
+## Evidence
+Volatile: none
+## Next steps
+1. `bin/test spec/workers/retry_worker_spec.rb:42` — done when it passes 5 runs in a row
+⟪/{{plugin}} n=1a2b3c4d⟫

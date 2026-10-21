@@ -1,0 +1,3 @@
+#!/bin/sh
+# AT-P-14: an xcode-select that reports no developer tools (install it as `xcode-select`).
+exit 2

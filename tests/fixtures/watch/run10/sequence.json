@@ -1,0 +1,110 @@
+{
+  "v": 1,
+  "id": "AT-M3-07",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "expect": {
+    "main_copies": 9,
+    "subagent_copies": 1,
+    "rollup_rows": 10,
+    "failure_count_excludes": "the subagent row",
+    "status_after (AT-S-02)": "5 compactions listed, 1 non-ok verdict (step 8, unshaped)"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "now": "2026-10-21T10:10:00+03:00",
+      "kind": "main",
+      "nonce": "6b28c4bd",
+      "stdin": "payloads/PostCompact/run10-01.json",
+      "dispatch": "watch/run10/dispatch-6b28c4bd.json"
+    },
+    {
+      "step": 2,
+      "now": "2026-10-21T10:20:00+03:00",
+      "kind": "main",
+      "nonce": "e7822710",
+      "stdin": "payloads/PostCompact/run10-02.json",
+      "dispatch": "watch/run10/dispatch-e7822710.json"
+    },
+    {
+      "step": 3,
+      "now": "2026-10-21T10:30:00+03:00",
+      "kind": "sub",
+      "nonce": "5654d7a2",
+      "stdin": "payloads/PostCompact/run10-03.json",
+      "dispatch": "watch/run10/dispatch-5654d7a2.json"
+    },
+    {
+      "step": 4,
+      "now": "2026-10-21T10:40:00+03:00",
+      "kind": "main",
+      "nonce": "1331ff7d",
+      "stdin": "payloads/PostCompact/run10-04.json",
+      "dispatch": "watch/run10/dispatch-1331ff7d.json"
+    },
+    {
+      "step": 5,
+      "now": "2026-10-21T10:50:00+03:00",
+      "kind": "main",
+      "nonce": "ed69e356",
+      "stdin": "payloads/PostCompact/run10-05.json",
+      "dispatch": "watch/run10/dispatch-ed69e356.json"
+    },
+    {
+      "step": 6,
+      "now": "2026-10-21T11:00:00+03:00",
+      "kind": "main",
+      "nonce": "f9bbd8e0",
+      "stdin": "payloads/PostCompact/run10-06.json",
+      "dispatch": "watch/run10/dispatch-f9bbd8e0.json"
+    },
+    {
+      "step": 7,
+      "now": "2026-10-21T11:10:00+03:00",
+      "kind": "main",
+      "nonce": "b6c6861c",
+      "stdin": "payloads/PostCompact/run10-07.json",
+      "dispatch": "watch/run10/dispatch-b6c6861c.json"
+    },
+    {
+      "step": 8,
+      "now": "2026-10-21T11:20:00+03:00",
+      "kind": "main-unmarked",
+      "nonce": "c405aebb",
+      "stdin": "payloads/PostCompact/run10-08.json",
+      "dispatch": "watch/run10/dispatch-c405aebb.json",
+      "after_step": {
+        "argv": [
+          "save-copy",
+          "--sid",
+          "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "--nonce",
+          "c405aebb",
+          "--from",
+          "$FIXTURES/summaries/33-unmarked-main-a.txt",
+          "--writer",
+          "mod",
+          "--scope",
+          "main"
+        ],
+        "note": "PostCompact defers (copy-deferred, MOD §5.3 step 2); the after-step saves under the nonce name"
+      }
+    },
+    {
+      "step": 9,
+      "now": "2026-10-21T11:30:00+03:00",
+      "kind": "main",
+      "nonce": "9e9d6370",
+      "stdin": "payloads/PostCompact/run10-09.json",
+      "dispatch": "watch/run10/dispatch-9e9d6370.json"
+    },
+    {
+      "step": 10,
+      "now": "2026-10-21T11:40:00+03:00",
+      "kind": "main",
+      "nonce": "7fb108d8",
+      "stdin": "payloads/PostCompact/run10-10.json",
+      "dispatch": "watch/run10/dispatch-7fb108d8.json"
+    }
+  ]
+}

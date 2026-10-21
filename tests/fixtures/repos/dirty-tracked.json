@@ -1,0 +1,29 @@
+{
+  "v": 1,
+  "id": "dirty-tracked",
+  "dir": "example-repo",
+  "git": true,
+  "note": "HT-B-02: a tracked file already dirty; the case edits it again and expects own_latest.unchanged false",
+  "branch": "feature/LAB-123-retry",
+  "author": {
+    "name": "Fixture Author",
+    "email": "fixture@example.invalid",
+    "date": "2026-10-21T09:30:00+03:00"
+  },
+  "commits": [
+    {
+      "message": "fixture: initial commit",
+      "files": {
+        "README.md": "# example-repo\n\nFixture repository.\n",
+        "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :ok\n  end\nend\n"
+      }
+    }
+  ],
+  "dirty": {
+    "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :retry\n  end\nend\n"
+  },
+  "untracked": {
+    "notes/scratch.md": "fixture scratch note\n"
+  },
+  "ignored_files": {}
+}

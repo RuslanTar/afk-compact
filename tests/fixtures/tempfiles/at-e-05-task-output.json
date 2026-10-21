@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "AT-E-05",
+  "files": [
+    {
+      "path": "$TMP/claude-tasks/tasks/x.output",
+      "lines": 5000,
+      "line": "line {n} of fixture task output CANARY-TEXT-task-output"
+    }
+  ],
+  "paths_log": [
+    "$TMP/claude-tasks/tasks/x.output"
+  ],
+  "expect": "the copy is a redacted head/tail excerpt of <=80 lines"
+}

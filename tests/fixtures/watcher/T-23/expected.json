@@ -1,0 +1,33 @@
+{
+  "id": "T-23",
+  "spec": "WATCHER-SPEC §9 T-23",
+  "spec_input": "`unshaped` main compaction whose resume block lacks the non-ok note; a resume block of 10,500 chars",
+  "spec_expected": "A-23 twice",
+  "v1_scope": "A-23",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-23",
+          "severity": "warn"
+        },
+        "count": 2
+      }
+    ]
+  },
+  "metrics": {
+    "M-15": [
+      {
+        "nonce": "23a0b0c1",
+        "nonok_note_missing": true
+      },
+      {
+        "nonce": "23a0b0c2",
+        "resume_over_10k": true
+      }
+    ]
+  }
+}

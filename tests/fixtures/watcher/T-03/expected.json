@@ -1,0 +1,26 @@
+{
+  "id": "T-03",
+  "spec": "WATCHER-SPEC §9 T-03",
+  "spec_input": "replaced summary without `isCompactSummary` or `preservedSegment`",
+  "spec_expected": "summary found; `summary_flags` records the absence",
+  "v1_scope": "sweep rows: summary flags",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "boundary": {
+          "uuid": "32d7595c-85ca-4cd5-8052-007151d37bb7",
+          "preserved_segment": false,
+          "summary_line": 6,
+          "summary_flags": {
+            "isCompactSummary": false,
+            "isVisibleInTranscriptOnly": false
+          }
+        }
+      }
+    ]
+  },
+  "metrics": {}
+}

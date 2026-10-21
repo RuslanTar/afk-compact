@@ -1,0 +1,13 @@
+#!/bin/sh
+# AT-E-10, HT-LA-01: a queue_cmd with canned answers chosen by its first argument.
+# QUEUE_STUB_DIR holds <subcommand>.out (printed) and <subcommand>.rc (exit code, default 0).
+# QUEUE_STUB_LOG, when set, gets one line per call with the arguments, so a case can assert
+# that no adopt or add call happened. A subcommand without a canned answer exits 64.
+[ -n "$QUEUE_STUB_LOG" ] && printf '%s\n' "$*" >> "$QUEUE_STUB_LOG"
+sub=$1
+dir=${QUEUE_STUB_DIR:-$(dirname "$0")/../queue/prose}
+[ -f "$dir/$sub.out" ] || [ -f "$dir/$sub.rc" ] || exit 64
+[ -f "$dir/$sub.out" ] && cat "$dir/$sub.out"
+rc=0
+[ -f "$dir/$sub.rc" ] && rc=$(cat "$dir/$sub.rc")
+exit "$rc"

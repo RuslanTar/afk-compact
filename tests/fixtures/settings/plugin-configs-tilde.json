@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "handoff_root": "~/fixture-handoffs"
+      }
+    }
+  }
+}

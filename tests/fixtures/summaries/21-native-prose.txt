@@ -1,0 +1,3 @@
+<summary>
+We worked on the retry worker in example-repo. The backoff is implemented and capped at five tries, the job is idempotent by request id, and one spec is still flaky because it depends on wall-clock rounding. The user asked to keep the public API unchanged and to add no new gems. Next, the flaky spec at spec/workers/retry_worker_spec.rb:42 should be fixed and run five times in a row.
+</summary>

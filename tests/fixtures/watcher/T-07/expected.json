@@ -1,0 +1,40 @@
+{
+  "id": "T-07",
+  "spec": "WATCHER-SPEC §9 T-07",
+  "spec_input": "subagent compaction: boundary only in `subagents/agent-<id>.jsonl`; PostCompact with the parent sid",
+  "spec_expected": "`actor:<id>`; no main row; a summary with `s=main` → A-03",
+  "v1_scope": "attribution, A-03",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID/compactions.jsonl",
+        "fields": {
+          "actor": "a9a00b3f363327444",
+          "nonce": "5e6f7081",
+          "verdict": "scope-leak"
+        }
+      },
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-03",
+          "severity": "critical"
+        },
+        "count": 1
+      }
+    ],
+    "absent_rows": [
+      {
+        "file": "$WATCH/$SID/compactions.jsonl",
+        "fields": {
+          "actor": "main"
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "actor": "a9a00b3f363327444"
+  }
+}

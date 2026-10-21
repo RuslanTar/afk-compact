@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "handoff_root": "$TMP/example-repo/handoffs-tracked"
+      }
+    }
+  }
+}

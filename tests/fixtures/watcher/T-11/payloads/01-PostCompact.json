@@ -1,0 +1,9 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "PostCompact",
+  "trigger": "auto",
+  "compact_summary": "<summary>\n⟪{{plugin}} v1 n=11b0c0d0 s=main⟫\n# LAB-123 — fixture summary\n## Resume here\nStatus: active · State: fixture (checkpoint: clean)\n## Decisions and do-not-re-raise\nD-6 cursor pagination — because offsets drift (agent)\n## Next steps\n1. `bin/test spec/workers` — done when green\n⟪/{{plugin}} n=11b0c0d0⟫\n</summary>"
+}

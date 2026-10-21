@@ -1,0 +1,54 @@
+{
+  "id": "T-06",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-06",
+  "seed": [
+    {
+      "copy": "watcher/T-06/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/06a0a0a1.json",
+      "to": "$WATCH/$SID/dispatch/06a0a0a1.json"
+    },
+    {
+      "copy": "watcher/T-06/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/06a0a0a2.json",
+      "to": "$WATCH/$SID/dispatch/06a0a0a2.json"
+    },
+    {
+      "copy": "watcher/T-06/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/06a0a0a3.json",
+      "to": "$WATCH/$SID/dispatch/06a0a0a3.json"
+    },
+    {
+      "copy": "watcher/T-06/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/06a0a0a4.json",
+      "to": "$WATCH/$SID/dispatch/06a0a0a4.json"
+    },
+    {
+      "copy": "watcher/T-06/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "to": "$WATCH/$SID.jsonl"
+    },
+    {
+      "copy": "watcher/T-06/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.classic.jsonl",
+      "to": "$WATCH/$SID.classic.jsonl"
+    },
+    {
+      "copy": "watcher/T-06/seed/example-repo/general/compact/2026-10-21_11-00-06_5e55a001_c1-06a0a0.md",
+      "to": "$ROOT/example-repo/general/compact/2026-10-21_11-00-06_5e55a001_c1-06a0a0.md"
+    }
+  ],
+  "steps": [
+    {
+      "now": "2026-10-21T14:06:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-06/payloads/01-Stop.json",
+      "note": "first main Stop after the four boundaries; only the first has a copy",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

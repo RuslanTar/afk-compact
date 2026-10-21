@@ -1,0 +1,28 @@
+{
+  "id": "T-09",
+  "spec": "WATCHER-SPEC §9 T-09",
+  "spec_input": "plugin-origin continue row, plus a later user row quoting the same text with no origin",
+  "spec_expected": "`auto_continue:1`",
+  "v1_scope": "sweep marks plugin-origin rows (the count is W13)",
+  "deferred": "auto_continue count (W13 report)",
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "plugin_origin_lines": [
+          9
+        ],
+        "not_plugin_origin_lines": [
+          11
+        ]
+      }
+    ],
+    "note": "the sweep row's field name for plugin-origin rows is WP-watch's (WATCH §6.3 lists none)"
+  },
+  "metrics": {
+    "M-17": {
+      "auto_continue": 1
+    }
+  }
+}

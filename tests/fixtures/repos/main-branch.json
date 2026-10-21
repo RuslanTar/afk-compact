@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "id": "main-branch",
+  "dir": "example-repo",
+  "git": true,
+  "note": "AT-M5-02 (c): no ticket, bucket general",
+  "branch": "main",
+  "author": {
+    "name": "Fixture Author",
+    "email": "fixture@example.invalid",
+    "date": "2026-10-21T09:30:00+03:00"
+  },
+  "commits": [
+    {
+      "message": "fixture: initial commit",
+      "files": {
+        "README.md": "# example-repo\n\nFixture repository.\n",
+        "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :ok\n  end\nend\n"
+      }
+    }
+  ],
+  "dirty": {},
+  "untracked": {},
+  "ignored_files": {}
+}

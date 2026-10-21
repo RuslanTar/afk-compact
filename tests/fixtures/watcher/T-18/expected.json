@@ -1,0 +1,17 @@
+{
+  "id": "T-18",
+  "spec": "WATCHER-SPEC §9 T-18",
+  "spec_input": "any row",
+  "spec_expected": "contains none of the fixture's planted canary strings (`CANARY-TEXT-…` placed in the summary, commands and user text)",
+  "v1_scope": "no canary string in any row",
+  "deferred": null,
+  "asserts": {
+    "grep_absent": [
+      {
+        "dir": "$WATCH",
+        "text": "CANARY-TEXT-"
+      }
+    ]
+  },
+  "metrics": {}
+}

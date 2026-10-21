@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "id": "planning-state",
+  "dir": "example-repo",
+  "git": true,
+  "note": "AT-E-09: checkpoint reads STATE.md only; porcelain and STATE.md mtime unchanged",
+  "branch": "main",
+  "author": {
+    "name": "Fixture Author",
+    "email": "fixture@example.invalid",
+    "date": "2026-10-21T09:30:00+03:00"
+  },
+  "commits": [
+    {
+      "message": "fixture: initial commit",
+      "files": {
+        "README.md": "# example-repo\n\nFixture repository.\n",
+        "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :ok\n  end\nend\n",
+        ".planning/STATE.md": "# Project State\n\nCurrent phase: 2 of 4 (retry worker)\nCurrent plan: 2.3\nStatus: in progress\nLast activity: 2026-10-21 - plan 2.3 started\n"
+      }
+    }
+  ],
+  "dirty": {
+    "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :retry\n  end\nend\n"
+  },
+  "untracked": {},
+  "ignored_files": {}
+}

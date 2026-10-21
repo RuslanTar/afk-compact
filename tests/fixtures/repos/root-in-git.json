@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "id": "root-in-git",
+  "dir": "example-repo",
+  "git": true,
+  "note": "D-12: $TMP/example-repo/handoffs-tracked is in the work tree and not ignored (REFUSED: root-in-git); .local-handoffs is ignored (proceed, root_in_git row with ignored:true)",
+  "branch": "main",
+  "author": {
+    "name": "Fixture Author",
+    "email": "fixture@example.invalid",
+    "date": "2026-10-21T09:30:00+03:00"
+  },
+  "commits": [
+    {
+      "message": "fixture: initial commit",
+      "files": {
+        "README.md": "# example-repo\n\nFixture repository.\n",
+        "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :ok\n  end\nend\n",
+        ".gitignore": ".local-handoffs/\n"
+      }
+    }
+  ],
+  "dirty": {},
+  "untracked": {
+    "handoffs-tracked/.keep": ""
+  },
+  "ignored_files": {
+    ".local-handoffs/.keep": ""
+  }
+}

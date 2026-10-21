@@ -1,0 +1,10 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "handoff_root": "$TMP/r",
+        "watcher": "off"
+      }
+    }
+  }
+}

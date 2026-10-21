@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "fixture-other-plugin@fixture-other-market": {
+      "options": {
+        "handoff_root": "$TMP/not-ours"
+      }
+    }
+  }
+}

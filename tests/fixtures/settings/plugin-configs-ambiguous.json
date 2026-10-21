@@ -1,0 +1,14 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "handoff_root": "$TMP/from-first"
+      }
+    },
+    "{{plugin}}@fixture-other-market": {
+      "options": {
+        "handoff_root": "$TMP/from-second"
+      }
+    }
+  }
+}

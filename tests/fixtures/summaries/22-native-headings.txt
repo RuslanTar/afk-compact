@@ -1,0 +1,10 @@
+<summary>
+## Summary of work so far
+The retry worker backs off up to five tries.
+
+## Remaining
+- fix the flaky spec at spec/workers/retry_worker_spec.rb:42
+
+## Notes
+- keep the public API unchanged
+</summary>

@@ -1,0 +1,7 @@
+<summary>
+## 1. Task and goal
+I am a subagent asked to list the callers of RetryWorker.enqueue.
+
+## 2. Findings
+Seven callers, two pass a raw hash.
+</summary>
