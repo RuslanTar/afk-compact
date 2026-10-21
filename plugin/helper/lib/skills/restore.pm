@@ -81,8 +81,12 @@ sub stash {
     my $ctx = skills::ctx::new({});
     my $rr = skills::core::roots_check($ctx->{settings});
     die skills::cli::refuse($rr) if $rr;
-    my ($verdict, $hits) = skills::core::classify_file_hits($src);
+    # The gate's verdict and the bytes it scanned (RRP-06): those bytes are what is written,
+    # never a second read of the file (bytes appended in between were never scanned; a file
+    # larger than the gate's scan is withheld as too-large).
+    my ($verdict, $hits, $raw) = skills::core::classify_file_hits($src);
     die skills::cli::refuse('withheld') if $verdict eq 'withhold';
+    die "stash: the gate returned no scanned bytes for $src\n" unless defined $raw;
     my $now = skills::util::now();
     my $dir = "$ctx->{disposable}/" . skills::util::ymd($now) . '/stash';
     skills::util::mkdir_p($dir);
@@ -90,8 +94,6 @@ sub stash {
     my ($stem, $ext) = $name =~ /\A(.*?)((?:\.[^.]+)?)\z/;
     my $dest = skills::util::unique_path($dir, skills::util::stem_time($now) . "_$stem", $ext);
     if ($verdict eq 'redact') {
-        my $raw = skills::util::read_file($src);
-        die "stash: cannot read $src\n" unless defined $raw;
         my ($red, $rh) = skills::core::secrets_redact($raw);
         skills::util::write_excl($dest, $red, 0600) or die "stash: exists\n";
         my %by;
@@ -100,8 +102,7 @@ sub stash {
             skills::cli::say("ADVISORY secret-$c rules=" . join(',', sort keys %{ $by{$c} })) if $by{$c};
         }
     } else {
-        my $res = skills::util::copy_file($src, $dest, 0600);
-        die "stash: $res\n" unless $res eq 'copied';
+        skills::util::write_excl($dest, $raw, 0600) or die "stash: exists\n";
     }
     skills::cli::say($dest);
     return 0;

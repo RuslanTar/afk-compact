@@ -37,15 +37,17 @@ sub run {
     $used += ($_->{bytes} // 0) for grep { ($_->{status} // '') =~ /\A(copied|redacted)\z/ } @{ skills::stage::evidence_rows($dir) };
 
     my @jobs = ((map { _expand(keep => $_) } @keep), (map { _expand(dispose => $_) } @dispose));
-    for my $c (@clone) { push @jobs, map { [ keep => $_->[0], $_->[1] ] } _clone_patches($dir, $c) }
+    for my $c (@clone) { push @jobs, map { [ keep => undef, $_->{label}, $_ ] } _clone_patches($c) }
 
     my @rows;
     for my $j (@jobs) {
-        my ($where, $path, $origin_label) = @$j;
+        my ($where, $path, $origin_label, $patch) = @$j;
         my $src = defined $path ? (skills::util::abs_path($path) // $path) : undef;
         my $dest = $where eq 'keep' ? $keep_dir : $disp_dir;
         my $r;
-        if (!defined $src || !-e $src || -d _) {
+        if ($patch && defined $patch->{bytes}) {
+            $r = _gate_patch($patch, $dest, $used);
+        } elsif (!defined $src || !-e $src || -d _) {
             $r = { status => 'missing', copy => undef, bytes => 0, sha256 => '' };
         } else {
             skills::util::mkdir_p($dest);
@@ -95,37 +97,82 @@ sub run {
     return 0;
 }
 
-# Scratch git clone with local commits → patch files in the stage
-# (TPL §5 "scratch-clone patch series"). Returns [path, origin label].
+# git for a patch: up to one byte over the file cap is kept, so an over-cap patch is seen
+# as such (never cut short and copied as if whole).
+sub _git_bytes {
+    my ($top, @args) = @_;
+    return { rc => -1, out => '' } unless skills::gitfacts::usable();
+    return skills::util::run(['git', '-C', $top, @args], 10000, trace => 'git', max_bytes => $FILE_MAX + 1);
+}
+
+sub _paths_z {
+    my ($r) = @_;
+    return undef unless $r->{rc} == 0;
+    return [ grep { $_ ne '' } split /\0/, $r->{out} ];
+}
+
+# Scratch git clone with local commits -> one patch per commit plus the uncommitted diff
+# (TPL §5 "scratch-clone patch series"), built in memory: nothing is written until the
+# gate has run (RRP-01). Returns {name, label, top, bytes, paths}; a clone outside git
+# gives one row with no bytes (missing).
 sub _clone_patches {
-    my ($stage, $clone) = @_;
+    my ($clone) = @_;
     my $src = skills::util::abs_path($clone) // $clone;
     my $w = skills::gitfacts::where($src);
-    return ([ undef, $src ]) unless $w->{in_git};
+    return ({ name => undef, label => $src }) unless $w->{in_git};
     my $top = $w->{worktree};
-    my $out = "$stage/clone-" . File::Basename::basename($top);
-    my $n = 2;
-    $out = "$stage/clone-" . File::Basename::basename($top) . '-' . $n++ while -e $out;
-    skills::util::mkdir_p($out);
     my @res;
     my $rl = skills::gitfacts::git($top, 'rev-list', '--reverse', "--max-count=$CLONE_MAX", 'HEAD', '--not', '--remotes');
     my @shas = $rl->{rc} == 0 ? grep { /\A[0-9a-f]{40}\z/ } split /\n/, $rl->{out} : ();
     my $i = 0;
     for my $sha (@shas) {
         $i++;
-        my $fp = skills::gitfacts::git($top, 'format-patch', '--stdout', '-1', $sha);
-        next if $fp->{rc} != 0;
-        my $p = sprintf('%s/%04d-%s.patch', $out, $i, substr($sha, 0, 8));
-        skills::util::write_excl($p, $fp->{out}, 0600);
-        push @res, [ $p, "$top#" . substr($sha, 0, 8) ];
+        my $fp = _git_bytes($top, 'format-patch', '--stdout', '-1', $sha);
+        next if $fp->{rc} != 0 || $fp->{out} eq '';
+        # every path the commit touches, both sides of a rename
+        my $paths = _paths_z(_git_bytes($top, 'diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '--no-renames', '-z', $sha));
+        push @res, { name => sprintf('%04d-%s.patch', $i, substr($sha, 0, 8)), label => "$top#" . substr($sha, 0, 8),
+                     top => $top, bytes => $fp->{out}, paths => $paths };
     }
-    my $d = skills::gitfacts::git($top, 'diff', 'HEAD', '--binary');
+    my $d = _git_bytes($top, 'diff', 'HEAD', '--binary');
     if ($d->{rc} == 0 && $d->{out} ne '') {
-        my $p = "$out/uncommitted.patch";
-        skills::util::write_excl($p, $d->{out}, 0600);
-        push @res, [ $p, "$top#uncommitted" ];
+        my $paths = _paths_z(_git_bytes($top, 'diff', 'HEAD', '--name-only', '--no-renames', '-z'));
+        push @res, { name => 'uncommitted.patch', label => "$top#uncommitted", top => $top, bytes => $d->{out}, paths => $paths };
     }
     return @res;
+}
+
+# One in-memory patch through the gate (RRP-01), the way a file is gated (handoff-spec §10):
+# over the caps -> ref-only; a touched path that the name gate refuses (.netrc, *.sqlite,
+# a transcript), or a path list git could not give -> withheld whole; a HARD hit in the
+# text -> withheld; a WARN hit -> a redacted copy; else copied. Only the gated result is
+# written, and only into the evidence folder.
+sub _gate_patch {
+    my ($pt, $dest, $used) = @_;
+    my $bytes = $pt->{bytes};
+    my $sha = skills::util::sha256_hex($bytes);
+    my %r = (copy => undef, bytes => length $bytes, sha256 => $sha,
+             mtime => skills::util::iso_local(skills::util::now()), rules => []);
+    if (length($bytes) > $FILE_MAX || $used + length($bytes) > $TOTAL_MAX) {
+        return { %r, status => 'ref-only', scan => 'ref-only' };
+    }
+    my $paths = $pt->{paths};
+    if (!$paths || grep { skills::core::denied_path("$pt->{top}/$_") } @$paths) {
+        return { %r, status => 'withheld', scan => 'withheld', rules => ['deny-name'] };
+    }
+    my $hits = skills::core::secrets_scan($bytes);
+    my %u;
+    my @ids = grep { !$u{$_}++ } map { $_->{rule} } @$hits;
+    if (grep { $_->{class} eq 'HARD' } @$hits) {
+        return { %r, status => 'withheld', scan => 'withheld', rules => \@ids };
+    }
+    my ($out, $status) = ($bytes, 'copied');
+    if (@$hits) { ($out) = skills::core::secrets_redact($bytes); $status = 'redacted' }
+    skills::util::mkdir_p($dest);
+    my ($stem, $ext) = $pt->{name} =~ /\A(.*?)((?:\.[^.]+)?)\z/;
+    my $p = skills::util::unique_path($dest, $stem, $ext);
+    skills::util::write_excl($p, $out, 0600) or die "evidence: $p exists\n";
+    return { %r, status => $status, copy => $p, scan => ($status eq 'copied' ? 'full' : 'redacted'), rules => \@ids };
 }
 
 # A directory argument stands for its regular files (at most 100, sorted).

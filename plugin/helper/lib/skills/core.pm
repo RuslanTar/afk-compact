@@ -173,12 +173,21 @@ sub classify_file {
     return $r;
 }
 
-# (copy|redact|withhold, [{rule, class}]): the gate's verdict and its hits (ids, never values).
+# (copy|redact|withhold, [{rule, class}], $scanned): the gate's verdict, its hits (ids,
+# never values) and, for copy and redact, the bytes the gate scanned (RRP-06: write those,
+# never a second read of the file).
 sub classify_file_hits {
     my ($path) = @_;
-    my ($r, $hits) = secrets::classify_file($path);    # WP-core returns (action, \@hits)
+    my ($r, $hits, $raw) = secrets::classify_file($path);    # WP-core returns (action, \@hits, bytes)
     $r = $r->{action} // $r->{class} if ref $r eq 'HASH';
-    return ($r // 'copy', _hits($hits));
+    return ($r // 'copy', _hits($hits), $raw);
+}
+
+# A path the name gate refuses: deny-listed by name, or never copied (transcripts, session
+# JSONL, environment dumps); the path and its real target are both checked.
+sub denied_path {
+    my ($path) = @_;
+    return (secrets::denied_name($path) || secrets::never_copy($path)) ? 1 : 0;
 }
 
 # (text with each hit replaced by [redacted:<rule>], [{rule, class}]), every rule class.

@@ -1,0 +1,33 @@
+{
+ "id": "HT-SS-03",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "RRP-06 (TPL §5, HK-44): stash never copies bytes the secret gate did not scan. A 13,000,048-byte notes.md whose token sits after 13,000,000 bytes of filler is larger than the gate's 12 MB scan: REFUSED: withheld (rule too-large), nothing is written to the disposable folder. The same token in a small notes.md is refused as before",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {"repo": {"branch": "feature/LAB-7-retry", "commits": [{"files": {"app/retry.rb": "x = 1\n"}, "msg": "seed"}]}, "at": "$TMP/repo"},
+    {"bigfile": "$TMP/repo/.planning/notes.md", "bytes": 13000000, "fill": "b", "tail": "\nkey $SECRET{github-token}\n"}
+   ],
+   "cwd": "$TMP/repo",
+   "argv": ["stash", "$TMP/repo/.planning/notes.md"],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: withheld\n",
+    "files": [{"path": "$DISP/2026-10-21/stash/*", "count": 0}],
+    "grep_absent": [{"dir": "$DISP", "text": "$SECRET{github-token}"}]
+   }
+  },
+  {
+   "setup": [
+    {"write": "$TMP/repo/.planning/small.md", "content": "key $SECRET{github-token}\n"}
+   ],
+   "cwd": "$TMP/repo",
+   "argv": ["stash", "$TMP/repo/.planning/small.md"],
+   "expect": {"exit": 3, "stdout": "REFUSED: withheld\n"}
+  }
+ ]
+}
