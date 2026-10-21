@@ -239,6 +239,25 @@
      "ownership.repin.held_by": "22222222"
     }
    }
+  },
+  {
+   "note": "MOD §7: the process's session is its live- record with no ended- record; after a /clear across the DST change the ended session's earlier-but-larger ts string must not win",
+   "write": "$ROOT/.sessions/by-pid/1-1792886400.live-00000000.json",
+   "content": "{\"pid\": 1, \"pid_lstart\": \"Sun Oct 25 01:00:00 2026\", \"session_id\": \"00000000-0000-4000-8000-000000000000\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-25T02:50:00+03:00\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/by-pid/1-1792886400.ended-00000000.json",
+   "content": "{\"session_id\": \"00000000-0000-4000-8000-000000000000\", \"reason\": \"clear\", \"ts\": \"2026-10-25T02:09:00+02:00\"}"
+  },
+  {
+   "write": "$ROOT/.sessions/by-pid/1-1792886400.live-cccccccc.json",
+   "content": "{\"pid\": 1, \"pid_lstart\": \"Sun Oct 25 01:00:00 2026\", \"session_id\": \"cccccccc-cccc-4ccc-8ccc-cccccccccccc\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"clear\", \"ts\": \"2026-10-25T02:10:00+02:00\"}"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "env": {"STORE_TEST_CLAUDE_PID": "1:Sun Oct 25 01:00:00 2026"},
+   "argv": ["begin", "--sid", "${CLAUDE_SESSION_ID}", "--topic", "dst"],
+   "expect": {"exit": 0, "json": {"session.id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "session.identity": {"null": 1}}}
   }
  ]
 }

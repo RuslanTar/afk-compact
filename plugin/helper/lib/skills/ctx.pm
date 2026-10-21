@@ -117,17 +117,21 @@ sub pid_matches {
     return _norm_ls($now) eq _norm_ls($recorded) ? 1 : 0;
 }
 
-# The live record of the Claude Code process this helper runs under.
+# The live record of the Claude Code process this helper runs under: a live-
+# record of this pid and start time with no ended- record (MOD §7), newest
+# by time (an epoch compare, so a DST change cannot reorder them).
 sub own_record {
     my ($ctx) = @_;
     my $cp = skills::core::claude_pid();
     return (undef, undef) unless $cp;
     my $all = records($ctx);
+    my %ended = map { ("$_->{pid}-$_->{epoch}-$_->{sid8}" => 1) } grep { $_->{state} eq 'ended' } @$all;
     my @mine = grep {
         $_->{state} eq 'live' && $_->{pid} eq $cp->{pid}
             && _norm_ls($_->{data}{pid_lstart}) eq _norm_ls($cp->{lstart})
+            && !$ended{"$_->{pid}-$_->{epoch}-$_->{sid8}"}
     } @$all;
-    @mine = sort { ($b->{data}{ts} // '') cmp ($a->{data}{ts} // '') } @mine;
+    @mine = sort { (skills::util::iso_to_epoch($b->{data}{ts}) // 0) <=> (skills::util::iso_to_epoch($a->{data}{ts}) // 0) } @mine;
     return ($mine[0], $cp);
 }
 
