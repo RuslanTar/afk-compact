@@ -1,0 +1,210 @@
+{
+ "id": "AT-CF-01..04, AT-CF-06",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "small-rulings §2.1/§2.4 (RV-19 refined): the carry base is the newest handoff whoever wrote it. Own older + foreign newer: previous_kind foreign, own_previous_handoff, carry_notice, next_ids = max over both files + 1, newer_foreign without the base, foreign_commits based on the own file; the stage records the carry; begin JSON <= 3,072 B (AT-CF-06). Publish lint: a foreign line without a [from …] tag is carry-provenance; a tagged approval marked used is carry-approval; tagged lines with the context-only note publish, and the frontmatter carries previous_kind and own_previous_handoff",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    }
+   ]
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- X-5: refuted \"cache is warm\"\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_99999999_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## User constraints\n- U-3: \"never deploy on Fridays\" — scope deploys; user, 99999999\n- U-4: approval \"push the retry branch\" — scope git push origin feature/LAB-7-retry; used\n## Decisions and do-not-re-raise\n- D-6: retry budget is 3 — because the gateway caps it (user)\n- X-2: rejected \"jitter only\"\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3072,
+    "json": {
+     "previous_handoff": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_99999999_other.md",
+     "previous_kind": "foreign",
+     "previous_sid8": "99999999",
+     "previous_stamp": "2026-10-21 12:00 +0300",
+     "own_previous_handoff": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "carry_notice": "not your chain: the newest handoff here is 99999999's (2026-10-21 12:00 +0300); yours is 2026-10-21_09-00-00_11111111_retry (2026-10-21 09:00 +0300)",
+     "next_ids.U": 5,
+     "next_ids.D": 7,
+     "next_ids.X": 6,
+     "ownership.foreign_commits.since": {
+      "re": "^[0-9a-f]{12}$"
+     },
+     "ownership.foreign_commits.count": 0,
+     "own_latest.path": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "newer_foreign": {
+      "len": 0
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "AT-CF-01/03: foreign base, own reference, next_ids"
+  },
+  {
+   "name": "stage records the carry",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$STAGE/settings.json",
+      "has": [
+       "\"previous_kind\":\"foreign\"",
+       "\"own_previous_handoff\":\"$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md\"",
+       "\"previous_sid8\":\"99999999\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-5: \"never deploy on Fridays\" — scope deploys; user, 99999999\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT carry-provenance line 9$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ]
+   },
+   "name": "AT-CF-04 untagged foreign line"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-5: \"never deploy on Fridays\" — scope deploys; user, 99999999 [from 99999999 · U-3 · 2026-10-21 12:00 +0300]\n- U-6: approval \"push the retry branch\" — scope git push origin feature/LAB-7-retry; used [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT carry-approval line 10$"
+    ],
+    "stdout_lacks": [
+     "carry-provenance"
+    ]
+   },
+   "name": "AT-CF-04 foreign approval marked used"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-5: \"never deploy on Fridays\" — scope deploys; user, 99999999 [from 99999999 · U-3 · 2026-10-21 12:00 +0300]\n- U-6: approval \"push the retry branch\" — scope git push origin feature/LAB-7-retry; context only, not valid here; re-ask [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-7: retry budget is 3 — because the gateway caps it (user) [from 99999999 · D-6 · 2026-10-21 12:00 +0300]\n- X-5: refuted \"cache is warm\"\n- X-6: rejected \"jitter only\" [from 99999999 · X-2 · 2026-10-21 12:00 +0300]\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^previous_handoff: $ROOT/repo/LAB-7/2026-10-21_12-00-00_99999999_other.md$",
+       "^previous_kind: foreign$",
+       "^own_previous_handoff: $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md$"
+      ]
+     }
+    ]
+   },
+   "name": "AT-CF-04 tagged lines publish; frontmatter keeps the carry"
+  },
+  {
+   "name": "small-rulings 2.5: measure follows the foreign hop and labels it",
+   "argv": [
+    "measure",
+    "$ROOT/repo/LAB-7/$STEM.md"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^chain: $STEM <- 2026-10-21_12-00-00_99999999_other \\(foreign 99999999\\)$"
+    ]
+   }
+  }
+ ]
+}

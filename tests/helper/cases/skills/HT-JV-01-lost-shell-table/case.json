@@ -1,0 +1,567 @@
+{
+ "id": "HT-JV-01 (AT-J-03, 04, 06, 07, 08, 09, 10)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-1 D3-D5 heal-check for background shells in a successor session (/clear: the origin's process now runs C, lineage C -> origin): V1-V7 signal lines, the D4 table (row 3 done -> collect, row 2c leftover, row 7 stopped, row 6 an unmeasured output -> low -> ask, row 4 failed but verified and read-only -> ok, row 5 all measured -> ok job:<id> + run: the recorded command byte for byte), effects classes (outward always asks, unknown asks), a withheld command is never printed (AT-J-03), a forged row fails V1 (AT-J-10), relaunch_auto shadow -> would-relaunch + REFUSED shadow and off -> mode-off (settings file), relation other refused first (B-11), no relation flag, --bump stores the run line's sha as pending and counts (one per resume)",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/repo/app"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2001-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-66666666.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"66666666-6666-4666-8666-666666666666\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2099-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/66666666-6666-4666-8666-666666666666.lineage.json",
+     "json": {
+      "previous_session_id": "$SID",
+      "lineage_reason": "clear"
+     }
+    },
+    {
+     "write": "$WATCH/$SID/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b5\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"command_sha256\": \"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/b5.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b6\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9f75fc6b9e15290ea1fc2fa75f7605acb43190976edb272494f226acbcb649f7\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": null, \"output_path_source\": \"none\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"command_sha256\": \"54703843d2e117a445593b679d2fbe56354b35955c85ca8c8e2915b972995223\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/b3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"b4\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"command_sha256\": \"16ed68b993237f37fc578039217e623e0c2a7f37b2a71e62ef255c6a81a6266f\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/b4.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bl\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Sat Jan  6 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la tmp; echo \\\"__exit $?\\\"\", \"command_sha256\": \"32395034684507e5d02b8f688cb3f2e0a18d966c4326171253f2325fa4ae2040\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bl.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bs\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la log; echo \\\"__exit $?\\\"\", \"command_sha256\": \"d3dc4c4707f11a9d415349484ef38960a8e5065e8b131c64cd5f62ed31742174\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bs.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bo\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9edab38589c804560099c89c07c66adb7b86d9ae64a95211d2e898c5d1e7bd37\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bo.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bu\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh scripts/t.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"4f25ea8f1632610f378c083d0bb915f1e41262dc6b13b7c25a5c025f1c12a45b\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bu.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bf\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la forged; echo \\\"__exit $?\\\"\", \"command_sha256\": \"71cb0dc6412f26f49d1fd7d0eb872dfa7c1acd3a17060becb0846ac21f8c59fa\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bf.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"bw\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": null, \"command_sha256\": \"765d8720d11c28c72dc7a5880c1a811aceabbbee5ee259b2c3f116d297e3de13\", \"command_withheld\": [\"pem\"], \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/bw.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:20:00.000+03:00\", \"ev\": \"stop\", \"sid\": \"$SID\", \"kind\": \"stop\", \"task_id\": \"bs\"}\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_00\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_00\", \"content\": \"Command running in background with ID: b5.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b5\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: b6.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b6\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: b3.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b3\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: b4.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"b4\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_04\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la tmp; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_04\", \"content\": \"Command running in background with ID: bl.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bl\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_05\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la log; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_05\", \"content\": \"Command running in background with ID: bs.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bs\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_06\", \"name\": \"Bash\", \"input\": {\"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_06\", \"content\": \"Command running in background with ID: bo.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bo\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_07\", \"name\": \"Bash\", \"input\": {\"command\": \"sh scripts/t.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_07\", \"content\": \"Command running in background with ID: bu.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"bu\"}}\n"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-6.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 7, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"b5\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"b6\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"b3\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"b4\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bl\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bs\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bo\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bu\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bf\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"bw\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-5.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 6, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/out/b5.output",
+     "content": "listing\n"
+    },
+    {
+     "age": "$TMP/out/b5.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/b3.output",
+     "content": "x\n__exit 0\n"
+    },
+    {
+     "age": "$TMP/out/b3.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/b4.output",
+     "content": "x\n__exit 2\n"
+    },
+    {
+     "age": "$TMP/out/b4.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bl.output",
+     "content": "still writing\n"
+    },
+    {
+     "write": "$TMP/out/bs.output",
+     "content": "stopped\n"
+    },
+    {
+     "age": "$TMP/out/bs.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bo.output",
+     "content": "pushing\n"
+    },
+    {
+     "age": "$TMP/out/bo.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bu.output",
+     "content": "tests\n"
+    },
+    {
+     "age": "$TMP/out/bu.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bf.output",
+     "content": "f\n"
+    },
+    {
+     "age": "$TMP/out/bf.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/bw.output",
+     "content": "w\n"
+    },
+    {
+     "age": "$TMP/out/bw.output",
+     "minutes": 60
+    }
+   ]
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "shadow"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-J-07 shadow: verdict would-relaunch, refused",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V1 record pass ",
+     "^signal: V2 owner-ended pass \\(owner ended 2099-01-01 03:00 \\+0300\\)$",
+     "^signal: V3 in-flight pass ",
+     "^signal: V4 no-completion pass ",
+     "^signal: V5 quiet pass ",
+     "^signal: V6 no-effect pass ",
+     "^signal: V7 runnable pass ",
+     "^verdict: LOST · confidence high · effects none · would-relaunch$",
+     "^REFUSED: shadow$",
+     "^ask-command: ls -la app; echo \"__exit \\$\\?\"$",
+     "^ask-source: recorded$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "off"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-J-07 off: mode-off",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects none$",
+     "^REFUSED: mode-off$",
+     "^ask-command: ls -la app; echo \"__exit \\$\\?\"$"
+    ],
+    "stdout_lacks": [
+     "would-relaunch"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/1-978652800.live-77777777.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"Fri Jan  5 00:00:00 2001\", \"session_id\": \"77777777-7777-4777-8777-777777777777\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2050-01-01T00:00:00+00:00\"}"
+    }
+   ]
+  },
+  {
+   "name": "AT-J-06 / B-11: relation other comes before mode-off",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: relation$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:Fri Jan  5 00:00:00 2001"
+   }
+  },
+  {
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5",
+    "--relation",
+    "successor"
+   ],
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "name": "AT-J-06 no relation flag",
+   "expect": {
+    "exit": 64
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-J-04 row 6: an unmeasured signal is low: ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b6"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V4 no-completion unmeasured \\(no output path",
+     "^verdict: LOST · confidence low · effects none$",
+     "^REFUSED: lost-low$",
+     "^ask-command: ls -la lib; echo",
+     "^ask-source: recorded$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 3: exit marker 0: collect",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b3"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: DONE-UNREPORTED ",
+     "^REFUSED: done-unreported$",
+     "^collect: $TMP/out/b3\\.output$"
+    ],
+    "stdout_lacks": [
+     "^ask-command:"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 2c: written after the owner ended: report",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bl"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V5 quiet fail ",
+     "^verdict: LEFTOVER ",
+     "^REFUSED: leftover$"
+    ],
+    "stdout_lacks": [
+     "^ask-command:"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 7: a recorded stop is never relaunched",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bs"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: STOPPED ",
+     "^REFUSED: stopped$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-10: a forged row with no transcript match fails V1",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bf"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V1 record fail \\(no matching Bash call in the origin transcript\\)$",
+     "^REFUSED: not-lost$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-03: a withheld command is never printed or relaunched",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bw"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: command-withheld$",
+     "^ask-command: none \\(the command held a credential-like value; re-launch it yourself\\)$"
+    ],
+    "stdout_lacks": [
+     "curl"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-08: an outward command with no recipe: V6 cannot pass, low, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V6 no-effect unmeasured \\(no recipe and not read-only\\)$",
+     "^verdict: LOST · confidence low · effects outward$",
+     "^REFUSED: lost-low$",
+     "^ask-command: git push"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-08: not read-only and not allowlisted: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "bu"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence low · effects unknown$",
+     "^REFUSED: lost-low$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 4: failed, read-only, verified: restart gate passes",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^verdict: FAILED ",
+     "\\nok job:b4\\nrun: ls -la bin; echo \"__exit \\$\\?\"\\n\\z"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 5 / AT-J-06 / AT-J-09: successor, LOST high, none: relaunch; --bump stores the run line's sha",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5",
+    "--bump"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^signal: V1 record pass ",
+     "^signal: V2 owner-ended pass \\(owner ended 2099-01-01 03:00 \\+0300\\)$",
+     "^signal: V3 in-flight pass ",
+     "^signal: V4 no-completion pass ",
+     "^signal: V5 quiet pass ",
+     "^signal: V6 no-effect pass ",
+     "^signal: V7 runnable pass ",
+     "^verdict: LOST · confidence high · effects none$",
+     "\\nok job:b5\\nrun: ls -la app; echo \"__exit \\$\\?\"\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/66666666-6666-4666-8666-666666666666/jobs-pending.jsonl",
+      "json_lines": true,
+      "has": [
+       "\"sha256\":\"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\"",
+       "\"task_id\":\"b5\"",
+       "\"origin_sid\":\"$SID\""
+      ]
+     },
+     {
+      "path": "$WATCH/heal/$SID/b5.count",
+      "has": [
+       "\"chain\":1"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/66666666-6666-4666-8666-666666666666.classic.jsonl",
+      "ev": "heal",
+      "fields": {
+       "result": "ok",
+       "verdict": "LOST",
+       "confidence": "high",
+       "effects": "none",
+       "relation": "successor",
+       "mode": "on",
+       "item": "b5"
+      }
+     }
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "S-11: one relaunch per resume",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "b5",
+    "--bump"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: counter$"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  }
+ ]
+}

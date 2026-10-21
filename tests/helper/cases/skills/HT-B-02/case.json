@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "begin: own_latest.unchanged false after an edit to an already-dirty file (RV-18); previous_handoff never another session's file (RV-19), which goes to newer_foreign with its In flight line number (RV-26); age_min and reuse_window_min (D-14)",
+ "note": "begin: own_latest.unchanged false after an edit to an already-dirty file (RV-18); AT-CF-07: the newest handoff is the carry base whoever wrote it (small-rulings §2.1): another session's file is previous_handoff with previous_kind foreign and a carry_notice, and is not repeated in newer_foreign (newer_foreign rows and their In flight line numbers, RV-26: AT-CF-03); age_min and reuse_window_min (D-14)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -45,25 +45,27 @@
  "expect": {
   "exit": 0,
   "json": {
-   "previous_handoff": {
+   "previous_handoff": "$ROOT/repo/LAB-7/2026-10-21_13-00-00_99999999_other.md",
+   "previous_kind": "foreign",
+   "previous_sid8": "99999999",
+   "previous_stamp": "2026-10-21 13:00 +0300",
+   "own_previous_handoff": {
     "null": 1
    },
+   "carry_notice": "not your chain: the newest handoff here is 99999999's (2026-10-21 13:00 +0300)",
    "own_latest": {
     "null": 1
    },
    "newer_foreign": {
-    "len": 1
+    "len": 0
    },
-   "newer_foreign.0.path": "$ROOT/repo/LAB-7/2026-10-21_13-00-00_99999999_other.md",
-   "newer_foreign.0.sid8": "99999999",
-   "newer_foreign.0.inflight_line": 15,
    "porcelain.count": 1
   }
  },
  "then": [
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 14:05)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 14:05 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 14:05 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 14:05 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "cwd": "$TMP/repo",
@@ -106,6 +108,10 @@
      "reuse_window_min": 15,
      "newer_foreign": {
       "len": 0
+     },
+     "previous_kind": "own",
+     "carry_notice": {
+      "null": 1
      }
     }
    }

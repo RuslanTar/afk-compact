@@ -1,0 +1,208 @@
+{
+ "id": "AT-RM-07",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-12 §1.5.6: a full repo-mode lifecycle (project init, a compaction copy, swept evidence, a refused draft, a published handoff, watch rows) leaves only the declaration, README, .gitignore and the export under the toplevel (git status --porcelain --ignored); copies, evidence and rows stay in the private store",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"repo_roots\": \"$TMP/repo\"}}}}\n"
+    },
+    {
+     "mkdir": "$TMP/scratch"
+    },
+    {
+     "write": "$TMP/scratch/run-suite.sh",
+     "content": "echo suite\n",
+     "mode": "0700"
+    }
+   ]
+  },
+  {
+   "name": "project init",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^created \\.claude/handoffs\\.json$"
+    ]
+   }
+  },
+  {
+   "name": "a compaction copy",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "c1c1c1c1",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$TMP/s1.md",
+     "text": "<summary>\n⟪$BRAND v1 n=c1c1c1c1 s=main⟫\n# LAB-7 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=c1c1c1c1⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "c1c1c1c1",
+    "--from",
+    "$TMP/s1.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "name": "sweep evidence",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--keep",
+    "$TMP/scratch/run-suite.sh"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — draft\n## Resume here\nStatus: active\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: lint "
+    ]
+   },
+   "name": "a refused draft",
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Exported to repository: \\.claude/handoffs/LAB-7/$STEM\\.md "
+    ]
+   },
+   "name": "a published handoff",
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "name": "git sees only the declaration, README, .gitignore and the export",
+   "cwd": "$TMP/repo",
+   "exec": [
+    "/usr/bin/git",
+    "status",
+    "--porcelain",
+    "--ignored",
+    "-uall"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\A\\?\\? \\.claude/handoffs\\.json\\n\\?\\? \\.claude/handoffs/\\.gitignore\\n\\?\\? \\.claude/handoffs/LAB-7/$STEM\\.md\\n\\?\\? \\.claude/handoffs/README\\.md\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/compact/*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/run-suite.sh"
+     },
+     {
+      "path": "$WATCH/$SID.classic.jsonl",
+      "has": [
+       "\"ev\":\"handoff_export\""
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

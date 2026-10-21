@@ -10,8 +10,8 @@ our $OUT = '';
 
 sub say { my ($line) = @_; $OUT .= $line . "\n"; return 1 }
 
-# Die with this to end with a refusal: die skills::cli::refuse('reason').
-sub refuse { my ($why) = @_; return bless { why => $why }, 'skills::cli::Refused' }
+# Die with this to end with a refusal: die skills::cli::refuse('reason'[, lines after]).
+sub refuse { my ($why, @after) = @_; return bless { why => $why, after => \@after }, 'skills::cli::Refused' }
 sub usage  { my ($why) = @_; return bless { why => $why }, 'skills::cli::Usage' }
 
 # Parse options from @$argv with Getopt::Long specs; dies usage() on error.
@@ -37,6 +37,7 @@ sub main {
         if (ref $e eq 'skills::cli::Refused') {
             print $OUT;
             print "REFUSED: $e->{why}\n";
+            print "$_\n" for @{ $e->{after} || [] };
             return 3;
         }
         if (ref $e eq 'skills::cli::Usage') {

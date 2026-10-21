@@ -1,0 +1,175 @@
+{
+ "id": "AT-CF-02, AT-CF-03, AT-CF-06",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "begin carry base by relation: a lineage predecessor's newest file is chain with no notice (next_ids from it); an empty bucket gives all carry keys null and next_ids 1; with a foreign base, newer_foreign lists up to 2 other newer files (never the base) with their In flight line, a document with imported_from is never the base (DP-6) but is listed, and the JSON stays within 3,072 B",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-8-x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/r8"
+    },
+    {
+     "repo": {
+      "branch": "feature/LAB-9-y",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/r9"
+    },
+    {
+     "repo": {
+      "branch": "feature/LAB-10-z",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/r10"
+    },
+    {
+     "write": "$ROOT/.sessions/33333333-3333-4333-8333-333333333333.lineage.json",
+     "json": {
+      "previous_session_id": "44444444-4444-4444-8444-444444444444",
+      "lineage_reason": "clear"
+     }
+    },
+    {
+     "write": "$ROOT/r8/LAB-8/2026-10-21_10-00-00_44444444_pred.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0c0c0c0c\ndate: 2026-10-21T10:00:00+03:00\nsession_id: 44444444-4444-4444-8444-444444444444\nactor: main\n---\n⟪$BRAND v1 n=0c0c0c0c s=manual⟫\n# LAB-8 — predecessor\n## User constraints\n- U-2: \"x\" — scope y; user, 44444444\n⟪/$BRAND n=0c0c0c0c⟫\n"
+    },
+    {
+     "write": "$ROOT/r9/LAB-9/2026-10-21_09-00-00_33333333_own.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d0d0d0d\ndate: 2026-10-21T09:00:00+03:00\nsession_id: 33333333-3333-4333-8333-333333333333\nactor: main\n---\n⟪$BRAND v1 n=0d0d0d0d s=manual⟫\n# LAB-9 — own\n## User constraints\nnone stated\n⟪/$BRAND n=0d0d0d0d⟫\n"
+    },
+    {
+     "write": "$ROOT/r9/LAB-9/2026-10-21_10-00-00_99999999_base.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0b0b0b0b\ndate: 2026-10-21T10:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\n---\n⟪$BRAND v1 n=0b0b0b0b s=manual⟫\n# LAB-9 — base\n## User constraints\n- U-1: \"rule 1\" — scope s1; user, 99999999\n- U-2: \"rule 2\" — scope s2; user, 99999999\n- U-3: \"rule 3\" — scope s3; user, 99999999\n- U-4: \"rule 4\" — scope s4; user, 99999999\n- U-5: \"rule 5\" — scope s5; user, 99999999\n- U-6: \"rule 6\" — scope s6; user, 99999999\n- U-7: \"rule 7\" — scope s7; user, 99999999\n- U-8: \"rule 8\" — scope s8; user, 99999999\n- U-9: \"rule 9\" — scope s9; user, 99999999\n- U-10: \"rule 10\" — scope s10; user, 99999999\n- U-11: \"rule 11\" — scope s11; user, 99999999\n- U-12: \"rule 12\" — scope s12; user, 99999999\n- U-13: \"rule 13\" — scope s13; user, 99999999\n- U-14: \"rule 14\" — scope s14; user, 99999999\n- U-15: \"rule 15\" — scope s15; user, 99999999\n⟪/$BRAND n=0b0b0b0b⟫\n"
+    },
+    {
+     "write": "$ROOT/r9/LAB-9/2026-10-21_11-00-00_99999999_x1.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e01\ndate: 2026-10-21T11:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\n---\n⟪$BRAND v1 n=0e0e0e01 s=manual⟫\n# LAB-9 — other 1\n## User constraints\nnone stated\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0e0e0e01⟫\n"
+    },
+    {
+     "write": "$ROOT/r9/LAB-9/2026-10-21_12-00-00_99999999_x2.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e02\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\n---\n⟪$BRAND v1 n=0e0e0e02 s=manual⟫\n# LAB-9 — other 2\n## User constraints\nnone stated\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0e0e0e02⟫\n"
+    },
+    {
+     "write": "$ROOT/r9/LAB-9/2026-10-21_13-00-00_99999999_x3.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e03\ndate: 2026-10-21T13:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\n---\n⟪$BRAND v1 n=0e0e0e03 s=manual⟫\n# LAB-9 — other 3\n## User constraints\nnone stated\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0e0e0e03⟫\n"
+    },
+    {
+     "write": "$ROOT/r9/LAB-9/2026-10-21_13-30-00_77777777_imp.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T13:30:00+03:00\nsession_id: 77777777-7777-4777-8777-777777777777\nactor: main\nimported_from: repo:.claude/handoffs/LAB-9/x.md\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-9 — imported\n## User constraints\nnone stated\n⟪/$BRAND n=0a0b0c0d⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/r8",
+   "argv": [
+    "begin",
+    "--sid",
+    "33333333-3333-4333-8333-333333333333",
+    "--topic",
+    "x"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "chain",
+     "previous_sid8": "44444444",
+     "carry_notice": {
+      "null": 1
+     },
+     "own_previous_handoff": {
+      "null": 1
+     },
+     "next_ids.U": 3,
+     "next_ids.D": 1
+    }
+   },
+   "name": "AT-CF-02 chain base"
+  },
+  {
+   "cwd": "$TMP/r10",
+   "argv": [
+    "begin",
+    "--sid",
+    "33333333-3333-4333-8333-333333333333",
+    "--topic",
+    "y"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_handoff": {
+      "null": 1
+     },
+     "previous_kind": {
+      "null": 1
+     },
+     "previous_sid8": {
+      "null": 1
+     },
+     "carry_notice": {
+      "null": 1
+     },
+     "next_ids.U": 1,
+     "next_ids.D": 1,
+     "next_ids.X": 1
+    }
+   },
+   "name": "AT-CF-02 empty bucket"
+  },
+  {
+   "cwd": "$TMP/r9",
+   "argv": [
+    "begin",
+    "--sid",
+    "33333333-3333-4333-8333-333333333333",
+    "--topic",
+    "y"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3072,
+    "json": {
+     "previous_kind": "foreign",
+     "previous_handoff": "$ROOT/r9/LAB-9/2026-10-21_13-00-00_99999999_x3.md",
+     "own_previous_handoff": "$ROOT/r9/LAB-9/2026-10-21_09-00-00_33333333_own.md",
+     "newer_foreign": {
+      "len": 2
+     },
+     "newer_foreign.0.path": "$ROOT/r9/LAB-9/2026-10-21_13-30-00_77777777_imp.md",
+     "newer_foreign.1.path": "$ROOT/r9/LAB-9/2026-10-21_12-00-00_99999999_x2.md",
+     "newer_foreign.1.inflight_line": 13
+    }
+   },
+   "name": "AT-CF-03/06 newer_foreign without the base; imported never the base; 3 KB"
+  }
+ ]
+}

@@ -158,8 +158,12 @@ sub _utf8 {
 # ---------------------------------------------------------------- sha256
 
 my $HAVE_DIGEST;
+# Character strings are encoded to UTF-8 first (DP-12): Digest::SHA dies on a wide
+# character, and the pure-Perl fallback would hash code points, not bytes.
 sub sha256_hex {
     my ($data) = @_;
+    $data = '' unless defined $data;
+    if (utf8::is_utf8($data)) { my $c = $data; utf8::encode($c); $data = $c }
     if (!defined $HAVE_DIGEST) {
         $HAVE_DIGEST = eval { require Digest::SHA; 1 } ? 1 : 0;
     }
@@ -269,8 +273,19 @@ sub iso_local {
     return POSIX::strftime('%Y-%m-%dT%H:%M:%S', localtime $e) . sprintf('%s%02d:%02d', $sg, int($a / 3600), int(($a % 3600) / 60));
 }
 
+# stamp(epoch) -> 2026-10-21 14:05 +0300 (RV-24): local date, time and the numeric UTC
+# offset of that instant, always all three; what `date '+%Y-%m-%d %H:%M %z'` prints and
+# the spec's time_re matches. Core's util::stamp is the one source when it is loaded.
+sub stamp {
+    my ($e) = @_;
+    $e //= now();
+    return util::stamp($e) if defined &util::stamp;
+    my @lt = localtime(int $e);
+    return POSIX::strftime('%Y-%m-%d %H:%M', @lt) . ' ' . POSIX::strftime('%z', @lt);
+}
+
+# hhmm(epoch) -> 14:05, for logs only; text a model reads carries stamp().
 sub hhmm      { return POSIX::strftime('%H:%M', localtime($_[0] // now())) }
-sub mmdd_hhmm { return POSIX::strftime('%m-%d %H:%M', localtime($_[0] // now())) }
 sub ymd       { return POSIX::strftime('%Y-%m-%d', localtime($_[0] // now())) }
 sub stem_time { return POSIX::strftime('%Y-%m-%d_%H-%M-%S', localtime($_[0] // now())) }
 

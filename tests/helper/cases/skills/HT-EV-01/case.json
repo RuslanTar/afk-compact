@@ -158,7 +158,7 @@
      "^copied $ROOT/repo/LAB-7/evidence/$STEM/0001-[0-9a-f]{8}.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8}$",
      "^Evidence: $ROOT/repo/LAB-7/evidence/$STEM/ \\(4 files, 0.0 MB; MANIFEST.tsv\\)$",
      "^Disposable: $DISP/2026-10-21/$STEM-evidence/ \\(kept until you remove it\\)$",
-     "^Volatile: $TMP/s/gone.txt — missing at 14:05$",
+     "^Volatile: $TMP/s/gone.txt — missing at 2026-10-21 14:05 \\+0300$",
      "^Volatile: $TMP/s/.env — withheld by the secret gate"
     ],
     "stdout_lacks": [
@@ -263,7 +263,7 @@
   {
    "note": "a stage whose settings.json names another bucket is not a stage: nothing is written there",
    "write": "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b/settings.json",
-   "content": "{\"v\":1,\"session_id\":\"$SID\",\"sid8\":\"11111111\",\"nonce\":\"0b0b0b0b\",\"stem\":\"2026-10-21_14-05-12_11111111_retry\",\"date\":\"2026-10-21T14:05:12+03:00\",\"checked_at\":\"14:05\",\"bucket\":\"$TMP/elsewhere\",\"settings\":{}}\n"
+   "content": "{\"v\":1,\"session_id\":\"$SID\",\"sid8\":\"11111111\",\"nonce\":\"0b0b0b0b\",\"stem\":\"2026-10-21_14-05-12_11111111_retry\",\"date\":\"2026-10-21T14:05:12+03:00\",\"checked_at\":\"2026-10-21 14:05 +0300\",\"bucket\":\"$TMP/elsewhere\",\"settings\":{}}\n"
   },
   {
    "argv": ["evidence", "--stage", "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b", "--keep", "$TMP/s/scratch.txt"],

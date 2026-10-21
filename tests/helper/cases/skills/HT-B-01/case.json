@@ -77,10 +77,18 @@
    "inflight_measured",
    "tmp_candidates",
    "config",
-   "reuse_window_min"
+   "reuse_window_min",
+   "previous_kind",
+   "previous_sid8",
+   "previous_stamp",
+   "own_previous_handoff",
+   "carry_notice",
+   "next_ids",
+   "mode",
+   "export_target"
   ],
   "json": {
-   "checked_at": "14:05",
+   "checked_at": "2026-10-21 14:05 +0300",
    "session.id": "$SID",
    "session.sid8": "11111111",
    "session.actor": "main",
@@ -121,7 +129,8 @@
    },
    "queued_line": {
     "null": 1
-   }
+   },
+   "mode.mode": "private"
   },
   "files": [
    {
@@ -161,14 +170,22 @@
   {
    "note": "TPL §6, HDN §8: the passed id is a cross-check only; on a mismatch the per-process record's id wins and the identity is degraded",
    "cwd": "$TMP/repo",
-   "argv": ["begin", "--sid", "99999999-9999-4999-8999-999999999999", "--topic", "mismatch"],
+   "argv": [
+    "begin",
+    "--sid",
+    "99999999-9999-4999-8999-999999999999",
+    "--topic",
+    "mismatch"
+   ],
    "expect": {
     "exit": 0,
     "json": {
      "session.id": "$SID",
      "session.sid8": "11111111",
      "session.identity": "degraded (sid-mismatch)",
-     "stage": {"re": "/repo/mismatch/\\.staging/11111111-[0-9a-f]{8}$"}
+     "stage": {
+      "re": "/repo/mismatch/\\.staging/11111111-[0-9a-f]{8}$"
+     }
     }
    }
   },
@@ -256,9 +273,25 @@
   },
   {
    "cwd": "$TMP/repo",
-   "env": {"STORE_TEST_CLAUDE_PID": "1:Sun Oct 25 01:00:00 2026"},
-   "argv": ["begin", "--sid", "${CLAUDE_SESSION_ID}", "--topic", "dst"],
-   "expect": {"exit": 0, "json": {"session.id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "session.identity": {"null": 1}}}
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:Sun Oct 25 01:00:00 2026"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "${CLAUDE_SESSION_ID}",
+    "--topic",
+    "dst"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "session.id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+     "session.identity": {
+      "null": 1
+     }
+    }
+   }
   }
  ]
 }

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "stamp: HH:MM on the stage's day, MM-DD HH:MM after midnight (RV-24); each stamp appended to stamps.log; a directory that is not a stage -> REFUSED: no-stage",
+ "note": "stamp: a full stamp YYYY-MM-DD HH:MM +hhmm on the stage's day and after midnight alike (RV-24, AT-TS-01); each stamp appended to stamps.log; a directory that is not a stage -> REFUSED: no-stage",
  "now": "2026-10-21T23:58:00+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -48,7 +48,7 @@
    "now": "2026-10-21T23:59:30+03:00",
    "expect": {
     "exit": 0,
-    "stdout": "23:59\n"
+    "stdout": "2026-10-21 23:59 +0300\n"
    }
   },
   {
@@ -60,13 +60,13 @@
    "now": "2026-10-22T00:01:00+03:00",
    "expect": {
     "exit": 0,
-    "stdout": "10-22 00:01\n",
+    "stdout": "2026-10-22 00:01 +0300\n",
     "files": [
      {
       "path": "$STAGE/stamps.log",
       "mode": "0600",
       "has": [
-       "\\A2026-10-21T23:59:30\\+03:00\\t23:59\\n2026-10-22T00:01:00\\+03:00\\t10-22 00:01\\n\\z"
+       "\\A2026-10-21T23:59:30\\+03:00\\t2026-10-21 23:59 \\+0300\\n2026-10-22T00:01:00\\+03:00\\t2026-10-22 00:01 \\+0300\\n\\z"
       ]
      }
     ]

@@ -104,7 +104,7 @@
  "expect": {
   "exit": 0,
   "stdout_has": [
-   "\\AMeasured facts \\(14:05\\)\\ncwd: $TMP/repo\\n",
+   "\\AMeasured facts \\(2026-10-21 14:05 \\+0300\\)\\ncwd: $TMP/repo\\n",
    "^worktree: $TMP/repo · branch feature/LAB-7-retry · HEAD [0-9a-f]+ \\(ahead of git_commit [0-9a-f]{8}\\)$",
    "^dirty: clean$",
    "^upstream: none$",

@@ -76,12 +76,12 @@ sub run {
         my $note = (!defined $kd || $kd eq '' || $kd eq '0') ? 'kept until you remove it' : "retention $kd days";
         skills::cli::say("Disposable: $disp_dir/ ($note)");
     }
-    my $hhmm = skills::util::hhmm($now);
+    my $stamp = skills::util::stamp($now);
     for my $r (@rows) {
         if ($r->{status} eq 'ref-only') {
             skills::cli::say(sprintf('Ref-only: %s — %d B, sha256 %s', $r->{origin}, $r->{bytes} // 0, substr($r->{sha256} // '', 0, 8)));
         } elsif ($r->{status} eq 'missing') {
-            skills::cli::say("Volatile: $r->{origin} — missing at $hhmm");
+            skills::cli::say("Volatile: $r->{origin} — missing at $stamp");
         } elsif ($r->{status} eq 'withheld') {
             my $rules = ref $r->{rules} eq 'ARRAY' && @{ $r->{rules} } ? ' (' . join(',', @{ $r->{rules} }) . ')' : '';
             skills::cli::say("Volatile: $r->{origin} — withheld by the secret gate$rules");

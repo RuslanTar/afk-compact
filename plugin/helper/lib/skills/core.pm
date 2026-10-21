@@ -25,6 +25,12 @@ package skills::core;
 #                                        (<root>/<repo>/<bucket>); settings passed as a 4th
 #                                        argument because a skill flag can move the root
 #   detect::summary($text)             -> {verdict, marker_line, sentinel_from_end, nonce, scope}
+# Seams of the 2026-10-21 rulings (needs/core-to-skills.md):
+#   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
+#   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
+#   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
+#   jobrec::record_of / read_rows / jobs_path / add_pending (Dev-1)
+#   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
 use strict;
 use warnings;
 use POSIX ();
@@ -42,6 +48,11 @@ use gsd;
 use queue;
 use bucket;
 use detect;
+use rc;
+use repomode;
+use handoff_turn;
+use sidecar;
+use jobrec;
 
 sub settings {
     my ($flags) = @_;
@@ -255,6 +266,66 @@ sub bucket_resolve {
     my $r = bucket::resolve($sid, $cwd, $topic);
     die "bucket: no result\n" unless ref $r eq 'HASH' && $r->{path};
     return $r;
+}
+
+# ---------------------------------------------------------------- 2026-10-21 seams
+
+# The effective watch dir (log_dir, or its safe default), or undef when neither is safe.
+sub watch_dir { my $w = eval { rc::watch() }; return $w }
+
+# <watch>/<sid> of the bound session (the effective watch dir: log_dir, or its safe default).
+sub sid_dir { my $d = eval { rc::sid_dir() }; return $d }
+
+# The D-12 mode of cwd's worktree: {mode, reason, toplevel, main_checkout, root_rel, root_path,
+# ignored, exports, ...}; rc::mode logs handoff_mode once per (mode, reason).
+sub mode {
+    my ($cwd) = @_;
+    my $m = eval { rc::mode($cwd) };
+    return { mode => 'private', reason => 'repo-root-unchecked' } unless ref $m eq 'HASH' && $m->{mode};
+    return $m;
+}
+
+# A worktree's declaration and repository-root check (D-12 §1.5.2, §1.5.3), read-only.
+sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? $d : { present => 0 } }
+sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? $c : { ok => 0, reason => 'repo-root-unchecked' } }
+sub gitignore_text { return repomode::gitignore_text() }
+sub default_root { return $repomode::DEFAULT_ROOT }
+sub decl_name { return $repomode::DECL }
+sub valid_root { return repomode::valid_root($_[0]) }
+
+# The handoff-turn store (D-18), all read through lib/handoff_turn.pm.
+sub ht_open_for_begin { my ($d) = @_; return defined $d ? handoff_turn::open_for_begin($d) : undef }
+sub ht_stage_of       { my ($d, $ht) = @_; return defined $d ? handoff_turn::stage_of($d, $ht) : undef }
+sub ht_bind_stage     { my ($d, $ht, $stage) = @_; return handoff_turn::bind_stage($d, $ht, $stage) }
+sub ht_mark_published { my ($d, $ht, $path) = @_; return handoff_turn::mark_published($d, $ht, $path) }
+sub ht_record         { my ($d, $ht) = @_; return defined $d ? handoff_turn::record($d, $ht) : undef }
+sub ht_valid          { return handoff_turn::valid_ht($_[0]) }
+
+# (slot object, slot path) of the highest seq in <sid_dir>/bg, or (): the rule of
+# sidecar::newest (DP-13: by seq, never by mtime; the first of equal seqs in name order).
+sub sidecar_newest {
+    my ($sid_dir) = @_;
+    return () unless defined $sid_dir && -d "$sid_dir/bg";
+    my ($best, $path);
+    for my $f (skills::util::list_dir("$sid_dir/bg")) {
+        next unless $f =~ /\Aslot-\d+\.json\z/;
+        my $d = eval { skills::util::json_decode(skills::util::read_file("$sid_dir/bg/$f", 262144)) };
+        next unless ref $d eq 'HASH';
+        ($best, $path) = ($d, "$sid_dir/bg/$f") if !$best || ($d->{seq} // 0) > ($best->{seq} // 0);
+    }
+    return $best ? ($best, $path) : ();
+}
+
+# Dev-1 job records of a session dir.
+sub job_record { my ($sid_dir, $task) = @_; return eval { jobrec::record_of($sid_dir, $task) } }
+sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jobs_path($sid_dir)) }; return ref $r eq 'ARRAY' ? $r : [] }
+sub job_add_pending { my ($sid_dir, $p) = @_; return jobrec::add_pending($sid_dir, $p) }
+sub job_output_source { return $jobrec::OUTPUT_PATH_SOURCE // 'none' }
+
+# settings::relaunch over the run context's resolved settings (consent keys: file only).
+sub relaunch {
+    my $r = eval { settings::relaunch(rc::settings()) };
+    return ref $r eq 'HASH' ? $r : { auto => 'off', allow => [], quiet_s => 120, allow_active => 0, invalid => [], clamped => [] };
 }
 
 sub detect_summary {

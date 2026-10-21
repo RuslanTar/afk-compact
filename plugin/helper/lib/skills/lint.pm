@@ -6,8 +6,15 @@ package skills::lint;
 #
 # lint(\%in) → {blocking => [[rule, where]…], advisory => [[rule, where]…]}
 # %in: body, recipes {name => text}, extra {name => text} (ledger, inflight),
-#      previous (text of previous_handoff or undef), times {shown => 1},
-#      evidence [rows], bucket, brand.
+#      previous (text of previous_handoff, the carry base, or undef), times {shown => 1},
+#      evidence [rows], bucket, brand; 2026-10-21 rulings:
+#      previous_kind (own|chain|foreign) and own_previous (text of own_previous_handoff)
+#        for carry-provenance and carry-approval (small-rulings §2.4);
+#      repo_mode and export_text (the body after the D-12 §1.5.5 rewrite) for
+#        private-path (repo mode only);
+#      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2).
+# Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
+# private-path classes come from the spec too (fail closed: spec-missing <key>).
 use strict;
 use warnings;
 use skills::spec;
@@ -25,7 +32,9 @@ sub lint {
     my (@block, @adv);
     my $body = $in->{body} // '';
     my @lines = split /\n/, $body, -1;
-    my %prev_lines = map { $_ => 1 } split /\n/, ($in->{previous} // '');
+    skills::spec::need(qw(time_re claim_tags.verified_re carry.tag_re carry.foreign_approval_note lint_ids private_path_classes));
+    # Lines carried byte-identical from the base or from the own chain's file.
+    my %prev_lines = map { $_ => 1 } split /\n/, join("\n", grep { defined } $in->{previous}, $in->{own_previous});
     my $mains = skills::spec::sections_main();
     my $locs = skills::spec::sections_location();
     my $nf = skills::spec::none_forms();
@@ -189,6 +198,57 @@ sub lint {
         push @block, [ 'unprinted-time', 'line ' . ($i + 1) ] for grep { !$times->{$_} } @t;
     }
 
+    # ---- time-format (RV-24): `checked` or `[verified` with a time that is not a full
+    # stamp (HH:MM, MM-DD HH:MM, a date without its offset), outside carried lines.
+    # Without it a short form would slip past unprinted-time, which reads only stamps.
+    my $short = qr/(?:[0-9]{4}-[0-9]{2}-[0-9]{2}[ T])?(?:[0-9]{2}-[0-9]{2} )?[0-9]{1,2}:[0-9]{2}/;
+    for my $i (0 .. $#lines) {
+        my $l = $lines[$i];
+        next if $prev_lines{$l};
+        my $bad = 0;
+        while ($l =~ /(?:\bchecked|\[verified)[ \t]+/g) {
+            my $at = substr($l, pos($l));
+            next if $tre && $at =~ /\A$tre(?![0-9])/;
+            $bad = 1 if $at =~ /\A$short(?![0-9])/;
+        }
+        push @block, [ 'time-format', 'line ' . ($i + 1) ] if $bad;
+    }
+
+    # ---- carry provenance (small-rulings §2.4): with a foreign base, a U-/D-/X- line whose
+    # content is the foreign base's and not the own chain's needs a `[from …]` tag; a
+    # tagged approval is context only. Reworded lines are not detected (stated limit).
+    my $tag_re = skills::spec::regex_at('carry.tag_re');
+    my $note = skills::spec::get('carry.foreign_approval_note');
+    if (($in->{previous_kind} // '') eq 'foreign' && defined $in->{previous}) {
+        my %foreign = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, $in->{previous};
+        my %own = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, ($in->{own_previous} // '');
+        for my $i (0 .. $#lines) {
+            my $n = _ledger_norm($lines[$i], $tag_re) // next;
+            next if $tag_re && $lines[$i] =~ $tag_re;
+            push @block, [ 'carry-provenance', 'line ' . ($i + 1) ] if $foreign{$n} && !$own{$n};
+        }
+    }
+    if ($tag_re) {
+        for my $i (0 .. $#lines) {
+            my $l = $lines[$i];
+            next unless $l =~ $tag_re && $l =~ /\bU-[0-9]+:\s*approval\b/;
+            push @block, [ 'carry-approval', 'line ' . ($i + 1) ]
+                if index($l, $note) < 0 || $l =~ /\bnot yet used\b|\bused\b/;
+        }
+    }
+
+    # ---- private-path (D-12 Block F; repo mode only): a machine-private path left in the
+    # text the export would write after its rewrite (own home already ~/). A durable copy
+    # or a Volatile: line does not excuse it: the path would reach git.
+    if ($in->{repo_mode}) {
+        my @x = split /\n/, ($in->{export_text} // $body), -1;
+        my $classes = skills::spec::private_path_classes();
+        for my $i (0 .. $#x) {
+            my @ids = map { $_->{id} } grep { $x[$i] =~ $_->{re} } @$classes;
+            push @block, [ 'private-path', 'line ' . ($i + 1) . ' ' . join(',', @ids) ] if @ids;
+        }
+    }
+
     # ---- id ranges (the spec's id_range_re)
     if (my $idr = skills::spec::id_range_re()) {
         for my $i (0 .. $#lines) {
@@ -272,6 +332,15 @@ sub lint {
         push @adv, [ 'must-read', "n=$mr" ] if $mr > 3;
     }
     push @adv, [ 'secret-warn', 'rules=' . join(',', sort keys %warn) ] if %warn;
+    # Dev-1 D2: a recipe whose command: differs from the plugin's job record of its task.
+    for my $name (sort keys %{ $in->{recipes} || {} }) {
+        my $t = $in->{recipes}{$name};
+        my ($rid) = $t =~ /^\s*item:\s*B-\d+.*?runtime id\s+([A-Za-z0-9._:-]+)/m;
+        my $job = defined $rid ? ($in->{jobs} || {})->{$rid} : undef;
+        next unless $job && defined $job->{command};
+        my ($cmd) = $t =~ /^\s*command:[ \t]*(.*?)[ \t]*$/m;
+        push @adv, [ 'recipe-mismatch', "restart/$name" ] if !defined $cmd || $cmd ne $job->{command};
+    }
     if (defined $in->{previous}) {
         my %pl = map { _norm($_) => 1 } grep { _counts($_) } split /\n/, $in->{previous};
         my @mine = grep { _counts($_) } @lines;
@@ -280,7 +349,22 @@ sub lint {
             push @adv, [ 'overlap', sprintf('%d%%', int(100 * $shared / @mine)) ] if $shared / @mine >= 0.30;
         }
     }
+    my $ids = skills::spec::lint_ids();
+    for my $r (@block) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{blocking}{ $r->[0] } }
+    for my $r (@adv) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{advisory}{ $r->[0] } }
     return { blocking => \@block, advisory => \@adv };
+}
+
+# A U-, D- or X- ledger line's content with its bullet, id and carry tags removed and
+# white space collapsed; undef for any other line.
+sub _ledger_norm {
+    my ($l, $tag_re) = @_;
+    return undef unless $l =~ /\A\s*(?:[-*]\s+)?[UDX]-[0-9]+:\s*(.*)\z/;
+    my $c = $1;
+    $c =~ s/$tag_re//g if $tag_re;
+    $c =~ s/\s+/ /g;
+    $c =~ s/\A | \z//g;
+    return $c eq '' ? undef : $c;
 }
 
 sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }

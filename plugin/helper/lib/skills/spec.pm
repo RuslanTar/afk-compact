@@ -21,6 +21,63 @@ sub load {
 
 sub available { return eval { load(); 1 } ? 1 : 0 }
 
+# Fail closed on a key this code needs (2026-10-21 build brief): need('a', 'b.c') dies
+# "spec-missing <key>" when a key (dotted for a nested object) is absent or empty.
+sub need {
+    my (@keys) = @_;
+    my $s = load();
+    for my $k (@keys) {
+        my $v = $s;
+        for my $part (split /\./, $k) {
+            $v = ref $v eq 'HASH' ? $v->{$part} : undef;
+            last unless defined $v;
+        }
+        my $empty = !defined $v || (!ref $v && $v eq '') || (ref $v eq 'ARRAY' && !@$v) || (ref $v eq 'HASH' && !%$v);
+        die "spec-missing $k\n" if $empty;
+    }
+    return 1;
+}
+
+# The value of a key, dotted for a nested object (need() it first where it is required).
+sub get {
+    my ($k) = @_;
+    my $v = load();
+    for my $part (split /\./, $k) { $v = ref $v eq 'HASH' ? $v->{$part} : undef; return undef unless defined $v }
+    return $v;
+}
+
+# A regex from a string key (dotted), compiled once per call; undef when absent or bad.
+sub regex_at {
+    my ($k) = @_;
+    my $v = get($k);
+    return undef unless defined $v && !ref $v && $v ne '';
+    return eval { qr/$v/ };
+}
+
+# {blocking => {id => 1}, advisory => {id => 1}, repo_mode_only => {id => 1}} (lint_ids).
+sub lint_ids {
+    my $v = get('lint_ids');
+    my %out;
+    for my $k (qw(blocking advisory repo_mode_only)) {
+        $out{$k} = { map { $_ => 1 } grep { defined && !ref } @{ _list(ref $v eq 'HASH' ? $v->{$k} : undef) } };
+    }
+    return \%out;
+}
+
+# private_path_classes -> [{id, re}] (D-12 Block F, the `private-path` patterns).
+sub private_path_classes {
+    my @out;
+    for my $e (@{ _list(get('private_path_classes')) }) {
+        next unless ref $e eq 'HASH' && defined $e->{re} && !ref $e->{re};
+        my $re = eval { qr/$e->{re}/ } or next;
+        push @out, { id => $e->{id} // 'private', re => $re };
+    }
+    return \@out;
+}
+
+# frontmatter_keys_<kind> as a list (handoff, copy, export).
+sub frontmatter_keys { my ($kind) = @_; return [ grep { defined && !ref } @{ _list(get("frontmatter_keys_$kind")) } ] }
+
 # A heading literal → {level, name, literal}
 sub _heading {
     my ($h) = @_;

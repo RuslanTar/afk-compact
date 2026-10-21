@@ -1,0 +1,305 @@
+{
+ "id": "AT-RM-13",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-12 §1.5.9, Dev-6: project copy --from private --ticket T is a read-only dry run by default (would-export, skip secret, TOTAL; no file, dir or row written); --apply sends each private handoff through the export pipeline (rewrite, scan, no-replace write) and exports N-1 with skip secret for the one with a HARD hit; originals stay byte-identical; a re-run prints exists; other tickets are not touched; copy needs repo mode",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"repo_roots\": \"$TMP/repo\"}}}}\n"
+    },
+    {
+     "write": "$TMP/tree.pl",
+     "content": "use strict; use warnings;\nmy ($out, @roots) = @ARGV; my @l;\nmy @st = @roots;\nwhile (@st) {\n    my $p = pop @st;\n    my @s = lstat $p or next;\n    push @l, join(' ', $p, $s[1], $s[2], $s[7], $s[9]);\n    if (-d _) { opendir(my $d, $p) or next; push @st, map { \"$p/$_\" } grep { !/^\\.\\.?$/ && $_ ne '.git' } readdir $d; next }\n    if (-f _) { open(my $f, '<:raw', $p) or next; local $/; my $c = <$f>; push @l, \"$p sum \" . unpack('%32C*', $c) }\n}\nopen(my $o, '>', $out) or die; print $o join(\"\\n\", sort @l), \"\\n\";\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\nrepository: repo\nbucket: repo/LAB-7\nbranch: feature/LAB-7-retry\nstatus: in-progress\nticket: LAB-7\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_10-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0b0b0b0b\ndate: 2026-10-21T10:00:00+03:00\nsession_id: $SID\nactor: main\nrepository: repo\nbucket: repo/LAB-7\nbranch: feature/LAB-7-retry\nstatus: in-progress\nticket: LAB-7\n---\n⟪$BRAND v1 n=0b0b0b0b s=manual⟫\n# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: $ROOT/repo/LAB-7/2026-10-21_10-00-00_11111111_retry.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0b0b0b0b⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0c0c0c0c\ndate: 2026-10-21T11:00:00+03:00\nsession_id: $SID\nactor: main\nrepository: repo\nbucket: repo/LAB-7\nbranch: feature/LAB-7-retry\nstatus: in-progress\nticket: LAB-7\n---\n⟪$BRAND v1 n=0c0c0c0c s=manual⟫\n# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: $ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_retry.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- token: $SECRET{github-token} — pasted by mistake\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0c0c0c0c⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-8/2026-10-21_12-00-00_11111111_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d0d0d0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\nticket: LAB-8\n---\n⟪$BRAND v1 n=0d0d0d0d s=manual⟫\n# LAB-8 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-8 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-8-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-8-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0d0d0d0d⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "private and repository trees before",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/t0",
+    "$ROOT/repo/LAB-7",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "private tree before",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/t0p",
+    "$ROOT/repo/LAB-7"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "dry run lists, writes nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "private",
+    "--ticket",
+    "LAB-7"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Awould-export $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry\\.md -> \\.claude/handoffs/LAB-7/2026-10-21_09-00-00_11111111_retry\\.md\\nwould-export $ROOT/repo/LAB-7/2026-10-21_10-00-00_11111111_retry\\.md -> \\.claude/handoffs/LAB-7/2026-10-21_10-00-00_11111111_retry\\.md\\nskip secret $ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_retry\\.md \\(rules [^)]+\\)\\nTOTAL 3 · would-export 2 · skip 1 \\(dry run; nothing written\\)\\n\\z"
+    ],
+    "stdout_lacks": [
+     "LAB-8",
+     "ghp_"
+    ],
+    "absent": [
+     "$TMP/repo/.claude/handoffs"
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/*.classic.jsonl",
+      "ev": "project_copy"
+     }
+    ]
+   }
+  },
+  {
+   "name": "trees after the dry run",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/t1",
+    "$ROOT/repo/LAB-7",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "the dry run wrote nothing",
+   "exec": [
+    "/usr/bin/cmp",
+    "$TMP/t0",
+    "$TMP/t1"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "apply exports N-1",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "private",
+    "--ticket",
+    "LAB-7",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^exported $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry\\.md -> \\.claude/handoffs/LAB-7/2026-10-21_09-00-00_11111111_retry\\.md$",
+     "^exported $ROOT/repo/LAB-7/2026-10-21_10-00-00_11111111_retry\\.md -> ",
+     "^skip secret $ROOT/repo/LAB-7/2026-10-21_11-00-00_11111111_retry\\.md ",
+     "^TOTAL 3 · exported 2 · skip 1$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/*.md",
+      "count": 2
+     },
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+      "mode": "0600",
+      "has": [
+       "^export: repo$",
+       "^bucket: LAB-7$",
+       "^nonce: 0a0a0a0a$",
+       "this handoff: \\.claude/handoffs/LAB-7/2026-10-21_09-00-00_11111111_retry\\.md$",
+       "worktree \\. · branch"
+      ],
+      "lacks": [
+       "$ROOT",
+       "$TMP"
+      ]
+     }
+    ],
+    "absent": [
+     "$TMP/repo/.claude/handoffs/LAB-7/2026-10-21_11-00-00_11111111_retry.md"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/*.classic.jsonl",
+      "ev": "project_copy",
+      "fields": {
+       "from": "private",
+       "apply": true
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "private tree after the apply",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/t2",
+    "$ROOT/repo/LAB-7"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "originals byte-identical",
+   "exec": [
+    "/usr/bin/cmp",
+    "$TMP/t0p",
+    "$TMP/t2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "a re-run: exists",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "private",
+    "--ticket",
+    "LAB-7",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^exists $ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry\\.md -> ",
+     "^exists $ROOT/repo/LAB-7/2026-10-21_10-00-00_11111111_retry\\.md -> ",
+     "^skip secret ",
+     "^TOTAL 3 · exists 2 · skip 1$"
+    ]
+   }
+  },
+  {
+   "name": "--ticket or --all is required",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "private"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "not both",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "private",
+    "--all",
+    "--ticket",
+    "LAB-7"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "--from private|repo",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "elsewhere",
+    "--all"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"repo_roots\": \"\"}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "copy needs repo mode",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "private",
+    "--all"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: not-repo-mode not-accepted\n"
+   }
+  }
+ ]
+}
