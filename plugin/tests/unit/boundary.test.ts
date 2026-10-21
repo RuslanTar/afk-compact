@@ -139,11 +139,10 @@ test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its rea
   const r = await w.tool($)
   expect(r.context?.[0]).toBe(halted(w, '2-nonok'))
   expect(r.context?.[0]).not.toContain('Then it resumes the work by itself')
-  // CR-F30/F35: a [halt] nudge promises no compaction (active once the asset carries the new line).
-  if (assetText('checkpoint-nudge', w.name).includes('It compacts afterwards only if auto-continue is off or at its hourly limit.')) {
-    expect(r.context?.[0]).not.toContain('the plugin compacts the session into a handoff summary')
-    expect(r.context?.[0]).toContain('It compacts afterwards only if auto-continue is off or at its hourly limit.')
-  }
+  // CR-F30/F35: a [halt] nudge promises no compaction (DP-4, DP-13). Not guarded on the asset:
+  // a build whose nudge still makes the promise (before wp/text febc3c1, or a revert) fails here.
+  expect(r.context?.[0]).not.toContain('the plugin compacts the session into a handoff summary')
+  expect(r.context?.[0]).toContain('It compacts afterwards only if auto-continue is off or at its hourly limit.')
   await w.turnEnd($)
   await w.advance(5000)
   expect(w.submits).toEqual(TURN ? [handoffSubmit(w, '2-nonok')] : [])
