@@ -293,8 +293,9 @@ sub _counts {
     return 0 if $l =~ /\A\s*(?:[-*]\s+)?(?:[UDXQ]-\d+|Superseded:)/;
     return 0 if $l =~ /\A\s*(?:[-*]\s+)?(?:Evidence|Disposable|Ref-only|Volatile):/;
     return 0 if $l =~ /\A\s*\|\s*:?-{2,}/;
-    $NONE //= { map { _norm($_) => 1 } @{ (eval { skills::spec::none_strings() } || []) } };
-    return 0 if $NONE->{ _norm($l) };
+    $NONE //= (eval { skills::spec::none_res() } || []);
+    my $n = _norm($l);
+    return 0 if grep { $n =~ $_ } @$NONE;
     return 1;
 }
 

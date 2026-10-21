@@ -2,7 +2,7 @@
  "id": "HT-PB-02",
  "layer": "H",
  "owner": "skills",
- "note": "publish: every ADVISORY rule of TPL §7 is printed and the handoff is still published: size >20 KB, code block >5 lines, log-shaped line, 4 consecutive hash lines, >15 changes, >3 must-read, WARN secret hit as `ADVISORY secret-warn rules=<ids>` (D-13), >=30% non-ledger overlap with previous_handoff",
+ "note": "publish: every ADVISORY rule of TPL §7 is printed and the handoff is still published: size >20 KB, code block >5 lines, log-shaped line, 4 consecutive hash lines, >15 changes, >3 must-read, WARN secret hit as `ADVISORY secret-warn rules=<ids>` (D-13), >=30% non-ledger overlap with previous_handoff; headings and none-forms do not count toward the overlap (RV-30)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -88,6 +88,24 @@
      }
     ]
    }
+  },
+  {
+   "note": "RV-30: a quiet chained draft whose shared lines are only none-forms (regexes in the spec block) and one carried line stays under 30%, so no overlap advisory",
+   "cwd": "$TMP/repo",
+   "now": "2026-10-21T14:06:30+03:00",
+   "argv": ["begin", "--sid", "$SID", "--topic", "retry"],
+   "capture": {"STAGE": "json:stage", "STEM": "json:stem"},
+   "expect": {"exit": 0, "json": {"previous_handoff": "$ROOT/repo/LAB-7/$STEM.md"}}
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix waits for the owner\n## Resume here\nStatus: waiting-owner · State: LAB-7 retry fix waits for the owner (checkpoint: clean)\nStep 1: `bin/test retry --again` — for \"check the review\"\nGate: owner gate · Don't: merge it yourself\nLive: nothing running (checked 14:05)\n## User constraints\nnone stated\n## In flight\nNothing in flight — checked 14:05 via task list\n## Live state\nnone beyond git — checked 14:06\n## Open questions\nnone\n## Next steps\n1. `bin/test retry --again` — done when the owner replies\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "now": "2026-10-21T14:06:40+03:00",
+   "argv": ["publish", "--stage", "$STAGE", "--slug", "retry", "--status", "blocked"],
+   "expect": {"exit": 0, "stdout_lacks": ["^LINT ", "^ADVISORY overlap"], "stdout_has": ["\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM.md\\n\\z"]}
   }
  ]
 }

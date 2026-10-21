@@ -111,8 +111,8 @@
    "^  [0-9a-f]{7,} Test ours$",
    "^foreign: 1 commits this chain did not make: [0-9a-f]{7,} \\(authors: Other Dev\\)$",
    "^handoff worktree: $TMP/repo exists$",
-   "^needs-ask outward line 19$",
-   "^needs-ask outward line 22$"
+   "^needs-ask push line 19$",
+   "^needs-ask http-write line 22$"
   ],
   "stdout_lacks": [
    "Approvals",

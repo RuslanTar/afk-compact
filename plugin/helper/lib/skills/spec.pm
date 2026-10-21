@@ -74,6 +74,18 @@ sub none_strings {
     return \@all;
 }
 
+# The none-forms as patterns. The spec block writes each one as an anchored
+# regex (`^none stated$`); any other entry is matched as a literal line.
+sub none_res {
+    my @out;
+    for my $f (@{ none_strings() }) {
+        next unless defined $f && $f ne '';
+        my $re = $f =~ /\A\^/ ? eval { qr/$f/ } : qr/\A\Q$f\E\z/;
+        push @out, $re if $re;
+    }
+    return \@out;
+}
+
 sub regex {
     my ($key) = @_;
     my $v = load()->{$key};

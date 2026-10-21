@@ -1,19 +1,33 @@
 {
-  "_note": "Dev-runner stand-in for plugin/assets/handoff-spec.json until WP-text's spec-literals block lands. @BRAND@ is filled from plugin.json at run time. Literals copied from the handoff template (TPL §3, §4) and CONSISTENCY §1.",
+  "_note": "Dev-runner stand-in for plugin/assets/handoff-spec.json until WP-text's spec-literals block lands. @BRAND@ is filled from plugin.json at run time. Keys and value shapes follow WP-text's src/assets/handoff-spec.md spec-literals block (wp/text 938adea): none-forms are anchored regexes, outward_classes is a list of {id, re}.",
   "sections_main": ["## Resume here", "## User constraints", "## Decisions and do-not-re-raise", "## In flight",
                     "## Live state", "## Open questions", "## Location", "## Work done and findings", "## Evidence", "## Next steps"],
   "sections_location": ["### GSD", "### Environment", "### Guards in force", "### Ownership"],
   "none_forms_handoff": {
-    "## User constraints": ["none stated"],
-    "## In flight": ["Nothing in flight — checked HH:MM via <channels probed>", "Nothing in flight known (not checked)"],
-    "## Live state": ["none beyond git — checked HH:MM"],
-    "## Open questions": ["none"]
+    "## User constraints": ["^none stated$"],
+    "## In flight": ["^Nothing in flight — checked ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2} via .+$", "^Nothing in flight known \\(not checked\\)$"],
+    "## Live state": ["^none beyond git — checked ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}$"],
+    "## Open questions": ["^none$"]
+  },
+  "none_forms_compaction": {
+    "## User constraints": ["^none stated$"],
+    "## In flight": ["^Nothing in flight as of the last message \\(not checked\\)$"],
+    "## Live state": ["^none beyond git \\(not checked\\)$"],
+    "## Open questions": ["^none$"],
+    "## Own background tasks": ["^none \\(not checked\\)$"]
   },
   "marker_re": "^⟪@BRAND@ v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
   "sentinel_re": "^⟪/@BRAND@ n=([0-9a-f]{8})⟫$",
   "restart_classes": ["auto", "ask", "never"],
-  "outward_classes": {
-    "outward": ["\\bgit\\s+push\\b", "\\bgh\\s+pr\\s+(merge|create|comment)\\b", "\\bcurl\\b.*\\s-X\\s*(POST|PUT|PATCH|DELETE)\\b"],
-    "destructive": ["\\bgit\\s+reset\\s+--hard\\b", "\\bkubectl\\s+(delete|apply)\\b", "\\bdrop\\s+table\\b"]
-  }
+  "outward_classes": [
+    {"id": "push", "re": "\\bgit\\b.*\\bpush\\b"},
+    {"id": "force-push", "re": "\\bgit\\b.*\\bpush\\b.*(--force|--force-with-lease|[ \\t]-[A-Za-z]*f\\b|[ \\t]\\+[^ \\t]+)"},
+    {"id": "mr-write", "re": "\\b(gh[ \\t]+(pr|issue)[ \\t]+(create|merge|close|reopen|comment|edit|review|ready)|glab[ \\t]+(mr|issue)[ \\t]+(create|merge|close|reopen|note|update|approve))\\b"},
+    {"id": "http-write", "re": "\\b(curl\\b.*([ \\t](-X|--request)[ \\t]*(POST|PUT|PATCH|DELETE)\\b|[ \\t](-d|--data[a-z-]*|-F|--form|-T|--upload-file)\\b)|wget\\b.*--(post|method)|gh[ \\t]+api\\b.*([ \\t](-X|--method)[ \\t]*(POST|PUT|PATCH|DELETE)|[ \\t](-f|-F|--field|--raw-field|--input)\\b))"},
+    {"id": "deploy", "re": "\\b(deploy|kubectl[ \\t]+(apply|create|delete|patch|replace|rollout|scale|set|edit)|helm[ \\t]+(install|upgrade|uninstall|rollback)|terraform[ \\t]+(apply|destroy|import)|tofu[ \\t]+(apply|destroy))\\b"},
+    {"id": "publish", "re": "\\b((npm|yarn|pnpm)[ \\t]+publish|gem[ \\t]+push|twine[ \\t]+upload|cargo[ \\t]+publish|docker[ \\t]+push|gh[ \\t]+release[ \\t]+(create|upload|edit))\\b"},
+    {"id": "history-rewrite", "re": "\\bgit\\b.*\\b(rebase|filter-branch|filter-repo|commit[ \\t]+.*--amend|reset[ \\t]+.*--hard|update-ref[ \\t]+-d)\\b"},
+    {"id": "recursive-delete", "re": "\\b(rm[ \\t]+(-[A-Za-z]*[rR][A-Za-z]*|--recursive)\\b|find\\b.*[ \\t]-delete\\b|git[ \\t]+(.*[ \\t])?clean\\b|rsync\\b.*--delete)"},
+    {"id": "mcp-write", "re": "^mcp__.+__([A-Za-z]+_)?([Cc]reate|[Uu]pdate|[Dd]elete|[Rr]emove|[Pp]ost|[Ss]end|[Mm]erge|[Pp]ublish|[Ww]rite|[Aa]dd|[Ee]dit|[Cc]omment|[Tt]ransition|[Aa]pprove|[Cc]lose)"}
+  ]
 }
