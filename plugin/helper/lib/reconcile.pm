@@ -109,9 +109,13 @@ sub run {
         }
     }
 
+    # The transcript scan reads the whole file: not started once the budget is spent
+    # (steps 2 and 3 need its boundaries, so both wait for the next Stop).
+    my $in_time = util::clock_ms() <= $deadline;
+
     # 2. unresolved and precompute dispatches (> 10 min old)
-    my $bounds = defined $a{transcript} ? transcript::boundaries($a{transcript}) : [];
-    for my $d (@disp) {
+    my $bounds = $in_time && defined $a{transcript} ? transcript::boundaries($a{transcript}) : [];
+    for my $d ($in_time ? @disp : ()) {
         last if util::clock_ms() > $deadline;
         next unless $d->{_epoch} && $now - $d->{_epoch} > 600 && $now - $d->{_epoch} < 7 * 86400;
         my $nn = $d->{nonce};
@@ -130,7 +134,7 @@ sub run {
 
     # 3. order canary C6 (only for boundaries after this session's first record)
     my $cutoff = $a{cutoff};
-    if (defined $cutoff) {
+    if (defined $cutoff && $in_time) {
         for my $b (@$bounds) {
             last if util::clock_ms() > $deadline;
             next unless $b->{epoch} >= $cutoff && $now - $b->{epoch} > 15;
