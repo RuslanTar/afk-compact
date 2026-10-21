@@ -1,0 +1,350 @@
+{
+ "id": "AT-RM-03",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-12 §1.5.8 (DP-5 helper form): accepted with no declaration is private (not-declared); project init creates the declaration, README and .gitignore by exclusive create and shows the mode; a second init prints exists x3 and leaves sha and inode unchanged; init writes no consent (a repository not accepted stays not-accepted, the settings file is byte-identical); a pre-existing different .gitignore is kept and logged once as repo_gitignore_drift; an invalid declaration is not replaced; outside git it refuses",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/r2"
+    },
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/r3"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"repo_roots\": \"$TMP/repo;$TMP/r3\"}}}}\n"
+    },
+    {
+     "write": "$TMP/tree.pl",
+     "content": "use strict; use warnings;\nmy ($out, @roots) = @ARGV; my @l;\nmy @st = @roots;\nwhile (@st) {\n    my $p = pop @st;\n    my @s = lstat $p or next;\n    push @l, join(' ', $p, $s[1], $s[2], $s[7], $s[9]);\n    if (-d _) { opendir(my $d, $p) or next; push @st, map { \"$p/$_\" } grep { !/^\\.\\.?$/ && $_ ne '.git' } readdir $d; next }\n    if (-f _) { open(my $f, '<:raw', $p) or next; local $/; my $c = <$f>; push @l, \"$p sum \" . unpack('%32C*', $c) }\n}\nopen(my $o, '>', $out) or die; print $o join(\"\\n\", sort @l), \"\\n\";\n"
+    },
+    {
+     "write": "$TMP/r3/.claude/handoffs/.gitignore",
+     "content": "node_modules/\n"
+    },
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 2, \"mode\": \"repo\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/bad"
+    },
+    {
+     "mkdir": "$TMP/plain"
+    }
+   ]
+  },
+  {
+   "name": "accepted, no declaration: private (not-declared)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "status",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "handoff mode: private (not-declared)\n"
+   }
+  },
+  {
+   "name": "status --json",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "status",
+    "--cwd",
+    "$TMP/repo",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "mode": "private",
+     "reason": "not-declared",
+     "accepted": true,
+     "decl.present": false,
+     "exports": 0,
+     "toplevel": {
+      "re": "/repo$"
+     }
+    }
+   }
+  },
+  {
+   "name": "init creates 3 files",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "created .claude/handoffs.json\ncreated .claude/handoffs/README.md\ncreated .claude/handoffs/.gitignore\nhandoff mode: repo (accepted)\nexports: 0 under .claude/handoffs\nnothing is committed: review and commit .claude/handoffs.json, .claude/handoffs/README.md and .claude/handoffs/.gitignore yourself\n",
+    "files": [
+     {
+      "path": "$TMP/repo/.claude/handoffs.json",
+      "mode": "0600",
+      "has": [
+       "\\A\\{\"version\": 1, \"mode\": \"repo\", \"root\": \"\\.claude/handoffs\"\\}\n\\z"
+      ]
+     },
+     {
+      "path": "$TMP/repo/.claude/handoffs/README.md",
+      "has": [
+       "^Only reviewed|Only reviewed, secret-scanned handoffs belong here"
+      ]
+     },
+     {
+      "path": "$TMP/repo/.claude/handoffs/.gitignore",
+      "has": [
+       "\\A# Written once by the handoff plugin\\.",
+       "^\\.staging/$",
+       "^compact/$",
+       "^evidence/$",
+       "^\\*\\.tmp-\\*$",
+       "^\\*\\.lock$"
+      ]
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\\A\\{\"pluginConfigs\": \\{\"$BRAND@m\": \\{\"options\": \\{\"repo_roots\": \"$TMP/repo;$TMP/r3\"\\}\\}\\}\\}\\n\\z"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/*.classic.jsonl",
+      "ev": "project_init",
+      "fields": {
+       "result": "created"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "tree after the first init",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/t1",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "a second init: exists x3",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "exists .claude/handoffs.json\nexists .claude/handoffs/README.md\nexists .claude/handoffs/.gitignore\nhandoff mode: repo (accepted)\nexports: 0 under .claude/handoffs\nnothing is committed: review and commit .claude/handoffs.json, .claude/handoffs/README.md and .claude/handoffs/.gitignore yourself\n"
+   }
+  },
+  {
+   "name": "tree after the second init",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/t2",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "sha and inode unchanged",
+   "exec": [
+    "/usr/bin/cmp",
+    "$TMP/t1",
+    "$TMP/t2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "DP-5: init in a repository not accepted writes no consent",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/r2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Acreated \\.claude/handoffs\\.json\\n",
+     "^handoff mode: private \\(not-accepted\\)$",
+     "^accept: add $TMP/r2 to repo_roots in /config \\(nothing here writes it\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"repo_roots\": \"$TMP/repo;$TMP/r3\"\\}\\}\\}\\}\\n\\z"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a pre-existing different .gitignore is kept: drift",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/r3"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "created .claude/handoffs.json\ncreated .claude/handoffs/README.md\nexists .claude/handoffs/.gitignore\nhandoff mode: repo (accepted)\nrepo_gitignore_drift: .claude/handoffs/.gitignore lacks generated lines; it is never edited\nexports: 0 under .claude/handoffs\nnothing is committed: review and commit .claude/handoffs.json, .claude/handoffs/README.md and .claude/handoffs/.gitignore yourself\n",
+    "files": [
+     {
+      "path": "$TMP/r3/.claude/handoffs/.gitignore",
+      "has": [
+       "\\Anode_modules/\\n\\z"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/*.classic.jsonl",
+      "ev": "repo_gitignore_drift",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "an invalid declaration is not replaced",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/bad"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: repo-decl-invalid\n",
+    "absent": [
+     "$TMP/bad/.claude/handoffs"
+    ]
+   }
+  },
+  {
+   "name": "not a repository",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/plain"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: not-in-git\n",
+    "absent": [
+     "$TMP/plain/.claude",
+     "$TMP/.claude"
+    ]
+   },
+   "env": {
+    "GIT_CEILING_DIRECTORIES": "$TMP"
+   }
+  },
+  {
+   "name": "no flag chooses the root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "init",
+    "--cwd",
+    "$TMP/repo",
+    "--root",
+    "x"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "DP-5: no enable subcommand",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "enable"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  }
+ ]
+}

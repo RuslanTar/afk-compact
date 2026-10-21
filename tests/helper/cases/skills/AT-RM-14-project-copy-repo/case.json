@@ -1,0 +1,201 @@
+{
+ "id": "AT-RM-14",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-12 §1.5.9, B-10: project copy --from repo --all is a dry run by default; --apply copies 2 exports with no private twin into the private bucket with imported_from: repo:<rel path>; the exports are untouched; a re-run finds the twins (exists); resume still reads the copies as foreign (relation other, from session) and heal-check refuses recipe-not-local",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"repo_roots\": \"$TMP/repo\"}}}}\n"
+    },
+    {
+     "write": "$TMP/tree.pl",
+     "content": "use strict; use warnings;\nmy ($out, @roots) = @ARGV; my @l;\nmy @st = @roots;\nwhile (@st) {\n    my $p = pop @st;\n    my @s = lstat $p or next;\n    push @l, join(' ', $p, $s[1], $s[2], $s[7], $s[9]);\n    if (-d _) { opendir(my $d, $p) or next; push @st, map { \"$p/$_\" } grep { !/^\\.\\.?$/ && $_ ne '.git' } readdir $d; next }\n    if (-f _) { open(my $f, '<:raw', $p) or next; local $/; my $c = <$f>; push @l, \"$p sum \" . unpack('%32C*', $c) }\n}\nopen(my $o, '>', $out) or die; print $o join(\"\\n\", sort @l), \"\\n\";\n"
+    },
+    {
+     "write": "$TMP/repo/.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e0e\ndate: 2026-10-21T15:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\nticket: LAB-9\nbucket: LAB-9\nexport: repo\n---\n⟪$BRAND v1 n=0e0e0e0e s=manual⟫\n# LAB-9 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-9 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-9-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-9-retry · this handoff: .claude/handoffs/LAB-9/x.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0e0e0e0e⟫\n"
+    },
+    {
+     "write": "$TMP/repo/.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T16:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\nticket: LAB-9\nbucket: LAB-9\nexport: repo\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-9 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-9 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-9-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-9-retry · this handoff: .claude/handoffs/LAB-9/x.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "exports before",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/x0",
+    "$TMP/repo/.claude/handoffs"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "dry run",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "repo",
+    "--all"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Awould-import \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md -> $ROOT/repo/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md\\nwould-import \\.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate\\.md -> ",
+     "^TOTAL 2 · would-import 2 \\(dry run; nothing written\\)$"
+    ],
+    "absent": [
+     "$ROOT/repo"
+    ]
+   }
+  },
+  {
+   "name": "apply imports 2",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "repo",
+    "--all",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^imported \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md -> $ROOT/repo/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md$",
+     "^imported \\.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate\\.md -> ",
+     "^TOTAL 2 · imported 2$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-9/*.md",
+      "count": 2
+     },
+     {
+      "path": "$ROOT/repo/LAB-9/2026-10-21_15-00-00_99999999_mate.md",
+      "mode": "0600",
+      "has": [
+       "^export: repo\\nimported_from: repo:\\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md\\n---\\n",
+       "^session_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd$"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/*.classic.jsonl",
+      "ev": "project_copy",
+      "fields": {
+       "from": "repo",
+       "apply": true
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "exports after",
+   "exec": [
+    "/usr/bin/perl",
+    "$TMP/tree.pl",
+    "$TMP/x1",
+    "$TMP/repo/.claude/handoffs"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "exports untouched",
+   "exec": [
+    "/usr/bin/cmp",
+    "$TMP/x0",
+    "$TMP/x1"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "a re-run: the imported copies are the private twins",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "project",
+    "copy",
+    "--from",
+    "repo",
+    "--all",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^exists \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md \\(private twin\\)$",
+     "^TOTAL 2 · exists 2$"
+    ]
+   }
+  },
+  {
+   "name": "resume still treats an imported copy as foreign",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "LAB-9"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pick: $ROOT/repo/LAB-9/2026-10-21_16-00-00_99999999_mate\\.md$",
+     "^relation: other$",
+     "^foreign: from session 99999999$"
+    ]
+   }
+  },
+  {
+   "name": "and heal-check never takes its recipe",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "99999999-aaaa-4bbb-8ccc-dddddddddddd",
+    "--item",
+    "b1"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: recipe-not-local\n"
+   }
+  }
+ ]
+}
