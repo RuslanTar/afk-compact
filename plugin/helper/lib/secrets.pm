@@ -63,7 +63,9 @@ sub redact {
 sub denied_name {
     my ($path) = @_;
     my $b = util::basename($path);
-    return (grep { $b =~ $_ } @{ spec::deny_names() }) ? 1 : 0;
+    my $deny = spec::deny_names();
+    return 0 if grep { $b =~ $_ } @{ spec::deny_except() || [] };
+    return (grep { $b =~ $_ } @$deny) ? 1 : 0;
 }
 
 # Never copied: transcripts, session JSONL, environment dumps.

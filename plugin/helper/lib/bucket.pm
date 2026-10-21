@@ -1,8 +1,10 @@
 package bucket;
 # lib/bucket.pm: bucket choice (MOD-SPEC §7). Owner: WP-core.
 #   session pin <root>/.sessions/<sid>.json -> predecessor's pin via
-#   <root>/.sessions/<sid>.lineage.json (one hop) -> topic (skills' --topic)
-#   -> branch ticket [A-Z][A-Z0-9]+-[0-9]+ -> general. Never asks; never writes a pin.
+#   <root>/.sessions/<sid>.lineage.json (one hop) -> branch ticket
+#   [A-Z][A-Z0-9]+-[0-9]+ -> topic (skills' --topic; the handoff SKILL uses it only
+#   "without a session pin or a ticket in the branch") -> general. Never asks; never
+#   writes a pin.
 # A pin's `bucket` is a path relative to <root> (`<repo>/<topic>`) or an absolute
 # path under <root> (the pin format is WP-skills'; see the WP-core report).
 use strict;
@@ -52,10 +54,10 @@ sub resolve {
         my $prev = ref $l eq 'HASH' ? $l->{previous_session_id} : undef;
         if (defined $prev && $prev ne 'unknown' && defined(my $pb = _pin_bucket($root, $prev))) {
             ($rel, $source) = ($pb, 'pin-lineage');
-        } elsif (defined $topic && slug($topic) ne '') {
-            ($rel, $source) = ("$repo/" . slug($topic), 'topic');
         } elsif (defined $where->{branch} && $where->{branch} =~ /([A-Z][A-Z0-9]+-[0-9]+)/) {
             ($rel, $source) = ("$repo/$1", 'branch');
+        } elsif (defined $topic && slug($topic) ne '') {
+            ($rel, $source) = ("$repo/" . slug($topic), 'topic');
         } else {
             ($rel, $source) = ("$repo/general", 'general');
         }

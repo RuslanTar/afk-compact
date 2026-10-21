@@ -19,6 +19,7 @@ sub run {
     rc::init(sid => $opt->{sid}, writer => 'helper', flags => settings::flags_from($opt));
     require "skills/measure_handoff.pm";
     my @lines = skills::measure_handoff::run($rest->[0], rc::settings());
+    @lines = @{ $lines[0] } if @lines == 1 && ref $lines[0] eq 'ARRAY';    # the seam may return an array ref
     args::out(@lines);
     return 0;
 }

@@ -65,24 +65,38 @@ sub secret_rules {
     return $RULES;
 }
 
-# Deny-listed file names: regexes over the basename. `deny_names` sits beside or
-# inside `secret_rules` (BUILD-PLAN §3.4 "plus deny_names").
-my $DENY;
+# Deny-listed file names, matched against the basename. `deny_names` sits beside or
+# inside `secret_rules` (BUILD-PLAN §3.4 "plus deny_names"): a list of regexes, or the
+# spec-literals form {globs: [...], except_globs: [...]} (`*` and `?` within one name).
+my ($DENY, $DENY_EXCEPT);
+sub _glob_re {
+    my ($g) = @_;
+    my $r = join '', map { $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) } split /([*?])/, $g;
+    return qr/\A$r\z/;
+}
+sub _name_re {
+    my ($d) = @_;
+    return _glob_re($d->{glob}) if ref $d eq 'HASH' && defined $d->{glob};
+    my $s = ref $d eq 'HASH' ? $d->{re} : $d;
+    return undef unless defined $s && !ref $s;
+    return eval { qr/$s/ };
+}
 sub deny_names {
     return $DENY if $DENY;
-    my @src;
+    my (@src, @exc);
     my $sr = has('secret_rules') ? get('secret_rules') : undef;
     push @src, @{ $sr->{deny_names} } if ref $sr eq 'HASH' && ref $sr->{deny_names} eq 'ARRAY';
-    push @src, list('deny_names');
-    my @out;
-    for my $d (@src) {
-        my $s = ref $d eq 'HASH' ? $d->{re} : $d;
-        next unless defined $s;
-        my $re = eval { qr/$s/ } or next;
-        push @out, $re;
+    my $dn = has('deny_names') ? get('deny_names') : undef;
+    if (ref $dn eq 'ARRAY') {
+        push @src, @$dn;
+    } elsif (ref $dn eq 'HASH') {
+        push @src, map { { glob => $_ } } @{ $dn->{globs} || [] };
+        push @exc, map { { glob => $_ } } @{ $dn->{except_globs} || [] };
     }
-    $DENY = \@out;
+    $DENY = [grep { defined } map { _name_re($_) } @src];
+    $DENY_EXCEPT = [grep { defined } map { _name_re($_) } @exc];
     return $DENY;
 }
+sub deny_except { deny_names(); return $DENY_EXCEPT }
 
 1;

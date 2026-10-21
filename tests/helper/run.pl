@@ -14,7 +14,20 @@
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY.
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), plus every
+#   variable a step captured.
+# Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
+#   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
+#                            not the system temp folder (the publish lint treats paths
+#                            under /tmp, /private/tmp and /var/folders as ephemeral)
+#   step "cwd"               the helper's working directory (default: the case's $TMP)
+#   step "capture"           {VAR: "json:<dotted path>" | "re:<regex, one group>"} from stdout
+#   a step without argv, lib or setup that holds a setup action runs as a setup step
+#   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
+#     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
+#     run (+ capture, exit)
+#   expect: stdout_has / stdout_lacks (regexes, /m); json_keys; json {dotted path: value |
+#     {re} | {null} | {len} | {present}}; files has / lacks (regexes, /m)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -65,6 +78,19 @@ my $RUN_TMP = do {
 };
 my %STAGE_INFO;
 my $STAGE = stage_plugin("$RUN_TMP/stage/plugin");
+my $REPO_TMP;
+sub repo_tmp {
+    return $REPO_TMP if $REPO_TMP;
+    $REPO_TMP = "$REPO/tmp/store-h-" . $$ . '-' . util::rand_hex(6);
+    util::mkdir_p($REPO_TMP);
+    return $REPO_TMP;
+}
+my $LSTART1 = do {
+    my $r = util::run(['ps', '-o', 'lstart=', '-p', '1'], timeout_ms => 5000);
+    (my $v = $r->{out} // '') =~ s/\s+/ /g;
+    $v =~ s/\A | \z//g;
+    $v;
+};
 
 sub copy_tree {
     my ($src, $dst) = @_;
@@ -157,7 +183,7 @@ exit($FAILED ? 1 : 0);
 # ---------------------------------------------------------------- one case
 sub run_case {
     my ($case, $cdir) = @_;
-    my $tmp = "$RUN_TMP/c$N";
+    my $tmp = (($case->{tmp_base} // '') eq 'repo' ? repo_tmp() : $RUN_TMP) . "/c$N";
     util::mkdir_p("$tmp/home");
     util::mkdir_p("$tmp/tmpdir");
     my %V;
@@ -171,6 +197,7 @@ sub run_case {
     $V{BRAND} = $BRAND;
     $V{HOST} = $HOSTNAME;
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
+    $V{LSTART1} = $LSTART1;
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
@@ -196,9 +223,15 @@ sub run_case {
             push @errs, map { "$label: $_" } @le;
             next;
         }
+        if (!$st->{argv} && !$st->{setup} && is_setup_action($st)) {
+            my $e = eval { setup($st, \%V, $case, $st, $cdir); 1 };
+            if (!$e) { push @errs, "$label setup: $@"; return @errs }
+            next;
+        }
         next unless $st->{argv};
         my $res = invoke($st, $case, \%V, $cdir, $i);
         push @errs, map { "$label: $_" } check($st->{expect} || {}, $res, \%V, $st);
+        capture($st->{capture}, $res->[0]{out}, \%V) if $st->{capture} && @$res;
         if ($VERBOSE) {
             for my $r (@$res) { print "#   [$label] exit $r->{exit}\n"; print map { "#   | $_\n" } split /\n/, substr($r->{out}, 0, 4000) }
         }
@@ -211,6 +244,8 @@ sub subst {
     return $s unless defined $s && !ref $s;
     $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
+    # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
+    $s =~ s/\$([A-Z][A-Z0-9_]*)/exists $V->{$1} && defined $V->{$1} ? $V->{$1} : "\$$1"/ge;
     return $s;
 }
 
@@ -247,14 +282,81 @@ sub write_text {
     chmod(oct($mode), $path) if defined $mode;
 }
 
+sub git_env {
+    my ($V) = @_;
+    return { HOME => $V->{HOME}, GIT_CONFIG_NOSYSTEM => '1', GIT_AUTHOR_NAME => 'Test', GIT_AUTHOR_EMAIL => 'test@example.invalid',
+             GIT_COMMITTER_NAME => 'Test', GIT_COMMITTER_EMAIL => 'test@example.invalid' };
+}
+
 sub git_run {
     my ($dir, $V, @a) = @_;
     my $git = util::which('git') // '/usr/bin/git';
-    my $r = util::run([$git, '-C', $dir, @a], timeout_ms => 20000,
-                      env => { HOME => $V->{HOME}, GIT_CONFIG_NOSYSTEM => '1', GIT_AUTHOR_NAME => 'Test', GIT_AUTHOR_EMAIL => 'test@example.invalid',
-                               GIT_COMMITTER_NAME => 'Test', GIT_COMMITTER_EMAIL => 'test@example.invalid' });
+    my $r = util::run([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
     die "git @a failed in $dir\n" unless $r->{exit} == 0;
     return $r->{out};
+}
+
+# Inline repo recipe (WP-skills cases): {base, branch, commits: [{files, msg}], ignored, dirty, untracked} at <dir>
+sub make_repo {
+    my ($rc, $at, $V) = @_;
+    die "repo recipe needs at\n" unless defined $at && $at ne '';
+    util::mkdir_p($at);
+    git_run($at, $V, 'init', '-q', '-b', $rc->{base} // 'main');
+    for my $cm (@{ $rc->{commits} || [{ files => { 'README.md' => "seed\n" }, msg => 'seed' }] }) {
+        write_text("$at/$_", $cm->{files}{$_}) for sort keys %{ $cm->{files} || {} };
+        git_run($at, $V, 'add', '-A');
+        git_run($at, $V, 'commit', '-q', '--allow-empty', '-m', $cm->{msg} // 'commit');
+    }
+    git_run($at, $V, 'checkout', '-q', '-b', $rc->{branch}) if $rc->{branch} && $rc->{branch} ne ($rc->{base} // 'main');
+    if (@{ $rc->{ignored} || [] }) {
+        write_text("$at/.gitignore", join("\n", @{ $rc->{ignored} }) . "\n");
+        git_run($at, $V, 'add', '.gitignore');
+        git_run($at, $V, 'commit', '-q', '-m', 'ignore');
+    }
+    write_text("$at/$_", $rc->{dirty}{$_}) for sort keys %{ $rc->{dirty} || {} };
+    write_text("$at/$_", $rc->{untracked}{$_}) for sort keys %{ $rc->{untracked} || {} };
+}
+
+sub is_setup_action {
+    my ($s) = @_;
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir stub repo dispatch transcript run git bigfile age);
+}
+
+# Dotted path into decoded JSON: (found, value)
+sub jpath {
+    my ($d, $path) = @_;
+    for my $k (split /\./, $path) {
+        if (ref $d eq 'ARRAY' && $k =~ /\A\d+\z/) { return (0, undef) if $k > $#$d; $d = $d->[$k] }
+        elsif (ref $d eq 'HASH') { return (0, undef) unless exists $d->{$k}; $d = $d->{$k} }
+        else { return (0, undef) }
+    }
+    return (1, $d);
+}
+
+# capture {VAR: "json:<path>" | "re:<regex with one group>"} from a helper's stdout
+sub capture {
+    my ($cap, $out, $V) = @_;
+    my $o = $out // '';
+    utf8::decode($o);
+    for my $k (keys %$cap) {
+        my $how = $cap->{$k};
+        if ($how =~ /\Ajson:(.*)\z/s) {
+            my $d = eval { jsonc::decode($out) };
+            my (undef, $v) = jpath($d, $1);
+            $V->{$k} = $v if defined $v && !ref $v;
+        } elsif ($how =~ /\Are:(.*)\z/s) {
+            my $re = $1;
+            $V->{$k} = $1 if $o =~ /$re/m;
+        }
+    }
+}
+
+# JSON booleans compare as 1/0, so a case may write true or 1.
+sub scalar_text {
+    my ($v) = @_;
+    return 'null' unless defined $v;
+    return $v ? '1' : '0' if jsonc::is_bool($v);
+    return ref $v ? jsonc::encode($v) : "$v";
 }
 
 sub setup {
@@ -266,6 +368,8 @@ sub setup {
         my $text;
         if (exists $s->{json}) { $text = jsonc::encode($s->{json}) . "\n" }
         elsif (exists $s->{parts}) { $text = join('', @{ $s->{parts} }) }
+        elsif (exists $s->{content_parts}) { $text = join('', @{ $s->{content_parts} }); $s->{mode} //= '0600' }
+        elsif (exists $s->{content}) { $text = $s->{content}; $s->{mode} //= '0600' }
         elsif (exists $s->{bytes}) { $text = ('x' x 63 . "\n") x int($s->{bytes} / 64); $text .= 'x' x ($s->{bytes} - length $text) }
         elsif (exists $s->{lines}) { $text = join('', map { "line $_ of the output\n" } 1 .. $s->{lines}) }
         else { $text = $s->{text} // '' }
@@ -279,6 +383,29 @@ sub setup {
     if (exists $s->{stub}) {
         my $dir = $s->{dir} // "$V->{TMP}/bin";
         write_text("$dir/$s->{stub}", "#!/bin/sh\n" . ($s->{script} // 'exit 0') . "\n", '0755');
+        return;
+    }
+    if (exists $s->{repo} && ref $s->{repo} eq 'HASH') { make_repo($s->{repo}, $s->{at}, $V); return }
+    if (exists $s->{git}) {
+        my $dir = $s->{cwd} // $V->{TMP};
+        my $r = util::run([util::which('git') // '/usr/bin/git', @{ $s->{git} }], timeout_ms => 20000, cwd => $dir,
+                          env => { %{ git_env($V) }, %{ $s->{env} || {} } });
+        die "git @{ $s->{git} }: exit $r->{exit}\n" unless $r->{exit} == 0;
+        if ($s->{var}) { (my $o = $r->{out}) =~ s/\s+\z//; $V->{ $s->{var} } = $o }
+        return;
+    }
+    if (exists $s->{bigfile}) {
+        util::mkdir_p(util::dirname($s->{bigfile}));
+        open(my $fh, '>:raw', $s->{bigfile}) or die "bigfile $s->{bigfile}: $!\n";
+        my $left = $s->{bytes} // 0;
+        my $chunk = ($s->{fill} // 'b') x 65536;
+        while ($left > 0) { my $n = $left < 65536 ? $left : 65536; print $fh substr($chunk, 0, $n); $left -= $n }
+        close $fh;
+        return;
+    }
+    if (exists $s->{age}) {
+        my $t = time - 60 * ($s->{minutes} // 0);
+        utime($t, $t, $s->{age}) or die "age $s->{age}: $!\n";
         return;
     }
     if (exists $s->{repo}) {
@@ -340,7 +467,9 @@ sub setup {
         return;
     }
     if (exists $s->{run}) {
-        invoke({ %$s, argv => $s->{run} }, $case, $V, $cdir, 'setup');
+        my $res = invoke({ %$s, argv => $s->{run} }, $case, $V, $cdir, 'setup');
+        die "run @{ $s->{run} }: exit $res->[0]{exit}, want $s->{exit}\n" if defined $s->{exit} && $res->[0]{exit} != $s->{exit};
+        capture($s->{capture}, $res->[0]{out}, $V) if $s->{capture};
         return;
     }
     die "unknown setup action: " . join(',', keys %$s) . "\n";
@@ -384,11 +513,12 @@ sub stdin_of {
 
 # Start one helper process; returns {pid, out_r}
 sub spawn {
-    my ($argv, $env, $stdin, $outf, $errf) = @_;
+    my ($argv, $env, $stdin, $outf, $errf, $cwd) = @_;
     my $pid = fork();
     die "fork: $!\n" unless defined $pid;
     if ($pid == 0) {
         %ENV = %$env;
+        if (defined $cwd) { chdir($cwd) or POSIX::_exit(125) }
         open(STDOUT, '>', $outf) or POSIX::_exit(126);
         open(STDERR, '>', $errf) or POSIX::_exit(126);
         my $inf = "$outf.in";
@@ -419,9 +549,10 @@ sub invoke {
         }
         push @prepared, [$av, $sin, "$V->{TMP}/out-$i-$k", "$V->{TMP}/err-$i-$k"];
     }
+    my $cwd = defined $st->{cwd} ? subst($st->{cwd}, $V) : $V->{TMP};
     for my $pp (@prepared) {
         my $t0 = util::clock_ms();
-        push @procs, { pid => spawn($pp->[0], $env, $pp->[1], $pp->[2], $pp->[3]), outf => $pp->[2], errf => $pp->[3], t0 => $t0 };
+        push @procs, { pid => spawn($pp->[0], $env, $pp->[1], $pp->[2], $pp->[3], $cwd), outf => $pp->[2], errf => $pp->[3], t0 => $t0 };
     }
     if (defined $st->{kill_after_ms}) {
         util::sleep_ms($st->{kill_after_ms});
@@ -732,6 +863,30 @@ sub check {
         push @e, "stdout does not match /$x->{stdout_re}/: " . jsonc::encode(substr($outc, 0, 300)) if defined $x->{stdout_re} && $outc !~ /$x->{stdout_re}/m;
         for my $c (@{ $x->{stdout_contains} || [] }) { push @e, "stdout lacks " . jsonc::encode($c) if index($outc, $c) < 0 }
         for my $c (@{ $x->{stdout_absent} || [] }) { push @e, "stdout has " . jsonc::encode($c) if index($outc, $c) >= 0 }
+        for my $re (@{ $x->{stdout_has} || [] }) { push @e, "stdout lacks /$re/: " . jsonc::encode(substr($outc, 0, 1500)) unless $outc =~ /$re/m }
+        for my $re (@{ $x->{stdout_lacks} || [] }) { push @e, "stdout has /$re/" if $outc =~ /$re/m }
+        if ($x->{json_keys} || $x->{json}) {
+            my $d = eval { jsonc::decode($out) };
+            if (ref $d ne 'HASH') { push @e, "stdout is not a JSON object: " . jsonc::encode(substr($outc, 0, 300)) }
+            else {
+                if ($x->{json_keys}) {
+                    my ($got, $want) = (join(',', sort keys %$d), join(',', sort @{ $x->{json_keys} }));
+                    push @e, "json keys [$got], want [$want]" if $got ne $want;
+                }
+                for my $p (sort keys %{ $x->{json} || {} }) {
+                    my ($ok, $v) = jpath($d, $p);
+                    my $w = $x->{json}{$p};
+                    if (ref $w eq 'HASH') {
+                        push @e, "json $p !~ /$w->{re}/: " . scalar_text($v) if exists $w->{re} && !($ok && defined $v && !ref $v && $v =~ /$w->{re}/);
+                        push @e, "json $p not null" if exists $w->{null} && $ok && defined $v;
+                        push @e, "json $p length, want $w->{len}" if exists $w->{len} && !(ref $v eq 'ARRAY' && @$v == $w->{len});
+                        push @e, "json $p missing" if exists $w->{present} && !$ok;
+                    } elsif (scalar_text($v) ne scalar_text($w)) {
+                        push @e, "json $p = " . scalar_text($v) . ", want " . scalar_text($w);
+                    }
+                }
+            }
+        }
         push @e, "stdout is " . length($out) . " bytes > $x->{stdout_max_bytes}" if defined $x->{stdout_max_bytes} && length($out) > $x->{stdout_max_bytes};
         push @e, golden_diff($x->{stdout_golden}, $outc) if $x->{stdout_golden};
         push @e, "stderr not empty: " . substr($r->{err}, 0, 200) if $x->{stderr_empty} && length $r->{err};
@@ -775,6 +930,8 @@ sub check {
             my $txt = $raw; utf8::decode($txt);
             for my $c (@{ $f->{contains} || [] }) { push @e, "$p lacks " . jsonc::encode($c) if index($txt, $c) < 0 }
             for my $c (@{ $f->{absent_text} || [] }) { push @e, "$p has " . jsonc::encode($c) if index($txt, $c) >= 0 }
+            for my $re (@{ $f->{has} || [] }) { push @e, "$p lacks /$re/" unless $txt =~ /$re/m }
+            for my $re (@{ $f->{lacks} || [] }) { push @e, "$p has /$re/" if $txt =~ /$re/m }
             if (defined $f->{lines}) { my $n = () = $raw =~ /\n/g; push @e, "$p: $n lines, want $f->{lines}" if $n != $f->{lines} }
             if (defined $f->{max_lines}) { my $n = () = $raw =~ /\n/g; push @e, "$p: $n lines > $f->{max_lines}" if $n > $f->{max_lines} }
             if ($f->{json_lines}) { my $k = 0; for my $l (split /\n/, $raw) { $k++; push @e, "$p line $k is not JSON" unless eval { jsonc::decode($l); 1 } } }
