@@ -1,0 +1,169 @@
+{
+ "id": "HT-JV-02 (AT-J-04 rows 1, 2a, 2b)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-1 D4 in the origin session itself: a job on this process's task list is RUNNING (leave); one off the list with no exit marker while this process and session own it is ENDED-UNEXPLAINED (ask, never automatic); seen from another process of the same session it is RUNNING-ELSEWHERE (report); a job whose old process is gone (a --resume in a new process) is LOST and relaunches",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/repo/app"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2001-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:50:00+03:00\"}"
+    },
+    {
+     "write": "$WATCH/$SID/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"r2a\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"command_sha256\": \"849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/r2a.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"r2b\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9f75fc6b9e15290ea1fc2fa75f7605acb43190976edb272494f226acbcb649f7\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/r2b.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"r5\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"command_sha256\": \"54703843d2e117a445593b679d2fbe56354b35955c85ca8c8e2915b972995223\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/r5.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la app; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: r2a.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"r2a\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: r2b.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"r2b\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: r5.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"r5\"}}\n"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-0.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 7, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r2a\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"r5\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/out/r2a.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r2a.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/r2b.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r2b.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/r5.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r5.output",
+     "minutes": 60
+    }
+   ]
+  },
+  {
+   "name": "AT-J-04 row 2a: on this process's task list: leave it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "r2a"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: RUNNING ",
+     "^REFUSED: running$"
+    ],
+    "stdout_lacks": [
+     "^ask-command:"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 2b: this process, off the list, no exit marker: ask, never automatic",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "r2b"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V2 owner-ended fail \\(owner is this process and session\\)$",
+     "^verdict: ENDED-UNEXPLAINED ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: ls -la lib; echo"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  },
+  {
+   "name": "AT-J-04 row 1: the owner session is live as another process",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "r2a"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V2 owner-ended fail \\(owner session live in another process\\)$",
+     "^verdict: RUNNING-ELSEWHERE ",
+     "^REFUSED: running-elsewhere$"
+    ],
+    "stdout_lacks": [
+     "^ask-command:"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "4194000:Thu Jan  1 00:00:00 2004"
+   }
+  },
+  {
+   "name": "same session in a new process (--resume): the old process is gone: relaunch",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "r5"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^signal: V2 owner-ended pass \\(owner ended \\(time unknown\\)\\)$",
+     "^verdict: LOST · confidence high · effects none$",
+     "\\nok job:r5\\nrun: ls -la doc; echo \"__exit \\$\\?\"\\n\\z"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  }
+ ]
+}

@@ -270,6 +270,9 @@ sub bucket_resolve {
 
 # ---------------------------------------------------------------- 2026-10-21 seams
 
+# The effective watch dir (log_dir, or its safe default), or undef when neither is safe.
+sub watch_dir { my $w = eval { rc::watch() }; return $w }
+
 # <watch>/<sid> of the bound session (the effective watch dir: log_dir, or its safe default).
 sub sid_dir { my $d = eval { rc::sid_dir() }; return $d }
 
@@ -298,18 +301,19 @@ sub ht_mark_published { my ($d, $ht, $path) = @_; return handoff_turn::mark_publ
 sub ht_record         { my ($d, $ht) = @_; return defined $d ? handoff_turn::record($d, $ht) : undef }
 sub ht_valid          { return handoff_turn::valid_ht($_[0]) }
 
-# (slot object, slot path) of the highest seq in <sid_dir>/bg (sidecar::newest, DP-13), or ().
+# (slot object, slot path) of the highest seq in <sid_dir>/bg, or (): the rule of
+# sidecar::newest (DP-13: by seq, never by mtime; the first of equal seqs in name order).
 sub sidecar_newest {
     my ($sid_dir) = @_;
     return () unless defined $sid_dir && -d "$sid_dir/bg";
-    my $slot = eval { sidecar::newest($sid_dir) } or return ();
-    my $path;
+    my ($best, $path);
     for my $f (skills::util::list_dir("$sid_dir/bg")) {
         next unless $f =~ /\Aslot-\d+\.json\z/;
         my $d = eval { skills::util::json_decode(skills::util::read_file("$sid_dir/bg/$f", 262144)) };
-        if (ref $d eq 'HASH' && defined $d->{seq} && defined $slot->{seq} && $d->{seq} == $slot->{seq}) { $path = "$sid_dir/bg/$f"; last }
+        next unless ref $d eq 'HASH';
+        ($best, $path) = ($d, "$sid_dir/bg/$f") if !$best || ($d->{seq} // 0) > ($best->{seq} // 0);
     }
-    return ($slot, $path);
+    return $best ? ($best, $path) : ();
 }
 
 # Dev-1 job records of a session dir.

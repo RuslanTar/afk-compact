@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "inventory <handoff>: last sidecar slot and its task outputs (size, mtime); In-flight rows with class; probe paths; recorded pids matched by start time (live / start-differs); leftover pid and port; recipes with script state; heal counters; no task tools (OD-19)",
+ "note": "inventory <handoff>: last sidecar slot and its task outputs (size, mtime); In-flight rows with class; probe paths; recorded pids matched by start time (live / start-differs); leftover pid and port; recipes with script state; heal counters; no task tools (OD-19); the sidecar slot is the one of the highest seq, here the older file by mtime (DP-13)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -31,15 +31,11 @@
   },
   {
    "write": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-2.json",
-   "content": "{\"ts\": \"2026-10-21T13:00:00+03:00\", \"tasks\": []}"
-  },
-  {
-   "age": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-2.json",
-   "minutes": 60
+   "content": "{\"seq\": 1, \"ts\": \"2026-10-21T13:00:00+03:00\", \"tasks\": []}"
   },
   {
    "write": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-3.json",
-   "content": "{\"ts\": \"2026-10-21T13:59:00+03:00\", \"tasks\": [{\"id\": \"b8890\", \"kind\": \"shell\", \"status\": \"running\", \"output\": \"$TMP/run/b8890.output\"}]}"
+   "content": "{\"seq\": 2, \"ts\": \"2026-10-21T13:59:00+03:00\", \"tasks\": [{\"id\": \"b8890\", \"kind\": \"shell\", \"status\": \"running\", \"output\": \"$TMP/run/b8890.output\"}]}"
   },
   {
    "write": "$ROOT/.sessions/by-pid/1-1792580000.live-22222222.json",
@@ -56,6 +52,10 @@
   {
    "write": "$WATCH/heal/22222222-2222-4222-8222-222222222222/b8890.count",
    "content": "{\"chain\": 1, \"by_resume\": {\"x\": 1}}"
+  },
+  {
+   "age": "$WATCH/22222222-2222-4222-8222-222222222222/bg/slot-3.json",
+   "minutes": 60
   }
  ],
  "cwd": "$TMP/repo",

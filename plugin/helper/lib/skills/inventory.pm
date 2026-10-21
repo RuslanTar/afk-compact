@@ -3,6 +3,12 @@ package skills::inventory;
 # no task tools). Prints the last Stop sidecar of the handoff's session,
 # task outputs (size, mtime), In-flight rows with their probe paths, recorded
 # pids with a start-time match, listening ports, recipes and heal counters.
+# 2026-10-21 rulings: the sidecar slot is the one of the highest seq, never the newest
+# mtime (DP-13); each job the plugin recorded for the session prints one `job:` line with
+# its re-verification signals (Dev-1 D3, skills/jobs.pm; read-only); a document that is
+# not local (a repository export or an imported copy, D-12) is never probed: no pid,
+# port, path or start-time matching, since a foreign pid could match an unrelated
+# local process.
 use strict;
 use warnings;
 use Socket ();
@@ -12,6 +18,9 @@ use skills::ctx;
 use skills::store;
 use skills::begin;
 use skills::heal;
+use skills::jobs;
+use skills::core;
+use Cwd ();
 
 sub run {
     my ($argv) = @_;
@@ -23,15 +32,19 @@ sub run {
     my $ctx = skills::ctx::new({});
     my $hs = $d->{fm}{session_id} // '';
     $hs = '' unless skills::ctx::valid_sid($hs);
+    if (skills::store::is_export($d) || skills::store::imported($d) || !_under_root($ctx, $path)) {
+        skills::cli::say('not local: ' . (skills::store::imported($d) ? 'an imported copy of a repository export' : 'a repository export or a file outside the handoff store'));
+        skills::cli::say('in-flight: other machine: not probed');
+        skills::cli::say('evidence: not on this machine');
+        return 0;
+    }
 
-    # Sidecar ring of the handoff's session.
-    my $bg = "$ctx->{watch}/$hs/bg";
-    my @slots = $hs ne '' ? grep { /\Aslot-\d+\.json\z/ } skills::util::list_dir($bg) : ();
-    if (@slots) {
-        my ($newest) = sort { (stat "$bg/$b")[9] <=> (stat "$bg/$a")[9] || $b cmp $a } @slots;
-        my $sc = eval { skills::util::json_decode(skills::util::read_file("$bg/$newest", 262144)) } || {};
+    # Sidecar ring of the handoff's session: the slot of the highest seq (DP-13).
+    my $watch = skills::core::watch_dir() // $ctx->{watch};
+    my ($sc, $slot_path) = $hs ne '' ? skills::core::sidecar_newest("$watch/$hs") : ();
+    if ($sc && $slot_path) {
         my $tasks = skills::begin::sidecar_tasks($sc);
-        skills::cli::say(sprintf('sidecar: %s ts=%s tasks=%d', "$bg/$newest", $sc->{ts} // '?', scalar @$tasks));
+        skills::cli::say(sprintf('sidecar: %s ts=%s tasks=%d', $slot_path, $sc->{ts} // '?', scalar @$tasks));
         for my $t (@$tasks) {
             my $line = join ' · ', 'task: ' . ($t->{id} // '?'), $t->{kind} // '?', $t->{status} // '?';
             $line .= ' · ' . _file($t->{output}) if defined $t->{output};
@@ -81,8 +94,25 @@ sub run {
         skills::cli::say("claude_pid: $d->{fm}{claude_pid} (" . (kill(0, $d->{fm}{claude_pid}) || $!{EPERM} ? 'running; match by record above' : 'not running') . ')');
     }
 
-    # Recipes and counters.
+    # Recipes, recorded jobs and counters.
     my $edir = skills::store::bucket_of($path) . '/evidence/' . skills::store::stem_of($path);
+    if ($hs ne '') {
+        my %recipe = map { ((defined $_->{rid} ? $_->{rid} : $_->{bn}) => $_) } @{ skills::heal::recipes_in($edir) };
+        my %seen;
+        my $id = skills::ctx::resolve_sid($ctx, undef);
+        my $rl = skills::core::relaunch();
+        for my $r (reverse @{ skills::core::job_rows("$watch/$hs") }) {
+            next unless ($r->{ev} // '') eq 'job' && defined $r->{task_id} && !$seen{ $r->{task_id} }++;
+            my $v = skills::jobs::verify($ctx, origin => $hs, task => $r->{task_id}, recipe => $recipe{ $r->{task_id} },
+                                         relaunch => $rl, cwd => Cwd::getcwd(),
+                                         current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} });
+            my $st = skills::jobs::states($v);
+            skills::cli::say(join ' · ', "job: $r->{task_id}", 'recorded', 'read-only ' . ($r->{is_read_only} ? 'yes' : 'no'),
+                'effects ' . $v->{effects}, 'output ' . ($r->{output_path} // 'none'),
+                'verdict ' . $v->{status} . ' ' . $v->{confidence},
+                'signals ' . join(' ', map { "$_=$st->{$_}" } @skills::jobs::SIGNALS));
+        }
+    }
     for my $r (@{ skills::heal::recipes_in($edir) }) {
         skills::cli::say(join ' · ', "recipe: $r->{bn}", 'runtime id ' . ($r->{rid} // '?'), 'class ' . ($r->{class} // 'ask'),
             $r->{path}, 'script sha ' . skills::heal::script_state($r, $edir));
@@ -96,6 +126,14 @@ sub run {
         }
     }
     return 0;
+}
+
+# 1 when the path lies under the private handoff root (the store this machine owns).
+sub _under_root {
+    my ($ctx, $p) = @_;
+    my $root = skills::util::abs_path($ctx->{root}) // $ctx->{root};
+    my $real = skills::util::abs_path($p) // $p;
+    return index($real, "$root/") == 0 ? 1 : 0;
 }
 
 sub _file {
