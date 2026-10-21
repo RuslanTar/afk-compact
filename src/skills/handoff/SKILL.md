@@ -27,16 +27,17 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 | G | Session-bound work is running (shells, monitors, scheduled tasks, workflows, agents) | Do not wait. Gate line `stay in this session: <ids> die on /clear or exit`, and the report's insurance line. |
 | H | Call budget spent | Stop probing; tag what is not re-checked `[unverified]`; continue at Step 3. |
 
-Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edit STATE.md; delete or move files; give the helper transcripts, session logs, shell history, environment dumps or credentials; read the transcript; act outward (push, merge, deploy, post, comment) or commit just to clean the tree; <!-- review-fix: "mutate" contradicted Step 0.2 finishing an atomic step --> restart, wake or stop background work (healing is the resume's job); spawn verification agents; sleep or poll; route around a permission or guard denial (record it under Guards in force; retry a classifier outage once).
+Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edit STATE.md; delete or move files; give the helper transcripts, session logs, shell history, environment dumps or credentials; read the transcript; act outward (push, merge, deploy, post, comment), commit just to clean the tree, or `git add` a repository export; <!-- review-fix: "mutate" contradicted Step 0.2 finishing an atomic step --> restart, wake or stop background work (healing is the resume's job); spawn verification agents; sleep or poll; route around a permission or guard denial (record it under Guards in force; retry a classifier outage once).
 
 **Budget.** Step 1 ≤4 calls · Step 2 ≤11 · Step 4 ≤2 · Step 6 1 · Step 7 ≤7 (publish; up to 2 LINT rounds, each one Write and one publish; one ADVISORY round, one Edit and one publish). Typical 10–14, hard cap 25; recipe Writes (Step 5, ≤8) on top.
+
+**Plugin handoff turn.** When `begin` prints `handoff_turn`, the plugin asked for this handoff because it will not resume the work by itself. Its call limit is on top of yours. When it says the budget is spent, go to Step 6 with what you have (H, skipping Steps 3–5), or stop if nothing is drafted. Its other stop conditions are yours. Never write a second handoff in that turn, even after a compaction: `"resumed": true` means the stage is the one already begun, so continue its draft; `REFUSED: handoff-exists <path>` means it is published at `<path>`, so report that path as the receipt (not B).
 
 ## Step 0 — Gate
 
 1. Condition A? Stop.
 2. Clean boundary: no merge, rebase or cherry-pick in progress, no half-applied edit set, no unrecorded test result. Finish an open atomic step first if it takes ≤3 calls and needs no conflict choice; never abort, skip or reset it to get clean. Otherwise the checkpoint is `MID-STEP <step>, remaining <what>`, recorded in Live state, and the file stands alone without it. <!-- review-fix -->
 3. A dirty tree is fine when every uncommitted file is listed in Live state with its intent (over 10: template §4.5). <!-- review-fix -->
-4. If this turn will end with a question or a final report, or the user said they are leaving, write the handoff now, before your final message. Why: the context is warm now; a later write loses detail.
 
 ## Step 1 — Measure (one batch)
 
@@ -46,7 +47,7 @@ Run together:
 
 `<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. A topic from the arguments also takes `--topic-explicit`: the helper then re-pins the bucket to it unless another live session holds that bucket (`ownership.repin`). Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note. <!-- review-fix -->
 
-`begin` prints ≤3 KB of JSON: identity, git state, `stage`, `stem`, `checked_at`, `previous_handoff`, `own_latest`, `newer_foreign`, `ownership`, `gsd`, `queued_line`, `inflight_measured`, `tmp_candidates` (ephemeral paths cited this session) and the settings used.
+`begin` prints ≤3 KB of JSON: identity, git state, `stage`, `stem`, `checked_at`, `previous_handoff`, `previous_kind`, `own_previous_handoff`, `carry_notice`, `next_ids`, `own_latest`, `newer_foreign`, `ownership`, `gsd`, `queued_line`, `inflight_measured`, `tmp_candidates` (ephemeral paths cited this session), `mode` and `export_target` (handoff mode), `handoff_turn` in a plugin handoff turn, and the settings used.
 - `REFUSED` → B. A merge or rebase in progress that Step 0.2 did not already record as `MID-STEP` → apply Step 0.2 once, then continue; never loop back. <!-- review-fix: was an endless 0.2 ↔ 1 loop -->
 - `own_latest.unchanged` and nothing else happened since its `date` (no edit, decision, answer, new request or background change; this handoff request itself does not count): reply with its path and the resume line; stop. Reuse never patches it. <!-- review-fix -->
 - Self-invoked (the user did not ask for this handoff), `own_latest.age_min` under `reuse_window_min` (15), `own_latest.unchanged`, and no new decision or background change since: the same reply; stop.
@@ -57,14 +58,14 @@ Run together:
 Run together:
 - `{{plugin}}-store stamp --stage <stage>`: its time is the as-of for this batch.
 - Read the template (once per invocation).
-- Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry.
+- Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry. If `previous_kind` is `foreign`, also read `own_previous_handoff` up to its `## In flight` line, carry its ledger lines the base lacks, and follow template rule 8 for the foreign lines. One extra read.
 - Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
 - `ps -o pid=,lstart=,comm= -p <pid>,<pid>` for pids recorded this session.
 - One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on.
 
 Build In flight as the union by runtime id of the listings, `inflight_measured` and the probes, never from memory; assign each row its restart class (template §4.4). Record stalled-looking items as found. Work you started this session that no channel lists still gets a row, watched `not listed [unverified]`; never drop it (listings miss live tasks). <!-- review-fix -->
 - A listing fails or none exists → the `not checked` none-form.
-- A claim not re-checked → `last seen HH:MM [unverified]`, time from tool output you already have.
+- A claim not re-checked → `last seen <stamp> [unverified]`, time from tool output you already have.
 - A second probe batch (a corrected call) carries its own `stamp`; never reuse an earlier batch's time. <!-- review-fix -->
 - A re-check breaks Step 1 → record the drift in Live state, change Step 1 or set `blocked`, report it. Do not ask.
 
@@ -78,17 +79,17 @@ For each path you will cite and each `tmp_candidates` item: `--keep` (a later re
 
 `{{plugin}}-store evidence --stage <stage> --keep <path> <path> --dispose <path> --clone <dir>` (omit empty flags)
 
-It prints `<status> <durable path | -> <bytes> <sha8> <origin>` per path (`copied`, `dup`, `ref-only`, `redacted`, `withheld`, `missing`), then the Evidence lines (`Evidence:`, `Disposable:`, `Ref-only:`, `Volatile:`) and any `WARN quota`. `withheld` → D. `missing` that a resume needs → one corrected call if you know the path; else it stays on `Volatile:` as `missing at HH:MM`.
+It prints `<status> <durable path | -> <bytes> <sha8> <origin>` per path (`copied`, `dup`, `ref-only`, `redacted`, `withheld`, `missing`), then the Evidence lines (`Evidence:`, `Disposable:`, `Ref-only:`, `Volatile:`) and any `WARN quota`. `withheld` → D. `missing` that a resume needs → one corrected call if you know the path; else it stays on `Volatile:` as `missing at <stamp>`.
 
 ## Step 5 — Restart recipes
 
-For each `auto` or `ask` row, Write `<stage>/restart/<B-n>.md` in the template §4.4 recipe form, with the durable script path from Step 4, literal arguments, and model and effort for every agent spawn. No placeholders.
+For each `auto` or `ask` row, Write `<stage>/restart/<B-n>.md` in the template §4.4 recipe form, with the durable script path from Step 4, literal arguments, and model and effort for every agent spawn. No placeholders. Publish adds the `job:` line; for a shell job the plugin recorded it also replaces `command:` with the recorded command.
 
 ## Step 6 — Draft
 
 Write the body to `<stage>/body.md`, from the `#` title to Next steps in template order, without frontmatter, marker or sentinel. Apply the inclusion test to every line.
-- Carry every `U-`, `D-`, `X-` line and ask from `previous_handoff` unchanged unless superseded; rewrite the rest.
-- `checked HH:MM` and `[verified HH:MM: <cmd>]` only with `checked_at` or a `stamp` time.
+- Carry every `U-`, `D-`, `X-` line and ask from `previous_handoff` unchanged unless superseded; rewrite the rest. A foreign base: renumber from `next_ids`, tag each foreign line, foreign approvals as context only (template rule 8, §4.2).
+- `checked <stamp>` and `[verified <stamp>: <cmd>]` only with `checked_at` or a `stamp` time, copied whole (date, time and offset).
 - Paste the helper's Evidence lines; add ≤5 items and the `Volatile:` reasons.
 - Gated steps read `ask user: <action>` with a user-run `! <cmd>`, never an order.
 
@@ -96,19 +97,19 @@ Write the body to `<stage>/body.md`, from the `#` title to Next steps in templat
 
 `{{plugin}}-store publish --stage <stage> --slug <kebab-slug> --status <in-progress|blocked|completed>`
 
-It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`.
-- `LINT` → fix every LINT line in one Write of `body.md` (or of the recipe), publish again; after 2 failed rounds → C.
-- `ADVISORY` → fix if one Edit does it, else list it in the report.
+It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`. In repo mode one export line follows the written receipt: `Exported to repository: <path> (…)`, `Export refused: <reason>` (the handoff is still saved) or `Not exported: <how to accept>`.
+- `LINT` → one round = one Write of `body.md` (or of the recipe) that fixes every LINT line, then publish again. Never one Edit per LINT line. After 2 failed rounds → C. `LINT private-path` (repo mode) is fixed the same way: the path would reach git, so write a durable path or a pointer instead.
+- `ADVISORY` → at most one round: if one Edit fixes it, Edit and publish again; else list it in the report. A LINT round in progress absorbs it.
 - `ADVISORY secret-warn rules=<ids>` → take the value out and say where it lives, or report those rule ids; never the value.
 - Saved only when the receipt says so.
 
 ## Step 8 — Report (≤8 lines, this order)
 
-1. The receipt, verbatim.
+1. The receipt, verbatim, and the export line under it when printed.
 2. `Resume with: /{{plugin}}:resume <path>`
 3. Status word and Step 1.
-4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` Otherwise `nothing running (checked HH:MM)` or `nothing running known (not checked)`.
+4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` Otherwise `nothing running (checked <stamp>)` or `nothing running known (not checked)`.
 5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder). <!-- review-fix -->
 6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
-8. Advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
+8. `carry_notice` verbatim when set, advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
