@@ -19,7 +19,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 | | When | Do instead |
 |---|---|---|
 | A | You are a subagent or workflow agent | Write no file. Read template §8, return that subagent form as text and stop. <!-- review-fix --> |
-| B | The helper prints `REFUSED` (other than `REFUSED: lint`, which is C), is missing or crashes | Relay it verbatim, say nothing was saved. Missing or crashed: then print the body here in the chat, never in a file, in template order without frontmatter, marker or sentinel, its first line `not saved, no secret scan`. Stop. Never write the handoff another way. <!-- review-fix --> |
+| B | The helper prints `REFUSED` (other than `REFUSED: lint`, which is C), is missing or crashes | Relay it verbatim, say nothing was saved. Missing, crashed or `REFUSED: helper-runtime`: then print the body here in the chat, never in a file, in template order without frontmatter, marker or sentinel, its first line `not saved, no secret scan`. Stop. Never write the handoff another way. <!-- review-fix --> |
 | C | Blocking `LINT` after 2 fix rounds | Relay the receipt (it names the kept draft) and stop. Never say "saved". |
 | D | An evidence row is `withheld` | Never copy it another way or retry. If a resume needs it, add an Open question naming where it lives. |
 | E | The user must decide something | Record it in Open questions with a recommendation. No interactive question tool here: it holds the turn open and blocks compaction. |
