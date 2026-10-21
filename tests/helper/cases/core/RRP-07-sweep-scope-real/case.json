@@ -1,0 +1,26 @@
+{
+ "id": "RRP-07-sweep-scope-real",
+ "tmp_base": "repo",
+ "note": "RRP-07 (MOD-SPEC §10 sweep scope): a recorded path is in scope only when its cleaned form and its real form both sit under a temp root (/tmp, /private/tmp, /var/folders, /private/var/folders, $TMPDIR) or it is a tasks/*.output. $TMP is under the repo's tmp/ here, outside every temp root except the child's TMPDIR ($TMP/tmpdir). Not swept: a path that leaves /tmp through '..', a path through a link inside TMPDIR that points out of it, a scratchpad/ folder outside the temp roots. Swept: a plain file in TMPDIR",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {"mkdir": "$TMP/example-repo"},
+    {"write": "$TMP/private/notes.md", "text": "RRP07-CANARY private notes outside every temp folder\n"},
+    {"symlink": "$TMP/tmpdir/out", "to": "$TMP/private"},
+    {"write": "$TMP/example-repo/scratchpad/plan.md", "text": "RRP07-CANARY a repo folder named scratchpad\n"},
+    {"write": "$TMP/tmpdir/run/control.log", "text": "RRP07 control line\n"},
+    {"paths": ["/tmp/../..$TMP/private/notes.md", "$TMP/tmpdir/out/notes.md", "$TMP/example-repo/scratchpad/plan.md", "$TMP/tmpdir/run/control.log"]}
+   ],
+   "argv": ["sweep", "--sid", "$SID", "--nonce", "1a2b3c4d", "--cwd", "$TMP/example-repo"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": ["^copied\\t\\S+/tmpdir/run/control\\.log\\t", "^TOTAL copied=1 dup=0 ref_only=0 redacted=0 withheld=0 referenced_budget=0$"],
+    "stdout_lacks": ["notes\\.md", "scratchpad/plan\\.md"],
+    "grep_absent": [{"dir": "$DISP", "text": "RRP07-CANARY"}]
+   }
+  }
+ ]
+}

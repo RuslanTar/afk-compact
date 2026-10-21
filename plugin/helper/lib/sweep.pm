@@ -10,17 +10,36 @@ use warnings;
 
 our @STATUSES = qw(copied dup ref-only redacted withheld missing referenced-budget);
 
-sub _in_scope {
+# Under a temp root: /tmp, /var/folders (macOS paths also come in their realpath form under
+# /private, F2-11) or $TMPDIR (as set and real). Scratchpads count only inside these roots.
+sub _temp_root {
     my ($p) = @_;
     return 0 unless defined $p && $p =~ m{^/};
-    # macOS paths also come in their realpath form (/tmp and /var are links into /private)
     return 1 if $p =~ m{^(?:/private)?/tmp/};
     return 1 if $p =~ m{^(?:/private)?/var/folders/};
     my $t = $ENV{TMPDIR};
-    if (defined $t && $t =~ m{^/.+}) { $t =~ s{/+$}{}; return 1 if index($p, "$t/") == 0 }
-    return 1 if $p =~ m{/scratchpad/};
-    return 1 if $p =~ m{/tasks/[^/]+\.output$};
+    if (defined $t && $t =~ m{^/.+}) {
+        $t =~ s{/+$}{};
+        for my $r ($t, util::real_path($t)) { return 1 if defined $r && $r ne '' && index($p, "$r/") == 0 }
+    }
     return 0;
+}
+
+# RRP-07: the recorded path is tested as cleaned ('..' resolved) and as real (links
+# resolved the way open() will; for a path that does not exist yet, its nearest existing
+# folder): both must sit under a temp root, so neither `/tmp/../<elsewhere>` nor a link
+# inside the temp folder that points out of it is swept. A tasks/*.output (Claude Code's
+# background-task output) is in scope wherever it is; its target still goes through the
+# secret gate (a link to a transcript is withheld, PRIV-02).
+sub _in_scope {
+    my ($p) = @_;
+    return 0 unless defined $p && !ref $p && $p =~ m{^/};
+    my $clean = util::clean_path($p);
+    return 0 unless defined $clean;
+    return 1 if $clean =~ m{/tasks/[^/]+\.output\z};
+    my $real = -e $p ? do { require Cwd; Cwd::abs_path($p) } : util::real_path($p);
+    return 0 unless defined $real;
+    return (_temp_root($clean) && _temp_root($real)) ? 1 : 0;
 }
 
 sub candidates {
