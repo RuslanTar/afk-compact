@@ -6,6 +6,8 @@ import { onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onTurnComplete } from './lib/boundary'
 import { onCompact } from './lib/compact'
 import { newState, realDeps } from './lib/deps'
+import { countCall, limitText, onInterjection } from './lib/handoff-turn'
+import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { blockName, contextBlock } from './lib/resume'
@@ -33,18 +35,33 @@ export const register: Register = (on, options) => {
     return r
   }).catch(($, e, next) => next(e))
 
+  // A user's prompt delivered into the running handoff turn lifts its limits text (MOD-SPEC §9.1).
+  on('prompt.submit', async ($, e, next) => {
+    const r = await next(e)
+    if (e.turnId !== undefined && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')) {
+      const d = realDeps($, options, state)
+      await onInterjection(d, await prepare(d), e.turnId)
+    }
+    return r
+  }).catch(($, e, next) => next(e))
+
   on('tool.call', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
     const d = realDeps($, options, state)
     const sid = await prepare(d)
-    const isAsk = String(e.tool) === ASK_TOOL
+    const tool = String(e.tool)
+    const input = e as unknown as Record<string, unknown>
+    const isAsk = tool === ASK_TOOL
     if (isAsk) {
       state.askOpen++
       state.askedThisTurn = true
     }
+    // Dev-1: the session's directory as the job will see it is read before the call runs.
+    const job = await jobStart(d, tool)
     // The temp paths of this call are recorded beside it, never before it: the tool does not
     // wait for the helper (one spawn per new path), and nothing is recorded with auto_evidence off.
-    if (d.cfg.auto_evidence) trackPaths(state, recordPaths(d, sid, String(e.tool), e as unknown as Record<string, unknown>))
+    if (d.cfg.auto_evidence) trackPaths(state, recordPaths(d, sid, tool, input))
+    countCall(d)
     let r
     try {
       r = await next(e)
@@ -52,7 +69,8 @@ export const register: Register = (on, options) => {
       if (isAsk) state.askOpen--
     }
     if (r.deny !== undefined) return r
-    const text = await nudgeText(d, sid)
+    if (job) await recordJob(d, sid, tool, input, r, job)
+    const text = (await limitText(d, sid, r.text)) ?? (await nudgeText(d, sid))
     if (text === undefined) return r
     return { ...r, context: [...(r.context ?? []), text] }
   }).catch(($, e, next) => next(e))

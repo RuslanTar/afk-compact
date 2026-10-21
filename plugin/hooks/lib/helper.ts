@@ -63,16 +63,75 @@ export type DispatchArgs = {
   instrBytes: number
   ccVersion: string | null
   loadId: string
+  /** The handoff turn this dispatch follows or interrupts (MOD-SPEC §2.3 `handoff_ht`). */
+  handoffHt?: string
 }
 
-/** `dispatch …` → `ok`; exit 3 `REFUSED: nonce-exists`. */
+/** `dispatch … [--handoff-ht H]` → `ok`; exit 3 `REFUSED: nonce-exists`. */
 export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
   return call(d, [
     'dispatch', '--sid', a.sid, '--nonce', a.nonce, '--actor', a.actor, '--trigger', a.trigger,
     '--channel', a.channel, '--resume-pref', a.resumePref, '--tags', a.tags.join(','),
     '--midturn', a.midturn ? 'true' : 'false', '--instr-sha8', a.instrSha8, '--instr-bytes', String(a.instrBytes),
     '--cc-version', a.ccVersion ?? '', '--load-id', a.loadId,
+    ...(a.handoffHt !== undefined ? ['--handoff-ht', a.handoffHt] : []),
   ])
+}
+
+/**
+ * `handoff-turn open --sid --ht --reason --max-calls --max-tokens` (D-18 B8): `ok` (the ht record
+ * was created), `EXISTS` (draw another ht), or `failed` (refused, or the call failed).
+ */
+export async function handoffTurnOpen(d: Deps, sid: string, ht: string, reason: string, maxCalls: number, maxTokens: number): Promise<'ok' | 'EXISTS' | 'failed'> {
+  const r = await call(d, ['handoff-turn', 'open', '--sid', sid, '--ht', ht, '--reason', reason, '--max-calls', String(maxCalls), '--max-tokens', String(maxTokens)])
+  const s = r.stdout.trim()
+  if (r.ok && (s === 'ok' || s === 'EXISTS')) return s
+  return 'failed'
+}
+
+/** `handoff-turn supersede --sid --ht --nonce` (the race): true when written or already there. */
+export async function handoffTurnSupersede(d: Deps, sid: string, ht: string, nonce: string): Promise<boolean> {
+  const r = await call(d, ['handoff-turn', 'supersede', '--sid', sid, '--ht', ht, '--nonce', nonce])
+  return r.ok && /^(ok|EXISTS)$/.test(r.stdout.trim())
+}
+
+export type HandoffState =
+  | { state: 'none' }
+  | { state: 'staged'; stage: string; draft: boolean; finish: string | null }
+  | { state: 'published'; path: string }
+  | { state: 'superseded'; nonce: string }
+  | { state: 'failed' }
+
+/**
+ * `handoff-state --sid --ht`: `none` · `staged <stage> draft=<0|1> finish=<command>` (the command
+ * is everything after `finish=`; `none` when no safe one exists) · `published <path>` ·
+ * `superseded <nonce>`; anything else is `failed`.
+ */
+export async function handoffState(d: Deps, sid: string, ht: string): Promise<HandoffState> {
+  const r = await call(d, ['handoff-state', '--sid', sid, '--ht', ht])
+  return r.ok ? parseHandoffState(r.stdout) : { state: 'failed' }
+}
+
+export function parseHandoffState(stdout: string): HandoffState {
+  const s = stdout.replace(/\s+$/, '').split('\n')[0] ?? ''
+  if (s === 'none') return { state: 'none' }
+  let m: RegExpExecArray | null
+  if ((m = /^published (\S.*)$/.exec(s))) return { state: 'published', path: m[1] ?? '' }
+  if ((m = /^superseded ([0-9a-f]{8})$/.exec(s))) return { state: 'superseded', nonce: m[1] ?? '' }
+  if ((m = /^staged (\S.*?) draft=([01]) finish=(.+)$/.exec(s))) {
+    const finish = m[3] ?? 'none'
+    return { state: 'staged', stage: m[1] ?? '', draft: m[2] === '1', finish: finish === 'none' ? null : finish }
+  }
+  return { state: 'failed' }
+}
+
+/**
+ * `log --sid S --stream jobs --stdin` (Dev-1 D1): one raw job or stop object per line; the helper
+ * completes and appends the row, or refuses (`REFUSED: jobs-caller`, exit 3) and logs why.
+ */
+export async function logJobs(d: Deps, sid: string, lines: readonly string[]): Promise<RunResult | undefined> {
+  if (lines.length === 0) return undefined
+  return call(d, ['log', '--sid', sid, '--stream', 'jobs', '--stdin'], HELPER_MS, lines.join('\n') + '\n')
 }
 
 /** Path of this session's newest main copy, or undefined (`none`, or a failed call). */

@@ -6,6 +6,7 @@ import { cancelBoundary } from './boundary'
 import { versionCanary } from './canary'
 import { effective } from './config'
 import { clearHalt, loadHalt } from './cont'
+import { onHandoffTurnStart } from './handoff-turn'
 import { ensureIdent, isoLocal, log } from './log'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
@@ -51,7 +52,10 @@ export async function onSessionStart(d: Deps): Promise<void> {
   })
 }
 
-/** Main `turn.start`: cancels the boundary timer, clears halt on a user turn, writes liveness. */
+/**
+ * Main `turn.start`: cancels the boundary timer, clears halt on a user turn, starts or cancels
+ * the handoff turn (MOD-SPEC §9.1), writes liveness.
+ */
 export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
   await ensureIdent(d, await d.sessionId())
   const sid = await prepare(d)
@@ -63,7 +67,15 @@ export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
   s.nudgedThisTurn = false
   s.askedThisTurn = false
   s.resumeAfter = false
-  if (s.ourSubmitPending) s.ourSubmitPending = false
-  else await clearHalt(d, sid)
+  s.lastCycle = null
+  // A published handoff names only a compaction before the next main turn (§3.1).
+  s.published = undefined
+  const ours = s.ourSubmitPending
+  if (ours) s.ourSubmitPending = false
+  else {
+    s.nudgeNonce = undefined
+    await clearHalt(d, sid)
+  }
+  await onHandoffTurnStart(d, sid, ours, turnId)
   await writeAlive(d, sid, turnId)
 }

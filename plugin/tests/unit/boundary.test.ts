@@ -2,7 +2,17 @@
 // thrash (MOD-SPEC §4, §9) and the trigger switches (§1.2).
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
+import { assetText } from '../../hooks/lib/assets.gen'
+import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { AGENT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
+
+/** The handoff-turn asset ships in this build (else last cycles degrade to no handoff turn). */
+const TURN = hasAsset('handoff-turn')
+const halted = (w: World, reason: keyof typeof HALT_REASON_TEXT, tokens = '610,000') =>
+  assemble(w.name, 'checkpoint-nudge', TURN ? ['halt', 'halt-handoff'] : ['halt'], { tokens, halt_reason: HALT_REASON_TEXT[reason] })
+const handoffSubmit = (w: World, reason: keyof typeof HALT_REASON_TEXT) =>
+  assembleIf(w.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(maxCalls()) })
 
 const CONT = 'the session was compacted at the checkpoint you reached. Continue from Step 1 of the summary; questions the user owns stay open.'
 
@@ -113,7 +123,7 @@ test('AT-B-04: one nudge per main turn; none for a subagent call or a denied cal
   expect(w.rowsOf('nudge').length).toBe(1)
 })
 
-test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge, no continue, one halt row and toast', async ($, on) => {
+test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its reason; one handoff-turn submit, no continue, no compaction (DP-4)', async ($, on) => {
   const w = new World().install(on)
   w.summaryMode = 'unshaped'
   await w.start($)
@@ -125,21 +135,45 @@ test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge, no continue
   expect(w.toasts.filter(t => t.includes(': halt;')).length).toBe(1)
   expect(w.files.get(`${WATCH}/${SID_A}/halt.json`)).toContain('"active":true')
   w.tokens = 610000
+  w.compacts = []
   const r = await w.tool($)
-  expect(r.context?.[0]).toContain('so the plugin will not resume the work by itself')
+  expect(r.context?.[0]).toBe(halted(w, '2-nonok'))
   expect(r.context?.[0]).not.toContain('Then it resumes the work by itself')
   await w.turnEnd($)
   await w.advance(5000)
-  expect(w.submits.length).toBe(0)
+  expect(w.submits).toEqual(TURN ? [handoffSubmit(w, '2-nonok')] : [])
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual(['halt:2-nonok'])
+  if (TURN) {
+    await w.turnStart($, '')
+    await w.turnEnd($, 'Handoff written.')
+    await w.advance(60000)
+  }
+  expect(w.compacts.length).toBe(0)
+  expect(w.rowsOf('halt').length).toBe(1)
 })
 
-test('AT-B-06: 4 nudge-driven compactions within 50 min: 3 continues, the 4th continue_capped + halt', async ($, on) => {
+test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped at its nudged turn end, then the handoff turn, then one compaction, no continue', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   for (let i = 0; i < 4; i++) {
+    if (i === 3) {
+      await w.turnStart($)
+      w.tokens = 610000
+      expect((await w.tool($)).context?.[0]).toBe(halted(w, 'cap'))
+      await w.turnEnd($)
+      expect(w.rowsOf('continue_capped').length).toBe(1)
+      expect(w.compacts.length).toBe(3)
+      if (TURN) {
+        await w.advance(2000)
+        expect(w.submits.slice(3)).toEqual([handoffSubmit(w, 'cap')])
+        await w.turnStart($, '')
+        await w.turnEnd($, 'LINT stop.')
+      }
+      await w.advance(500)
+      break
+    }
     await nudgedTurn($, w)
     w.tokens = 100000
-    if (i === 3) break
     await w.turnStart($, 'continue text')
     await w.turnEnd($)
     for (let q = 0; q < 2; q++) {
@@ -149,8 +183,8 @@ test('AT-B-06: 4 nudge-driven compactions within 50 min: 3 continues, the 4th co
     await w.advance(10 * 60000)
   }
   expect(w.compacts.length).toBe(4)
-  expect(w.submits.length).toBe(3)
-  expect(w.submits.every(t => t.includes(CONT))).toBe(true)
+  expect(w.submits.length).toBe(TURN ? 4 : 3)
+  expect(w.submits.slice(0, 3).every(t => t.includes(CONT))).toBe(true)
   expect(w.rowsOf('thrash').length).toBe(0)
   expect(w.rowsOf('continue_capped').length).toBe(1)
   expect(w.rowsOf('halt')[0]?.reason).toBe('cap')
@@ -207,14 +241,14 @@ test('AT-B-09: a nudged turn that ends aborted: no continue', async ($, on) => {
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-10: continue with the claim still free: fixed line + block, ≤5,500 chars, claim prompt.submit', async ($, on) => {
+test('AT-B-10: continue with the claim still free: fixed line + block, ≤6,500 chars (DP-14 (2)), claim prompt.submit', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await nudgedTurn($, w)
   expect(w.submits.length).toBe(1)
   const text = w.submits[0] ?? ''
   expect(text.startsWith(`Note from the user's ${w.name} plugin: ${CONT}\n\nThe ${w.name} plugin adds this after compaction`)).toBe(true)
-  expect(text.length <= 5500).toBe(true)
+  expect(text.length <= 6500).toBe(true)
   const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
   expect(w.claims.get(nonce)).toBe('prompt.submit')
   expect(w.rowsOf('continue')[0]?.result).toBe('submitted')
@@ -237,20 +271,29 @@ test('AT-B-12: a nudged turn ending on a question, or with an AskUserQuestion ca
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-13: halt mode: a tool call at 610K gets the [halt] nudge; a turn end at 450K skips (halt)', async ($, on) => {
+test('AT-B-13: halt mode: a turn end at 450K skips (halt); a tool call at 610K gets [halt]; that turn end starts a handoff turn', async ($, on) => {
   const w = new World().install(on)
   w.summaryMode = 'unshaped'
   await w.start($)
   await w.turnStart($)
   await raiseCompact($, { trigger: 'auto' })
   await raiseCompact($, { trigger: 'auto' })
-  w.tokens = 610000
-  expect((await w.tool($)).context?.[0]).toContain('so the plugin will not resume the work by itself')
   w.tokens = 450000
   await w.turnEnd($)
   expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
   await w.advance(5000)
   expect(w.compacts.length).toBe(2)
+  // A user turn clears halt; two more non-ok verdicts in it halt again, and its nudge is [halt].
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  w.tokens = 610000
+  expect((await w.tool($)).context?.[0]).toBe(halted(w, '2-nonok'))
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual(TURN ? [handoffSubmit(w, '2-nonok')] : [])
+  expect(w.rowsOf('skip').map(r => r.why)).toEqual(TURN ? ['halt'] : ['halt', 'halt'])
+  expect(w.compacts.length).toBe(4)
 })
 
 test('halt mode survives a reload (halt.json) until a user-typed turn clears it', async ($, on) => {
@@ -322,8 +365,8 @@ test('AT-P-04: window 200000: trigger_disabled_small_window; no nudge or plugin 
   await w.turnEnd($)
   await w.advance(5000)
   const eff = w.rowsOf('config_effective')[0]
-  expect(eff?.soft_max).toBe(67000)
-  expect(eff?.target).toBe(44666)
+  expect(eff?.soft_max).toBe(51000)
+  expect(eff?.target).toBe(34000)
   expect(w.rowsOf('trigger_disabled_small_window').length).toBe(1)
   expect(w.compacts.length).toBe(0)
   await raiseCompact($, { trigger: 'auto' })
@@ -339,4 +382,28 @@ test('AT-P-03: soft max 900000 over window 800000: soft_max 640000, target 40000
   expect(eff?.soft_max).toBe(640000)
   expect(eff?.target).toBe(400000)
   expect(w.rowsOf('config_clamped').map(r => [r.key, r.configured, r.effective])).toEqual([['soft_max', 900000, 640000]])
+})
+
+test('AT-Q-08 (mod part): queue_cmd set: the nudge keeps [queue] with @queue_add@ naming this cycle\'s compaction nonce; unset: dropped', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 610000
+  const r = await w.tool($)
+  await w.turnEnd($)
+  await w.advance(500)
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  const queueAdd = w.name + `-store queue-add --sid ${SID_A} --nonce ${nonce}`
+  expect(r.context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['continue', 'queue'], { tokens: '610,000', queue_add: queueAdd }))
+  if (assetText('checkpoint-nudge', w.name).includes('@queue_add@')) expect(r.context?.[0]).toContain(queueAdd)
+  // The mod itself never runs the queue tool or queue-add (OD-21 as amended by D-10).
+  expect(w.callsOf('queue-add').length).toBe(0)
+})
+
+test('AT-Q-08 (mod part): queue_cmd unset: the nudge has no [queue] line', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 610000
+  expect((await w.tool($)).context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['continue'], { tokens: '610,000' }))
 })

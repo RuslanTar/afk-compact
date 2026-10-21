@@ -21,9 +21,10 @@ import { World } from './harness.test'
 const NAME = 'x'.repeat(14)
 
 describe('BT-04 TS assembler vs the goldens', () => {
-  // D-10: the mod never applies `queue`, so goldens with that tag are the Python and helper side only.
-  const cases = GOLDENS.filter(g => !g.tags.includes('queue'))
-  test('every non-queue golden, byte for byte', () => {
+  // D-10 (small-rulings §1.7): the mod applies `queue` whenever `queue_cmd` is set, so every
+  // golden counts, the queue ones included.
+  const cases = GOLDENS
+  test('every golden, byte for byte', () => {
     expect(cases.length).toBeGreaterThan(20)
     for (const g of cases) {
       const got = assemble(NAME, g.asset as AssetName, g.tags as Tag[], GOLDEN_RUNTIME)

@@ -1,5 +1,6 @@
 // Auto-continue, the hourly cap, halt mode and the thrash rule (MOD-SPEC §9, S-14).
 import type { Deps } from './deps'
+import type { HaltReason } from './handoff-turn'
 import { claimBy } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 import { logOutcome } from './resume'
@@ -84,6 +85,40 @@ export async function thrashCheck(d: Deps, sid: string, atTarget: boolean): Prom
   }
 }
 
+/** Auto-continue stamps of the last 60 min (`$.store` key `cont:<sid>`, survives reloads). */
+export async function contStamps(d: Deps, sid: string, now: number): Promise<number[]> {
+  const raw = await d.storeGet(`cont:${sid}`)
+  return (Array.isArray(raw) ? raw : []).filter((t): t is number => typeof t === 'number' && now - t < HOUR_MS)
+}
+
+/**
+ * MOD-SPEC §9.1 last cycle, computed at the nudge: halt mode (`2-nonok`, `thrash`, `cap`), the
+ * hourly cap already reached (`cap`, checked now, not after the compaction), or
+ * `max_auto_continues_per_hour` 0 (`continue-off`); null for a cycle that will auto-continue.
+ */
+export async function lastCycleOf(d: Deps, sid: string): Promise<HaltReason | null> {
+  const s = d.state
+  if (s.halt.active) return s.halt.reason === 'thrash' || s.halt.reason === 'cap' ? s.halt.reason : '2-nonok'
+  const max = d.cfg.max_auto_continues_per_hour
+  if (max === 0) return 'continue-off'
+  return (await contStamps(d, sid, await d.now())).length >= max ? 'cap' : null
+}
+
+/**
+ * The nudged turn of a last cycle ended with `answer`: no auto-continue follows. A capped cycle
+ * enters halt `cap` now, before its handoff turn and compaction (DP-13); the `continue` row says
+ * why this cycle does not continue.
+ */
+export async function lastCycleEnd(d: Deps, sid: string, last: HaltReason): Promise<void> {
+  d.state.resumeAfter = false
+  if (last === 'cap') {
+    await log(d, sid, 'continue_capped', { continues_last_hour: (await contStamps(d, sid, await d.now())).length })
+    escalate(d, 'continue-capped')
+    await enterHalt(d, sid, 'cap')
+  }
+  await log(d, sid, 'continue', { result: last === 'continue-off' ? 'skipped:disabled' : `halt:${last}`, continues_last_hour: null })
+}
+
 /**
  * After a plugin compaction: auto-continue only after a nudge-driven one, not in halt mode,
  * not when the nudged turn ended on a user-owned question, under the hourly cap. The resume
@@ -108,8 +143,8 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
   }
   const now = await d.now()
   const key = `cont:${sid}`
-  const raw = await d.storeGet(key)
-  const stamps = (Array.isArray(raw) ? raw : []).filter((t): t is number => typeof t === 'number' && now - t < HOUR_MS)
+  const stamps = await contStamps(d, sid, now)
+  // The nudge already called a capped cycle a last cycle (lastCycleOf); this is the backstop.
   if (stamps.length >= max) {
     await log(d, sid, 'continue_capped', { continues_last_hour: stamps.length })
     escalate(d, 'continue-capped')

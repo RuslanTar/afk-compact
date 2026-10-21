@@ -3,6 +3,7 @@
 // the compaction's resume block has settled; readers join it to the rollup by nonce.
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import { hasAsset } from '../../hooks/lib/assemble'
 import { AGENT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 /** A main turn that crosses the soft max (nudge), ends with `answer`, and compacts at 500 ms. */
@@ -109,8 +110,18 @@ test('F2-3: the capped 4th nudge-driven compaction: not continued, halt true, it
   await w.start($)
   for (let i = 0; i < 4; i++) {
     await nudgedTurn($, w)
+    if (i === 3) {
+      // The capped cycle's handoff turn (MOD-SPEC §9.1) comes first; nothing is published here.
+      if (hasAsset('handoff-turn')) {
+        await w.advance(2000)
+        await w.turnStart($, '')
+        await w.turnEnd($, 'LINT stop.')
+        await w.advance(500)
+      }
+      w.tokens = 100000
+      break
+    }
     w.tokens = 100000
-    if (i === 3) break
     await w.turnStart($, 'continue text')
     await w.turnEnd($)
     for (let q = 0; q < 2; q++) {
@@ -127,6 +138,7 @@ test('F2-3: the capped 4th nudge-driven compaction: not continued, halt true, it
   const rows = w.rowsOf('mod_outcome')
   expect(rows.length).toBe(4)
   expect(rows[3]).toMatchObject({ nonce: nonceOf(w, 3), nudged: true, continued: false, halt: true, resume: 'delivered:prompt.context' })
+  if (hasAsset('handoff-turn')) expect(rows[3]?.handoff_turn).toBe('none')
   expect(new Set(rows.map(r => r.nonce)).size).toBe(4)
 })
 

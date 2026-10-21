@@ -2,13 +2,17 @@
 // channel whose claim wins. The mod's channels are `prompt.context` (order 2) and the continue
 // text (order 3, cont.ts); classic SessionStart (order 1) is the helper's.
 import type { Deps, Outcome, PendingResume } from './deps'
-import type { Tag } from './assemble'
+import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
+import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 
-/** MOD-SPEC §3.4: total ≤5,000 chars. */
-export const BLOCK_MAX = 5000
+/** MOD-SPEC §3.4: total ≤6,000 chars (DP-8; never >10,000, the SessionStart cutoff). */
+export const BLOCK_MAX = 6000
+
+/** `@handoff_finish@` when a raced draft has no safe finish command (its line says draft absent). */
+export const NO_FINISH = '(none)'
 
 export type BlockArgs = {
   /** This compaction's dispatch nonce (the re-measure reads its evidence). */
@@ -18,6 +22,8 @@ export type BlockArgs = {
   /** Path of this compaction's copy, or null with `notSaved` as the reason. */
   savedCopy: string | null
   notSaved?: string
+  /** `[handoff]` (a published handoff of this window) or `[handoff-partial]` (a raced handoff turn). */
+  handoff?: RaceBlock
 }
 
 export async function buildBlock(d: Deps, sid: string, a: BlockArgs): Promise<string> {
@@ -27,7 +33,18 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs): Promise<st
   const remeasure = await measure(d, sid, a.nonce)
   const measuredAt = isoLocal(await d.now(), false)
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
-  const runtime = { session_id: sid, saved_copy: saved, measured_at: measuredAt }
+  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: measuredAt }
+  const h = a.handoff
+  if (h && 'published' in h) {
+    tags.push('handoff')
+    runtime.handoff_path = h.published
+  } else if (h) {
+    // Never together with `[handoff]`; a draft without a safe finish command counts as absent.
+    const present = h.draft && h.finish !== null
+    tags.push('handoff-partial')
+    runtime.draft_state = present ? 'present' : 'absent'
+    runtime.handoff_finish = present ? '`' + (h.finish ?? '') + '`' : NO_FINISH
+  }
   if (remeasure === undefined) return assemble(d.name, 'resume-context', tags, runtime, ['remeasure'])
   const lines = remeasure.split('\n')
   let block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure })
@@ -98,5 +115,5 @@ export async function claimedElsewhere(d: Deps, pend: PendingResume): Promise<st
  * the rollup row by nonce; nothing is rewritten.
  */
 export async function logOutcome(d: Deps, sid: string, nonce: string, o: Outcome, resume: string, actor = 'main'): Promise<void> {
-  await log(d, sid, 'mod_outcome', { nonce, nudged: o.nudged, continued: o.continued, halt: o.halt, resume }, actor)
+  await log(d, sid, 'mod_outcome', { nonce, nudged: o.nudged, continued: o.continued, halt: o.halt, resume, ...(o.handoff ?? {}) }, actor)
 }
