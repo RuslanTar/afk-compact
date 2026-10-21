@@ -1,0 +1,241 @@
+// Deps: everything a handler needs from the engine, as one interface, plus the real `$`-backed
+// implementation. Handlers take Deps, never `$`, so a test can run them through the kit (where
+// test hooks answer `$`) or with a fake Deps.
+import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claude-code'
+import type { Config, Effective, Paths } from './config'
+import { optionEnv, parseOptions, paths } from './config'
+
+export type RunResult = {
+  /** True when the command ran and exited 0. */
+  ok: boolean
+  /** Exit code, or null when the call rejected (could not start, or timed out). */
+  exitCode: number | null
+  stdout: string
+  /** `rejected: <message>` when the call rejected, else the child's stderr. */
+  error: string
+}
+
+export type Usage = { tokens: number | undefined; window: number }
+export type Version = { version: string; base?: string; builtAt?: string }
+
+export interface Deps {
+  /** `$.plugin.name`: the brand at run time (never a literal in code). */
+  readonly name: string
+  /** `$.plugin.root`: the plugin's folder (shipped assets live under it). */
+  readonly root: string
+  /** `$.plugin.root + "/bin/" + $.plugin.name + "-store"`. */
+  readonly helper: string
+  readonly cfg: Config
+  readonly state: LoadState
+  sessionId(): Promise<string>
+  usage(): Promise<Usage>
+  version(): Promise<Version>
+  /** `$.session.compact`; rejects while a turn runs. */
+  compact(instructions: string): Promise<SessionCompactResult>
+  submit(text: string): Promise<void>
+  /** `$.process.run` with rejections caught. */
+  run(argv: readonly string[], timeoutMs: number): Promise<RunResult>
+  /** Whole-file write; false when it failed. */
+  write(path: string, text: string): Promise<boolean>
+  exists(path: string): Promise<boolean>
+  read(path: string): Promise<string | undefined>
+  storeGet(key: string): Promise<unknown>
+  storeSet(key: string, value: unknown): Promise<void>
+  now(): Promise<number>
+  after(ms: number, fn: () => void): { cancel: () => void }
+  toast(text: string): void
+  policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
+  /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
+  paths(): Promise<Paths | undefined>
+}
+
+/** What one module load keeps in memory (a reload starts a fresh one). */
+export type LoadState = {
+  loadId: string
+  initDone: boolean
+  eff: Effective | undefined
+  ident: { pid: number | null; pid_lstart: string | null } | undefined
+  ccVersion: string | null
+  helperMissingLogged: boolean
+  /** Main turn bookkeeping. */
+  mainTurnRunning: boolean
+  turnSeq: number
+  turnId: string | null
+  askOpen: number
+  askedThisTurn: boolean
+  nudgedThisTurn: boolean
+  /** A nudge-driven compaction should auto-continue (MOD-SPEC §9). */
+  resumeAfter: boolean
+  /** The last main turn ended on a user-owned question. */
+  lastTurnAsksUser: boolean
+  /** The next main turn.start comes from our own `$.prompt.submit`. */
+  ourSubmitPending: boolean
+  /** Boundary scheduler. */
+  timer: { cancel: () => void } | undefined
+  busy: boolean
+  lastPluginCompactAt: number | undefined
+  /** Plugin compactions for the thrash rule: the main turn they ended, and whether refilled. */
+  pluginCompactions: { turnSeq: number; refilled: boolean | null }[]
+  consecutiveNonOk: number
+  halt: { active: boolean; reason: string | null }
+  haltToasted: boolean
+  /** prompt.context ran in this load (MOD-SPEC §3.4 ctxSeen). */
+  ctxSeen: boolean
+  /** Nonces of this load's mod-self dispatches (the self-call check, §3.1 step 0). */
+  selfNonces: Set<string>
+  /** The pending main resume block for prompt.context or the continue text. */
+  pending: PendingResume | undefined
+  mainCompactions: number
+  fourthToasted: boolean
+  selfCallLoggedFor: Set<string>
+  keysetLoggedFor: Set<string>
+  /** Temp paths already recorded for this session (MOD §10). */
+  recordedPaths: Set<string>
+  /** Background work a test awaits (boundary runs from a timer). */
+  inflight: Promise<unknown> | undefined
+  /** `<root>`/`<watch>`, resolved once per load. */
+  pathsMemo: Promise<Paths | undefined> | undefined
+  /** Main compactions per session id (the fourth-compaction toast). */
+  mainCompactionsSid: string | null
+  /** Escalation kinds already toasted in this load. */
+  toasted: Set<string>
+}
+
+export type PendingResume = {
+  sid: string
+  nonce: string
+  block: string
+  resumePref: 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
+  /** Main turn count when it became pending (an undelivered block survives a whole turn). */
+  turnSeq: number
+}
+
+export function newState(loadId: string): LoadState {
+  return {
+    loadId,
+    initDone: false,
+    eff: undefined,
+    ident: undefined,
+    ccVersion: null,
+    helperMissingLogged: false,
+    mainTurnRunning: false,
+    turnSeq: 0,
+    turnId: null,
+    askOpen: 0,
+    askedThisTurn: false,
+    nudgedThisTurn: false,
+    resumeAfter: false,
+    lastTurnAsksUser: false,
+    ourSubmitPending: false,
+    timer: undefined,
+    busy: false,
+    lastPluginCompactAt: undefined,
+    pluginCompactions: [],
+    consecutiveNonOk: 0,
+    halt: { active: false, reason: null },
+    haltToasted: false,
+    ctxSeen: false,
+    selfNonces: new Set(),
+    pending: undefined,
+    mainCompactions: 0,
+    fourthToasted: false,
+    selfCallLoggedFor: new Set(),
+    keysetLoggedFor: new Set(),
+    recordedPaths: new Set(),
+    inflight: undefined,
+    pathsMemo: undefined,
+    mainCompactionsSid: null,
+    toasted: new Set(),
+  }
+}
+
+/** The real Deps over the engine's `$`. */
+export function realDeps($: EngineInterface, options: PluginOptions, state: LoadState): Deps {
+  const cfg = parseOptions(options)
+  const env = optionEnv(options)
+  return {
+    name: $.plugin.name,
+    root: $.plugin.root,
+    helper: $.plugin.root + '/bin/' + $.plugin.name + '-store',
+    cfg,
+    state,
+    sessionId: () => $.session.id(),
+    async usage() {
+      const u = await $.session.usage()
+      return { tokens: u.context.tokens, window: u.context.window }
+    },
+    async version() {
+      const v = await $.session.version()
+      return { version: v.version, base: v.base, builtAt: v.builtAt }
+    },
+    compact: instructions => $.session.compact({ instructions }),
+    async submit(text) {
+      await $.prompt.submit({ text })
+    },
+    async run(argv, timeoutMs) {
+      try {
+        const r = await $.process.run(argv, { timeoutMs, env })
+        return { ok: r.exitCode === 0, exitCode: r.exitCode, stdout: r.stdout, error: r.stderr }
+      } catch (err) {
+        return { ok: false, exitCode: null, stdout: '', error: 'rejected: ' + errText(err) }
+      }
+    },
+    async write(path, text) {
+      try {
+        await $.fs.write(path, text)
+        return true
+      } catch {
+        return false
+      }
+    },
+    async exists(path) {
+      try {
+        return await $.fs.exists(path)
+      } catch {
+        return false
+      }
+    },
+    async read(path) {
+      try {
+        const t = await $.fs.read(path)
+        return typeof t === 'string' ? t : undefined
+      } catch {
+        return undefined
+      }
+    },
+    storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
+    now: () => $.clock.now(),
+    after: (ms, fn) => $.clock.after(ms, fn),
+    toast(text) {
+      if (cfg.warn_ui) $.ui.toast(text)
+    },
+    async policy() {
+      try {
+        const p = await $.settings.read({ source: 'policy' })
+        return { mods_managed_only: p['allowManagedModsOnly'] === true, hooks_managed_only: p['allowManagedHooksOnly'] === true }
+      } catch {
+        return { mods_managed_only: false, hooks_managed_only: false }
+      }
+    },
+    paths() {
+      if (!state.pathsMemo) {
+        state.pathsMemo = (async () => {
+          let home: string | undefined
+          try {
+            home = await $.env.get('HOME')
+          } catch {
+            home = undefined
+          }
+          return paths(cfg, home)
+        })()
+      }
+      return state.pathsMemo
+    },
+  }
+}
+
+export function errText(err: unknown): string {
+  if (err instanceof Error) return err.message.slice(0, 120)
+  return String(err).slice(0, 120)
+}

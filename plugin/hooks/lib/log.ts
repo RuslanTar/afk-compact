@@ -1,0 +1,84 @@
+// Mod rows (MOD-SPEC §2.5, WATCHER-SPEC §6.2 envelope): one `log` helper call per row, in order;
+// when the helper call fails, one file per row under `<watch>/<sid>/events/`. Rows are
+// content-free: ids, counts, enums, byte counts, durations, our own paths.
+import type { Deps } from './deps'
+import { PLUGIN_VERSION } from './meta.gen'
+import { randomHex } from './nonce'
+import { call } from './helper'
+import { byteLength } from './normalize'
+
+export type Fields = Record<string, string | number | boolean | null | readonly string[] | Record<string, number>>
+
+/** ISO 8601 local time with milliseconds and offset. */
+export function isoLocal(ms: number, withMs = true): string {
+  const dt = new Date(ms)
+  const off = -dt.getTimezoneOffset()
+  const sign = off >= 0 ? '+' : '-'
+  const a = Math.abs(off)
+  const p = (n: number, w = 2) => String(n).padStart(w, '0')
+  const base = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}T${p(dt.getHours())}:${p(dt.getMinutes())}:${p(dt.getSeconds())}`
+  return base + (withMs ? '.' + p(dt.getMilliseconds(), 3) : '') + `${sign}${p(Math.floor(a / 60))}:${p(a % 60)}`
+}
+
+export type Row = Record<string, unknown>
+
+export async function makeRow(d: Deps, sid: string, ev: string, fields: Fields, actor = 'main'): Promise<Row> {
+  const now = await d.now()
+  const s = d.state
+  return {
+    v: 1,
+    ts: isoLocal(now),
+    ev,
+    sid,
+    actor,
+    writer: 'mod',
+    pid: s.ident?.pid ?? null,
+    plugin_version: PLUGIN_VERSION,
+    cc_version: s.ccVersion,
+    turn_seq: s.turnSeq,
+    ...fields,
+  }
+}
+
+/** Appends one row to `<watch>/<sid>.jsonl` through the helper, or the fallback event file. */
+export async function log(d: Deps, sid: string, ev: string, fields: Fields = {}, actor = 'main'): Promise<void> {
+  const row = await makeRow(d, sid, ev, fields, actor)
+  const line = JSON.stringify(row)
+  if (byteLength(line) > 4096) return
+  const r = await call(d, ['log', '--sid', sid, '--json', line])
+  if (r.ok) return
+  await fallback(d, sid, row)
+  if (!d.state.helperMissingLogged) {
+    d.state.helperMissingLogged = true
+    await fallback(d, sid, await makeRow(d, sid, 'helper_missing', { stage: 'log', error_class: r.exitCode === null ? 'rejected' : 'exit-' + String(r.exitCode) }))
+  }
+}
+
+async function fallback(d: Deps, sid: string, row: Row): Promise<void> {
+  const p = await d.paths()
+  if (!p) return
+  const now = await d.now()
+  await d.write(`${p.watch}/${sid}/events/${now}-${randomHex(4)}.json`, JSON.stringify(row) + '\n')
+}
+
+/** Records one helper-missing row for a non-log helper call (once per load). */
+export async function helperMissing(d: Deps, sid: string, stage: string): Promise<void> {
+  if (d.state.helperMissingLogged) return
+  d.state.helperMissingLogged = true
+  await log(d, sid, 'helper_missing', { stage })
+}
+
+/**
+ * The toast for an escalation row (MOD-SPEC §5.5: log + toast where the mod runs, never an
+ * action), once per kind per load. Wording is provisional: the design names the toast, not its
+ * text, except the two after-step toasts of MOD-SPEC §5.2 (see `toastOnce`).
+ */
+export function escalate(d: Deps, row: string): void {
+  toastOnce(d, row, `${d.name}: ${row}; see /${d.name}:status`)
+}
+
+export function toastOnce(d: Deps, key: string, text: string): void {
+  if (d.state.toasted.has(key)) return
+  d.state.toasted.add(key)
+  d.toast(text)
+}
