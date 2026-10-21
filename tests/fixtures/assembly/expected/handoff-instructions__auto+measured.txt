@@ -25,5 +25,5 @@ Last line before </summary>: ⟪/compactinue n=1a2b3c4d⟫
 Ids: one per item, never ranges, never renumbered. Copy an earlier summary's U-, D-, X- and settled lines unchanged unless superseded (convert another format's user rules, asks, reasoned decisions and rejected options); rewrite the rest, latest value only. Unasked work is proposed. No secrets, even quoted or in commands; say where they live.
 Measured facts below are the plugin's (2026-10-21T14:05:00+03:00): contradict none, do not restate them ("see Measured facts"); take the GSD position, durable evidence paths, the Queued: line (last in Open questions) and checked times only from them.
 Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1
-GSD: phase 2 of 4, plan 2.3 in progress (checked 14:05)
+GSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)
 Aim for 6–10K characters, 12K with many live rows; cut Work done and Evidence first, never U-, D-, X-, In flight or questions. Replace the earlier summary; do not extend it.

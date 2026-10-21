@@ -11,4 +11,4 @@ In flight (listed HH:MM): B-n <runtime id> · kind · what · due · probe `<cmd
 Saved: <paths from step 2> | none
 Questions: Q-n what · options · recommendation · blocks | none
 Copy runtime ids exactly as listed; HH:MM comes from the date output. Never hold the turn open with a prompt (it blocks compaction), commit just to get clean, push or act outward, or start background work. A permission or guard denial: note it in the block, never route around it.
-In the step-3 batch, queue each user-owned question with queue add --lane lane:example-repo/LAB-123 and write its queue id in Questions.
+In the step-3 batch, queue each user-owned question with compactinue-store queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d and write its queue id in Questions.

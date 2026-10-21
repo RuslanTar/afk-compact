@@ -206,13 +206,13 @@ export const CORPUS: readonly CorpusEntry[] = [
  },
  {
   "file": "19-manual-marker-handoff.txt",
-  "text": "\u27eacompactinue v1 n=cd2e3f40 s=manual\u27eb\n# LAB-77 \u2014 import report paginates\n## Resume here\nStatus: waiting-owner \u00b7 State: pagination done, owner to pick the page size (checkpoint: clean)\nStep 1: `bin/test spec/reports/import_report_spec.rb` \u2014 proposed\nGate: Q-1 \u00b7 Don't: hard-code the page size before the owner answers\nLive: nothing running known (not checked)\n## User constraints\nnone stated\n## Decisions and do-not-re-raise\nD-1 cursor pagination \u2014 because offsets drift while rows are inserted (agent)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 page size 50 or 200 \u00b7 blocks Step 1 \u00b7 options 50, 200 \u00b7 recommendation 50 \u00b7 raised by agent \u00b7 asked 13:40\n## Work done and findings\nImportReport pagination: tested \u2014 app/reports/import_report.rb#each_page; tests: 12 pass, `bin/test spec/reports`\n## Next steps\n1. `bin/test spec/reports/import_report_spec.rb` \u2014 done when the owner's page size is set and green\n\u27ea/compactinue n=cd2e3f40\u27eb\n",
+  "text": "\u27eacompactinue v1 n=cd2e3f40 s=manual\u27eb\n# LAB-77 \u2014 import report paginates\n## Resume here\nStatus: waiting-owner \u00b7 State: pagination done, owner to pick the page size (checkpoint: clean)\nStep 1: `bin/test spec/reports/import_report_spec.rb` \u2014 proposed\nGate: Q-1 \u00b7 Don't: hard-code the page size before the owner answers\nLive: nothing running known (not checked)\n## User constraints\nnone stated\n## Decisions and do-not-re-raise\nD-1 cursor pagination \u2014 because offsets drift while rows are inserted (agent)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 page size 50 or 200 \u00b7 blocks Step 1 \u00b7 options 50, 200 \u00b7 recommendation 50 \u00b7 raised by agent \u00b7 asked 2026-10-21 13:40 +0300\n## Work done and findings\nImportReport pagination: tested \u2014 app/reports/import_report.rb#each_page; tests: 12 pass, `bin/test spec/reports`\n## Next steps\n1. `bin/test spec/reports/import_report_spec.rb` \u2014 done when the owner's page size is set and green\n\u27ea/compactinue n=cd2e3f40\u27eb\n",
   "verdict": "ok",
   "marker_line": 1,
   "sentinel_from_end": 1,
   "nonce": "cd2e3f40",
   "scope": "manual",
-  "normalized_sha256": "088d4ace4be73677c1092e9dca35fb102f9057b16655a9586dcdfd53599b7fd4",
+  "normalized_sha256": "377147e6d8cda830acf63c9c80470c66fa5d2427dc7585846afcb93e0c59c85b",
   "dispatch": null
  },
  {
@@ -447,13 +447,13 @@ export const CORPUS: readonly CorpusEntry[] = [
  },
  {
   "file": "34-unmarked-main-b.txt",
-  "text": "<summary>\n# LAB-77 \u2014 import report paginates\n## Resume here\nStatus: waiting-owner \u00b7 State: pagination done, owner to pick the page size (checkpoint: clean)\nStep 1: `bin/test spec/reports/import_report_spec.rb` \u2014 proposed\nGate: Q-1 \u00b7 Don't: hard-code the page size before the owner answers\nLive: nothing running known (not checked)\n## User constraints\nnone stated\n## Decisions and do-not-re-raise\nD-1 cursor pagination \u2014 because offsets drift while rows are inserted (agent)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 page size 50 or 200 \u00b7 blocks Step 1 \u00b7 options 50, 200 \u00b7 recommendation 50 \u00b7 raised by agent \u00b7 asked 13:40\n## Work done and findings\nImportReport pagination: tested \u2014 app/reports/import_report.rb#each_page; tests: 12 pass, `bin/test spec/reports`\n## Next steps\n1. `bin/test spec/reports/import_report_spec.rb` \u2014 done when the owner's page size is set and green\n</summary>\n",
+  "text": "<summary>\n# LAB-77 \u2014 import report paginates\n## Resume here\nStatus: waiting-owner \u00b7 State: pagination done, owner to pick the page size (checkpoint: clean)\nStep 1: `bin/test spec/reports/import_report_spec.rb` \u2014 proposed\nGate: Q-1 \u00b7 Don't: hard-code the page size before the owner answers\nLive: nothing running known (not checked)\n## User constraints\nnone stated\n## Decisions and do-not-re-raise\nD-1 cursor pagination \u2014 because offsets drift while rows are inserted (agent)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 page size 50 or 200 \u00b7 blocks Step 1 \u00b7 options 50, 200 \u00b7 recommendation 50 \u00b7 raised by agent \u00b7 asked 2026-10-21 13:40 +0300\n## Work done and findings\nImportReport pagination: tested \u2014 app/reports/import_report.rb#each_page; tests: 12 pass, `bin/test spec/reports`\n## Next steps\n1. `bin/test spec/reports/import_report_spec.rb` \u2014 done when the owner's page size is set and green\n</summary>\n",
   "verdict": "unshaped",
   "marker_line": null,
   "sentinel_from_end": null,
   "nonce": null,
   "scope": null,
-  "normalized_sha256": "d115cfb2f4414978504af242f3f105e1cecd7912a3987d75ea753bc0ccc943c9",
+  "normalized_sha256": "87f59d07463e2d50343bba3ad3cc6cac4f2fc261210e2ea8fac184813422a735",
   "dispatch": null
  },
  {

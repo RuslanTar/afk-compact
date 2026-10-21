@@ -25,5 +25,5 @@ Ids: one per item, never ranges, never renumbered. Copy an earlier summary's U-,
 Over ~2,000 characters of decisions, fold earlier-summary D-/X- lines nothing open uses into: D-1, X-2 settled; full text in ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_12-30-00_5e55a001_c1-5ca1ab.md (never U-).
 Measured facts below are the plugin's (2026-10-21T14:05:00+03:00): contradict none, do not restate them ("see Measured facts"); take the GSD position, durable evidence paths, the Queued: line (last in Open questions) and checked times only from them.
 Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1
-GSD: phase 2 of 4, plan 2.3 in progress (checked 14:05)
+GSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)
 Aim for 6–10K characters, 12K with many live rows; cut Work done and Evidence first, never U-, D-, X-, In flight or questions. Replace the earlier summary; do not extend it.
