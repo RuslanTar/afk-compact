@@ -55,7 +55,11 @@ export async function onSessionStart(d: Deps): Promise<void> {
   await versionCanary(d, sid)
   const pol = await d.policy()
   await log(d, sid, 'policy', { mods_managed_only: pol.mods_managed_only, hooks_managed_only: pol.hooks_managed_only })
-  await log(d, sid, 'session', { phase: 'start', source: null, mod_loaded: true })
+  // WATCHER-SPEC §6.3 `session` fields; unknown values are null, never omitted (§6.2).
+  await log(d, sid, 'session', {
+    phase: 'start', source: null, reason: null, mod_loaded: true, previous_session_id: null, lineage_reason: null,
+    pid_lstart: d.state.ident?.pid_lstart ?? null,
+  })
 }
 
 /** Main `turn.start`: cancels the boundary timer, clears halt on a user turn, writes liveness. */

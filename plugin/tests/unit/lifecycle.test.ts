@@ -26,7 +26,8 @@ test('session.start rows: policy flags and the session row', async ($, on) => {
   w.policy = { allowManagedModsOnly: true }
   await w.start($)
   expect(w.rowsOf('policy')[0]).toMatchObject({ mods_managed_only: true, hooks_managed_only: false, writer: 'mod', sid: SID_A, pid: 43210, v: 1 })
-  expect(w.rowsOf('session')[0]).toMatchObject({ phase: 'start', mod_loaded: true })
+  expect(w.rowsOf('session')[0]).toMatchObject({ phase: 'start', mod_loaded: true, pid_lstart: 'Tue Oct 21 14:00:00 2026' })
+  for (const k of ['source', 'reason', 'previous_session_id', 'lineage_reason']) expect(w.rowsOf('session')[0]?.[k]).toBeNull()
   for (const r of w.rows) for (const k of ['v', 'ts', 'ev', 'sid', 'actor', 'writer', 'pid', 'plugin_version', 'cc_version', 'turn_seq']) expect(Object.keys(r)).toContain(k)
 })
 
