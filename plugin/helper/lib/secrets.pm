@@ -138,17 +138,24 @@ sub is_log_or_json {
     return util::basename($path) =~ /\.(log|json|jsonl|ndjson|out|output)$/i ? 1 : 0;
 }
 
-# classify_file(path) -> (copy|redact|withhold, \@hits)
+our $SCAN_MAX = 12 * 1024 * 1024;
+
+# classify_file(path) -> (copy|redact|withhold, \@hits, $scanned): the third value is the
+# file's bytes as scanned (copy and redact only), so a caller can write exactly what the
+# gate read rather than read the file again (bytes appended in between were never
+# scanned). A file larger than one scan reads is withheld as `too-large` (RRP-06): the
+# part past the scan was never looked at.
 sub classify_file {
     my ($path) = @_;
     return ('withhold', [{ rule => 'deny-name', class => 'HARD', count => 1 }]) if denied_name($path) || never_copy($path);
-    my $raw = util::read_file($path, 12 * 1024 * 1024);
+    my $raw = util::read_file($path, $SCAN_MAX + 1);
     return ('withhold', [{ rule => 'unreadable', class => 'HARD', count => 1 }]) unless defined $raw;
+    return ('withhold', [{ rule => 'too-large', class => 'HARD', count => 1 }]) if length($raw) > $SCAN_MAX;
     my $hits = scan($raw);
-    return ('copy', []) unless @$hits;
-    return ('redact', $hits) if is_log_or_json($path);
+    return ('copy', [], $raw) unless @$hits;
+    return ('redact', $hits, $raw) if is_log_or_json($path);
     return ('withhold', $hits) if has_hard($hits);
-    return ('redact', $hits);
+    return ('redact', $hits, $raw);
 }
 
 sub rule_ids { return join(',', map { $_->{rule} } @{ $_[0] || [] }) }
