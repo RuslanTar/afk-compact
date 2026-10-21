@@ -1,0 +1,209 @@
+{
+ "id": "D-12-roots",
+ "note": "BUILD-PLAN 3.1 unsafe roots (MOD-SPEC 1.2 refined by D-12, provisional): handoff_root inside a git work tree and not ignored -> REFUSED: root-in-git; inside a work tree but git-ignored -> saved, one root_in_git {ignored:true} row; inside .planning/ -> REFUSED: root-in-planning; shaping (the PreCompact fallback) still runs under a refused root",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "root in git, not ignored",
+   "setup": [
+    {
+     "repo": "$TMP/repo",
+     "ignore": [
+      "ign/"
+     ]
+    },
+    {
+     "mkdir": "$TMP/repo/ign"
+    },
+    {
+     "mkdir": "$TMP/plan/.planning"
+    },
+    {
+     "write": "$TMP/sum.txt",
+     "text": "summary body\n"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/repo/hr",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/w1"
+   },
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "-",
+    "--from",
+    "$TMP/sum.txt",
+    "--writer",
+    "postcompact-fallback",
+    "--scope",
+    "unknown",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_contains": [
+     "REFUSED: root-in-git"
+    ],
+    "absent": [
+     "$TMP/repo/hr"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1,
+      "fields": {
+       "key": "handoff_root",
+       "ignored": false,
+       "reason": "root-in-git"
+      }
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "fields": {
+       "result": "failed:root-in-git"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "root in git, ignored",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/repo/ign/r",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/w2"
+   },
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "-",
+    "--from",
+    "$TMP/sum.txt",
+    "--writer",
+    "postcompact-fallback",
+    "--scope",
+    "unknown",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "Saved copy: "
+    ],
+    "files": [
+     {
+      "path": "$TMP/repo/ign/r/*/general/compact/unattributed/*.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$TMP/w2/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1,
+      "fields": {
+       "key": "handoff_root",
+       "ignored": true
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "root inside .planning/",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/plan/.planning/r",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/w3"
+   },
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "-",
+    "--from",
+    "$TMP/sum.txt",
+    "--writer",
+    "postcompact-fallback",
+    "--scope",
+    "unknown",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_contains": [
+     "REFUSED: root-in-planning"
+    ],
+    "absent": [
+     "$TMP/plan/.planning/r"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/w3/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1,
+      "fields": {
+       "key": "handoff_root",
+       "ignored": false,
+       "reason": "root-in-planning"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "shaping still runs under a refused root",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/repo/hr",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/w1"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout_golden": {
+     "files": [
+      "$FIX/assembly/expected/handoff-instructions__auto.txt",
+      "$FIX/assembly/expected/subagent-instructions__fallback.txt"
+     ],
+     "nonce": "a1b2c3d4"
+    },
+    "absent": [
+     "$TMP/repo/hr"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "count": 1
+     },
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "root_in_git",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -59,6 +59,32 @@
      "git"
     ]
    }
+  },
+  {
+   "name": "positive control: a git that is not /usr/bin/git runs and is traced",
+   "setup": [
+    {
+     "stub": "git",
+     "script": "exit 1"
+    }
+   ],
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "git: not a repository"
+    ],
+    "trace_has": [
+     "git"
+    ]
+   }
   }
  ]
 }
