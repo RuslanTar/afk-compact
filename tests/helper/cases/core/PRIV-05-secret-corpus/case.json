@@ -1,15 +1,10 @@
 {
  "id": "PRIV-05-secret-corpus",
- "note": "PRIV-05 (MOD-SPEC §10 AT-E-04, handoff-spec §10, BUILD-PLAN §5): every entry and name of the shared fragment corpus (tests/fixtures/secrets/corpus.json, values joined at run time, never stored whole) through the shipped secret gate: HARD entries hit a HARD rule, WARN entries hit a rule, controls hit none; redaction, with all rules and with HARD rules only (the summary-copy path), leaves no fragment; deny-listed names are withheld and the example/sample/template/dist names are not. The two PEM entries keep their key body under the shipped pem rule (header line only): PRIV-01, a WP-text rule fix, so they are TODO here",
+ "note": "PRIV-05 (MOD-SPEC §10 AT-E-04, handoff-spec §10, BUILD-PLAN §5): every entry and name of the shared fragment corpus (tests/fixtures/secrets/corpus.json, values joined at run time, never stored whole) through the shipped secret gate: HARD entries hit a HARD rule, WARN entries hit a rule, controls hit none; redaction, with all rules and with HARD rules only (the summary-copy path), leaves no fragment; deny-listed names are withheld and the example/sample/template/dist names are not. The PEM entries (whole blocks, a short last line, JSON-escaped) are also the PRIV-01 regression check: under a pem rule that matches only the BEGIN line their key body survives redaction",
  "steps": [
   {
    "lib": "secret_corpus",
-   "args": {
-    "known_gaps": {
-     "pem-rsa": "PRIV-01: the pem rule matches only the BEGIN line (assets/handoff-spec.md, WP-text)",
-     "pem-openssh": "PRIV-01: the pem rule matches only the BEGIN line (assets/handoff-spec.md, WP-text)"
-    }
-   }
+   "args": {}
   }
  ]
 }
