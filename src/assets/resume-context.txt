@@ -1,0 +1,12 @@
+The {{plugin}} plugin adds this after compaction: ≤3 tool calls before real work; heal actions apart, ≤2 per flagged row.
+Subagent: skip step 3; read your jobs' output yourself (blocking read ≤4 min per call, never a bare sleep or an idle turn); report to the parent as text. <!-- review-fix: "foreground wait" read as sleep, which is blocked -->
+1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.
+2. Last step, ≤1 call: [unverified] or MID-STEP → check its effect before anything unsafe to repeat; unclear and outward: ask.
+3. Background, 1 batch: probe In-flight rows the runtime did not re-announce, never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged ≥ max(15 min, 3× last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: restart once from the recipe `{{plugin}}-store heal-check --origin @session_id@ --item <runtime id> --bump` prints with ok, never detached; else ask. Leftovers: report, never kill. <!-- review-fix: restart was not limited to failed/lost rows; no idempotency check -->
+4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`. <!-- review-fix: was step 5, after "do Step 1"; consistency: v1 ships no Approvals (verified), MOD-SPEC §2.6 -->
+5. Step 1, ≤1 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails. <!-- review-fix: no stop rule invented work after auto-continue -->
+6. No recap, verification agents, sleep loops or turn-holding prompts; skip the saved copy. Drift or heals: one line.
+[midturn] Compacted mid-turn or precomputed: the last step is [unverified].
+[nonok] Summary not in handoff format: take state from Measured facts and kept messages.
+Measured facts (@measured_at@; saved copy of this summary: @saved_copy@):
+@remeasure@
