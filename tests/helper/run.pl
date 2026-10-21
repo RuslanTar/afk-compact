@@ -503,7 +503,7 @@ sub make_repo {
 sub is_setup_action {
     my ($s) = @_;
     return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
-                                               tempfiles secret_files repo_fixture paths);
+                                               tempfiles secret_files repo_fixture paths fixture_setup touch);
 }
 
 # ---------------------------------------------------------------- fixture recipes (tests/fixtures/README.md)
@@ -666,6 +666,18 @@ sub setup {
             return;
         }
         util::copy_file($src, $s->{to}, mode => oct($s->{mode} // '0600'));
+        return;
+    }
+    if (exists $s->{fixture_setup}) {
+        # tests/fixtures/setups/<id>.json: its "setup" steps, run in order (fixtures README "Setups")
+        my $rc = jsonc::decode(util::read_file(src_file("setups/$s->{fixture_setup}", $cdir)));
+        setup($_, $V, $case, $st, $cdir) for @{ $rc->{setup} || [] };
+        return;
+    }
+    if (exists $s->{touch}) {
+        # {"touch": path, "at": ISO}: the file's mtime on the case clock (age and mtime_ago_s are real-clock relative)
+        my $t = util::parse_iso($s->{at} // '') // die "touch $s->{touch}: bad time " . ($s->{at} // 'none') . "\n";
+        utime($t, $t, $s->{touch}) or die "touch $s->{touch}: $!\n";
         return;
     }
     if (exists $s->{tempfiles}) { fixture_tempfiles($s, $V, $cdir); return }
@@ -1232,6 +1244,15 @@ sub builtin {
         POSIX::tzset();
         return @e;
     }
+    if ($name eq 'assembly_runtime_fill') {
+        # fix-to-core §2: runtime.json values that spell the brand {{plugin}} are filled
+        my $rt = assembly_runtime($a->{file});
+        for my $k (sort keys %{ $a->{want} || {} }) {
+            my $w = $a->{want}{$k};
+            push @e, "runtime $k: " . ($rt->{$k} // 'missing') . ", want $w" unless ($rt->{$k} // '') eq $w;
+        }
+        return @e;
+    }
     if ($name eq 'handoff_turn_api') {
         # D-18 B7/B8: the seams begin and publish call (lib/handoff_turn.pm): the open ht
         # begin binds (newest, no .published, at most 60 min old), one stage per ht
@@ -1305,7 +1326,8 @@ sub assembly_runtime {
               session_id => '00000000-0000-4000-8000-000000000000', saved_copy => $prev, tokens => '612,345',
               queue_add => "$BRAND-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", measured_facts => '', remeasure => '');
     my $rf = $file // "$REPO/tests/fixtures/assembly/runtime.json";
-    if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, %$j) if ref $j eq 'HASH' }
+    # runtime.json may spell the brand {{plugin}} (the BT-02 rename drill regenerates goldens first)
+    if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, map { my $v = $j->{$_}; $v =~ s/\{\{plugin\}\}/$BRAND/g if defined $v && !ref $v; ($_ => $v) } keys %$j) if ref $j eq 'HASH' }
     return \%rt;
 }
 

@@ -1,0 +1,5 @@
+{"setup": [
+  {"mkdir": "$TMP/fx/dir"},
+  {"write": "$TMP/fx/dir/out.log", "text": "line 1\n"},
+  {"repo": "$TMP/fx/repo", "files": {"README.md": "r\n"}}
+]}
