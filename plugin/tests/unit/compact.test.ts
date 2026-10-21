@@ -293,3 +293,15 @@ test('AT-M2-02 (across loads): a version already seen in $.store logs no second 
   expect(w.rowsOf('self_call_hook_ran').length).toBe(0)
   expect(w.callsOf('dispatch').length).toBe(0)
 })
+
+test('@remeasure@: the after-step measures for this compaction\'s nonce (its own evidence), also for another plugin\'s trigger:plugin call', async ($, on) => {
+  const w = new World().install(on)
+  await $.turn.start({ text: 'go on', turnId: 't1' })
+  await raiseCompact($, { trigger: 'plugin' })
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce')
+  expect(nonce).toMatch(/^[0-9a-f]{8}$/)
+  expect(w.callsOf('checkpoint').length).toBe(0)
+  const m = w.callsOf('measure')
+  expect(m.length).toBe(1)
+  expect(w.flag(m[0], '--nonce')).toBe(nonce)
+})

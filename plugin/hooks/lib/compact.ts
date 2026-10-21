@@ -237,7 +237,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     s.fourthToasted = false
   }
   s.mainCompactions++
-  const block = await buildBlock(d, a.sid, { midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved })
+  const block = await buildBlock(d, a.sid, { nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved })
   s.pending = { sid: a.sid, nonce: a.nonce, block, resumePref: a.resumePref, turnSeq: s.turnSeq }
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)
   if (!s.fourthToasted && (s.mainCompactions >= 4 || chars > 12000)) {

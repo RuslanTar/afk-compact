@@ -47,6 +47,8 @@ export class World {
   /** The second line `save-copy` prints, or undefined for `Saved copy: <path>`. */
   saveLine: string | undefined
   helperDown = false
+  /** The effective watch folder `ident` reports (null: the helper refused every log folder). */
+  identWatch: string | null = WATCH
   name = ''
   /** `$.plugin.root`, read off the helper path. */
   root = ''
@@ -176,7 +178,7 @@ export class World {
     const sid = flag('--sid')
     switch (sub) {
       case 'ident':
-        return ok('{"pid":43210,"pid_lstart":"Tue Oct 21 14:00:00 2026","execpath_version":null}\n')
+        return ok(JSON.stringify({ pid: 43210, pid_lstart: 'Tue Oct 21 14:00:00 2026', execpath_version: null, watch: this.identWatch }) + '\n')
       case 'log': {
         const row = JSON.parse(flag('--json')) as Row
         if (flag('--stream') === 'paths') this.pathRows.push(row)
