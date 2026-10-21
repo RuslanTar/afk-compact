@@ -1,5 +1,5 @@
 The user's compactinue plugin asks for this form, not any list above; this subagent resumes cold. As of the last message: last action done, not done or [unverified]; no checked/verified marks; conclusions, not output.
-<summary> starts ⟪compactinue v1 n=a1b2c3d4 s=sub⟫, ends ⟪/compactinue n=a1b2c3d4⟫; in order:
+<summary> starts ⟪compactinue v1 n=1a2b3c4d s=sub⟫, ends ⟪/compactinue n=1a2b3c4d⟫; in order:
 ## Task as assigned: quoted
 ## Constraints from the parent: quoted
 ## Report: where, how (default text to parent)
