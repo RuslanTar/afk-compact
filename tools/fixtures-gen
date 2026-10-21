@@ -27,7 +27,10 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             transcript after each step's appends holds the declared transcript_state, and with
             "order": "S-21" SessionStart(compact) and PostCompact see no boundary row newer than
             PreCompact (lab S-21: the row lands after PostCompact)
-  rename   a temp copy renamed to another brand passes --check after the plain regenerate
+  scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
+            expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
+            equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
+  rename  a temp copy renamed to another brand passes --check after the plain regenerate
             step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
 Placeholders (tests/fixtures/README.md): `{{plugin}}` and `{{marketplace}}` are filled from
@@ -40,7 +43,7 @@ src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the pr
 built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
 deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
-import hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
+import datetime, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -477,6 +480,56 @@ def check_sequences():
     return problems, count
 
 
+# The scope-proof table (transcripts/scope-cases.json; MOD-SPEC §2.4 as amended by ROOT-RULINGS F2-1).
+SCOPE_CASES = os.path.join(FIX, "transcripts", "scope-cases.json")
+SCOPE_KEYS = {"expect_scope": True, "expect_scope_postcompact": False}   # key -> P3 counted
+
+
+def iso(ts):
+    return datetime.datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)
+
+
+def ref_scope(case, b, with_p3):
+    """main | sub | unknown by the §2.4 rule: main = P1-main, or P3-main with no subagent signal;
+    subagent = P1-sub, P2-sub or P3-sub; both or neither = unknown. with_p3=False is the reading
+    inside SessionStart(compact) and PostCompact (F2-1: the boundary row lands after them)."""
+    d = load_dispatch(case["dispatch"]) if case["dispatch"] else None
+    name, _, swap = case["summary"].partition("#nonce=")
+    text = fill(read(os.path.join(SUMMARIES, name)), b)
+    nonce = detect(text, b["name"])[3]
+    if swap and nonce:
+        text, nonce = text.replace(nonce, swap), swap
+    mscope = detect(text, b["name"])[4]
+    p1 = d if d and nonce and d["nonce"] == nonce else None
+    main = bool(p1 and p1.get("agent_id") is None and p1.get("channel") in ("mod-hook", "mod-self"))
+    sub = bool(p1 and p1.get("agent_id") is not None) or mscope == "sub"
+    if with_p3:
+        tdir = os.path.join(FIX, case["transcripts"])
+        p3_main = transcript_counts(read(os.path.join(tdir, "main.jsonl")))[0] > case["boundaries_count"]
+        agent_new = False
+        sdir = os.path.join(tdir, "subagents")
+        for f in sorted(os.listdir(sdir)) if os.path.isdir(sdir) else []:
+            for line in read(os.path.join(sdir, f)).split("\n"):
+                r = json.loads(line) if line.strip() else {}
+                if r.get("subtype") == "compact_boundary" and (d is None or iso(r["timestamp"]) > iso(d["ts"])):
+                    agent_new = True
+        main = main or (p3_main and not agent_new and not sub)
+        sub = sub or (agent_new and not p3_main)
+    return "unknown" if main == sub else ("main" if main else "sub")
+
+
+def check_scope_cases(b):
+    problems = []
+    table = json.loads(read(SCOPE_CASES))
+    for case in table["cases"]:
+        for key, with_p3 in sorted(SCOPE_KEYS.items()):
+            want = ref_scope(case, b, with_p3)
+            if case.get(key) != want:
+                problems.append("scope-cases {}: {} is {}, the §2.4 rule{} gives {}".format(
+                    case["id"], key, case.get(key), "" if with_p3 else " without P3 (F2-1)", want))
+    return problems, len(table["cases"])
+
+
 # The rename drill (BUILD-PLAN §4.6, fixture side): a temp copy with another brand must pass
 # --check after the plain regenerate step alone. The corpus sha column depends on the brand
 # (README "Corpus"), so this fails whenever the regenerate step leaves that column stale.
@@ -589,6 +642,10 @@ def check(b):
     seq_problems, nseq = check_sequences()
     problems += seq_problems
     print("sequences: {} replayed (transcript state per step, S-21 order)".format(nseq))
+    # scope
+    scope_problems, nscope = check_scope_cases(b)
+    problems += scope_problems
+    print("scope: {} scope-cases rows against the §2.4 rule, at reconcile and inside PostCompact".format(nscope))
     # drift
     gen_dir = os.path.join(REPO, GEN_REL)
     for name, text in sorted(rendered.items()):

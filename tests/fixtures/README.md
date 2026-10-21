@@ -31,7 +31,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `roots/<case>/` | handoff-root states to copy into `$ROOT`: pins, lineage, per-process records, two earlier copies (`seq-2`) | AT-M5-01, M5-02, M5-10 |
 | `settings/<case>.json` | `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json` with `pluginConfigs` | AT-P-10, E-14, D-12 |
 | `transcripts/<case>/main.jsonl`, `subagents/agent-<id>.jsonl` | transcript rows, TF Q3 §1a shapes | AT-C-08, M3-02, M3-12, M4-03, T-01..T-25 |
-| `transcripts/scope-cases.json` | the scope-proof table: dispatch, summary, transcript dir, count seed, expected scope | AT-C-08, AT-M4-03 |
+| `transcripts/scope-cases.json` | the scope-proof table: dispatch, summary, transcript dir, count seed, expected scope at reconcile (`expect_scope`, every proof) and inside SessionStart(compact)/PostCompact (`expect_scope_postcompact`, no P3: F2-1) | AT-C-08, AT-M4-03 |
 | `watcher/T-NN/` | `input.json` (seeds, ordered hook steps), `payloads/`, `seed/`, `expected.json` | WATCH §9 T-01..T-25 |
 | `sequences/<id>/`, `transcripts/<id>/` | ordered hook steps with the main transcript's state per step: `S-21-classic`, `S-21-mod` (the live S-21 event order) | F2-1 regression, AT-C-08, AT-M4-03 |
 | `secrets/corpus.json` | secret values as fragments (with per-line and per-value parts), file-name deny-list cases, sweep files | AT-E-04, E-06, S-10 |
