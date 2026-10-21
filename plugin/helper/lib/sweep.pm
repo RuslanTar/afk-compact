@@ -13,8 +13,9 @@ our @STATUSES = qw(copied dup ref-only redacted withheld missing referenced-budg
 sub _in_scope {
     my ($p) = @_;
     return 0 unless defined $p && $p =~ m{^/};
+    # macOS paths also come in their realpath form (/tmp and /var are links into /private)
     return 1 if $p =~ m{^(?:/private)?/tmp/};
-    return 1 if $p =~ m{^/var/folders/};
+    return 1 if $p =~ m{^(?:/private)?/var/folders/};
     my $t = $ENV{TMPDIR};
     if (defined $t && $t =~ m{^/.+}) { $t =~ s{/+$}{}; return 1 if index($p, "$t/") == 0 }
     return 1 if $p =~ m{/scratchpad/};
