@@ -35,7 +35,7 @@ describe('AT-C-01 nonce', () => {
 })
 
 describe('AT-C-02 detector', () => {
-  const P = 'compactinue-test'
+  const P = 'zz-detect-probe'
   const n = '1a2b3c4d'
   const marker = markerText(P, n, 'main')
   const sentinel = sentinelText(P, n)
