@@ -65,7 +65,7 @@ sub parse_iso {
 sub _local_offset {
     my ($t) = @_;
     my @l = localtime($t);
-    return timegm(@l[0 .. 5]) - $t;
+    return timegm(@l[0 .. 4], $l[5] + 1900) - $t;
 }
 
 # Local time with offset and milliseconds (WATCH §6.2 envelope `ts`).
