@@ -29,15 +29,35 @@ sub rows {
 }
 
 # Rows of a log stream (classic or mod), decoded.
+# stream_rows(path, evs => [ev, ...], tail => bytes): `evs` decodes only rows of those
+# events (a line is skipped before the JSON decode unless its "ev" value is listed, so a
+# long session's sweep and session rows cost a regex test, not a decode); `tail` reads
+# only the last bytes of the file (the partial first line dropped).
 sub stream_rows {
-    my ($path) = @_;
+    my ($path, %o) = @_;
     my @out;
-    open(my $fh, '<:raw', $path) or return \@out;
-    while (my $l = <$fh>) {
+    return \@out unless defined $path;
+    my $want;
+    if ($o{evs}) { my $alt = join('|', map { quotemeta } @{ $o{evs} }); $want = qr/"ev"\s*:\s*"(?:$alt)"/ }
+    my @lines;
+    if ($o{tail}) {
+        my $data = util::read_tail($path, $o{tail}) // return \@out;
+        @lines = split /\n/, $data;
+    } else {
+        open(my $fh, '<:raw', $path) or return \@out;
+        while (my $l = <$fh>) {
+            next if $want && $l !~ $want;
+            my $j = eval { jsonc::decode($l) } or next;
+            push @out, $j if ref $j eq 'HASH';
+        }
+        close $fh;
+        return \@out;
+    }
+    for my $l (@lines) {
+        next if $want && $l !~ $want;
         my $j = eval { jsonc::decode($l) } or next;
         push @out, $j if ref $j eq 'HASH';
     }
-    close $fh;
     return \@out;
 }
 

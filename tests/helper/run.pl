@@ -31,6 +31,7 @@
 #     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
+#     write + jsonl_repeat {row, count} (then any jsonl rows);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it)
@@ -496,6 +497,8 @@ sub setup {
         elsif (exists $s->{lines}) { $text = join('', map { "line $_ of the output\n" } 1 .. $s->{lines}) }
         else { $text = $s->{text} // '' }
         if ($s->{jsonl}) { $text = join('', map { jsonc::encode($_) . "\n" } @{ $s->{jsonl} }) }
+        # jsonl_repeat {row, count}: one row many times (a long session's stream), then the jsonl rows
+        if ($s->{jsonl_repeat}) { $text = (jsonc::encode($s->{jsonl_repeat}{row}) . "\n") x $s->{jsonl_repeat}{count} . ($s->{jsonl} ? $text : '') }
         write_text($p, $text, $s->{mode});
         if (defined $s->{mtime_ago_s}) { my $t = time - $s->{mtime_ago_s}; utime($t, $t, $p) }
         return;

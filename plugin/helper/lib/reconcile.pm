@@ -12,6 +12,8 @@ package reconcile;
 use strict;
 use warnings;
 
+our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered);
+
 sub _before_epoch {
     my ($rows) = @_;
     my $min;
@@ -29,7 +31,10 @@ sub run {
     my $deadline = $t0 + ($a{budget_ms} // 2000);
     my $now = util::now();
     my %n = (late => 0, unresolved => 0, precompute_not_reused => 0, order_anomaly => 0, undelivered => 0);
-    my $classic = rollup::stream_rows(rc::stream_path('classic'));
+    # only the rows reconcile reads (its own rows, copies, PreCompact rows): a long
+    # session's other rows are skipped before the decode (the Stop budget)
+    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => [@OWN_ROWS, qw(copy precompact precompact_shaped
+                                                                                            precompact_marker_orphan precompact_fallback)]);
     my $rolls = rollup::rows($sid_dir);
     my (%copied, %logged, %rolled_id6, %rolled_nonce);
     for my $r (@$classic) {

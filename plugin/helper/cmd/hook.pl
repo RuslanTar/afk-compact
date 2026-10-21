@@ -305,11 +305,13 @@ sub _turn_kind {
         }
         return 0;
     };
-    my $rolls = rollup::rows($d);
+    # Only the newest row of each kind matters, and PermissionDenied has 2 s: read the
+    # stream tails (256 KB) and decode only the rows asked for.
+    my $rolls = rollup::stream_rows("$d/compactions.jsonl", tail => 256 * 1024);
     return 'post-compaction' if grep { ($_->{actor} // '') eq 'main' && (util::parse_iso($_->{ts} // '') // 0) > $last } @$rolls;
-    my $classic = rollup::stream_rows(rc::stream_path('classic'));
+    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => ['resume_receipt'], tail => 256 * 1024);
     return 'resume' if $newer->($classic, qr/^resume_receipt$/);
-    my $mod = rollup::stream_rows(rc::stream_path('mod'));
+    my $mod = rollup::stream_rows(rc::stream_path('mod'), evs => ['nudge'], tail => 256 * 1024);
     return 'nudge' if $newer->($mod, qr/^nudge$/);
     return 'other';
 }

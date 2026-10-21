@@ -11,7 +11,7 @@ sub _resolved {
     my ($sid_dir, $classic) = @_;
     my %r;
     for my $row (@{ rollup::rows($sid_dir) }) { $r{ $row->{nonce} } = 1 if defined $row->{nonce} }
-    for my $row (@{ rollup::stream_rows($classic) }) {
+    for my $row (@{ rollup::stream_rows($classic, evs => [qw(copy copy_deferred)]) }) {
         next unless ($row->{ev} // '') =~ /^(copy|copy_deferred)$/ && defined $row->{nonce};
         next if ($row->{ev} eq 'copy') && ($row->{result} // '') =~ /^failed/;
         $r{ $row->{nonce} } = 1;
@@ -23,7 +23,7 @@ sub _resolved {
 # $.session.compact call as rejected, or the compaction as skipped (compacted skip=<class>).
 sub _mod_closed {
     my %c;
-    for my $row (@{ rollup::stream_rows(rc::stream_path('mod')) }) {
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compact_rejected compacted)]) }) {
         my $ev = $row->{ev} // '';
         next unless defined $row->{nonce} && !ref $row->{nonce};
         $c{ $row->{nonce} } = 1 if $ev eq 'compact_rejected' || ($ev eq 'compacted' && defined $row->{skip});

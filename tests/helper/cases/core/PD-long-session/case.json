@@ -1,0 +1,187 @@
+{
+ "id": "PD-long-session",
+ "note": "BUILD-PLAN §3.3 PermissionDenied (2 s) row: a long session (60,000 classic and 60,000 mod rows before this turn) does not push PermissionDenied past its timeout; the turn kind still comes from the newest rows: a resume_receipt after the last Stop gives turn_kind resume, a nudge gives nudge",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "resume turn",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$WATCH/$SID/last-stop",
+     "text": "2026-10-21T14:00:00.000+03:00\n"
+    },
+    {
+     "write": "$WATCH/$SID.classic.jsonl",
+     "jsonl_repeat": {
+      "row": {
+       "v": 1,
+       "ts": "2026-10-21T10:00:00.000+03:00",
+       "ev": "sweep",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "classic",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": "2.1.306",
+       "turn_seq": null,
+       "file": "main",
+       "from_off": 0,
+       "to_off": 99,
+       "rows": 40,
+       "bytes": 5000,
+       "ms": 10
+      },
+      "count": 60000
+     },
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-21T14:01:00.000+03:00",
+       "ev": "resume_receipt",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "helper",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": "2.1.306",
+       "turn_seq": null,
+       "handoff": null,
+       "relation": "same",
+       "tier": "T1"
+      }
+     ]
+    },
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl_repeat": {
+      "row": {
+       "v": 1,
+       "ts": "2026-10-21T10:00:00.000+03:00",
+       "ev": "skip",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": "2.1.306",
+       "turn_seq": null,
+       "why": "cooldown"
+      },
+      "count": 60000
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 60"
+    },
+    "tool_use_id": "toolu_01",
+    "reason": "denied by a rule"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "ms_max": 2000,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 1,
+      "fields": {
+       "turn_kind": "resume",
+       "caused_by": "plugin",
+       "guard_class": "sleep-poll"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "nudge turn",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/last-stop",
+     "text": "2026-10-21T14:02:00.000+03:00\n"
+    },
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl_repeat": {
+      "row": {
+       "v": 1,
+       "ts": "2026-10-21T10:00:00.000+03:00",
+       "ev": "skip",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": "2.1.306",
+       "turn_seq": null,
+       "why": "cooldown"
+      },
+      "count": 60000
+     },
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-21T14:03:00.000+03:00",
+       "ev": "nudge",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": "2.1.306",
+       "turn_seq": null,
+       "tokens": 600000
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 60"
+    },
+    "tool_use_id": "toolu_01",
+    "reason": "denied by a rule"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "ms_max": 2000,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 1,
+      "fields": {
+       "turn_kind": "nudge"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}
