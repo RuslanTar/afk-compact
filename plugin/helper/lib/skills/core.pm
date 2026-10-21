@@ -16,7 +16,8 @@ package skills::core;
 #   identity::lstart($pid)             -> optional; start time in the record format
 #   nonce::draw($sid)                  -> 8 lowercase hex
 #   secrets::scan($text)               -> [{rule, class}]
-#   secrets::classify_file($path)      -> copy | redact | withhold
+#   secrets::classify_file($path)      -> (copy | redact | withhold, [{rule, class}])
+#   secrets::redact($text)             -> ($redacted_text, [{rule, class}]) over every rule class
 #   evidence::copy($src,$dir,\%caps,$index) -> {status, copy, bytes, sha256, mtime, scan, rules}
 #   gsd::read($worktree)               -> arrayref of lines | {lines=>[...]} | undef
 #   queue::call(\@argv, $budget_ms)    -> {rc|exit, out|stdout, timed_out|timeout}
@@ -168,9 +169,30 @@ sub secrets_scan {
 
 sub classify_file {
     my ($path) = @_;
-    my ($r) = secrets::classify_file($path);    # WP-core returns (action, \@hits)
+    my ($r) = classify_file_hits($path);
+    return $r;
+}
+
+# (copy|redact|withhold, [{rule, class}]): the gate's verdict and its hits (ids, never values).
+sub classify_file_hits {
+    my ($path) = @_;
+    my ($r, $hits) = secrets::classify_file($path);    # WP-core returns (action, \@hits)
     $r = $r->{action} // $r->{class} if ref $r eq 'HASH';
-    return $r // 'copy';
+    return ($r // 'copy', _hits($hits));
+}
+
+# (text with each hit replaced by [redacted:<rule>], [{rule, class}]), every rule class.
+sub secrets_redact {
+    my ($text) = @_;
+    my ($red, $hits) = secrets::redact($text);
+    die "secrets: redact gave no text\n" unless defined $red;
+    return ($red, _hits($hits));
+}
+
+sub _hits {
+    my ($h) = @_;
+    return [] unless ref $h eq 'ARRAY';
+    return [ map { { rule => $_->{rule} // $_->{id} // 'unknown', class => uc($_->{class} // 'WARN') } } @$h ];
 }
 
 sub evidence_copy {

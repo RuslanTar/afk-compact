@@ -67,7 +67,11 @@ sub restore {
     return 0;
 }
 
-# stash: copy one file into today's disposable folder; print the copy path.
+# stash: copy one file into today's disposable folder; print the copy path
+# (the last line). The secret gate runs first (TPL §5): withhold → REFUSED:
+# withheld; redact → a redacted copy, its rule ids (never values) printed as
+# `ADVISORY secret-hard rules=<ids>` and, for WARN hits, `ADVISORY secret-warn
+# rules=<ids>` (D-13); copy → a byte copy.
 sub stash {
     my ($argv) = @_;
     skills::cli::opts($argv);
@@ -77,15 +81,28 @@ sub stash {
     my $ctx = skills::ctx::new({});
     my $rr = skills::core::roots_check($ctx->{settings});
     die skills::cli::refuse($rr) if $rr;
-    die skills::cli::refuse('withheld') if skills::core::classify_file($src) eq 'withhold';
+    my ($verdict, $hits) = skills::core::classify_file_hits($src);
+    die skills::cli::refuse('withheld') if $verdict eq 'withhold';
     my $now = skills::util::now();
     my $dir = "$ctx->{disposable}/" . skills::util::ymd($now) . '/stash';
     skills::util::mkdir_p($dir);
     my $name = File::Basename::basename($src);
     my ($stem, $ext) = $name =~ /\A(.*?)((?:\.[^.]+)?)\z/;
     my $dest = skills::util::unique_path($dir, skills::util::stem_time($now) . "_$stem", $ext);
-    my $res = skills::util::copy_file($src, $dest, 0600);
-    die "stash: $res\n" unless $res eq 'copied';
+    if ($verdict eq 'redact') {
+        my $raw = skills::util::read_file($src);
+        die "stash: cannot read $src\n" unless defined $raw;
+        my ($red, $rh) = skills::core::secrets_redact($raw);
+        skills::util::write_excl($dest, $red, 0600) or die "stash: exists\n";
+        my %by;
+        $by{ $_->{class} eq 'HARD' ? 'hard' : 'warn' }{ $_->{rule} } = 1 for @$hits, @$rh;
+        for my $c (qw(hard warn)) {
+            skills::cli::say("ADVISORY secret-$c rules=" . join(',', sort keys %{ $by{$c} })) if $by{$c};
+        }
+    } else {
+        my $res = skills::util::copy_file($src, $dest, 0600);
+        die "stash: $res\n" unless $res eq 'copied';
+    }
     skills::cli::say($dest);
     return 0;
 }
