@@ -39,3 +39,4 @@ file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatc
 38-mod-text-after-summary-close.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
 39-sub-native-numbered.txt	unshaped	-	-	-	-	e770844275df35871a098a0c03c051cecac26e6c3dcf175bde8a589acf3e25d9	
 40-empty-summary.txt	unshaped	-	-	-	-	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	
+41-sub-marker-main-heading.txt	scope-leak	1	1	5e6f7081	sub	112a1d8cdbf807f1bc8932210a06003646128b03a47dadb743ee8f451c6d8786	watch/dispatch-5e6f7081.json
