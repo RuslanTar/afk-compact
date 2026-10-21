@@ -185,25 +185,35 @@ sub run {
     my ($mre, $sre) = (skills::spec::marker_re(), skills::spec::sentinel_re());
     die "marker does not match the spec grammar\n" if ($mre && $marker !~ $mre) || ($sre && $sentinel !~ $sre);
     (my $btxt = $body) =~ s/\s+\z//;
+    # CR-F9 (D-18 B8): the whole file is written and read back under a temp name first;
+    # only then is the handoff-turn claim made, and the file is linked into place (an
+    # exclusive create). A failed write or read-back leaves no claim behind.
     my ($path, $content);
     for (1 .. 5) {
         $path = skills::util::unique_path($bucket, $s->{stem}, '.md');
         (my $bb = $btxt) =~ s/\@self\@/$path/g;
         $content = $fm . $marker . "\n" . $bb . "\n" . $sentinel . "\n";
-        if ($ht && defined $sid_dir) {
-            # One handoff per plugin handoff turn: the claim comes first (D-18 B8).
-            my ($ok, $have) = skills::core::ht_mark_published($sid_dir, $ht, $path);
-            if (!$ok) { _refuse($ctx, $row, "handoff-exists $have") }
-        }
-        last if skills::util::write_excl($path, $content, 0600);
-        die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
+        my $tmp = "$bucket/.$s->{stem}.md.publish-$$-" . int(rand(1e6));
+        my $placed = eval {
+            skills::util::write_excl($tmp, $content, 0600) or die "publish tmp exists: $tmp\n";
+            my $back = skills::util::read_file($tmp);
+            my @tail = grep { /\S/ } split /\n/, ($back // '');
+            die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
+                && @tail && $tail[-1] eq $sentinel;
+            if ($ht && defined $sid_dir) {
+                # One handoff per plugin handoff turn: the claim comes before the file (D-18 B8).
+                my ($ok, $have) = skills::core::ht_mark_published($sid_dir, $ht, $path);
+                if (!$ok) { unlink $tmp; _refuse($ctx, $row, "handoff-exists $have") }
+            }
+            _place($tmp, $path, $ht);
+        };
+        my $err = $@;
+        unlink $tmp if -e $tmp;
+        die $err unless defined $placed;
+        last if $placed;
         undef $path;
     }
     die "no free handoff name\n" unless $path;
-    my $back = skills::util::read_file($path);
-    my @tail = grep { /\S/ } split /\n/, ($back // '');
-    die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
-        && @tail && $tail[-1] eq $sentinel;
     skills::util::write_excl("$dir/published", "$path\n", 0600);
 
     # ---- pin under the TPL §6 lock
@@ -280,6 +290,21 @@ sub _job_lines {
     else { $t =~ s/^(\s*item:[^\n]*\n)/$1command: $cmd\n/m }
     $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · recorded\n/m;
     return $t;
+}
+
+# Link the checked temp file to the handoff path, never over an existing file: 1 placed,
+# 0 the name is taken (try the next one; after a handoff-turn claim it dies instead).
+# A file system without hard links falls back to a rename after an existence check.
+sub _place {
+    my ($tmp, $path, $ht) = @_;
+    return 1 if link($tmp, $path);
+    my $eexist = $!{EEXIST};
+    if ($eexist || -e $path || -l $path) {
+        die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
+        return 0;
+    }
+    rename($tmp, $path) or die "rename $path: $!\n";
+    return 1;
 }
 
 sub _refuse {
