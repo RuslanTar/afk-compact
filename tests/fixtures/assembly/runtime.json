@@ -9,7 +9,7 @@
   "measured_facts": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nGSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)",
   "remeasure": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none",
   "halt_reason": "the hourly auto-continue limit is reached",
-  "max_calls": "25",
+  "max_calls": "34",
   "handoff_path": "~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md",
   "draft_state": "present",
   "handoff_finish": "`{{plugin}}-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active`"
