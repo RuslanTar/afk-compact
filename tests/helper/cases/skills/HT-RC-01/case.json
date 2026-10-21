@@ -1,5 +1,6 @@
 {
  "id": "HT-RC-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "receipt: one content-free resume_receipt row (relation, tier, calls, drift[], bg{}, questions, adopt, handoff relative to the root), prints nothing; bad enums are usage errors",

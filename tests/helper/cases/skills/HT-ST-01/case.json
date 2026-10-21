@@ -1,5 +1,6 @@
 {
  "id": "HT-ST-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "stamp: HH:MM on the stage's day, MM-DD HH:MM after midnight (RV-24); each stamp appended to stamps.log; a directory that is not a stage -> REFUSED: no-stage",

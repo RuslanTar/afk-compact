@@ -1,5 +1,6 @@
 {
  "id": "HT-EV-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "evidence: every status (copied, dup, ref-only, redacted, withheld, missing); 10 MB per file and 50 MB per handoff caps -> ref-only; Evidence/Disposable/Ref-only/Volatile lines; WARN quota over evidence_quota_mb",

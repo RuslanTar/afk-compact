@@ -1,5 +1,6 @@
 {
  "id": "HT-PI-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "pin: writes <root>/.sessions/<sid>.json under the TPL §6 lock (bucket, resumed_from, worktree, lane); a lock whose owner pid is dead is taken over and logged lock_stale; a live owner's lock is never broken (REFUSED: pin-locked, pin unchanged); outside the root or an auto: lane refused",
@@ -60,7 +61,7 @@
  "then": [
   {
    "write": "$ROOT/.sessions/$SID.json.lock",
-   "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 999999, \"lstart\": \"Mon Jan  1 00:00:00 2001\", \"host\": \"h\"}"
+   "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 999999, \"pid_lstart\": \"Mon Jan  1 00:00:00 2001\", \"host\": \"$HOST\"}"
   },
   {
    "cwd": "$TMP/repo",
@@ -95,7 +96,7 @@
   },
   {
    "write": "$ROOT/.sessions/$SID.json.lock",
-   "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 1, \"lstart\": \"$LSTART1\", \"host\": \"h\"}"
+   "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"host\": \"$HOST\"}"
   },
   {
    "cwd": "$TMP/repo",

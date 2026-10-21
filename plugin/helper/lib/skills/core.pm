@@ -44,10 +44,20 @@ use detect;
 
 sub settings {
     my ($flags) = @_;
-    my $s = settings::resolve($flags || {});
+    # The core libraries read the run context (rc: root, watch, root checks, the row
+    # envelope). A skill flag can move the roots, so the context is built from the flags.
+    my $r = rc::init(sid => 'unknown', writer => 'helper', actor => 'main', flags => $flags || {});
+    my $s = ref $r eq 'HASH' ? $r->{settings} : undef;
     $s = $s->{values} if ref $s eq 'HASH' && ref $s->{values} eq 'HASH';
     die "settings: no result\n" unless ref $s eq 'HASH';
     return $s;
+}
+
+# The session id the core context logs and locks under (rc), once a skill knows it.
+sub bind_sid {
+    my ($sid) = @_;
+    rc::set_sid($sid) if defined $sid && $sid ne '' && defined &rc::set_sid;
+    return $sid;
 }
 
 sub paths {
@@ -64,6 +74,13 @@ sub roots_check {
     return undef if !defined $r;
     if (ref $r eq 'HASH') {
         return undef if $r->{ok};
+        # WP-core shape: one result per root key, {ok} or {ok => 0, reason}. The skills
+        # write under handoff_root and disposable_root; log_dir falls back in core.
+        my @per = grep { ref $r->{$_} eq 'HASH' } qw(handoff_root disposable_root);
+        if (@per) {
+            for my $k (@per) { return $r->{$k}{reason} // 'root-unsafe' unless $r->{$k}{ok} }
+            return undef;
+        }
         return $r->{refused} // $r->{reason} // 'root-unsafe';
     }
     return undef if $r eq 'ok' || $r eq '1';
@@ -121,8 +138,9 @@ sub claude_pid {
 sub lstart {
     my ($pid) = @_;
     return undef unless defined $pid && $pid =~ /\A\d+\z/;
-    if (defined &identity::lstart) {
-        my $v = eval { identity::lstart($pid) };
+    for my $f (qw(start_time lstart)) {
+        my $code = identity->can($f) or next;
+        my $v = eval { $code->($pid) };
         return $v if defined $v && $v ne '';
     }
     my $r = skills::util::run(['ps', '-o', 'lstart=', '-p', $pid], 2000);
@@ -150,17 +168,27 @@ sub secrets_scan {
 
 sub classify_file {
     my ($path) = @_;
-    my $r = secrets::classify_file($path);
+    my ($r) = secrets::classify_file($path);    # WP-core returns (action, \@hits)
     $r = $r->{action} // $r->{class} if ref $r eq 'HASH';
     return $r // 'copy';
 }
 
 sub evidence_copy {
     my ($src, $dir, $caps, $index) = @_;
-    my $r = evidence::copy($src, $dir, $caps, $index);
+    # WP-core keeps the running total behind a scalar ref (caps.used => \$bytes).
+    my %c = %{ $caps || {} };
+    $c{used} = \(my $u = $c{used} // 0) unless ref $c{used};
+    # The skill writes MANIFEST.tsv itself at publish (exclusive create), and its ref-only
+    # rows carry no copy (`ref-only - <bytes> <sha8> <origin>`, handoff SKILL Step 4).
+    $c{manifest} //= 0;
+    $c{ref_file} //= 0;
+    my $r = evidence::copy($src, $dir, \%c, $index);
     die "evidence: no row\n" unless ref $r eq 'HASH';
     $r->{status} //= $r->{result} // 'missing';
     $r->{copy}   //= $r->{copy_path} // $r->{path};
+    # WP-core does not hash a file withheld by name; the skill's rows and MANIFEST carry
+    # its sha256 (a hash, never content).
+    $r->{sha256} //= sha::hex256_file($src) if $r->{status} eq 'withheld' && -f $src;
     $r->{sha256} //= '';
     $r->{bytes}  //= 0;
     $r->{scan}   //= $r->{status} eq 'copied' ? 'full' : $r->{status};
@@ -191,7 +219,9 @@ sub queue_call {
 
 sub bucket_resolve {
     my ($sid, $cwd, $topic, $s) = @_;
-    my $r = bucket::resolve($sid, $cwd, $topic, $s);
+    # WP-core: resolve(sid, cwd, topic [, where]) reads the root from the run context,
+    # which settings() built from the same flags; the 4th argument is git facts, not settings.
+    my $r = bucket::resolve($sid, $cwd, $topic);
     die "bucket: no result\n" unless ref $r eq 'HASH' && $r->{path};
     return $r;
 }

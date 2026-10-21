@@ -1,5 +1,6 @@
 {
  "id": "HT-VE-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "verify <handoff>: one row per MANIFEST entry: ok (sha256 matches), missing (copy changed or gone), withheld, redacted, and ok for a ref-only origin at its recorded size; no manifest -> `no manifest`",

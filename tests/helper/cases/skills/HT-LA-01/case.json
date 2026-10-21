@@ -1,5 +1,6 @@
 {
  "id": "HT-LA-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "lane adopt: `queue: not configured` without queue_cmd; the bound lane; a different bound lane -> mismatch line, nothing queued; an auto: id refused (D-21 lane: only); a held lane -> the refusal relayed, exit 3",

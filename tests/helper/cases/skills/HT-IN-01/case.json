@@ -1,5 +1,6 @@
 {
  "id": "HT-IN-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "inventory <handoff>: last sidecar slot and its task outputs (size, mtime); In-flight rows with class; probe paths; recorded pids matched by start time (live / start-differs); leftover pid and port; recipes with script state; heal counters; no task tools (OD-19)",
