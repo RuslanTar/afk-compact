@@ -113,14 +113,20 @@ sub on_PreCompact {
     my @tags = (($trigger eq 'auto' ? ('auto') : ()), (defined $prev ? ('chain') : ()));
     my $bytes = do { my $c = $text; utf8::encode($c); length $c };
     if (defined(my $w = rc::watch())) {
-        my $c = rc::claude();
-        my $rec = dispatch::record(nonce => $nonce, session_id => $sid, actor => 'unknown', trigger => $trigger,
-                                   channel => 'classic', resume_pref => 'sessionstart', midturn => 0, tags => \@tags,
-                                   instructions_sha8 => substr(sha::hex256($text), 0, 8), instructions_bytes => $bytes,
-                                   cc_version => rc::cc_version(), load_id => undef, pid => $c->{pid}, pid_lstart => $c->{lstart});
-        dispatch::write($w, $sid, $rec);
-        rc::emit('dispatch', [nonce => $nonce, trigger => $trigger, agent_id => undef, compaction_seq => undef, channel => 'classic',
-                              resume_pref => 'sessionstart', midturn => jsonc::false(), tags => \@tags, instructions_bytes => $bytes]);
+        # A record that cannot be written (an unwritable root or watch dir) must not cost
+        # the shaping: the fallback text is still printed (MOD-SPEC §3.2).
+        my $ok = eval {
+            my $c = rc::claude();
+            my $rec = dispatch::record(nonce => $nonce, session_id => $sid, actor => 'unknown', trigger => $trigger,
+                                       channel => 'classic', resume_pref => 'sessionstart', midturn => 0, tags => \@tags,
+                                       instructions_sha8 => substr(sha::hex256($text), 0, 8), instructions_bytes => $bytes,
+                                       cc_version => rc::cc_version(), load_id => undef, pid => $c->{pid}, pid_lstart => $c->{lstart});
+            dispatch::write($w, $sid, $rec);
+            rc::emit('dispatch', [nonce => $nonce, trigger => $trigger, agent_id => undef, compaction_seq => undef, channel => 'classic',
+                                  resume_pref => 'sessionstart', midturn => jsonc::false(), tags => \@tags, instructions_bytes => $bytes]);
+            1;
+        };
+        rc::emit('watch_error', [stage => 'hook.PreCompact.dispatch', error_class => _error_class($@)]) unless $ok;
     }
     rc::emit('precompact_fallback', [nonce => $nonce, trigger => $trigger, bytes => $bytes, chain => jsonc::bool(defined $prev),
                                      orphan => jsonc::bool($d->{found})]);
