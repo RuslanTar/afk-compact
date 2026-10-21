@@ -1,0 +1,163 @@
+{
+ "id": "HT-WA-02",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-7 D2: the cap ends the wait with exit 10 within max + 1 s and the re-run line; --max 0 checks once and returns in under 1 s; --max outside 0..7200, a bad spec, no --for, an unknown flag or a stray argument is usage (exit 64)",
+ "steps": [
+  {
+   "name": "cap",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--max",
+    "2"
+   ],
+   "expect": {
+    "exit": 10,
+    "ms_max": 3000,
+    "stdout": "wait: pending after 2s (max 2s); run the same command again\n"
+   }
+  },
+  {
+   "name": "max 0",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10,
+    "ms_max": 1000,
+    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
+   }
+  },
+  {
+   "name": "max 7201",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--max",
+    "7201"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "max -1",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--max",
+    "-1"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "max not a number",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--max",
+    "1.5"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "bad condition",
+   "argv": [
+    "wait",
+    "--for",
+    "port:3000",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "pid 0",
+   "argv": [
+    "wait",
+    "--for",
+    "pid-exit:0",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "bad guard",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--while",
+    "marker:$TMP/x:y",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "no --for",
+   "argv": [
+    "wait",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "unknown flag",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--poll",
+    "1"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "stray argument",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "sleep"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  }
+ ]
+}

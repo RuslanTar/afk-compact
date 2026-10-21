@@ -1,0 +1,173 @@
+{
+ "id": "HT-WA-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-7 D2: pid-exit, file, marker and exit each end the wait with exit 0 and the documented line; exit: prints rc= for the active `__exit N` marker; the runtime `[exited with code N]` form is not matched while the spec marks it inactive (P-D1-2); any one of several --for conditions is enough; a marker appended during the wait is found",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/w/log",
+     "content": "boot\nREADY port=3000\n"
+    },
+    {
+     "write": "$TMP/w/ex",
+     "content": "build\n__exit 3\n"
+    },
+    {
+     "write": "$TMP/w/neg",
+     "content": "__exit -1\n"
+    },
+    {
+     "write": "$TMP/w/rt",
+     "content": "[exited with code 0]\n"
+    },
+    {
+     "write": "$TMP/w/late",
+     "content": "start\n"
+    }
+   ]
+  },
+  {
+   "name": "file",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/w/log",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done file:$TMP/w/log after 0s\n"
+   }
+  },
+  {
+   "name": "marker",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/w/log:READY port=\\d+",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done marker:$TMP/w/log:READY port=\\d+ after 0s line=2 match=READY port=3000\n"
+   }
+  },
+  {
+   "name": "exit prints rc",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/w/ex",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done exit:$TMP/w/ex after 0s rc=3 line=2\n"
+   }
+  },
+  {
+   "name": "exit with a negative code",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/w/neg",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Await: done exit:\\S+ after 0s rc=-1 line=1\\n\\z"
+    ]
+   }
+  },
+  {
+   "name": "the runtime trailer is inactive until P-D1-2",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/w/rt",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10,
+    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
+   }
+  },
+  {
+   "name": "pid-exit on a pid that is gone",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(exit 0) & p=$!; wait $p; exec \"$0\" wait --for pid-exit:$p --max 0",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Await: done pid-exit:\\d+ after 0s note=not-running-at-start\\n\\z"
+    ]
+   }
+  },
+  {
+   "name": "pid-exit when the job ends",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(sleep 1 & echo $! > \"$TMP_P\") ; exec \"$0\" wait --for pid-exit:$(cat \"$TMP_P\") --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 4000,
+    "stdout_has": [
+     "\\Await: done pid-exit:\\d+ after [0-2]s note=pid-unanchored\\n\\z"
+    ]
+   },
+   "env": {
+    "TMP_P": "$TMP/w/pid"
+   }
+  },
+  {
+   "name": "any of two conditions",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/w/none",
+    "--for",
+    "exit:$TMP/w/ex",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done exit:$TMP/w/ex after 0s rc=3 line=2\n"
+   }
+  },
+  {
+   "name": "exit marker appended during the wait",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(sleep 1; printf \"__exit 0\\n\" >> \"$TMP_F\") & exec \"$0\" wait --for exit:\"$TMP_F\" --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 4000,
+    "stdout_has": [
+     "\\Await: done exit:\\S+/late after [0-2]s rc=0 line=2\\n\\z"
+    ]
+   },
+   "env": {
+    "TMP_F": "$TMP/w/late"
+   }
+  }
+ ]
+}

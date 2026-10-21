@@ -1,0 +1,211 @@
+{
+ "id": "HT-WA-05",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-7 D2, REVIEW B-15, DP-14 (4): a FIFO, a directory or a device is refused as not-regular with exit 3 at once, with no blocking open; a marker regex that does not compile, is longer than 200 chars or holds (?{, (??{ or (* is usage (exit 64); a pattern that runs past --max is ended by alarm(max + 5) with exit 70 and no stdout",
+ "steps": [
+  {
+   "name": "make a FIFO",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "mkfifo \"$TMP_F\"",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "env": {
+    "TMP_F": "$TMP/fifo"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/log",
+     "content": "line\n"
+    },
+    {
+     "write": "$TMP/slow",
+     "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!\n"
+    }
+   ]
+  },
+  {
+   "name": "FIFO",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/fifo:x",
+    "--max",
+    "60"
+   ],
+   "expect": {
+    "exit": 3,
+    "ms_max": 1000,
+    "stdout": "REFUSED: not-regular $TMP/fifo\n"
+   }
+  },
+  {
+   "name": "FIFO as exit",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/fifo",
+    "--max",
+    "60"
+   ],
+   "expect": {
+    "exit": 3,
+    "ms_max": 1000,
+    "stdout": "REFUSED: not-regular $TMP/fifo\n"
+   }
+  },
+  {
+   "name": "directory",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP",
+    "--max",
+    "60"
+   ],
+   "expect": {
+    "exit": 3,
+    "ms_max": 1000,
+    "stdout": "REFUSED: not-regular $TMP\n"
+   }
+  },
+  {
+   "name": "device",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:/dev/zero:x",
+    "--max",
+    "60"
+   ],
+   "expect": {
+    "exit": 3,
+    "ms_max": 1000,
+    "stdout": "REFUSED: not-regular /dev/zero\n"
+   }
+  },
+  {
+   "name": "FIFO guard",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--while",
+    "file:$TMP/fifo",
+    "--max",
+    "60"
+   ],
+   "expect": {
+    "exit": 3,
+    "ms_max": 1000,
+    "stdout": "REFUSED: not-regular $TMP/fifo\n"
+   }
+  },
+  {
+   "name": "regex does not compile",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:(",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "regex of 201 chars",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "regex of 200 chars",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10
+   }
+  },
+  {
+   "name": "code block",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:(?{ 1 })",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "postponed regex",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:(??{ 'x' })",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "verb",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:(*FAIL)",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "overrun",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/slow:^(a+)+\\1$",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 70,
+    "ms_max": 9000,
+    "stdout": ""
+   },
+   "timeout_s": 30
+  }
+ ]
+}

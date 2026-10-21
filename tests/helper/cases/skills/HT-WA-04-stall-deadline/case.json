@@ -1,0 +1,143 @@
+{
+ "id": "HT-WA-04",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-7 D2: --stall ends with exit 11 when the watched file never grows or never appears, and not while it grows; --stall needs a marker: or exit: condition; a passed --deadline ends with exit 13; a later one does not",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/log",
+     "content": "started\n"
+    }
+   ]
+  },
+  {
+   "name": "no growth",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/log:DONE",
+    "--stall",
+    "1",
+    "--max",
+    "5"
+   ],
+   "expect": {
+    "exit": 11,
+    "ms_max": 2500,
+    "stdout": "wait: stalled $TMP/log no growth for 1s\n"
+   }
+  },
+  {
+   "name": "never appears",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/nolog",
+    "--stall",
+    "1",
+    "--max",
+    "5"
+   ],
+   "expect": {
+    "exit": 11,
+    "ms_max": 2500,
+    "stdout": "wait: stalled $TMP/nolog no growth for 1s\n"
+   }
+  },
+  {
+   "name": "growth keeps it waiting",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(for i in 1 2 3 4 5 6 7 8; do printf \"tick\\n\" >> \"$TMP_L\"; sleep 0.4; done) & exec \"$0\" wait --for marker:\"$TMP_L\":DONE --stall 1 --max 2",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 10,
+    "ms_max": 3500,
+    "stdout_has": [
+     "\\Await: pending after 2s \\(max 2s\\)"
+    ]
+   },
+   "env": {
+    "TMP_L": "$TMP/log"
+   }
+  },
+  {
+   "name": "stall without a file condition",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/log",
+    "--stall",
+    "1"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "stall 0",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:$TMP/log",
+    "--stall",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "deadline passed",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--deadline",
+    "1000",
+    "--max",
+    "5"
+   ],
+   "expect": {
+    "exit": 13,
+    "ms_max": 1500,
+    "stdout": "wait: overdue deadline 1970-01-01T00:16:40+00:00 passed\n"
+   }
+  },
+  {
+   "name": "deadline later",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--deadline",
+    "4102444800",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10
+   }
+  },
+  {
+   "name": "deadline not an epoch",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--deadline",
+    "tomorrow"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  }
+ ]
+}

@@ -1,0 +1,132 @@
+{
+ "id": "HT-WA-03",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-7 D2: a pid whose start time differs from @<start> is met as reused; an anchored pid that ends is met without a note (a zombie child of the helper reads as gone); --while pid ends the wait with exit 12 when the pid is gone or reused; --while file when the file goes; a live unanchored pid stays pending",
+ "steps": [
+  {
+   "name": "reused",
+   "argv": [
+    "wait",
+    "--for",
+    "pid-exit:$RUNNER_PID@1",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done pid-exit:$RUNNER_PID@1 after 0s note=reused\n"
+   }
+  },
+  {
+   "name": "live, unanchored",
+   "argv": [
+    "wait",
+    "--for",
+    "pid-exit:$RUNNER_PID",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10,
+    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
+   }
+  },
+  {
+   "name": "anchored pid ends",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "sleep 2 & p=$!; s=$(date +%s); exec \"$0\" wait --for pid-exit:$p@$s --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 5000,
+    "stdout_has": [
+     "\\Await: done pid-exit:\\d+@\\d+ after [1-3]s\\n\\z"
+    ]
+   }
+  },
+  {
+   "name": "guard pid gone",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(exit 0) & p=$!; wait $p; exec \"$0\" wait --for file:\"$TMP_N\" --while pid:$p --max 5",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 12,
+    "ms_max": 1500,
+    "stdout_has": [
+     "\\Await: ended pid:\\d+ \\(gone\\) before file:\\S+/none\\n\\z"
+    ]
+   },
+   "env": {
+    "TMP_N": "$TMP/none"
+   }
+  },
+  {
+   "name": "guard pid reused",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/none",
+    "--while",
+    "pid:$RUNNER_PID@1",
+    "--max",
+    "5"
+   ],
+   "expect": {
+    "exit": 12,
+    "ms_max": 1500,
+    "stdout": "wait: ended pid:$RUNNER_PID@1 (reused) before file:$TMP/none\n"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/g",
+     "content": "running\n"
+    }
+   ]
+  },
+  {
+   "name": "guard file goes",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(sleep 1; mv \"$TMP_G\" \"$TMP_G.moved\") & exec \"$0\" wait --for file:\"$TMP_N\" --while file:\"$TMP_G\" --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 12,
+    "ms_max": 4000,
+    "stdout_has": [
+     "\\Await: ended file:\\S+/g \\(deleted\\) before file:\\S+/none\\n\\z"
+    ]
+   },
+   "env": {
+    "TMP_G": "$TMP/g",
+    "TMP_N": "$TMP/none"
+   }
+  },
+  {
+   "name": "a met condition wins over a broken guard",
+   "argv": [
+    "wait",
+    "--for",
+    "file:$TMP/g.moved",
+    "--while",
+    "file:$TMP/g",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done file:$TMP/g.moved after 0s\n"
+   }
+  }
+ ]
+}

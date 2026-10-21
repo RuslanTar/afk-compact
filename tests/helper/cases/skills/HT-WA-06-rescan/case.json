@@ -1,0 +1,98 @@
+{
+ "id": "HT-WA-06",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Dev-7 D2: a marker file that is truncated or rotated mid-wait is rescanned from 0 and the marker is found (note rescanned); a partial last line is not matched until its newline arrives",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/t",
+     "content": "noise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\n"
+    },
+    {
+     "write": "$TMP/r",
+     "content": "noise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\nnoise line\n"
+    },
+    {
+     "write": "$TMP/p",
+     "text": "READ"
+    },
+    {
+     "write": "$TMP/q",
+     "text": "READ"
+    }
+   ]
+  },
+  {
+   "name": "truncated",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(sleep 1; : > \"$F\"; printf \"READY\\n\" >> \"$F\") & exec \"$0\" wait --for marker:\"$F\":READY --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 4000,
+    "stdout_has": [
+     "\\Await: done marker:\\S+ after [0-2]s line=1 match=READY note=rescanned\\n\\z"
+    ]
+   },
+   "env": {
+    "F": "$TMP/t"
+   }
+  },
+  {
+   "name": "rotated",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(sleep 1; mv \"$F\" \"$F.1\"; printf \"READY\\n\" > \"$F\") & exec \"$0\" wait --for marker:\"$F\":READY --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 4000,
+    "stdout_has": [
+     "\\Await: done marker:\\S+ after [0-2]s line=1 match=READY note=rescanned\\n\\z"
+    ]
+   },
+   "env": {
+    "F": "$TMP/r"
+   }
+  },
+  {
+   "name": "partial line",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:$TMP/p:READ",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10
+   }
+  },
+  {
+   "name": "partial line completed",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "(sleep 1; printf \"Y\\n\" >> \"$F\") & exec \"$0\" wait --for marker:\"$F\":^READY$ --max 10",
+    "$PLUGIN/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 4000,
+    "stdout_has": [
+     "\\Await: done marker:\\S+ after [0-2]s line=1 match=READY\\n\\z"
+    ]
+   },
+   "env": {
+    "F": "$TMP/q"
+   }
+  }
+ ]
+}
