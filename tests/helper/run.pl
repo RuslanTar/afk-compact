@@ -1303,7 +1303,7 @@ sub assembly_runtime {
     my $prev = $prefix . ('p' x (141 - length $prefix));
     my %rt = (nonce => 'a1b2c3d4', previous_copy => $prev, measured_at => '2026-10-21T04:40:00+03:00',
               session_id => '00000000-0000-4000-8000-000000000000', saved_copy => $prev, tokens => '612,345',
-              queue_add => 'queue-cmd add --lane example-repo/LAB-123', measured_facts => '', remeasure => '');
+              queue_add => "$BRAND-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", measured_facts => '', remeasure => '');
     my $rf = $file // "$REPO/tests/fixtures/assembly/runtime.json";
     if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, %$j) if ref $j eq 'HASH' }
     return \%rt;

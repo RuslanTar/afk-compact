@@ -64,7 +64,7 @@ if args:
 PREV = "~/.claude/handoffs/example-repo/LAB-123/" + "p" * (PATH_LEN - len("~/.claude/handoffs/example-repo/LAB-123/"))
 RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-21T04:40:00+03:00",
            "session_id": "00000000-0000-4000-8000-000000000000", "saved_copy": PREV, "tokens": "612,345",
-           "queue_add": "queue-cmd add --lane example-repo/LAB-123", "measured_facts": "", "remeasure": ""}
+           "queue_add": NAME + "-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", "measured_facts": "", "remeasure": ""}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt"}
