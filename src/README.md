@@ -227,7 +227,7 @@ Resume re-checks seven facts:
 6. nothing the job was expected to write is newer than its start;
 7. the folder exists and the command can be found.
 
-Only when all seven hold, and the relation is the same session or a successor (`/clear` or a proven lineage), does resume start the job again, once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). The command is never run by the helper itself.
+Resume starts the job again by itself only when the relation is the same session or a successor (`/clear` or a proven lineage), and then in two cases: all seven hold, or the job failed (its output ends with a non-zero exit code, so check 4 fails) while checks 1 and 7 hold. Either way it starts a job at most once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). The command is never run by the helper itself.
 
 What may start again by itself: **read-only jobs only**, as Claude Code's own read-only check decides. Anything with outside effects (a push, a deploy, a write to a service) always asks. `relaunch_allow` exists, but it has no effect in this version. Nothing is ever stopped to make room: an old process that may still run blocks the start. A job whose output ends with `[killed]` (stopped with TaskStop or at exit) always asks.
 
