@@ -47,8 +47,11 @@ sub run {
     my @disp = dispatch::all($watch, $sid);
     my %disp = map { $_->{nonce} => $_ } @disp;
 
-    # 1. stashes without a copy
-    for my $f (util::list_dir("$sid_dir/pending")) {
+    # 1. stashes without a copy. Not while handoff_root is refused (MOD-SPEC §1.2): every
+    # save would be refused again and log another failed copy row at each Stop; the
+    # stashes wait for a later Stop with a safe root (the refusal row is once per session).
+    my @pending = rc::root_ok('handoff_root') ? util::list_dir("$sid_dir/pending") : ();
+    for my $f (@pending) {
         last if util::clock_ms() > $deadline;
         my ($id6, $kind, $nonce);
         if ($f =~ /^([0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md$/) { ($id6, $kind) = ($1, 'post') }
