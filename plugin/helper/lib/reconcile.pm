@@ -332,6 +332,16 @@ sub _run {
         $copied->{"n:$mn"} = $save->{rel} if defined $mn;
         rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
         $logged->{"copy_late:" . ($mn // $save->{id6})} = 1;
+        # Main-proven: sweep (MOD-SPEC §5.3 step 5), as step 0 does (RR-S21-04). The
+        # swept/<id6> claim (the nonce's first 6, as the mod's after-step claims it) keeps a
+        # compaction from being swept twice.
+        my $sweep;
+        if ($scope eq 'main') {
+            (my $stem = util::basename($save->{path} // '')) =~ s/\.md$//;
+            $sweep = sweep::run(sid => $sid, id6 => $save->{id6}, stem => $stem, transcript => $m{transcript} // $a{transcript},
+                                budget_ms => $left->(), bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $mn);
+        }
+        my $tot = $sweep ? $sweep->{totals} : undef;
         my $rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
         if (!$rolled) {
             my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
@@ -342,7 +352,9 @@ sub _run {
                           verdict => $save->{verdict}, verdict_source => ($kind eq 'mod' ? 'after-step' : 'postcompact'),
                           marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end},
                           summary_chars => $s->{chars}, shape_class => detect::shape_class($s),
-                          copy => 'late', copy_path => $save->{rel});
+                          copy => 'late', copy_path => $save->{rel},
+                          evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
+                                                redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef));
             push @{ $st->{rolls_l} }, { id6 => $save->{id6}, nonce => $mn, e => $now, actor => $actor, pc => 0, join => 'reconcile' };
         }
     }
