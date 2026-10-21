@@ -1,0 +1,230 @@
+{
+  "c8": {
+    "binary_version": "2.1.306",
+    "counts": {
+      "CLAUDE_CODE_CURRIED_TRINKET": 3,
+      "CLAUDE_CODE_EXECPATH": 5,
+      "Exit code 0 - stdout appended as custom compact instructions": 2,
+      "capped": 237,
+      "control": 2612,
+      "lean": 4691,
+      "no_scratchpad": 12,
+      "no_scratchpad_capped": 4,
+      "no_scratchpad_keep_asks": 4,
+      "short": 2316,
+      "short_v2": 4,
+      "tengu_curried_trinket": 2
+    }
+  },
+  "c9": {
+    "hashes": {
+      "$.session.version": "1a579a79ccf404e1",
+      "$.store": "0aeda176a9d1b866",
+      "SessionCompactInput": "559010e016701093",
+      "SessionCompactResult": "5848996aa9edd608",
+      "SessionCompactTrigger": "186ccec201d357fa",
+      "SessionVersion": "dc474f8afd7df49d"
+    },
+    "specs": [
+      {
+        "name": "SessionCompactInput",
+        "start_re": "^\\s*export type SessionCompactInput\\b"
+      },
+      {
+        "name": "SessionCompactResult",
+        "start_re": "^\\s*export type SessionCompactResult\\b"
+      },
+      {
+        "name": "SessionCompactTrigger",
+        "start_re": "^\\s*export type SessionCompactTrigger\\b"
+      },
+      {
+        "name": "SessionVersion",
+        "start_re": "^\\s*export type SessionVersion\\b"
+      },
+      {
+        "name": "$.store",
+        "start_re": "^\\s*store: \\{\\s*$"
+      },
+      {
+        "name": "$.session.version",
+        "start_re": "^\\s*version: \\(\\) => Promise<SessionVersion>;"
+      }
+    ],
+    "types_version": "2.1.305"
+  },
+  "cc_version": "2.1.306",
+  "copy_trailers": [],
+  "keysets": {
+    "PermissionDenied": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "effort",
+        "mcp_server",
+        "permission_mode",
+        "prompt_id"
+      ],
+      "required": [
+        "cwd",
+        "hook_event_name",
+        "reason",
+        "session_id",
+        "tool_input",
+        "tool_name",
+        "tool_use_id",
+        "transcript_path"
+      ],
+      "sha8": "abf9c731"
+    },
+    "PostCompact": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "effort",
+        "permission_mode",
+        "prompt_id"
+      ],
+      "required": [
+        "compact_summary",
+        "cwd",
+        "hook_event_name",
+        "session_id",
+        "transcript_path",
+        "trigger"
+      ],
+      "sha8": "d0ecd835"
+    },
+    "PreCompact": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "effort",
+        "permission_mode",
+        "prompt_id"
+      ],
+      "required": [
+        "custom_instructions",
+        "cwd",
+        "hook_event_name",
+        "session_id",
+        "transcript_path",
+        "trigger"
+      ],
+      "sha8": "f5203cc9"
+    },
+    "SessionEnd": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "effort",
+        "permission_mode",
+        "prompt_id"
+      ],
+      "required": [
+        "cwd",
+        "hook_event_name",
+        "reason",
+        "session_id",
+        "transcript_path"
+      ],
+      "sha8": "4a9456de"
+    },
+    "SessionStart": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "context_tokens",
+        "effort",
+        "estimated_cache_write_usd",
+        "model",
+        "permission_mode",
+        "prompt_cache_likely_expired",
+        "prompt_id",
+        "seconds_since_last_response",
+        "session_title"
+      ],
+      "required": [
+        "cwd",
+        "hook_event_name",
+        "session_id",
+        "source",
+        "transcript_path"
+      ],
+      "sha8": "a8c6e0c2"
+    },
+    "Stop": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "background_tasks",
+        "effort",
+        "last_assistant_message",
+        "permission_mode",
+        "prompt_id",
+        "session_crons"
+      ],
+      "required": [
+        "cwd",
+        "hook_event_name",
+        "session_id",
+        "stop_hook_active",
+        "transcript_path"
+      ],
+      "sha8": "7f254d32"
+    },
+    "StopFailure": {
+      "optional": [
+        "agent_id",
+        "agent_type",
+        "effort",
+        "error_details",
+        "last_assistant_message",
+        "permission_mode",
+        "prompt_id"
+      ],
+      "required": [
+        "cwd",
+        "error",
+        "hook_event_name",
+        "session_id",
+        "transcript_path"
+      ],
+      "sha8": "8a7bb9c6"
+    },
+    "SubagentStop": {
+      "optional": [
+        "background_tasks",
+        "effort",
+        "last_assistant_message",
+        "permission_mode",
+        "prompt_id",
+        "session_crons"
+      ],
+      "required": [
+        "agent_id",
+        "agent_transcript_path",
+        "agent_type",
+        "cwd",
+        "hook_event_name",
+        "session_id",
+        "stop_hook_active",
+        "transcript_path"
+      ],
+      "sha8": "efd0f317"
+    },
+    "session.compact": {
+      "optional": [
+        "agentId",
+        "instructions"
+      ],
+      "required": [
+        "messages",
+        "trigger"
+      ],
+      "sha8": "42188fd0"
+    }
+  },
+  "types_version": "2.1.305",
+  "v": 1
+}
