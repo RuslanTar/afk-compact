@@ -145,13 +145,15 @@ sub read_rows {
 }
 
 # The pending entry a new job with command sha `sha` fulfils: the newest one with that
-# sha whose task no job row has named in relaunch_of yet.
+# sha whose task no job row has named in relaunch_of yet, neither on disk nor earlier in
+# this batch (`claimed`: "task_id\tsha" keys, CR-F3).
 sub _match_pending {
-    my ($sid_dir, $sha) = @_;
+    my ($sid_dir, $sha, $claimed) = @_;
     my $pend = read_rows(pending_path($sid_dir));
     return undef unless @$pend;
     my %done = map { (($_->{relaunch_of} // '') . "\t" . ($_->{command_sha256} // '') => 1) }
                grep { ($_->{ev} // '') eq 'job' } @{ read_rows(jobs_path($sid_dir)) };
+    %done = (%done, %{ $claimed || {} });
     for my $p (reverse @$pend) {
         next unless ($p->{sha256} // '') eq $sha;
         next if $done{ ($p->{task_id} // '') . "\t$sha" };
@@ -160,9 +162,11 @@ sub _match_pending {
     return undef;
 }
 
-# complete(raw row, sid, owner) -> (row object) or (undef, 'usage: ...')
+# complete(raw row, sid, owner, claimed) -> (row object) or (undef, 'usage: ...').
+# claimed (hash ref, optional): the pending entries earlier rows of the same batch
+# fulfilled; a match is added to it.
 sub complete {
-    my ($in, $sid, $owner) = @_;
+    my ($in, $sid, $owner, $claimed) = @_;
     my $kind = $in->{kind} // 'job';
     return (undef, 'usage: kind job|stop') unless $kind =~ /^(job|stop)$/;
     my $task = $in->{task_id};
@@ -181,25 +185,35 @@ sub complete {
     my $launched = (defined $in->{launched_at} && defined util::parse_iso($in->{launched_at})) ? $in->{launched_at} : util::iso(util::now());
     my ($opath, $osrc, $cand, $ocheck) = output_path({ %$in, cwd => $cwd, session_cwd => $owner->{cwd} }, $sid);
     my $d = rc::sid_dir();
-    my $pend = defined $d ? _match_pending($d, $sha) : undef;
+    my $pend = defined $d ? _match_pending($d, $sha, $claimed) : undef;
+    $claimed->{ ($pend->{task_id} // '') . "\t$sha" } = 1 if $pend && ref $claimed eq 'HASH';
     my $epoch = $pend ? (($pend->{epoch} // 1) =~ /^\d+$/ ? $pend->{epoch} + 1 : 2) : 1;
+    # level 0: the full row; 1: no candidate paths; 2: no cwd and no output path either
     my $build = sub {
-        my ($command, $withheld) = @_;
+        my ($command, $withheld, $level) = @_;
+        $level //= 0;
+        my $keep = $level < 2;
         return log::row('job', [
             kind => 'job', task_id => $task, launched_at => $launched,
             owner => jsonc::obj(pid => $owner->{pid}, lstart => $owner->{lstart}),
-            cwd => $cwd, command => $command, command_sha256 => $sha, command_withheld => $withheld,
+            cwd => ($keep ? $cwd : undef), command => $command, command_sha256 => $sha, command_withheld => $withheld,
             is_read_only => jsonc::bool(_bool_true($in->{is_read_only})),
             sandbox_disabled => jsonc::bool(_bool_true($in->{sandbox_disabled})),
-            backgrounded => $bg, output_path => $opath, output_path_source => $osrc, output_path_check => $ocheck,
-            output_path_candidates => $cand,
+            backgrounded => $bg, output_path => ($keep ? $opath : undef), output_path_source => ($keep ? $osrc : 'none'),
+            output_path_check => ($keep ? $ocheck : undef),
+            output_path_candidates => ($level < 1 ? $cand : undef),
             relaunch_of => ($pend ? $pend->{task_id} : undef), epoch => 0 + $epoch,
         ], $env);
     };
+    my $fits = sub { return length(jsonc::encode_bytes($_[0])) + 1 <= $log::MAX };
     my $row = @hard ? $build->(undef, \@hard) : $build->($cmd, undef);
-    # A command too long for one row is withheld like a secret: the job never relaunches by itself.
-    my $len = do { my $l = jsonc::encode($row); utf8::encode($l) if utf8::is_utf8($l); length($l) + 1 };
-    $row = $build->(undef, ['row-too-large']) if $len > $log::MAX;
+    # A command too long for one row is withheld like a secret: the job never relaunches by
+    # itself. A row still too large (long cwd and paths, CR-F4) drops the candidate paths,
+    # then the cwd and the output path, so the row always fits one append.
+    for my $level (0 .. 2) {
+        last if $fits->($row);
+        $row = $build->(undef, ['row-too-large'], $level);
+    }
     return ($row);
 }
 

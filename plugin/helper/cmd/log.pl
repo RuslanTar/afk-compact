@@ -95,16 +95,19 @@ sub _jobs {
     if (!defined $raw) { args::out('REFUSED: batch-too-large'); return 3 }
     my @rows;
     my $k = 0;
+    # The whole batch is checked before any row is written (a usage error writes nothing).
+    # A pending relaunch fulfilled by an earlier row of the batch is not matched again by a
+    # later one (%claimed, CR-F3), as if the earlier row were already on disk.
+    my %claimed;
     for my $line (split /\n/, $raw) {
         $k++;
         next unless $line =~ /\S/;
         my $in = eval { jsonc::decode($line) };
         die "usage: stdin line $k is not a JSON object\n" unless ref $in eq 'HASH';
-        my ($row, $err) = jobrec::complete($in, $sid, $owner);
+        my ($row, $err) = jobrec::complete($in, $sid, $owner, \%claimed);
         die "$err (stdin line $k)\n" if defined $err;
         push @rows, $row;
     }
-    # One row at a time: a later row's relaunch match reads the rows written before it.
     log::append(jobrec::jobs_path($d), $_) for @rows;
     return 0;
 }
