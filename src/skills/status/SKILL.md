@@ -14,6 +14,6 @@ Run `{{plugin}}-store status --sid "${CLAUDE_SESSION_ID}"` (the plugin's helper,
 - `smokeDue`, with the user-run line `! {{plugin}}-store smoke`;
 - policy flags.
 
-Repo mode is set up by the user, never by you: `! {{plugin}}-store project status --cwd <repo>`, then `! {{plugin}}-store project init --cwd <repo>` (writes the declaration, README and `.gitignore`; commits nothing), then adding the repository to `repo_roots` in `/config`. `project copy` is a dry run unless the user adds `--apply`.
+Repo mode is set up by the user, never by you: `! {{plugin}}-store project status --cwd <repo>`, then `! {{plugin}}-store project init --cwd <repo>` (writes the declaration, README and `.gitignore`; commits nothing), then adding the repository to `repo_roots` in `/config`. `project copy` is a dry run unless the user adds `--apply`. With `--from repo` it never imports an export that has a HARD secret hit: it prints `skip secret <rel> (rules <ids>)`, counted under `skip` in `TOTAL`.
 
 No content, no transcript reads, no actions.
