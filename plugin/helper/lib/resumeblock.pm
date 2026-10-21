@@ -45,8 +45,15 @@ sub claim {
         rc::emit('resume_inject', [nonce => $nonce, channel => $channel, bytes => $o{bytes}, nonok_note => $o{nonok_note}]);
         return ('CLAIMED');
     }
-    my $raw = util::read_file($f) // '';
-    my ($who) = $raw =~ /^(\S+)/;
+    # The winner creates the file, then writes its channel: a loser that reads in
+    # between sees it empty, so wait briefly for the content (up to ~0.5 s).
+    my $who;
+    for my $try (1 .. 50) {
+        my $raw = util::read_file($f) // '';
+        ($who) = $raw =~ /^(\S+)/;
+        last if defined $who;
+        util::sleep_ms(10);
+    }
     return ('TAKEN', $who // 'unknown');
 }
 
