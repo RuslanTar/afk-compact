@@ -22,6 +22,11 @@ sub _matches {
         my ($s, $e) = ($-[0], $+[0]);
         last if $e == $s && !defined pos($text);
         if ($e == $s) { pos($text) = $e + 1; next }
+        # Only the value: not the boundary characters a lead or trail group matched; the
+        # trailing one is left for the next match, so two values one comma apart both hit.
+        $s = $+[1] if $r->{lead} && defined $+[1];
+        if ($r->{trail} && defined $-[$#+] && $-[$#+] > $s) { $e = $-[$#+]; pos($text) = $e }
+        next if $e <= $s;
         my $m = substr($text, $s, $e - $s);
         next if defined $r->{min_entropy} && _entropy($m) < $r->{min_entropy};
         push @spans, [$s, $e];

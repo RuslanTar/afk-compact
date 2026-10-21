@@ -1,0 +1,74 @@
+{
+ "id": "PRIV-08-redact-delimiters",
+ "note": "PRIV-08 (MOD-SPEC §10 'Logs and JSON with any hit -> redacted copy'): a redacted copy keeps the characters beside a value that the cloud-key-bare and high-entropy rules match as boundaries: a JSON evidence copy stays valid JSON with its quotes, a log keeps its line breaks, and two keys one comma apart are both replaced with the comma kept; no value reaches the copy",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "write": "$TMP/tmpdir/keys.json",
+     "text": "{\"aws\":\"$SECRET{aws-secret-prefixless}\",\"n\":1}\n"
+    },
+    {
+     "write": "$TMP/tmpdir/trace.log",
+     "text": "line1\n$SECRET{high-entropy}\nline3\npair $SECRET{aws-secret-prefixless},$SECRET{aws-secret-prefixless}\n"
+    },
+    {
+     "paths": [
+      "$TMP/tmpdir/keys.json",
+      "$TMP/tmpdir/trace.log"
+     ]
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^redacted\\t\\S+/tmpdir/keys\\.json\\t",
+     "^redacted\\t\\S+/tmpdir/trace\\.log\\t"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/keys.json",
+      "json_lines": true,
+      "lines": 1,
+      "json": {
+       "aws": "[redacted:cloud-key-bare]",
+       "n": 1
+      }
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/trace.log",
+      "lines": 4,
+      "has": [
+       "\\Aline1\\n\\[redacted:high-entropy\\]\\nline3\\n",
+       "^pair \\[redacted:cloud-key-bare\\],\\[redacted:cloud-key-bare\\]$"
+      ]
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{aws-secret-prefixless}"
+     },
+     {
+      "dir": "$DISP",
+      "text": "$SECRET{high-entropy}"
+     }
+    ]
+   }
+  }
+ ]
+}

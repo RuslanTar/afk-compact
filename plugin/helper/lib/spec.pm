@@ -58,8 +58,13 @@ sub secret_rules {
         next unless ref $r eq 'HASH' && defined $r->{re} && defined $r->{id};
         my $src = $r->{re};
         my $re = eval { qr/$src/ } or next;
+        # Boundary groups (PRIV-08): a rule written `(^|[^...])body` or `body($|[^...])` matches
+        # the character beside the value too; `lead`/`trail` say so, and a hit covers only the
+        # value, so redaction keeps the quote, space or newline beside it.
         push @out, { id => $r->{id}, class => uc($r->{class} // 'WARN'), re => $re,
-                     min_entropy => $r->{min_entropy} };
+                     min_entropy => $r->{min_entropy},
+                     lead => ($src =~ /\A\(\^\|\[\^/ ? 1 : 0),
+                     trail => ($src =~ /\(\$\|\[\^(?:\\.|[^\]\\])*\]\)\z/ ? 1 : 0) };
     }
     $RULES = \@out;
     return $RULES;
