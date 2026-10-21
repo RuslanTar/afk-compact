@@ -65,13 +65,17 @@ sub run {
             if ($d) { ($tier, $pick) = (4, $d); last }
         }
     }
+    # Tier 5 selects only when the token names exactly one bucket. A partial
+    # match (pay → pay-12) never selects: it only orders the tier-6 candidates.
     my @matching;
+    my $exact = 0;
     if (!$pick && defined $arg && $arg !~ m{/}) {
         my $tok = lc $arg;
         my @all = sort keys %bdirs;
         @matching = grep { lc(File::Basename::basename($_)) eq $tok } @all;
+        $exact = 1 if @matching;
         @matching = grep { index(lc(File::Basename::basename($_)), $tok) >= 0 } @all unless @matching;
-        if (@matching == 1) {
+        if ($exact && @matching == 1) {
             my ($d) = grep { $_->{bucket} eq $matching[0] && !_is_sub($_) } @pool;
             ($tier, $pick) = (5, $d) if $d;
         }

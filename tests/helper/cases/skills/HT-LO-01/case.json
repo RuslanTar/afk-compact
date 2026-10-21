@@ -296,6 +296,17 @@
    }
   },
   {
+   "note": "a token that only partly matches one bucket (pay vs pay-12) selects nothing: tier 6, that bucket's file first among the candidates",
+   "cwd": "$TMP/repo",
+   "argv": ["locate", "--sid", "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "--cwd", "$TMP/repo", "--arg", "pay"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 6\\npick: none\\nrelation: unselected\\ncandidate: $ROOT/repo/pay-12/2026-10-18_08-00-00_cccccccc_p.md · 2026-10-18T08:00:00\\+03:00 · "
+    ]
+   }
+  },
+  {
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
