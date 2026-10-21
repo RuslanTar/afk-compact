@@ -369,7 +369,7 @@ export const SPEC = {
       0,
       7200
     ],
-    "main_max_s": 1800,
+    "main_max_s": 1740,
     "subagent_bash_timeout_ms": 300000,
     "marker_regex_max_chars": 200,
     "marker_regex_forbidden": [
