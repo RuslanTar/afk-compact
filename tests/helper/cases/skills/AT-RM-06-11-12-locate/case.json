@@ -195,6 +195,37 @@
    }
   },
   {
+   "name": "AT-RM-11 heal-check never reads a recipe from the repository",
+   "cwd": "$TMP/w",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "99999999-aaaa-4bbb-8ccc-dddddddddddd",
+    "--item",
+    "b1"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: recipe-not-local\n",
+    "stdout_lacks": [
+     "^run: ",
+     "^ask-command:"
+    ]
+   }
+  },
+  {
+   "name": "D-12: inventory of an export probes nothing",
+   "cwd": "$TMP/w",
+   "argv": [
+    "inventory",
+    "$TMP/w/.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "not local: a repository export or a file outside the handoff store\nin-flight: other machine: not probed\nevidence: not on this machine\n"
+   }
+  },
+  {
    "setup": [
     {
      "write": "$HOME/.claude/settings.json",
