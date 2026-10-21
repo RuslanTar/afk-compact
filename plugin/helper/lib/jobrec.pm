@@ -7,7 +7,8 @@ package jobrec;
 #         record) · cwd · command (literal; null when withheld) · command_sha256 ·
 #         command_withheld [rule ids] · is_read_only (true only when core set it) ·
 #         sandbox_disabled · backgrounded flag|user|timeout|other · output_path ·
-#         output_path_source · output_path_candidates · relaunch_of · epoch
+#         output_path_source · output_path_check · output_path_candidates ·
+#         relaunch_of · epoch
 #   stop: task_id (a TaskStop call)
 # Writer guard: accepted only when the helper's parent is the recorded Claude Code
 # process (ppid = the live record's pid, start time matching); else REFUSED: jobs-caller.
@@ -25,15 +26,20 @@ package jobrec;
 use strict;
 use warnings;
 
-# Output path source (DP-2 / REVIEW A-2, probe P-D1-6). BackgroundTaskSummary has no
-# output path (types :820-851) and result.backgroundOutputPath is set only for jobs kept
-# by another process (types :21290). Two candidate sources are read and recorded for the
-# probe; neither is used until P-D1-6 says which one holds:
+# Output path source (DP-2 / REVIEW A-2, probe P-D1-6; DP-24 (a)). BackgroundTaskSummary
+# has no output path (types :820-851) and result.backgroundOutputPath is set only for jobs
+# kept by another process (types :21290). Two candidate sources are read and recorded:
 #   result-text  the Bash tool.call result text names the output file
 #   layout       the observed <tmp>/claude-<uid>/<cwd slug>/<sid>/tasks/<id>.output
-# 'none' (today): output_path stays null and `/status` says automatic relaunch is
-# inactive (no output path). Set it to the source the probe passed.
-our $OUTPUT_PATH_SOURCE = 'none';
+# P-D1-6 passed on 2.1.306 (5/5 jobs: the result text names the layout's file), so the
+# result text is the source and the layout its cross-check (output_path_check):
+#   agrees     the result-text path equals the layout candidate: used
+#   differs    they name different files: output_path stays null, so the job asks
+#   no-layout  no layout candidate (cwd unknown): null, the path is not confirmed
+#   no-path    the result text names no output file: null
+# 'none' turns the source off: output_path stays null and `/status` says automatic
+# relaunch is inactive (no output path).
+our $OUTPUT_PATH_SOURCE = 'result-text';
 our %SOURCES = map { $_ => 1 } qw(none result-text layout);
 
 our $ID_RE = qr/\A[A-Za-z0-9._:-]{1,128}\z/;
@@ -59,7 +65,8 @@ sub owner {
         my $j = eval { jsonc::decode(util::read_file("$dir/$f") // '') };
         next unless ref $j eq 'HASH' && ($j->{session_id} // '') eq $sid;
         next unless defined $j->{pid_lstart} && defined $c->{lstart} && $j->{pid_lstart} eq $c->{lstart};
-        return { pid => 0 + $j->{pid}, lstart => $j->{pid_lstart} };
+        return { pid => 0 + $j->{pid}, lstart => $j->{pid_lstart},
+                 cwd => (defined $j->{cwd} && !ref $j->{cwd} && $j->{cwd} =~ m{^/} ? $j->{cwd} : undef) };
     }
     return undef;
 }
@@ -96,21 +103,33 @@ sub path_from_layout {
     return "$base/claude-$</" . cwd_slug($cwd) . "/$sid/tasks/$task.output";
 }
 
-# output_path(raw, sid) -> (path or undef, source, candidates)
+# output_path(raw, sid) -> (path or undef, source, candidates, check or undef)
 sub output_path {
     my ($in, $sid) = @_;
     my $rt = path_from_result_text($in->{result_text}, $in->{task_id});
     my $ly = path_from_layout($sid, $in->{cwd}, $in->{task_id});
+    # The slug is the session's project folder, not the shell's cwd after a `cd` (lab
+    # e1-f49d74, job bpu7ylqls): the session start cwd gives a second layout candidate.
+    my $ls = path_from_layout($sid, $in->{session_cwd}, $in->{task_id});
+    $ls = undef if defined $ls && defined $ly && $ls eq $ly;
     my $bo = (defined $in->{background_output_path} && !ref $in->{background_output_path}
               && $in->{background_output_path} =~ m{^/[^\n]{1,1024}$}) ? $in->{background_output_path} : undef;
     my $cand = jsonc::obj(
         result_text => (defined $rt ? jsonc::obj(path => $rt, exists => jsonc::bool(-e $rt)) : undef),
         layout      => (defined $ly ? jsonc::obj(path => $ly, exists => jsonc::bool(-e $ly)) : undef),
+        (defined $ls ? (layout_session => jsonc::obj(path => $ls, exists => jsonc::bool(-e $ls))) : ()),
         background_output_path => $bo,
     );
     my $src = $SOURCES{$OUTPUT_PATH_SOURCE} ? $OUTPUT_PATH_SOURCE : 'none';
-    my $path = $src eq 'result-text' ? $rt : $src eq 'layout' ? $ly : undef;
-    return ($path, (defined $path ? $src : 'none'), $cand);
+    my ($path, $check);
+    if ($src eq 'result-text') {
+        my @lay = grep { defined } ($ly, $ls);
+        $check = !defined $rt ? 'no-path' : !@lay ? 'no-layout' : (grep { $_ eq $rt } @lay) ? 'agrees' : 'differs';
+        $path = $rt if $check eq 'agrees';
+    } elsif ($src eq 'layout') {
+        $path = $ly;
+    }
+    return ($path, (defined $path ? $src : 'none'), $cand, $check);
 }
 
 sub _bool_true { my ($v) = @_; return (jsonc::is_bool($v) && $v) || (defined $v && !ref $v && $v =~ /^(1|true)$/) ? 1 : 0 }
@@ -160,7 +179,7 @@ sub complete {
     my $cwd = (defined $in->{cwd} && !ref $in->{cwd} && $in->{cwd} =~ m{^/}) ? $in->{cwd} : undef;
     my $bg = (defined $in->{backgrounded} && $BACKGROUNDED{ $in->{backgrounded} }) ? $in->{backgrounded} : 'other';
     my $launched = (defined $in->{launched_at} && defined util::parse_iso($in->{launched_at})) ? $in->{launched_at} : util::iso(util::now());
-    my ($opath, $osrc, $cand) = output_path({ %$in, cwd => $cwd }, $sid);
+    my ($opath, $osrc, $cand, $ocheck) = output_path({ %$in, cwd => $cwd, session_cwd => $owner->{cwd} }, $sid);
     my $d = rc::sid_dir();
     my $pend = defined $d ? _match_pending($d, $sha) : undef;
     my $epoch = $pend ? (($pend->{epoch} // 1) =~ /^\d+$/ ? $pend->{epoch} + 1 : 2) : 1;
@@ -172,7 +191,8 @@ sub complete {
             cwd => $cwd, command => $command, command_sha256 => $sha, command_withheld => $withheld,
             is_read_only => jsonc::bool(_bool_true($in->{is_read_only})),
             sandbox_disabled => jsonc::bool(_bool_true($in->{sandbox_disabled})),
-            backgrounded => $bg, output_path => $opath, output_path_source => $osrc, output_path_candidates => $cand,
+            backgrounded => $bg, output_path => $opath, output_path_source => $osrc, output_path_check => $ocheck,
+            output_path_candidates => $cand,
             relaunch_of => ($pend ? $pend->{task_id} : undef), epoch => 0 + $epoch,
         ], $env);
     };
