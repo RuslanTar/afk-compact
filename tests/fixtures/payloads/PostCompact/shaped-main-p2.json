@@ -1,0 +1,9 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "PostCompact",
+  "trigger": "auto",
+  "compact_summary": "<summary>\n⟪{{plugin}} v1 n=d2e3f405 s=main⟫\n# LAB-123 — retry worker drains, one flaky spec open\n## Resume here\nStatus: active · State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` — for \"make the retry worker drain the queue\"\nGate: none · Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" — scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" — scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries — because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id — because duplicates were seen in staging (agent)\nX-1 rejected a global mutex — it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release · blocks nothing · options now, next · recommendation next · raised by agent · unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented — lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding — spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` — done when it passes 5 runs in a row\n⟪/{{plugin}} n=d2e3f405⟫\n</summary>\n"
+}
