@@ -1,0 +1,11 @@
+{
+ "id": "AT-RN-01..05",
+ "note": "small-rulings §5.3 R1-R5 (BH-6 rest): child runs of the runner on case-local folders, each with its own TMPDIR and --repo-tmp folder. 01: a passing case's c<N> is gone before the next case starts. 02: a failing run keeps only the failed case's c<N> and stage/, and prints '# kept:' with exactly those paths. 03: TERM during a case leaves no store-h-* dir (exit 130); with --keep it leaves them. 04: a die before the first case (no launcher in the staged tree) leaves no dir. 05: the repo tmp folder goes when it is empty after a passing tmp_base repo run",
+ "steps": [
+  {"name": "AT-RN-01", "lib": "runner_hygiene", "args": {"tmp": "$TMP", "which": "01"}},
+  {"name": "AT-RN-02", "lib": "runner_hygiene", "args": {"tmp": "$TMP", "which": "02"}},
+  {"name": "AT-RN-03", "lib": "runner_hygiene", "args": {"tmp": "$TMP", "which": "03"}},
+  {"name": "AT-RN-04", "lib": "runner_hygiene", "args": {"tmp": "$TMP", "which": "04"}},
+  {"name": "AT-RN-05", "lib": "runner_hygiene", "args": {"tmp": "$TMP", "which": "05"}}
+ ]
+}

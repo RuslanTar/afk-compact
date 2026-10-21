@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-01-inner-a",
+ "steps": [
+  {"setup": [{"write": "$TMP/marker", "text": "a\n"}]},
+  {"exec": ["/bin/test", "-f", "$TMP/marker"], "expect": {"exit": 0}}
+ ]
+}
