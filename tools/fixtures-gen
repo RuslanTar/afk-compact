@@ -30,7 +30,8 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
-  rename  a temp copy renamed to another brand passes --check after the plain regenerate
+  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8)
+  rename a temp copy renamed to another brand passes --check after the plain regenerate
             step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
 Placeholders (tests/fixtures/README.md): `{{plugin}}` and `{{marketplace}}` are filled from
@@ -480,6 +481,38 @@ def check_sequences():
     return problems, count
 
 
+# Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
+# answer has the queue-stub/v1 shape that ROOT-RULINGS F2-8 adopts as the v1 contract.
+QUEUE = os.path.join(FIX, "queue")
+QUEUE_V1_KEYS = ["schema", "session", "lane", "open", "pending", "preview", "held_by", "lanes"]
+QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
+LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
+
+
+def check_queue():
+    problems, njson = [], 0
+    for case in sorted(os.listdir(QUEUE)) if os.path.isdir(QUEUE) else []:
+        p = os.path.join(QUEUE, case, "list.out")
+        text = read(p) if os.path.exists(p) else ""
+        if not text.lstrip().startswith("{"):
+            continue
+        njson += 1
+        where = "queue/{}/list.out".format(case)
+        try:
+            doc = json.loads(text)
+        except ValueError as e:
+            problems.append("{}: {}".format(where, e))
+            continue
+        int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
+        if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
+                or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
+                or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
+                or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
+            problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
+                where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
+    return problems, njson
+
+
 # The scope-proof table (transcripts/scope-cases.json; MOD-SPEC §2.4 as amended by ROOT-RULINGS F2-1).
 SCOPE_CASES = os.path.join(FIX, "transcripts", "scope-cases.json")
 SCOPE_KEYS = {"expect_scope": True, "expect_scope_postcompact": False}   # key -> P3 counted
@@ -646,6 +679,10 @@ def check(b):
     scope_problems, nscope = check_scope_cases(b)
     problems += scope_problems
     print("scope: {} scope-cases rows against the §2.4 rule, at reconcile and inside PostCompact".format(nscope))
+    # queue
+    queue_problems, nqueue = check_queue()
+    problems += queue_problems
+    print("queue: {} JSON list answers in the queue-stub/v1 shape".format(nqueue))
     # drift
     gen_dir = os.path.join(REPO, GEN_REL)
     for name, text in sorted(rendered.items()):

@@ -38,7 +38,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `tempfiles/<case>.json` | large or many-line files the runner creates at run time | AT-E-02, E-05, E-07, E-08 |
 | `repos/<case>.json` | git repo recipes the runner materialises as `$TMP/<dir>` | AT-M5-02, E-01, E-09, HT-B-02, D-12 |
 | `bin/git-slow`, `bin/queue-stub`, `bin/xcode-select-fail` | PATH stubs | AT-E-01, AT-E-10, HT-LA-01, AT-P-14 |
-| `queue/<case>/` | canned `queue-stub` answers | AT-E-10 |
+| `queue/<case>/` | canned `queue-stub` answers: `json` (`list --json` in the `queue-stub/v1` shape that ROOT-RULINGS F2-8 adopts: `lane:repo/x`, 2 open, S1), `prose`, `fail` | AT-E-10 |
 | `assembly/runtime.json` | `@token@` values for `tools/assemble --goldens` (BT-04) | goldens |
 
 ## Formats
@@ -77,6 +77,6 @@ Groups worth knowing: 01–05, 11, 27, 29 and 38 share one normalized body (Post
 
 ## Not here (open)
 
-- A structured `queue_cmd list --json` answer and the `adopt` answers (AT-E-10 b, HT-LA-01 mismatch): design/ defines neither output shape. Only the prose and failure answers exist.
+- The `adopt` answers (HT-LA-01 mismatch): F2-8 adopts only the `list --json` shape (`queue/json`, AT-E-10 b). The adopt replies are not fixed, so only the `list` answers exist.
 - `<watch>/<sid>/paths.jsonl` rows, the lock owner record and the `halt.json` content: their formats belong to WP-core and WP-mod.
 - Skill-side drafts and handoffs for the HT cases: WP-skills keeps case-local data under `tests/helper/cases/skills/`.
