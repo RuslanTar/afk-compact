@@ -2,11 +2,14 @@ package skills::stage;
 # lib/skills/stage.pm: a stage made by `begin` (<bucket>/.staging/<sid8>-<nonce>/).
 use strict;
 use warnings;
+use File::Basename ();
 use skills::util;
 use skills::cli;
 use skills::ctx;
 
 # Load the stage and a context built from the settings stored in it.
+# The stage must be <bucket>/.staging/<sid8>-<nonce> of the bucket its
+# settings name, so evidence and publish write only next to the stage.
 sub open_stage {
     my ($dir) = @_;
     die skills::cli::usage('--stage is required') unless defined $dir && $dir ne '';
@@ -16,6 +19,10 @@ sub open_stage {
     my $t = skills::util::read_file("$dir/settings.json", 262144);
     my $s = eval { skills::util::json_decode($t) };
     die skills::cli::refuse('no-stage') unless ref $s eq 'HASH' && $s->{session_id};
+    my $bucket = defined $s->{bucket} && !ref $s->{bucket} ? skills::util::abs_path($s->{bucket}) : undef;
+    die skills::cli::refuse('no-stage')
+        unless defined $bucket && $bucket eq File::Basename::dirname(File::Basename::dirname($dir))
+            && File::Basename::basename($dir) eq ($s->{sid8} // '') . '-' . ($s->{nonce} // '');
     my %flags = %{ $s->{settings} || {} };
     my $ctx = skills::ctx::new(\%flags);
     skills::ctx::set_sid($ctx, $s->{session_id});
