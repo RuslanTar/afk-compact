@@ -1,0 +1,193 @@
+#!/usr/bin/python3
+"""tools/canary-baseline: write plugin/assets/canary-baseline.json (MOD-SPEC §5.6; E-15).
+
+Usage: tools/canary-baseline [--types FILE] [--claude BIN] [--out FILE] [--check]
+  --types   claude-code.d.ts to read (default: $CC_TYPES_DIR/claude-code.d.ts, else .types/)
+  --claude  the Claude Code binary for the C8 string counts (default: the newest installed
+            version in ~/.local/share/claude/versions/, else $CLAUDE_CODE_EXECPATH; E-15)
+  --out     output file (default plugin/assets/canary-baseline.json)
+  --check   compare with the existing file instead of writing (exit 1 on drift)
+
+Contents (no timestamps, so a re-run gives the same bytes):
+  keysets   C5: per classic event and for the session.compact input, the required and
+            optional top-level keys from the type declarations, plus sha8 of the sorted set
+  c8        binary string counts (TECH-FACTS Q6 §3 C8 list) for the tested binary
+  c9        sha256/16 of the declarations C9 names; `specs` holds the start regexes so the
+            helper's `smoke` extracts with the same rule (helper/cmd/smoke.pl decl_hash)
+  copy_trailers  installed-message trailers the normalizer cuts (none known)
+GEN file: committed by the integrator only (BUILD-PLAN §4.3). Owner: WP-core.
+"""
+import hashlib, json, os, re, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+EVENTS = ["PreCompact", "PostCompact", "SessionStart", "SessionEnd", "Stop", "SubagentStop",
+          "StopFailure", "PermissionDenied"]
+C8_STRINGS = ["Exit code 0 - stdout appended as custom compact instructions", "tengu_curried_trinket",
+              "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH", "control", "no_scratchpad",
+              "no_scratchpad_capped", "no_scratchpad_keep_asks", "lean", "short", "short_v2", "capped"]
+C9_SPECS = [
+    {"name": "SessionCompactInput", "start_re": r"^\s*export type SessionCompactInput\b"},
+    {"name": "SessionCompactResult", "start_re": r"^\s*export type SessionCompactResult\b"},
+    {"name": "SessionCompactTrigger", "start_re": r"^\s*export type SessionCompactTrigger\b"},
+    {"name": "SessionVersion", "start_re": r"^\s*export type SessionVersion\b"},
+    {"name": "$.store", "start_re": r"^\s*store: \{\s*$"},
+    {"name": "$.session.version", "start_re": r"^\s*version: \(\) => Promise<SessionVersion>;"},
+]
+
+
+def die(msg):
+    print("canary-baseline: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def strip_comments(lines, start):
+    """Yield (stripped line) from `start`, comments removed, blank lines skipped."""
+    in_block = False
+    for l in lines[start:]:
+        if in_block:
+            m = re.match(r"^.*?\*/", l)
+            if not m:
+                continue
+            l = l[m.end():]
+            in_block = False
+        l = re.sub(r"/\*.*?\*/", "", l)
+        m = re.search(r"/\*.*$", l)
+        if m:
+            l = l[:m.start()]
+            in_block = True
+        l = re.sub(r"//.*$", "", l).strip()
+        if l:
+            yield l
+
+
+def decl(lines, start_re):
+    """The C9 rule: from the first matching line until depth 0 on a line ending ';'."""
+    rx = re.compile(start_re)
+    idx = next((i for i, l in enumerate(lines) if rx.search(l)), None)
+    if idx is None:
+        return None
+    kept, depth = [], 0
+    for l in strip_comments(lines, idx):
+        depth += len(re.findall(r"[{(\[]", l)) - len(re.findall(r"[})\]]", l))
+        kept.append(l)
+        if depth <= 0 and l.endswith(";"):
+            break
+    return kept
+
+
+def members(kept):
+    """Top-level property names of a type literal (depth 1), with optional flags."""
+    out, depth = [], 0
+    for l in kept:
+        if depth == 1:
+            m = re.match(r"^(?:readonly\s+)?(\w+)(\?)?:", l)
+            if m:
+                out.append((m.group(1), bool(m.group(2))))
+        depth += len(re.findall(r"[{(\[]", l)) - len(re.findall(r"[})\]]", l))
+    return out
+
+
+def keyset(req, opt):
+    keys = sorted(set(req) | set(opt))
+    return {"required": sorted(set(req)), "optional": sorted(set(opt) - set(req)),
+            "sha8": hashlib.sha256(",".join(keys).encode()).hexdigest()[:8]}
+
+
+def type_members(lines, name):
+    kept = decl(lines, r"^\s*(?:export\s+)?type {}\b".format(re.escape(name)))
+    if kept is None:
+        die("type {} not found".format(name))
+    return kept
+
+
+def main(argv):
+    types = None
+    binary = None
+    out = os.path.join(REPO, "plugin", "assets", "canary-baseline.json")
+    check = False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--types", "--claude", "--out") and i + 1 < len(argv):
+            if a == "--types":
+                types = argv[i + 1]
+            elif a == "--claude":
+                binary = argv[i + 1]
+            else:
+                out = argv[i + 1]
+            i += 2
+            continue
+        if a == "--check":
+            check = True
+            i += 1
+            continue
+        die("unknown argument {}\n{}".format(a, __doc__))
+    if not types:
+        d = os.environ.get("CC_TYPES_DIR")
+        types = os.path.join(d, "claude-code.d.ts") if d else os.path.join(REPO, ".types", "claude-code.d.ts")
+    if not os.path.isfile(types):
+        die("no type declarations at {} (set CC_TYPES_DIR or --types)".format(types))
+    if not binary:
+        vdir = os.path.expanduser("~/.local/share/claude/versions")
+        vers = [v for v in os.listdir(vdir) if re.match(r"^\d+\.\d+\.\d+$", v)] if os.path.isdir(vdir) else []
+        vers.sort(key=lambda v: [int(x) for x in v.split(".")])
+        binary = os.path.join(vdir, vers[-1]) if vers else os.environ.get("CLAUDE_CODE_EXECPATH")
+    if not binary or not os.path.isfile(binary):
+        die("no Claude Code binary (set CLAUDE_CODE_EXECPATH or --claude)")
+    with open(types, encoding="utf-8") as f:
+        text = f.read()
+    lines = text.split("\n")
+    m = re.match(r"^// Written by Claude Code (\S+?)\.?$", lines[0])
+    types_version = m.group(1) if m else "unknown"
+    cc_version = os.path.basename(binary) if re.match(r"^\d+\.\d+\.\d+", os.path.basename(binary)) else "unknown"
+
+    base = members(type_members(lines, "BaseHookInput"))
+    keysets = {}
+    for ev in EVENTS:
+        kept = type_members(lines, ev + "HookInput")
+        own = members(kept)
+        allm = base + own
+        if "BaseHookInput" not in " ".join(kept):
+            allm = own
+        req = [n for n, o in allm if not o]
+        opt = [n for n, o in allm if o]
+        # A key typed optional in one part and required in another counts as required.
+        keysets[ev] = keyset(req, [n for n in opt if n not in req])
+    sc = members(type_members(lines, "SessionCompactInput"))
+    keysets["session.compact"] = keyset([n for n, o in sc if not o], [n for n, o in sc if o])
+
+    with open(binary, "rb") as f:
+        data = f.read()
+    counts = {s: data.count(s.encode()) for s in C8_STRINGS}
+    del data
+
+    hashes = {}
+    for spec in C9_SPECS:
+        kept = decl(lines, spec["start_re"])
+        if kept is None:
+            die("C9 declaration {} not found".format(spec["name"]))
+        hashes[spec["name"]] = hashlib.sha256("\n".join(kept).encode()).hexdigest()[:16]
+
+    doc = {"v": 1, "cc_version": cc_version, "types_version": types_version, "keysets": keysets,
+           "c8": {"binary_version": cc_version, "counts": counts},
+           "c9": {"types_version": types_version, "specs": C9_SPECS, "hashes": hashes},
+           "copy_trailers": []}
+    text_out = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    if check:
+        cur = open(out, encoding="utf-8").read() if os.path.isfile(out) else ""
+        if cur != text_out:
+            print("canary-baseline: {} differs from a fresh render".format(os.path.relpath(out, REPO)))
+            return 1
+        print("canary-baseline: current")
+        return 0
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text_out)
+    print("canary-baseline: wrote {} (Claude Code {}, types {})".format(out, cc_version, types_version))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

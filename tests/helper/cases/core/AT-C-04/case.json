@@ -1,0 +1,50 @@
+{
+  "id": "AT-C-04",
+  "note": "dispatch: file 0600 in a 0700 directory; JSON parses; every field of MOD-SPEC 2.3 present; a second write of the same nonce is refused (exit 3)",
+  "now": "2026-10-21T14:05:12+03:00",
+  "tz": "Etc/GMT-3",
+  "steps": [
+    {
+      "argv": ["dispatch", "--sid", "$SID", "--nonce", "1a2b3c4d", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook",
+               "--resume-pref", "prompt.context", "--tags", "midturn,chain", "--midturn", "true", "--instr-sha8", "9f2c01ab",
+               "--instr-bytes", "3994", "--cc-version", "2.1.306", "--load-id", "load-1"],
+      "expect": {
+        "exit": 0, "stdout": "ok\n", "stderr_empty": true,
+        "files": [
+          {"path": "$WATCH/$SID/dispatch/1a2b3c4d.json", "mode": "0600",
+           "keys": ["v", "nonce", "session_id", "actor", "agent_id", "trigger", "channel", "resume_pref", "midturn", "tags",
+                    "instructions_sha8", "instructions_bytes", "cc_version", "load_id", "pid", "pid_lstart", "ts"],
+           "json": {"v": 1, "nonce": "1a2b3c4d", "session_id": "$SID", "actor": "main", "agent_id": null, "trigger": "auto",
+                    "channel": "mod-hook", "resume_pref": "prompt.context", "midturn": true, "tags": ["midturn", "chain"],
+                    "instructions_sha8": "9f2c01ab", "instructions_bytes": 3994, "cc_version": "2.1.306", "load_id": "load-1",
+                    "pid": 424242, "ts": "2026-10-21T14:05:12+03:00"},
+           "keys_absent": ["compaction_seq"]},
+          {"path": "$WATCH/$SID/dispatch", "mode": "0700"}
+        ],
+        "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "dispatch", "fields": {"nonce": "1a2b3c4d", "channel": "mod-hook"}}]
+      }
+    },
+    {
+      "name": "agent dispatch",
+      "argv": ["dispatch", "--sid", "$SID", "--nonce", "5e6f7a8b", "--actor", "a9a00b3f363327444", "--trigger", "auto",
+               "--channel", "mod-hook", "--midturn", "false"],
+      "expect": {"exit": 0, "files": [{"path": "$WATCH/$SID/dispatch/5e6f7a8b.json",
+                 "json": {"actor": "a9a00b3f363327444", "agent_id": "a9a00b3f363327444", "resume_pref": "none", "midturn": false}}]}
+    },
+    {
+      "name": "same nonce again",
+      "argv": ["dispatch", "--sid", "$SID", "--nonce", "1a2b3c4d", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook"],
+      "expect": {"exit": 3, "stdout": "REFUSED: nonce-exists\n"}
+    },
+    {
+      "name": "bad channel",
+      "argv": ["dispatch", "--sid", "$SID", "--nonce", "0badc0de", "--actor", "main", "--trigger", "auto", "--channel", "nope"],
+      "expect": {"exit": 64, "stdout": ""}
+    },
+    {
+      "name": "unknown subcommand",
+      "argv": ["no-such-subcommand"],
+      "expect": {"exit": 64, "stdout": ""}
+    }
+  ]
+}
