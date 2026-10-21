@@ -1,6 +1,6 @@
 <summary>
-⟪compactinue v1 n=5e6f7a8b s=sub⟫
+⟪{{plugin}} v1 n=5e6f7a8b s=sub⟫
 ## Task as assigned: "count rows"
 ## Next action: report
-⟪/compactinue n=5e6f7a8b⟫
+⟪/{{plugin}} n=5e6f7a8b⟫
 </summary>

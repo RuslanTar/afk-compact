@@ -1,9 +1,9 @@
 file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256
-a-wrapper.txt	ok	1	1	1a2b3c4d	main	f0f649093b158d077b07887ae3f4b277f178fbf5d0e8ef244b0a87647504bab5
-b-line6.txt	unshaped	-	1	-	-	3e2cb95fc97559b0bf15d4afb13a5ebdf06ca813f8f933fb1f019d2ca5b38847
-c-byte0.txt	ok	1	1	1a2b3c4d	main	f0f649093b158d077b07887ae3f4b277f178fbf5d0e8ef244b0a87647504bab5
+a-wrapper.txt	ok	1	1	1a2b3c4d	main	8ee4ae171b37ee367f9fdd41f24883b016a4b3b48a81ce21a9fdcbc601b125e8
+b-line6.txt	unshaped	-	1	-	-	64c69a23c23db79dedada486b41aae6d43ecfcbad61e730b485b21563f651f6e
+c-byte0.txt	ok	1	1	1a2b3c4d	main	8ee4ae171b37ee367f9fdd41f24883b016a4b3b48a81ce21a9fdcbc601b125e8
 d-foreign.txt	unshaped	-	-	-	-	ddaeef412c90d32bcffe9eaa25d41998abf728fed50bed69c4d24dfae2d44b1a
-e-close-blank.txt	ok	1	1	1a2b3c4d	main	f0f649093b158d077b07887ae3f4b277f178fbf5d0e8ef244b0a87647504bab5
-f-trailer.txt	ok-trailer	1	2	1a2b3c4d	main	c099bf15c79cf2928280355f75b0f80a742d69b9b942f2ae1d7fc2c1518a118f
-g-nonce-differs.txt	truncated	1	1	1a2b3c4d	main	3ec6fa3e7f1efee4add31136275bd2f527c28e4c846f74cd86aef1702c104a85
-h-sub.txt	ok	1	1	5e6f7a8b	sub	5d431db98384b5a6fdb6ef71b12ba7680d13f3b102011971597034af81c5cc7e
+e-close-blank.txt	ok	1	1	1a2b3c4d	main	8ee4ae171b37ee367f9fdd41f24883b016a4b3b48a81ce21a9fdcbc601b125e8
+f-trailer.txt	ok-trailer	1	2	1a2b3c4d	main	d454975f6b1a25363855731dd903942e2cced79d0a6a3f68824d15e6e24c05fd
+g-nonce-differs.txt	truncated	1	1	1a2b3c4d	main	76ca61be1b5f26dad385ceb8ea3075f07ef27d33159319c3de2b0e6594107b53
+h-sub.txt	ok	1	1	5e6f7a8b	sub	7cc9dcea41e25f3e9df36a1b64cf85235f72fb6fd52618c3ab7370ae5e14ca08

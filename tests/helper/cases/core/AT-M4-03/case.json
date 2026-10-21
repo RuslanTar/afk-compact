@@ -1,6 +1,6 @@
 {
  "id": "AT-M4-03",
- "note": "PostCompact, no marker, no dispatch match: (a) main boundary count +1 -> compact/; (b) only subagents/agent-x.jsonl gained a boundary -> compact/subagents/ with -a from the file name; (c) neither -> compact/unattributed/",
+ "note": "PostCompact, no marker, no dispatch match, in the S-21 event order (ROOT-RULINGS F2-1: the boundary row is written after PostCompact): PostCompact stashes and defers (copy_deferred why=scope; no file, no sweep), the next Stop proves the scope with P3: (a) the main transcript gained a boundary row after the PostCompact -> compact/, boundaries.count 1; (b) only subagents/agent-x.jsonl gained one -> compact/subagents/ with -a from the file name; (c) neither -> compact/unattributed/ once SETTLE_S has passed",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -16,12 +16,6 @@
       {
        "prompt": {
         "age_s": 120
-       }
-      },
-      {
-       "boundary": {
-        "age_s": 5,
-        "precomputed": false
        }
       }
      ]
@@ -41,9 +35,65 @@
    },
    "expect": {
     "exit": 0,
+    "stdout": "",
     "files": [
      {
       "path": "$ROOT/work/general/compact/2026-10-21_14-05-12_a3333333_c1-h*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/a3333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     },
+     {
+      "file": "$WATCH/a3333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "(a) the next Stop: main",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/a3333333-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00",
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "a3333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/a3333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/2026-10-21_14-05-40_a3333333_c1-h*.md",
       "count": 1
      },
      {
@@ -51,6 +101,24 @@
       "contains": [
        "1"
       ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/a3333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/a3333333-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "actor": "main",
+       "ts": "2026-10-21T14:05:12+03:00",
+       "copy": "saved",
+       "post_tokens": 41000
+      }
      }
     ]
    }
@@ -64,16 +132,6 @@
       {
        "prompt": {
         "age_s": 300
-       }
-      }
-     ]
-    },
-    {
-     "transcript": "$TMP/proj/b3333333-2222-4333-8444-555555555555/subagents/agent-x.jsonl",
-     "rows": [
-      {
-       "boundary": {
-        "age_s": 4
        }
       }
      ]
@@ -93,13 +151,60 @@
    },
    "expect": {
     "exit": 0,
+    "stdout": "",
     "files": [
      {
-      "path": "$ROOT/work/general/compact/subagents/2026-10-21_14-05-12_b3333333-ax_c1-h*.md",
+      "path": "$ROOT/work/general/compact/subagents/*b3333333*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) the next Stop: sub",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/b3333333-2222-4333-8444-555555555555/subagents/agent-x.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "b3333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/b3333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/2026-10-21_14-05-40_b3333333-ax_c1-h*.md",
       "count": 1
      },
      {
       "path": "$ROOT/work/general/compact/*b3333333*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/b3333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
       "count": 0
      }
     ]
@@ -123,7 +228,33 @@
     "exit": 0,
     "files": [
      {
-      "path": "$ROOT/work/general/compact/unattributed/2026-10-21_14-05-12_c3333333_h*.md",
+      "path": "$ROOT/work/general/compact/unattributed/*c3333333*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) the next Stop: unattributed",
+   "now": "2026-10-21T14:05:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "c3333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/c3333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/2026-10-21_14-05-40_c3333333_h*.md",
       "count": 1
      }
     ]

@@ -1,13 +1,14 @@
 {
  "id": "AT-C-09",
- "note": "one summary as a PostCompact compact_summary and as the mod's installed message: identical normalized body and sha256; save-copy from the second writer prints EXISTS sha-match",
+ "note": "one summary as a PostCompact compact_summary and as the mod's installed message: identical normalized body and sha256; save-copy from the second writer prints EXISTS sha-match; the brand is written {{plugin}} (the runner fills it), so the case holds after a rename (RN-1)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
   {
    "lib": "detect_tsv",
    "args": {
-    "tsv": "expected.tsv"
+    "tsv": "expected.tsv",
+    "sha": "template"
    }
   },
   {
@@ -33,7 +34,7 @@
     "cwd": "$TMP/work",
     "hook_event_name": "PostCompact",
     "trigger": "auto",
-    "compact_summary": "<summary>\n⟪compactinue v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/compactinue n=1a2b3c4d⟫\n</summary>"
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>"
    },
    "expect": {
     "exit": 0,
@@ -56,7 +57,7 @@
     "--nonce",
     "1a2b3c4d",
     "--from",
-    "$CASE/mod.txt",
+    "$TMP/mod.txt",
     "--writer",
     "mod",
     "--scope",
@@ -67,6 +68,11 @@
    "setup": [
     {
      "mkdir": "$TMP/work"
+    },
+    {
+     "copy": "mod.txt",
+     "to": "$TMP/mod.txt",
+     "subst": true
     }
    ],
    "expect": {

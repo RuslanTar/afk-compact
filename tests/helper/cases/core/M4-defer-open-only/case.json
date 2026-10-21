@@ -1,6 +1,6 @@
 {
  "id": "M4-defer-open-only",
- "note": "MOD-SPEC §2.4 (P1 is the record of the nonce found in the summary or custom_instructions), §5.3 step 2, §5.4, §6 (unknown scope -> compact/unattributed/): (a) a mod-self dispatch whose $.session.compact got no compaction, followed by a seated PreCompact fallback: the unmarked summary is not deferred to the mod dispatch, it is saved now as unattributed, and the mod dispatch is later compaction_unresolved; (b) a mod dispatch the mod logged as compact_rejected is neither deferred to nor time-joined; (c) a deferred stash with no scope proof is saved late under the dispatch nonce in unattributed/, not promoted to the main slot",
+ "note": "MOD-SPEC §2.4 (P1 is the record of the nonce found in the summary or custom_instructions), §5.3 step 2, §5.4, §6 (unknown scope -> compact/unattributed/), ROOT-RULINGS F2-1 (no proof in the hook -> stash, defer to reconcile): (a) a mod-self dispatch whose $.session.compact got no compaction, followed by a seated PreCompact fallback: the unmarked summary is not deferred to the mod dispatch (copy_deferred why=scope, not why=mod); the Stop after SETTLE_S saves it as unattributed, and the mod dispatch is later compaction_unresolved; (b) a mod dispatch the mod logged as compact_rejected is neither deferred to nor time-joined; (c) a deferred stash with no scope proof is saved late under the dispatch nonce in unattributed/, not promoted to the main slot",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -45,7 +45,7 @@
    }
   },
   {
-   "name": "(a) PostCompact, unmarked summary: saved now, no defer to the older mod dispatch",
+   "name": "(a) PostCompact, unmarked summary: no defer to the older mod dispatch; no proof, so stashed for reconcile",
    "argv": [
     "hook",
     "PostCompact"
@@ -64,16 +64,23 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "copy_deferred",
-      "count": 0
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 0,
+      "fields": {
+       "why": "mod"
+      }
      },
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "copy",
-      "count": 1,
-      "fields": {
-       "result": "unattributed",
-       "slot": "unattributed"
-      }
+      "count": 0
      }
     ],
     "files": [
@@ -82,18 +89,14 @@
       "count": 0
      },
      {
-      "path": "$ROOT/work/general/compact/unattributed/*_${SID8}_h*.md",
-      "count": 1,
-      "frontmatter": {
-       "actor": "unknown",
-       "channel": "classic"
-      }
+      "path": "$ROOT/work/general/compact/unattributed/*.md",
+      "count": 0
      }
     ]
    }
   },
   {
-   "name": "(a) Stop: nothing late, nothing in the main slot; the rejected dispatch stays open",
+   "name": "(a) Stop 20 s later: saved as unattributed, nothing late, nothing in the main slot; the rejected dispatch stays open",
    "argv": [
     "hook",
     "Stop"
@@ -118,16 +121,34 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "copy",
-      "count": 1
+      "count": 1,
+      "fields": {
+       "result": "unattributed",
+       "slot": "unattributed"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "compaction_unresolved",
+      "count": 0
      }
     ],
     "files": [
      {
       "path": "$ROOT/work/general/compact/*.md",
       "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_${SID8}_h*.md",
+      "count": 1,
+      "frontmatter": {
+       "actor": "unknown",
+       "channel": "classic"
+      }
      }
     ]
-   }
+   },
+   "now": "2026-10-21T14:05:32+03:00"
   },
   {
    "name": "(a) 11 min later the rejected dispatch is compaction_unresolved",
@@ -210,8 +231,41 @@
      {
       "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
       "ev": "copy_deferred",
-      "count": 0
+      "count": 0,
+      "fields": {
+       "why": "mod"
+      }
      },
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) Stop: saved as unattributed, with no dispatch joined",
+   "now": "2026-10-21T14:05:30+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
      {
       "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
       "ev": "copy",
@@ -313,7 +367,8 @@
       }
      }
     ]
-   }
+   },
+   "now": "2026-10-21T14:05:30+03:00"
   }
  ]
 }

@@ -36,6 +36,8 @@ sub run {
                          dispatch => $rec, channel => ($rec ? $rec->{channel} : 'none'),
                          seat_state => ($rec ? (postcompact::seat_state($rec, $opt->{transcript}))[0] : 'none'),
                          verdict_ctx => \%vc);
+    # the mod's own stash (pending/<nonce>.mod.md) goes once the copy holds it (F2-7)
+    copies::drop_stash($opt->{from}, $r->{result});
     args::out($r->{line1}, $r->{line2});
     return $r->{exit};
 }

@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-02",
- "note": "five summaries: sentinel missing, trailer after the sentinel, no marker, boundary precomputed:true, s=main under a subagent-proven dispatch -> truncated, ok-trailer, unshaped, stale, scope-leak",
+ "note": "five summaries: sentinel missing, trailer after the sentinel, no marker, boundary precomputed:true, s=main under a subagent-proven dispatch -> truncated, ok-trailer, unshaped, stale, scope-leak; S-21 event order (ROOT-RULINGS F2-1): the unmarked one has no proof in PostCompact, so its copy and rollup row come from the next Stop (P3 main); a precomputed install whose dispatch is the precompute one is stale in PostCompact already, before any boundary row exists",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -140,12 +140,6 @@
        "prompt": {
         "age_s": 120
        }
-      },
-      {
-       "boundary": {
-        "age_s": 5,
-        "precomputed": false
-       }
       }
      ]
     }
@@ -165,6 +159,55 @@
    "expect": {
     "exit": 0,
     "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*32222222*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/32222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "no marker: the next Stop",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/32222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00",
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "32222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/32222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
     "rows": [
      {
       "file": "$WATCH/32222222-2222-4333-8444-555555555555/compactions.jsonl",
@@ -176,7 +219,7 @@
     ],
     "files": [
      {
-      "path": "$ROOT/work/general/compact/*_c1-h*.md",
+      "path": "$ROOT/work/general/compact/*_32222222_c1-h*.md",
       "count": 1
      }
     ]
@@ -241,6 +284,57 @@
      {
       "path": "$ROOT/work/general/compact/*_c1-444444.md",
       "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "precompute dispatch, no boundary row yet (S-21 order)",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "66666666",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "precompute",
+      "age_s": 300,
+      "midturn": false,
+      "session_id": "62222222-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "62222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/62222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=66666666 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=66666666⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/62222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "verdict": "stale",
+       "precomputed": true
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_62222222_c1-666666.md",
+      "count": 1,
+      "frontmatter": {
+       "verdict": "stale"
+      }
      }
     ]
    }

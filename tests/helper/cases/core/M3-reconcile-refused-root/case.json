@@ -1,6 +1,6 @@
 {
  "id": "M3-reconcile-refused-root",
- "note": "MOD-SPEC §1.2 unsafe roots, §2.5 content-free rows, §5.4 (reconcile <= 2 s): while handoff_root is refused (inside a git work tree, not ignored), PostCompact logs one failed copy row and keeps the stash; Stops under the refused root do not retry the save (no extra copy row per Stop); a Stop with a safe root saves the stash late",
+ "note": "MOD-SPEC §1.2 unsafe roots, §2.5 content-free rows, §5.4 (reconcile <= 2 s): while handoff_root is refused (inside a git work tree, not ignored), PostCompact with a proven main summary logs one failed copy row and keeps the stash; Stops under the refused root do not retry the save (no extra copy row per Stop); a Stop with a safe root saves the stash late. A summary with no scope proof (ROOT-RULINGS F2-1) is only stashed: refused Stops leave it, and the safe Stop saves it as unattributed",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -15,6 +15,15 @@
     },
     {
      "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20
+     }
     }
    ],
    "argv": [
@@ -27,7 +36,7 @@
     "cwd": "$TMP/work",
     "hook_event_name": "PostCompact",
     "trigger": "auto",
-    "compact_summary": "<summary>\nplain native summary\n</summary>"
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 refused root\n## Resume here\nStatus: active\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>"
    },
    "expect": {
     "exit": 0,
@@ -43,7 +52,7 @@
     ],
     "files": [
      {
-      "path": "$TMP/w1/$SID/pending/h*.post.md",
+      "path": "$TMP/w1/$SID/pending/1a2b3c.post.md",
       "count": 1
      }
     ]
@@ -158,6 +167,78 @@
    }
   },
   {
+   "name": "no proof: stashed only",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nplain native summary\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 0
+     },
+     {
+      "file": "$TMP/w1/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$TMP/w1/12222222-2222-4333-8444-555555555555/pending/h*.post.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "no proof: a Stop under the refused root leaves it",
+   "now": "2026-10-21T14:05:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 0
+     }
+    ],
+    "files": [
+     {
+      "path": "$TMP/w1/12222222-2222-4333-8444-555555555555/pending/h*.post.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
    "name": "Stop once the root is safe: the stash is saved late",
    "env": {
     "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/safe"
@@ -191,10 +272,50 @@
     ],
     "files": [
      {
-      "path": "$TMP/safe/work/general/compact/unattributed/*_${SID8}_h*.md",
+      "path": "$TMP/safe/work/general/compact/*_${SID8}_c1-1a2b3c.md",
       "count": 1
      }
     ]
+   },
+   "now": "2026-10-21T14:05:41+03:00"
+  },
+  {
+   "name": "no proof: the safe Stop saves it as unattributed",
+   "now": "2026-10-21T14:05:42+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$TMP/w1/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "unattributed"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$TMP/safe/work/general/compact/unattributed/*_12222222_h*.md",
+      "count": 1
+     }
+    ]
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/safe"
    }
   }
  ]

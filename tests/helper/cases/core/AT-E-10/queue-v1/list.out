@@ -1,0 +1,1 @@
+{"schema": "queue-stub/v1", "session": "11111111-2222-4333-8444-555555555555", "lane": "lane:repo/x", "open": 2, "pending": 2, "preview": false, "held_by": "11111111-2222-4333-8444-555555555555", "lanes": [{"id": "lane:repo/x", "holder": "11111111-2222-4333-8444-555555555555", "open": 2, "preview": false}]}

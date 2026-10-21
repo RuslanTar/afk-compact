@@ -11,7 +11,7 @@
 # Step: {"argv", "stdin" (file in the case dir or tests/fixtures/), "stdin_json", "stdin_text",
 #   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N (+ "kill_signal", default KILL),
 #   "expect": {...}}
-# Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir,
+# Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir, symlink (+ to),
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
@@ -33,6 +33,8 @@
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
 #     write + jsonl_repeat {row, count} (then any jsonl rows);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
+#     (+ subst: true fills the placeholders in the copied text)
+#   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
@@ -351,7 +353,7 @@ sub make_repo {
 
 sub is_setup_action {
     my ($s) = @_;
-    return scalar grep { exists $s->{$_} } qw(write copy mkdir stub repo dispatch transcript run git bigfile age
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
                                                tempfiles secret_files repo_fixture paths);
 }
 
@@ -503,12 +505,30 @@ sub setup {
         if (defined $s->{mtime_ago_s}) { my $t = time - $s->{mtime_ago_s}; utime($t, $t, $p) }
         return;
     }
-    if (exists $s->{copy}) { my $src = src_file($s->{copy}, $cdir); util::mkdir_p(util::dirname($s->{to})); util::copy_file($src, $s->{to}, mode => oct($s->{mode} // '0600')); return }
+    if (exists $s->{copy}) {
+        my $src = src_file($s->{copy}, $cdir);
+        util::mkdir_p(util::dirname($s->{to}));
+        # "subst": true fills the placeholders ({{plugin}}, $SID, ...) in the copied text, so a
+        # case file a helper reads itself (save-copy --from) carries no literal brand (RN-1).
+        if ($s->{subst}) {
+            my $t = util::read_file($src) // die "copy $src: unreadable\n";
+            utf8::decode($t);
+            write_text($s->{to}, subst($t, $V), $s->{mode} // '0600');
+            return;
+        }
+        util::copy_file($src, $s->{to}, mode => oct($s->{mode} // '0600'));
+        return;
+    }
     if (exists $s->{tempfiles}) { fixture_tempfiles($s, $V, $cdir); return }
     if (exists $s->{secret_files}) { fixture_secret_files($s, $V, $cdir); return }
     if (exists $s->{repo_fixture}) { fixture_repo($s, $V, $cdir); return }
     if (exists $s->{paths}) { record_paths($V, $s->{sid}, @{ $s->{paths} }); return }
     if (exists $s->{mkdir}) { util::mkdir_p($s->{mkdir}); chmod(oct($s->{mode}), $s->{mkdir}) if $s->{mode}; return }
+    if (exists $s->{symlink}) {
+        util::mkdir_p(util::dirname($s->{symlink}));
+        symlink($s->{to}, $s->{symlink}) or die "symlink $s->{symlink}: $!\n";
+        return;
+    }
     if (exists $s->{stub}) {
         my $dir = $s->{dir} // "$V->{TMP}/bin";
         write_text("$dir/$s->{stub}", "#!/bin/sh\n" . ($s->{script} // 'exit 0') . "\n", '0755');
@@ -762,8 +782,15 @@ sub builtin {
             }
             $vc{scope} = $r{proof} if defined $r{proof} && $r{proof} =~ /^(main|sub|unknown)$/;
             my $s = detect::summary($text, \%vc);
+            # "sha": "template" (case-local TSVs, RN-1): the sha of the normalized body with the
+            # brand written back as {{plugin}}, so the expected value holds under any brand.
+            my $sha = $s->{sha256};
+            if (($a->{sha} // '') eq 'template') {
+                (my $n = $s->{normalized}) =~ s/\Q$bn\E/{{plugin}}/g;
+                $sha = sha::hex256($n);
+            }
             my %got = (verdict => $s->{verdict}, marker_line => $s->{marker_line} // '-', sentinel_from_end => $s->{sentinel_from_end} // '-',
-                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $s->{sha256});
+                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $sha);
             for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256)) {
                 next unless exists $r{$k} && defined $r{$k} && $r{$k} ne '';
                 push @e, "$r{file}: $k $got{$k}, want $r{$k}" if $got{$k} ne $r{$k};
@@ -876,6 +903,48 @@ sub builtin {
             }
         }
         push @e, 'no use/require found' unless $n;
+        return @e;
+    }
+    if ($name eq 'secret_corpus') {
+        # PRIV-05: every entry and name of tests/fixtures/secrets/corpus.json through the shipped
+        # gate. An entry's class: HARD -> a HARD hit, WARN -> a hit, none -> no hit. Redaction
+        # (all rules, the log/JSON path; HARD only, the summary path for HARD entries) leaves no
+        # fragment of 8+ characters. A name: withheld <-> denied by name. Rule ids are reported
+        # (the corpus ids are WP-fix's; they are not compared). `known_gaps` {id: reason} turns
+        # that entry's failures into TODO lines (a gap another work package owns).
+        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) };
+        return ('no secret corpus') unless ref $c eq 'HASH';
+        my %gap = %{ $a->{known_gaps} || {} };
+        my $n = 0;
+        for my $en (@{ $c->{entries} || [] }) {
+            my $v = join('', @{ $en->{fragments} || [] });
+            my @frag = grep { length >= 8 } @{ $en->{fragments} || [] };
+            my $hits = secrets::scan($v);
+            my $cls = $en->{class} // 'none';
+            my @mine;
+            push @mine, "class $cls: no HARD hit" if $cls eq 'HARD' && !secrets::has_hard($hits);
+            push @mine, "class $cls: no hit" if $cls eq 'WARN' && !@$hits;
+            push @mine, 'control: hit ' . secrets::rule_ids($hits) if $cls eq 'none' && @$hits;
+            if ($cls ne 'none') {
+                my ($all) = secrets::redact("x $v x");
+                push @mine, 'redacted (all rules) keeps a fragment' if grep { index($all, $_) >= 0 } @frag;
+                if ($cls eq 'HARD') {
+                    my ($hard) = secrets::redact("x $v x", ['HARD']);
+                    push @mine, 'redacted (HARD rules, the summary path) keeps a fragment' if grep { index($hard, $_) >= 0 } @frag;
+                }
+            }
+            $n++;
+            next unless @mine;
+            if (exists $gap{ $en->{id} }) { print "# TODO $en->{id}: @mine ($gap{ $en->{id} })\n"; next }
+            push @e, map { "entry $en->{id}: $_" } @mine;
+        }
+        for my $nm (@{ $c->{names} || [] }) {
+            my $want = ($nm->{expect} // '') eq 'withheld' ? 1 : 0;
+            my $got = secrets::denied_name("/tmp/corpus/$nm->{name}") ? 1 : 0;
+            $n++;
+            push @e, "name $nm->{name}: " . ($got ? 'withheld' : 'copied') . ", want $nm->{expect}" if $got != $want;
+        }
+        push @e, 'no corpus entries' unless $n;
         return @e;
     }
     if ($name eq 'live_peers') {

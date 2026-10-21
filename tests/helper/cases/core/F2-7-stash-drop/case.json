@@ -1,0 +1,165 @@
+{
+ "id": "F2-7-stash-drop",
+ "note": "ROOT-RULINGS F2-7 (PRIV-03): the plugin's own raw-summary stash goes once a copy holds the summary: PostCompact's pending/<id6>.post.md after its save, the mod's pending/<nonce>.mod.md after save-copy prints Saved or EXISTS sha-match; an unsaved stash (EXISTS sha-differs) stays for reconcile, a --from file outside pending/ is never touched, and the content-free .post.json meta stays",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "PostCompact saves and drops its stash",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 stash\n## Resume here\nStatus: active\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-1a2b3c.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c.post.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c.post.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "the after-step's EXISTS sha-match drops the mod stash",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+     "text": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 stash\n## Resume here\nStatus: active\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--from",
+    "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^VERDICT ok .*\\nEXISTS: .*_c1-1a2b3c\\.md sha-match\\n$",
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "an unsaved mod stash stays",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+     "text": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 stash\n## Resume here\nStatus: a different text\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--from",
+    "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "sha-differs\\n$",
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "a --from file outside pending/ is never removed",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "2b3c4d5e",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "manual",
+      "age_s": 5
+     }
+    },
+    {
+     "write": "$TMP/outside/2b3c4d5e.mod.md",
+     "text": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n<summary>\n⟪{{plugin}} v1 n=2b3c4d5e s=main⟫\n# LAB-42 stash\n## Resume here\nStatus: active\n⟪/{{plugin}} n=2b3c4d5e⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b3c4d5e",
+    "--from",
+    "$TMP/outside/2b3c4d5e.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\nSaved copy: .*_c2-2b3c4d\\.md\\n$",
+    "files": [
+     {
+      "path": "$TMP/outside/2b3c4d5e.mod.md",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

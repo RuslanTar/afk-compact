@@ -1,0 +1,696 @@
+{
+ "id": "S-21-event-order",
+ "note": "ROOT-RULINGS F2-1, live probe S-21 (lab E1/probes/S-21-S-26.md, 2.1.306): the main compact_boundary row (and the summary row, stamped earlier) are written after SessionStart(compact), PostCompact and the mod after-step, so the boundary count proves nothing inside those hooks. A: classic-only manual /compact in the probe's order and timing: SessionStart(compact) injects the block; PostCompact stashes and defers (no copy, no sweep, no boundaries.count); a SubagentStop saves nothing; the next Stop proves main with P3, saves the copy under the marker nonce with the boundary row's tokens, sweeps, writes the rollup row with the PostCompact time and boundaries.count 1. B: the mod path: P1 proves main inside PostCompact; the after-step finds EXISTS sha-match; the next Stop accounts the late row to it. C: a main row that landed after its PostCompact never proves a later unproven compaction main (no main-slot copy, no sweep); the Stop matches the later one to its own subagent row",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "A: setup (the main transcript before /compact: no boundary row)",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "ts": "2026-10-21T14:04:40+03:00"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "A: PreCompact manual, no mod: the classic fallback",
+   "now": "2026-10-21T14:04:48.478+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "manual",
+    "custom_instructions": null
+   },
+   "capture": {
+    "N": "re:n=([0-9a-f]{8}) s=main"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "A: SubagentStop of the summarizer fork",
+   "now": "2026-10-21T14:05:00.582+03:00",
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false,
+    "agent_id": "a35780152b5d4568c",
+    "agent_type": "",
+    "agent_transcript_path": "$TMP/proj/$SID/subagents/agent-a35780152b5d4568c.jsonl",
+    "last_assistant_message": "<summary>S21-CANARY-summarizer-text</summary>",
+    "background_tasks": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/**",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "A: SessionStart(compact) with 0 boundary rows: the block is injected, not suppressed",
+   "now": "2026-10-21T14:05:00.724+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "model": "opus[1m]",
+    "prompt_id": "p-1",
+    "scratchpad_dir": "$TMP/tmpdir/scratchpad",
+    "session_id": "$SID",
+    "source": "compact",
+    "transcript_path": "$TMP/proj/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_json": {
+     "hookSpecificOutput": {
+      "hookEventName": "SessionStart"
+     }
+    },
+    "context_contains": [
+     "Subagent: skip step 3"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject",
+      "count": 1,
+      "fields": {
+       "channel": "sessionstart",
+       "nonce": "$N"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/boundaries.count",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "A: PostCompact with 0 boundary rows: no proof, so stash and defer",
+   "now": "2026-10-21T14:05:00.813+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "manual",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=$N s=main⟫\n# LAB-42 S-21 fixture\n## Resume here\nStatus: active\n⟪/{{plugin}} n=$N⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.post.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/boundaries.count",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope",
+       "nonce": "$N"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "A: the boundary row lands after PostCompact (summary row stamped earlier); a SubagentStop saves nothing",
+   "now": "2026-10-21T14:05:08.369+03:00",
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false,
+    "agent_id": "acf8286e728d8e226",
+    "agent_type": "",
+    "agent_transcript_path": "$TMP/proj/$SID/subagents/agent-acf8286e728d8e226.jsonl",
+    "last_assistant_message": "<summary>S21-CANARY-summarizer-text</summary>",
+    "background_tasks": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     }
+    ]
+   },
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:00.865+03:00",
+        "trigger": "manual",
+        "pre": 37896,
+        "post": 4537,
+        "duration_ms": 12100,
+        "precomputed": false
+       }
+      },
+      {
+       "type": "user",
+       "isCompactSummary": true,
+       "uuid": "u-s21-$SID",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:05:00.626+03:00",
+       "message": {
+        "role": "user",
+        "content": "This session is being continued from a previous conversation. S21-CANARY-summary-row"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "A: the next Stop proves main with P3 and saves (and sweeps)",
+   "now": "2026-10-21T14:05:30+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-*.md",
+      "count": 1,
+      "frontmatter": {
+       "actor": "main",
+       "nonce": "$N",
+       "channel": "classic",
+       "tokens_before": "37896",
+       "tokens_after": "4537",
+       "verdict": "ok"
+      }
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/boundaries.count",
+      "contains": [
+       "1"
+      ]
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.post.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "saved",
+       "slot": "main",
+       "proof": "p3-main",
+       "nonce": "$N"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "order_anomaly",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "actor": "main",
+       "ts": "2026-10-21T14:05:00+03:00",
+       "nonce": "$N",
+       "resume": "delivered:sessionstart",
+       "pre_tokens": 37896,
+       "post_tokens": 4537,
+       "copy": "saved"
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$ROOT",
+      "text": "S21-CANARY"
+     }
+    ]
+   }
+  },
+  {
+   "name": "B: the mod before-step writes its dispatch; PreCompact is shaped (silent)",
+   "now": "2026-10-21T14:10:00.073+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "b1b2c3d4",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "ts": "2026-10-21T14:10:00+03:00",
+      "session_id": "22222222-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "22222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": "Keep the handoff form. First line inside <summary>: ⟪{{plugin}} v1 n=b1b2c3d4 s=main⟫"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/22222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "precompact_shaped",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "B: SessionStart(compact): the mod dispatch resumes through prompt.context",
+   "now": "2026-10-21T14:10:55.005+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "model": "opus[1m]",
+    "prompt_id": "p-1",
+    "scratchpad_dir": "$TMP/tmpdir/scratchpad",
+    "session_id": "22222222-2222-4333-8444-555555555555",
+    "source": "compact",
+    "transcript_path": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "B: PostCompact with 0 boundary rows: P1 proves main, saved now",
+   "now": "2026-10-21T14:10:55.106+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "22222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=b1b2c3d4 s=main⟫\n# LAB-42 S-21 fixture\n## Resume here\nStatus: active\n⟪/{{plugin}} n=b1b2c3d4⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_22222222_c1-b1b2c3.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/22222222-2222-4333-8444-555555555555/boundaries.count",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/22222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "B: the mod after-step 41 ms later: EXISTS sha-match",
+   "now": "2026-10-21T14:10:55.147+03:00",
+   "setup": [
+    {
+     "write": "$WATCH/22222222-2222-4333-8444-555555555555/pending/b1b2c3d4.mod.md",
+     "text": "This session is being continued from a previous conversation.\n\nSummary:\n<summary>\n⟪{{plugin}} v1 n=b1b2c3d4 s=main⟫\n# LAB-42 S-21 fixture\n## Resume here\nStatus: active\n⟪/{{plugin}} n=b1b2c3d4⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "22222222-2222-4333-8444-555555555555",
+    "--nonce",
+    "b1b2c3d4",
+    "--from",
+    "$WATCH/22222222-2222-4333-8444-555555555555/pending/b1b2c3d4.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--tokens",
+    "223438,14943",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "sha-match\\n$"
+   }
+  },
+  {
+   "name": "B: the boundary row 42 ms after the after-step; the next Stop accounts it to that compaction",
+   "now": "2026-10-21T14:11:21+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:10:55.189+03:00",
+        "trigger": "auto",
+        "pre": 223438,
+        "post": 14943,
+        "duration_ms": 12100,
+        "precomputed": false
+       }
+      },
+      {
+       "type": "user",
+       "isCompactSummary": true,
+       "uuid": "u-s21-22222222",
+       "sessionId": "22222222-2222-4333-8444-555555555555",
+       "timestamp": "2026-10-21T14:10:54.606+03:00",
+       "message": {
+        "role": "user",
+        "content": "This session is being continued from a previous conversation. S21-CANARY-summary-row"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "22222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_22222222_*.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/22222222-2222-4333-8444-555555555555/boundaries.count",
+      "contains": [
+       "1"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/22222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "order_anomaly",
+      "count": 0,
+      "fields": {
+       "kind": "boundary-without-postcompact"
+      }
+     },
+     {
+      "file": "$WATCH/22222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "C: a proven main compaction",
+   "now": "2026-10-21T14:20:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "c1c2c3d4",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 30,
+      "session_id": "33333333-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "33333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/33333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=c1c2c3d4 s=main⟫\n# LAB-42 S-21 fixture\n## Resume here\nStatus: active\n⟪/{{plugin}} n=c1c2c3d4⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_33333333_c1-c1c2c3.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "C: 30 s later an unproven compaction, after the first one's boundary row landed: not main, no sweep",
+   "now": "2026-10-21T14:20:30+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/33333333-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:20:00.050+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "33333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/33333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_33333333_*.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/33333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     },
+     {
+      "file": "$WATCH/33333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "C: its subagent row lands 50 ms later; the Stop saves it as a subagent copy",
+   "now": "2026-10-21T14:21:00+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/33333333-2222-4333-8444-555555555555/subagents/agent-x7.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:20:30.050+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "33333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/33333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_33333333_*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/work/general/compact/subagents/*_33333333-ax7_c1-h*.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/33333333-2222-4333-8444-555555555555/boundaries.count",
+      "contains": [
+       "1"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/33333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

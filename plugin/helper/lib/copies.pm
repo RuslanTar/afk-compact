@@ -48,6 +48,30 @@ sub copy_sha {
     return (sha::hex256($body), $fm);
 }
 
+# Is this path one of the plugin's own raw-summary stashes of this session
+# (<watch>/<sid>/pending/<id6>.post.md or <nonce>.mod.md)?
+sub own_stash {
+    my ($path) = @_;
+    my $sd = rc::sid_dir();
+    return 0 unless defined $path && defined $sd && -f $path && !-l $path;
+    return 0 unless util::basename($path) =~ /\A(?:[0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md\z|\A[0-9a-f]{8}\.mod\.md\z/;
+    my $real = util::real_path($path);
+    my $dir = util::real_path("$sd/pending");
+    return (defined $real && defined $dir && util::dirname($real) eq $dir) ? 1 : 0;
+}
+
+# drop_stash(path, result) -> 1 when removed. ROOT-RULINGS F2-7 (PRIV-03): once a copy holds
+# the summary (saved, unattributed, late, or EXISTS sha-match), the plugin's own transient
+# raw stash goes, so a HARD secret redacted in the copy does not stay beside it. Only our
+# stash files; an unsaved stash (refused, mismatch, deferred) stays for reconcile. The
+# content-free .post.json meta stays.
+sub drop_stash {
+    my ($path, $result) = @_;
+    return 0 unless defined $result && $result =~ /\A(?:saved|unattributed|late|exists)\z/;
+    return 0 unless own_stash($path);
+    return unlink($path) ? 1 : 0;
+}
+
 sub _seq {
     my ($dir, $sid8, $actor_tag) = @_;
     my $n = 0;
@@ -95,12 +119,14 @@ sub prev_copy {
 # save(%a) -> {exit, line1, line2, result, path, verdict, id6, sha256}
 # a: sid text nonce writer scope agent tokens cwd transcript trigger dispatch
 #    seat_state channel precomputed scan verdict_ctx late queue_lane evidence where
+#    content_name (the summary repeats an earlier marker: saved under h<sha5> with no
+#    nonce, ROOT-RULINGS F2-2)
 sub save {
     my (%a) = @_;
     my $sid = $a{sid};
     my $s = $a{scan} || detect::scan($a{text});
     $s->{sha256} //= sha::hex256($s->{normalized});
-    my $nonce = nonce::valid($a{nonce}) ? $a{nonce} : $s->{nonce};
+    my $nonce = $a{content_name} ? undef : nonce::valid($a{nonce}) ? $a{nonce} : $s->{nonce};
     $nonce = undef unless nonce::valid($nonce);
     my $rec = $a{dispatch} // (defined $nonce ? dispatch::read(rc::watch(), $sid, $nonce) : undef);
     my $scope = $a{scope} // 'unknown';
@@ -227,7 +253,7 @@ sub save {
     return $refuse->($out->{why} // 'race') unless $out->{kind} eq 'saved';
     my $result = $a{late} ? 'late' : $scope eq 'unknown' ? 'unattributed' : 'saved';
     rc::emit('copy', [nonce => $nonce, id6 => $out->{id6}, result => $result, slot => $slot, rel_path => $rel, writer => $a{writer},
-                      seq => $out->{seq}, redacted => (defined $redacted ? jsonc::true() : jsonc::false())]);
+                      seq => $out->{seq}, redacted => (defined $redacted ? jsonc::true() : jsonc::false()), (defined $a{proof} ? (proof => $a{proof}) : ())]);
     rc::emit('verdict', [nonce => $nonce, verdict => $verdict, verdict_source => (($a{writer} // '') eq 'mod' ? 'after-step' : 'postcompact'),
                          marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end}]);
     return { %ret, exit => 0, result => $result, path => $out->{path}, rel => $rel, seq => $out->{seq}, id6 => $out->{id6},

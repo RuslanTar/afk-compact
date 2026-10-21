@@ -1,14 +1,17 @@
 package scope;
-# lib/scope.pm: scope proof for every classic-side save and inject (MOD-SPEC §2.4).
+# lib/scope.pm: scope proof for every classic-side save and inject (MOD-SPEC §2.4, as
+# ROOT-RULINGS F2-1 orders it after the S-21 probe). Owner: WP-core.
 #   P1 dispatch record for the nonce: main = agent_id null and channel mod-hook|mod-self;
 #      subagent = agent_id set
 #   P2 summary marker s=sub (s=main alone is no proof: the classic text is scope-neutral)
-#   P3 transcript: main transcript holds more compact_boundary rows than
-#      <watch>/<sid>/boundaries.count -> main signal; a subagents/agent-*.jsonl
-#      gained a boundary newer than the dispatch ts while the main count did not change
-#      -> subagent signal (agent id from the file name)
+#   P3 transcript boundary rows: the main compact_boundary row is written after
+#      SessionStart(compact) and PostCompact (S-21, 2 of 2 live compactions), so P3 can
+#      never prove the current compaction inside those hooks. It is evaluated at the next
+#      Stop only (reconcile::p3), which matches each new main boundary to the PostCompact
+#      before it, and a new subagent boundary to an unmatched one.
 #   main = P1-main, or P3-main with no subagent signal; subagent = P1-sub, P2-sub or
-#   P3-sub; both or neither = unknown. Owner: WP-core.
+#   P3-sub; both or neither = unknown. Without proof PostCompact stashes and defers the
+#   save to reconcile: no main-slot save and no sweep without proof (MOD-SPEC §0 item 6).
 use strict;
 use warnings;
 
@@ -19,42 +22,25 @@ sub stored_count {
     return 0 + $1;
 }
 
-# prove(dispatch => rec|undef, marker_scope => main|sub|manual|undef,
-#       transcript => path, sid => S, sid_dir => D, since => epoch)
-# -> {scope, agent_id, main_count, p1, p2, p3_main, p3_sub}
+# prove(dispatch => rec|undef, marker_scope => main|sub|manual|undef)
+# -> {scope, agent_id, p1, p2}: the proofs a hook may use (no boundary count)
 sub prove {
     my (%a) = @_;
     my $d = $a{dispatch};
-    my %r = (p1 => undef, p2 => undef, p3_main => 0, p3_sub => 0);
+    my %r = (p1 => undef, p2 => undef);
     if ($d) {
         if (defined $d->{agent_id}) { $r{p1} = 'sub'; $r{agent_id} = $d->{agent_id} }
         elsif (dispatch::is_mod($d)) { $r{p1} = 'main' }
     }
     $r{p2} = 'sub' if ($a{marker_scope} // '') eq 'sub';
-    my $tp = $a{transcript};
-    my $main_count = defined $tp && -f $tp ? transcript::count($tp) : undef;
-    $r{main_count} = $main_count;
-    my $stored = stored_count($a{sid_dir});
-    $r{p3_main} = (defined $main_count && $main_count > $stored) ? 1 : 0;
-    if (!$r{p3_main}) {
-        my $since = $a{since} // (util::now() - 120);
-        for my $f (@{ transcript::subagent_files($tp, $a{sid}) }) {
-            my $b = transcript::boundaries($f->{path});
-            if (grep { $_->{epoch} >= $since - 1 } @$b) {
-                $r{p3_sub} = 1;
-                $r{agent_id} //= $f->{agent_id};
-                last;
-            }
-        }
-    }
-    my $sub = ($r{p1} // '') eq 'sub' || $r{p2} || $r{p3_sub};
-    my $main = ($r{p1} // '') eq 'main' || ($r{p3_main} && !$sub);
+    my $sub = ($r{p1} // '') eq 'sub' || $r{p2};
+    my $main = ($r{p1} // '') eq 'main';
     $r{scope} = ($main && $sub) ? 'unknown' : $main ? 'main' : $sub ? 'sub' : 'unknown';
     delete $r{agent_id} if $r{scope} ne 'sub';
     return \%r;
 }
 
-# Set boundaries.count to the observed main count (under seq.lock), MOD-SPEC §2.4.
+# Set boundaries.count (the main boundary rows already accounted for, under seq.lock).
 sub set_count {
     my ($sid_dir, $count, $owner) = @_;
     return unless defined $count;

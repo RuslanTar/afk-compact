@@ -1,6 +1,6 @@
 {
  "id": "AT-E-10",
- "note": "MOD-SPEC §10 AT-E-10, HK-34: (a) queue_cmd unset: no queue call, lane null; (c) a queue_cmd that answers prose (tests/fixtures/bin/queue-stub with queue/prose): lane omitted with a lane_unknown row; only `list --json --session <sid>` is ever called, never adopt or add. (b) is blocked: design/ defines no structured `queue_cmd list --json` answer (tests/fixtures/README.md 'Not here'), so no case asserts it yet",
+ "note": "MOD-SPEC §10 AT-E-10, HK-34, ROOT-RULINGS F2-8: (a) queue_cmd unset: no queue call, lane null; (b) a queue_cmd answering the v1 contract (queue-stub/v1, canned in queue-v1/) with lane:repo/x and 2 open: checkpoint lane lane:repo/x and `Queued: 2 open …` in the measured block, then the PostCompact copy of that dispatch carries queue_lane: lane:repo/x from the checkpoint; (c) a queue_cmd that answers prose (tests/fixtures/bin/queue-stub with queue/prose): lane omitted with a lane_unknown row; (d) an answer naming another schema is not read (lane_unknown why=schema); only `list --json --session <sid>` is ever called, never adopt or add",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -95,6 +95,155 @@
       "count": 1,
       "fields": {
        "why": "not-json"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) queue-stub/v1",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
+    "QUEUE_STUB_DIR": "$CASE/queue-v1",
+    "QUEUE_STUB_LOG": "$TMP/queue.log"
+   },
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3c4d5e6f",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "lane": "lane:repo/x",
+     "queued_line": {
+      "re": "\\AQueued: 2 open in lane:repo/x; "
+     },
+     "measured_block": {
+      "re": "(?m)^Queued: 2 open in lane:repo/x; "
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
+    ],
+    "files": [
+     {
+      "path": "$TMP/queue.log",
+      "lines": 2,
+      "has": [
+       "\\Alist --json --session $SID\\nlist --json --session $SID$"
+      ],
+      "lacks": [
+       "^(adopt|add)\\b"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lane_unknown",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) the copy takes the lane from that checkpoint",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
+    "QUEUE_STUB_DIR": "$CASE/queue-v1",
+    "QUEUE_STUB_LOG": "$TMP/queue.log"
+   },
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "3c4d5e6f",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=3c4d5e6f s=main⟫\n# LAB-42 queue lane\n## Resume here\nStatus: active\n⟪/{{plugin}} n=3c4d5e6f⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/example-repo/general/compact/*_c1-3c4d5e.md",
+      "count": 1,
+      "frontmatter": {
+       "queue_lane": "lane:repo/x",
+       "nonce": "3c4d5e6f"
+      }
+     },
+     {
+      "path": "$TMP/queue.log",
+      "lines": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "(d) another schema",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
+    "QUEUE_STUB_DIR": "$CASE/queue-v2",
+    "QUEUE_STUB_LOG": "$TMP/queue.log"
+   },
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "4d5e6f7a",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "lane": null,
+     "queued_line": null
+    },
+    "files": [
+     {
+      "path": "$TMP/queue.log",
+      "lines": 3,
+      "lacks": [
+       "^(adopt|add)\\b"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lane_unknown",
+      "count": 1,
+      "fields": {
+       "why": "schema"
       }
      }
     ]

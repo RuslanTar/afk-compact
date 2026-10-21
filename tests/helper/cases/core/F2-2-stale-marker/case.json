@@ -1,0 +1,453 @@
+{
+ "id": "F2-2-stale-marker",
+ "note": "ROOT-RULINGS F2-2 (SPEC-03), MOD-SPEC §5.1 stale verdict, §5.3: a summary that repeats an earlier compaction's marker is never lost. Classic path: the first summary (marker N1, no scope proof) is saved under its nonce name at the next Stop; a later summary repeating marker N1 with another body is saved under a content name (h<sha5>, frontmatter nonce null), verdict stale, before and after the first one's copy exists; no copy mismatch. Mod path: a stale marker counts as no marker, so PostCompact defers to the open mod dispatch, whose after-step saves it under its own nonce (verdict stale), and the stash goes",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "capture": {
+    "N1": "re:n=([0-9a-f]{8}) s=main"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=$N1 s=main⟫\n# LAB-42 first\n## Resume here\nStatus: active\n⟪/$BRAND n=$N1⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "nonce": "$N1",
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop: the first is saved under its nonce",
+   "now": "2026-10-21T14:05:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_${SID8}_*.md",
+      "count": 1,
+      "frontmatter": {
+       "nonce": "$N1",
+       "verdict": "ok"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "now": "2026-10-21T14:25:12+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "now": "2026-10-21T14:25:14+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=$N1 s=main⟫\n# LAB-42 second, much later work\n## Resume here\nStatus: active, new state\n⟪/$BRAND n=$N1⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 0,
+      "fields": {
+       "result": "mismatch"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 2,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/h*.post.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop: the stale one is saved under a content name",
+   "now": "2026-10-21T14:25:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_${SID8}_h*.md",
+      "count": 1,
+      "frontmatter": {
+       "verdict": "stale",
+       "nonce": null
+      }
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*.md",
+      "count": 2
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 0,
+      "fields": {
+       "result": "mismatch"
+      }
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "verdict": "stale"
+      }
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "now": "2026-10-21T14:30:12+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "now": "2026-10-21T14:30:14+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=$N1 s=main⟫\n# LAB-42 second, third, later still\n## Resume here\nStatus: active, third state\n⟪/$BRAND n=$N1⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "Stop: a third repeat is saved too",
+   "now": "2026-10-21T14:30:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_${SID8}_h*.md",
+      "count": 2
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 2,
+      "fields": {
+       "verdict": "stale"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "status: three compactions, two not ok, no copy mismatch",
+   "now": "2026-10-21T14:31:00+03:00",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^compactions: 3 in this session; last 3 \\(2 not ok\\):"
+    ],
+    "stdout_lacks": [
+     "copy_mismatch"
+    ]
+   }
+  },
+  {
+   "name": "mod path: the first compaction",
+   "now": "2026-10-21T15:00:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "d1d1d1d1",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "session_id": "12222222-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=d1d1d1d1 s=main⟫\n# LAB-42 first\n## Resume here\nStatus: active\n⟪/{{plugin}} n=d1d1d1d1⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_12222222_c1-d1d1d1.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "mod path: a stale marker is deferred to the open dispatch",
+   "now": "2026-10-21T15:20:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "d2d2d2d2",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "session_id": "12222222-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=d1d1d1d1 s=main⟫\n# LAB-42 second, other work\n## Resume here\nStatus: active\n⟪/{{plugin}} n=d1d1d1d1⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "nonce": "d2d2d2d2",
+       "why": "mod"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_12222222_*.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "mod path: the after-step saves it under its own nonce",
+   "now": "2026-10-21T15:20:00+03:00",
+   "setup": [
+    {
+     "write": "$WATCH/12222222-2222-4333-8444-555555555555/pending/d2d2d2d2.mod.md",
+     "text": "This session is being continued from a previous conversation.\n\nSummary:\n<summary>\n⟪{{plugin}} v1 n=d1d1d1d1 s=main⟫\n# LAB-42 second, other work\n## Resume here\nStatus: active\n⟪/{{plugin}} n=d1d1d1d1⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "12222222-2222-4333-8444-555555555555",
+    "--nonce",
+    "d2d2d2d2",
+    "--from",
+    "$WATCH/12222222-2222-4333-8444-555555555555/pending/d2d2d2d2.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^VERDICT stale .*\\nSaved copy: .*_12222222_c2-d2d2d2\\.md\\n$"
+   }
+  },
+  {
+   "name": "mod path: Stop drops the PostCompact stash the after-step saved",
+   "now": "2026-10-21T15:20:30+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_12222222_*.md",
+      "count": 2
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_12222222_*.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/12222222-2222-4333-8444-555555555555/pending/*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     }
+    ]
+   }
+  }
+ ]
+}

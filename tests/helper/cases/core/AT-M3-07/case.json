@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-07, AT-S-02",
- "note": "10-compaction fixture run with one unmarked summary (deferred, saved by the after-step) and one subagent compaction: 9 main copies + 1 subagent copy, 10 rollup rows, one non-ok verdict, failure counts exclude the subagent; then status lists 5 compactions, 1 non-ok, smokeDue, and no summary text; status reports halt on from the halt.json the mod writes ({active, reason, since}), and off once active is false",
+ "note": "10-compaction fixture run with one unmarked summary (deferred, saved by the after-step) and one subagent compaction: 9 main copies + 1 subagent copy, 10 rollup rows, one non-ok verdict, failure counts exclude the subagent; then status lists 5 compactions, 1 non-ok, smokeDue, and no summary text; status reports halt on from the halt.json the mod writes ({active, reason, since}), and off once active is false; S-21 event order (ROOT-RULINGS F2-1): every boundary row is written 50 ms after its PostCompact, and the reconcile at the end matches the 9 main rows and the subagent row to their PostCompacts (boundaries.count 9)",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -38,11 +38,6 @@
       {
        "prompt": {
         "age_s": 60
-       }
-      },
-      {
-       "boundary": {
-        "age_s": 3
        }
       }
      ]
@@ -82,10 +77,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:03:00.050+03:00"
        }
       }
      ]
@@ -125,10 +125,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:06:00.050+03:00"
        }
       }
      ]
@@ -168,10 +173,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:09:00.050+03:00"
        }
       }
      ]
@@ -211,10 +221,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:12:00.050+03:00"
        }
       }
      ]
@@ -248,11 +263,11 @@
      }
     },
     {
-     "transcript": "$TMP/proj/$SID/subagents/agent-a9a00b3f363327444.jsonl",
+     "transcript": "$TMP/proj/$SID.jsonl",
      "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:15:00.050+03:00"
        }
       }
      ]
@@ -292,10 +307,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID/subagents/agent-a9a00b3f363327444.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:18:00.050+03:00"
        }
       }
      ]
@@ -335,10 +355,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:21:00.050+03:00"
        }
       }
      ]
@@ -376,6 +401,16 @@
     {
      "write": "$TMP/c8.mod.md",
      "text": "This session is being continued from a previous conversation.\n\nSummary:\n<summary>\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n</summary>"
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:24:00.050+03:00"
+       }
+      }
+     ]
     }
    ],
    "argv": [
@@ -419,11 +454,6 @@
        "prompt": {
         "age_s": 60
        }
-      },
-      {
-       "boundary": {
-        "age_s": 3
-       }
       }
      ]
     }
@@ -462,10 +492,15 @@
        "prompt": {
         "age_s": 60
        }
-      },
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
       {
        "boundary": {
-        "age_s": 3
+        "ts": "2026-10-21T14:27:00.050+03:00"
        }
       }
      ]
@@ -544,7 +579,19 @@
       }
      }
     ]
-   }
+   },
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:30:00.050+03:00"
+       }
+      }
+     ]
+    }
+   ]
   },
   {
    "name": "AT-S-02 status",

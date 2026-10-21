@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-15",
- "note": "unmarked summary at PostCompact with a pending mod-hook main dispatch: copy_deferred, no file; the after-step save-copy with that nonce writes one copy ..._c1-<nonce6>.md, verdict unshaped; without the after-step the next Stop writes it (copy_late)",
+ "note": "unmarked summary at PostCompact with a pending mod-hook main dispatch: copy_deferred, no file; the after-step save-copy with that nonce writes one copy ..._c1-<nonce6>.md, verdict unshaped; without the after-step the next Stop writes it (copy_late); in the S-21 event order (ROOT-RULINGS F2-1) the boundary row is written after PostCompact, so the late save takes its main scope from P3 at that Stop",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -163,12 +163,6 @@
        "prompt": {
         "age_s": 120
        }
-      },
-      {
-       "boundary": {
-        "age_s": 5,
-        "precomputed": false
-       }
       }
      ]
     }
@@ -224,11 +218,28 @@
     ],
     "files": [
      {
-      "path": "$ROOT/work/general/compact/2026-10-21_14-05-12_12222222_c1-9a8b7c.md",
-      "count": 1
+      "path": "$ROOT/work/general/compact/2026-10-21_14-05-40_12222222_c1-9a8b7c.md",
+      "count": 1,
+      "frontmatter": {
+       "actor": "main"
+      }
      }
     ]
-   }
+   },
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00",
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ]
   }
  ]
 }

@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-05",
- "note": "PostCompact stash present, no copy (the PostCompact helper was killed before its save), no after-step: the next hook Stop writes the copy; row copy_late",
+ "note": "PostCompact stash present, no copy (the PostCompact helper was killed before its save), no after-step: the next hook Stop writes the copy; row copy_late; the stash is dropped once the late copy holds it (F2-7)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -142,6 +142,14 @@
     "files": [
      {
       "path": "$ROOT/work/general/compact/*.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c.post.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c.post.json",
       "count": 1
      }
     ]

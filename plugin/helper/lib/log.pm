@@ -17,7 +17,7 @@ sub row {
     elsif (ref $fields eq 'HASH') { @f = map { ($_ => $fields->{$_}) } sort keys %$fields }
     return jsonc::obj(
         v              => 1,
-        ts             => util::iso_ms(util::now()),
+        ts             => $c->{ts} // util::iso_ms(util::now()),
         ev             => $ev,
         sid            => $c->{sid},
         actor          => $c->{actor} // 'unknown',

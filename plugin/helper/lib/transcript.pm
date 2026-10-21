@@ -4,21 +4,31 @@ package transcript;
 use strict;
 use warnings;
 
-# boundaries(path) -> [{uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed}]
+# boundary(line) -> {uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed} or undef
+sub boundary {
+    my ($line) = @_;
+    return undef unless index($line, 'compact_boundary') >= 0;
+    my $j = eval { jsonc::decode($line) };
+    return undef unless ref $j eq 'HASH' && ($j->{subtype} // '') eq 'compact_boundary';
+    my $m = ref $j->{compactMetadata} eq 'HASH' ? $j->{compactMetadata} : {};
+    return { uuid => $j->{uuid}, ts => $j->{timestamp}, epoch => util::parse_iso($j->{timestamp} // '') // 0,
+             trigger => $m->{trigger}, pre => $m->{preTokens}, post => $m->{postTokens},
+             duration_ms => $m->{durationMs}, precomputed => ($m->{precomputed} ? 1 : 0) };
+}
+
+# boundaries(path [, tail => bytes]) -> [{uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed}]
+# (tail: only the last bytes of the file, for a hook that wants the newest rows)
 sub boundaries {
-    my ($path) = @_;
+    my ($path, %o) = @_;
     my @out;
     return \@out unless defined $path && -f $path;
-    open(my $fh, '<:raw', $path) or return \@out;
-    while (my $line = <$fh>) {
-        next unless index($line, 'compact_boundary') >= 0;
-        my $j = eval { jsonc::decode($line) };
-        next unless ref $j eq 'HASH' && ($j->{subtype} // '') eq 'compact_boundary';
-        my $m = ref $j->{compactMetadata} eq 'HASH' ? $j->{compactMetadata} : {};
-        push @out, { uuid => $j->{uuid}, ts => $j->{timestamp}, epoch => util::parse_iso($j->{timestamp} // '') // 0,
-                     trigger => $m->{trigger}, pre => $m->{preTokens}, post => $m->{postTokens},
-                     duration_ms => $m->{durationMs}, precomputed => ($m->{precomputed} ? 1 : 0) };
+    if ($o{tail}) {
+        my $data = util::read_tail($path, $o{tail}) // return \@out;
+        for my $line (split /\n/, $data) { my $b = boundary($line); push @out, $b if $b }
+        return \@out;
     }
+    open(my $fh, '<:raw', $path) or return \@out;
+    while (my $line = <$fh>) { my $b = boundary($line); push @out, $b if $b }
     close $fh;
     return \@out;
 }
