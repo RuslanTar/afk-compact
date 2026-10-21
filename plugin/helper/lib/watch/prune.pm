@@ -21,7 +21,7 @@ sub _walk {
     return (0) if -l _;
     if (-f _) { return (1, $st[9], [$path], [], $st[7]) }
     return (0) unless -d _;
-    my ($newest, @files, @dirs, $bytes) = ($st[9]);
+    my ($newest, @files, @dirs, $bytes) = (0);
     $bytes = 0;
     opendir(my $dh, $path) or return (0);
     my @e = grep { $_ ne '.' && $_ ne '..' } readdir $dh;

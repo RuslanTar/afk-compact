@@ -222,7 +222,8 @@ sub _analyze {
         $c->{b_seq}++;
         my %b = (
             line => $line, uuid => $uuid, ts => (defined $f->{ts} ? watch::io::iso($f->{ts}) : undef),
-            ts_epoch => $f->{ts}, seq => $c->{b_seq}, trigger => $trig, trigger_detail => $detail,
+            ts_epoch => $f->{ts}, seq => $c->{b_seq}, trigger => $trig, boundary_trigger => $trig,
+            trigger_detail => $detail,
             pre => $f->{pre}, post => $f->{post}, duration_ms => $f->{duration_ms},
             precomputed => watch::ctx::B($f->{precomputed}), dropped => $f->{dropped},
             preserved_segment => watch::ctx::B($f->{preserved_segment}), summary_line => undef,

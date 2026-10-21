@@ -87,6 +87,18 @@ sub on_stop {
         my $run = watch::sweep::run($ctx, $soft);
         return 1 if $run->{busy};
         my $files = $run->{files} || [];
+        my $state = $run->{state} || {};
+        my $sess = $state->{session} = ref $state->{session} eq 'HASH' ? $state->{session} : {};
+        my $carry = ref $state->{carry} eq 'HASH' ? $state->{carry} : {};
+        $sess->{task_kinds} = $carry->{task_types} if ref $carry->{task_types} eq 'HASH';
+        # Rules first: they add the joined per-compaction fields to each
+        # boundary record before the sweep rows are written.
+        $stage = 'rules';
+        my $S = watch::rules::load_session($ctx);
+        my $ex = watch::alerts::load_existing($ctx);
+        my $hard_stop = watch::io::mono() >= $hard;
+        watch::rules::evaluate($ctx, $S, $ex, $sess, $files) unless $hard_stop;
+        $stage = 'sweep';
         for my $f (@$files) {
             watch::ctx::error_row($ctx, 'sweep', 'unreadable') if $f->{unreadable};
             watch::ctx::error_row($ctx, 'sweep', 'bad-json') if $f->{bad_lines};
@@ -97,16 +109,7 @@ sub on_stop {
                                     actor => $f->{actor});
             }
         }
-        my $state = $run->{state} || {};
-        my $sess = $state->{session} = ref $state->{session} eq 'HASH' ? $state->{session} : {};
-        my $carry = ref $state->{carry} eq 'HASH' ? $state->{carry} : {};
-        $sess->{task_kinds} = $carry->{task_types} if ref $carry->{task_types} eq 'HASH';
-        $stage = 'rules';
-        my $S = watch::rules::load_session($ctx);
-        my $ex = watch::alerts::load_existing($ctx);
-        if (watch::io::mono() < $hard) {
-            watch::rules::evaluate($ctx, $S, $ex, $sess, $files);
-        } else {
+        if ($hard_stop) {
             watch::ctx::log_row($ctx, 'sweep_partial', { file => undef, from_off => undef, to_off => undef,
                                                          reason => 'hard-stop' }, actor => 'main');
         }

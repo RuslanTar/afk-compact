@@ -203,9 +203,12 @@ sub _derive {
     my $trig;
     if ($D && ($D->{channel} // '') eq 'mod-self') { $trig = 'plugin' }
     elsif ($D && ($D->{channel} // '') ne 'classic' && defined $D->{trigger}) { $trig = $D->{trigger} }
-    elsif ($B && defined $B->{trigger}) { $trig = $B->{trigger} }
+    elsif ($B && defined $B->{boundary_trigger}) { $trig = $B->{boundary_trigger} }
     elsif ($P) { $trig = $P->{trigger} }
     $C->{trigger} = $trig;
+    $C->{trigger_src} = !defined $trig ? undef
+                      : ($D && (($D->{channel} // q()) eq q(mod-self) || (($D->{channel} // q()) ne q(classic) && defined $D->{trigger}))) ? q(dispatch)
+                      : ($B && defined $B->{boundary_trigger}) ? q(boundary) : q(postcompact);
     $C->{nonce} = $D ? $D->{nonce} : ($P && $P->{nonce_found}) ? $P->{nonce_found} : 'none';
     $C->{nonce_match} = ($P && $D && defined $P->{nonce_found} && $P->{nonce_found} eq $D->{nonce}) ? 1 : 0;
     $C->{channel} = $D ? $D->{channel} : ($P ? 'none' : undef);
@@ -256,6 +259,21 @@ sub _derive {
             if ($P->{mod_alive_this_turn}) { $C->{bypass_suspected} = 1 } else { $C->{mod_off} = 1 }
         }
     }
+    # The realtime per-compaction fields ride on the boundary's sweep record.
+    if ($B) {
+        $B->{trigger} = $C->{trigger};
+        $B->{trigger_src} = $C->{trigger_src};
+        $B->{verdict} = $C->{verdict};
+        $B->{nonce} = $C->{nonce};
+        $B->{nonce_match} = watch::ctx::B($C->{nonce_match});
+        $B->{channel} = $C->{channel};
+        $B->{join} = $C->{join};
+        $B->{attributed} = $C->{actor};
+        $B->{copy} = $C->{copy};
+        $B->{bypass_suspected} = watch::ctx::B($C->{bypass_suspected});
+        $B->{mod_off} = watch::ctx::B($C->{mod_off});
+        $B->{postcompact} = watch::ctx::B($P);
+    }
 }
 
 # --- rules ------------------------------------------------------------------
@@ -303,6 +321,7 @@ sub evaluate {
         }
         if ($c->{main} && $B && !$c->{precompute}) {
             my $bp = band($th, $B->{pre});
+            $B->{band_position} = $bp;
             if (defined $bp && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
                 $R->(rule => 'A-05', severity => 'warn', id_parts => \@idp, %k,
                      evidence => { band_position => $bp, tokens_before => $B->{pre}, target => $th->{target},
@@ -345,7 +364,7 @@ sub evaluate {
             $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'hookless'], %k,
                  evidence => { hookless_boundary => \1, line => $B->{line} });
         }
-        if ($B && defined $B->{trigger} && $B->{trigger} !~ /\A(?:auto|manual)\z/) {
+        if ($B && defined $B->{boundary_trigger} && $B->{boundary_trigger} !~ /\A(?:auto|manual)\z/) {
             $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'trigger'], %k,
                  evidence => { trigger_unknown => \1, line => $B->{line} });
         }
