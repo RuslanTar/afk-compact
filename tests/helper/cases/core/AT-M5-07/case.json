@@ -1,0 +1,174 @@
+{
+ "id": "AT-M5-07",
+ "note": "one session, three compactions: the same sid in every dispatch, copy and row; no state file renamed or reset (boundaries.count grows to 3)",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ]
+  },
+  {
+   "now": "2026-10-21T14:05:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "51700001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 10,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "age_s": 2
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=51700001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=51700001⟫\n</summary>"
+   }
+  },
+  {
+   "now": "2026-10-21T14:10:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "52700002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 10,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "age_s": 2
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=52700002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=52700002⟫\n</summary>"
+   }
+  },
+  {
+   "now": "2026-10-21T14:15:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "53700003",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 10,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "age_s": 2
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=53700003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=53700003⟫\n</summary>"
+   }
+  },
+  {
+   "name": "check",
+   "now": "2026-10-21T14:20:00+03:00",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_${SID8}_c*.md",
+      "count": 3,
+      "frontmatter": {
+       "session_id": "$SID"
+      }
+     },
+     {
+      "path": "$WATCH/$SID/dispatch/*.json",
+      "count": 3,
+      "json": {
+       "session_id": "$SID"
+      }
+     },
+     {
+      "path": "$WATCH/$SID/boundaries.count",
+      "contains": [
+       "3"
+      ]
+     },
+     {
+      "path": "$WATCH/*.classic.jsonl",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 3,
+      "fields": {
+       "session_id": "$SID",
+       "sid": "$SID"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

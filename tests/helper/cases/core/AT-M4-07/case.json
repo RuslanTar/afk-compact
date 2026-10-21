@@ -1,0 +1,96 @@
+{
+ "id": "AT-M4-07",
+ "note": "3 PostCompact payloads for 3 parallel subagent compactions, same sid: 3 distinct copies; no MANIFEST write; each call well under its timeout (no lock wait over 1 s beyond start-up)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "a1000001",
+      "actor": "a1111111aaaa",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "a2000002",
+      "actor": "a2222222bbbb",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "a3000003",
+      "actor": "a3333333cccc",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "parallel_inputs": [
+    {
+     "stdin_json": {
+      "session_id": "$SID",
+      "transcript_path": "$TMP/proj/$SID.jsonl",
+      "cwd": "$TMP/work",
+      "hook_event_name": "PostCompact",
+      "trigger": "auto",
+      "compact_summary": "<summary>\n⟪$BRAND v1 n=a1000001 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=a1000001⟫\n</summary>"
+     }
+    },
+    {
+     "stdin_json": {
+      "session_id": "$SID",
+      "transcript_path": "$TMP/proj/$SID.jsonl",
+      "cwd": "$TMP/work",
+      "hook_event_name": "PostCompact",
+      "trigger": "auto",
+      "compact_summary": "<summary>\n⟪$BRAND v1 n=a2000002 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=a2000002⟫\n</summary>"
+     }
+    },
+    {
+     "stdin_json": {
+      "session_id": "$SID",
+      "transcript_path": "$TMP/proj/$SID.jsonl",
+      "cwd": "$TMP/work",
+      "hook_event_name": "PostCompact",
+      "trigger": "auto",
+      "compact_summary": "<summary>\n⟪$BRAND v1 n=a3000003 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=a3000003⟫\n</summary>"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "ms_max": 5000,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/*_c1-a*.md",
+      "count": 3
+     }
+    ],
+    "absent": [
+     "$DISP/*/*/MANIFEST.tsv",
+     "$ROOT/work/general/compact/*.md"
+    ]
+   }
+  }
+ ]
+}

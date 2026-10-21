@@ -1,0 +1,115 @@
+{
+ "id": "AT-M5-10",
+ "note": "SessionStart startup (pid P, start time T, sid S1); SessionStart(compact); SessionEnd(other): one P-T.live-<sid8>.json (none for compact); one P-T.ended-<sid8>.json with reason; a reader with a live pid but a different start time treats the session as not live",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/424242-*.live-${SID8}.json",
+      "count": 1,
+      "mode": "0600",
+      "json": {
+       "pid": 424242,
+       "pid_lstart": "Tue Oct 21 09:00:00 2026",
+       "session_id": "$SID",
+       "source": "startup"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/*",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "other"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/424242-*.ended-${SID8}.json",
+      "count": 1,
+      "json": {
+       "session_id": "$SID",
+       "reason": "other"
+      }
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/*",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "reader",
+   "setup": [
+    {
+     "write": "$TMP/peers/.sessions/by-pid/1-100.live-aaaaaaaa.json",
+     "json": {
+      "pid": 1,
+      "pid_lstart": "Mon Jan  1 00:00:00 2001",
+      "session_id": "pid-1-wrong-start"
+     }
+    },
+    {
+     "write": "$TMP/peers/.sessions/by-pid/999999-100.live-bbbbbbbb.json",
+     "json": {
+      "pid": 999999,
+      "pid_lstart": "Mon Jan  1 00:00:00 2001",
+      "session_id": "dead-pid"
+     }
+    }
+   ],
+   "lib": "live_peers",
+   "args": {
+    "root": "$TMP/peers",
+    "expect": []
+   }
+  }
+ ]
+}

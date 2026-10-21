@@ -1,0 +1,80 @@
+{
+ "id": "AT-M5-03",
+ "note": "sessions A and B in one bucket save at the same second: two files differing by sid8; no file replaced",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "f1000001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "f1666666-2222-4333-8444-555555555555"
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "f2000002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "f2666666-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "parallel_inputs": [
+    {
+     "stdin_json": {
+      "session_id": "f1666666-2222-4333-8444-555555555555",
+      "transcript_path": "$TMP/proj/f1666666-2222-4333-8444-555555555555.jsonl",
+      "cwd": "$TMP/work",
+      "hook_event_name": "PostCompact",
+      "trigger": "auto",
+      "compact_summary": "<summary>\n⟪$BRAND v1 n=f1000001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=f1000001⟫\n</summary>"
+     }
+    },
+    {
+     "stdin_json": {
+      "session_id": "f2666666-2222-4333-8444-555555555555",
+      "transcript_path": "$TMP/proj/f2666666-2222-4333-8444-555555555555.jsonl",
+      "cwd": "$TMP/work",
+      "hook_event_name": "PostCompact",
+      "trigger": "auto",
+      "compact_summary": "<summary>\n⟪$BRAND v1 n=f2000002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=f2000002⟫\n</summary>"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/2026-10-21_14-05-12_f1666666_c1-f10000.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/work/general/compact/2026-10-21_14-05-12_f2666666_c1-f20000.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 2
+     }
+    ]
+   }
+  }
+ ]
+}

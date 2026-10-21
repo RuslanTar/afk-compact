@@ -1,0 +1,60 @@
+{
+ "id": "AT-M5-01",
+ "note": "TZ +03:00, clock 2026-10-21T14:05:12+03:00, seq 3, nonce 1a2b3c4d: name 2026-10-21_14-05-12_<sid8>_c3-1a2b3c.md; frontmatter date 2026-10-21T14:05:12+03:00",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$ROOT/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0a0a.md",
+     "mode": "0400",
+     "text": "---\nsession_id: $SID\nactor: main\ndate: 2026-10-21T13:00:00+03:00\n---\nx\n"
+    },
+    {
+     "write": "$ROOT/work/general/compact/2026-10-21_13-30-00_${SID8}_c2-0b0b0b.md",
+     "mode": "0400",
+     "text": "---\nsession_id: $SID\nactor: main\ndate: 2026-10-21T13:30:00+03:00\n---\ny\n"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/2026-10-21_14-05-12_${SID8}_c3-1a2b3c.md",
+      "frontmatter": {
+       "date": "2026-10-21T14:05:12+03:00",
+       "compaction_seq": "3",
+       "previous_handoff": "~/.claude/handoffs/work/general/compact/2026-10-21_13-30-00_${SID8}_c2-0b0b0b.md"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,296 @@
+{
+ "id": "AT-C-08",
+ "note": "scope proof table (MOD-SPEC 2.4): each P1/P2/P3 combination incl. the conflicting pair -> main (compact/), sub (compact/subagents/) or unknown (compact/unattributed/)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ]
+  },
+  {
+   "name": "P1-main",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "c1000001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "d1444444-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d1444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d1444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=c1000001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=c1000001⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-c?0000.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "P1-sub",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "c2000002",
+      "actor": "a9a00b3f363327444",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "d2444444-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d2444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d2444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=c2000002 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=c2000002⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/*_d2444444-aa9a00b3f_c1-c?0000.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "P2-sub alone (marker without a record)",
+   "setup": [],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d3444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d3444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=c3000003 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=c3000003⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/*_d3444444_c1-c?0000.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "P3-main alone",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/d4444444-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d4444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d4444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\np3 main\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_d4444444_c1-h*.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "P3-sub alone",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/d5444444-2222-4333-8444-555555555555/subagents/agent-q7.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "age_s": 2
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d5444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d5444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\np3 sub\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/*_d5444444-aq7_c1-h*.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "P3-main with a subagent signal (P2-sub)",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/d6444444-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d6444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d6444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=c6000006 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=c6000006⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/*_d6444444_c1-c?0000.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "conflicting pair: P1-main and P2-sub",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "c7000007",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "d7444444-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d7444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d7444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=c7000007 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=c7000007⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_d7444444_c70000.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "neither",
+   "setup": [],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "d8444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d8444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nno proof\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_d8444444_h*.md",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

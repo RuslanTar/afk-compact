@@ -1,0 +1,82 @@
+{
+ "id": "AT-M3-10",
+ "note": "SessionStart startup with CLAUDE_CODE_EXECPATH=.../versions/2.1.305 and last-version 2.1.304: version_hint row; with the variable unset: no row, exit 0",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/data/last-version",
+     "text": "2.1.304\n"
+    }
+   ],
+   "env": {
+    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.305",
+    "CLAUDE_PLUGIN_DATA": "$TMP/data"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "version_hint",
+      "count": 1,
+      "fields": {
+       "from": "2.1.304",
+       "to": "2.1.305"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$TMP/data/last-version",
+      "contains": [
+       "2.1.305"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "unset",
+   "env": {
+    "CLAUDE_PLUGIN_DATA": "$TMP/data"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "version_hint",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

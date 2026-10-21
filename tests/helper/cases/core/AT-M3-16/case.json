@@ -1,0 +1,100 @@
+{
+ "id": "AT-M3-16",
+ "note": "two different unmarked summaries for one sid in the same second, no dispatch (seated, unknown scope): two files in compact/unattributed/ with different h<sha5> ids; a replay of the first prints EXISTS sha-match",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nfirst native summary\n</summary>"
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nsecond native summary\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/2026-10-21_14-05-12_${SID8}_h*.md",
+      "count": 2,
+      "mode": "0400"
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 2,
+      "fields": {
+       "result": "unattributed"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "layers_missing",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "replay",
+   "setup": [
+    {
+     "write": "$TMP/first.txt",
+     "text": "<summary>\nfirst native summary\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "-",
+    "--from",
+    "$TMP/first.txt",
+    "--writer",
+    "postcompact-fallback",
+    "--scope",
+    "unknown",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^VERDICT unshaped marker_line=- sentinel_from_end=-\\nEXISTS: .*/unattributed/.*_h[0-9a-f]{5}\\.md sha-match\\n$",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*.md",
+      "count": 2
+     }
+    ]
+   }
+  }
+ ]
+}

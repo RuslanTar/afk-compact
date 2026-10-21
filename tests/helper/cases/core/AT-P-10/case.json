@@ -1,0 +1,199 @@
+{
+ "id": "AT-P-10",
+ "note": "helper from a plain shell (no CLAUDE_PLUGIN_OPTION_*): pluginConfigs['<name>@<mkt>'].options.handoff_root from the settings file is used; --root wins over it; several matching keys -> defaults + config_ambiguous (E-14); CLAUDE_PLUGIN_ROOT outside the config dir's plugins/ selects <name>@inline",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@$BRAND": {
+        "options": {
+         "handoff_root": "~/from-settings"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e770001",
+    "--actor",
+    "main",
+    "--trigger",
+    "auto",
+    "--channel",
+    "mod-hook"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/from-settings/.watch/$SID/dispatch/5e770001.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "flag wins",
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e770002",
+    "--actor",
+    "main",
+    "--trigger",
+    "auto",
+    "--channel",
+    "mod-hook",
+    "--root",
+    "$TMP/flag-root"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/flag-root/.watch/$SID/dispatch/5e770002.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "env wins over settings",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/env-root"
+   },
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e770003",
+    "--actor",
+    "main",
+    "--trigger",
+    "auto",
+    "--channel",
+    "mod-hook"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/env-root/.watch/$SID/dispatch/5e770003.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "inline",
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$TMP/dev/plugin"
+   },
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@$BRAND": {
+        "options": {
+         "handoff_root": "~/from-settings"
+        }
+       },
+       "$BRAND@inline": {
+        "options": {
+         "handoff_root": "~/from-inline"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e770004",
+    "--actor",
+    "main",
+    "--trigger",
+    "auto",
+    "--channel",
+    "mod-hook"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/from-inline/.watch/$SID/dispatch/5e770004.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "ambiguous",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@a": {
+        "options": {
+         "handoff_root": "~/a"
+        }
+       },
+       "$BRAND@b": {
+        "options": {
+         "handoff_root": "~/b"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e770005",
+    "--actor",
+    "main",
+    "--trigger",
+    "auto",
+    "--channel",
+    "mod-hook"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.claude/handoffs/.watch/$SID/dispatch/5e770005.json",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$HOME/.claude/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "config_ambiguous",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

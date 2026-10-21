@@ -1,0 +1,218 @@
+{
+ "id": "AT-M5-04",
+ "note": "two processes, same sid, concurrent saves: seqs unique; then a lock owner record with a dead pid, then a live pid with a wrong start time: both stale owners are taken over and logged lock_stale",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "b1000001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "b2000002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$TMP/s1.md",
+     "text": "<summary>\n⟪$BRAND v1 n=b1000001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=b1000001⟫\n</summary>"
+    },
+    {
+     "write": "$TMP/s2.md",
+     "text": "<summary>\n⟪$BRAND v1 n=b2000002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=b2000002⟫\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy"
+   ],
+   "parallel_inputs": [
+    {
+     "argv": [
+      "save-copy",
+      "--sid",
+      "$SID",
+      "--nonce",
+      "b1000001",
+      "--from",
+      "$TMP/s1.md",
+      "--writer",
+      "mod",
+      "--scope",
+      "main",
+      "--cwd",
+      "$TMP/work"
+     ]
+    },
+    {
+     "argv": [
+      "save-copy",
+      "--sid",
+      "$SID",
+      "--nonce",
+      "b2000002",
+      "--from",
+      "$TMP/s2.md",
+      "--writer",
+      "mod",
+      "--scope",
+      "main",
+      "--cwd",
+      "$TMP/work"
+     ]
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/work/general/compact/*_c2-*.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "dead owner",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "b3000003",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$TMP/s3.md",
+     "text": "<summary>\n⟪$BRAND v1 n=b3000003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=b3000003⟫\n</summary>"
+    },
+    {
+     "write": "$WATCH/$SID/seq.lock",
+     "json": {
+      "sid": "$SID",
+      "actor": "main",
+      "pid": 999999,
+      "pid_lstart": "Tue Oct 21 08:00:00 2026",
+      "host": "$HOST",
+      "ts": "2026-10-21T14:00:00+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "b3000003",
+    "--from",
+    "$TMP/s3.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "Saved copy: .*_c3-b30000\\.md",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lock_stale",
+      "count": 1,
+      "fields": {
+       "lock": "seq.lock",
+       "reason": "dead"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "live pid, wrong start time",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "b4000004",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$TMP/s4.md",
+     "text": "<summary>\n⟪$BRAND v1 n=b4000004 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=b4000004⟫\n</summary>"
+    },
+    {
+     "write": "$WATCH/$SID/seq.lock",
+     "json": {
+      "sid": "$SID",
+      "actor": "main",
+      "pid": 1,
+      "pid_lstart": "Mon Jan  1 00:00:00 2001",
+      "host": "$HOST",
+      "ts": "2026-10-21T14:00:00+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "b4000004",
+    "--from",
+    "$TMP/s4.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "Saved copy: .*_c4-b40000\\.md",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lock_stale",
+      "count": 2
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lock_stale",
+      "fields": {
+       "reason": "start-time"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

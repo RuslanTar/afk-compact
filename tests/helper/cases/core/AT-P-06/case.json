@@ -1,0 +1,98 @@
+{
+ "id": "AT-P-06",
+ "note": "hook SessionStart with CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=<tmp>/r: records under <tmp>/r/.watch/; with the variable unset they land under the default; unsubstituted ${user_config.*} and empty values count as unset",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/r"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/r/.watch/$SID.classic.jsonl",
+      "count": 1
+     },
+     {
+      "path": "$TMP/r/.watch/$SID/classic-alive.json",
+      "count": 1
+     },
+     {
+      "path": "$TMP/r/.sessions/by-pid/*.live-${SID8}.json",
+      "count": 1
+     },
+     {
+      "path": "$HOME/.claude/handoffs",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "unset",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.claude/handoffs/.watch/$SID.classic.jsonl",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "unsubstituted",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "${user_config.handoff_root}",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": ""
+   },
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "other"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$HOME/.claude/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "session",
+      "fields": {
+       "phase": "end"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

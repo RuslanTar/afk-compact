@@ -153,10 +153,13 @@ sub save {
                 my $existing = find($bk->{path}, $cur);
                 last unless $existing;
                 my ($esha, $efm) = copy_sha($existing);
-                if (defined $esha && $esha eq $s->{sha256}) {
+                # Same id6 from another session or another nonce (6 hex of 8 can repeat)
+                # is a true collision, never "already saved": suffix -2, -3, ... (HK-48).
+                my $same = ($efm->{session_id} // '') eq $sid && ($efm->{nonce} // '') eq ($nonce // '');
+                if ($same && defined $esha && $esha eq $s->{sha256}) {
                     return { kind => 'exists', path => $existing, match => 1, fm => $efm };
                 }
-                if ($cur =~ /^h/) { $cur = $id6 . '-' . ($try + 1); next }    # true collision, other content
+                if (!$same || $cur =~ /^h/) { $cur = $id6 . '-' . ($try + 1); next }
                 return { kind => 'exists', path => $existing, match => 0, fm => $efm };
             }
             my $seq = $scope eq 'unknown' ? undef : _seq($dir, $sid8, $actor_tag);

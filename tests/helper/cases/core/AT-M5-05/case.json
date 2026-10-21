@@ -1,0 +1,131 @@
+{
+ "id": "AT-M5-05",
+ "note": "SessionEnd(clear) pid P sid S1, then SessionStart(clear) pid P sid S2, then a second SessionStart(clear) for S2: S2.lineage.json = {previous_session_id: S1, lineage_reason: clear}, unchanged after the second event; fork with no record -> unknown",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "a7777777-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/a7777777-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "clear"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/424242-*.ended-a7777777.json",
+      "count": 1,
+      "json": {
+       "session_id": "a7777777-2222-4333-8444-555555555555",
+       "reason": "clear"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b7777777-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/b7777777-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "clear"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/b7777777-2222-4333-8444-555555555555.lineage.json",
+      "mode": "0600",
+      "json": {
+       "previous_session_id": "a7777777-2222-4333-8444-555555555555",
+       "lineage_reason": "clear"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/b7777777-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "session",
+      "fields": {
+       "phase": "start",
+       "source": "clear",
+       "previous_session_id": "a7777777-2222-4333-8444-555555555555"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "now": "2026-10-21T14:06:00+03:00",
+   "setup": [
+    {
+     "write": "$TMP/marker",
+     "text": "x"
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b7777777-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/b7777777-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "clear"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/b7777777-2222-4333-8444-555555555555.lineage.json",
+      "json": {
+       "previous_session_id": "a7777777-2222-4333-8444-555555555555"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "fork without a record",
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "515151:Tue Oct 21 10:00:00 2026"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "c7777777-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/c7777777-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "fork"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/c7777777-2222-4333-8444-555555555555.lineage.json",
+      "json": {
+       "previous_session_id": "unknown",
+       "lineage_reason": "fork"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

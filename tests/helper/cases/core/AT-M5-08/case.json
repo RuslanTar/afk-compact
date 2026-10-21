@@ -1,0 +1,1318 @@
+{
+ "id": "AT-M5-08",
+ "note": "50 Stop events with 50 different task sets, then 5 with an unchanged set: exactly 20 slot files holding the newest 20 sets; the 5 unchanged events write nothing; no task description stored",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "set 1",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-001",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 2",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-002",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 3",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-003",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 4",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-004",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 5",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-005",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 6",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-006",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 7",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-007",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 8",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-008",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 9",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-009",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 10",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-010",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 11",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-011",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 12",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-012",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 13",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-013",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 14",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-014",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 15",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-015",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 16",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-016",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 17",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-017",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 18",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-018",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 19",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-019",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 20",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-020",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 21",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-021",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 22",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-022",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 23",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-023",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 24",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-024",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 25",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-025",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 26",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-026",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 27",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-027",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 28",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-028",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 29",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-029",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 30",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-030",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 31",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-031",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 32",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-032",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 33",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-033",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 34",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-034",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 35",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-035",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 36",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-036",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 37",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-037",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 38",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-038",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 39",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-039",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 40",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-040",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 41",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-041",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 42",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-042",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 43",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-043",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 44",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-044",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 45",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-045",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 46",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-046",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 47",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-047",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 48",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-048",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 49",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-049",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "set 50",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-050",
+      "type": "shell",
+      "status": "running",
+      "description": "synthetic"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "unchanged 0",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-050",
+      "type": "shell",
+      "status": "running",
+      "description": "other words"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "unchanged 1",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-050",
+      "type": "shell",
+      "status": "running",
+      "description": "other words"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "unchanged 2",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-050",
+      "type": "shell",
+      "status": "running",
+      "description": "other words"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "unchanged 3",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-050",
+      "type": "shell",
+      "status": "running",
+      "description": "other words"
+     }
+    ],
+    "session_crons": []
+   }
+  },
+  {
+   "name": "unchanged 4",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [
+     {
+      "id": "task-050",
+      "type": "shell",
+      "status": "running",
+      "description": "other words"
+     }
+    ],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$WATCH/$SID/bg/slot-*.json",
+      "count": 20
+     },
+     {
+      "path": "$WATCH/$SID/bg/slot.lock",
+      "json": {
+       "n": 50
+      }
+     },
+     {
+      "path": "$WATCH/$SID/bg/slot-9.json",
+      "json": {
+       "seq": 50,
+       "tasks": [
+        {
+         "id": "task-050",
+         "type": "shell",
+         "status": "running",
+         "output_path": null
+        }
+       ]
+      }
+     },
+     {
+      "path": "$WATCH/$SID/bg/slot-10.json",
+      "json": {
+       "seq": 31
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "synthetic"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "other words"
+     }
+    ]
+   }
+  }
+ ]
+}

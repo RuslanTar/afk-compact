@@ -1,0 +1,83 @@
+{
+ "id": "AT-M3-12",
+ "note": "transcript with a boundary row and no PostCompact: order_anomaly at the next Stop (only boundaries after the session's first record count)",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "now": "2026-10-21T14:00:00+03:00",
+   "transcript_old": true,
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T13:00:00+03:00",
+        "uuid": "b-old"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "now": "2026-10-21T14:06:00+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:01:00+03:00",
+        "uuid": "b-new"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "order_anomaly",
+      "count": 1,
+      "fields": {
+       "uuid": "b-new",
+       "kind": "boundary-without-postcompact"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,103 @@
+{
+ "id": "AT-M1-10",
+ "note": "SessionStart(compact) with no dispatch in the last 600 s: block printed with the [nonok] line; row layers_missing at the following PostCompact",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "0ld00000",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 900,
+      "midturn": false
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "context_contains": [
+     "Summary not in handoff format: take state from Measured facts and kept messages.",
+     "Subagent: skip step 3"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject",
+      "count": 1,
+      "fields": {
+       "nonok_note": true
+      }
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nnative\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "layers_missing",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "seat_state": "none",
+       "channel": "none"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

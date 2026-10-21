@@ -1,0 +1,104 @@
+{
+ "id": "AT-M3-11",
+ "needs": [
+  "baseline"
+ ],
+ "note": "PostCompact payload with one extra top-level key: one keyset_change per version (a second payload adds none)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.306"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nx\n</summary>",
+    "brand_new_key": 1
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "keyset_change",
+      "count": 1,
+      "fields": {
+       "event": "PostCompact",
+       "added": [
+        "brand_new_key"
+       ],
+       "missing": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "again",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\ny\n</summary>",
+    "brand_new_key": 2
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "keyset_change",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "known keys only",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/t.jsonl",
+    "cwd": "$TMP",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null,
+    "permission_mode": "default"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "keyset_change",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

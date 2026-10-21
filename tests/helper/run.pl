@@ -406,13 +406,22 @@ sub invoke {
     my @argv = ("$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} });
     @argv = map { subst($_, $V) } @{ $st->{exec} } if $st->{exec};
     my $stdin = stdin_of($st, $V, $cdir);
-    my $n = $st->{parallel} // 1;
+    my @inputs = $st->{parallel_inputs} ? @{ $st->{parallel_inputs} } : ((undef) x ($st->{parallel} // 1));
     my @procs;
-    for my $k (1 .. $n) {
-        my $outf = "$V->{TMP}/out-$i-$k";
-        my $errf = "$V->{TMP}/err-$i-$k";
+    my $k = 0;
+    my @prepared;
+    for my $in (@inputs) {
+        $k++;
+        my ($av, $sin) = (\@argv, $stdin);
+        if ($in) {
+            $av = ["$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $in->{argv} }] if $in->{argv};
+            $sin = stdin_of($in, $V, $cdir) if grep { exists $in->{$_} } qw(stdin stdin_json stdin_text stdin_parts);
+        }
+        push @prepared, [$av, $sin, "$V->{TMP}/out-$i-$k", "$V->{TMP}/err-$i-$k"];
+    }
+    for my $pp (@prepared) {
         my $t0 = util::clock_ms();
-        push @procs, { pid => spawn(\@argv, $env, $stdin, $outf, $errf), outf => $outf, errf => $errf, t0 => $t0 };
+        push @procs, { pid => spawn($pp->[0], $env, $pp->[1], $pp->[2], $pp->[3]), outf => $pp->[2], errf => $pp->[3], t0 => $t0 };
     }
     if (defined $st->{kill_after_ms}) {
         util::sleep_ms($st->{kill_after_ms});
@@ -534,6 +543,70 @@ sub builtin {
             my $a2 = $pp->encode($pp->decode(jsonc::encode_bytes($mine)));
             push @e, "$d: round trip differs" unless $a1 eq $a2;
         }
+        return @e;
+    }
+    if ($name eq 'floor_lint') {
+        # AT-P-11: every use/require in plugin/helper is a floor module (RUNTIME §2.4, plus
+        # overload, lib and utf8, probed present in debian:bookworm-slim perl-base), one of
+        # the helper's own libraries, or sits inside an eval with a fallback.
+        my %floor = map { $_ => 1 } qw(strict warnings constant Fcntl POSIX Errno Cwd File::Spec File::Path File::Temp
+            File::Basename IPC::Open3 Getopt::Long IO::Handle List::Util Scalar::Util Text::ParseWords IO::File IO::Select
+            Socket Exporter Carp parent integer bytes overload lib utf8);
+        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes);
+        my $root = "$REPO/plugin/helper";
+        my %own;
+        my @stack = ("$root/lib");
+        while (@stack) {
+            my $d = pop @stack;
+            for my $f (util::list_dir($d)) {
+                if (-d "$d/$f") { push @stack, "$d/$f"; next }
+                next unless $f =~ /\.pm$/;
+                (my $rel = substr("$d/$f", length("$root/lib/"))) =~ s/\.pm$//;
+                $rel =~ s{/}{::}g;
+                $own{$rel} = 1;
+            }
+        }
+        @stack = ($root);
+        my $n = 0;
+        while (@stack) {
+            my $d = pop @stack;
+            for my $f (util::list_dir($d)) {
+                my $p = "$d/$f";
+                if (-d $p) { push @stack, $p; next }
+                next unless $f =~ /\.p[lm]$/;
+                my $src = util::read_file($p);
+                my $ln = 0;
+                for my $line (split /\n/, $src) {
+                    $ln++;
+                    next if $line =~ /^\s*#/;
+                    while ($line =~ /\b(use|require)\s+([A-Za-z_][A-Za-z0-9_:]*)/g) {
+                        my ($kw, $m) = ($1, $2);
+                        next if $m =~ /^v?\d/ || $m eq 'if';
+                        $n++;
+                        next if $floor{$m} || $own{$m};
+                        next if $optional{$m} && $line =~ /eval\s*\{/;
+                        push @e, "$p:$ln: $kw $m is not on the floor";
+                    }
+                    while ($line =~ /\brequire\s+"([^"\$]+)\.pm"/g) {
+                        (my $m = $1) =~ s{/}{::}g;
+                        $n++;
+                        push @e, "$p:$ln: require \"$1.pm\" is not a helper library" unless $own{$m};
+                    }
+                }
+            }
+        }
+        push @e, 'no use/require found' unless $n;
+        return @e;
+    }
+    if ($name eq 'live_peers') {
+        # AT-M5-10 reader: a live- record counts only when its pid runs with the same start time
+        # and no ended- record exists.
+        for my $l (qw(sessions)) { require "$l.pm" }
+        local %rc::R = (paths => { root => $a->{root} });
+        my @live = map { $_->{session_id} } @{ sessions::live_peers() };
+        my $want = join(',', sort @{ $a->{expect} || [] });
+        my $got = join(',', sort @live);
+        push @e, "live peers [$got], want [$want]" unless $got eq $want;
         return @e;
     }
     return ("unknown builtin $name");
@@ -696,6 +769,7 @@ sub check {
             my $d = pop @stack;
             next unless -e $d;
             if (-d $d) { push @stack, map { "$d/$_" } util::list_dir($d); next }
+            next if defined $g->{exclude} && $d =~ /$g->{exclude}/;
             my $raw = util::read_file($d) // '';
             push @e, "$d contains the canary text" if index($raw, $text) >= 0;
         }
