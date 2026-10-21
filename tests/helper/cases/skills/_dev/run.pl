@@ -17,7 +17,7 @@
 #           {mkdir} (+) | {repo: {branch, commits: [{files, msg}], dirty,
 #           untracked, ignored}, at} (+, inline recipe) | {run: argv, env,
 #           cwd, capture} (+, a helper call) | {git: argv, cwd} (+) |
-#           {age: path, minutes} (+, set mtime)]
+#           {age: path, minutes} (+, set mtime) | {bigfile, bytes, fill} (+)]
 #   expect: exit, stdout, stdout_re, stdout_max_bytes, stdout_has (+),
 #           stdout_lacks (+), json_keys (+), json (+, dotted path → value or
 #           {re} | {null} | {len}), files [{path, mode, has, lacks, count}],
@@ -207,6 +207,13 @@ sub setup_step {
         my $r = helper($st->{run}, \%e, $st->{cwd} // $vars->{TMP}, '');
         push @$err, "setup run @{ $st->{run} }: exit $r->{rc}" if defined $st->{exit} && $r->{rc} != $st->{exit};
         capture($st->{capture}, $r->{out}, $vars) if $st->{capture};
+    } elsif (exists $st->{bigfile}) {
+        File::Path::make_path(File::Basename::dirname($st->{bigfile}));
+        open(my $fh, '>:raw', $st->{bigfile}) or die "bigfile: $!\n";
+        my $left = $st->{bytes};
+        my $chunk = ($st->{fill} // 'b') x 65536;
+        while ($left > 0) { my $n = $left < 65536 ? $left : 65536; print $fh substr($chunk, 0, $n); $left -= $n }
+        close $fh;
     } elsif (exists $st->{age}) {
         my $t = time - 60 * ($st->{minutes} // 0);
         utime $t, $t, $st->{age};

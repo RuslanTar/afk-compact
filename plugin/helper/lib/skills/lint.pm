@@ -194,17 +194,17 @@ sub lint {
         my $n = 0;
         for my $l (split /\n/, $t) {
             $n++;
-            push @block, [ 'recipe-placeholder', "$name:$n" ]
+            push @block, [ 'recipe-placeholder', "restart/$name:$n" ]
                 if $l =~ /<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/ || $l =~ /\b(?:TODO|TBD|FIXME)\b/;
             if ($l =~ /\A\s*script:\s*(\S+)/) {
                 my $sp = $1;
                 next if $sp =~ /\Anone\z/i;
                 my $abs = $sp =~ m{\A/} ? $sp : "$in->{bucket}/$sp";
-                push @block, [ 'recipe-script', "$name:$n" ] unless $durable{$abs};
+                push @block, [ 'recipe-script', "restart/$name:$n" ] unless $durable{$abs};
             }
             if ($l =~ /\A\s*spawns:\s*(.*)\z/) {
                 my $v = $1;
-                push @block, [ 'recipe-spawn', "$name:$n" ] if $v =~ /agent/i && !($v =~ /\bmodel\s+\S/ && $v =~ /\beffort\s+\S/);
+                push @block, [ 'recipe-spawn', "restart/$name:$n" ] if $v =~ /agent/i && !($v =~ /\bmodel\s+\S/ && $v =~ /\beffort\s+\S/);
             }
         }
     }
