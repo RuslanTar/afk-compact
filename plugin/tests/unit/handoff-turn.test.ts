@@ -9,10 +9,11 @@ import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import { DEFAULTS } from '../../hooks/lib/config'
-import { lastCycleOf } from '../../hooks/lib/cont'
+import { continueLine, lastCycleOf } from '../../hooks/lib/cont'
 import type { Deps } from '../../hooks/lib/deps'
 import { newState } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
+import { BRAND } from './_gen/brand.gen'
 import { HOME, SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
 
 const TURN = hasAsset('handoff-turn')
@@ -59,6 +60,16 @@ function bandText(w: World, band: 'near' | 'spent' | 'imminent'): string | undef
 
 test('c = 1 + call_cap + recipe_cap from the shared spec = 34 (RV-25, DP-6)', () => {
   expect(C).toBe(34)
+})
+
+test('DP-24 (g), P-LT-1: no text the plugin submits starts with "/" (the host refuses it as a user command)', () => {
+  const texts = [continueLine(BRAND.name)]
+  for (const reason of Object.keys(HALT_REASON_TEXT) as (keyof typeof HALT_REASON_TEXT)[]) {
+    const t = assembleIf(BRAND.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C) })
+    expect(t === undefined).toBe(!TURN)
+    if (t !== undefined) texts.push(t)
+  }
+  for (const t of texts) expect(t.trimStart().startsWith('/')).toBe(false)
 })
 
 test('AT-LT-01: nudge at 610K: [halt] with @halt_reason@ for (a) halt, (b) cap reached, (c) max 0; [continue] for (d)', async ($, on) => {
