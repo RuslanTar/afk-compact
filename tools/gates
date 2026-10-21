@@ -35,7 +35,7 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   Text gates of the 2026-10-21 rulings, over the skills/ and assets/ of a folder target (src
   or plugin) and over any README.md:
   wait-text    AT-W-01 (Dev-7): no `blocking read`, no "wait for a/the ... notification", no
-               bare `sleep N`; a foreground or bounded wait that is not negated names
+               bare `sleep N`; a foreground or bounded wait not negated in its own clause names
                `<x>-store wait` or `<store> wait` on its line; skills/resume/SKILL.md has the
                main rule (a "notification wakes you" line naming `run_in_background`)
   asset-bytes  AT-W-02 (Dev-7): assets/resume-context.txt and subagent-instructions.txt, every
@@ -128,7 +128,12 @@ NOTIFICATION_WAIT = re.compile(r"\bwait(?:s|ing)? (?:for|on) (?:(?:a|an|the|its|
 BARE_SLEEP = re.compile(r"(?i:\bsleep)\s+(?:\d|N\b|<[a-z_-]+>)")
 FOREGROUND_WAIT = re.compile(r"\b(?:wait(?:s|ing)? in the foreground|foreground wait|bounded wait|"
                              r"block on it in the foreground)\b", re.I)
-NEGATED = re.compile(r"\b(?:never|not|no)\b[^.;:]*$", re.I)
+NEGATION = re.compile(r"\b(?:never|not|no)\b", re.I)
+# CR-F43: a negation in another clause does not negate the match. A new clause starts after
+# `.`, `;`, `:`, or `then`/`but`/`otherwise`/`else`; a leading subordinate clause ("If the job
+# has not finished yet,", "When no notification arrived,") is dropped up to its comma.
+CLAUSE_START = re.compile(r"[.;:]|\b(?:then|but|otherwise|else)\b", re.I)
+SUBCLAUSE = re.compile(r"\b(?:if|when|whenever|until|unless|once|after|before|while|because|since)\b[^,]*,", re.I)
 STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
 MAIN_RULE = re.compile(r"notification wakes you", re.I)
 # AT-W-02: bytes of the full render (every tag line kept); resume = DP-8 protocol hard cap,
@@ -172,7 +177,9 @@ def text_docs(target):
 
 
 def not_negated(line, m):
-    return not NEGATED.search(line[max(0, m.start() - 40):m.start()])
+    """True unless a never/not/no in the match's own clause, within 40 characters, negates it."""
+    pre = SUBCLAUSE.sub(" ", CLAUSE_START.split(line[:m.start()])[-1])
+    return not NEGATION.search(pre[-40:])
 
 
 def wait_text_hits(target, brand):

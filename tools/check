@@ -265,6 +265,10 @@ def probes(name):
         append(d, "plugin/assets/subagent-instructions.txt",
                "Subagent: do a blocking read of the output, run sleep 30, then wait for the task notification.\n")
         append(d, "plugin/skills/handoff/SKILL.md", "\nWait in the foreground until the job ends.\n")
+        # CR-F43: a negation in an earlier clause does not hide the wait.
+        append(d, "plugin/skills/status/SKILL.md",
+               "\nIf the job has not finished yet, do a bounded wait and read the output.\n"
+               "When no notification arrived, wait in the foreground until the job ends.\n")
 
     def asset_grow(d):
         append(d, "plugin/assets/resume-context.txt", "x" * 600 + "\n")
@@ -374,7 +378,10 @@ def probes(name):
         ("wait-text", "AT-W-01", gates_only("wait-text"), wait_text,
          [r"^GATE wait-text plugin/assets/subagent-instructions\.txt:\d+: AT-W-01 " + r for r in
           ("blocking-read", "bare-sleep", "notification-wait")]
-         + [r"^GATE wait-text plugin/skills/handoff/SKILL\.md:\d+: AT-W-01 foreground-wait"], None),
+         + [r"^GATE wait-text plugin/skills/handoff/SKILL\.md:\d+: AT-W-01 foreground-wait",
+            r"^GATE wait-text plugin/skills/status/SKILL\.md:\d+: AT-W-01 foreground-wait: 'bounded wait'",
+            r"^GATE wait-text plugin/skills/status/SKILL\.md:\d+: AT-W-01 foreground-wait: 'wait in the foreground'"],
+         None),
         ("asset-bytes", "AT-W-02", gates_only("asset-bytes"), asset_grow,
          [r"^GATE asset-bytes plugin/assets/resume-context\.txt: AT-W-02 \d+ B > 2500$",
           r"^GATE asset-bytes plugin/assets/subagent-instructions\.txt: AT-W-02 \d+ B > 1100$"], None),
