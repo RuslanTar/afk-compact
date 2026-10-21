@@ -21,6 +21,8 @@ active on the path, else dropped. [measured] lines and @remeasure@ belong to the
 not the static core. Extra checks: no `<!--` survives; CDN Review item 9 (cited step numbers
 exist and still name the same step; [queue]/[halt] lines reference only kept lines); heading
 literals equal the spec-literals block of handoff-spec.md once that file exists.
+Budgets: the BUDGETS table (D-17 and DP-8 of the 2026-10-21 rulings; AT-P-07). Above a soft
+limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails.
 Exit 1 when a hard budget is exceeded or any check fails.
 """
 import itertools, json, os, re, sys
@@ -96,13 +98,39 @@ def assemble(text, tags, drop=()):
     return re.sub(r"@([a-z_]+)@", lambda m: RUNTIME.get(m.group(1), m.group(0)), s)
 
 
-def check(label, s, budget=None, unit="chars", soft=False):
+# One row per budget: (unit, soft, hard); None = no limit of that kind. Soft = ADVISORY only.
+# D-17 (root DP-8): the static core has a soft target and no hard cap; the mod channel total
+# stays the hard guard on what reaches the summarizer. DP-8: resume protocol soft 2,000 /
+# hard 2,500, resume block total 6,000, and never over the 10,000-char SessionStart cutoff.
+BUDGETS = {
+    "static core":           ("chars", 4500, None),
+    "mod channel total":     ("bytes", None, 8192),
+    "classic channel total": ("bytes", None, 8192),
+    "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
+    "subagent mod":          ("chars", 900, None),
+    "subagent classic":      ("chars", 1100, None),
+    "resume protocol":       ("chars", 2000, 2500),
+    "resume block total":    ("chars", None, 6000),
+    "sessionstart cutoff":   ("chars", None, 10000),
+    "nudge":                 ("chars", 2200, None),
+}
+
+
+def check(label, s, budget):
+    unit, soft, hard = BUDGETS[budget]
     n = len(s) if unit == "chars" else len(s.encode())
     leftovers = re.findall(r"^\[[a-z-]+\] |@[a-z_]+@|\{\{[^}]*\}\}|<!--", s, flags=re.M)
-    over = budget is not None and n > budget
-    flag = ("OVER" if not soft else "over (soft)") if over else "ok"
-    print(f"{label:44} {n:6} {unit:5} budget={budget if budget else '-':>5}  {flag}" + (f"  LEFTOVER {leftovers}" if leftovers else ""))
-    return (over and not soft) or bool(leftovers)
+    over = hard is not None and n > hard
+    flag = "OVER" if over else "ADVISORY (over soft)" if soft is not None and n > soft else "ok"
+    print(f"{label:44} {n:6} {unit:5} soft={soft if soft else '-':>5} hard={hard if hard else '-':>5}  {flag}"
+          + (f"  LEFTOVER {leftovers}" if leftovers else ""))
+    return over or bool(leftovers)
+
+
+def budget_table():
+    print("budget                    unit   soft   hard")
+    for k, (unit, soft, hard) in BUDGETS.items():
+        print(f"{k:25} {unit:5} {soft if soft else '-':>6} {hard if hard else '-':>6}")
 
 
 TEXT = {k: load(v) for k, v in FILES.items()}
@@ -279,26 +307,32 @@ def goldens_module(runtime, rows):
             "export const GOLDENS: readonly Golden[] = " + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
 
 
-BLOCK = "x" * 3000  # worst-case measured block (header + facts <= 3,000 B)
+BLOCK = "x" * BUDGETS["measured block"][2]  # worst-case measured block (header + facts)
 bad = False
 print(f"assets: {os.path.relpath(DIR, REPO)}  plugin name length: {len(NAME)}  runtime path length: {PATH_LEN}")
+budget_table()
 for tags in ([], ["midturn"], ["chain"], ["midturn", "chain"]):
-    bad |= check(f"main mod static core {'+'.join(tags) or 'base'}", static(main, tags, drop=("measured",)), 4000)
+    bad |= check(f"main mod static core {'+'.join(tags) or 'base'}", static(main, tags, drop=("measured",)), "static core")
 for tags in (["auto"], ["auto", "chain"]):
-    bad |= check(f"main classic static core {'+'.join(tags)}", static(main, tags, drop=("measured",)), 4000)
+    bad |= check(f"main classic static core {'+'.join(tags)}", static(main, tags, drop=("measured",)), "static core")
 RUNTIME["measured_facts"] = BLOCK
 for tags in (["midturn", "chain", "measured"], ["chain", "measured"]):
-    bad |= check(f"mod channel total {'+'.join(tags)} (hard, B)", assemble(main, tags), 8192, "bytes")
+    bad |= check(f"mod channel total {'+'.join(tags)} (B)", assemble(main, tags), "mod channel total")
 RUNTIME["measured_facts"] = ""
-bad |= check("subagent mod", assemble(sub, []), 900, soft=True)
-bad |= check("subagent classic +fallback", assemble(sub, ["fallback"]), 1100, soft=True)
+bad |= check("subagent mod", assemble(sub, []), "subagent mod")
+bad |= check("subagent classic +fallback", assemble(sub, ["fallback"]), "subagent classic")
 classic_total = assemble(main, ["auto", "chain"], drop=("measured",)) + assemble(sub, ["fallback"])
-bad |= check("classic channel total main+sub (hard, B)", classic_total, 8192, "bytes")
+bad |= check("classic channel total main+sub (B)", classic_total, "classic channel total")
 for tags in ([], ["midturn"], ["nonok"], ["midturn", "nonok"]):
     bad |= check(f"resume protocol {'+'.join(tags) or 'base'}",
-                 assemble(res, tags, drop=("measured_at", "remeasure")), 2000)
+                 assemble(res, tags, drop=("measured_at", "remeasure")), "resume protocol")
+RUNTIME["remeasure"] = BLOCK
+resume_total = assemble(res, ["midturn", "nonok"])
+bad |= check("resume block total midturn+nonok", resume_total, "resume block total")
+bad |= check("resume block total vs SessionStart cutoff", resume_total, "sessionstart cutoff")
+RUNTIME["remeasure"] = ""
 for tags in (["continue"], ["halt"], ["continue", "queue"], ["halt", "queue"]):
-    bad |= check(f"nudge {'+'.join(tags)}", assemble(nudge, tags), 2200, soft=True)
+    bad |= check(f"nudge {'+'.join(tags)}", assemble(nudge, tags), "nudge")
 leftover = False
 for asset in FILES:
     for tags in combos(asset):
