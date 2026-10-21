@@ -38,7 +38,7 @@
     "queue_cmd": {
       "type": "file",
       "title": "Queue command",
-      "description": "Executable answering 'list --json --session <sid>' and 'adopt --lane <id> [--if-free]'. Empty = off.",
+      "description": "Executable answering 'list --json --session <sid>', 'adopt --lane <id> [--if-free]' and 'add --json …' (draft on stdin). Empty = off.",
       "default": ""
     },
     "triggers": {
@@ -82,10 +82,24 @@
     "max_auto_continues_per_hour": {
       "type": "number",
       "title": "Auto-continues per hour",
-      "description": "Cap on automatic continues in a rolling hour; 0 disables auto-continue.",
+      "description": "Cap on automatic continues in a rolling hour; 0 = never auto-continue, so every nudged cycle is a last cycle.",
       "default": 3,
       "min": 0,
       "max": 10
+    },
+    "handoff_turn": {
+      "type": "string",
+      "title": "Handoff turn",
+      "description": "halt = before the last compaction of a run that will not auto-continue, one more turn writes a handoff; off = no handoff turn.",
+      "default": "halt"
+    },
+    "handoff_turn_max_tokens": {
+      "type": "number",
+      "title": "Handoff turn allowance (tokens)",
+      "description": "Tokens the handoff turn may use; reserved below the native trigger.",
+      "default": 64000,
+      "min": 20000,
+      "max": 150000
     },
     "measured_block": {
       "type": "boolean",
@@ -108,7 +122,7 @@
     "watcher": {
       "type": "string",
       "title": "Watcher",
-      "description": "shadow = log every compaction (content-free); off = no watcher rows.",
+      "description": "shadow = log every compaction (content-free); off = no watcher rows. Case and spaces are ignored; any other value counts as shadow.",
       "default": "shadow"
     },
     "stall_min": {
@@ -134,6 +148,32 @@
       "title": "Permission-denial classes",
       "description": "Patterns that class permission denials. Empty = the shipped classes.",
       "default": ""
+    },
+    "repo_roots": {
+      "type": "string",
+      "title": "Repositories for repo mode",
+      "description": "Main checkouts, separated by ';', that may also receive published handoffs when the repository declares it in .claude/handoffs.json. Read from your settings file only (flags and env are ignored). Empty = none.",
+      "default": ""
+    },
+    "relaunch_auto": {
+      "type": "string",
+      "title": "Automatic relaunch",
+      "description": "on = relaunch a lost background job by itself when every check passes; shadow = log the verdict, always ask; off = always ask. Read from your settings file only (flags and env are ignored).",
+      "default": "on"
+    },
+    "relaunch_allow": {
+      "type": "string",
+      "title": "Relaunch allowlist",
+      "description": "Patterns (each starts ^), separated by ';', for repeat-safe local commands. No effect in this version: only read-only jobs relaunch by themselves. Read from your settings file only (flags and env are ignored).",
+      "default": ""
+    },
+    "relaunch_quiet_s": {
+      "type": "number",
+      "title": "Relaunch quiet window (seconds)",
+      "description": "Seconds without output before a lost job counts as quiet when its end time is unknown.",
+      "default": 120,
+      "min": 30,
+      "max": 3600
     }
   }
 }
