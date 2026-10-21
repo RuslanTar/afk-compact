@@ -26,9 +26,10 @@ brand.json; `$TMP`, `$HOME`, `$WATCH`, `$ROOT`, `$SID` stay for the case runner;
 `$SECRET{<id>}` is filled from secrets/corpus.json by the case runner only. Files that hold a
 `$SECRET{` token are left out of the generated modules (no secret corpus in U fixtures).
 
-Secret rules: the `secret_rules` and `deny_names` of the spec-literals block in
+Secret rules: the `secret_rules` (id, class, re) of the spec-literals block in
 src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the provisional
-built-in set below, written from MOD-SPEC §10 and the handoff template §5.
+built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
+deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
 import hashlib, json, math, os, re, sys
 
@@ -144,12 +145,15 @@ def detect(text, name, dispatch=None):
             if nonce:
                 verdict = "stale"
         else:
+            # P1 of MOD §2.4: sub = agent_id set; main = agent_id null and a mod channel.
+            # A classic dispatch (actor unknown) proves neither scope.
             sub = dispatch.get("agent_id") is not None
+            main = not sub and dispatch.get("channel") in ("mod-hook", "mod-self")
             if nonce and nonce != dispatch["nonce"]:
                 verdict = "stale"
             elif sub and (scope == "main" or (scope is None and resume_heading)):
                 verdict = "scope-leak"
-            elif not sub and scope == "sub":
+            elif main and scope == "sub":
                 verdict = "scope-leak"
     if verdict is None:
         if not nonce:
