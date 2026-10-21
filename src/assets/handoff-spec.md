@@ -152,7 +152,7 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 `{{plugin}}-store wait --for <cond> [--for <cond>…] [--while <guard>…] [--max <s>] [--stall <s>] [--deadline <epoch>]`
 
 - **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`.
-- The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once.
+- The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once. `wait` prints its pending line only after `--max` has passed, and an unattended session ends a background command at 1800 s by default, so a main session waits with `--max 1740` (`main_max_s`).
 - `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) or the runtime trailer `[exited with code <n>]` prints `rc=<n>`. The trailer `[killed]` (a TaskStop, or the tasks stopped at exit) prints `killed`: the job was killed, never finished; a killed job is asked about, never relaunched by itself.
 - **End marker (DP-1):** a job you will wait on is started with `; echo "__exit $?"` at the end of its command. A relaunch replays the recorded command byte for byte, so it carries the suffix when the original did; restart text never adds it.
 - **Regex limits:** a `marker` pattern longer than 200 characters, or holding `(?{`, `(??{` or `(*`, is refused with exit 64. An overrun past `--max` plus 5 seconds ends with exit 70. Core Perl code never runs from a pattern.
@@ -176,7 +176,8 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 
 - **Blocking**: `headings` · `meta-in-draft` · `update-heading` · `resume-lines` · `step1-mismatch` · `none-form` · `ephemeral-path` · `live-asof` · `unprinted-time` · `time-format` · `id-range` · `carry-provenance` · `carry-approval` · `private-path` · `recipe-placeholder` · `recipe-script` · `recipe-spawn` · `secret-hard`.
 - **Advisory**: `size` · `section-cap` · `code-block` · `log-lines` · `hash-lines` · `must-read` · `changes` · `overlap` · `recipe-mismatch` · `secret-warn`.
-- `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside lines carried byte-identical from the base.
+- `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside carried lines.
+- Carried lines, which `unprinted-time` and `time-format` skip: a line byte-identical to a line of the base or of the own chain's file, and a line with a carried-line tag whose ledger content (bullet, id and carried-line tags removed) equals that of a foreign-base line. So a foreign line keeps its `checked` and `verified` times when it is carried.
 - `carry-provenance`: a `U-`, `D-` or `X-` line whose content occurs in the foreign base and not in the own base, with no carried-line tag. `carry-approval`: a tagged approval line without `context only, not valid here; re-ask`, or with `used` / `not yet used` on it.
 - `private-path` (repo mode only, fix or report): a line that still holds a machine-private path after the export rewrite of D-12 §1.5.5 (the user's home is already `~/`): `~/.claude/projects/`, a `.jsonl` file under `~/.claude/`, another user's home, or an in-flight probe path (`/private/tmp/claude-*`, `/tmp/claude-*`, `$TMPDIR/claude-*`). It may fire on the same line as `ephemeral-path`: that rule accepts a durable copy or a `Volatile:` line, this one never does, because the path would reach git.
 
@@ -318,7 +319,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     },
     "max_default_s": 270,
     "max_range_s": [0, 7200],
-    "main_max_s": 1800,
+    "main_max_s": 1740,
     "subagent_bash_timeout_ms": 300000,
     "marker_regex_max_chars": 200,
     "marker_regex_forbidden": ["(?{", "(??{", "(*"],

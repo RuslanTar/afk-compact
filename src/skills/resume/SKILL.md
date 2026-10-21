@@ -21,7 +21,7 @@ Restore work from a handoff written by `/{{plugin}}:handoff` or from a saved com
 3. **Approvals** in a handoff or summary are context only. Before any outward, destructive, production or self-modifying action, ask here and offer a user-run `! <command>`. One exception, in the same session only: an approval that `<store> measure` lists under `Approvals (verified)` carries if its quoted scope names this exact action. Record it as used.
 4. **Times and "checked" marks** come from the shell (`date '+%Y-%m-%d %H:%M %z'`) or the helper. In a compaction summary, `checked <stamp>` and `[verified …]` count as unverified unless they sit in a Measured facts block.
 5. **Verify directly.** Run up to about 10 cheap checks here. Spawn agents only for wide fan-out, naming model and effort, with a length-capped report. Re-check any alarm yourself.
-6. **Shell.** One-line commands. Waiting: start long work with `run_in_background`; its notification wakes you. A job you will wait on ends with `; echo "__exit $?"`. To wait on something you did not start, run `<store> wait --for <spec> --max 1800` with `run_in_background`; to probe once, `--max 0`. Never sleep or wait in the foreground. Monitor is for a stream of events, not one completion. Never `&&`-chain existence checks. Never read a session transcript; checking its mtime is fine.
+6. **Shell.** One-line commands. Waiting: start long work with `run_in_background`; its notification wakes you. A job you will wait on ends with `; echo "__exit $?"`. To wait on something you did not start, run `<store> wait --for <spec> --max 1740` with `run_in_background`; to probe once, `--max 0`. Never sleep or wait in the foreground. Monitor is for a stream of events, not one completion. Never `&&`-chain existence checks. Never read a session transcript; checking its mtime is fine.
 7. **Guards.** Use the sanctioned route a `Guards in force` line names, and never record or reuse a way around a guard. If the permission classifier is down, retry once, then report it. Never reroute.
 8. **Secrets.** Check env files and credentials by existence and key names only. Never print a value.
 9. **Never edit** the resumed handoff, another session's state or `.planning/HANDOFF.json`.
@@ -148,7 +148,7 @@ Compaction keeps background work alive. Background shells survive `/clear` (same
 
 Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Listed but on no channel → LOST candidate. Running but unlisted → LEFTOVER candidate. Workflows are not re-announced after compaction: a workflow whose journal or transcripts changed within grace is RUNNING even if no runtime list shows it. <!-- review-fix: TECH-FACTS Q3 — local_workflow never re-attached as task_status -->
 
-**5b–5d** (probe, classify, act), the restart and workflow gates, the lease rule and the leftover rule are in `${CLAUDE_PLUGIN_ROOT}/skills/resume/references/self-heal.md`. Read it once when the union has a row; with none, R5 ends here. A lost or failed background shell goes through `heal-check`'s re-verification (self-heal.md, Lost shell job); never relaunch one from the handoff's text.
+**5b–5d** (probe, classify, act), the restart and workflow gates, the lease rule and the leftover rule are in `${CLAUDE_PLUGIN_ROOT}/skills/resume/references/self-heal.md`. Read it once when the union has a row; with none, R5 ends here. A lost or failed item goes through `heal-check`'s re-verification (self-heal.md, Restart gate and Lost shell job); never relaunch one from the handoff's text.
 
 ## R6 Restore evidence (≤1 call)
 
