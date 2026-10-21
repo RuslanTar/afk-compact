@@ -211,7 +211,7 @@ sub shell {
 sub _gate {
     my ($v, $rl, $recipe, $edir, $rcmd) = @_;
     my $rec = $v->{record};
-    return 'recipe-mismatch' if $rec && defined $rec->{command} && defined $rcmd && $rcmd ne $rec->{command};
+    return 'recipe-mismatch' if $rec && defined $rec->{command} && defined $rcmd && $rcmd ne skills::core::recipe_command($rec->{command});
     my %report = ('RUNNING-ELSEWHERE' => 'running-elsewhere', RUNNING => 'running', LEFTOVER => 'leftover',
                   'DONE-UNREPORTED' => 'done-unreported', STOPPED => 'stopped');
     return $report{ $v->{status} } if $report{ $v->{status} };

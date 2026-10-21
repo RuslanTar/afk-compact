@@ -283,9 +283,8 @@ sub _job_lines {
         $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · not recorded\n/m;
         return $t;
     }
-    my $cmd = defined $job->{command} ? $job->{command}
+    my $cmd = defined $job->{command} ? skills::core::recipe_command($job->{command})
             : '(withheld: ' . join(',', @{ ref $job->{command_withheld} eq 'ARRAY' ? $job->{command_withheld} : ['secret'] }) . ')';
-    $cmd =~ s/[\r\n]+/ /g;
     if ($t =~ /^\s*command:/m) { $t =~ s/^(\s*)command:[^\n]*/$1command: $cmd/m }
     else { $t =~ s/^(\s*item:[^\n]*\n)/$1command: $cmd\n/m }
     $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · recorded\n/m;

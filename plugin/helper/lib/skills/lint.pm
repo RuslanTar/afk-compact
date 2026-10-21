@@ -339,7 +339,7 @@ sub lint {
         my $job = defined $rid ? ($in->{jobs} || {})->{$rid} : undef;
         next unless $job && defined $job->{command};
         my ($cmd) = $t =~ /^\s*command:[ \t]*(.*?)[ \t]*$/m;
-        push @adv, [ 'recipe-mismatch', "restart/$name" ] if !defined $cmd || $cmd ne $job->{command};
+        push @adv, [ 'recipe-mismatch', "restart/$name" ] if !defined $cmd || $cmd ne skills::core::recipe_command($job->{command});
     }
     if (defined $in->{previous}) {
         my %pl = map { _norm($_) => 1 } grep { _counts($_) } split /\n/, $in->{previous};
