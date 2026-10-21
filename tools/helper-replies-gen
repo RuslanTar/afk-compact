@@ -1,0 +1,140 @@
+#!/usr/bin/python3
+"""tools/helper-replies-gen: record real helper replies for BT-05 (ROOT-RULINGS: WP-core owns it).
+
+Usage:
+  tools/helper-replies-gen            write plugin/tests/unit/_gen/helper-replies.gen.ts
+  tools/helper-replies-gen --check    exit 1 when the committed module differs from a fresh run
+
+Runs the built launcher plugin/bin/<name>-store (run tools/build first) through the calls the
+mod makes (BUILD-PLAN §3.1, hooks/lib/helper.ts and log.ts), in one fresh temporary HOME with
+STORE_TEST_MODE=1, a fixed clock and a fixed Claude pid, and records each call's argv, exit
+code and stdout. The U test (plugin/tests/unit/replies.test.ts, WP-mod) replays the same argv
+against the mod's fake helper and compares exit codes and output shapes.
+
+Recorded text is made portable: the temp dir becomes $TMP, the temp HOME becomes ~ and the
+plugin name is split out (each string is kept as parts; join them with a name), so the module
+holds no user path and no name. ASCII escapes keep marker shapes out of plugin/'s plain text.
+"""
+import json, os, shutil, subprocess, sys, tempfile
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+OUT = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "helper-replies.gen.ts")
+SID = "5e55a001-0c0f-4f1e-9a00-00000000a001"
+NONCE = "1a2b3c4d"
+NOW = "2026-10-21T14:05:12+03:00"
+CLAUDE_PID = "424242:Tue Oct 21 09:00:00 2026"
+
+
+def brand():
+    with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
+        return json.load(f)["name"]
+
+
+def summary(name):
+    # A shaped main summary as the mod's after-step writes it (marker line 1, sentinel last).
+    return ("<summary>\n⟪{0} v1 n={1} s=main⟫\n# LAB-42 — retry in progress\n"
+            "## Resume here\nStatus: active\n⟪/{0} n={1}⟫\n</summary>\n").format(name, NONCE)
+
+
+def calls(tmp):
+    row = json.dumps({"v": 1, "ev": "nudge", "sid": SID, "actor": "main", "writer": "mod"}, separators=(",", ":"))
+    prow = json.dumps({"v": 1, "ev": "temp_path", "path": "$TMP/out.log"}, separators=(",", ":"))
+    disp = ["dispatch", "--sid", SID, "--nonce", NONCE, "--actor", "main", "--trigger", "auto",
+            "--channel", "mod-hook", "--resume-pref", "prompt.context", "--tags", "midturn",
+            "--midturn", "true", "--instr-sha8", "9f2c01ab", "--instr-bytes", "3994",
+            "--cc-version", "2.1.306", "--load-id", "l0ad0001"]
+    save = ["save-copy", "--sid", SID, "--nonce", NONCE, "--from", tmp + "/summary.txt", "--writer", "mod",
+            "--scope", "main", "--tokens", "612345,41000"]
+    return [
+        ("ident", ["ident", "--sid", SID]),
+        ("prev-copy-none", ["prev-copy", "--sid", SID, "--actor", "main"]),
+        ("dispatch-ok", disp),
+        ("dispatch-exists", disp),
+        ("checkpoint", ["checkpoint", "--sid", SID, "--nonce", NONCE, "--budget-ms", "10000"]),
+        ("save-copy-saved", save),
+        ("save-copy-exists", save),
+        ("prev-copy-path", ["prev-copy", "--sid", SID, "--actor", "main"]),
+        ("sweep", ["sweep", "--sid", SID, "--nonce", NONCE]),
+        ("claim-claimed", ["claim", "--sid", SID, "--nonce", NONCE, "--channel", "prompt.context"]),
+        ("claim-taken", ["claim", "--sid", SID, "--nonce", NONCE, "--channel", "prompt.submit"]),
+        ("measure", ["measure", "--sid", SID, "--compact"]),
+        ("log", ["log", "--sid", SID, "--json", row]),
+        ("log-paths", ["log", "--sid", SID, "--stream", "paths", "--json", prow]),
+    ]
+
+
+def portable(s, tmp, home, name):
+    s = s.replace(home, "~").replace(tmp, "$TMP")
+    real = os.path.realpath(tmp)
+    if real != tmp:
+        s = s.replace(os.path.realpath(home), "~").replace(real, "$TMP")
+    return s.split(name)
+
+
+def record():
+    name = brand()
+    launcher = os.path.join(REPO, "plugin", "bin", name + "-store")
+    if not os.access(launcher, os.X_OK):
+        sys.exit("helper-replies-gen: no launcher at plugin/bin/{}-store (run tools/build)".format(name))
+    tmp = tempfile.mkdtemp(prefix="replies-")
+    try:
+        home = os.path.join(tmp, "home")
+        work = os.path.join(tmp, "work")
+        os.makedirs(home)
+        os.makedirs(work)
+        text = summary(name)
+        with open(os.path.join(tmp, "summary.txt"), "w", encoding="utf-8") as f:
+            f.write(text)
+        env = {"HOME": home, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TZ": "Etc/GMT-3", "TMPDIR": tmp,
+               "STORE_TEST_MODE": "1", "STORE_TEST_NOW": NOW, "STORE_TEST_CLAUDE_PID": CLAUDE_PID}
+        rows = []
+        for label, argv in calls(tmp):
+            r = subprocess.run([launcher] + argv, cwd=work, env=env, capture_output=True, timeout=60)
+            out = r.stdout.decode("utf-8", "replace")
+            if label == "checkpoint" and r.returncode == 0:
+                # step timings vary per run; zero them so the module is reproducible
+                j = json.loads(out)
+                j["checkpoint_ms"] = {k: 0 for k in j.get("checkpoint_ms") or {}}
+                out = json.dumps(j, separators=(",", ":"), ensure_ascii=False) + "\n"
+            rows.append({"name": label, "argv": [portable(a, tmp, home, name) for a in argv],
+                         "exitCode": r.returncode, "stdout": portable(out, tmp, home, name)})
+        inputs = {"$TMP/summary.txt": text.split(name)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return render(rows, inputs)
+
+
+def render(rows, inputs):
+    return ("// GEN by tools/helper-replies-gen from real helper runs (BT-05). Do not edit; run the tool.\n"
+            "// Strings are kept in parts split at the plugin name: join the parts with a name.\n"
+            "// $TMP stands for the run's temp dir and ~ for its HOME.\n\n"
+            "export type RecordedReply = { name: string; argv: readonly (readonly string[])[]; exitCode: number;"
+            " stdout: readonly string[] }\n\n"
+            "export const REPLY_SID = " + json.dumps(SID) + "\n"
+            "export const REPLY_NONCE = " + json.dumps(NONCE) + "\n\n"
+            "/** Files the calls read, by recorded path (parts split at the name). */\n"
+            "export const REPLY_INPUTS: Readonly<Record<string, readonly string[]>> = "
+            + json.dumps(inputs, ensure_ascii=True, indent=1) + "\n\n"
+            "export const HELPER_REPLIES: readonly RecordedReply[] = "
+            + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
+
+
+def main(argv):
+    if argv not in ([], ["--check"]):
+        sys.exit(__doc__)
+    text = record()
+    if argv == ["--check"]:
+        cur = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else None
+        ok = cur == text
+        print("HELPER REPLIES CHECK: " + ("PASS" if ok else "FAIL (run tools/helper-replies-gen)"))
+        return 0 if ok else 1
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    print("helper-replies-gen: wrote {} replies to {}".format(text.count('"name":'), os.path.relpath(OUT, REPO)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
