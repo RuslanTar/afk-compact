@@ -45,14 +45,17 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 
 - **Status words** (Resume here): `active` · `blocked` · `waiting-owner` · `waiting-job` · `done`.
 - **Work-state ladder**: `proposed` · `queued` · `implemented` · `tested` · `committed` · `pushed` · `in review` · `merged` · `deployed` · `published` · `installed`.
-- **Claim tags**: `[verified HH:MM: <cmd>]` · `[unverified]` · `[inherited: <stem>]` · `Superseded: <id> by <id> (HH:MM)`. Live state tags: `measured` · `verified` · `unverified` · `inherited`. A time is `HH:MM`, or `MM-DD HH:MM` when the day differs from the file's `date`.
+- **Claim tags**: `[verified <stamp>: <cmd>]` · `[unverified]` · `[inherited: <stem>]` · `Superseded: <id> by <id> (<stamp>)`. Live state tags: `measured` · `verified` · `unverified` · `inherited`.
+- **Stamp** (RV-24): a time is always `YYYY-MM-DD HH:MM ±hhmm` (local date, local time, numeric UTC offset, all three, e.g. `2026-10-21 14:05 +0300`). The helper prints stamps; in a shell, `date '+%Y-%m-%d %H:%M %z'`. Older files may hold `HH:MM` or `MM-DD HH:MM` (`time_legacy_re`): read them, never write them. Frontmatter `date` stays ISO with a colon offset.
 - **Ids**, one per item, never ranges, kept across a chain: `U-n` user constraint, approval or ask · `D-n` decision · `X-n` rejected option, refuted finding or failed approach · `Q-n` question · `B-n` in-flight row (plus its runtime id).
-- **Questions**: owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked HH:MM` · `timed out` · `answered: <answer>`.
+- **Questions**: owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` · `answered: <answer>`.
 - **Restart classes**: `auto` · `ask` · `never`.
 - **In-flight `kind`**: `agent` · `teammate` · `workflow` · `monitor` · `cron` · `shell` · `server` · `peer` · `external`.
 - **Dies on**: `/clear` · exit · 7-day expiry · nothing.
 - **Frontmatter `status`**: `in-progress` · `blocked` · `completed`. **`lineage_reason`**: `clear` · `fork` · `bg-copy` · `handoff-resume` · `none`.
 - **Resume relation**: `same-session` · `successor` · `other` · `unselected`. **Integrity**: `ok` · `possibly truncated` · `legacy` · `unshaped` · `s=sub`.
+- **Carry base** (`previous_kind`, RV-19): `own` (this session's file) · `chain` (a lineage predecessor's file) · `foreign` (another session's file). These are the relations `same-session`, `successor` and `other` as the writer sees them. A document with `imported_from` is never the carry base.
+- **Carried-line tag** (lines taken from another session's handoff): `[from <sid8> · <their id> · <their stamp>]`, or `[from <sid8> · - · <stamp>]` on a pointer line. A foreign approval is carried only as `context only, not valid here; re-ask`.
 - **Queue lane**: `^(lane|auto):[A-Za-z0-9._/-]+$`; only the helper writes it. A resume adopts only `lane:` ids.
 
 ## 5. Explicit none-forms
@@ -62,8 +65,8 @@ Only these sections take a none-form; other empty sections are omitted.
 | Section | Handoff (skill) | Compaction summary |
 |---|---|---|
 | User constraints | `none stated` | `none stated` |
-| In flight | `Nothing in flight — checked HH:MM via <channels>` or `Nothing in flight known (not checked)` | `Nothing in flight as of the last message (not checked)` |
-| Live state | `none beyond git — checked HH:MM` | `none beyond git (not checked)` |
+| In flight | `Nothing in flight — checked <stamp> via <channels>` or `Nothing in flight known (not checked)` | `Nothing in flight as of the last message (not checked)` |
+| Live state | `none beyond git — checked <stamp>` | `none beyond git (not checked)` |
 | Open questions | `none` | `none` |
 | Own background tasks (subagent) | — | `none (not checked)` |
 
@@ -72,6 +75,7 @@ Only these sections take a none-form; other empty sections are omitted.
 - Handoff: a 7-column table `B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart`, ≤8 rows; past 8 the table ends `+N more: B-9, B-10; see evidence/<stem>/inflight.md`.
 - Compaction: one row per item, `B-n <runtime id> · kind · what · due · probe · class`, optional `restart:` line (data, never run), ≤8 rows; past 8, `+N more: <ids>`, and the re-measure lists every id.
 - Restart recipe: `<bucket>/evidence/<stem>/restart/<B-n>.md`. Restarts run only from the recipe `heal-check` prints.
+- Probe for a `shell`, `server` or `external` job: `{{plugin}}-store wait --for <spec> --max 0` (§14), which checks once and returns at once.
 
 ## 7. Ledger fold line
 
@@ -79,8 +83,9 @@ Only these sections take a none-form; other empty sections are omitted.
 
 ## 8. Frontmatter
 
-- Handoff: `kind: handoff`, `writer`, `nonce`, `date`, `session_id`, `actor`, `previous_session_id`, `lineage_reason`, `transcript_path`, `claude_pid`, `cc_version`, `repository`, `bucket`, `worktree`, `branch`, `git_commit`, `status`, `ticket`, `queue_lane`, `previous_handoff`, `gsd`. Empty keys are omitted.
-- Summary copy: `kind` (`compact-summary` · `subagent-summary`) and the handoff keys except `ticket` and `gsd`, plus `bucket_source`, `trigger`, `compaction_seq`, `tokens_before`, `tokens_after`, `verdict`, `channel`, `seat_state`, `evidence`, `redacted`.
+- Handoff: `kind: handoff`, `writer`, `nonce`, `date`, `session_id`, `actor`, `previous_session_id`, `lineage_reason`, `transcript_path`, `claude_pid`, `cc_version`, `repository`, `bucket`, `worktree`, `branch`, `git_commit`, `status`, `ticket`, `queue_lane`, `previous_handoff`, `previous_kind`, `own_previous_handoff`, `imported_from`, `gsd`. Empty keys are omitted. `previous_kind` (`own` · `chain` · `foreign`) and `own_previous_handoff` (a path, only when the carry base is foreign and an own file exists) are written by `begin`/`publish` (RV-19); `imported_from` (`repo:<rel path>`) only by `project copy --from repo`.
+- Summary copy: `kind` (`compact-summary` · `subagent-summary`) and the handoff keys except `ticket`, `gsd`, `previous_kind`, `own_previous_handoff` and `imported_from`, plus `bucket_source`, `trigger`, `compaction_seq`, `tokens_before`, `tokens_after`, `verdict`, `channel`, `seat_state`, `evidence`, `redacted`.
+- Export (repo mode, D-12 §1.5.5; `frontmatter_keys_export`): the handoff keys minus the machine-only `transcript_path`, `claude_pid` and `worktree`, minus the private-chain keys `previous_kind`, `own_previous_handoff` and `imported_from`, plus `export: repo`. `bucket`, `previous_handoff` and `gsd` are rewritten to repository-relative values. A key outside this list is dropped from an export.
 - `writer`: `handoff` · `mod` · `postcompact-fallback`. Code writes frontmatter, marker and sentinel; a model never types them.
 
 ## 9. Locations
@@ -142,7 +147,45 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 | A-26 | plugin layers not running |
 | A-27 | auto-continue without a nudge |
 
-## 14. Machine-readable literals
+## 14. Wait specs (Dev-7 D2, D3; DP-1, DP-14)
+
+`{{plugin}}-store wait --for <cond> [--for <cond>…] [--while <guard>…] [--max <s>] [--stall <s>] [--deadline <epoch>]`
+
+- **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`.
+- The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once.
+- `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) prints `rc=<n>`. The runtime trailer `[exited with code <n>]` is accepted the same way only when the `exit_markers` entry `runtime` is active in the block below (it stays off until probe P-D1-2 passes).
+- **End marker (DP-1):** a job you will wait on is started with `; echo "__exit $?"` at the end of its command. A relaunch replays the recorded command byte for byte, so it carries the suffix when the original did; restart text never adds it.
+- **Regex limits:** a `marker` pattern longer than 200 characters, or holding `(?{`, `(??{` or `(*`, is refused with exit 64. An overrun past `--max` plus 5 seconds ends with exit 70. Core Perl code never runs from a pattern.
+- **Quoting (Dev-5):** resume passes a handoff's spec only inside single quotes. A spec containing `'` is reported, never run.
+- **One output line.** Matched text is cut to 120 characters, never the whole line.
+
+| Exit | Meaning |
+|---|---|
+| 0 | `wait: done <cond> after <n>s[ rc=<n>][ line=<n> match=<text>][ note=<…>]` |
+| 10 | `wait: pending after <n>s (max <m>s); run the same command again` |
+| 11 | `wait: stalled <path> no growth for <n>s` (with `--stall`) |
+| 12 | `wait: ended <guard> (gone\|reused\|deleted) before <cond>` |
+| 13 | `wait: overdue deadline <ISO> passed` (with `--deadline`) |
+| 3 | `REFUSED: <not-regular\|unreadable> <path>` |
+| 64 | usage: a bad spec, a pattern that does not compile or breaks the limits, `--max` out of range |
+| 70 | internal error, or the `alarm` backstop fired |
+
+## 15. Lint rule ids
+
+Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) or `ADVISORY <id> <where>`. The publish lint and the template's lint list use exactly these.
+
+- **Blocking**: `headings` · `meta-in-draft` · `update-heading` · `resume-lines` · `step1-mismatch` · `none-form` · `ephemeral-path` · `live-asof` · `unprinted-time` · `time-format` · `id-range` · `carry-provenance` · `carry-approval` · `private-path` · `recipe-placeholder` · `recipe-script` · `recipe-spawn` · `secret-hard`.
+- **Advisory**: `size` · `section-cap` · `code-block` · `log-lines` · `hash-lines` · `must-read` · `changes` · `overlap` · `recipe-mismatch` · `secret-warn`.
+- `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside lines carried byte-identical from the base.
+- `carry-provenance`: a `U-`, `D-` or `X-` line whose content occurs in the foreign base and not in the own base, with no carried-line tag. `carry-approval`: a tagged approval line without `context only, not valid here; re-ask`, or with `used` / `not yet used` on it.
+- `private-path` (repo mode only, fix or report): a line that still holds a machine-private path after the export rewrite of D-12 §1.5.5 (the user's home is already `~/`): `~/.claude/projects/`, a `.jsonl` file under `~/.claude/`, another user's home, or an in-flight probe path (`/private/tmp/claude-*`, `/tmp/claude-*`, `$TMPDIR/claude-*`). It may fire on the same line as `ephemeral-path`: that rule accepts a durable copy or a `Volatile:` line, this one never does, because the path would reach git.
+
+## 16. Caps
+
+- `call_cap` 25: the handoff skill's hard cap on tool calls (Step 1 ≤4 · Step 2 ≤11 · Step 4 ≤2 · Step 6 1 · Step 7 ≤7). `recipe_cap` 8: restart-recipe writes (Step 5) on top. The plugin handoff turn derives its own call limit from both (1 + `call_cap` + `recipe_cap`).
+- The compaction text budgets (D-17, DP-8) are not here: `tools/assemble` holds them.
+
+## 17. Machine-readable literals
 
 Patterns use the subset that both Perl and JavaScript read the same way: no flags, so letter case is spelled out in classes. A rule with `min_entropy` also needs the match's Shannon entropy (bits per character) at or above that value. A clutter class with `max_lines` flags a fenced block longer than that; one with `min_run` flags that many consecutive matching lines. `copy_trailers` lists engine trailers after a summary body that the normalizer cuts; none is known for the tested version.
 
@@ -198,18 +241,19 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "status_words": ["active", "blocked", "waiting-owner", "waiting-job", "done"],
   "ladder": ["proposed", "queued", "implemented", "tested", "committed", "pushed", "in review", "merged", "deployed", "published", "installed"],
   "claim_tags": {
-    "verified_re": "\\[verified ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}: [^\\]]+\\]",
+    "verified_re": "\\[verified [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}: [^\\]]+\\]",
     "unverified": "[unverified]",
     "inherited_re": "\\[inherited: [^\\]]+\\]",
-    "superseded_re": "Superseded: [UDXQB]-[0-9]+ by [UDXQB]-[0-9]+ \\(([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}\\)"
+    "superseded_re": "Superseded: [UDXQB]-[0-9]+ by [UDXQB]-[0-9]+ \\([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}\\)"
   },
   "live_state_tags": ["measured", "verified", "unverified", "inherited"],
-  "time_re": "([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}",
+  "time_re": "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}",
+  "time_legacy_re": "([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}",
   "id_prefixes": {"U": "user constraint, approval or ask", "D": "decision", "X": "rejected, refuted or failed", "Q": "question", "B": "in-flight row"},
   "id_range_re": "\\b[UDXQB]-[0-9]+(\\.\\.|–|—)([UDXQB]-)?[0-9]+\\b",
   "question_owners_re": "^(next-agent|user|external:.+|bg:B-[0-9]+)$",
   "question_raised_by": ["user", "agent", "external"],
-  "question_status_re": "^(unasked|asked ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}|timed out|answered: .+)$",
+  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|answered: .+)$",
   "restart_classes": ["auto", "ask", "never"],
   "kinds": ["agent", "teammate", "workflow", "monitor", "cron", "shell", "server", "peer", "external"],
   "dies_on": ["/clear", "exit", "7-day expiry", "nothing"],
@@ -221,8 +265,8 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "lane_adopt_re": "^lane:[A-Za-z0-9._/-]+$",
   "none_forms_handoff": {
     "## User constraints": ["^none stated$"],
-    "## In flight": ["^Nothing in flight — checked ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2} via .+$", "^Nothing in flight known \\(not checked\\)$"],
-    "## Live state": ["^none beyond git — checked ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}$"],
+    "## In flight": ["^Nothing in flight — checked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4} via .+$", "^Nothing in flight known \\(not checked\\)$"],
+    "## Live state": ["^none beyond git — checked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}$"],
     "## Open questions": ["^none$"]
   },
   "none_forms_compaction": {
@@ -239,8 +283,56 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "more_compaction_re": "\\+[0-9]+ more: B-[0-9]+(, B-[0-9]+)*",
   "recipe_path": "<bucket>/evidence/<stem>/restart/<B-n>.md",
   "fold_line_re": "^(- )?([DX]-[0-9]+(, [DX]-[0-9]+)*) settled; full text in (\\S+)$",
-  "frontmatter_keys_handoff": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "transcript_path", "claude_pid", "cc_version", "repository", "bucket", "worktree", "branch", "git_commit", "status", "ticket", "queue_lane", "previous_handoff", "gsd"],
+  "frontmatter_keys_handoff": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "transcript_path", "claude_pid", "cc_version", "repository", "bucket", "worktree", "branch", "git_commit", "status", "ticket", "queue_lane", "previous_handoff", "previous_kind", "own_previous_handoff", "imported_from", "gsd"],
   "frontmatter_keys_copy": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "transcript_path", "claude_pid", "cc_version", "repository", "bucket", "bucket_source", "worktree", "branch", "git_commit", "status", "queue_lane", "previous_handoff", "trigger", "compaction_seq", "tokens_before", "tokens_after", "verdict", "channel", "seat_state", "evidence", "redacted"],
+  "frontmatter_keys_export": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "cc_version", "repository", "bucket", "branch", "git_commit", "status", "ticket", "queue_lane", "previous_handoff", "gsd", "export"],
+  "export_value": "repo",
+  "previous_kinds": ["own", "chain", "foreign"],
+  "carry": {
+    "tag_re": "\\[from [0-9a-f]{8} · ([UDX]-[0-9]+|-) · [^\\]]+\\]",
+    "foreign_approval_note": "context only, not valid here; re-ask"
+  },
+  "call_cap": 25,
+  "recipe_cap": 8,
+  "lint_ids": {
+    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard"],
+    "advisory": ["size", "section-cap", "code-block", "log-lines", "hash-lines", "must-read", "changes", "overlap", "recipe-mismatch", "secret-warn"],
+    "repo_mode_only": ["private-path"]
+  },
+  "private_path_classes": [
+    {"id": "claude-projects", "re": "(~|\\$HOME|\\$\\{HOME\\})/\\.claude/projects/"},
+    {"id": "claude-jsonl", "re": "(~|\\$HOME|\\$\\{HOME\\})/\\.claude/[^\\s'\"`]*\\.jsonl"},
+    {"id": "other-home", "re": "(/[U]sers/[^/\\s'\"`]+/|/[h]ome/[^/\\s'\"`]+/|[A-Za-z]:\\\\{1,2}[U]sers\\\\{1,2}[^\\\\\\s'\"`]+\\\\)"},
+    {"id": "probe-tmp", "re": "(/private/tmp/claude-|/tmp/claude-|\\$TMPDIR/claude-|\\$\\{TMPDIR\\}/claude-)"}
+  ],
+  "wait": {
+    "cond_res": {
+      "pid-exit": "^pid-exit:([0-9]+)(@([0-9]+))?$",
+      "file": "^file:([^:]+)$",
+      "marker": "^marker:([^:]+):(.+)$",
+      "exit": "^exit:([^:]+)$"
+    },
+    "guard_res": {
+      "pid": "^pid:([0-9]+)(@([0-9]+))?$",
+      "file": "^file:([^:]+)$"
+    },
+    "max_default_s": 270,
+    "max_range_s": [0, 7200],
+    "main_max_s": 1800,
+    "subagent_bash_timeout_ms": 300000,
+    "marker_regex_max_chars": 200,
+    "marker_regex_forbidden": ["(?{", "(??{", "(*"],
+    "alarm_slack_s": 5,
+    "match_text_max_chars": 120,
+    "first_scan_max_bytes": 268435456,
+    "exit_codes": {"done": 0, "refused": 3, "pending": 10, "stalled": 11, "ended": 12, "overdue": 13, "usage": 64, "internal": 70},
+    "exit_markers": [
+      {"id": "echo", "re": "^__exit (-?[0-9]+)$", "active": true},
+      {"id": "runtime", "re": "^\\[exited with code (-?[0-9]+)\\]$", "active": false, "gate": "P-D1-2"}
+    ],
+    "end_suffix": "; echo \"__exit $?\"",
+    "inflight_probe_cmd": "{{plugin}}-store wait --for <spec> --max 0"
+  },
   "frontmatter_kinds": ["handoff", "compact-summary", "subagent-summary"],
   "writers": ["handoff", "mod", "postcompact-fallback"],
   "evidence_statuses": ["copied", "dup", "ref-only", "redacted", "withheld", "missing"],
