@@ -27,7 +27,7 @@ Read from R5 of the resume skill once its 5a inventory has a row. `<store>` is t
 | # | Finding (first matching row wins) | Status | Same session or successor | Other relation |
 |---|---|---|---|---|
 | 1 | the owner session is live as **another** process | RUNNING elsewhere | leave; report; never relaunch (R4) | same |
-| 2a | on this process's runtime list, or output written within the quiet window while the owner lives | RUNNING | leave; to wait on it, `<store> wait` as the resume skill's Rule 6 says | report |
+| 2a | on this process's runtime list, or output written within the quiet window while the owner lives, or no end marker while the owner's process outlived a `/clear` | RUNNING | leave; to wait on it, `<store> wait` as the resume skill's Rule 6 says | report |
 | 2b | owner is this process and session, the job is off the runtime list, no exit marker; or, any owner, the output ends `[killed]` | ENDED-UNEXPLAINED or KILLED (a TaskStop or the stop at exit) | **ask**, with the exact command; never automatic | report |
 | 2c | owner ended, but output still written after the end | LEFTOVER (something outlived the session) | report; never stop it; a `! kill` question only if proven ours | same |
 | 3 | exit marker, code 0 | DONE-UNREPORTED | collect first (excerpt of the `collect:` path) | collect |
