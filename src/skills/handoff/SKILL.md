@@ -6,7 +6,7 @@ argument-hint: "[ticket-or-topic] [note for the next session]"
 
 # Handoff
 
-Write one new handoff file that a cold session resumes with `/{{plugin}}:resume <path>`. Format and lint rules: `references/handoff-template.md` (read in Step 2).
+Write one new handoff file that a cold session resumes with `/{{plugin}}:resume <path>`. Format and lint rules: `${CLAUDE_PLUGIN_ROOT}/skills/handoff/references/handoff-template.md` (the template; read in Step 2).
 
 **Code measures, you judge.** The helper `{{plugin}}-store` (on the Bash PATH while the plugin is enabled) produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
 
@@ -56,7 +56,7 @@ Run together:
 
 Run together:
 - `{{plugin}}-store stamp --stage <stage>`: its time is the as-of for this batch.
-- Read `references/handoff-template.md` (once per invocation).
+- Read the template (once per invocation).
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry.
 - Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
 - `ps -o pid=,lstart=,command= -p <pid>,<pid>` for pids recorded this session.
