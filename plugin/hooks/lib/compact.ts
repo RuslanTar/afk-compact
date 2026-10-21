@@ -102,12 +102,14 @@ type Next = (e: SessionCompactInput) => Promise<SessionCompactResult>
 /** MOD-SPEC §3.1: the `session.compact` handler. */
 export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, next: Next): Promise<SessionCompactResult> {
   const s = d.state
-  // Step 0: our marker with a mod-self record = our own self-call reached our hook.
+  // Step 0: our marker with a mod-self record = our own self-call reached our hook. The row is
+  // a drift canary, once per Claude Code version (kept in $.store across loads).
   const mark = lastInstrMarker(e.instructions, d.name)
   if (mark && (await isSelfDispatch(d, sid, mark.nonce))) {
     const v = s.ccVersion ?? 'unknown'
-    if (!s.selfCallLoggedFor.has(v)) {
+    if (!s.selfCallLoggedFor.has(v) && (await d.storeGet('selfcall:' + v)) === undefined) {
       s.selfCallLoggedFor.add(v)
+      await d.storeSet('selfcall:' + v, true)
       await log(d, sid, 'self_call_hook_ran', { nonce: mark.nonce })
       escalate(d, 'self-call-hook-ran')
     }

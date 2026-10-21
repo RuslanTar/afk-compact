@@ -244,3 +244,14 @@ function bytes(s: string): number {
 }
 
 void KEPT
+
+test('AT-M2-02 (across loads): a version already seen in $.store logs no second self_call_hook_ran', async ($, on) => {
+  const w = new World()
+  w.install(on, { 'selfcall:2.1.306': true })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  const nonce = '1a2b3c4d'
+  w.files.set(`${WATCH}/${SID_A}/dispatch/${nonce}.json`, JSON.stringify({ nonce, channel: 'mod-self' }))
+  await raiseCompact($, { trigger: 'plugin', instructions: markerText(w.name, nonce, 'main') })
+  expect(w.rowsOf('self_call_hook_ran').length).toBe(0)
+  expect(w.callsOf('dispatch').length).toBe(0)
+})
