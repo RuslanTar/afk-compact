@@ -269,7 +269,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     {"id": "key-value", "class": "WARN", "re": "([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])?|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])[\"']?[ \\t]*[=:][ \\t]*[\"']?[^\\s\"',;]{6,}"},
     {"id": "cloud-key-bare", "class": "WARN", "re": "(^|[^A-Za-z0-9/+])(?=[A-Za-z0-9/+]{0,39}[A-Z])(?=[A-Za-z0-9/+]{0,39}[a-z])(?=[A-Za-z0-9/+]{0,39}[0-9])[A-Za-z0-9/+]{40}($|[^A-Za-z0-9/+=])"},
     {"id": "high-entropy", "class": "WARN", "re": "(^|[^A-Za-z0-9+/])(?=[A-Za-z0-9+/]{0,200}[0-9])(?=[A-Za-z0-9+/]{0,200}[A-Z])(?=[A-Za-z0-9+/]{0,200}[a-z])[A-Za-z0-9+/]{32,}={0,2}", "min_entropy": 4.0},
-    {"id": "cookie", "class": "WARN", "re": "([Ss]et-)?[Cc]ookie:[ \\t]*([^=\\s;]+=[^;\\s]*;[ \\t]*)*[^=\\s;]+=[^;\\s]{8,}(;[ \\t]*[^=\\s;]+=[^;\\s]*)*"}
+    {"id": "cookie", "class": "WARN", "re": "([Ss]et-)?[Cc]ookie\\\\?[\"']?[ \\t]*:[ \\t]*(\\\\?[\"'\\[][ \\t]*)*([^=\\s;\"'\\\\]+=\\\\?\"?[^;\\s\"'\\\\]*(\\\\?\")?;[ \\t]*)*[^=\\s;\"'\\\\]+=\\\\?\"?[^;\\s\"'\\\\]{8,}((\\\\?\")?;[ \\t]*[^=\\s;\"'\\\\]+=\\\\?\"?[^;\\s\"'\\\\]*)*"}
   ],
   "deny_names": {
     "globs": [".env*", "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa*", "id_dsa*", "id_ecdsa*", "id_ed25519*", ".netrc", ".npmrc", ".claude.json", ".credentials.json", ".bash_history", ".zsh_history", ".sh_history", "fish_history", "history.jsonl", "*.har", "*.sqlite", "*.sqlite3", "*.heapsnapshot"],
