@@ -9,7 +9,8 @@
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form of §3.5 (argv, stdin, setup, expect, then).
 # Step: {"argv", "stdin" (file in the case dir or tests/fixtures/), "stdin_json", "stdin_text",
-#   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N, "expect": {...}}
+#   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N (+ "kill_signal", default KILL),
+#   "expect": {...}}
 # Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir,
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
@@ -681,7 +682,7 @@ sub invoke {
     }
     if (defined $st->{kill_after_ms}) {
         util::sleep_ms($st->{kill_after_ms});
-        kill 'KILL', $_->{pid} for @procs;
+        kill $st->{kill_signal} // 'KILL', $_->{pid} for @procs;
     }
     my $limit = ($st->{timeout_s} // 60) * 1000;
     for my $p (@procs) {

@@ -46,9 +46,14 @@ sub _watch_call {
 our $STOP_BUDGET_MS = 7000;
 our $WATCH_HARD_S = 3;
 
+# SessionStart (5 s hook timeout): the compact block is measured within this budget from
+# hook start, so it is printed and claimed before the hook is killed.
+our $SESSION_COMPACT_MS = 3500;
+our $T0;
+
 sub run {
     my ($event) = @_;
-    my $t0 = util::clock_ms();
+    my $t0 = $T0 = util::clock_ms();
     my $raw = do { local $/; <STDIN> };
     return 0 unless defined $event && $EVENTS{$event};
     my $p = defined $raw && $raw =~ /\S/ ? eval { jsonc::decode($raw) } : undef;
@@ -206,7 +211,9 @@ sub session_compact {
         return ('', {});
     }
     my $block = resumeblock::build(sid => $sid, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
-                                   measured_at => util::iso($now), remeasure => measure::compact($sid, $p->{cwd}, $nonce));
+                                   measured_at => util::iso($now),
+                                   remeasure => measure::compact($sid, $p->{cwd}, $nonce,
+                                                                 budget_ms => $SESSION_COMPACT_MS - (util::clock_ms() - ($T0 // util::clock_ms()))));
     my ($r) = resumeblock::claim($sid, $nonce, 'sessionstart', bytes => length($block), nonok_note => jsonc::bool($nonok));
     return ('', { dispatch => $nonce }) unless $r eq 'CLAIMED';
     my $json = jsonc::encode(jsonc::obj(hookSpecificOutput => jsonc::obj(hookEventName => 'SessionStart', additionalContext => $block)));
