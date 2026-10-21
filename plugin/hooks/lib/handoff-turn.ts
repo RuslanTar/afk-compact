@@ -121,10 +121,14 @@ export async function planHandoff(d: Deps, sid: string, reason: HaltReason, eff:
 /**
  * The delay is over: draws the ht (checked against dispatch records and handoff-turn records),
  * opens its record, then submits the `[submit]` text, framed. False, with a `handoff_skipped`
- * row, when the record cannot be opened or the submit fails.
+ * row, when the record cannot be opened or the submit fails. True, with nothing submitted, when
+ * a user turn started while it awaited the helper (§9.1 step 3: that turn cancels the handoff
+ * turn and logs `why=user-turn`; the normal rules apply at its end).
  */
 export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispatchTaken: (n: string) => Promise<boolean>): Promise<boolean> {
   const s = d.state
+  // Checked again after every await: onTurnStart marks a main turn before its own awaits.
+  const cancelled = () => s.handoffTurn !== h || h.phase !== 'delay' || s.mainTurnRunning
   const runtime: Runtime = { halt_reason: HALT_REASON_TEXT[h.reason], max_calls: String(h.maxCalls) }
   const text = assembleIf(d.name, 'handoff-turn', ['submit'], runtime)
   if (text === undefined) {
@@ -136,18 +140,23 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   let opened: string | undefined
   for (let i = 0; i < 3 && opened === undefined; i++) {
     const ht = await drawNonce(taken)
+    if (cancelled()) return true
     const r = await handoffTurnOpen(d, sid, ht, h.reason, h.maxCalls, h.allowance)
     if (r === 'failed') break
     if (r === 'ok') opened = ht
   }
   if (opened === undefined) {
+    if (cancelled()) return true
     await skipped(d, sid, 'open-failed')
     return false
   }
+  // Set before the check below, so a cancel row written from here on names the ht.
   h.ht = opened
-  h.phase = 'submitted'
   const now = await d.now()
   await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
+  // No await between this check and the submit call: a user turn that started meanwhile wins.
+  if (cancelled()) return true
+  h.phase = 'submitted'
   s.ourSubmitPending = true
   try {
     await d.submit(text)

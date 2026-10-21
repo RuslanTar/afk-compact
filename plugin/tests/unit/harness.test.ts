@@ -64,6 +64,10 @@ export class World {
   atCompact: (() => void) | undefined
   /** Overrides by subcommand. */
   replies: Record<string, (args: string[]) => Reply> = {}
+  /** Awaited before the fake helper answers a call (a race inside one helper spawn). */
+  atHelper: ((sub: string, args: string[]) => Promise<void>) | undefined
+  /** How the bottom answers `$.prompt.submit`: `{ drop }` with this reason when set. */
+  submitDrop: string | undefined
 
   constructor(init: Partial<Pick<World, 'sid' | 'tokens' | 'window' | 'version'>> = {}) {
     Object.assign(this, init)
@@ -93,12 +97,14 @@ export class World {
       return t === undefined ? { deny: 'missing' } : { value: t }
     })
     on('fs.exists', (_$, e) => ({ value: this.files.has(e.path) }))
-    on('process.run', (_$, e) => {
+    on('process.run', async (_$, e) => {
+      if (this.atHelper) await this.atHelper(e.argv[1] ?? '', e.argv.slice(2))
       const r = this.helper([...e.argv], { ...(e.init?.env ?? {}) }, e.init?.stdin)
       if (r === 'reject') return { deny: 'cannot start' }
       return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     on('prompt.submit', (_$, e) => {
+      if (this.submitDrop !== undefined) return { drop: this.submitDrop }
       this.submits.push(e.text)
       return { text: e.text }
     })

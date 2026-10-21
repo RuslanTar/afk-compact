@@ -57,11 +57,15 @@ export async function onSessionStart(d: Deps): Promise<void> {
  * the handoff turn (MOD-SPEC §9.1), writes liveness.
  */
 export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
-  await ensureIdent(d, await d.sessionId())
-  const sid = await prepare(d)
   const s = d.state
+  // Before any await: a handoff-turn timer that is awaiting the helper must see this turn, and
+  // our pending submit is claimed by the first turn to start (§9.1 step 3).
   cancelBoundary(d)
   s.mainTurnRunning = true
+  const ours = s.ourSubmitPending
+  s.ourSubmitPending = false
+  await ensureIdent(d, await d.sessionId())
+  const sid = await prepare(d)
   s.turnSeq++
   s.turnId = turnId
   s.nudgedThisTurn = false
@@ -70,9 +74,7 @@ export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
   s.lastCycle = null
   // A published handoff names only a compaction before the next main turn (§3.1).
   s.published = undefined
-  const ours = s.ourSubmitPending
-  if (ours) s.ourSubmitPending = false
-  else {
+  if (!ours) {
     s.nudgeNonce = undefined
     await clearHalt(d, sid)
   }

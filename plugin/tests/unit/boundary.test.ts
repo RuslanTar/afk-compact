@@ -157,6 +157,15 @@ test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its rea
   expect(w.rowsOf('halt').length).toBe(1)
 })
 
+test('CR-F20: a continue answered { drop }: continue skipped:submit-failed', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  w.submitDrop = 'a Stop stands'
+  await nudgedTurn($, w)
+  expect(w.compacts.length).toBe(1)
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual(['submitted', 'skipped:submit-failed'])
+})
+
 test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped at its nudged turn end, then the handoff turn, then one compaction, no continue', async ($, on) => {
   const w = new World().install(on)
   await w.start($)

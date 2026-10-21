@@ -36,9 +36,10 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // A user's prompt delivered into the running handoff turn lifts its limits text (MOD-SPEC §9.1).
+  // One the user asked to wait its turn (`wait`, ctrl+x enter) is not delivered into it.
   on('prompt.submit', async ($, e, next) => {
     const r = await next(e)
-    if (e.turnId !== undefined && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')) {
+    if (e.turnId !== undefined && e.wait !== true && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')) {
       const d = realDeps($, options, state)
       await onInterjection(d, await prepare(d), e.turnId)
     }

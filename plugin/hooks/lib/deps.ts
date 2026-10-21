@@ -222,7 +222,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     compact: instructions => $.session.compact({ instructions }),
     async submit(text) {
-      await $.prompt.submit({ text })
+      // A hook or the engine refuses a submit with a resolved `{ drop }`: that is a failed
+      // submit too, so the caller's `submit-failed` path runs and `ourSubmitPending` is reset.
+      const r = await $.prompt.submit({ text })
+      if (r.drop !== undefined) throw new Error('dropped: ' + String(r.drop))
     },
     async run(argv, timeoutMs, stdin) {
       try {

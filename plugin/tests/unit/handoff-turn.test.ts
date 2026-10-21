@@ -455,3 +455,57 @@ test('the handoff turn is never started for a subagent turn, nor on the 400K tur
   expect(w.callsOf('handoff-turn').length).toBe(0)
   expect(w.rowsOf('handoff_skipped').length).toBe(0)
 })
+
+test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submit, why=user-turn, that turn is not the handoff turn', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  let raced = false
+  w.atHelper = async (sub, args) => {
+    if (raced || sub !== 'handoff-turn' || args[0] !== 'open') return
+    raced = true
+    await w.turnStart($, 'actually, stop here')
+  }
+  await w.advance(2000)
+  expect(raced).toBe(true)
+  await w.advance(10000)
+  expect(w.submits.length).toBe(0)
+  expect(w.rowsOf('handoff_skipped').map(r => r.why)).toEqual(['user-turn'])
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
+  // The user's turn gets no limits text, and its end follows the normal rules.
+  w.tokens = 704000
+  expect((await w.tool($)).context?.[0]).not.toBe(bandText(w, 'spent'))
+  await w.turnEnd($)
+  expect(w.rowsOf('handoff_turn_end').length).toBe(0)
+})
+
+test('CR-F20: a handoff-turn submit answered { drop }: why=submit-failed with the ht; the cap cycle compacts; the next user turn is not the handoff turn', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  w.submitDrop = 'a Stop stands'
+  await w.advance(2000)
+  const ht = w.lastHt() ?? ''
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.ht])).toEqual([['submit-failed', ht]])
+  expect(w.compacts.length).toBe(1)
+  w.submitDrop = undefined
+  await w.turnStart($, 'what happened?')
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
+})
+
+test('CR-F21: a prompt queued with wait=true during the handoff turn is no interjection: the limits text stays', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  await $.prompt.submit({ text: 'after this, run the tests', origin: { kind: 'composer' }, turnId: 't2', wait: true } as never)
+  expect(w.rowsOf('handoff_user_interjected').length).toBe(0)
+  w.tokens = 704000
+  expect((await w.tool($)).context).toEqual([bandText(w, 'spent')])
+})
