@@ -54,10 +54,20 @@ sub iso {
 
 sub iso_ms { return iso($_[0], 1) }
 
-sub stamp {
+# file_stamp(epoch) -> 2026-10-21_14-05-12, the time part of copy and evidence file names
+sub file_stamp {
     my ($epoch) = @_;
     $epoch = now() unless defined $epoch;
     return POSIX::strftime('%Y-%m-%d_%H-%M-%S', localtime(int $epoch));
+}
+
+# stamp(epoch) -> 2026-10-21 14:05 +0300 (RV-24, small-rulings §3a): local date, time and
+# numeric UTC offset, always all three; the offset is the one of that instant (DST). The
+# same text `date '+%Y-%m-%d %H:%M %z'` prints, and the spec's `time_re` matches it.
+sub stamp {
+    my ($epoch) = @_;
+    my @lt = localtime(int($epoch // now()));
+    return POSIX::strftime('%Y-%m-%d %H:%M', @lt) . ' ' . POSIX::strftime('%z', @lt);
 }
 
 sub day {
@@ -66,6 +76,7 @@ sub day {
     return POSIX::strftime('%Y-%m-%d', localtime(int $epoch));
 }
 
+# hhmm(epoch) -> 14:05, for logs that need only the time; text the model reads uses stamp()
 sub hhmm {
     my ($epoch) = @_;
     return POSIX::strftime('%H:%M', localtime(int($epoch // now())));

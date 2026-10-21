@@ -3,7 +3,8 @@ package measure;
 # measured block). Order: git; in-flight inventory (every listed id); evidence map
 # (<= 8 rows from this compaction's checkpoint or sweep); GSD (own worktree, <= 8
 # lines); the Queued: line when queue_cmd is set. <= 3,000 B, cut at a line
-# boundary with `(+N lines)`. No `Approvals (verified)` section in v1 (D-2).
+# boundary with `(+N lines)`. No `Approvals (verified)` section in v1 (D-2). Times are
+# stamps (`In flight (sidecar 2026-10-21 14:05 +0300)`, RV-24).
 # Owner: WP-core.
 use strict;
 use warnings;
@@ -29,8 +30,8 @@ sub inflight_lines {
     return ('In flight: not listed (no sidecar yet)') unless $slot;
     my @t = @{ $slot->{tasks} || [] };
     my @c = @{ $slot->{crons} || [] };
-    return ('In flight (sidecar ' . util::hhmm(util::parse_iso($slot->{ts} // '') // util::now()) . '): nothing listed') unless @t || @c;
-    my @out = ('In flight (sidecar ' . util::hhmm(util::parse_iso($slot->{ts} // '') // util::now()) . '):');
+    return ('In flight (sidecar ' . util::stamp(util::parse_iso($slot->{ts} // '') // util::now()) . '): nothing listed') unless @t || @c;
+    my @out = ('In flight (sidecar ' . util::stamp(util::parse_iso($slot->{ts} // '') // util::now()) . '):');
     for my $x (@t) {
         my $line = "  $x->{id} · $x->{type} · $x->{status}";
         if (defined $x->{output_path}) { $line .= " · output $x->{output_path} (" . (-e $x->{output_path} ? 'exists' : 'missing') . ')' }

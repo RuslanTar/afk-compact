@@ -1211,6 +1211,27 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'stamp_spec') {
+        # RV-24: util::stamp against the spec's time_re once the spec carries the RV-24 grammar
+        # (WP-text part 1 changes time_re and adds time_legacy_re); until then only the
+        # built-in shape is checked and a TODO line says so.
+        my $re = eval { spec::has('time_legacy_re') ? spec::get('time_re') : undef };
+        print "# TODO stamp_spec: the spec has no RV-24 time_re yet (WP-text part 1)\n" unless defined $re;
+        my $shape = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
+        for my $tz (@{ $a->{tz} || ['UTC'] }) {
+            local $ENV{TZ} = $tz;
+            POSIX::tzset();
+            for my $e (@{ $a->{epochs} || [] }) {
+                my $s = util::stamp($e);
+                push @e, "$tz $e: '$s' is not YYYY-MM-DD HH:MM +hhmm" unless $s =~ /\A$shape\z/;
+                push @e, "$tz $e: '$s' does not match the spec time_re" if defined $re && $s !~ /\A(?:$re)\z/;
+                my $want = POSIX::strftime('%Y-%m-%d %H:%M %z', localtime $e);
+                push @e, "$tz $e: '$s', want '$want'" unless $s eq $want;
+            }
+        }
+        POSIX::tzset();
+        return @e;
+    }
     if ($name eq 'jobs_output_path') {
         # DP-2 / DP-13: the two output-path readers of lib/jobrec.pm (probe P-D1-6 decides
         # which one is used; 'none' until then) and the switch between them.

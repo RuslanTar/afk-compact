@@ -190,7 +190,7 @@ sub save {
                 return { kind => 'exists', path => $existing, match => 0, fm => $efm };
             }
             my $seq = $scope eq 'unknown' ? undef : _seq($dir, $sid8, $actor_tag);
-            my $stamp = util::stamp(util::now());
+            my $stamp = util::file_stamp(util::now());
             my $name = $scope eq 'unknown' ? "${stamp}_${sid8}_$cur.md" : "${stamp}_${sid8}${actor_tag}_c${seq}-$cur.md";
             my $path = "$dir/$name";
             my $fm = frontmatter::write([
