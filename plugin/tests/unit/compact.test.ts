@@ -245,6 +245,44 @@ function bytes(s: string): number {
 
 void KEPT
 
+test('compacted.skip is a class: a short token is kept, free text from a hook is logged as other', async ($, on) => {
+  const w = new World().install(on)
+  w.compactMode = { skip: 'vetoed' }
+  await raiseCompact($, { trigger: 'auto' })
+  w.compactMode = { skip: 'the user said: keep everything about the SQL migration' }
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('compacted').map(r => r.skip)).toEqual(['vetoed', 'other'])
+  expect(JSON.stringify(w.rows)).not.toContain('SQL migration')
+})
+
+test('after-step toasts (MOD-SPEC §5.2 step 6): non-ok verdict names it; the fourth main compaction toasts once', async ($, on) => {
+  const w = new World().install(on)
+  const fourth = () => w.toasts.filter(t => t === `${w.name}: 4 compactions in this session; consider /${w.name}:handoff and a fresh session.`).length
+  w.summaryMode = 'truncated'
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.toasts).toContain(`${w.name}: compaction summary not in handoff format (truncated); the resume block adds a fallback note.`)
+  w.summaryMode = 'ok'
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  expect(fourth()).toBe(0)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(fourth()).toBe(1)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(fourth()).toBe(1)
+  expect(w.toasts.filter(t => t.includes('not in handoff format')).length).toBe(1)
+})
+
+test('after-step toast: a summary over 12,000 chars gives the same toast once, on the first main compaction', async ($, on) => {
+  const w = new World().install(on)
+  const base = w.summaryMessages.bind(w)
+  w.summaryMessages = instr => base(instr).map(m => (m.role === 'user' ? { ...m, text: m.text.replace('Status: active\n', 'Status: active\n' + 'x'.repeat(12001) + '\n') } : m))
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.toasts.filter(t => t.startsWith(`${w.name}: 4 compactions in this session`)).length).toBe(1)
+  expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
+})
+
 test('AT-M2-02 (across loads): a version already seen in $.store logs no second self_call_hook_ran', async ($, on) => {
   const w = new World()
   w.install(on, { 'selfcall:2.1.306': true })

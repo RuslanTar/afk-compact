@@ -61,6 +61,14 @@ async function fallback(d: Deps, sid: string, row: Row): Promise<void> {
   await d.write(`${p.watch}/${sid}/events/${now}-${randomHex(4)}.json`, JSON.stringify(row) + '\n')
 }
 
+/**
+ * A `skip` reason as a row value (WATCHER-SPEC §6.3 `compacted.skip`: null or a class). Any
+ * hook can set the reason, so free text is never logged: a short token is kept, else `other`.
+ */
+export function skipClass(reason: string): string {
+  return /^[A-Za-z0-9._:-]{1,40}$/.test(reason) ? reason : 'other'
+}
+
 /** Records one helper-missing row for a non-log helper call (once per load). */
 export async function helperMissing(d: Deps, sid: string, stage: string): Promise<void> {
   if (d.state.helperMissingLogged) return

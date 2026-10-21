@@ -10,7 +10,7 @@ import { keysetCanary, triggerCanary } from './canary'
 import { countVerdict } from './cont'
 import { detectSummary, isOk, lastInstrMarker } from './detect'
 import { checkpoint, dispatch, failClass, prevCopy, saveCopy, sweep } from './helper'
-import { escalate, helperMissing, isoLocal, log, toastOnce } from './log'
+import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce } from './log'
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import { buildBlock } from './resume'
@@ -143,7 +143,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   const t0 = await d.now()
   const r = await next({ ...e, instructions: [e.instructions, text].filter(Boolean).join('\n\n') })
   if (r.skip !== undefined) {
-    await log(d, sid, 'compacted', { nonce, skip: r.skip.slice(0, 40), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0 }, actor)
+    await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0 }, actor)
     return r
   }
   if (trigger === 'precompute') {

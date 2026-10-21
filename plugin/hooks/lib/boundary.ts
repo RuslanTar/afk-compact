@@ -6,7 +6,7 @@ import { afterStep, dispatchExists, guarded, mainText, writeDispatch } from './c
 import { effective } from './config'
 import { autoContinue, thrashCheck } from './cont'
 import { checkpoint, prevCopy } from './helper'
-import { log } from './log'
+import { log, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
 
@@ -103,7 +103,7 @@ export async function boundary(d: Deps): Promise<void> {
       return
     }
     if (r.skip !== undefined) {
-      await log(d, sid, 'compacted', { nonce, skip: r.skip.slice(0, 40), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0 })
+      await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0 })
       return
     }
     await log(d, sid, 'compacted', {
