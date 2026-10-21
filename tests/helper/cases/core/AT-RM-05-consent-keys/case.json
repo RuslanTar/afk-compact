@@ -1,6 +1,6 @@
 {
  "id": "AT-RM-05, AT-J-14",
- "note": "DP-3 / REVIEW A-3: the consent keys repo_roots, relaunch_auto and relaunch_allow are read from the user settings file only (settings.pm %FILE_ONLY). Given as a flag (--repo-roots, --relaunch-auto, --relaunch-allow) or as CLAUDE_PLUGIN_OPTION_* env they are ignored with the note '<key>: settings file only' and one config_note row per key: a declared repository stays private (not-accepted), relaunch_auto keeps the file's value, a '^.*' allow pattern does not appear. Values in the file are validated (Dev-1 config keys): an unknown relaunch_auto is off, a pattern without ^ or one that does not compile is dropped, relaunch_quiet_s is clamped to 30-3600. Other keys still take flag and env (handoff_root by env)",
+ "note": "DP-3 / REVIEW A-3: the consent keys repo_roots, relaunch_auto and relaunch_allow are read from the user settings file only (settings.pm %FILE_ONLY). Given as a flag (--repo-roots, --relaunch-auto, --relaunch-allow) or as CLAUDE_PLUGIN_OPTION_* env they are ignored with the note '<key>: settings file only' and one config_note row per key: a declared repository stays private (not-accepted), relaunch_auto keeps the file's value, a '^.*' allow pattern does not appear. Values in the file are validated (Dev-1 config keys): an unknown relaunch_auto is off, a pattern without ^ or one that does not compile is dropped, relaunch_quiet_s is clamped to 30-3600. Other keys still take flag and env (handoff_root by env). CR-F34 (provisional): the settings file is ~/.claude/settings.json; a CLAUDE_CONFIG_DIR naming another folder (a model-run command can set it) gives the three keys their safe values (no repository accepted, relaunch off, no patterns) with a note and one config_note {note: config-dir-not-home} row per key, even when ~/.claude/settings.json would accept",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -33,6 +33,21 @@
                     "^  relaunch_allow: 1 patterns, no effect in this version \\(read-only jobs only\\)$",
                     "^  config: relaunch_auto invalid, off used$", "^  config: relaunch_allow invalid, pattern dropped$",
                     "^  config: relaunch_quiet_s 5 clamped to 30$"],
-     "stdout_lacks": ["^note: "]}}
+     "stdout_lacks": ["^note: "]}},
+  {"name": "CR-F34: CLAUDE_CONFIG_DIR naming ~/.claude reads the same file", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr", "CLAUDE_CONFIG_DIR": "$HOME/.claude/"},
+   "expect": {"exit": 0, "stdout_has": ["^handoff mode: repo \\(accepted\\)$"], "stdout_lacks": ["^note: "]}},
+  {"name": "CR-F34: a settings file in another CLAUDE_CONFIG_DIR grants no consent", "setup": [
+    {"write": "$TMP/cfg/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"repo_roots": "$TMP/r20", "relaunch_auto": "on", "relaunch_allow": "^.*"}}}}}],
+   "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr", "CLAUDE_CONFIG_DIR": "$TMP/cfg"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff mode: private \\(not-accepted\\)$", "^automatic relaunch: off · relaunch_auto off$",
+                    "^note: repo_roots: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$",
+                    "^note: relaunch_auto: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$",
+                    "^note: relaunch_allow: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$"],
+     "stdout_lacks": ["relaunch_allow: \\d+ patterns"],
+     "rows": [{"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "repo_roots", "note": "config-dir-not-home"}},
+              {"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "relaunch_auto", "note": "config-dir-not-home"}}]}}
  ]
 }

@@ -131,8 +131,11 @@ sub preamble {
     }
     emit('config_ambiguous', [candidates => 'several']) if $R{settings}{ambiguous} && once('config_ambiguous');
     for my $n (@{ $R{settings}{notes} || [] }) {
-        next unless $n =~ /^([a-z_]+): settings file only$/;
-        emit('config_note', [key => $1, note => 'settings-file-only']) if once("config_note.$1");
+        if ($n =~ /^([a-z_]+): settings file only$/) {
+            emit('config_note', [key => $1, note => 'settings-file-only']) if once("config_note.$1");
+        } elsif ($n =~ /^([a-z_]+): CLAUDE_CONFIG_DIR is not ~\/\.claude, safe value used$/) {
+            emit('config_note', [key => $1, note => 'config-dir-not-home']) if once("config_note.$1.config-dir");
+        }
     }
 }
 

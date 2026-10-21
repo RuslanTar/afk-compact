@@ -8,7 +8,9 @@ package settings;
 # single key whose part before `@` is the brand; several -> defaults + ambiguous.
 # Consent keys (DP-3, REVIEW A-3; %FILE_ONLY) are read from the settings file only: a
 # model-run Bash call can pass flags and env, so those two sources are ignored with the
-# note `<key>: settings file only`. Paths (dir and file keys) are UTF-8 bytes whatever
+# note `<key>: settings file only`. That file is ~/.claude/settings.json: a
+# CLAUDE_CONFIG_DIR naming another folder gives the consent keys their safe values
+# (CR-F34, config_dir_foreign). Paths (dir and file keys) are UTF-8 bytes whatever
 # their source, as env, flag and file-system values are (SR 1.1).
 use strict;
 use warnings;
@@ -82,6 +84,25 @@ sub _coerce {
 
 sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne '' ? util::expand_tilde($ENV{CLAUDE_CONFIG_DIR}) : util::home() . '/.claude' }
 
+# CR-F34 (DP-3, provisional): the consent keys come from ~/.claude/settings.json only. A
+# command the model runs can set CLAUDE_CONFIG_DIR, so a settings file it names cannot
+# grant consent: when CLAUDE_CONFIG_DIR names another folder than ~/.claude, each consent
+# key takes its safe value (%SAFE: no repository accepted, automatic relaunch off, no
+# allow patterns) with the note `<key>: CLAUDE_CONFIG_DIR is not ~/.claude, safe value used`.
+our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '');
+sub consent_dir { return util::home() . '/.claude' }
+sub config_dir_foreign {
+    my $cd = config_dir();
+    my $home = consent_dir();
+    return 0 if util::clean_path($cd) eq util::clean_path($home);
+    my ($rc, $rh) = (util::real_path($cd), util::real_path($home));
+    return 0 if defined $rc && defined $rh && $rc eq $rh;
+    my @a = stat $cd;
+    my @b = stat $home;
+    return 0 if @a && @b && $a[0] == $b[0] && $a[1] == $b[1];
+    return 1;
+}
+
 # Returns (options hashref or undef, note) from the user's settings file.
 sub _settings_file_options {
     my $brand = ctx::brand();
@@ -118,6 +139,7 @@ sub resolve {
     my ($opts, $ckey) = _settings_file_options();
     my $ambiguous = (defined $ckey && $ckey eq 'ambiguous') ? 1 : 0;
     my $uc = ctx::user_config();
+    my $foreign = config_dir_foreign();
     for my $k (@KEYS) {
         my ($key, $type, $fallback) = @$k;
         my $default = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : $fallback;
@@ -125,7 +147,11 @@ sub resolve {
         my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
         my $file_only = $FILE_ONLY{$key};
         push @notes, "$key: settings file only" if $file_only && (!_unset($flags->{$key}) || !_unset($env));
-        if (!$file_only && !_unset($flags->{$key})) { ($v, $s) = ($flags->{$key}, 'flag') }
+        if ($file_only && $foreign) {
+            push @notes, "$key: CLAUDE_CONFIG_DIR is not ~/.claude, safe value used";
+            ($v, $s) = ($SAFE{$key}, 'safe');
+        }
+        elsif (!$file_only && !_unset($flags->{$key})) { ($v, $s) = ($flags->{$key}, 'flag') }
         elsif (!$file_only && !_unset($env)) { ($v, $s) = ($env, 'env') }
         elsif (!$ambiguous && ref $opts eq 'HASH' && !_unset($opts->{$key})) { ($v, $s) = ($opts->{$key}, 'settings') }
         else { ($v, $s) = ($default, 'default') }
