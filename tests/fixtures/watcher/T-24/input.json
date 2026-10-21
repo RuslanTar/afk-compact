@@ -1,0 +1,34 @@
+{
+  "id": "T-24",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-24",
+  "seed": [
+    {
+      "copy": "watcher/T-24/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/offsets/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl.off",
+      "to": "$WATCH/$SID/offsets/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl.off"
+    },
+    {
+      "copy": "watcher/T-24/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.classic.jsonl",
+      "to": "$WATCH/$SID.classic.jsonl"
+    }
+  ],
+  "steps": [
+    {
+      "now": "2026-10-21T14:06:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-24/payloads/01-Stop.json",
+      "note": "after --resume: same basename, new path, file shorter than the stored offset",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

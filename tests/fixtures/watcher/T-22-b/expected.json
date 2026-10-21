@@ -1,0 +1,26 @@
+{
+  "id": "T-22-b",
+  "spec": "WATCHER-SPEC §9 T-22",
+  "spec_input": "continue row after a native auto compaction with no nudge; a continue after 2 consecutive `unshaped` verdicts",
+  "spec_expected": "A-27; A-19",
+  "v1_scope": "A-27 / A-19",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-19",
+          "severity": "critical"
+        },
+        "count": 1
+      }
+    ]
+  },
+  "metrics": {
+    "M-17": {
+      "continue_after_halt_cond": true
+    }
+  }
+}

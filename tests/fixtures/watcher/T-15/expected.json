@@ -1,0 +1,44 @@
+{
+  "id": "T-15",
+  "spec": "WATCHER-SPEC §9 T-15",
+  "spec_input": "PostCompact with no dispatch, mod loaded, no self-call",
+  "spec_expected": "`bypass_suspected:true`; A-16",
+  "v1_scope": "bypass_suspected, A-16",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "bypass_suspected",
+        "count": 1
+      },
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "postcompact",
+        "fields": {
+          "mod_alive_this_turn": true
+        }
+      },
+      {
+        "file": "$WATCH/$SID/compactions.jsonl",
+        "fields": {
+          "seat_state": "classic-only"
+        }
+      },
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-16",
+          "severity": "warn"
+        },
+        "count": 1
+      }
+    ]
+  },
+  "metrics": {
+    "M-06": {
+      "bypass_suspected": true
+    }
+  }
+}

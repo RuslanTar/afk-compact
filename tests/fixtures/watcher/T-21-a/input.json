@@ -1,0 +1,50 @@
+{
+  "id": "T-21-a",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-21-a",
+  "seed": [
+    {
+      "copy": "watcher/T-21-a/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/3c4d5e6f.json",
+      "to": "$WATCH/$SID/dispatch/3c4d5e6f.json"
+    },
+    {
+      "copy": "watcher/T-21-a/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/mod-alive.json",
+      "to": "$WATCH/$SID/mod-alive.json"
+    },
+    {
+      "copy": "watcher/T-21-a/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "to": "$WATCH/$SID.jsonl"
+    }
+  ],
+  "steps": [
+    {
+      "now": "2026-10-21T14:05:06+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "watcher/T-21-a/payloads/01-PostCompact.json",
+      "note": "the only dispatch is the classic fallback's; no mod dispatch and no self-call within 120 s",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-21-a/payloads/02-Stop.json",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "T-12-a",
+  "spec": "WATCHER-SPEC §9 T-12",
+  "spec_input": "4 consecutive compactions, each 2 main turns after the previous (3 rapid refills)",
+  "spec_expected": "`rapid_refill_run:3`, `thrash:true`; A-07. With 3 such compactions: `rapid_refill_run:2`, no A-07",
+  "v1_scope": "A-07",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-07",
+          "severity": "critical"
+        },
+        "count": 1
+      }
+    ]
+  },
+  "metrics": {
+    "M-20": {
+      "rapid_refill_run": 3,
+      "thrash": true
+    }
+  }
+}

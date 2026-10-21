@@ -1,0 +1,24 @@
+{
+  "id": "T-03",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-03",
+  "seed": [],
+  "steps": [
+    {
+      "now": "2026-10-21T14:06:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-03/payloads/01-Stop.json",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

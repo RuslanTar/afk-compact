@@ -1,0 +1,1 @@
+{"v":1,"ts":"2026-10-21T13:30:00.050+03:00","ev":"precompact","sid":"5e55a001-0c0f-4f1e-9a00-00000000a001","actor":"unknown","writer":"classic","pid":43210,"plugin_version":"0.1.0","cc_version":"2.1.306","turn_seq":null,"trigger":"auto","ci_bytes":3994,"ci_has_nonce":true,"ci_nonce":"e05e05e0","ci_foreign_header":false,"keyset_hash":"00000000"}

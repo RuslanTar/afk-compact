@@ -1,0 +1,152 @@
+{
+  "id": "T-12-b",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-12-b",
+  "transcript_mode": "append parts in step order to the payload transcript_path",
+  "seed": [],
+  "steps": [
+    {
+      "now": "2026-10-21T13:01:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/01-Stop.json",
+      "transcript_append": "transcripts/T-12-b/main.part-01.jsonl",
+      "note": "main turn end",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:02:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/02-Stop.json",
+      "transcript_append": "transcripts/T-12-b/main.part-02.jsonl",
+      "note": "main turn end",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:03:02+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "watcher/T-12-b/payloads/03-PostCompact.json",
+      "transcript_append": "transcripts/T-12-b/main.part-03.jsonl",
+      "note": "native auto compaction 1 (unshaped, no dispatch)",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:04:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/04-Stop.json",
+      "transcript_append": "transcripts/T-12-b/main.part-04.jsonl",
+      "note": "main turn end",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:05:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/05-Stop.json",
+      "transcript_append": "transcripts/T-12-b/main.part-05.jsonl",
+      "note": "main turn end",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:06:02+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "watcher/T-12-b/payloads/06-PostCompact.json",
+      "transcript_append": "transcripts/T-12-b/main.part-06.jsonl",
+      "note": "native auto compaction 2 (unshaped, no dispatch)",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:07:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/07-Stop.json",
+      "transcript_append": "transcripts/T-12-b/main.part-07.jsonl",
+      "note": "main turn end",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:08:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/08-Stop.json",
+      "transcript_append": "transcripts/T-12-b/main.part-08.jsonl",
+      "note": "main turn end",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:09:02+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "watcher/T-12-b/payloads/09-PostCompact.json",
+      "transcript_append": "transcripts/T-12-b/main.part-09.jsonl",
+      "note": "native auto compaction 3 (unshaped, no dispatch)",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T13:10:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-12-b/payloads/10-Stop.json",
+      "note": "evaluation Stop",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "T-24",
+  "spec": "WATCHER-SPEC §9 T-24",
+  "spec_input": "transcript basename unchanged but path moved after `--resume`, offset beyond the new file's size",
+  "spec_expected": "sweep restarts at 0; no duplicate rows (dedupe by `uuid`)",
+  "v1_scope": "sweep rows: offset restart",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "sweep",
+        "fields": {
+          "from_off": 0
+        },
+        "last": true
+      }
+    ],
+    "dedupe": "boundary uuid e48008f8-942b-4345-8424-207072032a16 appears in no new sweep row (already counted)"
+  },
+  "metrics": {}
+}

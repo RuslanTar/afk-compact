@@ -1,0 +1,41 @@
+{
+  "id": "T-25",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-25",
+  "transcript_mode": "append parts in step order to the payload transcript_path",
+  "seed": [],
+  "steps": [
+    {
+      "now": "2026-10-21T13:50:30+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-25/payloads/01-Stop.json",
+      "transcript_append": "transcripts/T-25/main.part-01.jsonl",
+      "note": "the first turn ends cleanly",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-25/payloads/02-Stop.json",
+      "transcript_append": "transcripts/T-25/main.part-02.jsonl",
+      "note": "boundary 1 follows a prompt row with no assistant row; boundary 2 follows an assistant tool_use with no Stop in between",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

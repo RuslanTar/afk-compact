@@ -1,0 +1,42 @@
+{
+  "id": "T-22-b",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/T-22-b",
+  "seed": [
+    {
+      "copy": "watcher/T-22-b/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/22b0c0d1.json",
+      "to": "$WATCH/$SID/dispatch/22b0c0d1.json"
+    },
+    {
+      "copy": "watcher/T-22-b/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/22b0c0d2.json",
+      "to": "$WATCH/$SID/dispatch/22b0c0d2.json"
+    },
+    {
+      "copy": "watcher/T-22-b/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "to": "$WATCH/$SID.jsonl"
+    },
+    {
+      "copy": "watcher/T-22-b/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/compactions.jsonl",
+      "to": "$WATCH/$SID/compactions.jsonl"
+    }
+  ],
+  "steps": [
+    {
+      "now": "2026-10-21T13:01:00+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "watcher/T-22-b/payloads/01-Stop.json",
+      "note": "a continue was submitted after two consecutive unshaped main verdicts",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    }
+  ]
+}

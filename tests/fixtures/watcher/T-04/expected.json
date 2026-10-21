@@ -1,0 +1,46 @@
+{
+  "id": "T-04",
+  "spec": "WATCHER-SPEC §9 T-04",
+  "spec_input": "precompute dispatch, then a boundary with `precomputed:true`, `durationMs:20`",
+  "spec_expected": "joined; excluded from failure, thrash and duration stats; `verdict:stale` even when the nonce matches (`nonce_match` recorded apart, HK-61)",
+  "v1_scope": "rollup verdict: stale (exclusion from stats is W13)",
+  "deferred": "exclusion from failure, thrash and duration stats (W13 report)",
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID/compactions.jsonl",
+        "fields": {
+          "nonce": "4d5e6f70",
+          "verdict": "stale",
+          "precomputed": true
+        }
+      },
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "postcompact",
+        "fields": {
+          "nonce_found": "4d5e6f70",
+          "verdict": "stale"
+        }
+      }
+    ],
+    "absent_rows": [
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-17"
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "M-07": {
+      "verdict": "stale",
+      "nonce_match": true
+    },
+    "M-03": {
+      "duration_ms": 20
+    }
+  }
+}

@@ -44,6 +44,8 @@ SECRET_MARK = "$SECRET{"
 COLUMNS = ["file", "verdict", "marker_line", "sentinel_from_end", "nonce", "scope",
            "normalized_sha256", "dispatch"]
 SKIP_DIRS = {".git", "node_modules", ".types", "__pycache__"}
+# jsonl lines that are malformed on purpose (WATCH T-16: the sweeper must survive them)
+INTENDED_MALFORMED = {"tests/fixtures/transcripts/T-16/main.jsonl": {5}}
 
 
 def die(msg):
@@ -370,7 +372,7 @@ def check(b):
                 problems.append("parse {}: {}".format(rel, e))
         elif p.endswith(".jsonl"):
             for no, line in enumerate(read(p).split("\n"), 1):
-                if line.strip():
+                if line.strip() and no not in INTENDED_MALFORMED.get(rel, ()):
                     try:
                         json.loads(line)
                     except ValueError as e:

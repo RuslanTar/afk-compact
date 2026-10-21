@@ -1,0 +1,43 @@
+{
+  "id": "T-20",
+  "spec": "WATCHER-SPEC §9 T-20",
+  "spec_input": "precompute PreCompact(`auto`, no nonce) with no PostCompact, then an unshaped plugin compaction 0.7 s later",
+  "spec_expected": "`precompute_or_failed` (info), no `failed:no-post`; the later compaction does not time-join to the precompute dispatch; `verdict:unshaped`",
+  "v1_scope": "precompute_or_failed info row",
+  "deferred": null,
+  "asserts": {
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "precompute_or_failed",
+        "count": 1
+      },
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "postcompact",
+        "fields": {
+          "verdict": "unshaped"
+        }
+      }
+    ],
+    "absent_rows": [
+      {
+        "file": "$WATCH/$SID.alerts.jsonl",
+        "ev": "alert",
+        "fields": {
+          "rule": "A-17"
+        }
+      }
+    ],
+    "rollup_rule": "the PostCompact does not time-join to the precompute's dispatch (join != time to it)"
+  },
+  "metrics": {
+    "M-19": {
+      "failed": "none",
+      "precompute_or_failed": 1
+    },
+    "M-07": {
+      "verdict": "unshaped"
+    }
+  }
+}
