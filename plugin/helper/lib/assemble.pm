@@ -9,8 +9,12 @@ package assemble;
 use strict;
 use warnings;
 
+# `turn` (handoff-turn.txt, D-18 B6) is assembled by the mod; the helper knows it so the
+# BT-04 goldens of every asset compare. Tags are kept only when a caller passes them: the
+# classic paths never pass the mod-only ones (main [handoff], res [handoff] and
+# [handoff-partial], nudge [halt-handoff], the turn's [submit] [near] [spent] [imminent]).
 our %FILES = (main => 'handoff-instructions.txt', sub => 'subagent-instructions.txt',
-              res => 'resume-context.txt', nudge => 'checkpoint-nudge.txt');
+              res => 'resume-context.txt', nudge => 'checkpoint-nudge.txt', turn => 'handoff-turn.txt');
 
 my %TEXT;
 sub text {
