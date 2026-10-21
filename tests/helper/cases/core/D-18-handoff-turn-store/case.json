@@ -1,6 +1,6 @@
 {
  "id": "D-18 B8 (handoff-turn, handoff-state, dispatch --handoff-ht)",
- "note": "D-18 §9.1 / B3 / B8 (core half of HT-LT-01..03). handoff-turn open exclusive-creates <watch>/<sid>/handoff-turn/<ht>.json (0600, row handoff_turn_open) and answers EXISTS for a taken ht; handoff-state prints none / staged <stage> draft=<0|1> finish=<publish command, no session id> / published <path> / superseded <nonce>; supersede needs an open ht. The lib seams begin and publish call: the open ht is the newest with no .published and at most 60 min old; one stage and one published handoff per ht. dispatch --handoff-ht puts handoff_ht in the record and the row, and the tag handoff is accepted",
+ "note": "D-18 §9.1 / B3 / B8 (core half of HT-LT-01..03). handoff-turn open exclusive-creates <watch>/<sid>/handoff-turn/<ht>.json (0600, row handoff_turn_open) and answers EXISTS for a taken ht; handoff-state prints none / staged <stage> draft=<0|1> finish=<publish command, no session id> / published <path> / superseded <nonce>; supersede needs an open ht. The lib seams begin and publish call: the open ht is the newest with no .published and at most 60 min old; one stage and one published handoff per ht. handoff-turn close --why cancelled|ended exclusive-creates <ht>.closed (0600; ok, EXISTS, REFUSED: no-ht exit 3 for an unknown ht), begin no longer binds that ht and handoff-state does not change (CR-F17/F25). dispatch --handoff-ht puts handoff_ht in the record and the row, and the tag handoff is accepted",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -327,6 +327,48 @@
     "now": "2026-10-21T14:05:12+03:00",
     "want_open": "c1c2c3c4"
    }
+  },
+  {
+   "name": "CR-F17/F25: open an ht the mod then cancels",
+   "argv": ["handoff-turn", "open", "--sid", "$SID", "--ht", "0b0c0d0e", "--reason", "cap", "--max-calls", "34", "--max-tokens", "64000"],
+   "expect": {"exit": 0, "stdout": "ok\n"}
+  },
+  {
+   "name": "CR-F17/F25: before the close begin binds it",
+   "lib": "handoff_turn_api",
+   "args": {"sid_dir": "$WATCH/$SID", "now": "2026-10-21T14:05:12+03:00", "want_open": "0b0c0d0e"}
+  },
+  {
+   "name": "CR-F17/F25: close with a bad reason",
+   "argv": ["handoff-turn", "close", "--sid", "$SID", "--ht", "0b0c0d0e", "--why", "whim"],
+   "expect": {"exit": 64, "absent": ["$WATCH/$SID/handoff-turn/0b0c0d0e.closed"]}
+  },
+  {
+   "name": "CR-F17/F25: close an unknown ht",
+   "argv": ["handoff-turn", "close", "--sid", "$SID", "--ht", "d1d2d3d4", "--why", "cancelled"],
+   "expect": {"exit": 3, "stdout": "REFUSED: no-ht\n", "absent": ["$WATCH/$SID/handoff-turn/d1d2d3d4.closed"]}
+  },
+  {
+   "name": "CR-F17/F25: close",
+   "argv": ["handoff-turn", "close", "--sid", "$SID", "--ht", "0b0c0d0e", "--why", "cancelled"],
+   "expect": {"exit": 0, "stdout": "ok\n",
+              "files": [{"path": "$WATCH/$SID/handoff-turn/0b0c0d0e.closed", "mode": "0600", "contains": ["cancelled"]}]}
+  },
+  {
+   "name": "CR-F17/F25: a second close",
+   "argv": ["handoff-turn", "close", "--sid", "$SID", "--ht", "0b0c0d0e", "--why", "ended"],
+   "expect": {"exit": 0, "stdout": "EXISTS\n",
+              "files": [{"path": "$WATCH/$SID/handoff-turn/0b0c0d0e.closed", "contains": ["cancelled"]}]}
+  },
+  {
+   "name": "CR-F17/F25: handoff-state is unchanged by a close",
+   "argv": ["handoff-state", "--sid", "$SID", "--ht", "0b0c0d0e"],
+   "expect": {"exit": 0, "stdout": "none\n"}
+  },
+  {
+   "name": "CR-F17/F25: begin skips the closed ht",
+   "lib": "handoff_turn_api",
+   "args": {"sid_dir": "$WATCH/$SID", "now": "2026-10-21T14:05:12+03:00", "want_open": "c1c2c3c4"}
   },
   {
    "name": "dispatch --handoff-ht",

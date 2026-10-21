@@ -9,6 +9,8 @@ package handoff_turn;
 #   <ht>.published   the handoff path, written by `publish` before its rename (mark_published)
 #   <ht>.superseded  the nonce of a native compaction that ran during the turn (the race);
 #                    `<ht>.json` stays write-once, so superseded_by lives in this twin file
+#   <ht>.closed      why the mod closed the ht (cancelled | ended; `handoff-turn close`,
+#                    CR-F17/F25): begin no longer binds it (open_for_begin)
 # A second handoff for one ht cannot happen: bind_stage returns the existing stage
 # (`resumed`), mark_published refuses with the existing path.
 use strict;
@@ -16,6 +18,7 @@ use warnings;
 
 our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off);
 our $OPEN_MAX_AGE_S = 3600;
+our %CLOSE_WHY = map { $_ => 1 } qw(cancelled ended);
 
 sub valid_ht { return defined $_[0] && $_[0] =~ /\A[0-9a-f]{8}\z/ ? 1 : 0 }
 sub dir { my ($sid_dir) = @_; return "$sid_dir/handoff-turn" }
@@ -48,8 +51,8 @@ sub record {
     return $j;
 }
 
-# open_for_begin(sid_dir) -> the newest ht with a record, no .published and opened at most
-# 60 minutes ago, or undef (begin binds it; the model never types an ht, HK-06)
+# open_for_begin(sid_dir) -> the newest ht with a record, no .published, no .closed and
+# opened at most 60 minutes ago, or undef (begin binds it; the model never types an ht, HK-06)
 sub open_for_begin {
     my ($sid_dir) = @_;
     my $now = util::now();
@@ -57,7 +60,7 @@ sub open_for_begin {
     for my $f (util::list_dir(dir($sid_dir))) {
         next unless $f =~ /\A([0-9a-f]{8})\.json\z/;
         my $ht = $1;
-        next if -e _f($sid_dir, $ht, 'published');
+        next if -e _f($sid_dir, $ht, 'published') || -e _f($sid_dir, $ht, 'closed');
         my $r = record($sid_dir, $ht) or next;
         my $t = util::parse_iso($r->{opened_at} // '') // next;
         next if $now - $t > $OPEN_MAX_AGE_S || $t > $now + 60;
@@ -88,6 +91,18 @@ sub mark_published {
     return (1, $path) if util::write_excl($f, "$path\n", 0600);
     return (0, _read_line($f) // $path);
 }
+
+# close_ht(sid_dir, ht, why) -> 1 created | 0 exists (CR-F17/F25: the mod closes an ht
+# whose turn it cancelled after the open, or that ended, so a later manual handoff in the
+# hour does not bind it)
+sub close_ht {
+    my ($sid_dir, $ht, $why) = @_;
+    die "handoff_turn: bad ht\n" unless valid_ht($ht);
+    die "handoff_turn: bad close reason\n" unless defined $why && $CLOSE_WHY{$why};
+    return util::write_excl(_f($sid_dir, $ht, 'closed'), "$why\n", 0600);
+}
+
+sub closed_of { my ($sid_dir, $ht) = @_; return valid_ht($ht) ? _read_line(_f($sid_dir, $ht, 'closed')) : undef }
 
 # supersede(sid_dir, ht, nonce) -> 1 created | 0 exists
 sub supersede {

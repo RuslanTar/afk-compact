@@ -5,7 +5,11 @@
 #   handoff-turn supersede --sid S --ht H --nonce N
 #     -> `ok` | `EXISTS`; a native compaction (nonce N) ran during the turn (the race):
 #        the plugin compaction for this ht is dropped. Unknown ht -> exit 3 `REFUSED: no-ht`
-# The mod runs both; the reason is the halt reason of the last cycle (2-nonok, thrash,
+#   handoff-turn close --sid S --ht H --why cancelled|ended
+#     -> `ok` (exclusive create of <ht>.closed, 0600) | `EXISTS`; begin no longer binds
+#        that ht (CR-F17/F25). Unknown ht -> exit 3 `REFUSED: no-ht`; handoff-state is
+#        unchanged by it
+# The mod runs all three; the reason is the halt reason of the last cycle (2-nonok, thrash,
 # cap, continue-off); C and T are the mod's limits for the turn (D-18 B1 step 2).
 use strict;
 use warnings;
@@ -14,8 +18,8 @@ package cmd_handoff_turn;
 
 sub run {
     my ($verb, @rest) = @_;
-    die "usage: handoff-turn open|supersede --sid S --ht H ...\n" unless defined $verb && $verb =~ /^(open|supersede)$/;
-    my ($opt) = args::parse(\@rest, known => [qw(sid ht reason max-calls max-tokens nonce root log-dir)]);
+    die "usage: handoff-turn open|supersede|close --sid S --ht H ...\n" unless defined $verb && $verb =~ /^(open|supersede|close)$/;
+    my ($opt) = args::parse(\@rest, known => [qw(sid ht reason max-calls max-tokens nonce why root log-dir)]);
     my $sid = args::init_sid($opt);
     args::need($opt, 'ht');
     die "usage: --ht is 8 lowercase hex\n" unless handoff_turn::valid_ht($opt->{ht});
@@ -26,6 +30,13 @@ sub run {
         die "usage: --nonce is 8 lowercase hex\n" unless nonce::valid($opt->{nonce});
         if (!handoff_turn::record($d, $opt->{ht})) { args::out('REFUSED: no-ht'); return 3 }
         args::out(handoff_turn::supersede($d, $opt->{ht}, $opt->{nonce}) ? 'ok' : 'EXISTS');
+        return 0;
+    }
+    if ($verb eq 'close') {
+        args::need($opt, 'why');
+        die "usage: --why cancelled|ended\n" unless $handoff_turn::CLOSE_WHY{ $opt->{why} };
+        if (!handoff_turn::record($d, $opt->{ht})) { args::out('REFUSED: no-ht'); return 3 }
+        args::out(handoff_turn::close_ht($d, $opt->{ht}, $opt->{why}) ? 'ok' : 'EXISTS');
         return 0;
     }
     args::need($opt, qw(reason max-calls max-tokens));
