@@ -29,7 +29,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 
 Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edit STATE.md; delete or move files; give the helper transcripts, session logs, shell history, environment dumps or credentials; read the transcript; act outward (push, merge, deploy, post, comment) or commit just to clean the tree; restart, wake or stop background work (healing is the resume's job); spawn verification agents; sleep or poll; route around a permission or guard denial (record it under Guards in force; retry a classifier outage once).
 
-**Budget.** Step 1 ≤4 calls · Step 2 ≤10 · Step 4 ≤2 · Step 6 1 · Step 7 ≤5 (publish plus 2 rounds of one Write and publish). Typical 10–14, hard cap 22; recipe Writes (Step 5, ≤8) on top.
+**Budget.** Step 1 ≤4 calls · Step 2 ≤11 · Step 4 ≤2 · Step 6 1 · Step 7 ≤7 (publish; up to 2 LINT rounds, each one Write and one publish; one ADVISORY round, one Edit and one publish). Typical 10–14, hard cap 25; recipe Writes (Step 5, ≤8) on top.
 
 ## Step 0 — Gate
 
