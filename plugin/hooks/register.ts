@@ -4,8 +4,8 @@
 import type { Register } from 'claude-code'
 import { onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onTurnComplete } from './lib/boundary'
-import { onCompact } from './lib/compact'
-import { newState, realDeps } from './lib/deps'
+import { onCompact, trackNative } from './lib/compact'
+import { newState, promptEntering, promptNotEntered, realDeps } from './lib/deps'
 import { countCall, limitText, onInterjection } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
@@ -23,7 +23,7 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
-    await onTurnStart(realDeps($, options, state), e.turnId)
+    await onTurnStart(realDeps($, options, state), e.turnId, e.text)
     return next(e)
   }).catch(($, e, next) => next(e))
 
@@ -37,8 +37,20 @@ export const register: Register = (on, options) => {
 
   // A user's prompt delivered into the running handoff turn lifts its limits text (MOD-SPEC §9.1).
   // One the user asked to wait its turn (`wait`, ctrl+x enter) is not delivered into it.
+  // A prompt entering an idle session (no `turnId`) is counted before `next`, which resolves only
+  // once its turn started: that turn.start then knows a prompt other than ours entered (CR-F17).
+  // Our own submits never reach this hook (the engine skips the calling plugin's hook).
   on('prompt.submit', async ($, e, next) => {
-    const r = await next(e)
+    const entering = e.turnId === undefined
+    if (entering) promptEntering(state)
+    let r
+    try {
+      r = await next(e)
+    } catch (err) {
+      if (entering) promptNotEntered(state)
+      throw err
+    }
+    if (entering && r.drop !== undefined) promptNotEntered(state)
     if (e.turnId !== undefined && e.wait !== true && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')) {
       const d = realDeps($, options, state)
       await onInterjection(d, await prepare(d), e.turnId)
@@ -78,7 +90,7 @@ export const register: Register = (on, options) => {
 
   on('session.compact', async ($, e, next) => {
     const d = realDeps($, options, state)
-    return onCompact(d, await prepare(d), e, x => next(x))
+    return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
   }).catch(($, e, next) => next(e))
 
   on('prompt.context', async ($, e, next) => {

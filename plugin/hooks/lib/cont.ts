@@ -1,5 +1,6 @@
 // Auto-continue, the hourly cap, halt mode and the thrash rule (MOD-SPEC §9, S-14).
 import type { Deps } from './deps'
+import { submitPending, submitSettled } from './deps'
 import type { HaltReason } from './handoff-turn'
 import { claimBy } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
@@ -167,13 +168,13 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
   stamps.push(now)
   await d.storeSet(key, stamps)
   await log(d, sid, 'continue', { result: 'submitted', continues_last_hour: stamps.length })
-  s.ourSubmitPending = true
+  submitPending(s, text)
   let submitted = true
   try {
     await d.submit(text)
   } catch {
     submitted = false
-    s.ourSubmitPending = false
+    submitSettled(s)
     await log(d, sid, 'continue', { result: 'skipped:submit-failed', continues_last_hour: stamps.length })
   }
   if (pend && resume !== undefined) {

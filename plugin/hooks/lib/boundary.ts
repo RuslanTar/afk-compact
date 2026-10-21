@@ -40,13 +40,17 @@ export type BoundaryOpts = {
 export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<void> {
   const s = d.state
   s.mainTurnRunning = false
+  // Prompts entering an idle session have all started their turns or were refused (a bound).
+  s.foreignPrompts = 0
+  // Before any await: a native compaction from here on makes the post-handoff one a second one.
+  const seq = s.nativeCompactSeq
   s.lastTurnAsksUser = s.askedThisTurn || endsWithQuestion(t.answer)
   if (t.reason !== 'answer') s.resumeAfter = false
   await undeliveredCheck(d, sid)
   const end = await endHandoffTurn(d, sid, t.reason)
   if (end.kind === 'done') return
   if (end.kind === 'compact') {
-    schedule(d, 500, { exemptHalt: true, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq: s.nativeCompactSeq } })
+    schedule(d, 500, { exemptHalt: true, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq } })
     return
   }
   const nudged = s.lastCycle
@@ -126,6 +130,7 @@ function startHandoffTimer(d: Deps, sid: string, h: HandoffTurn): void {
 export function cancelBoundary(d: Deps): void {
   d.state.timer?.cancel()
   d.state.timer = undefined
+  d.state.afterNative = undefined
 }
 
 async function resumePref(d: Deps, sid: string): Promise<ResumePref> {
@@ -133,6 +138,29 @@ async function resumePref(d: Deps, sid: string): Promise<ResumePref> {
   const p = await d.paths()
   if (p && (await d.exists(`${p.watch}/${sid}/classic-alive.json`))) return 'sessionstart'
   return 'prompt.submit'
+}
+
+/**
+ * CR-F19, §9.1 End: one compaction after the handoff turn. While a native main compaction runs
+ * it waits for that one's end and is then scheduled again (500 ms): `wait`. A native one that
+ * compacted since the turn ended was it (§3.1): `ran`. Synchronous, so a caller can check right
+ * before an await-free call of `d.compact`.
+ */
+function nativeCheck(d: Deps, opts: BoundaryOpts): 'wait' | 'ran' | undefined {
+  const ah = opts.afterHandoff
+  if (!ah) return undefined
+  if (d.state.nativeCompacting > 0) {
+    d.state.afterNative = () => schedule(d, 500, opts)
+    return 'wait'
+  }
+  return d.state.nativeCompactSeq !== ah.seq ? 'ran' : undefined
+}
+
+/** `nativeCheck` with its `skip why=compacted` row; true when the compaction is not run now. */
+async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<boolean> {
+  const c = nativeCheck(d, opts)
+  if (c === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: opts.afterHandoff?.ht ?? null })
+  return c !== undefined
 }
 
 /**
@@ -144,12 +172,10 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
   const s = d.state
   const ah = opts.afterHandoff
   if (s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
+  // No await before this check, so a native compaction's end cannot slip past unseen.
+  if (nativeCheck(d, opts) === 'wait') return
   const sid = await d.sessionId()
-  // §9.1 End: one compaction after the handoff turn; a native one that ran since was it (§3.1).
-  if (ah && s.nativeCompactSeq !== ah.seq) {
-    await log(d, sid, 'skip', { why: 'compacted', ht: ah.ht })
-    return
-  }
+  if (await stopForNative(d, sid, opts)) return
   const eff = await effective(d, sid)
   if (eff.disabled) return
   const now = await d.now()
@@ -167,12 +193,20 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     const measured = d.cfg.measured_block && cp ? cp.measured_block : null
     const { text, tags } = await mainText(d, nonce, false, prev, measured, ah?.path)
     const pref = await resumePref(d, sid)
+    // The checkpoint above can take seconds: a native compaction may have started or run since.
+    if (await stopForNative(d, sid, opts)) return
     s.selfNonces.add(nonce)
     await writeDispatch(d, {
       sid, nonce, agentId: null, trigger: 'plugin', channel: 'mod-self', resumePref: pref, midturn: false, tags, text,
       ...(ah ? { handoffHt: ah.ht } : {}),
     })
     const t0 = await d.now()
+    // Once more after the dispatch write, with no await between this check and the call.
+    const late = nativeCheck(d, opts)
+    if (late !== undefined) {
+      if (late === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: ah?.ht ?? null })
+      return
+    }
     let r
     try {
       r = await d.compact(text)

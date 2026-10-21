@@ -7,12 +7,13 @@
 // The limits are context text only (DP-5, Q-R-2): no tool call is ever denied here, and the
 // texts say what the model should do, never that the plugin stops anything (DP-14 (7)).
 import type { Deps } from './deps'
+import { submitPending, submitSettled } from './deps'
 import type { Effective } from './config'
 import type { Runtime } from './assemble'
 import { assembleIf, hasAsset } from './assemble'
 import { specValue } from './detect'
 import type { HandoffState } from './helper'
-import { handoffState, handoffTurnOpen } from './helper'
+import { handoffState, handoffTurnClose, handoffTurnOpen } from './helper'
 import { log } from './log'
 import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
@@ -134,7 +135,8 @@ export async function planHandoff(d: Deps, sid: string, reason: HaltReason, eff:
  * opens its record, then submits the `[submit]` text, framed. False, with a `handoff_skipped`
  * row, when the record cannot be opened or the submit fails. True, with nothing submitted, when
  * a user turn started while it awaited the helper (§9.1 step 3: that turn cancels the handoff
- * turn and logs `why=user-turn`; the normal rules apply at its end).
+ * turn and logs `why=user-turn`; the normal rules apply at its end); an ht opened by then is
+ * closed (`handoff-turn close`), as after a failed submit.
  */
 export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispatchTaken: (n: string) => Promise<boolean>): Promise<boolean> {
   const s = d.state
@@ -156,8 +158,12 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
     if (r === 'failed') break
     if (r === 'ok') opened = ht
   }
+  if (cancelled()) {
+    // A user turn started while the open ran: its record is closed, so `begin` cannot bind it.
+    if (opened !== undefined) await handoffTurnClose(d, sid, opened, 'cancelled')
+    return true
+  }
   if (opened === undefined) {
-    if (cancelled()) return true
     await skipped(d, sid, 'open-failed')
     return false
   }
@@ -165,15 +171,19 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   h.ht = opened
   const now = await d.now()
   await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
-  // No await between this check and the submit call: a user turn that started meanwhile wins.
-  if (cancelled()) return true
+  if (cancelled()) {
+    await handoffTurnClose(d, sid, opened, 'cancelled')
+    return true
+  }
+  // No await between the check above and the submit call: a user turn that started meanwhile wins.
   h.phase = 'submitted'
-  s.ourSubmitPending = true
+  submitPending(s, text)
   try {
     await d.submit(text)
   } catch {
-    s.ourSubmitPending = false
+    submitSettled(s)
     await skipped(d, sid, 'submit-failed', opened)
+    await handoffTurnClose(d, sid, opened, 'cancelled')
     return false
   }
   return true
@@ -186,6 +196,11 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
 export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string): Promise<void> {
   const s = d.state
   const h = s.handoffTurn
+  if (ours && s.orphanSubmit) {
+    // The handoff prompt a user turn cancelled (below) runs now: no checkpoint nudge in it.
+    s.orphanSubmit = false
+    s.nudgedThisTurn = true
+  }
   if (!h) return
   if (h.phase === 'submitted' && ours) {
     h.phase = 'running'
@@ -199,6 +214,13 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
   if (!ours) {
     s.handoffTurn = undefined
     await skipped(d, sid, 'user-turn', h.ht)
+    // CR-F17: a user prompt that entered beside our submit started first. Our prompt is still
+    // queued and runs after it as a plain turn (it is still ours: claimTurn kept it pending);
+    // its ht is closed so neither turn's `begin` binds it as a handoff turn's.
+    if (h.phase === 'submitted') {
+      s.orphanSubmit = s.ourSubmitPending
+      if (h.ht !== null) await handoffTurnClose(d, sid, h.ht, 'cancelled')
+    }
   }
 }
 
