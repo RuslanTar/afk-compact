@@ -156,6 +156,7 @@ sub run {
                              scope => $scope, agent => $agent, tokens => $tokens, cwd => $cwd, transcript => $tp,
                              trigger => $trigger, dispatch => $rec, seat_state => $seat, channel => $channel,
                              precomputed => $precomputed, verdict => $verdict, queue_lane => $lane, evidence => $evid);
+        copies::drop_stash("$sid_dir/pending/$id6.post.md", $save->{result});
         # Main-proven: sweep whatever the save outcome (MOD-SPEC §5.3 step 5); a refused
         # copy under an unsafe handoff_root does not stop evidence going to the
         # disposable root, which sweep checks on its own.

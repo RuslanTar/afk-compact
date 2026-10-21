@@ -40,8 +40,10 @@ sub run {
     for my $r (@$classic) {
         my $ev = $r->{ev} // '';
         if ($ev eq 'copy' && ($r->{result} // '') !~ /^failed/) {
-            $copied{ $r->{id6} } = 1 if defined $r->{id6};
-            $copied{ 'n:' . $r->{nonce} } = 1 if defined $r->{nonce};
+            # the value: the copy's path under <root> (a stash with the same body can go, F2-7)
+            my $rel = ($r->{result} // '') eq 'mismatch' ? '' : ($r->{rel_path} // '');
+            $copied{ $r->{id6} } = $rel if defined $r->{id6};
+            $copied{ 'n:' . $r->{nonce} } = $rel if defined $r->{nonce};
         }
         $logged{"$ev:" . ($r->{nonce} // $r->{uuid} // $r->{id6} // '')} = 1;
     }
@@ -56,13 +58,25 @@ sub run {
     # save would be refused again and log another failed copy row at each Stop; the
     # stashes wait for a later Stop with a safe root (the refusal row is once per session).
     my @pending = rc::root_ok('handoff_root') ? util::list_dir("$sid_dir/pending") : ();
+    # A stash whose summary a copy already holds (same normalized body) is dropped (F2-7).
+    my $drop_if_held = sub {
+        my ($f, $rel, $text) = @_;
+        return unless defined $rel && $rel ne '';
+        my ($csha) = copies::copy_sha(rc::root() . "/$rel");
+        copies::drop_stash("$sid_dir/pending/$f", 'exists')
+            if defined $csha && $csha eq sha::hex256(detect::scan($text)->{normalized});
+    };
     for my $f (@pending) {
         last if util::clock_ms() > $deadline;
         my ($id6, $kind, $nonce);
         if ($f =~ /^([0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md$/) { ($id6, $kind) = ($1, 'post') }
         elsif ($f =~ /^([0-9a-f]{8})\.mod\.md$/) { ($nonce, $kind) = ($1, 'mod'); $id6 = substr($1, 0, 6) }
         else { next }
-        next if $copied{$id6} || (defined $nonce && $copied{"n:$nonce"});
+        if (exists $copied{$id6} || (defined $nonce && exists $copied{"n:$nonce"})) {
+            my $text = util::read_file("$sid_dir/pending/$f");
+            $drop_if_held->($f, (exists $copied{$id6} ? $copied{$id6} : $copied{"n:$nonce"}), $text) if defined $text;
+            next;
+        }
         my $text = util::read_file("$sid_dir/pending/$f") // next;
         my %m;
         if ($kind eq 'post') {
@@ -70,7 +84,10 @@ sub run {
             my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
             %m = %$j if ref $j eq 'HASH';
             # a deferred unmarked summary: the after-step's nonce, if it ever saved, is copied under it
-            if (!defined $m{nonce} && defined $m{deferred} && $copied{"n:$m{deferred}"}) { next }
+            if (!defined $m{nonce} && defined $m{deferred} && exists $copied{"n:$m{deferred}"}) {
+                $drop_if_held->($f, $copied{"n:$m{deferred}"}, $text);
+                next;
+            }
         }
         my $s = detect::scan($text);
         my $mn = $nonce // $m{nonce} // $s->{nonce};
@@ -83,8 +100,7 @@ sub run {
         my $scope = $m{scope} // 'unknown';
         if ($p1 && dispatch::is_mod($p1)) { $scope = defined $p1->{agent_id} ? 'sub' : 'main' }
         my $agent = $m{agent} // ($p1 ? $p1->{agent_id} : undef);
-        my $exists = defined $mn && $copied{ 'n:' . $mn };
-        next if $exists;
+        if (defined $mn && exists $copied{"n:$mn"}) { $drop_if_held->($f, $copied{"n:$mn"}, $text); next }
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn,
                                 writer => ($kind eq 'mod' ? 'mod' : 'postcompact-fallback'),
                                 scope => $scope, agent => $agent, tokens => $m{tokens}, cwd => $m{cwd} // $a{cwd},
@@ -92,10 +108,11 @@ sub run {
                                 dispatch => $drec, channel => ($drec ? $drec->{channel} : 'none'),
                                 precomputed => $m{precomputed}, late => 1,
                                 verdict_ctx => { dispatch_nonce => ($drec ? $drec->{nonce} : undef) });
+        copies::drop_stash("$sid_dir/pending/$f", $save->{result}) if $save->{exit} == 0;
         next unless $save->{exit} == 0 && $save->{result} eq 'late';
         $n{late}++;
-        $copied{ $save->{id6} } = 1;
-        $copied{"n:$mn"} = 1 if defined $mn;
+        $copied{ $save->{id6} } = $save->{rel};
+        $copied{"n:$mn"} = $save->{rel} if defined $mn;
         rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
         if (!$rolled_id6{$id6} && !(defined $mn && $rolled_nonce{$mn})) {
             rollup::write(session_id => $sid, actor => ($scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed'),
@@ -126,7 +143,7 @@ sub run {
             $n{precompute_not_reused}++;
             next;
         }
-        next if $rolled_nonce{$nn} || $copied{"n:$nn"} || $logged{"compaction_unresolved:$nn"};
+        next if $rolled_nonce{$nn} || exists $copied{"n:$nn"} || $logged{"compaction_unresolved:$nn"};
         next if -e "$sid_dir/pending/$nn.mod.md";
         rc::emit('compaction_unresolved', [nonce => $nn, trigger => $d->{trigger}, channel => $d->{channel}]);
         $n{unresolved}++;

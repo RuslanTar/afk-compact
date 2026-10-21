@@ -48,6 +48,30 @@ sub copy_sha {
     return (sha::hex256($body), $fm);
 }
 
+# Is this path one of the plugin's own raw-summary stashes of this session
+# (<watch>/<sid>/pending/<id6>.post.md or <nonce>.mod.md)?
+sub own_stash {
+    my ($path) = @_;
+    my $sd = rc::sid_dir();
+    return 0 unless defined $path && defined $sd && -f $path && !-l $path;
+    return 0 unless util::basename($path) =~ /\A(?:[0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md\z|\A[0-9a-f]{8}\.mod\.md\z/;
+    my $real = util::real_path($path);
+    my $dir = util::real_path("$sd/pending");
+    return (defined $real && defined $dir && util::dirname($real) eq $dir) ? 1 : 0;
+}
+
+# drop_stash(path, result) -> 1 when removed. ROOT-RULINGS F2-7 (PRIV-03): once a copy holds
+# the summary (saved, unattributed, late, or EXISTS sha-match), the plugin's own transient
+# raw stash goes, so a HARD secret redacted in the copy does not stay beside it. Only our
+# stash files; an unsaved stash (refused, mismatch, deferred) stays for reconcile. The
+# content-free .post.json meta stays.
+sub drop_stash {
+    my ($path, $result) = @_;
+    return 0 unless defined $result && $result =~ /\A(?:saved|unattributed|late|exists)\z/;
+    return 0 unless own_stash($path);
+    return unlink($path) ? 1 : 0;
+}
+
 sub _seq {
     my ($dir, $sid8, $actor_tag) = @_;
     my $n = 0;
