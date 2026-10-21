@@ -1,0 +1,12 @@
+{
+  "session_id": "5e55a003-0c0f-4f1e-9a00-00000000a003",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a003-0c0f-4f1e-9a00-00000000a003.jsonl",
+  "cwd": "$TMP/example-repo",
+  "hook_event_name": "SessionStart",
+  "source": "fork",
+  "model": "claude-fixture-model",
+  "seconds_since_last_response": 30,
+  "context_tokens": 95000,
+  "prompt_cache_likely_expired": false,
+  "estimated_cache_write_usd": 0.0
+}

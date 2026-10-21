@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "id": "outside-git",
+  "dir": "plain-dir",
+  "git": false,
+  "note": "AT-M5-02 (d): repo = cwd basename, bucket general",
+  "files": {
+    "README.md": "# example-repo\n\nFixture repository.\n",
+    "lib/retry_worker.rb": "class RetryWorker\n  def perform(request_id)\n    :ok\n  end\nend\n"
+  }
+}

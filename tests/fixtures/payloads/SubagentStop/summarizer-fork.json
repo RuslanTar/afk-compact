@@ -1,0 +1,15 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "SubagentStop",
+  "permission_mode": "default",
+  "stop_hook_active": false,
+  "agent_id": "a0c0ffee0c0a1b2c3",
+  "agent_transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a0c0ffee0c0a1b2c3.jsonl",
+  "agent_type": "",
+  "last_assistant_message": "<summary>\nfixture summary text CANARY-TEXT-summary\n</summary>",
+  "background_tasks": [],
+  "session_crons": []
+}

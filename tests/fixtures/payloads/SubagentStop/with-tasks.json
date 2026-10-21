@@ -1,0 +1,26 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "SubagentStop",
+  "permission_mode": "default",
+  "effort": {
+    "level": "high"
+  },
+  "stop_hook_active": false,
+  "agent_id": "a9a00b3f363327444",
+  "agent_transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a9a00b3f363327444.jsonl",
+  "agent_type": "general-purpose",
+  "last_assistant_message": "Started a background test run.",
+  "background_tasks": [
+    {
+      "id": "b-007",
+      "type": "shell",
+      "status": "running",
+      "description": "fixture shell task 7",
+      "command": "bin/test spec/workers --seed 7"
+    }
+  ],
+  "session_crons": []
+}

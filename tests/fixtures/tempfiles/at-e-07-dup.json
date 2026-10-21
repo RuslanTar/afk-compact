@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "AT-E-07",
+  "files": [
+    {
+      "path": "$TMP/scratch/shared-result.txt",
+      "bytes": 2048,
+      "fill": "fixture shared result\n"
+    }
+  ],
+  "paths_log": [
+    "$TMP/scratch/shared-result.txt"
+  ],
+  "expect": "swept in two compactions in two buckets: one copy; the second row dup"
+}

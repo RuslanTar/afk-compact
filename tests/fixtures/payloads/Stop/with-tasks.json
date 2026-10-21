@@ -1,0 +1,58 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "Stop",
+  "permission_mode": "default",
+  "effort": {
+    "level": "high"
+  },
+  "stop_hook_active": false,
+  "last_assistant_message": "Done: the flaky spec passes five runs in a row.",
+  "background_tasks": [
+    {
+      "id": "b-001",
+      "type": "shell",
+      "status": "running",
+      "description": "fixture shell task 1",
+      "command": "bin/test spec/workers --seed 1"
+    },
+    {
+      "id": "a-002",
+      "type": "subagent",
+      "status": "running",
+      "description": "fixture subagent task 2",
+      "agent_type": "general-purpose"
+    },
+    {
+      "id": "w-003",
+      "type": "workflow",
+      "status": "running",
+      "description": "fixture workflow task 3",
+      "name": "fixture-workflow-3"
+    },
+    {
+      "id": "t-004",
+      "type": "teammate",
+      "status": "running",
+      "description": "fixture teammate task 4"
+    },
+    {
+      "id": "m-005",
+      "type": "monitor",
+      "status": "running",
+      "description": "fixture monitor task 5",
+      "server": "fixture-server",
+      "tool": "watch_logs"
+    }
+  ],
+  "session_crons": [
+    {
+      "id": "c-001",
+      "schedule": "0 9 * * 1-5",
+      "recurring": true,
+      "prompt": "fixture: check the nightly import"
+    }
+  ]
+}

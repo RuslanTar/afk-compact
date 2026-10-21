@@ -1,0 +1,14 @@
+{
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "transcript_path": "$TMP/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+  "cwd": "$TMP/example-repo",
+  "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+  "hook_event_name": "PermissionDenied",
+  "permission_mode": "auto",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "$TMP/example-repo/.env"
+  },
+  "tool_use_id": "toolu_fixture_read_env_rule",
+  "reason": "Denied by permission rule Read(./.env) in project settings."
+}

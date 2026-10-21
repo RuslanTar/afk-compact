@@ -1,0 +1,33 @@
+{
+  "v": 1,
+  "id": "AT-E-02",
+  "files": [
+    {
+      "path": "$TMP/scratch/small.txt",
+      "bytes": 1024,
+      "fill": "fixture small file\n"
+    },
+    {
+      "path": "$TMP/scratch/big-12mb.bin",
+      "bytes": 12582912,
+      "fill": "fixture 12 MiB filler line\n"
+    },
+    {
+      "path": "$TMP/scratch/big-30mb-a.bin",
+      "bytes": 31457280,
+      "fill": "fixture 30 MiB filler a\n"
+    },
+    {
+      "path": "$TMP/scratch/big-30mb-b.bin",
+      "bytes": 31457280,
+      "fill": "fixture 30 MiB filler b\n"
+    }
+  ],
+  "paths_log": [
+    "$TMP/scratch/small.txt",
+    "$TMP/scratch/big-12mb.bin",
+    "$TMP/scratch/big-30mb-a.bin",
+    "$TMP/scratch/big-30mb-b.bin"
+  ],
+  "expect": "1 KB copied; 12 MB ref-only; 50 MB per-compaction cap respected; rows carry bytes, sha256, mtime"
+}

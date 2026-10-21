@@ -227,7 +227,9 @@ BUILTIN_RULES = [
     ("stripe-key", "HARD", r"\b[sr]k_live_[0-9A-Za-z]{24,}"),
     ("gitlab-token", "HARD", r"\bglpat-[0-9A-Za-z_-]{20,}"),
     # WARN: key=value pairs, prefix-less cloud keys, high-entropy runs, cookies
-    ("kv-secret", "WARN", r"(?i)(?:pass|secret|token|key)\s*[=:]\s*\S{6,}"),
+    # MOD §10 writes (pass|secret|token|key)\s*[=:]\s*\S{6,}; taken literally it misses its own
+    # AT-E-04 password example, so the provisional set allows the common suffixes.
+    ("kv-secret", "WARN", r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|key)\s*[=:]\s*\S{6,}"),
     ("aws-secret-prefixless", "WARN",
      r"(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+]*[a-z])(?=[A-Za-z0-9/+]*[A-Z])(?=[A-Za-z0-9/+]*[0-9])"
      r"[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=])"),
@@ -238,7 +240,7 @@ BUILTIN_DENY = [r"^\.env(?:\..+)?$", r"^id_(?:rsa|dsa|ecdsa|ed25519)$", r"\.pem$
                 r"^\.netrc$", r"^\.npmrc$", r"^\.claude\.json$", r"^\.(?:bash|zsh|sh)_history$",
                 r"\.har$", r"\.sqlite3?$"]
 DENY_EXCEPT = r"^\.env\.(?:example|sample|template|dist)$"
-ENTROPY_RUN = re.compile(r"[A-Za-z0-9+/=_-]{32,}")
+ENTROPY_RUN = re.compile(r"[A-Za-z0-9+/]{32,}={0,2}")
 
 
 def entropy(s):
