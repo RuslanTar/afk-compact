@@ -51,6 +51,9 @@ sub run {
     my $need = eval { skills::spec::need(qw(frontmatter_keys_handoff frontmatter_keys_export time_re lint_ids carry.tag_re private_path_classes)); 1 };
     _refuse($ctx, $row, ($@ =~ s/\s+\z//r)) unless $need;
     my $ht = (defined $s->{handoff_ht} && skills::core::ht_valid($s->{handoff_ht})) ? $s->{handoff_ht} : undef;
+    # DP-16: a publish inside a plugin handoff turn names its ht on every handoff_publish row,
+    # so the watcher's A-18 matches the row to the turn exactly, not by time.
+    $row->{ht} = $ht if $ht;
     my $sid_dir = skills::core::sid_dir();
     if ($ht && defined $sid_dir) {
         my $done = skills::core::ht_record($sid_dir, $ht) && handoff_turn::published_of($sid_dir, $ht);
@@ -222,7 +225,6 @@ sub run {
     }
     $row->{result} = 'wrote';
     $row->{bucket_source} = $s->{bucket_source};
-    $row->{handoff_ht} = $ht if $ht;
     $ctx->log('handoff_publish', $row);
     skills::cli::say("Wrote handoff to: $path");
 

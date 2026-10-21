@@ -198,7 +198,7 @@
       "ev": "handoff_publish",
       "fields": {
        "result": "wrote",
-       "handoff_ht": "a1b2c3d4"
+       "ht": "a1b2c3d4"
       }
      }
     ]
@@ -282,7 +282,8 @@
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "handoff_publish",
       "fields": {
-       "result": "REFUSED:handoff-exists"
+       "result": "REFUSED:handoff-exists",
+       "ht": "a1b2c3d4"
       }
      }
     ]
