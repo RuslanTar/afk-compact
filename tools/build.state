@@ -8,6 +8,8 @@
     "plugin/README.md",
     "plugin/assets/checkpoint-nudge.txt",
     "plugin/assets/handoff-instructions.txt",
+    "plugin/assets/handoff-spec.json",
+    "plugin/assets/handoff-spec.md",
     "plugin/assets/resume-context.txt",
     "plugin/assets/subagent-instructions.txt",
     "plugin/bin/compactinue-store",
@@ -17,6 +19,8 @@
     "plugin/hooks/lib/spec.gen.ts",
     "plugin/skills/handoff/SKILL.md",
     "plugin/skills/handoff/references/handoff-template.md",
-    "plugin/skills/resume/SKILL.md"
+    "plugin/skills/resume/SKILL.md",
+    "plugin/skills/resume/references/self-heal.md",
+    "plugin/skills/status/SKILL.md"
   ]
 }

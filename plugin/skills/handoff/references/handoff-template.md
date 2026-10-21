@@ -211,7 +211,7 @@ Gated items read `ask user: <action> (needs fresh approval; user-run: ! <cmd>)`,
 
 ## 6. Session id and lock
 
-- **Identity** = full `session_id` + actor, from the plugin's per-process session record, cross-checked against the id the skill passes (mismatch → degrade line; none → random token, never a shared name). Compaction and `--resume` keep it; `/clear`, fork and background copies get a new one, linked by `previous_session_id` and `lineage_reason`. `transcript_path` locates, never keys.
+- **Identity** = full `session_id` + actor, from the plugin's per-process session record, cross-checked against the id the skill passes (mismatch → the line `identity: degraded (<reason>)` under Ownership; none → random token, never a shared name). Compaction and `--resume` keep it; `/clear`, fork and background copies get a new one, linked by `previous_session_id` and `lineage_reason`. `transcript_path` locates, never keys.
 - **Name** `YYYY-MM-DD_HH-MM-SS_<sid8>_<slug>.md`, local time; readers order by frontmatter `date`, never by name or mtime; `-2` on a clash; `-a<agent8>` only with an agent id known to code. Only the main session writes (§8).
 - **Lock.** Publishing is an exclusive create with no lock; a published file is never rewritten. The one lock guards the helper's read-modify-write of `.sessions/<sid>.json` (bucket, lane, worktree): owner = sid + actor + pid + process start time + host; stale only when that pid is gone or its start time differs (then taken over and logged); a live lock is never broken.
 - **Ownership** is checked before the first write to anything shared (foreign commits, a newer foreign handoff, a lane held elsewhere, another live session on the checkout): read-only there, recorded under Ownership. Never edit or delete another session's files.
@@ -219,7 +219,7 @@ Gated items read `ask user: <action> (needs fresh approval; user-run: ! <cmd>)`,
 ## 7. Lint (helper, at publish; it flags and never edits)
 
 - **Blocking** `LINT`, nothing published: headings missing, renamed or out of order; frontmatter, marker or sentinel in the draft; Resume here over 5 lines; Step 1 differs from Next steps item 1; a none-section empty without its none-form; an ephemeral path with no durable copy and not on `Volatile:`; a Live state row without an as-of; a `checked` or `verified` time the helper did not print in this run, outside lines carried byte-identical from `previous_handoff`; an id range; an `UPDATE` or addendum heading; a recipe with a placeholder, a script not in the manifest, or an agent spawn without model and effort; a HARD secret hit in the draft or recipes.
-- **Advisory** `ADVISORY`, published: over 20 KB; a section over its cap; a code block over 5 lines; log-, warning- or stack-shaped lines; 4 or more consecutive hash lines; over 15 changes or 3 must-read paths; a WARN secret hit; 30% or more of non-ledger lines shared with `previous_handoff` (lines starting `U-`, `D-`, `X-`, `Q-` or `Superseded:` excluded).
+- **Advisory** `ADVISORY`, published: over 20 KB; a section over its cap; a code block over 5 lines; log-, warning- or stack-shaped lines; 4 or more consecutive hash lines; over 15 changes or 3 must-read paths; a WARN secret hit; 30% or more of non-ledger lines shared with `previous_handoff` (lines starting `U-`, `D-`, `X-`, `Q-` or `Superseded:`, headings, none-forms and helper-pasted Evidence lines excluded).
 - Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kept at <path>` · `REFUSED: <other reason>`.
 
 ## 8. Subagent form (returned as text, never written)

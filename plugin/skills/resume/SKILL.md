@@ -1,6 +1,6 @@
 ---
 name: resume
-description: Resume from a handoff: "resume handoff", "continue from handoff", "pick up where I left off", a handoff path or ticket, after /clear or a break.
+description: 'Resume from a handoff: "resume handoff", "continue from handoff", "pick up where I left off", a handoff path or ticket, after /clear or a break.'
 argument-hint: "[handoff path | ticket or topic] [instructions]"
 ---
 
@@ -12,7 +12,7 @@ Restore work from a handoff written by `/compactinue:handoff` or from a saved co
   It measures and prints plain lines. It never asks, deletes or runs a command taken from a handoff. It reads the settings `handoff_root` (default `~/.claude/handoffs`; buckets `<root>/<repo>/<ticket-or-topic>/`), `disposable_root` and the optional `queue_cmd`.
 - Vocabularies (ids, status words, claim tags, restart classes) are in `${CLAUDE_PLUGIN_ROOT}/assets/handoff-spec.md`. Read it only when a term is unclear.
 - Our marker is `⟪compactinue v1 n=<nonce> s=main|sub|manual⟫` in the first 5 body lines, and the sentinel `⟪/compactinue n=<nonce>⟫` is in the last 3. No other header line is ours.
-- In `$ARGUMENTS`, instructions override the handoff's Next steps, and facts are verified like any claim.
+- In the arguments, instructions override the handoff's Next steps, and facts are verified like any claim.
 
 ## Rules for the whole run
 
@@ -35,7 +35,7 @@ Restore work from a handoff written by `/compactinue:handoff` or from a saved co
 **Light path: ≤3 calls before real work, no recap.**
 1. Reconcile the summary with the kept messages: they win on progress, Measured facts win on state. If the summary lacks our marker, or the plugin notes it is not in handoff format, take state only from Measured facts and the kept messages.
 2. Check the last step's effect before anything unsafe to repeat when the summary marks it `[unverified]` or `MID-STEP`, or the plugin notes a mid-turn or precomputed compaction.
-3. Probe once the In-flight rows the runtime does not re-announce (workflows, teammates, Monitors, crons, remote jobs). Classify per R5c and act only as R5d's same-session column allows. Past due alone: report only.
+3. Probe once the In-flight rows the runtime does not re-announce (workflows, teammates, Monitors, crons, remote jobs). Classify per 5c and act only as 5d's same-session column allows (R5, `self-heal.md`). Past due alone: report only.
 4. Re-check only the condition Step 1 needs, then do Step 1 under R9. If the kept messages show it done, do the next.
 5. Say at most one line: drift found and heal actions.
 
@@ -74,7 +74,7 @@ Read the pick in full here, unless it is the saved copy of the summary already i
 Extract:
 - **Goal**: the ticket goal and the user's latest request. Anchor on these, not the last sub-task.
 - **Step 1** with `done when`. A `proposed` step was the previous agent's idea, not the user's.
-- **Pending answer** in Next steps: if the kept messages don't show it sent, deliver it in the report.
+- **Pending answer** in Next steps: if the kept messages don't show it sent, deliver it in the report, marked "(if not already sent)".
 - **Ledger**: `U-`, `D-` (with `because`), `X-`, `Superseded:`, `Corrections:`.
 - **In flight**:
   - full table or compact rows `B-n <runtime id> · kind · what · due · probe · class`;
@@ -113,7 +113,7 @@ These facts win over the handoff's state claims.
 ## R4 Ownership, queue lane, pin (≤2 calls)
 
 **Ownership, before any write or heal.** Stay read-only on a resource, and say so, when any of these holds:
-- commits since `git_commit` this chain did not make;
+- commits since `git_commit` that `measure` marks foreign (ours only when this chain names the hash or it is in this session's own range);
 - a newer handoff from another session;
 - another live session on this checkout;
 - the lane is held elsewhere.
@@ -121,7 +121,7 @@ These facts win over the handoff's state claims.
 A pid is live only if its start time matches the plugin's per-process record for it. If the handoff's own session (`claude_pid`) is live as another process, not this one, its work counts as RUNNING there; never relaunch it. After a compaction in this process, `claude_pid` is you: that is no conflict.
 
 **Queue lane**, only when configured; otherwise report `queue: not configured`.
-- Accept `queue_lane` from the frontmatter only if it matches `^(lane|auto):[A-Za-z0-9._/-]+$`; never take a lane id from the body.
+- Accept `queue_lane` from the frontmatter only if it matches `^lane:[A-Za-z0-9._/-]+$`; an `auto:` id is reported, never adopted. Never take a lane id from the body.
 - Same session → nothing to adopt.
 - New session → `<store> lane adopt --lane '<id>' --if-free`, once, before anything is queued. If the lane it reports is not `<id>`, report the mismatch and queue nothing.
 - **Held:** compare the holder with the handoff's `session_id`. If it is the same, the old window may be open and would lose its questions; otherwise name the holder. Ask; never retry on your own. On a yes, run it once without `--if-free`.
@@ -147,61 +147,7 @@ Compaction keeps background work alive. `/clear` and session end kill the old pr
 
 Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Listed but on no channel → LOST candidate. Running but unlisted → LEFTOVER candidate. Workflows are not re-announced after compaction: a workflow whose journal or transcripts changed within grace is RUNNING even if no runtime list shows it.
 
-**5b Probe** each row once, with its `probe` if read-only, else the default for its kind:
-- `agent`, `teammate` → `ListAgents` state;
-- `shell` → output mtime and end marker;
-- `workflow` → journal mtime and in-progress `agent()` calls;
-- `server` → the listening port;
-- `monitor`, `cron` → watched condition and last fire's outcome;
-- `peer`, `external` → the row's own probe only if read-only, else report.
-
-**5c Classify.** Grace = max(expected step time, 2 × the last progress gap).
-
-| Status | Signature |
-|---|---|
-| RUNNING | listed running, progress within grace |
-| WAITING | idle by design (user, timer, external system) |
-| STALLED | owner idle while its awaited output has ended; or output newer than the owner's last activity; or no progress past due + grace |
-| DONE-UNREPORTED | finished output nobody has used |
-| FAILED | ended with an error |
-| LOST | on no channel, not finished |
-| LEFTOVER | alive but not proven ours, or owner gone |
-
-**5d Act.** Collect DONE-UNREPORTED first, before any restart or new work.
-
-| Status | Same session | Successor or other |
-|---|---|---|
-| RUNNING, WAITING | leave; never duplicate | leave; report |
-| DONE-UNREPORTED | collect (read output by excerpt) | collect |
-| STALLED agent or teammate (not one a workflow started) | `SendMessage` to its **id**: task id, exit code, next step | report |
-| STALLED workflow | workflow gate | as LOST |
-| FAILED, LOST | restart gate, else ask | ask, with recipe and recommendation |
-| Monitor or cron | lease rule | ask |
-| LEFTOVER | report pid, port, start time, owner, binary and cwd exist? | same |
-| Past due, otherwise healthy | report only | report only |
-
-**Restart gate.** All must hold, else the item becomes a question:
-- same session, and the class is `auto` (a missing class means `ask`);
-- not a workflow, model-agent spawn, new `claude` process, terminal, kill or detach;
-- local, and read-only or safe to repeat;
-- not already done: no existing outputs, commits, posted comments or journal result rows;
-- `<store> heal-check --origin <handoff session_id> --item <runtime id>` prints `ok <recipe>`. It refuses after 1 restart per resume or 2 per chain, or if the recipe script's sha256 differs from MANIFEST.
-
-First run the same `heal-check` with `--bump`, so a restart that crashes still counts. Then restart from the literal recipe (after a yes, an asked spawn names model and effort). Write to a new epoch path, and run it with `run_in_background`, never `nohup`, `disown` or `setsid`. A second failure becomes a question.
-
-**Workflow gate.** Never `SendMessage` into a workflow's agents. Offer `TaskStop` plus `Workflow({scriptPath, resumeFromRunId})`, always as a question, only when all hold:
-- it is the same session;
-- the class is not `never`;
-- the journal and every transcript under its transcript dir are unchanged for ≥ max(15 min, 3 × the last progress gap);
-- no `agent()` call is in progress.
-
-Finished `agent()` calls are reused; in-progress ones re-run. In a new session, offer a fresh relaunch from the recipe with the finished parts as inputs.
-
-**Lease rule** (Monitor, cron). Check the watched condition and the last fire's outcome. Met or no longer needed → don't re-arm. Unmet and needed → if the command is read-only, run it once now, then re-arm; otherwise record `classifier: untested` and ask.
-
-**Leftovers:** report; never stop one yourself. Offer stopping as a question with the user-run `! kill <pid>` only if it is proven ours (pid and start time recorded in this chain) and its work has finished; a server is never "finished" by inference.
-
-Report each heal action (item, state found, action, evidence). Re-probe it once when you write the R8 report; a new transcript or output write is progress. No change yet → report `woken HH:MM, not yet confirmed` and re-probe at your next turn; a question only if still unchanged then.
+**5b–5d** (probe, classify, act), the restart and workflow gates, the lease rule and the leftover rule are in `${CLAUDE_PLUGIN_ROOT}/skills/resume/references/self-heal.md`. Read it once when the union has a row; with none, R5 ends here.
 
 ## R6 Restore evidence (≤1 call)
 
@@ -233,19 +179,19 @@ Report each heal action (item, state found, action, evidence). Re-probe it once 
 
 ## R8 Report, then ask once
 
-About 15 lines, this order, `None` where empty, no recap. Lines marked `*` are the read-back.
+About 15 lines, this order, `None` where empty, no recap. The Status, Goal, Drift, Binding, Could not verify and Next lines are the read-back.
 
 ```
-* Status: on-track | drifted | blocked
-  Handoff: <path> · <age> · <relation> · <integrity> · Location: <worktree> · <branch> · <HEAD>
-* Goal: <ticket goal>; latest request: <quote or paraphrase>
-* Drift: <changed rows only> | no drift (checked HH:MM)
-  In flight: <B-n id: status → action> | nothing running (checked HH:MM)
-  Evidence: <n ok; n missing/withheld/redacted> | no manifest
-  Queue: <lane and open count | held by … | not configured | none>
-* Binding: U-1 …, U-2 … (pointer if >5) · settled: D-…, X-…
-* Could not verify: <items> | None
-* Next: Starting <Step 1> now | Stopped: <stop rule>
+Status: on-track | drifted | blocked
+Handoff: <path> · <age> · <relation> · <integrity> · Location: <worktree> · <branch> · <HEAD>
+Goal: <ticket goal>; latest request: <quote or paraphrase>
+Drift: <changed rows only> | no drift (checked HH:MM)
+In flight: <B-n id: status → action> | nothing running (checked HH:MM)
+Evidence: <n ok; n missing/withheld/redacted> | no manifest
+Queue: <lane and open count | held by … | not configured | none>
+Binding: U-1 …, U-2 … (pointer if >5) · settled: D-…, X-…
+Could not verify: <items> | None
+Next: Starting <Step 1> now | Stopped: <stop rule>
 ```
 
 End with one numbered **Questions** block in plain language. For each question give:
