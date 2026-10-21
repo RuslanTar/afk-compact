@@ -1,0 +1,12 @@
+{
+  "name": "{{marketplace}}",
+  "owner": { "name": "{{marketplace}}" },
+  "plugins": [
+    {
+      "name": "{{plugin}}",
+      "source": "./plugin",
+      "description": "{{description}}",
+      "version": "{{version}}"
+    }
+  ]
+}

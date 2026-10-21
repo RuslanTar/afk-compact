@@ -1,0 +1,137 @@
+{
+  "name": "{{plugin}}",
+  "version": "{{version}}",
+  "description": "{{description}}",
+  "userConfig": {
+    "handoff_root": {
+      "type": "directory",
+      "title": "Handoff root",
+      "description": "Folder for handoffs and saved summary copies; buckets are <root>/<repo>/<ticket-or-topic>/.",
+      "default": "~/.claude/handoffs"
+    },
+    "log_dir": {
+      "type": "directory",
+      "title": "Log folder",
+      "description": "Watcher logs and per-compaction records. Empty = <handoff root>/.watch.",
+      "default": ""
+    },
+    "disposable_root": {
+      "type": "directory",
+      "title": "Disposable evidence root",
+      "description": "Automatic evidence copies, in dated folders.",
+      "default": "~/.claude/trash-staging"
+    },
+    "disposable_keep_days": {
+      "type": "number",
+      "title": "Disposable keep days",
+      "description": "Retention note only; the plugin deletes nothing. 0 = kept until removed.",
+      "default": 0
+    },
+    "evidence_quota_mb": {
+      "type": "number",
+      "title": "Evidence quota (MB)",
+      "description": "Per-bucket evidence size that triggers a warning; warn only.",
+      "default": 500
+    },
+    "queue_cmd": {
+      "type": "file",
+      "title": "Queue command",
+      "description": "Executable answering 'list --json --session <sid>' and 'adopt --lane <id> [--if-free]'. Empty = off.",
+      "default": ""
+    },
+    "triggers": {
+      "type": "boolean",
+      "title": "Plugin compactions",
+      "description": "false = no plugin compactions, no nudge, no auto-continue; shaping, saving and verification still run.",
+      "default": true
+    },
+    "compact_target_tokens": {
+      "type": "number",
+      "title": "Compaction target (tokens)",
+      "description": "Plugin compaction at a clean turn end at or above this.",
+      "default": 400000,
+      "min": 100000
+    },
+    "compact_soft_max_tokens": {
+      "type": "number",
+      "title": "Soft maximum (tokens)",
+      "description": "Mid-turn nudge at or above this.",
+      "default": 600000,
+      "min": 150000
+    },
+    "native_window_tokens": {
+      "type": "number",
+      "title": "Native window (tokens)",
+      "description": "Your native auto-compact window, for the clamp. 0 = the session's context window.",
+      "default": 0
+    },
+    "boundary_delay_ms": {
+      "type": "number",
+      "title": "Boundary delay (ms)",
+      "description": "Delay before a turn-end compaction (500 ms after a nudge).",
+      "default": 2000
+    },
+    "cooldown_ms": {
+      "type": "number",
+      "title": "Cooldown (ms)",
+      "description": "Minimum gap between plugin compactions.",
+      "default": 30000
+    },
+    "max_auto_continues_per_hour": {
+      "type": "number",
+      "title": "Auto-continues per hour",
+      "description": "Cap on automatic continues in a rolling hour; 0 disables auto-continue.",
+      "default": 3,
+      "min": 0,
+      "max": 10
+    },
+    "measured_block": {
+      "type": "boolean",
+      "title": "Measured facts to the summarizer",
+      "description": "Send the measured facts block to the summarizer (plugin path only).",
+      "default": false
+    },
+    "auto_evidence": {
+      "type": "boolean",
+      "title": "Automatic evidence copies",
+      "description": "Copy the temp files a session cited into the disposable root after a compaction.",
+      "default": true
+    },
+    "warn_ui": {
+      "type": "boolean",
+      "title": "Warnings in the interface",
+      "description": "Toasts and status line for escalations.",
+      "default": true
+    },
+    "watcher": {
+      "type": "string",
+      "title": "Watcher",
+      "description": "shadow = log every compaction (content-free); off = no watcher rows.",
+      "default": "shadow"
+    },
+    "stall_min": {
+      "type": "number",
+      "title": "Stall threshold (minutes)",
+      "description": "Minutes without progress before the watcher calls work stalled.",
+      "default": 60
+    },
+    "cache_ttl_s": {
+      "type": "number",
+      "title": "Cache TTL (seconds)",
+      "description": "Warm/cold prompt-cache proxy used by the watcher.",
+      "default": 300
+    },
+    "otel_log_path": {
+      "type": "file",
+      "title": "OpenTelemetry log path",
+      "description": "Read only if you already write it. Empty = unused.",
+      "default": ""
+    },
+    "deny_class_patterns": {
+      "type": "string",
+      "title": "Permission-denial classes",
+      "description": "Patterns that class permission denials. Empty = the shipped classes.",
+      "default": ""
+    }
+  }
+}
