@@ -1,0 +1,349 @@
+{
+ "id": "F2-5-core-rows",
+ "note": "ROOT-RULINGS F2-5 (SAFE-09, PRIV-09), WATCHER-SPEC W10/W11 and §6.3: core is the one writer of stop_failure and permission_denied (the watcher, on by default, writes no second row); actor is main, or unknown for a payload from a subagent (agent_id); caused_by is plugin only within the first 10 main-thread tool calls after the plugin-injected block (here the compaction's), then session",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "3 calls after the compaction",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$WATCH/$SID/compactions.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-21T14:04:00.000+03:00",
+       "ev": "compaction",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "classic",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": null,
+       "turn_seq": null,
+       "session_id": "$SID",
+       "nonce": "1a2b3c4d"
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "type": "assistant",
+       "uuid": "a-a",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:04:10.000+03:00",
+       "isSidechain": false,
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_a_0",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_a_1",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_a_2",
+          "name": "Read",
+          "input": {}
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 30"
+    },
+    "tool_use_id": "toolu_x",
+    "reason": "Denied by a permissions.deny rule"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 1,
+      "fields": {
+       "actor": "main",
+       "tool_name": "Bash",
+       "reason_class": "rule",
+       "guard_class": "sleep-poll",
+       "turn_kind": "post-compaction",
+       "caused_by": "plugin"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "15 calls after the compaction",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "type": "assistant",
+       "uuid": "a-b",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:04:30.000+03:00",
+       "isSidechain": false,
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_b_0",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_1",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_2",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_3",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_4",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_5",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_6",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_7",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_8",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_9",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_10",
+          "name": "Read",
+          "input": {}
+         },
+         {
+          "type": "tool_use",
+          "id": "toolu_b_11",
+          "name": "Read",
+          "input": {}
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 30"
+    },
+    "tool_use_id": "toolu_x",
+    "reason": "Denied by a permissions.deny rule"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 2
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 1,
+      "fields": {
+       "turn_kind": "post-compaction",
+       "caused_by": "session"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a subagent's denial",
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 30"
+    },
+    "tool_use_id": "toolu_x",
+    "reason": "Denied by a permissions.deny rule",
+    "agent_id": "a9a00b3f363327444"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 3
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "count": 1,
+      "fields": {
+       "actor": "unknown",
+       "caused_by": "session"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "StopFailure, main",
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "StopFailure",
+    "error": "rate_limit"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stop_failure",
+      "count": 1,
+      "fields": {
+       "actor": "main",
+       "error_class": "rate_limit"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stop_failure",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "StopFailure from a subagent",
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "StopFailure",
+    "error": "server_error",
+    "agent_id": "a9a00b3f363327444"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stop_failure",
+      "count": 2
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stop_failure",
+      "count": 1,
+      "fields": {
+       "actor": "unknown",
+       "error_class": "server_error"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -10,6 +10,10 @@ package cmd_hook;
 
 our %EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart SessionEnd Stop SubagentStop StopFailure PermissionDenied);
 our %KEYSET_EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart);
+# One writer per row kind (ROOT-RULINGS F2-5): core writes stop_failure and
+# permission_denied with their computed classes; the watcher reads those rows from the
+# stream and is not called for these events, so it cannot write a second row.
+our %CORE_ROWS_ONLY = map { $_ => 1 } qw(StopFailure PermissionDenied);
 
 sub _error_class {
     my ($e) = @_;
@@ -90,7 +94,7 @@ sub run {
         $left = $WATCH_HARD_S if $left > $WATCH_HARD_S;
         $left = 0.2 if $left < 0.2;
         _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $left) });
-    } else {
+    } elsif (!$CORE_ROWS_ONLY{$event}) {
         _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra)) });
     }
     if (defined $out && length $out) {
@@ -257,9 +261,12 @@ sub on_StopFailure {
     my ($p) = @_;
     my $e = $p->{error};
     my $cls = (defined $e && !ref $e && $e =~ /^[a-z_]{1,40}$/) ? $e : 'other';
-    rc::emit('stop_failure', [error_class => $cls]);
+    rc::emit('stop_failure', [error_class => $cls], actor => _payload_actor($p));
     return ('', {});
 }
+
+# A payload from inside a subagent carries agent_id: the row's actor is then unknown.
+sub _payload_actor { my ($p) = @_; return defined $p->{agent_id} ? 'unknown' : 'main' }
 
 # ------------------------------------------------------------------ PermissionDenied (MOD-SPEC §1.3, OD-20)
 # reason_class and guard_class are fixed classes computed in memory; neither the
@@ -291,29 +298,70 @@ sub _guard_rules {
     return @r ? @r : @GUARD_DEFAULT;
 }
 
+# _turn_kind() -> (kind, inject_epoch, heal_epoch): the turn kind of MOD-SPEC §1.3 from the
+# newest rows after the last Stop, the time of the plugin-injected block behind it, and
+# the time of a heal action after the last Stop (WATCHER-SPEC §6.3 caused_by).
 sub _turn_kind {
-    my $d = rc::sid_dir() // return 'other';
+    my $d = rc::sid_dir() // return ('other', undef, undef);
     my $ls = util::read_file("$d/last-stop");
     my $last = defined $ls ? util::parse_iso(($ls =~ /(\S+)/)[0] // '') : undef;
     $last //= 0;
-    my $newer = sub {
+    my $newest = sub {
         my ($rows, $re) = @_;
         for my $r (reverse @$rows) {
             next unless ($r->{ev} // '') =~ $re;
             my $e = util::parse_iso($r->{ts} // '') // next;
-            return $e > $last ? 1 : 0;
+            return $e > $last ? $e : undef;
         }
-        return 0;
+        return undef;
     };
     # Only the newest row of each kind matters, and PermissionDenied has 2 s: read the
     # stream tails (256 KB) and decode only the rows asked for.
+    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => ['resume_receipt', 'heal'], tail => 256 * 1024);
+    my $heal = $newest->($classic, qr/^heal$/);
     my $rolls = rollup::stream_rows("$d/compactions.jsonl", tail => 256 * 1024);
-    return 'post-compaction' if grep { ($_->{actor} // '') eq 'main' && (util::parse_iso($_->{ts} // '') // 0) > $last } @$rolls;
-    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => ['resume_receipt'], tail => 256 * 1024);
-    return 'resume' if $newer->($classic, qr/^resume_receipt$/);
+    my ($post) = sort { $b <=> $a } grep { $_ > $last }
+                 map { util::parse_iso($_->{ts} // '') // 0 } grep { ($_->{actor} // '') eq 'main' } @$rolls;
+    return ('post-compaction', $post, $heal) if defined $post;
+    my $res = $newest->($classic, qr/^resume_receipt$/);
+    return ('resume', $res, $heal) if defined $res;
     my $mod = rollup::stream_rows(rc::stream_path('mod'), evs => ['nudge'], tail => 256 * 1024);
-    return 'nudge' if $newer->($mod, qr/^nudge$/);
-    return 'other';
+    my $nudge = $newest->($mod, qr/^nudge$/);
+    return ('nudge', $nudge, $heal) if defined $nudge;
+    return ('other', undef, $heal);
+}
+
+# Main-thread tool calls in the transcript's last 512 KB stamped after `since`, or undef
+# when the transcript cannot be read.
+sub _calls_since {
+    my ($path, $since) = @_;
+    return undef unless defined $path && !ref $path && $path ne '' && -f $path;
+    my $tail = util::read_tail($path, 512 * 1024) // return undef;
+    my $n = 0;
+    for my $line (split /\n/, $tail) {
+        next unless index($line, '"tool_use"') >= 0;
+        my $j = eval { jsonc::decode($line) };
+        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'assistant' && !$j->{isSidechain};
+        my $e = util::parse_iso($j->{timestamp} // '') // next;
+        next unless $e > $since;
+        my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+        $n += grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_use' } @$c if ref $c eq 'ARRAY';
+    }
+    return $n;
+}
+
+# WATCHER-SPEC §6.3: `plugin` when the denied call is within the first 10 calls after a
+# plugin-injected block or a heal action, else `session`. Without a readable transcript
+# the injection alone decides (the earlier rule).
+our $CAUSED_BY_CALLS = 10;
+sub _caused_by {
+    my ($inject, $heal, $transcript) = @_;
+    my @at = grep { defined } ($inject, $heal);
+    return 'session' unless @at;
+    my ($since) = sort { $b <=> $a } @at;
+    my $n = _calls_since($transcript, $since);
+    return 'plugin' unless defined $n;
+    return $n <= $CAUSED_BY_CALLS ? 'plugin' : 'session';
 }
 
 sub on_PermissionDenied {
@@ -325,9 +373,10 @@ sub on_PermissionDenied {
     my $hay = $reason . "\n" . (ref $p->{tool_input} ? jsonc::encode($p->{tool_input}) : ($p->{tool_input} // ''));
     my $gc = 'other';
     for my $r (_guard_rules()) { if ($hay =~ $r->[1]) { $gc = $r->[0]; last } }
-    my $tk = _turn_kind();
+    my ($tk, $inject, $heal) = _turn_kind();
+    my $by = defined $p->{agent_id} ? 'session' : _caused_by($inject, $heal, $p->{transcript_path});
     rc::emit('permission_denied', [tool_name => $tool, reason_class => $rc, guard_class => $gc, turn_kind => $tk,
-                                   caused_by => ($tk eq 'other' ? 'session' : 'plugin')]);
+                                   caused_by => $by], actor => _payload_actor($p));
     return ('', {});
 }
 
