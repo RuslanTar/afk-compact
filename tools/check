@@ -133,6 +133,8 @@ def main(argv):
             raise Fail("X-gen: tools/fixtures-gen missing")
         else:
             print("X-gen: tools/fixtures-gen not present yet (WP-fix); build part only")
+        if os.path.exists(os.path.join(tools, "helper-replies-gen")):
+            run([os.path.join(tools, "helper-replies-gen"), "--check"], "X-gen helper replies")
         steps.append("X-assemble")
         x_assemble(name)
         steps.append("X-gates")
