@@ -10,7 +10,8 @@ Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--goldens]
   --dir       asset folder (default src/assets)
   --goldens   also write tests/fixtures/assembly/expected/<asset>__<tags|base>.txt for every
               tag combination, with the runtime values of tests/fixtures/assembly/runtime.json
-              when that file exists (else the worst-case values below)
+              when that file exists (else the worst-case values below), and the same
+              texts as plugin/tests/unit/_gen/goldens.gen.ts for the U half of BT-04
 
 Build step: strip <!-- ... --> comments, fill {{plugin}}. Runtime: fill @tokens@ with
 worst-case values. A line starting "[tag] " is kept (tag stripped) only when the tag is
@@ -212,6 +213,37 @@ def write_goldens():
         if f.endswith(".txt") and f not in written:
             os.unlink(os.path.join(GOLDEN_DIR, f))
     print("goldens: {} files in {}".format(len(written), os.path.relpath(GOLDEN_DIR, REPO)))
+    write_goldens_module(runtime)
+
+
+def write_goldens_module(runtime):
+    """plugin/tests/unit/_gen/goldens.gen.ts: the goldens for the TS half of BT-04 (the kit has no fs).
+
+    Each golden is kept in parts split at the plugin name it was rendered with, so the module
+    holds no name (the rename drill copies _gen unchanged) and a test joins the parts with the
+    name it assembles for. ASCII escapes keep marker shapes out of the plain text of plugin/.
+    """
+    rows = []
+    for asset, fname in FILES.items():
+        stem = fname[:-4]
+        for tags in combos(asset):
+            path = os.path.join(GOLDEN_DIR, "{}__{}.txt".format(stem, "+".join(tags) or "base"))
+            with open(path, encoding="utf-8", newline="") as f:
+                text = f.read()
+            rows.append({"asset": stem, "tags": tags, "parts": text.split(NAME)})
+    rt = {k: v for k, v in sorted(runtime.items())}
+    out = ("// GEN by tools/assemble --goldens from tests/fixtures/assembly (runtime.json, expected/).\n"
+           "// Do not edit; edit the assets or runtime.json and run tools/assemble --goldens.\n"
+           "// Each golden is split at the plugin name it was rendered with: join the parts with a name.\n\n"
+           "export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = "
+           + json.dumps(rt, ensure_ascii=True, indent=1) + "\n\n"
+           "export type Golden = { asset: string; tags: readonly string[]; parts: readonly string[] }\n\n"
+           "export const GOLDENS: readonly Golden[] = " + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
+    dest = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "goldens.gen.ts")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "w", encoding="utf-8", newline="\n") as f:
+        f.write(out)
+    print("goldens module: {} goldens in {}".format(len(rows), os.path.relpath(dest, REPO)))
 
 
 BLOCK = "x" * 3000  # worst-case measured block (header + facts <= 3,000 B)
