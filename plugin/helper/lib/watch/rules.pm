@@ -1,0 +1,651 @@
+package watch::rules;
+# lib/watch/rules.pm: the Stop-time rule engine (WATCHER-SPEC §2 joins, §3
+# realtime fields, §7.1 rules A-01..A-27). Owner: WP-watch. Inputs: this
+# session's rows (classic, mod, mod fallback events, dispatch records, rollup,
+# sidecar slots) and the sweeper's new boundaries and events. Output: alert
+# rows and `precompute_or_failed` info rows. Never acts (WATCH §7.2).
+use strict;
+use warnings;
+use watch::alerts;
+use watch::ctx;
+use watch::io;
+use watch::spec;
+
+my %OKV = map { $_ => 1 } qw(ok ok-trailer);
+my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
+my $JOIN_S = 120;
+
+sub _t { my $r = shift; $r->{_t} //= watch::io::parse_iso($r->{ts}); return $r->{_t} }
+
+# --- session model ----------------------------------------------------------
+
+sub load_session {
+    my ($ctx) = @_;
+    my %S = (by => {}, disp => {}, disp_list => []);
+    my @rows;
+    push @rows, @{ watch::io::read_jsonl(watch::ctx::classic_log($ctx)) };
+    push @rows, @{ watch::io::read_jsonl(watch::ctx::mod_log($ctx)) };
+    my $ev_dir = watch::ctx::sid_dir($ctx) . '/events';
+    for my $f (watch::io::list_dir($ev_dir)) {
+        next unless $f =~ /\.json\z/;
+        my $r = watch::io::read_json_file("$ev_dir/$f");
+        push @rows, $r if ref $r eq 'HASH';
+    }
+    for my $r (@rows) {
+        next unless defined $r->{ev};
+        _t($r);
+        push @{ $S{by}{ $r->{ev} } }, $r;
+    }
+    for my $ev (keys %{ $S{by} }) {
+        $S{by}{$ev} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } @{ $S{by}{$ev} } ];
+    }
+    my $dd = watch::ctx::sid_dir($ctx) . '/dispatch';
+    for my $f (watch::io::list_dir($dd)) {
+        next unless $f =~ /\A([0-9a-f]{8})\.json\z/;
+        my $d = watch::io::read_json_file("$dd/$f");
+        next unless ref $d eq 'HASH';
+        $d->{nonce} //= $1;
+        _t($d);
+        $S{disp}{ $d->{nonce} } = $d;
+    }
+    $S{disp_list} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } values %{ $S{disp} } ];
+    $S{rollup} = {};
+    for my $r (@{ watch::io::read_jsonl(watch::ctx::sid_dir($ctx) . '/compactions.jsonl') }) {
+        $S{rollup}{ $r->{nonce} } = $r if defined $r->{nonce};
+    }
+    $S{bg} = _bg_slots($ctx);
+    return \%S;
+}
+
+sub rows_of { my ($S, $ev) = @_; return @{ $S->{by}{$ev} || [] } }
+
+sub _bg_slots {
+    my ($ctx) = @_;
+    my $dir = watch::ctx::sid_dir($ctx) . '/bg';
+    my @slots;
+    for my $f (watch::io::list_dir($dir)) {
+        next unless $f =~ /\Aslot-[0-9]+\.json\z/;
+        my $d = watch::io::read_json_file("$dir/$f") or next;
+        my @st = stat "$dir/$f";
+        my $tasks = $d->{tasks} // $d->{background_tasks} // [];
+        next unless ref $tasks eq 'ARRAY';
+        push @slots, { mtime => $st[9], ts => watch::io::parse_iso($d->{ts}),
+                       tasks => [ grep { ref $_ eq 'HASH' } @$tasks ] };
+    }
+    return [ sort { ($a->{ts} // $a->{mtime}) <=> ($b->{ts} // $b->{mtime}) } @slots ];
+}
+
+# Effective thresholds: the mod's latest config_effective row, else the
+# MOD-SPEC §1.2 clamp over the settings when the window is configured.
+sub thresholds {
+    my ($ctx, $S) = @_;
+    return { off => 1 } if rows_of($S, 'triggers_off') || rows_of($S, 'trigger_disabled_small_window');
+    my ($cfg) = reverse rows_of($S, 'config_effective');
+    if ($cfg) {
+        my $g = sub { for (@_) { return $cfg->{$_} if defined $cfg->{$_} && !ref $cfg->{$_} } return undef };
+        my %t = (target => $g->(qw(target target_tokens compact_target_tokens)),
+                 soft_max => $g->(qw(soft_max soft_max_tokens compact_soft_max_tokens)),
+                 window => $g->(qw(window native_window_tokens context_window)),
+                 native => $g->(qw(native_trigger native_trigger_tokens)));
+        $t{native} //= $t{window} - 33000 if defined $t{window};
+        return \%t if defined $t{target} && defined $t{soft_max} && defined $t{native};
+    }
+    my $s = $ctx->{settings};
+    return { off => 1 } if lc($s->{triggers} // 'true') eq 'false';
+    my $w = $s->{native_window_tokens};
+    return undef unless $w && $w > 0;
+    my $native = $w - 33000;
+    my $soft = _min($s->{compact_soft_max_tokens}, $native - 100000, int(0.8 * $w));
+    my $target = _min($s->{compact_target_tokens}, int($soft * 2 / 3));
+    return { off => 1 } if $target < 120000;
+    return { target => $target, soft_max => $soft, window => $w, native => $native };
+}
+
+sub _min { my $m = shift; for (@_) { $m = $_ if $_ < $m } return $m }
+
+sub band {
+    my ($th, $pre) = @_;
+    return undef unless $th && defined $pre;
+    return 'triggers-off' if $th->{off};
+    return 'at-native' if $pre >= $th->{native} * 0.98;
+    return 'above-softmax' if $pre >= $th->{soft_max};
+    return 'in-band' if $pre >= $th->{target};
+    return 'below-target';
+}
+
+# --- joins (WATCH §2) -------------------------------------------------------
+
+sub _pkey { my $p = shift; return join '|', ($p->{ts} // ''), ($p->{nonce_found} // '') }
+
+sub build_compactions {
+    my ($ctx, $S, $sess, $boundaries) = @_;
+    my %jp = map { $_ => 1 } @{ $sess->{jp} || [] };
+    my %jd = map { $_ => 1 } @{ $sess->{jd} || [] };
+    my @post = rows_of($S, 'postcompact');
+    my @pre = rows_of($S, 'precompact');
+    my @out;
+    my $find_disp = sub {
+        my ($P, $ref_t, $want_pre) = @_;
+        if ($P && defined $P->{nonce_found} && $S->{disp}{ $P->{nonce_found} }) {
+            return ($S->{disp}{ $P->{nonce_found} }, 'nonce');
+        }
+        if ($P && defined _t($P)) {
+            for my $Q (reverse @pre) {
+                my $qt = _t($Q) // next;
+                next if $qt > _t($P) + 1 || _t($P) - $qt > $JOIN_S;
+                my $n = $Q->{ci_nonce};
+                return ($S->{disp}{$n}, 'ci') if defined $n && $S->{disp}{$n} && !$jd{$n};
+            }
+        }
+        return (undef, undef) unless defined $ref_t;
+        my ($best, $bd);
+        for my $D (@{ $S->{disp_list} }) {
+            my $dt = _t($D) // next;
+            next if $jd{ $D->{nonce} } || $dt > $ref_t + 1 || $ref_t - $dt > $JOIN_S;
+            my $is_pre = ($D->{trigger} // '') eq 'precompute';
+            next if $want_pre ? !$is_pre : $is_pre;
+            if (!defined $bd || $ref_t - $dt < $bd) { $best = $D; $bd = $ref_t - $dt }
+        }
+        return $best ? ($best, 'time') : (undef, undef);
+    };
+    my $mk = sub {
+        my ($B, $P) = @_;
+        my $ref_t = $B ? $B->{ts_epoch} : _t($P);
+        my ($D, $join) = $find_disp->($P, $ref_t, $B && ${ $B->{precomputed} });
+        $jd{ $D->{nonce} } = 1 if $D;
+        $jp{ _pkey($P) } = 1 if $P;
+        my $C = { B => $B, P => $P, D => $D, join => $join };
+        _derive($ctx, $S, $C);
+        push @out, $C;
+    };
+    for my $B (sort { ($a->{ts_epoch} // 0) <=> ($b->{ts_epoch} // 0) } @$boundaries) {
+        my ($P, $pd);
+        if (defined $B->{ts_epoch}) {
+            for my $p (@post) {
+                next if $jp{ _pkey($p) };
+                my $pt = _t($p) // next;
+                my $d = abs($pt - $B->{ts_epoch});
+                next if $d > $JOIN_S;
+                if (!defined $pd || $d < $pd) { $P = $p; $pd = $d }
+            }
+        }
+        $mk->($B, $P);
+    }
+    for my $p (@post) {
+        next if $jp{ _pkey($p) };
+        my $pt = _t($p) // next;
+        next if $ctx->{now} - $pt <= $JOIN_S;
+        $mk->(undef, $p);
+    }
+    my @jp = sort keys %jp;
+    @jp = @jp[-300 .. -1] if @jp > 300;
+    $sess->{jp} = \@jp;
+    my @jd = sort keys %jd;
+    @jd = @jd[-300 .. -1] if @jd > 300;
+    $sess->{jd} = \@jd;
+    return \@out;
+}
+
+sub _derive {
+    my ($ctx, $S, $C) = @_;
+    my ($B, $P, $D) = @$C{qw(B P D)};
+    # Attribution, WATCH §2 join 4.
+    my $actor;
+    if ($P && ($P->{scope_found} // '') eq 'sub' && $D && defined $D->{agent_id}) { $actor = $D->{agent_id} }
+    elsif ($B) { $actor = $B->{actor} }
+    elsif ($D && defined $D->{agent_id}) { $actor = $D->{agent_id} }
+    elsif ($D && ($D->{actor} // '') eq 'main' && ($D->{channel} // '') =~ /\Amod-/) { $actor = 'main' }
+    else { $actor = 'unattributed' }
+    $C->{actor} = $actor;
+    $C->{main} = $actor eq 'main' ? 1 : 0;
+    $C->{precompute} = (($B && ${ $B->{precomputed} }) || ($D && ($D->{trigger} // '') eq 'precompute')) ? 1 : 0;
+    # Trigger, M-01.
+    my $trig;
+    if ($D && ($D->{channel} // '') eq 'mod-self') { $trig = 'plugin' }
+    elsif ($D && ($D->{channel} // '') ne 'classic' && defined $D->{trigger}) { $trig = $D->{trigger} }
+    elsif ($B && defined $B->{boundary_trigger}) { $trig = $B->{boundary_trigger} }
+    elsif ($P) { $trig = $P->{trigger} }
+    $C->{trigger} = $trig;
+    $C->{trigger_src} = !defined $trig ? undef
+                      : ($D && (($D->{channel} // q()) eq q(mod-self) || (($D->{channel} // q()) ne q(classic) && defined $D->{trigger}))) ? q(dispatch)
+                      : ($B && defined $B->{boundary_trigger}) ? q(boundary) : q(postcompact);
+    $C->{nonce} = $D ? $D->{nonce} : ($P && $P->{nonce_found}) ? $P->{nonce_found} : 'none';
+    $C->{nonce_match} = ($P && $D && defined $P->{nonce_found} && $P->{nonce_found} eq $D->{nonce}) ? 1 : 0;
+    $C->{channel} = $D ? $D->{channel} : ($P ? 'none' : undef);
+    # Verdict, M-07, with what the sweep adds: precomputed and attribution.
+    my $v = $P ? $P->{verdict} : undef;
+    if ($B && ${ $B->{precomputed} }) { $v = 'stale' }
+    elsif ($P && $actor ne 'main' && $actor ne 'unattributed') {
+        $v = 'scope-leak' if ($P->{scope_found} // '') eq 'main'
+                          || (($P->{main_headings} // 0) > 0 && ($P->{scope_found} // '') ne 'sub');
+    } elsif ($P && $actor eq 'main' && ($P->{scope_found} // '') eq 'sub') {
+        $v = 'scope-leak';
+    }
+    $C->{verdict} = $v;
+    $C->{key} = { session_id => $ctx->{sid}, actor => $actor,
+                  compaction_seq => ($B ? $B->{seq} : undef), nonce => $C->{nonce} };
+    $C->{id} = $B ? ('b:' . ($B->{uuid} // $B->{line})) : ('p:' . _pkey($P));
+    # Copy, M-14.
+    my $copy;
+    my $rk = $D ? $D->{nonce} : $P ? $P->{nonce_found} : undef;
+    if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
+    unless (defined $copy) {
+        my $ref_t = $P ? _t($P) : $B ? $B->{ts_epoch} : undef;
+        for my $r (rows_of($S, 'copy')) {
+            my $hit = defined $rk && defined $r->{nonce} ? $r->{nonce} eq $rk
+                    : (defined $ref_t && defined _t($r) && abs(_t($r) - $ref_t) <= $JOIN_S);
+            next unless $hit;
+            $copy = $r->{result};
+            last if defined $copy && $copy =~ /\A(?:saved|exists|late)\z/;
+        }
+    }
+    unless (defined $copy) {
+        for my $ev (qw(copy_failed copy_exists copy_mismatch)) {
+            for my $r (rows_of($S, $ev)) {
+                next unless defined $rk && ($r->{nonce} // '') eq $rk;
+                $copy = $ev eq 'copy_failed' ? 'failed:' . ($r->{reason} // 'unknown') : $ev eq 'copy_exists' ? 'exists' : 'mismatch';
+            }
+        }
+    }
+    $copy //= 'missing';
+    $C->{copy} = $copy;
+    $C->{copy_bad} = ($copy eq 'missing' || $copy =~ /\Afailed/ || $copy eq 'not-found') ? 1 : 0;
+    # Liveness, M-06.
+    if ($P) {
+        my $modd = $D && ($D->{channel} // '') =~ /\Amod-/;
+        my $self = grep { ($_->{channel} // '') eq 'mod-self' && defined _t($_) && defined _t($P)
+                          && _t($P) - _t($_) >= 0 && _t($P) - _t($_) <= $JOIN_S } @{ $S->{disp_list} };
+        if (!$modd && !$self) {
+            if ($P->{mod_alive_this_turn}) { $C->{bypass_suspected} = 1 } else { $C->{mod_off} = 1 }
+        }
+    }
+    # The realtime per-compaction fields ride on the boundary's sweep record.
+    if ($B) {
+        $B->{trigger} = $C->{trigger};
+        $B->{trigger_src} = $C->{trigger_src};
+        $B->{verdict} = $C->{verdict};
+        $B->{nonce} = $C->{nonce};
+        $B->{nonce_match} = watch::ctx::B($C->{nonce_match});
+        $B->{channel} = $C->{channel};
+        $B->{join} = $C->{join};
+        $B->{attributed} = $C->{actor};
+        $B->{copy} = $C->{copy};
+        $B->{bypass_suspected} = watch::ctx::B($C->{bypass_suspected});
+        $B->{mod_off} = watch::ctx::B($C->{mod_off});
+        $B->{postcompact} = watch::ctx::B($P);
+    }
+}
+
+# --- rules ------------------------------------------------------------------
+
+sub evaluate {
+    my ($ctx, $S, $ex, $sess, $sweep_files) = @_;
+    my @bounds = map { @{ $_->{boundaries} } } @$sweep_files;
+    my @events = map { @{ $_->{events} } } grep { $_->{actor} eq 'main' } @$sweep_files;
+    my $C = build_compactions($ctx, $S, $sess, \@bounds);
+    my $th = thresholds($ctx, $S);
+    my $secret_class = watch::spec::secret_classes($ctx->{spec});
+    my $vh = $sess->{vh} ||= [];
+    my $prev_chars = $sess->{prev_chars} ||= {};
+    my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
+    my $once = sub { my $rule = shift; return ($ex->{by_rule}{$rule} // 0) ? 'info' : 'warn' };
+
+    for my $c (@$C) {
+        my ($B, $P, $D) = @$c{qw(B P D)};
+        my @idp = ($c->{id});
+        my %k = (key => $c->{key}, actor => $c->{actor});
+        my $main_nf = $c->{main} && !$c->{precompute};
+        if ($main_nf && $c->{copy_bad}) {
+            $R->(rule => 'A-01', severity => 'critical', id_parts => \@idp, %k,
+                 evidence => { copy => ($c->{copy} =~ /\Afailed/ ? 'failed' : $c->{copy}), line => ($B ? $B->{line} : undef) });
+        }
+        if ($c->{main} && defined $c->{verdict}) {
+            my $bad = $BADV{ $c->{verdict} } ? 1 : 0;
+            my $shaped = ($c->{channel} // '') =~ /\A(?:mod-hook|mod-self|classic)\z/;
+            if ($bad && $shaped) {
+                my $prev_bad = @$vh && $BADV{ $vh->[-1][1] // '' };
+                $R->(rule => 'A-02', severity => ($prev_bad ? 'critical' : 'warn'), id_parts => \@idp, %k,
+                     evidence => { verdict => $c->{verdict}, channel => $c->{channel}, join => $c->{join} });
+            }
+            push @$vh, [ ($B ? $B->{uuid} : $c->{id}), $c->{verdict} ] unless $c->{precompute};
+            shift @$vh while @$vh > 20;
+        }
+        if (($c->{verdict} // '') eq 'scope-leak') {
+            $R->(rule => 'A-03', severity => 'critical', id_parts => \@idp, %k,
+                 evidence => { scope_found => ($P ? $P->{scope_found} : undef), line => ($B ? $B->{line} : undef),
+                               file => ($B ? $B->{file} : undef) });
+        }
+        if ($P && ($P->{fabricated_check_tokens} // 0) > 0) {
+            $R->(rule => 'A-04', severity => 'warn', id_parts => \@idp, %k,
+                 evidence => { fabricated_check_tokens => $P->{fabricated_check_tokens}, measured => $P->{measured} });
+        }
+        if ($c->{main} && $B && !$c->{precompute}) {
+            my $bp = band($th, $B->{pre});
+            $B->{band_position} = $bp;
+            if (defined $bp && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
+                $R->(rule => 'A-05', severity => 'warn', id_parts => \@idp, %k,
+                     evidence => { band_position => $bp, tokens_before => $B->{pre}, target => $th->{target},
+                                   soft_max => $th->{soft_max}, native_trigger => $th->{native} });
+            }
+            my $ttl = $ctx->{settings}{cache_ttl_s};
+            if (defined $B->{warm_gap_s} && $B->{warm_gap_s} > $ttl && ($B->{pre} // 0) >= 400000) {
+                $R->(rule => 'A-06', severity => 'warn', id_parts => \@idp, %k,
+                     evidence => { warm_gap_s => $B->{warm_gap_s}, tokens_before => $B->{pre} });
+            }
+            if (($B->{rapid_refill_run} // 0) >= 3) {
+                $R->(rule => 'A-07', severity => 'critical', id_parts => \@idp, %k,
+                     evidence => { rapid_refill_run => $B->{rapid_refill_run}, turns_since_prev => $B->{turns_since_prev} });
+            }
+            if (ref $B->{sid_canary} && !${ $B->{sid_canary} }) {
+                $R->(rule => 'A-13', severity => 'critical', id_parts => \@idp, %k, evidence => { line => $B->{line} });
+            }
+        }
+        if ($P && ref $P->{ledger} eq 'HASH') {
+            my $l = $P->{ledger};
+            my $u = $l->{lost_U} // 0;
+            my $dx = ($l->{lost_D} // 0) + ($l->{lost_X} // 0);
+            if ($u > 0 || $dx > 0) {
+                $R->(rule => 'A-09', severity => ($u > 0 ? 'critical' : 'warn'), id_parts => \@idp, %k,
+                     evidence => { lost_U => $l->{lost_U}, lost_D => $l->{lost_D}, lost_X => $l->{lost_X},
+                                   ledger_src => $l->{ledger_src} });
+            }
+        }
+        if ($P && defined $P->{summary_chars}) {
+            my $slot = $c->{main} ? 'main' : 'sub';
+            my $prev = $prev_chars->{$slot};
+            if ($prev && $P->{summary_chars} / $prev > 1.5 && $P->{summary_chars} > 10000) {
+                $R->(rule => 'A-10', severity => 'warn', id_parts => \@idp, %k,
+                     evidence => { growth_ratio => int(100 * $P->{summary_chars} / $prev) / 100,
+                                   summary_chars => $P->{summary_chars} });
+            }
+            $prev_chars->{$slot} = $P->{summary_chars};
+        }
+        if ($B && (!$P && !_pre_near($S, $B->{ts_epoch}))) {
+            $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'hookless'], %k,
+                 evidence => { hookless_boundary => \1, line => $B->{line} });
+        }
+        if ($B && defined $B->{boundary_trigger} && $B->{boundary_trigger} !~ /\A(?:auto|manual)\z/) {
+            $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'trigger'], %k,
+                 evidence => { trigger_unknown => \1, line => $B->{line} });
+        }
+        if ($P && $P->{arm_new}) {
+            $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'arm'], %k,
+                 evidence => { arm_fp => $P->{arm_fp} });
+        }
+        if ($c->{main} && $c->{bypass_suspected}) {
+            $R->(rule => 'A-16', severity => $once->('A-16'), id_parts => \@idp, %k,
+                 evidence => { bypass_suspected => \1, channel => $c->{channel} });
+        }
+        if ($P && @{ $P->{secret_hits} || [] }) {
+            my @hard = grep { ($secret_class->{$_} // '') eq 'HARD' } @{ $P->{secret_hits} };
+            if (@hard) {
+                $R->(rule => 'A-21', severity => 'critical', id_parts => \@idp, %k, evidence => { rules => \@hard });
+            }
+        }
+        if ($c->{main} && !$c->{precompute} && $c->{nonce} ne 'none') {
+            my @inj = grep { ($_->{nonce} // '') eq $c->{nonce} } rows_of($S, 'resume_inject');
+            my $nonok = defined $c->{verdict} && !$OKV{ $c->{verdict} };
+            my %why;
+            $why{count} = scalar @inj if @inj == 0 || @inj >= 2;
+            $why{nonok_note_missing} = \1 if $nonok && grep { defined $_->{nonok_note} && !$_->{nonok_note} } @inj;
+            $why{resume_over_10k} = \1 if grep { ($_->{bytes} // 0) > 10000 } @inj;
+            for my $w (sort keys %why) {
+                $R->(rule => 'A-23', severity => 'warn', id_parts => [@idp, $w], %k,
+                     evidence => { $w => $why{$w} });
+            }
+        }
+        if ($c->{main} && ($c->{mod_off} || ($P && ($c->{channel} // '') eq 'none'))) {
+            $R->(rule => 'A-26', severity => $once->('A-26'), id_parts => \@idp, %k,
+                 evidence => { mod_off => watch::ctx::B($c->{mod_off}), channel => $c->{channel} });
+        }
+    }
+    _event_rules($ctx, $S, $ex, $sess, \@events, $C);
+    _session_rules($ctx, $S, $ex, $sess);
+    return $C;
+}
+
+sub _pre_near {
+    my ($S, $t) = @_;
+    return 1 unless defined $t;
+    for my $r (rows_of($S, 'precompact'), rows_of($S, 'postcompact')) {
+        return 1 if defined _t($r) && abs(_t($r) - $t) <= $JOIN_S;
+    }
+    return 0;
+}
+
+sub _event_rules {
+    my ($ctx, $S, $ex, $sess, $events, $C) = @_;
+    my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
+    my $vh = $sess->{vh} || [];
+    my %approved;
+    for my $d (rows_of($S, 'dispatch')) {
+        $approved{$_} = 1 for grep { defined && !ref } @{ ref $d->{approvals_verified} eq 'ARRAY' ? $d->{approvals_verified} : [] };
+    }
+    my $max_cont = $ctx->{settings}{max_auto_continues_per_hour};
+    my %kind = %{ $sess->{task_kinds} || {} };
+    for my $slot (@{ $S->{bg} }) {
+        for my $t (@{ $slot->{tasks} }) {
+            $kind{ $t->{id} } = $t->{type} // $t->{kind} if defined $t->{id};
+        }
+    }
+    for my $e (@$events) {
+        my $k = $e->{k};
+        if ($k eq 'outward' && !$approved{ $e->{class} }) {
+            $R->(rule => 'A-12', severity => 'critical', id_parts => [$e->{win_uuid} // $e->{win_line}, $e->{class}, $e->{call_no}],
+                 evidence => { class => $e->{class}, call_no => $e->{call_no}, line => $e->{line},
+                               after => $e->{win_kind}, ($e->{win_kind} eq 'resume' ? (args_present => watch::ctx::B($e->{args})) : ()) });
+        } elsif ($k eq 'sid_mismatch') {
+            $R->(rule => 'A-13', severity => 'critical', id_parts => ['b:' . ($e->{b_uuid} // '')],
+                 evidence => { line => $e->{line} });
+        } elsif ($k eq 'slow_progress') {
+            $R->(rule => 'A-14', severity => 'warn', id_parts => [$e->{b_uuid}], evidence => { batches => $e->{batches}, line => $e->{line} });
+        } elsif ($k eq 'nudge_unresolved') {
+            $R->(rule => 'A-08', severity => 'warn', id_parts => [$e->{line}], evidence => { line => $e->{line} });
+        } elsif ($k eq 'api_error' && $e->{class} =~ /\A(?:compact|thrash|prompt-too-long)\z/) {
+            $R->(rule => 'A-17', severity => 'critical', id_parts => ['api', $e->{line}],
+                 evidence => { failed => 'api-error:' . $e->{class}, line => $e->{line} });
+            if ($e->{class} eq 'thrash') {
+                $R->(rule => 'A-07', severity => 'critical', id_parts => ['native', $e->{line}],
+                     evidence => { native_thrash => \1, line => $e->{line} });
+            }
+        } elsif ($k eq 'taskstop') {
+            my $type = $kind{ $e->{stop_id} } // '';
+            next unless $type =~ /workflow/i;
+            my $healed = grep { ($_->{item} // '') eq $e->{stop_id} && ($_->{result} // '') =~ /\Aok/ } rows_of($S, 'heal');
+            $R->(rule => 'A-20', severity => 'critical', id_parts => [$e->{win_uuid}, $e->{line}],
+                 evidence => { line => $e->{line} }) unless $healed;
+        } elsif ($k eq 'continue') {
+            my $pos;
+            if (defined $e->{b_uuid}) {
+                for my $i (0 .. $#$vh) { $pos = $i if ($vh->[$i][0] // '') eq $e->{b_uuid} }
+            }
+            if (defined $pos && $pos >= 1 && !$OKV{ $vh->[$pos][1] // '' } && !$OKV{ $vh->[$pos - 1][1] // '' }) {
+                $R->(rule => 'A-19', severity => 'critical', id_parts => ['halt', $e->{uuid} // $e->{line}],
+                     evidence => { continue_after_halt_cond => \1, line => $e->{line} });
+            }
+            if (defined $e->{b_uuid} && !$e->{b_nudged}) {
+                $R->(rule => 'A-27', severity => 'warn', id_parts => [$e->{uuid} // $e->{line}],
+                     evidence => { continue_without_nudge => \1, line => $e->{line} });
+            }
+        } elsif ($k eq 'heal_call') {
+            for my $rc (rows_of($S, 'resume_receipt')) {
+                my $rel = $rc->{relation} // '';
+                next unless $rel eq 'unselected' || $rel eq 'other';
+                next unless defined _t($rc) && defined $e->{ts} && $e->{ts} > _t($rc);
+                $R->(rule => 'A-22', severity => ($rel eq 'unselected' ? 'critical' : 'warn'),
+                     id_parts => [$rc->{ts}], evidence => { relation => $rel, line => $e->{line} });
+            }
+        }
+    }
+    for my $r (rows_of($S, 'continue')) {
+        my $n = $r->{continues_last_hour};
+        if (defined $n && !ref $n && $n =~ /\A[0-9]+\z/ && $n > $max_cont) {
+            $R->(rule => 'A-19', severity => 'critical', id_parts => ['cap', $r->{ts}],
+                 evidence => { continues_last_hour => 0 + $n, cap => $max_cont });
+        }
+    }
+    for my $r (rows_of($S, 'thrash')) {
+        $R->(rule => 'A-07', severity => 'critical', id_parts => ['mod', $r->{ts}], evidence => { mod_thrash => \1 });
+    }
+}
+
+sub _session_rules {
+    my ($ctx, $S, $ex, $sess) = @_;
+    my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
+    my $now = $ctx->{now};
+    my $last_stop = $sess->{last_stop_ts};
+    my $disp = $S->{disp};
+    my $excluded = sub { my $d = shift; return !$d || ($d->{trigger} // '') eq 'precompute' || defined $d->{agent_id} };
+
+    # A-17 (a) a skipped after-step, (b) a mod dispatch without `compacted` in 15 min.
+    my %compacted;
+    for my $r (rows_of($S, 'compacted')) {
+        $compacted{ $r->{nonce} } = 1 if defined $r->{nonce};
+        next unless defined $r->{skip} && !ref $r->{skip};
+        my $rd = $disp->{ $r->{nonce} // q() };
+        next if $rd && $excluded->($rd);
+        $R->(rule => 'A-17', severity => 'critical', id_parts => ['skip', $r->{nonce} // $r->{ts}],
+             evidence => { failed => "skipped:$r->{skip}" });
+    }
+    for my $d (@{ $S->{disp_list} }) {
+        next unless ($d->{channel} // '') =~ /\Amod-/ && !$excluded->($d);
+        next if $compacted{ $d->{nonce} } || !defined _t($d) || $now - _t($d) < 900;
+        $R->(rule => 'A-17', severity => 'critical', id_parts => ['no-after', $d->{nonce}],
+             key => { session_id => $ctx->{sid}, actor => 'main', compaction_seq => undef, nonce => $d->{nonce} },
+             evidence => { failed => 'no-after' });
+    }
+    # A-17 (c): a PreCompact never followed by its PostCompact.
+    my @pre = grep { defined _t($_) } rows_of($S, 'precompact');
+    my @post = grep { defined _t($_) } rows_of($S, 'postcompact');
+    my %paired;
+    for my $p (@post) {
+        my ($q) = grep { !$paired{$_} && _t($pre[$_]) <= _t($p) + 1 } reverse 0 .. $#pre;
+        $paired{$q} = 1 if defined $q;
+    }
+    my %pof = map { $_ => 1 } @{ $sess->{pof} || [] };
+    for my $i (0 .. $#pre) {
+        next if $paired{$i};
+        my $later = grep { $paired{$_} } ($i + 1 .. $#pre);
+        next unless $later || $now - _t($pre[$i]) > 900;
+        my $q = $pre[$i];
+        my $n = $q->{ci_nonce};
+        my $d = defined $n ? $disp->{$n} : undef;
+        my $counts = ($q->{trigger} // '') eq 'manual' || ($d && !$excluded->($d));
+        if ($counts) {
+            $R->(rule => 'A-17', severity => 'critical', id_parts => ['no-post', $q->{ts}],
+                 evidence => { failed => 'no-post', trigger => $q->{trigger} });
+        } elsif (!$pof{ $q->{ts} // '' }) {
+            $pof{ $q->{ts} // '' } = 1;
+            watch::ctx::log_row($ctx, 'precompute_or_failed', { trigger => $q->{trigger}, precompact_ts => $q->{ts},
+                                                                 ci_nonce => $n, join => 'none' }, actor => 'unknown');
+        }
+    }
+    my @pof = sort keys %pof;
+    @pof = @pof[-200 .. -1] if @pof > 200;
+    $sess->{pof} = \@pof;
+    # A-17 (d): a StopFailure within 60 s of a counted dispatch.
+    for my $sf (rows_of($S, 'stop_failure')) {
+        my $st = _t($sf) // next;
+        my ($d) = grep { !$excluded->($_) && defined _t($_) && $st - _t($_) >= 0 && $st - _t($_) <= 60 } @{ $S->{disp_list} };
+        next unless $d;
+        $R->(rule => 'A-17', severity => 'critical', id_parts => ['stop-failure', $sf->{ts}],
+             evidence => { failed => 'api-error:' . ($sf->{error_class} // 'other') });
+    }
+    # A-17 (f): >= 3 compact_rejected in one turn (since the previous Stop).
+    my @rej = grep { !defined $last_stop || (_t($_) // 0) > $last_stop } rows_of($S, 'compact_rejected');
+    if (@rej >= 3) {
+        $R->(rule => 'A-17', severity => 'critical', id_parts => ['rejected', $rej[0]{ts}],
+             evidence => { failed => 'rejected', count => scalar @rej });
+    }
+    # A-18: auto-continue stopped by a halt with no handoff written that turn.
+    for my $r (rows_of($S, 'continue')) {
+        next unless ($r->{result} // '') =~ /\Ahalt:/;
+        my $rt = _t($r) // next;
+        my $from = defined $last_stop && $last_stop < $rt ? $last_stop : $rt - 3600;
+        my $wrote = grep { ($_->{result} // '') =~ /\Awrote/ && defined _t($_) && _t($_) >= $from }
+                    rows_of($S, 'handoff_publish');
+        $R->(rule => 'A-18', severity => 'warn', id_parts => [$r->{ts}], evidence => { result => $r->{result} })
+            unless $wrote;
+    }
+    # A-14 (manual resume part).
+    for my $r (rows_of($S, 'resume_receipt')) {
+        next unless defined $r->{calls} && !ref $r->{calls} && $r->{calls} =~ /\A[0-9]+\z/ && $r->{calls} > 20;
+        $R->(rule => 'A-14', severity => 'warn', id_parts => ['receipt', $r->{ts}], evidence => { calls => 0 + $r->{calls} });
+    }
+    # A-15 from canary rows.
+    for my $ev (qw(keyset_change version_change trigger_unknown order_anomaly)) {
+        for my $r (rows_of($S, $ev)) {
+            my $first = !grep { ($_->{rule} // '') eq 'A-15' && ($_->{cc_version} // '') eq ($r->{cc_version} // '') } @{ $ex->{rows} };
+            $R->(rule => 'A-15', severity => ($first ? 'warn' : 'info'), id_parts => [$ev, $r->{ts}],
+                 evidence => { canary => $ev });
+        }
+    }
+    # A-24: quota warnings from the sweep; the watch dir over 50 MB.
+    for my $r (rows_of($S, 'warn_quota')) {
+        $R->(rule => 'A-24', severity => 'warn', id_parts => ['quota', $r->{ts}], evidence => { mb => $r->{mb} });
+    }
+    unless (grep { ($_->{rule} // '') eq 'A-24' && ref $_->{evidence} eq 'HASH' && $_->{evidence}{watch_dir} } @{ $ex->{rows} }) {
+        my $mb = _dir_mb($ctx->{watch}, 20000);
+        if (defined $mb && $mb > 50) {
+            $R->(rule => 'A-24', severity => 'warn', id_parts => ['watch-size'], evidence => { watch_dir => \1, mb => int $mb });
+        }
+    }
+    # A-25: >= 5 watch_error or sweep_partial rows in a day.
+    my %day;
+    for my $r (rows_of($S, 'watch_error'), rows_of($S, 'sweep_partial')) {
+        next unless defined $r->{ts} && $r->{ts} =~ /\A(\d{4}-\d\d-\d\d)/;
+        $day{$1}++;
+    }
+    for my $d (sort keys %day) {
+        next unless $day{$d} >= 5;
+        $R->(rule => 'A-25', severity => 'warn', id_parts => [$d], evidence => { rows => $day{$d}, date => $d });
+    }
+    # A-11: an item listed running for >= stall_min whose output has not moved.
+    my @slots = @{ $S->{bg} };
+    if (@slots) {
+        my %first;
+        for my $s (@slots) {
+            for my $t (@{ $s->{tasks} }) {
+                next unless defined $t->{id};
+                $first{ $t->{id} } //= $s->{ts} // $s->{mtime};
+            }
+        }
+        my $stall_s = 60 * $ctx->{settings}{stall_min};
+        for my $t (@{ $slots[-1]{tasks} }) {
+            next unless defined $t->{id} && ($t->{status} // 'running') =~ /\A(?:running|pending)\z/;
+            next unless defined $first{ $t->{id} } && $now - $first{ $t->{id} } >= $stall_s;
+            my $out = $t->{output_path} // $t->{outputFilePath};
+            my $quiet = 1;
+            if (defined $out && !ref $out && -e $out) {
+                my $mt = (stat $out)[9];
+                $quiet = $now - $mt >= 900 ? 1 : 0;
+            }
+            next unless $quiet;
+            $R->(rule => 'A-11', severity => 'warn', id_parts => [$t->{id}],
+                 evidence => { output_known => watch::ctx::B(defined $out), minutes => int(($now - $first{ $t->{id} }) / 60) });
+        }
+    }
+}
+
+sub _dir_mb {
+    my ($dir, $cap) = @_;
+    my ($bytes, $n) = (0, 0);
+    my @q = ($dir);
+    while (@q) {
+        my $d = shift @q;
+        opendir(my $dh, $d) or next;
+        for my $e (readdir $dh) {
+            next if $e eq '.' || $e eq '..';
+            return undef if ++$n > $cap;
+            my $p = "$d/$e";
+            my @st = lstat $p or next;
+            if (-l _) { next }
+            elsif (-d _) { push @q, $p }
+            else { $bytes += $st[7] }
+        }
+        closedir $dh;
+    }
+    return $bytes / (1 << 20);
+}
+
+1;
