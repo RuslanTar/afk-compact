@@ -28,7 +28,7 @@ Read from R5 of the resume skill once its 5a inventory has a row. `<store>` is t
 |---|---|---|---|---|
 | 1 | the owner session is live as **another** process | RUNNING elsewhere | leave; report; never relaunch (R4) | same |
 | 2a | on this process's runtime list, or output written within the quiet window while the owner lives | RUNNING | leave; to wait on it, `<store> wait` as the resume skill's Rule 6 says | report |
-| 2b | owner is this process and session, the job is off the runtime list, no exit marker | ENDED-UNEXPLAINED (the user or a TaskStop may have stopped it) | **ask**, with the exact command; never automatic | report |
+| 2b | owner is this process and session, the job is off the runtime list, no exit marker; or, any owner, the output ends `[killed]` | ENDED-UNEXPLAINED or KILLED (a TaskStop or the stop at exit) | **ask**, with the exact command; never automatic | report |
 | 2c | owner ended, but output still written after the end | LEFTOVER (something outlived the session) | report; never stop it; a `! kill` question only if proven ours | same |
 | 3 | exit marker, code 0 | DONE-UNREPORTED | collect first (excerpt of the `collect:` path) | collect |
 | 4 | exit marker, code ≠ 0 | FAILED | restart only as heal-check allows; else ask with a tail excerpt | ask |
@@ -36,7 +36,7 @@ Read from R5 of the resume skill once its 5a inventory has a row. `<store>` is t
 | 6 | V2 passes, others unmeasured (no record, output missing, no slot) | LOST · low | **ask** with the command and its source | ask |
 | 7 | the plugin recorded a stop for the job | STOPPED | report only; it was stopped on purpose | report |
 
-Row 7 is checked before rows 5 and 6, so a job stopped on purpose is never relaunched. `unselected`: inventory and report only.
+Row 7 is checked before rows 5 and 6, so a job stopped on purpose is never relaunched. A `[killed]` output is checked right after row 1, so a killed job is never RUNNING, LOST or STOPPED: it asks. `unselected`: inventory and report only.
 
 **5d Act.** Collect DONE-UNREPORTED first, before any restart or new work.
 

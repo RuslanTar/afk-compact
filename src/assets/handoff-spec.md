@@ -51,7 +51,7 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 - **Questions**: owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` · `answered: <answer>`.
 - **Restart classes**: `auto` · `ask` · `never`.
 - **In-flight `kind`**: `agent` · `teammate` · `workflow` · `monitor` · `cron` · `shell` · `server` · `peer` · `external`.
-- **Dies on**: `/clear` · exit · 7-day expiry · nothing.
+- **Dies on**: `/clear` · exit · 7-day expiry · nothing. A background shell or server survives `/clear`; at exit it stops unless the user picks "Move to background and exit", so its value is `exit`.
 - **Frontmatter `status`**: `in-progress` · `blocked` · `completed`. **`lineage_reason`**: `clear` · `fork` · `bg-copy` · `handoff-resume` · `none`.
 - **Resume relation**: `same-session` · `successor` · `other` · `unselected`. **Integrity**: `ok` · `possibly truncated` · `legacy` · `unshaped` · `s=sub`.
 - **Carry base** (`previous_kind`, RV-19): `own` (this session's file) · `chain` (a lineage predecessor's file) · `foreign` (another session's file). These are the relations `same-session`, `successor` and `other` as the writer sees them. A document with `imported_from` is never the carry base.
@@ -153,7 +153,7 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 
 - **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`.
 - The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once.
-- `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) prints `rc=<n>`. The runtime trailer `[exited with code <n>]` is accepted the same way only when the `exit_markers` entry `runtime` is active in the block below (it stays off until probe P-D1-2 passes).
+- `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) or the runtime trailer `[exited with code <n>]` prints `rc=<n>`. The trailer `[killed]` (a TaskStop, or the tasks stopped at exit) prints `killed`: the job was killed, never finished; a killed job is asked about, never relaunched by itself.
 - **End marker (DP-1):** a job you will wait on is started with `; echo "__exit $?"` at the end of its command. A relaunch replays the recorded command byte for byte, so it carries the suffix when the original did; restart text never adds it.
 - **Regex limits:** a `marker` pattern longer than 200 characters, or holding `(?{`, `(??{` or `(*`, is refused with exit 64. An overrun past `--max` plus 5 seconds ends with exit 70. Core Perl code never runs from a pattern.
 - **Quoting (Dev-5):** resume passes a handoff's spec only inside single quotes. A spec containing `'` is reported, never run.
@@ -161,7 +161,7 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 
 | Exit | Meaning |
 |---|---|
-| 0 | `wait: done <cond> after <n>s[ rc=<n>][ line=<n> match=<text>][ note=<…>]` |
+| 0 | `wait: done <cond> after <n>s[ rc=<n>\| killed][ line=<n> match=<text>][ note=<…>]` |
 | 10 | `wait: pending after <n>s (max <m>s); run the same command again` |
 | 11 | `wait: stalled <path> no growth for <n>s` (with `--stall`) |
 | 12 | `wait: ended <guard> (gone\|reused\|deleted) before <cond>` |
@@ -328,7 +328,8 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "exit_codes": {"done": 0, "refused": 3, "pending": 10, "stalled": 11, "ended": 12, "overdue": 13, "usage": 64, "internal": 70},
     "exit_markers": [
       {"id": "echo", "re": "^__exit (-?[0-9]+)$", "active": true},
-      {"id": "runtime", "re": "^\\[exited with code (-?[0-9]+)\\]$", "active": false, "gate": "P-D1-2"}
+      {"id": "runtime", "re": "^\\[exited with code (-?[0-9]+)\\]$", "active": true},
+      {"id": "killed", "re": "^\\[killed\\]$", "active": true, "means": "killed"}
     ],
     "end_suffix": "; echo \"__exit $?\"",
     "inflight_probe_cmd": "{{plugin}}-store wait --for <spec> --max 0"
