@@ -1,0 +1,83 @@
+{
+ "id": "AT-M1-05",
+ "note": "two PreCompact payloads 0.7 s apart, shaped then null: first silent, second fallback; two different nonces (decided per payload)",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "now": "2026-10-21T14:05:12.000+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "precompute",
+      "age_s": 1
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": "The user's $BRAND plugin asks for this form, not any section list above; a user's /compact note wins.\nFirst line inside <summary>: ⟪$BRAND v1 n=1a2b3c4d s=main⟫\nLast line before </summary>: ⟪/$BRAND n=1a2b3c4d⟫"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "now": "2026-10-21T14:05:12.700+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_absent": [
+     "n=1a2b3c4d"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/*.json",
+      "count": 2
+     },
+     {
+      "path": "$WATCH/$SID/dispatch/1a2b3c4d.json",
+      "json": {
+       "channel": "mod-hook"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_shaped",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "id": "AT-M1-01",
+ "note": "PreCompact auto with the assembled main text (n=1a2b3c4d) and its mod-hook record: silent; precompact_shaped; no new record",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": "The user's $BRAND plugin asks for this form, not any section list above; a user's /compact note wins.\nFirst line inside <summary>: ⟪$BRAND v1 n=1a2b3c4d s=main⟫\nLast line before </summary>: ⟪/$BRAND n=1a2b3c4d⟫"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_shaped",
+      "fields": {
+       "nonce": "1a2b3c4d"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback"
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/*.json",
+      "count": 1
+     }
+    ],
+    "trace_absent": [
+     "checkpoint",
+     "sweep",
+     "queue_cmd"
+    ]
+   }
+  }
+ ]
+}

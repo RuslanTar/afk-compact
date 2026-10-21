@@ -209,6 +209,7 @@ sub run_case {
 sub subst {
     my ($s, $V) = @_;
     return $s unless defined $s && !ref $s;
+    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
     return $s;
 }

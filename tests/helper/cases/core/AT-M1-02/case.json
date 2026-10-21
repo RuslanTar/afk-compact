@@ -1,0 +1,116 @@
+{
+ "id": "AT-M1-02",
+ "note": "PreCompact auto, custom_instructions null: main text with [auto] + subagent text with [fallback], one new nonce in marker and sentinel, <= 8,192 B, no Measured facts, classic dispatch, no checkpoint/sweep/queue call; with a previous main copy the [chain] line names it",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_max_bytes": 8192,
+    "stderr_empty": true,
+    "stdout_contains": [
+     "If this began mid-turn, the last step is [unverified] unless shown done.",
+     "Only if this is a subagent's assigned task"
+    ],
+    "stdout_absent": [
+     "[auto] ",
+     "[fallback] ",
+     "[chain] ",
+     "[measured] ",
+     "@nonce@",
+     "Measured facts",
+     "This began mid-turn:",
+     "<!--",
+     "{{",
+     "Over ~2,000 characters of decisions"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/*.json",
+      "count": 1,
+      "mode": "0600",
+      "json": {
+       "channel": "classic",
+       "actor": "unknown",
+       "agent_id": null,
+       "resume_pref": "sessionstart",
+       "trigger": "auto",
+       "tags": [
+        "auto"
+       ]
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "fields": {
+       "trigger": "auto",
+       "chain": false
+      }
+     }
+    ],
+    "trace_absent": [
+     "checkpoint",
+     "sweep",
+     "queue_cmd",
+     "git",
+     "measure"
+    ]
+   }
+  },
+  {
+   "name": "chain",
+   "setup": [
+    {
+     "write": "$ROOT/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md",
+     "mode": "0400",
+     "text": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 0a0b0c0d\ndate: 2026-10-21T13:00:00+03:00\nsession_id: $SID\nactor: main\n---\nbody\n"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_contains": [
+     "full text in ~/.claude/handoffs/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md (never U-)."
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "fields": {
+       "chain": true
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

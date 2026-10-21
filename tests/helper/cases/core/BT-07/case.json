@@ -1,0 +1,459 @@
+{
+ "id": "BT-07",
+ "note": "every hook <Event> with empty, malformed and valid stdin exits 0 and prints nothing or only its documented output; hooks never write stderr; malformed payloads leave one watch_error row",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "PreCompact empty",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "PreCompact malformed",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "PreCompact valid",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z"
+   }
+  },
+  {
+   "name": "PostCompact empty",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "PostCompact malformed",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "PostCompact valid",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nplain native summary\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "SessionStart empty",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "SessionStart malformed",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "SessionStart valid",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "SessionEnd empty",
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "SessionEnd malformed",
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "SessionEnd valid",
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "other"
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "Stop empty",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "Stop malformed",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "Stop valid",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "SubagentStop empty",
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "SubagentStop malformed",
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "SubagentStop valid",
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false,
+    "agent_id": "a1",
+    "agent_transcript_path": "$TMP/proj/$SID/subagents/agent-a1.jsonl",
+    "agent_type": "general-purpose"
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "StopFailure empty",
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "StopFailure malformed",
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "StopFailure valid",
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "StopFailure",
+    "error": "rate_limit"
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "PermissionDenied empty",
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "PermissionDenied malformed",
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_text": "{not json",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "PermissionDenied valid",
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 30"
+    },
+    "tool_use_id": "t1",
+    "reason": "denied by a rule"
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "unknown event",
+   "argv": [
+    "hook",
+    "Nope"
+   ],
+   "stdin_text": "{}",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "rows",
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "StopFailure",
+    "error": "something_new"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/unknown.classic.jsonl",
+      "ev": "watch_error",
+      "count": 16,
+      "fields": {
+       "error_class": "payload"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stop_failure",
+      "fields": {
+       "error_class": "rate_limit"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "permission_denied",
+      "fields": {
+       "tool_name": "Bash",
+       "reason_class": "rule",
+       "guard_class": "sleep-poll",
+       "caused_by": "session"
+      }
+     }
+    ],
+    "all_rows_content_free": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "keys": [
+       "tool_input",
+       "last_assistant_message",
+       "compact_summary",
+       "custom_instructions"
+      ]
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "sleep 30"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "denied by a rule"
+     }
+    ]
+   }
+  }
+ ]
+}
