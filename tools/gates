@@ -6,7 +6,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
   --names FILE  the competitor-name list, kept outside the repo (E-7); missing = FAIL
   --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
   --no-git-log  skip the attribution gate over `git log --format=%B`
-  --only GATE   report only one gate (names, user-path, markers, attribution, stale-name)
+  --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   names        every list entry, case-insensitive, as a whole token (letters, digits, `_`, `-`
@@ -18,7 +18,14 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                in files and in every commit message reachable from HEAD
   stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status`, `X-store`, `X:handoff skill`
                and manifest names have X equal to the brand; no other A-1 candidate
-               (`compactseam`, `wheelover`, `hold-thread`) and no `compact-handoff`
+               (`compactseam`, `wheelover`, `hold-thread`) and no `compact-handoff`, matched
+               case-insensitively anywhere in a word (`compact-handoff-research`, `compactseams`
+               and `wheelover2` count). Markers written as `\\uXXXX` escapes (the generated
+               fixture modules, which hold foreign test markers on purpose) are not read;
+               the BT-02 drill regenerates those modules under the new name instead
+  npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
+               `yarn.lock`, `pnpm-lock.yaml` or `node_modules/` anywhere inside a folder target
+               (an npm manifest in a plugin makes Claude Code run npm install on users' machines)
 Exit 0 when every gate has 0 hits, else 1.
 """
 import getpass, json, os, re, subprocess, sys
@@ -36,7 +43,23 @@ NAME_SHAPES = [
     re.compile(B + r"([A-Za-z0-9_{}@<>]+(?:-[A-Za-z0-9_{}@<>]+)*)-store" + E),
     re.compile(B + r"([A-Za-z0-9_{}@<>-]+):handoff skill"),
 ]
+NPM_FILES = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml"}
+NPM_DIRS = {"node_modules"}
 SKIP_DIRS = {".git", "node_modules", ".types"}
+
+
+def npm_paths(target):
+    """BT-06: npm manifests, lock files and node_modules folders inside a folder target."""
+    if not os.path.isdir(target):
+        return
+    for d, dirs, files in os.walk(target):
+        for x in sorted(dirs):
+            if x in NPM_DIRS:
+                yield os.path.join(d, x)
+        dirs[:] = sorted(x for x in dirs if x not in NPM_DIRS and x != ".git")
+        for f in sorted(files):
+            if f in NPM_FILES:
+                yield os.path.join(d, f)
 
 
 def die(msg):
@@ -130,13 +153,17 @@ def main(argv):
     parent = os.path.basename(os.path.dirname(main_repo))
     if parent:
         user_res.append(("projects folder", re.compile(B + re.escape(parent) + E)))
-    other_res = [(n, re.compile(B + re.escape(n) + E, re.I)) for n in OTHER_NAMES]
+    # Other candidate names are substrings: a trailing letter, digit or `-` must not hide them.
+    other_res = [(n, re.compile(re.escape(n), re.I)) for n in OTHER_NAMES]
 
     count = 0
     for target in targets:
         if not os.path.exists(target):
             hit("target", target, "missing")
             continue
+        for path in npm_paths(target):
+            shown = os.path.relpath(path) + ("/" if os.path.isdir(path) else "")
+            hit("npm", shown, "BT-06: no npm manifest or node_modules inside the plugin")
         for path in files_of(target):
             text = text_of(path)
             if text is None:

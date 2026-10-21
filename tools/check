@@ -1,12 +1,26 @@
 #!/usr/bin/python3
 """tools/check: run one phase's exit checks (BUILD-PLAN §4) in order; stop at the first failure.
 
-Usage: tools/check PHASE [--names FILE]
+Usage: tools/check PHASE [--names FILE] [--no-drill]
   PHASE    phase0       X-validate (skeleton), X-test, X-types, X-gen, X-assemble, X-gates,
-                        X-name, BT-02 rename drill
+                        X-name, X-tools, BT-02 rename drill
            integration  the same with every skill required, plus X-H (every helper case:
                         tests/helper/run.* over tests/helper/cases, then the WP-watch driver)
+           selftest     X-tools alone
   --names  the competitor-name list (E-7); default $GATE_NAMES_FILE. Missing = X-gates fails.
+  --no-drill  skip X-tools and BT-02 (used for the drill's own run inside its renamed copy)
+
+X-tools: plant known faults in temp copies of the work tree (tmp/selftest/) and confirm that
+tools/build --check and tools/gates report every one, while the unplanted copy passes the
+same command: CRLF line ends in GEN files, stray files where only GEN tools write, other
+candidate names inside longer words, and npm manifests or node_modules under plugin/ (BT-06).
+
+BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
+to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
+tools/fixtures-gen) in the copy, then the copy's own `tools/check PHASE --no-drill`, so every
+check of the phase (X-test and X-H included) runs under the new name. Then the old name must
+be gone from the copy's plugin/, README.md and marketplace file, the old launcher removed, and
+the repo's own tree unchanged.
 
 Environment: CC_TYPES_DIR (tools/typecheck), NODE or node on PATH, `claude` on PATH.
 """
@@ -21,6 +35,10 @@ SKILLS_ALL = ["handoff", "resume", "status"]
 WATCH_DRIVERS = ["tests/helper/cases/watch/_driver/run-watch.pl"]
 DRILL_NAME = "x" * 14
 DRILL_DIR = os.path.join(REPO, "tmp", "rename")
+SELFTEST_DIR = os.path.join(REPO, "tmp", "selftest")
+RENAME_STEPS = [["tools", "build"], ["tools", "assemble", "--goldens"], ["tools", "fixtures-gen"]]   # §4.6
+COPY_SKIP_TOP = {".git", "node_modules", "tmp"}
+COPY_SKIP = {"__pycache__", ".DS_Store", os.path.join("plugin", ".claude-plugin", "types")}
 
 
 class Fail(Exception):
@@ -39,8 +57,8 @@ def run(argv, label, cwd=REPO, capture=False):
     return r
 
 
-def brand():
-    with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
+def brand(root=REPO):
+    with open(os.path.join(root, "brand.json"), encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -105,19 +123,197 @@ def tree_state():
                           capture_output=True, text=True).stdout
 
 
+def copy_tree(dst):
+    """Copy the work tree (tracked and untracked files; no .git, node_modules or tmp/) to dst.
+
+    node_modules is linked, not copied, so X-types runs in the copy. Symlinks stay links.
+    """
+    if os.path.lexists(dst):
+        shutil.rmtree(dst)
+    for d, dirs, files in os.walk(REPO):
+        rel = os.path.relpath(d, REPO)
+        keep = []
+        for x in sorted(dirs):
+            xrel = os.path.normpath(os.path.join(rel, x))
+            if (rel == "." and x in COPY_SKIP_TOP) or x in COPY_SKIP or xrel in COPY_SKIP:
+                continue
+            if os.path.islink(os.path.join(d, x)):
+                os.makedirs(os.path.join(dst, rel), exist_ok=True)
+                os.symlink(os.readlink(os.path.join(d, x)), os.path.join(dst, xrel))
+                continue
+            keep.append(x)
+        dirs[:] = keep
+        os.makedirs(os.path.join(dst, rel), exist_ok=True)
+        for f in files:
+            if f not in COPY_SKIP:
+                shutil.copy2(os.path.join(d, f), os.path.join(dst, rel, f), follow_symlinks=False)
+    if os.path.isdir(os.path.join(REPO, "node_modules")):
+        os.symlink(os.path.join(REPO, "node_modules"), os.path.join(dst, "node_modules"))
+
+
+# ---------------------------------------------------------------- X-tools (self-test)
+
+def write_text(path, text, mode="w"):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, mode, encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
+def to_crlf(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    with open(path, "wb") as f:
+        f.write(data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+
+
+def probes(name):
+    """(id, finding, argv relative to the copy, plant(copy), [regex every stdout must hold])."""
+    gates_only = lambda g: ["tools/gates", "plugin", "--names", os.devnull, "--brand", name,
+                            "--no-git-log", "--only", g]
+
+    def crlf(d):
+        to_crlf(os.path.join(d, "plugin", "bin", name + "-store"))
+        to_crlf(os.path.join(d, "plugin", "hooks", "hooks.json"))
+
+    def stray(d):
+        for rel in ("plugin/assets/old-asset.txt", "plugin/hooks/lib/old.gen.ts",
+                    "plugin/tests/unit/_gen/stray.gen.ts", "plugin/.claude-plugin/extra.json",
+                    "plugin/notes.txt", "plugin/skills/handoff/.hidden"):
+            write_text(os.path.join(d, rel), "stray\n")
+
+    def other_names(d):
+        write_text(os.path.join(d, "plugin", "README.md"),
+                   "\nP5 cache at ~/.cache/compact-handoff-research and the compact-handoffs folder\n"
+                   "P6 the compactseams and wheelover2 variants, and HOLD-THREADS\n", "a")
+
+    def npm(d):
+        write_text(os.path.join(d, "plugin", "package.json"), '{"dependencies":{"left-pad":"1.3.0"}}\n')
+        write_text(os.path.join(d, "plugin", "node_modules", "left-pad", "index.js"), "module.exports = 1\n")
+        write_text(os.path.join(d, "plugin", "helper", "package-lock.json"), "{}\n")
+
+    readme = r"plugin/README\.md:\d+: "
+    return [
+        ("crlf", "RN-4", ["tools/build", "--check"], crlf,
+         [r"^differs plugin/bin/" + re.escape(name) + r"-store$", r"^differs plugin/hooks/hooks\.json$"]),
+        ("stray", "RN-5", ["tools/build", "--check"], stray,
+         [r"^stale plugin/assets/old-asset\.txt$", r"^stale plugin/hooks/lib/old\.gen\.ts$",
+          r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
+          r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"]),
+        ("other-names", "RN-3", gates_only("stale-name"), other_names,
+         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread")]),
+        ("npm", "RN-6", gates_only("npm"), npm,
+         [r"^GATE npm plugin/package\.json: BT-06", r"^GATE npm plugin/node_modules/: BT-06",
+          r"^GATE npm plugin/helper/package-lock\.json: BT-06"]),
+    ]
+
+
+def x_tools():
+    name = brand()["name"]
+    if os.path.lexists(SELFTEST_DIR):
+        shutil.rmtree(SELFTEST_DIR)
+    clean = os.path.join(SELFTEST_DIR, "clean")
+    copy_tree(clean)
+    failures = []
+    for pid, finding, argv, plant, want in probes(name):
+        r = subprocess.run([os.path.join(clean, argv[0])] + argv[1:], cwd=clean, capture_output=True, text=True)
+        if r.returncode != 0:
+            failures.append("{} ({}): `{}` fails on the unplanted copy:\n{}".format(
+                pid, finding, " ".join(argv), (r.stdout + r.stderr)[-1500:]))
+            continue
+        d = os.path.join(SELFTEST_DIR, pid)
+        shutil.copytree(clean, d, symlinks=True)
+        plant(d)
+        r = subprocess.run([os.path.join(d, argv[0])] + argv[1:], cwd=d, capture_output=True, text=True)
+        lines = r.stdout.splitlines()
+        missing = [w for w in want if not any(re.search(w, ln) for ln in lines)]
+        if r.returncode != 1 or missing:
+            failures.append("{} ({}): `{}` exit {}; not reported: {}\n{}".format(
+                pid, finding, " ".join(argv), r.returncode, missing, r.stdout[-1500:]))
+        else:
+            print("X-tools {} ({}): {} planted faults reported".format(pid, finding, len(want)))
+    if failures:
+        for f in failures:
+            print("X-tools FAIL " + f)
+        raise Fail("X-tools: {} of {} probes not caught".format(len(failures), len(probes(name))))
+    shutil.rmtree(SELFTEST_DIR)
+    print("X-tools: PASS ({} probes)".format(len(probes(name))))
+
+
+# ---------------------------------------------------------------- BT-02 (rename drill)
+
+def old_name_left(root, old):
+    """Lines in the renamed copy's shipped files that still hold the old name (substring)."""
+    targets = [os.path.join(root, "README.md"), os.path.join(root, ".claude-plugin", "marketplace.json")]
+    for d, dirs, files in os.walk(os.path.join(root, "plugin")):
+        dirs[:] = sorted(x for x in dirs if x not in ("node_modules", ".git") and
+                         not (x == "types" and os.path.basename(d) == ".claude-plugin"))
+        targets += [os.path.join(d, f) for f in sorted(files)]
+    left = []
+    for p in targets:
+        if not os.path.isfile(p):
+            continue
+        with open(p, "rb") as f:
+            data = f.read()
+        if b"\0" in data[:8192]:
+            continue
+        for no, line in enumerate(data.decode("utf-8", errors="replace").splitlines(), 1):
+            if old in line:
+                left.append("{}:{}".format(os.path.relpath(p, root), no))
+    return left
+
+
+def bt02(phase, names):
+    old = brand()["name"]
+    if old in DRILL_NAME:
+        raise Fail("BT-02: the drill name {} contains the brand {}".format(DRILL_NAME, old))
+    before = tree_state()
+    copy_tree(DRILL_DIR)
+    b = brand(DRILL_DIR)
+    if b["marketplace"] == b["name"]:
+        b["marketplace"] = DRILL_NAME
+    b["name"] = DRILL_NAME
+    write_text(os.path.join(DRILL_DIR, "brand.json"), json.dumps(b, indent=2, ensure_ascii=False) + "\n")
+    for step in RENAME_STEPS:
+        run([os.path.join(DRILL_DIR, *step[:2])] + step[2:], "BT-02 " + " ".join(step), cwd=DRILL_DIR)
+    inner = [os.path.join(DRILL_DIR, "tools", "check"), phase, "--no-drill"] + (["--names", names] if names else [])
+    run(inner, "BT-02 tools/check {} under {}".format(phase, DRILL_NAME), cwd=DRILL_DIR)
+    left = old_name_left(DRILL_DIR, old)
+    if left:
+        raise Fail("BT-02: the old name {} is left in {} lines of the renamed copy: {}".format(
+            old, len(left), ", ".join(left[:12])))
+    if os.path.exists(os.path.join(DRILL_DIR, "plugin", "bin", old + "-store")):
+        raise Fail("BT-02: the old launcher survived in the renamed copy")
+    run([os.path.join(REPO, "tools", "build"), "--check"], "BT-02 committed tree")
+    if tree_state() != before:
+        raise Fail("BT-02: the drill changed the working tree")
+    shutil.rmtree(DRILL_DIR)
+    print("BT-02: PASS (renamed to {} by the §4.6 steps; tools/check {} passed in the copy; "
+          "no {} left; committed tree unchanged)".format(DRILL_NAME, phase, old))
+
+
 def main(argv):
-    if not argv or argv[0] not in ("phase0", "integration"):
+    if not argv or argv[0] not in ("phase0", "integration", "selftest"):
         sys.exit(__doc__)
     phase = argv[0]
     names = os.environ.get("GATE_NAMES_FILE")
     if "--names" in argv:
         names = argv[argv.index("--names") + 1]
+    drill = "--no-drill" not in argv
+    steps = []
+    if phase == "selftest":
+        try:
+            steps.append("X-tools")
+            x_tools()
+        except Fail as e:
+            print("CHECK selftest: FAIL at X-tools ({})".format(e))
+            return 1
+        print("CHECK selftest: PASS (X-tools)")
+        return 0
     b = brand()
     name = b["name"]
     skills_required = ["handoff", "resume"] if phase == "phase0" else SKILLS_ALL
     plugin = os.path.join(REPO, "plugin")
     tools = os.path.join(REPO, "tools")
-    steps = []
     try:
         steps.append("X-validate")
         x_validate(plugin, REPO, name, skills_required)
@@ -156,19 +352,11 @@ def main(argv):
                 p = os.path.join(REPO, drv)
                 if os.path.exists(p):
                     run(["/usr/bin/perl", p], "X-H " + drv)
-        steps.append("BT-02")
-        before = tree_state()
-        run([os.path.join(tools, "build"), "--name", DRILL_NAME, "--out", DRILL_DIR], "BT-02 build")
-        x_validate(os.path.join(DRILL_DIR, "plugin"), DRILL_DIR, DRILL_NAME, skills_required)
-        x_assemble(DRILL_NAME)
-        gates([os.path.join(DRILL_DIR, "plugin"), os.path.join(DRILL_DIR, "README.md")], names, DRILL_NAME)
-        if os.path.exists(os.path.join(DRILL_DIR, "plugin", "bin", name + "-store")):
-            raise Fail("BT-02: the old launcher survived in the renamed copy")
-        run([os.path.join(tools, "build"), "--check"], "BT-02 committed tree")
-        if tree_state() != before:
-            raise Fail("BT-02: the drill changed the working tree")
-        shutil.rmtree(DRILL_DIR)
-        print("BT-02: PASS (renamed to {}; committed tree unchanged)".format(DRILL_NAME))
+        if drill:
+            steps.append("X-tools")
+            x_tools()
+            steps.append("BT-02")
+            bt02(phase, names)
     except Fail as e:
         print("CHECK {}: FAIL at {} ({})".format(phase, steps[-1], e))
         return 1
