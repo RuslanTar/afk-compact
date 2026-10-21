@@ -3,7 +3,7 @@
   "id": "AT-C-08 / AT-M4-03",
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
   "now": "2026-10-21T14:05:12+03:00",
-  "note": "Each row: dispatch record to seed (empty = none), summary corpus file (`#nonce=X` = replace the corpus nonce with X in marker and sentinel), transcript dir (main.jsonl -> the payload transcript_path, subagents/ -> <session dir>/subagents/), boundaries.count seed, expected scope per MOD §2.4.",
+  "note": "Each row: dispatch record to seed (empty = none), summary corpus file (`#nonce=X` = replace the corpus nonce with X in marker and sentinel), transcript dir (main.jsonl -> the payload transcript_path, subagents/ -> <session dir>/subagents/), boundaries.count seed, expect_scope = the scope per MOD §2.4 with every proof, as reconcile reads it at the next Stop; expect_scope_postcompact = the scope inside SessionStart(compact) and PostCompact, where P3 does not count because the main boundary row lands after both hooks (ROOT-RULINGS F2-1, lab S-21; see sequences/S-21-*). tools/fixtures-gen --check recomputes both.",
   "cases": [
     {
       "id": "p1-main",
@@ -12,6 +12,7 @@
       "transcripts": "transcripts/scope-none",
       "boundaries_count": 0,
       "expect_scope": "main",
+      "expect_scope_postcompact": "main",
       "why": "P1-main"
     },
     {
@@ -21,6 +22,7 @@
       "transcripts": "transcripts/scope-none",
       "boundaries_count": 0,
       "expect_scope": "sub",
+      "expect_scope_postcompact": "sub",
       "why": "P1-sub"
     },
     {
@@ -30,6 +32,7 @@
       "transcripts": "transcripts/scope-none",
       "boundaries_count": 0,
       "expect_scope": "sub",
+      "expect_scope_postcompact": "sub",
       "why": "P2-sub: s=sub marker; the classic dispatch has no agent id"
     },
     {
@@ -39,6 +42,7 @@
       "transcripts": "transcripts/scope-none",
       "boundaries_count": 0,
       "expect_scope": "unknown",
+      "expect_scope_postcompact": "unknown",
       "why": "P2-main with a classic dispatch is not proof; no P3"
     },
     {
@@ -48,6 +52,7 @@
       "transcripts": "transcripts/scope-main-plus1",
       "boundaries_count": 0,
       "expect_scope": "main",
+      "expect_scope_postcompact": "unknown",
       "why": "P3-main with no subagent signal"
     },
     {
@@ -57,6 +62,7 @@
       "transcripts": "transcripts/scope-main-plus1",
       "boundaries_count": 0,
       "expect_scope": "main",
+      "expect_scope_postcompact": "unknown",
       "why": "P3-main (AT-M4-03 a)"
     },
     {
@@ -66,6 +72,7 @@
       "transcripts": "transcripts/scope-sub-new",
       "boundaries_count": 0,
       "expect_scope": "sub",
+      "expect_scope_postcompact": "unknown",
       "why": "P3-sub: agent file boundary newer than the dispatch ts, main count unchanged (AT-M4-03 b, -a from the file name)"
     },
     {
@@ -75,6 +82,7 @@
       "transcripts": "transcripts/scope-sub-old",
       "boundaries_count": 0,
       "expect_scope": "unknown",
+      "expect_scope_postcompact": "unknown",
       "why": "the agent boundary predates the dispatch ts"
     },
     {
@@ -84,6 +92,7 @@
       "transcripts": "transcripts/scope-none",
       "boundaries_count": 0,
       "expect_scope": "unknown",
+      "expect_scope_postcompact": "unknown",
       "why": "neither (AT-M4-03 c)"
     },
     {
@@ -93,6 +102,7 @@
       "transcripts": "transcripts/scope-main-plus1",
       "boundaries_count": 1,
       "expect_scope": "unknown",
+      "expect_scope_postcompact": "unknown",
       "why": "the main boundary was already counted (boundaries.count 1)"
     },
     {
@@ -102,6 +112,7 @@
       "transcripts": "transcripts/scope-both",
       "boundaries_count": 0,
       "expect_scope": "unknown",
+      "expect_scope_postcompact": "unknown",
       "why": "the conflicting pair: main +1 and an agent file boundary (P3-main has a subagent signal, P3-sub needs main unchanged)"
     },
     {
@@ -111,6 +122,7 @@
       "transcripts": "transcripts/scope-none",
       "boundaries_count": 0,
       "expect_scope": "unknown",
+      "expect_scope_postcompact": "unknown",
       "why": "P1-main and P2-sub both hold: both = unknown by the §2.4 rule (the verdict is still scope-leak, see README)"
     }
   ]

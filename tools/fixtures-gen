@@ -2,16 +2,19 @@
 """tools/fixtures-gen: tests/fixtures -> plugin/tests/unit/_gen/*.gen.ts, and the fixture checks.
 
 Usage:
-  tools/fixtures-gen                 write plugin/tests/unit/_gen/{corpus,payloads,brand}.gen.ts
+  tools/fixtures-gen                 the regenerate step (BUILD-PLAN §4.3, §4.6): refresh the
+                                     brand-dependent normalized_sha256 column of
+                                     summaries/expected.tsv (written only when a value changed),
+                                     then write plugin/tests/unit/_gen/{corpus,payloads,brand}.gen.ts
   tools/fixtures-gen --out DIR       write the same three files under DIR/plugin/tests/unit/_gen/
+                                     (sha column refreshed in memory; the repo is not written)
   tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
                                      must equal a fresh render; exit 1 on any problem
   tools/fixtures-gen --clean         remove the three generated files (nothing else)
   tools/fixtures-gen --print-expected
                                      print summaries/expected.tsv as the reference detector
                                      computes it (authoring aid; never writes)
-  tools/fixtures-gen --refresh-sha   rewrite only the normalized_sha256 column of
-                                     summaries/expected.tsv for the current brand (after a rename)
+  tools/fixtures-gen --refresh-sha   only the sha-column refresh of the regenerate step
 
 Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   parse     every *.json under tests/fixtures parses; every *.jsonl line parses
@@ -20,6 +23,16 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
             its fragments are joined, and no single fragment hits anything
   drift     the generated files are current
+  sequences every sequences/<id>/ replays: files exist, payloads match their step, the main
+            transcript after each step's appends holds the declared transcript_state, and with
+            "order": "S-21" SessionStart(compact) and PostCompact see no boundary row newer than
+            PreCompact (lab S-21: the row lands after PostCompact)
+  scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
+            expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
+            equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
+  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8)
+  rename a temp copy renamed to another brand passes --check after the plain regenerate
+            step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
 Placeholders (tests/fixtures/README.md): `{{plugin}}` and `{{marketplace}}` are filled from
 brand.json; `$TMP`, `$HOME`, `$WATCH`, `$ROOT`, `$SID` stay for the case runner;
@@ -31,7 +44,7 @@ src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the pr
 built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
 deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
-import hashlib, json, math, os, re, sys
+import datetime, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -41,6 +54,7 @@ GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts")
 SUMMARIES = os.path.join(FIX, "summaries")
 EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
 PAYLOADS = os.path.join(FIX, "payloads")
+SEQUENCES = os.path.join(FIX, "sequences")
 SECRET_MARK = "$SECRET{"
 COLUMNS = ["file", "verdict", "marker_line", "sentinel_from_end", "nonce", "scope",
            "normalized_sha256", "dispatch"]
@@ -181,9 +195,9 @@ def load_dispatch(ref):
         return json.load(f)
 
 
-def read_expected():
+def read_expected(path=EXPECTED):
     rows = []
-    with open(EXPECTED, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         header = f.readline().rstrip("\n").split("\t")
         if header != COLUMNS:
             die("expected.tsv header is {}, want {}".format(header, COLUMNS))
@@ -215,28 +229,56 @@ def tsv(rows):
     return "\t".join(COLUMNS) + "\n" + "".join("\t".join(r[c] for c in COLUMNS) + "\n" for r in rows)
 
 
+def sha_refreshed(b):
+    """(rows of expected.tsv with normalized_sha256 recomputed for brand b, number changed).
+
+    Only the sha column is touched: it is a function of the text and the brand alone, so a
+    rename changes it (README "Corpus"). The other columns stay as authored for --check.
+    """
+    rows = read_expected()
+    fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
+    changed = 0
+    for r in rows:
+        f = fresh.get(r["file"])
+        if f and f["normalized_sha256"] != r["normalized_sha256"]:
+            r["normalized_sha256"] = f["normalized_sha256"]
+            changed += 1
+    return rows, changed
+
+
+def refresh_sha(b):
+    rows, changed = sha_refreshed(b)
+    if changed:
+        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
+            f.write(tsv(rows))
+        print("fixtures-gen: refreshed normalized_sha256 for {} rows of {} (brand {})".format(
+            changed, os.path.relpath(EXPECTED, REPO), b["name"]))
+    return changed
+
+
 # ---------------------------------------------------------------- secret rules
 
 BUILTIN_RULES = [
-    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (MOD §10, template §5)
+    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (MOD §10, template §5).
+    # Ids follow the spec-literals secret_rules, which the corpus `rule` column names.
     ("pem", "HARD", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     ("jwt", "HARD", r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
-    ("bearer", "HARD", r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"),
-    ("basic", "HARD", r"\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}"),
+    ("auth-header", "HARD", r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"),
+    ("auth-header", "HARD", r"\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}"),
     ("url-userinfo", "HARD", r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s/]+"),
     ("github-token", "HARD", r"\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,})"),
     ("slack-token", "HARD", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
-    ("aws-access-key", "HARD", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    ("aws-key-id", "HARD", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
     ("anthropic-key", "HARD", r"\bsk-ant-[A-Za-z0-9_-]{20,}"),
-    ("openai-style-key", "HARD", r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}"),
+    ("openai-key", "HARD", r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}"),
     ("google-api-key", "HARD", r"\bAIza[0-9A-Za-z_-]{35}"),
     ("stripe-key", "HARD", r"\b[sr]k_live_[0-9A-Za-z]{24,}"),
     ("gitlab-token", "HARD", r"\bglpat-[0-9A-Za-z_-]{20,}"),
     # WARN: key=value pairs, prefix-less cloud keys, high-entropy runs, cookies
     # MOD §10 writes (pass|secret|token|key)\s*[=:]\s*\S{6,}; taken literally it misses its own
     # AT-E-04 password example, so the provisional set allows the common suffixes.
-    ("kv-secret", "WARN", r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|key)\s*[=:]\s*\S{6,}"),
-    ("aws-secret-prefixless", "WARN",
+    ("key-value", "WARN", r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|key)\s*[=:]\s*\S{6,}"),
+    ("cloud-key-bare", "WARN",
      r"(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+]*[a-z])(?=[A-Za-z0-9/+]*[A-Z])(?=[A-Za-z0-9/+]*[0-9])"
      r"[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=])"),
     ("high-entropy", "WARN", "@entropy@"),
@@ -306,15 +348,16 @@ def js(v):
     return json.dumps(v, ensure_ascii=True, indent=1, sort_keys=False)
 
 
-def render(b):
+def render(b, rows=None):
     out = {}
     out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
         {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
          "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
 
-    dispatch_refs = {r["file"]: r["dispatch"] for r in read_expected()}
+    rows = read_expected() if rows is None else rows
+    dispatch_refs = {r["file"]: r["dispatch"] for r in rows}
     corpus = []
-    for r in read_expected():
+    for r in rows:
         text = read(os.path.join(SUMMARIES, r["file"]))
         if SECRET_MARK in text:
             continue
@@ -362,6 +405,204 @@ def walk(base):
             yield os.path.join(d, f)
 
 
+# Sequences (README "Sequences"): ordered hook steps with the main transcript's state per step.
+def transcript_counts(text):
+    """(compact_boundary rows of the main thread, isCompactSummary rows) in transcript text."""
+    nb = ns = 0
+    for line in text.split("\n"):
+        try:
+            r = json.loads(line) if line.strip() else None
+        except ValueError:
+            continue
+        if not isinstance(r, dict):
+            continue
+        if r.get("type") == "system" and r.get("subtype") == "compact_boundary" and not r.get("isSidechain"):
+            nb += 1
+        if r.get("isCompactSummary") is True:
+            ns += 1
+    return nb, ns
+
+
+def check_sequences():
+    problems, count = [], 0
+    if not os.path.isdir(SEQUENCES):
+        return problems, count
+    for name in sorted(os.listdir(SEQUENCES)):
+        d = os.path.join(SEQUENCES, name)
+        if not os.path.isdir(d):
+            continue
+        count += 1
+        where = "sequences/" + name
+        try:
+            inp = json.loads(read(os.path.join(d, "input.json")))
+            exp = json.loads(read(os.path.join(d, "expected.json")))
+        except (OSError, ValueError) as e:
+            problems.append("{}: {}".format(where, e))
+            continue
+        if inp.get("id") != name or exp.get("id") != name:
+            problems.append("{}: input.json and expected.json ids must equal the folder name".format(where))
+        for s in inp.get("seed", []):
+            if not os.path.exists(os.path.join(FIX, s.get("copy", ""))):
+                problems.append("{}: seed file {} missing".format(where, s.get("copy")))
+        steps, text, at_pre = inp.get("steps", []), "", None
+        for i, st in enumerate(steps, 1):
+            argv = st.get("argv", [])
+            ev = argv[1] if len(argv) > 1 and argv[0] == "hook" else None
+            label = "{} step {} {}".format(where, i, ev)
+            if st.get("transcript_append"):
+                p = os.path.join(FIX, st["transcript_append"])
+                if not os.path.exists(p):
+                    problems.append("{}: transcript_append {} missing".format(label, st["transcript_append"]))
+                    continue
+                text += read(p)
+            try:
+                payload = json.loads(read(os.path.join(FIX, st.get("stdin", ""))))
+            except (OSError, ValueError) as e:
+                problems.append("{}: stdin {}: {}".format(label, st.get("stdin"), e))
+                continue
+            if payload.get("hook_event_name") != ev or payload.get("session_id") != inp.get("sid"):
+                problems.append("{}: stdin {} is a {} payload for {}".format(
+                    label, st.get("stdin"), payload.get("hook_event_name"), payload.get("session_id")))
+            nb, ns = transcript_counts(text)
+            want = st.get("transcript_state")
+            if want is not None and (want.get("boundaries"), want.get("summaries")) != (nb, ns):
+                problems.append("{}: the replayed transcript holds {} boundary and {} summary rows, "
+                                "transcript_state says {} and {}".format(label, nb, ns, want.get("boundaries"),
+                                                                          want.get("summaries")))
+            if ev == "PreCompact":
+                at_pre = nb
+            in_hook = ev == "PostCompact" or (ev == "SessionStart" and payload.get("source") == "compact")
+            if inp.get("order") == "S-21" and in_hook and at_pre is not None and nb != at_pre:
+                problems.append("{}: S-21 order: the boundary row lands after PostCompact, but this step sees "
+                                "{} new since PreCompact".format(label, nb - at_pre))
+        for a in exp.get("step_asserts", []):
+            if not 1 <= a.get("after_step", 0) <= len(steps):
+                problems.append("{}: step_asserts after_step {} is not a step".format(where, a.get("after_step")))
+    return problems, count
+
+
+# Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
+# answer has the queue-stub/v1 shape that ROOT-RULINGS F2-8 adopts as the v1 contract.
+QUEUE = os.path.join(FIX, "queue")
+QUEUE_V1_KEYS = ["schema", "session", "lane", "open", "pending", "preview", "held_by", "lanes"]
+QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
+LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
+
+
+def check_queue():
+    problems, njson = [], 0
+    for case in sorted(os.listdir(QUEUE)) if os.path.isdir(QUEUE) else []:
+        p = os.path.join(QUEUE, case, "list.out")
+        text = read(p) if os.path.exists(p) else ""
+        if not text.lstrip().startswith("{"):
+            continue
+        njson += 1
+        where = "queue/{}/list.out".format(case)
+        try:
+            doc = json.loads(text)
+        except ValueError as e:
+            problems.append("{}: {}".format(where, e))
+            continue
+        int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
+        if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
+                or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
+                or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
+                or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
+            problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
+                where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
+    return problems, njson
+
+
+# The scope-proof table (transcripts/scope-cases.json; MOD-SPEC §2.4 as amended by ROOT-RULINGS F2-1).
+SCOPE_CASES = os.path.join(FIX, "transcripts", "scope-cases.json")
+SCOPE_KEYS = {"expect_scope": True, "expect_scope_postcompact": False}   # key -> P3 counted
+
+
+def iso(ts):
+    return datetime.datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)
+
+
+def ref_scope(case, b, with_p3):
+    """main | sub | unknown by the §2.4 rule: main = P1-main, or P3-main with no subagent signal;
+    subagent = P1-sub, P2-sub or P3-sub; both or neither = unknown. with_p3=False is the reading
+    inside SessionStart(compact) and PostCompact (F2-1: the boundary row lands after them)."""
+    d = load_dispatch(case["dispatch"]) if case["dispatch"] else None
+    name, _, swap = case["summary"].partition("#nonce=")
+    text = fill(read(os.path.join(SUMMARIES, name)), b)
+    nonce = detect(text, b["name"])[3]
+    if swap and nonce:
+        text, nonce = text.replace(nonce, swap), swap
+    mscope = detect(text, b["name"])[4]
+    p1 = d if d and nonce and d["nonce"] == nonce else None
+    main = bool(p1 and p1.get("agent_id") is None and p1.get("channel") in ("mod-hook", "mod-self"))
+    sub = bool(p1 and p1.get("agent_id") is not None) or mscope == "sub"
+    if with_p3:
+        tdir = os.path.join(FIX, case["transcripts"])
+        p3_main = transcript_counts(read(os.path.join(tdir, "main.jsonl")))[0] > case["boundaries_count"]
+        agent_new = False
+        sdir = os.path.join(tdir, "subagents")
+        for f in sorted(os.listdir(sdir)) if os.path.isdir(sdir) else []:
+            for line in read(os.path.join(sdir, f)).split("\n"):
+                r = json.loads(line) if line.strip() else {}
+                if r.get("subtype") == "compact_boundary" and (d is None or iso(r["timestamp"]) > iso(d["ts"])):
+                    agent_new = True
+        main = main or (p3_main and not agent_new and not sub)
+        sub = sub or (agent_new and not p3_main)
+    return "unknown" if main == sub else ("main" if main else "sub")
+
+
+def check_scope_cases(b):
+    problems = []
+    table = json.loads(read(SCOPE_CASES))
+    for case in table["cases"]:
+        for key, with_p3 in sorted(SCOPE_KEYS.items()):
+            want = ref_scope(case, b, with_p3)
+            if case.get(key) != want:
+                problems.append("scope-cases {}: {} is {}, the §2.4 rule{} gives {}".format(
+                    case["id"], key, case.get(key), "" if with_p3 else " without P3 (F2-1)", want))
+    return problems, len(table["cases"])
+
+
+# The rename drill (BUILD-PLAN §4.6, fixture side): a temp copy with another brand must pass
+# --check after the plain regenerate step alone. The corpus sha column depends on the brand
+# (README "Corpus"), so this fails whenever the regenerate step leaves that column stale.
+DRILL_BRAND = {"name": "zq-rename-drill", "marketplace": "zq-rename-market"}
+NO_DRILL_ENV = "FIXTURES_GEN_NO_DRILL"   # set for the drill's own inner --check (no recursion)
+
+
+def rename_drill(b):
+    problems = []
+    tmp = tempfile.mkdtemp(prefix="fixtures-gen-drill-")
+    try:
+        for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md")):
+            if os.path.exists(os.path.join(REPO, rel)):
+                os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
+                shutil.copy2(os.path.join(REPO, rel), os.path.join(tmp, rel))
+        shutil.copytree(FIX, os.path.join(tmp, "tests", "fixtures"), symlinks=True)
+        with open(os.path.join(tmp, "brand.json"), "w", encoding="utf-8", newline="\n") as f:
+            json.dump(dict(b, **DRILL_BRAND), f, indent=2)
+        tool = os.path.join(tmp, "tools", "fixtures-gen")
+        env = dict(os.environ, **{NO_DRILL_ENV: "1"})
+        for args in ([], ["--check"]):
+            r = subprocess.run([sys.executable, tool] + args, env=env, cwd=tmp, timeout=120,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+            if r.returncode != 0:
+                lines = [ln for ln in r.stdout.splitlines() if not ln.startswith(("parse:", "expected:", "secrets:"))]
+                problems.append("rename drill: `tools/fixtures-gen {}` exit {} after renaming to {}: {}".format(
+                    " ".join(args), r.returncode, DRILL_BRAND["name"], " | ".join(lines[:4])))
+                break
+        before = {r["file"]: r["normalized_sha256"] for r in read_expected()}
+        after = {r["file"]: r["normalized_sha256"]
+                 for r in read_expected(os.path.join(tmp, "tests", "fixtures", "summaries", "expected.tsv"))}
+        changed = sum(1 for k in before if after.get(k) != before[k])
+        if changed == 0 and not problems:
+            problems.append("rename drill: no normalized_sha256 changed with the brand, so the drill proves nothing")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("rename: regenerate + check in a copy renamed to {} ({} sha rows changed)".format(DRILL_BRAND["name"], changed))
+    return problems
+
+
 def check(b):
     problems = []
     # parse
@@ -404,6 +645,7 @@ def check(b):
         for rid, cls in scan(fill(text, b), rules):
             problems.append("secret-shaped {} in {}".format(rid, rel))
     corpus = load_corpus()
+    joined_by_id = {e["id"]: "".join(e["fragments"]) for e in corpus["entries"]}
     for e in corpus["entries"]:
         joined = "".join(e["fragments"])
         hit = scan(joined, rules)
@@ -413,6 +655,14 @@ def check(b):
                 problems.append("secrets {}: control hits {}".format(e["id"], hit))
         elif e["class"] not in classes:
             problems.append("secrets {}: joined value does not hit class {} ({})".format(e["id"], e["class"], hit))
+        if e.get("rule", "-") != "-" and e["rule"] not in {r for r, _ in hit}:
+            problems.append("secrets {}: joined value does not hit its rule id {} ({} rule set hits {})".format(
+                e["id"], e["rule"], source, sorted({r for r, _ in hit})))
+        for parent in e.get("part_of", []):
+            if parent not in joined_by_id:
+                problems.append("secrets {}: part_of names no entry {}".format(e["id"], parent))
+            elif joined not in joined_by_id[parent]:
+                problems.append("secrets {}: joined value is not inside entry {}".format(e["id"], parent))
         for frag in e["fragments"]:
             if scan(frag, rules):
                 problems.append("secrets {}: a single fragment is secret-shaped".format(e["id"]))
@@ -421,6 +671,18 @@ def check(b):
             problems.append("secrets name {}: deny-list says {}".format(n["name"], deny_name(n["name"])))
     print("secrets: {} files scanned with the {} rule set; {} corpus entries, {} names".format(
         len(texts), source, len(corpus["entries"]), len(corpus["names"])))
+    # sequences
+    seq_problems, nseq = check_sequences()
+    problems += seq_problems
+    print("sequences: {} replayed (transcript state per step, S-21 order)".format(nseq))
+    # scope
+    scope_problems, nscope = check_scope_cases(b)
+    problems += scope_problems
+    print("scope: {} scope-cases rows against the §2.4 rule, at reconcile and inside PostCompact".format(nscope))
+    # queue
+    queue_problems, nqueue = check_queue()
+    problems += queue_problems
+    print("queue: {} JSON list answers in the queue-stub/v1 shape".format(nqueue))
     # drift
     gen_dir = os.path.join(REPO, GEN_REL)
     for name, text in sorted(rendered.items()):
@@ -433,16 +695,19 @@ def check(b):
         for f in sorted(os.listdir(gen_dir)):
             if f.endswith(".gen.ts") and f not in rendered and f.startswith(("brand", "corpus", "payloads")):
                 problems.append("drift stale " + os.path.join(GEN_REL, f))
+    # rename
+    if not os.environ.get(NO_DRILL_ENV):
+        problems += rename_drill(b)
     for p in problems:
         print(p)
     print("FIXTURES CHECK: " + ("FAIL ({} problems)".format(len(problems)) if problems else "PASS"))
     return 1 if problems else 0
 
 
-def write(root, b):
+def write(root, b, rows=None):
     d = os.path.join(root, GEN_REL)
     os.makedirs(d, exist_ok=True)
-    for name, text in render(b).items():
+    for name, text in render(b, rows).items():
         with open(os.path.join(d, name), "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
     print("fixtures-gen: wrote {} files in {}".format(len(GEN_FILES), os.path.relpath(d, REPO) if root == REPO else d))
@@ -451,6 +716,7 @@ def write(root, b):
 def main(argv):
     b = brand()
     if argv == []:
+        refresh_sha(b)
         write(REPO, b)
         return 0
     if argv == ["--check"]:
@@ -459,7 +725,7 @@ def main(argv):
         root = os.path.abspath(argv[1])
         if root == REPO:
             die("--out must not be the repo; run without arguments instead")
-        write(root, b)
+        write(root, b, sha_refreshed(b)[0])
         return 0
     if argv == ["--clean"]:
         for name in GEN_FILES:
@@ -473,13 +739,8 @@ def main(argv):
         sys.stdout.write(tsv(expected_rows(b, refs)))
         return 0
     if argv == ["--refresh-sha"]:
-        rows = read_expected()
-        fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
-        for r in rows:
-            r["normalized_sha256"] = fresh[r["file"]]["normalized_sha256"]
-        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
-            f.write(tsv(rows))
-        print("fixtures-gen: refreshed normalized_sha256 for {} rows".format(len(rows)))
+        if not refresh_sha(b):
+            print("fixtures-gen: normalized_sha256 already current for brand {}".format(b["name"]))
         return 0
     die("unknown arguments {}\n{}".format(argv, __doc__))
 
