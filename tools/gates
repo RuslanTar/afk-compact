@@ -6,7 +6,8 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
   --names FILE  the competitor-name list, kept outside the repo (E-7); missing = FAIL
   --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
   --no-git-log  skip the attribution gate over `git log --format=%B`
-  --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm)
+  --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
+                skill-desc)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   names        every list entry, case-insensitive, as a whole token (letters, digits, `_`, `-`
@@ -26,6 +27,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
                `yarn.lock`, `pnpm-lock.yaml` or `node_modules/` anywhere inside a folder target
                (an npm manifest in a plugin makes Claude Code run npm install on users' machines)
+  skill-desc   BT-09 / AT-S-01: every skills/<name>/SKILL.md inside a folder target starts
+               `---\n`, its `description` (quotes removed) is at most 150 characters, and the
+               skill's trigger phrase (SKILL_TRIGGERS) sits in its first 50, case-insensitive
 Exit 0 when every gate has 0 hits, else 1.
 """
 import getpass, json, os, re, subprocess, sys
@@ -46,6 +50,51 @@ NAME_SHAPES = [
 NPM_FILES = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml"}
 NPM_DIRS = {"node_modules"}
 SKIP_DIRS = {".git", "node_modules", ".types"}
+# BT-09: the phrase a user says for each skill (AT-S-01 names "handoff status" for status).
+SKILL_TRIGGERS = {"handoff": "handoff", "resume": "resume", "status": "handoff status"}
+DESC_MAX = 150
+TRIGGER_WITHIN = 50
+
+
+def skill_desc_hits(target):
+    """BT-09 over <target>/skills/*/SKILL.md: (where, text) for each broken rule."""
+    out = []
+    sk = os.path.join(target, "skills")
+    if not os.path.isdir(sk):
+        return out
+    for name in sorted(os.listdir(sk)):
+        path = os.path.join(sk, name, "SKILL.md")
+        if not os.path.isfile(path):
+            continue
+        rel = os.path.relpath(path)
+        with open(path, "rb") as f:
+            data = f.read()
+        if not data.startswith(b"---\n"):
+            out.append((rel + ":1", "BT-09: SKILL.md does not start with ---\\n"))
+            continue
+        lines = data.decode("utf-8", errors="replace").split("\n")
+        end = next((i for i in range(1, len(lines)) if lines[i] == "---"), None)
+        desc = None
+        for i in range(1, end or len(lines)):
+            m = re.match(r"description:[ \t]*(.*)$", lines[i])
+            if m:
+                desc, no = m.group(1).strip(), i + 1
+                break
+        if end is None or desc is None:
+            out.append((rel + ":1", "BT-09: no frontmatter description"))
+            continue
+        if len(desc) >= 2 and desc[0] == desc[-1] and desc[0] in "'\"":
+            q = desc[0]
+            desc = desc[1:-1].replace("''", "'") if q == "'" else desc[1:-1]
+        where = "{}:{}".format(rel, no)
+        if len(desc) > DESC_MAX:
+            out.append((where, "BT-09: description {} chars > {}".format(len(desc), DESC_MAX)))
+        trig = SKILL_TRIGGERS.get(name)
+        if trig is None:
+            out.append((where, "BT-09: no trigger phrase known for skill {}".format(name)))
+        elif trig.lower() not in desc[:TRIGGER_WITHIN].lower():
+            out.append((where, "BT-09: trigger {!r} not in the first {} chars".format(trig, TRIGGER_WITHIN)))
+    return out
 
 
 def npm_paths(target):
@@ -164,6 +213,9 @@ def main(argv):
         for path in npm_paths(target):
             shown = os.path.relpath(path) + ("/" if os.path.isdir(path) else "")
             hit("npm", shown, "BT-06: no npm manifest or node_modules inside the plugin")
+        if os.path.isdir(target):
+            for where, text in skill_desc_hits(target):
+                hit("skill-desc", where, text)
         for path in files_of(target):
             text = text_of(path)
             if text is None:
