@@ -219,15 +219,16 @@ sub post_compact {
     else { $is_main = _looks_main($body, $ctx->{spec}) }
     my @tags = ref $disp eq 'HASH' && ref $disp->{tags} eq 'ARRAY' ? @{ $disp->{tags} } : ();
     my $measured = grep { $_ eq 'measured' } @tags;
-    my $hhmm;
+    # RV-24: the measured block's stamps (the first is the row's `measured_stamp`).
+    my @stamps;
     if ($measured && $nonce) {
         my $cp = watch::io::read_json_file(watch::ctx::sid_dir($ctx) . "/checkpoint/$nonce.json");
-        ($hhmm) = ($cp->{measured_block} // '') =~ /\b(\d\d:\d\d)\b/ if ref $cp eq 'HASH';
+        @stamps = watch::shape::measured_stamps($cp->{measured_block}, $ctx->{spec}) if ref $cp eq 'HASH';
     }
     my $rows = _copy_rows($ctx);
     my ($prev, $src) = previous_summary($ctx, $is_main, $nonce, $body, $rows);
     my $m = watch::shape::metrics(body => $body, spec => $ctx->{spec}, is_main => $is_main,
-                                  measured => $measured, measured_hhmm => $hhmm, prev => $prev, prev_src => $src);
+                                  measured => $measured, measured_stamps => \@stamps, prev => $prev, prev_src => $src);
     my $verdict = $det->{verdict};
     my ($fp, $fp_new);
     if (!defined $nonce && (!defined $verdict || $verdict eq 'unshaped')) {
@@ -257,6 +258,7 @@ sub post_compact {
         elements                => $m->{elements},
         fabricated_check_tokens => $m->{fabricated_check_tokens},
         measured                => watch::ctx::B($measured),
+        measured_stamp          => $stamps[0],
         ledger                  => $m->{ledger},
         clutter                 => $m->{clutter},
         tmp_paths               => $m->{tmp_paths},

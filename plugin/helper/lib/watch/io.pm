@@ -107,6 +107,10 @@ BEGIN { $SHA = eval { require Digest::SHA; 1 } ? 1 : 0 }
 # fallback) first, then Digest::SHA; undef when neither exists.
 sub sha256_hex {
     my ($bytes, $ctx) = @_;
+    return undef unless defined $bytes;
+    # A character string (code point above 0xFF, e.g. an em dash in a heading)
+    # is hashed as its UTF-8 bytes (DP-12): Digest::SHA dies on a wide character.
+    if (utf8::is_utf8($bytes)) { utf8::encode($bytes) }
     if ($ctx && ref $ctx->{sha256} eq 'CODE') {
         my $h = eval { $ctx->{sha256}->($bytes) };
         return lc $h if defined $h && $h =~ /\A[0-9a-fA-F]{64}\z/;

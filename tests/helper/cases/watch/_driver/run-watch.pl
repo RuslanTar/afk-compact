@@ -72,6 +72,8 @@ sub spec_for_tests {
         sections_subagent => ['## Task as assigned', '## Constraints from the parent', '## Report', '## Done',
                               '## Findings', '## Produced but not yet delivered', '## Own background tasks',
                               '## Next action'],
+        time_re => "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}",
+        time_legacy_re => "([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}",
         marker_re => "^$o$b v1 n=([0-9a-f]{8}) s=(main|sub|manual)$c\$",
         sentinel_re => "^$o/$b n=([0-9a-f]{8})$c\$",
         instr_marker_re => "$o$b v1 n=([0-9a-f]{8}) s=(main|sub)$c",

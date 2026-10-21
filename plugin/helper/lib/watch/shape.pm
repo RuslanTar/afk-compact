@@ -68,17 +68,59 @@ sub size_band {
     return $n < 2000 ? 'under-2K' : $n <= 4000 ? '2-4K' : 'over-4K';
 }
 
-# M-10: `checked HH:MM` and `[verified ` tokens; with a measured block, only
-# tokens whose HH:MM differs from the measured time count. `listed` never.
-sub fabricated {
-    my ($body, $measured, $measured_hhmm) = @_;
-    my $n = 0;
-    while ($body =~ /\bchecked (\d\d:\d\d)\b/g) {
-        $n++ unless $measured && defined $measured_hhmm && $1 eq $measured_hhmm;
+# RV-24 (small-rulings §3a): a stamp is `YYYY-MM-DD HH:MM ±hhmm`, regex `time_re` of the
+# spec asset; the legacy short forms (`HH:MM`, `MM-DD HH:MM`, `time_legacy_re`) are still read
+# and counted, never written. The fallbacks below only serve a spec without the keys.
+my $TIME_RE = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
+my $LEGACY_RE = '(?:[0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}';
+
+sub time_res {
+    my ($spec) = @_;
+    my $full = watch::spec::regex($spec || {}, 'time_re') || qr/$TIME_RE/;
+    my $legacy = watch::spec::regex($spec || {}, 'time_legacy_re') || qr/$LEGACY_RE/;
+    return ($full, $legacy);
+}
+
+# The stamps of a measured block (the checkpoint's `measured_block`): its header's stamp
+# first (core prints `Measured facts (<stamp or ISO time>):`), then every other whole stamp
+# in the block (`In flight (sidecar <stamp>)`); a block with no whole stamp gives its first
+# legacy `HH:MM`. The model may copy any of them (the instructions allow checked times
+# taken from Measured facts), so a token equal to one of them is not fabricated.
+sub measured_stamps {
+    my ($block, $spec) = @_;
+    return () unless defined $block && !ref $block && length $block;
+    my ($full, $legacy) = time_res($spec);
+    my @out;
+    my $add = sub { my $t = shift; push @out, $t if defined $t && !grep { $_ eq $t } @out };
+    my ($head) = split /\n/, $block, 2;
+    if ($head =~ /($full)/) { $add->($1) }
+    elsif ($head =~ /\b([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2})(?::[0-9]{2}(?:\.[0-9]+)?)?([+-])([0-9]{2}):?([0-9]{2})\b/) {
+        $add->("$1 $2 $3$4$5");
     }
-    while ($body =~ /\[verified ([^\]\n]{0,40})/g) {
-        my ($t) = $1 =~ /(\d\d:\d\d)/;
-        $n++ unless $measured && defined $measured_hhmm && defined $t && $t eq $measured_hhmm;
+    while ($block =~ /($full)/g) { $add->($1) }
+    unless (@out) { $add->($1) if $block =~ /\b([0-9]{2}:[0-9]{2})\b/ }
+    return @out;
+}
+
+# M-10: `checked <stamp>` and `[verified <stamp>` tokens, in the stamp form and in the legacy
+# short forms. With a measured block, a token whose whole text equals one of the block's
+# stamps does not count (`$stamps`, from measured_stamps). `listed` never counts.
+sub fabricated {
+    my ($body, $measured, $stamps, $spec) = @_;
+    my ($full, $legacy) = time_res($spec);
+    my %ok = map { $_ => 1 } grep { defined } @{ ref $stamps eq 'ARRAY' ? $stamps : [] };
+    my $n = 0;
+    my $count = sub {
+        my $t = shift;
+        $n++ unless $measured && defined $t && $ok{$t};
+    };
+    while ($body =~ /\bchecked (?:(?<f>$full)|(?<l>$legacy)(?![0-9]))/g) {
+        $count->(defined $+{f} ? $+{f} : $+{l});
+    }
+    while ($body =~ /\[verified (?:(?<f>$full)|(?<o>[^\]\n]{0,40}))/g) {
+        my $t = $+{f};
+        if (!defined $t && $+{o} =~ /\b($legacy)(?![0-9])/) { $t = $1 }
+        $count->($t);
     }
     return $n;
 }
@@ -280,7 +322,7 @@ sub metrics {
         size_band               => size_band($total, $is_main),
         section_chars           => (@$headings ? \%sec : undef),
         elements                => ($is_main && $roles ? elements($parts, $spec) : undef),
-        fabricated_check_tokens => fabricated($body, $a{measured}, $a{measured_hhmm}),
+        fabricated_check_tokens => fabricated($body, $a{measured}, $a{measured_stamps}, $spec),
         ledger                  => ledger_diff($body, $a{prev}, $a{prev_src}, $spec),
         clutter                 => $clutter,
         tmp_paths               => $tmp,

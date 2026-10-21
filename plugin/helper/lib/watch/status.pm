@@ -23,6 +23,7 @@ sub lines {
              ? 'alerts are shown here only (Stop delivery waits for probe P-W2)'
              : 'alerts are shown at the next Stop and here';
     push @out, "Watcher: shadow; $mode";
+    push @out, q(Watcher: the watcher setting is not "shadow" or "off"; it counts as shadow) if $ctx->{settings}{watcher_unknown};
     if (my $why = watch::ctx::refused($ctx)) {
         push @out, "Watcher: writes nothing ($why)";
     }
