@@ -1,0 +1,16 @@
+Note from the user's compactinue plugin: context is at 612,345 tokens. Once this turn is over, the plugin compacts the session into a handoff summary.
+Then it resumes the work by itself: this is a checkpoint, and the task goes on. Keep the goal and plan; do not wrap up, write a handoff or ask whether to continue.
+This time the plugin will not resume the work by itself (the hourly auto-continue limit is reached). Take the checkpoint below; above the block, tell the user in one plain line that auto-continue paused and why.
+After this turn the plugin asks you, in a turn of its own, to write a handoff: do not write one now.
+Take a clean checkpoint in at most 6 tool calls; a parallel batch counts as one.
+1. Finish, don't start (≤3 calls): finish the atomic step in progress unless it needs a choice from the user or acts outward; start nothing new. Never abort, reset or skip a merge, rebase or edit set to look clean: call it MID-STEP <step>, remaining <what>.
+2. Save context-only work (≤2 calls): write a drafted reply, unsent table or number, or unsaved finding to a scratch or temp file, not the repository. Copy no evidence: after this turn the plugin copies the temp files this session cited.
+3. List (1 batch): each runtime listing tool you have for background agents, workflows, scheduled tasks and background tasks, plus `git -C <worktree of this work> status --porcelain` and `date '+%Y-%m-%d %H:%M %z'`. Leave background work running; compaction keeps it alive. Never sleep or wait.
+4. If an answer the user awaits is ready, give it in full. Then close the turn with this block, nothing after it; it reaches the next window in the summary or as a kept message:
+Checkpoint: clean | MID-STEP <step>, remaining <what> · Step 1: <one exact command or edit> | none: task done
+Dirty: <each uncommitted file: intent; over 10: the count and intent per folder> | none
+In flight (listed <stamp>): B-n <runtime id> · kind · what · due · probe `<cmd>` · auto|ask|never, ≤8 rows, plus work you started that no listing shows (not listed [unverified]); +N more: their ids | nothing listed | not listed (no tool)
+Saved: <paths from step 2> | none
+Questions: Q-n what · options · recommendation · blocks | none
+Copy runtime ids exactly as listed; the stamp comes from the date output, copied whole. Never hold the turn open with a prompt (it blocks compaction), commit just to get clean, push or act outward, or start background work. A permission or guard denial: note it in the block, never route around it.
+In the step-3 batch, for each user-owned question run `compactinue-store queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d` with one JSON object on stdin (quoted heredoc): {"question":"…?","kind":"choice|approval|open","options":[{"label","description","recommended"}],"blocks":"…"}. It is local, not outward. Write the id it prints in Questions; on NOT QUEUED keep the question there as is.

@@ -72,15 +72,17 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            "handoff_finish": "`" + NAME + "-store publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
-         "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt"}
+         "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
 # Tags per asset, in the order DESIGN-NOTES §2 lists them (golden file names use this order).
-TAGS = {"main": ["midturn", "auto", "chain", "measured"], "sub": ["fallback"],
-        "res": ["midturn", "nonok"], "nudge": ["continue", "halt", "queue"]}
+TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff"], "sub": ["fallback"],
+        "res": ["midturn", "nonok", "handoff", "handoff-partial"], "nudge": ["continue", "halt", "halt-handoff", "queue"],
+        "turn": ["submit", "near", "spent", "imminent"]}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
 # CDN Review item 9: a kept [tag] line refers to these lines, which must be kept too.
-TAG_NEEDS = {("nudge", "halt"): ["Checkpoint: "], ("nudge", "queue"): ["Questions: "]}
+TAG_NEEDS = {("nudge", "halt"): ["Checkpoint: "], ("nudge", "halt-handoff"): ["Checkpoint: "],
+             ("nudge", "queue"): ["Questions: "]}
 
 
 def load(name):
@@ -118,6 +120,8 @@ BUDGETS = {
     "resume block total":    ("chars", None, 6000),
     "sessionstart cutoff":   ("chars", None, 10000),
     "nudge":                 ("chars", 2200, None),
+    "handoff turn submit":   ("chars", None, None),   # D-18 handoff-turn.txt: printed, no limit set
+    "handoff turn note":     ("chars", None, None),
 }
 
 
@@ -139,7 +143,7 @@ def budget_table():
 
 
 TEXT = {k: load(v) for k, v in FILES.items()}
-main, sub, res, nudge = TEXT["main"], TEXT["sub"], TEXT["res"], TEXT["nudge"]
+main, sub, res, nudge, turn = TEXT["main"], TEXT["sub"], TEXT["res"], TEXT["nudge"], TEXT["turn"]
 
 
 def static(text, tags, drop=()):
@@ -318,28 +322,36 @@ BLOCK = "x" * BUDGETS["measured block"][2]  # worst-case measured block (header 
 bad = False
 print(f"assets: {os.path.relpath(DIR, REPO)}  plugin name length: {len(NAME)}  runtime path length: {PATH_LEN}")
 budget_table()
-for tags in ([], ["midturn"], ["chain"], ["midturn", "chain"]):
+for tags in ([], ["midturn"], ["chain"], ["midturn", "chain"], ["midturn", "chain", "handoff"]):
     bad |= check(f"main mod static core {'+'.join(tags) or 'base'}", static(main, tags, drop=("measured",)), "static core")
 for tags in (["auto"], ["auto", "chain"]):
     bad |= check(f"main classic static core {'+'.join(tags)}", static(main, tags, drop=("measured",)), "static core")
 RUNTIME["measured_facts"] = BLOCK
-for tags in (["midturn", "chain", "measured"], ["chain", "measured"]):
+for tags in (["midturn", "chain", "measured"], ["chain", "measured"], ["midturn", "chain", "measured", "handoff"]):
     bad |= check(f"mod channel total {'+'.join(tags)} (B)", assemble(main, tags), "mod channel total")
 RUNTIME["measured_facts"] = ""
 bad |= check("subagent mod", assemble(sub, []), "subagent mod")
 bad |= check("subagent classic +fallback", assemble(sub, ["fallback"]), "subagent classic")
 classic_total = assemble(main, ["auto", "chain"], drop=("measured",)) + assemble(sub, ["fallback"])
 bad |= check("classic channel total main+sub (B)", classic_total, "classic channel total")
-for tags in ([], ["midturn"], ["nonok"], ["midturn", "nonok"]):
+for tags in ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
+             ["midturn", "nonok", "handoff-partial"]):
     bad |= check(f"resume protocol {'+'.join(tags) or 'base'}",
                  assemble(res, tags, drop=("measured_at", "remeasure")), "resume protocol")
 RUNTIME["remeasure"] = BLOCK
 resume_total = assemble(res, ["midturn", "nonok"])
 bad |= check("resume block total midturn+nonok", resume_total, "resume block total")
 bad |= check("resume block total vs SessionStart cutoff", resume_total, "sessionstart cutoff")
+resume_total = assemble(res, ["midturn", "nonok", "handoff-partial"])
+bad |= check("resume block total midturn+nonok+handoff-partial", resume_total, "resume block total")
+bad |= check("resume block total +handoff-partial vs cutoff", resume_total, "sessionstart cutoff")
 RUNTIME["remeasure"] = ""
-for tags in (["continue"], ["halt"], ["continue", "queue"], ["halt", "queue"]):
+for tags in (["continue"], ["halt"], ["continue", "queue"], ["halt", "queue"], ["halt", "halt-handoff"],
+             ["halt", "halt-handoff", "queue"]):
     bad |= check(f"nudge {'+'.join(tags)}", assemble(nudge, tags), "nudge")
+bad |= check("handoff turn [submit]", assemble(turn, ["submit"]), "handoff turn submit")
+for t in ("near", "spent", "imminent"):
+    bad |= check(f"handoff turn [{t}]", assemble(turn, [t]), "handoff turn note")
 leftover = False
 for asset in FILES:
     for tags in combos(asset):
