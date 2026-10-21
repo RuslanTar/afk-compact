@@ -1,8 +1,9 @@
 #!/bin/sh
 # compactinue-store: launcher for the plugin helper (POSIX sh; dash, ash,
 # bash 3.2 and Git Bash). It finds perl 5.28+ and runs helper/main.pl.
-# Without a usable perl it takes the fallback path: a hook prints nothing
-# and exits 0 after one content-free row; any other command refuses.
+# Without a usable perl or a readable main.pl it takes the fallback path: a
+# hook prints nothing and exits 0 after one content-free row; any other
+# command refuses.
 
 # Keep the user's perl library paths for queue_cmd children, then clear
 # every variable that can inject modules or change byte handling.
@@ -29,11 +30,16 @@ root=$(cd "$here/.." 2>/dev/null && pwd -P) || root=$here/..
 
 perl=$(command -v perl 2>/dev/null)
 [ -n "$perl" ] || perl=/usr/bin/perl
-if [ -x "$perl" ] && "$perl" -e 'exit($] < 5.028 ? 1 : 0)' 2>/dev/null; then
+if [ -x "$perl" ] && [ -r "$root/helper/main.pl" ] && "$perl" -e 'exit($] < 5.028 ? 1 : 0)' 2>/dev/null; then
+  if [ "${1-}" = hook ]; then
+    # Exit 2 from a hook blocks, vetoes or re-prompts; perl exits 2 on its own when it
+    # dies with errno ENOENT. A hook always exits 0, whatever main.pl does.
+    exec "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; do $main;' "$root/helper/main.pl" "$@" 2>/dev/null
+  fi
   exec "$perl" "$root/helper/main.pl" "$@"
 fi
 
-# Fallback: no perl, or one older than 5.28.
+# Fallback: no perl, one older than 5.28, or no readable helper/main.pl.
 if [ "${1-}" = hook ]; then
   payload=$(cat 2>/dev/null | head -c 65536 2>/dev/null)
   sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[ ]*:[ ]*"\([0-9A-Za-z-]\{8,64\}\)".*/\1/p' | head -n 1)

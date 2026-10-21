@@ -32,7 +32,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "{\"pid\":424242,\"pid_lstart\":\"Tue Oct 21 09:00:00 2026\",\"execpath_version\":null}\n"
+   "{\"pid\":424242,\"pid_lstart\":\"Tue Oct 21 09:00:00 2026\",\"execpath_version\":null,\"watch\":\"~/.claude/handoffs/.watch\"}\n"
   ]
  },
  {

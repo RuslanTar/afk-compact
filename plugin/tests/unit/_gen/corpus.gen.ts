@@ -521,5 +521,34 @@ export const CORPUS: readonly CorpusEntry[] = [
   "scope": null,
   "normalized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "dispatch": null
+ },
+ {
+  "file": "41-sub-marker-main-heading.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Resume here\nStatus: active \u00b7 State: callers listed, report not sent (checkpoint: clean)\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Next action\nreturn the report to the parent\n\u27ea/compactinue n=5e6f7081\u27eb\n</summary>\n",
+  "verdict": "scope-leak",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "112a1d8cdbf807f1bc8932210a06003646128b03a47dadb743ee8f451c6d8786",
+  "dispatch": {
+   "v": 1,
+   "nonce": "5e6f7081",
+   "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+   "actor": "a9a00b3f363327444",
+   "agent_id": "a9a00b3f363327444",
+   "trigger": "auto",
+   "channel": "mod-hook",
+   "resume_pref": "none",
+   "midturn": false,
+   "tags": [],
+   "instructions_sha8": "0e4d9b21",
+   "instructions_bytes": 897,
+   "cc_version": "2.1.306",
+   "load_id": "l0ad0001",
+   "pid": 43210,
+   "pid_lstart": "Wed Oct 21 09:00:00 2026",
+   "ts": "2026-10-21T14:05:00+03:00"
+  }
  }
 ]
