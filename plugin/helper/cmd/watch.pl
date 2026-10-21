@@ -12,6 +12,8 @@ use watch::ctx;
 use watch::io;
 use watch::prune;
 
+$SIG{__WARN__} = sub { };
+
 sub _usage {
     print STDERR "usage: watch prune --days N [--sid S]\n";
     exit 64;
