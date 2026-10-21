@@ -72,7 +72,7 @@ sub scan_file {
     my %res = (file => _basename($path), actor => $actor, events => [], boundaries => [],
                bad_lines => 0, oversize_lines => 0, partial => 0, restarted => 0,
                turns => { prompts => 0, tool_batches => 0, tool_calls => 0, classes => {}, errors => {},
-                          askq => { answered => 0, rejected => 0, timed_out => 0 }, plugin_origin_rows => 0, continues => 0,
+                          askq => { answered => 0, rejected => 0, timed_out => 0 }, plugin_origin_rows => 0, continues => 0, outward => {},
                           nudges => 0, task_status => 0 });
     my @st = stat $path;
     unless (@st && -r _) { $res{unreadable} = 1; return \%res }
@@ -307,7 +307,8 @@ sub _analyze {
         my $progress = 0;
         for my $call (@calls) {
             $t->{tool_calls}++;
-            $t->{classes}{ $call->{name} }++;
+            $t->{classes}{ $call->{mcp} ? q(mcp) : $call->{name} }++;
+            $t->{outward}{$_}++ for @{ $call->{outward} || [] };
             $c->{asks}{ $call->{id} } = 1 if $call->{ask} && defined $call->{id};
             $progress = 1 if $call->{progress} && !$call->{heal};
             if ($call->{heal}) {
