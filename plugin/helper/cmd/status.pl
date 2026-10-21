@@ -67,6 +67,9 @@ sub run {
     # escalations
     my %n;
     for my $r (@all) { my $e = $r->{ev} // ''; $n{$e}++ if grep { $_ eq $e } @ESCALATIONS }
+    # The classic saver has no mod stream: its EXISTS sha-differs (a second summary under one
+    # nonce, which is not saved) counts as copy_mismatch; the mod logs its own for writer mod.
+    $n{copy_mismatch} += grep { ($_->{ev} // '') eq 'copy' && ($_->{result} // '') eq 'mismatch' && ($_->{writer} // '') ne 'mod' } @$classic;
     my @esc = map { "$_ $n{$_}" } grep { $n{$_} } @ESCALATIONS;
     push @out, 'escalations: ' . (@esc ? join(', ', @esc) : 'none');
 
