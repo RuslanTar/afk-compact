@@ -1,7 +1,8 @@
 package dispatch;
 # lib/dispatch.pm: dispatch records <watch>/<sid>/dispatch/<nonce>.json (MOD-SPEC
 # §2.3, BUILD-PLAN §3.4): exclusive create, 0600 in a 0700 directory; every key
-# always present; compaction_seq never in it. Owner: WP-core.
+# always present; compaction_seq never in it. Optional `handoff_ht` (8 hex, D-18 B3) only
+# when the dispatch follows or interrupts a handoff turn. Owner: WP-core.
 use strict;
 use warnings;
 
@@ -10,7 +11,7 @@ our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref mid
 our %TRIGGERS = map { $_ => 1 } qw(manual auto plugin precompute unknown);
 our %CHANNELS = map { $_ => 1 } qw(mod-hook mod-self classic);
 our %PREFS = map { $_ => 1 } qw(prompt.context sessionstart prompt.submit none);
-our %TAGS = map { $_ => 1 } qw(midturn auto chain measured);
+our %TAGS = map { $_ => 1 } qw(midturn auto chain measured handoff);
 
 sub path { my ($watch, $sid, $nonce) = @_; return "$watch/$sid/dispatch/$nonce.json" }
 
@@ -37,6 +38,7 @@ sub record {
         pid                => defined $f{pid} ? 0 + $f{pid} : undef,
         pid_lstart         => $f{pid_lstart},
         ts                 => $f{ts} // util::iso(util::now()),
+        (defined $f{handoff_ht} ? (handoff_ht => $f{handoff_ht}) : ()),
     );
 }
 

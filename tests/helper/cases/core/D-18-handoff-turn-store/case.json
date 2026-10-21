@@ -1,0 +1,431 @@
+{
+ "id": "D-18 B8 (handoff-turn, handoff-state, dispatch --handoff-ht)",
+ "note": "D-18 §9.1 / B3 / B8 (core half of HT-LT-01..03). handoff-turn open exclusive-creates <watch>/<sid>/handoff-turn/<ht>.json (0600, row handoff_turn_open) and answers EXISTS for a taken ht; handoff-state prints none / staged <stage> draft=<0|1> finish=<publish command, no session id> / published <path> / superseded <nonce>; supersede needs an open ht. The lib seams begin and publish call: the open ht is the newest with no .published and at most 60 min old; one stage and one published handoff per ht. dispatch --handoff-ht puts handoff_ht in the record and the row, and the tag handoff is accepted",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "open",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n",
+    "files": [
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.json",
+      "mode": "0600",
+      "json": {
+       "v": 1,
+       "ht": "a1b2c3d4",
+       "session_id": "$SID",
+       "reason": "cap",
+       "max_calls": 34,
+       "max_tokens": 64000,
+       "opened_at": "2026-10-21T14:05:12+03:00"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_turn_open",
+      "count": 1,
+      "fields": {
+       "ht": "a1b2c3d4",
+       "reason": "cap",
+       "max_calls": 34
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "taken",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "thrash",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "EXISTS\n",
+    "files": [
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.json",
+      "contains": [
+       "\"reason\":\"cap\""
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_turn_open",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "bad reason",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "b1b2c3d4",
+    "--reason",
+    "whim",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 64,
+    "absent": [
+     "$WATCH/$SID/handoff-turn/b1b2c3d4.json"
+    ]
+   }
+  },
+  {
+   "name": "bad ht",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "XYZ"
+   ],
+   "expect": {
+    "exit": 64
+   }
+  },
+  {
+   "name": "none",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "none\n"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4/settings.json",
+     "json": {
+      "session_id": "$SID",
+      "bucket": "$ROOT/repo/LAB-123"
+     }
+    },
+    {
+     "write": "$WATCH/$SID/handoff-turn/a1b2c3d4.stage",
+     "text": "$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4\n"
+    }
+   ]
+  },
+  {
+   "name": "staged, no draft",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "staged $ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4 draft=0 finish=$BRAND-store publish --stage '$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4' --slug lab-123 --status in-progress\n"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4/body.md",
+     "text": "# draft\n"
+    },
+    {
+     "write": "$WATCH/$SID/handoff-turn/c1c2c3c4.json",
+     "json": {
+      "v": 1,
+      "ht": "c1c2c3c4",
+      "session_id": "$SID",
+      "reason": "cap",
+      "max_calls": 34,
+      "max_tokens": 64000,
+      "opened_at": "2026-10-21T14:00:00+03:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "staged with a draft",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^staged \\S+ draft=1 finish=$BRAND-store publish --stage '\\S+' --slug lab-123 --status in-progress\\n\\z",
+    "stdout_lacks": [
+     "$SID"
+    ]
+   }
+  },
+  {
+   "name": "supersede",
+   "argv": [
+    "handoff-turn",
+    "supersede",
+    "--sid",
+    "$SID",
+    "--ht",
+    "c1c2c3c4",
+    "--nonce",
+    "9f9e9d9c"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n",
+    "files": [
+     {
+      "path": "$WATCH/$SID/handoff-turn/c1c2c3c4.superseded",
+      "mode": "0600",
+      "contains": [
+       "9f9e9d9c"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "superseded",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "c1c2c3c4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "superseded 9f9e9d9c\n"
+   }
+  },
+  {
+   "name": "supersede an unknown ht",
+   "argv": [
+    "handoff-turn",
+    "supersede",
+    "--sid",
+    "$SID",
+    "--ht",
+    "d1d2d3d4",
+    "--nonce",
+    "9f9e9d9c"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: no-ht\n"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/handoff-turn/e1e2e3e4.json",
+     "json": {
+      "v": 1,
+      "ht": "e1e2e3e4",
+      "session_id": "$SID",
+      "reason": "thrash",
+      "max_calls": 34,
+      "max_tokens": 64000,
+      "opened_at": "2026-10-21T12:00:00+03:00"
+     }
+    },
+    {
+     "write": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+     "text": "$ROOT/repo/LAB-123/2026-10-21_14-05_11111111-a1b2c3.md\n"
+    },
+    {
+     "write": "$WATCH/$SID/handoff-turn/f1f2f3f4.json",
+     "json": {
+      "v": 1,
+      "ht": "f1f2f3f4",
+      "session_id": "$SID",
+      "reason": "continue-off",
+      "max_calls": 34,
+      "max_tokens": 64000,
+      "opened_at": "2026-10-21T14:04:00+03:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "the open ht begin binds; one stage and one handoff per ht",
+   "lib": "handoff_turn_api",
+   "args": {
+    "sid_dir": "$WATCH/$SID",
+    "now": "2026-10-21T14:05:12+03:00",
+    "want_open": "f1f2f3f4",
+    "bind": "f1f2f3f4",
+    "stage": "$ROOT/repo/LAB-123/.staging/11111111-f1f2f3f4",
+    "path": "$ROOT/repo/LAB-123/2026-10-21_14-06_11111111-f1f2f3.md"
+   }
+  },
+  {
+   "name": "published",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "published $ROOT/repo/LAB-123/2026-10-21_14-05_11111111-a1b2c3.md\n"
+   }
+  },
+  {
+   "name": "next open ht (the 2 h old one is not)",
+   "lib": "handoff_turn_api",
+   "args": {
+    "sid_dir": "$WATCH/$SID",
+    "now": "2026-10-21T14:05:12+03:00",
+    "want_open": "c1c2c3c4"
+   }
+  },
+  {
+   "name": "dispatch --handoff-ht",
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "0a0b0c0d",
+    "--actor",
+    "main",
+    "--trigger",
+    "plugin",
+    "--channel",
+    "mod-self",
+    "--tags",
+    "handoff",
+    "--midturn",
+    "false",
+    "--handoff-ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n",
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/0a0b0c0d.json",
+      "json": {
+       "handoff_ht": "a1b2c3d4",
+       "tags": [
+        "handoff"
+       ]
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "dispatch",
+      "count": 1,
+      "fields": {
+       "nonce": "0a0b0c0d",
+       "handoff_ht": "a1b2c3d4"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "dispatch without it",
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "0a0b0c0e",
+    "--actor",
+    "main",
+    "--trigger",
+    "plugin",
+    "--channel",
+    "mod-self"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/0a0b0c0e.json",
+      "keys_absent": [
+       "handoff_ht"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "bad --handoff-ht",
+   "argv": [
+    "dispatch",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "0a0b0c0f",
+    "--actor",
+    "main",
+    "--trigger",
+    "plugin",
+    "--channel",
+    "mod-self",
+    "--handoff-ht",
+    "nope"
+   ],
+   "expect": {
+    "exit": 64,
+    "absent": [
+     "$WATCH/$SID/dispatch/0a0b0c0f.json"
+    ]
+   }
+  }
+ ]
+}

@@ -1232,6 +1232,31 @@ sub builtin {
         POSIX::tzset();
         return @e;
     }
+    if ($name eq 'handoff_turn_api') {
+        # D-18 B7/B8: the seams begin and publish call (lib/handoff_turn.pm): the open ht
+        # begin binds (newest, no .published, at most 60 min old), one stage per ht
+        # (resumed), one published handoff per ht.
+        for my $l (qw(bucket handoff_turn)) { require "$l.pm" }
+        local $ENV{STORE_TEST_MODE} = '1';
+        local $ENV{STORE_TEST_NOW} = $a->{now};
+        my $d = $a->{sid_dir};
+        my $open = handoff_turn::open_for_begin($d);
+        push @e, 'open ht ' . ($open ? $open->{ht} : 'none') . ', want ' . ($a->{want_open} // 'none')
+            unless ($open ? $open->{ht} : '') eq ($a->{want_open} // '');
+        if (my $ht = $a->{bind}) {
+            my ($s1, $r1) = handoff_turn::bind_stage($d, $ht, $a->{stage});
+            my ($s2, $r2) = handoff_turn::bind_stage($d, $ht, "$a->{stage}-other");
+            push @e, "first bind: $s1 resumed=$r1" unless $s1 eq $a->{stage} && !$r1;
+            push @e, "second bind: $s2 resumed=$r2" unless $s2 eq $a->{stage} && $r2;
+            my ($p1, $q1) = handoff_turn::mark_published($d, $ht, $a->{path});
+            my ($p2, $q2) = handoff_turn::mark_published($d, $ht, "$a->{path}.other");
+            push @e, "first publish: $p1 $q1" unless $p1 && $q1 eq $a->{path};
+            push @e, "second publish: $p2 $q2" unless !$p2 && $q2 eq $a->{path};
+            my $after = handoff_turn::open_for_begin($d);
+            push @e, 'published ht still open' if $after && $after->{ht} eq $ht;
+        }
+        return @e;
+    }
     if ($name eq 'jobs_output_path') {
         # DP-2 / DP-13: the two output-path readers of lib/jobrec.pm (probe P-D1-6 decides
         # which one is used; 'none' until then) and the switch between them.
