@@ -59,7 +59,7 @@ Run together:
 - Read the template (once per invocation).
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry.
 - Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
-- `ps -o pid=,lstart=,command= -p <pid>,<pid>` for pids recorded this session.
+- `ps -o pid=,lstart=,comm= -p <pid>,<pid>` for pids recorded this session.
 - One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on.
 
 Build In flight as the union by runtime id of the listings, `inflight_measured` and the probes, never from memory; assign each row its restart class (template §4.4). Record stalled-looking items as found. Work you started this session that no channel lists still gets a row, watched `not listed [unverified]`; never drop it (listings miss live tasks). <!-- review-fix -->
