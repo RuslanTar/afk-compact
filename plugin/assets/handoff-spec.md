@@ -266,7 +266,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     {"id": "jwt", "class": "HARD", "re": "\\beyJ[A-Za-z0-9_-]{8,}\\.eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}"},
     {"id": "auth-header", "class": "HARD", "re": "\\b([Bb]earer|[Bb]asic)[ \\t]+[A-Za-z0-9._~+/-]{16,}=*"},
     {"id": "url-userinfo", "class": "HARD", "re": "\\b[A-Za-z][A-Za-z0-9+.-]*://[^/\\s:@]+:[^/\\s@]+@[^/\\s]+"},
-    {"id": "key-value", "class": "WARN", "re": "([Pp][Aa][Ss][Ss]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])[A-Za-z_]*[\"']?[ \\t]*[=:][ \\t]*[\"']?[^\\s\"',;]{6,}"},
+    {"id": "key-value", "class": "WARN", "re": "([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])?|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])[\"']?[ \\t]*[=:][ \\t]*[\"']?[^\\s\"',;]{6,}"},
     {"id": "cloud-key-bare", "class": "WARN", "re": "(^|[^A-Za-z0-9/+])(?=[A-Za-z0-9/+]{0,39}[A-Z])(?=[A-Za-z0-9/+]{0,39}[a-z])(?=[A-Za-z0-9/+]{0,39}[0-9])[A-Za-z0-9/+]{40}($|[^A-Za-z0-9/+=])"},
     {"id": "high-entropy", "class": "WARN", "re": "(^|[^A-Za-z0-9+/])(?=[A-Za-z0-9+/]{0,200}[0-9])(?=[A-Za-z0-9+/]{0,200}[A-Z])(?=[A-Za-z0-9+/]{0,200}[a-z])[A-Za-z0-9+/]{32,}={0,2}", "min_entropy": 4.0},
     {"id": "cookie", "class": "WARN", "re": "([Ss]et-)?[Cc]ookie:[ \\t]*[^=\\s;]+=[^;\\s]{8,}"}

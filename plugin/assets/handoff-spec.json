@@ -374,7 +374,7 @@
     {
       "id": "key-value",
       "class": "WARN",
-      "re": "([Pp][Aa][Ss][Ss]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])[A-Za-z_]*[\"']?[ \\t]*[=:][ \\t]*[\"']?[^\\s\"',;]{6,}"
+      "re": "([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])?|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])[\"']?[ \\t]*[=:][ \\t]*[\"']?[^\\s\"',;]{6,}"
     },
     {
       "id": "cloud-key-bare",
