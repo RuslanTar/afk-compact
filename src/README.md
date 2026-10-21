@@ -103,7 +103,7 @@ The handoff and the compaction instructions share one format, so `/{{plugin}}:re
 
 Set on the install screen, or later in `/config` (rows named `{{plugin}}.<key>`). An empty value means the default.
 
-Three keys let the plugin act without asking: `repo_roots`, `relaunch_auto` and `relaunch_allow`. The plugin reads them **from your settings file only** (under the plugin's `options` in `pluginConfigs`). Flags and environment values are ignored for these keys, and `/{{plugin}}:status` prints a note when it ignores one. Nothing the plugin or the model runs can set them for you.
+Three keys let the plugin act without asking: `repo_roots`, `relaunch_auto` and `relaunch_allow`. The plugin reads them **from your settings file only**: `settings.json` in your Claude Code config folder (`~/.claude`, or the folder `CLAUDE_CONFIG_DIR` names), under the plugin's `options` in `pluginConfigs`. Flags and plugin option values are ignored for these keys, and `/{{plugin}}:status` prints a note when it ignores one. The plugin itself never writes them. It finds that folder through `CLAUDE_CONFIG_DIR` as the running command sees it, so a command the model runs with its own `CLAUDE_CONFIG_DIR` makes the helper read another settings file. This version does not detect that; your permission mode judges such a command as usual.
 
 Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. It does not read them from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
 
