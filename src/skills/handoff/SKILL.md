@@ -58,7 +58,7 @@ Run together:
 - `{{plugin}}-store stamp --stage <stage>`: its time is the as-of for this batch.
 - Read `references/handoff-template.md` (once per invocation).
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry.
-- Read the first 60 lines of each `newer_foreign` handoff (≤2); record overlap under Ownership and never overwrite their decisions.
+- Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
 - `ps -o pid=,lstart=,command= -p <pid>,<pid>` for pids recorded this session.
 - One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on.
 
