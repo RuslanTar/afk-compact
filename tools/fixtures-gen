@@ -30,7 +30,8 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
-  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8)
+  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8; optional
+            `commands`); a queue/<case>/add.rc follows the D-10 exit table (small-rulings §1.2)
   setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
             (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
             repos (worktrees, submodule, symlinked root, declarations, exports against
@@ -1004,27 +1005,65 @@ QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
 LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
 
 
+QUEUE_COMMANDS = {"list", "adopt", "add"}
+QUEUE_ADD_STATUS = {"queued", "exists"}
+CLIENT_ID_RE = re.compile(r"^ck-[0-9a-f]{12}$")
+
+
 def check_queue():
+    """List answers in the queue-stub/v1 shape (optional `commands`); add answers per D-10
+    (small-rulings §1.2): rc 0 prints a queue-add/v1 object, rc 2 has no REFUSED line, rc 5 a
+    `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the other refusals."""
     problems, njson = [], 0
     for case in sorted(os.listdir(QUEUE)) if os.path.isdir(QUEUE) else []:
         p = os.path.join(QUEUE, case, "list.out")
         text = read(p) if os.path.exists(p) else ""
-        if not text.lstrip().startswith("{"):
-            continue
-        njson += 1
         where = "queue/{}/list.out".format(case)
-        try:
-            doc = json.loads(text)
-        except ValueError as e:
-            problems.append("{}: {}".format(where, e))
+        if text.lstrip().startswith("{"):
+            njson += 1
+            try:
+                doc = json.loads(text)
+            except ValueError as e:
+                problems.append("{}: {}".format(where, e))
+                continue
+            commands = doc.pop("commands", None)
+            int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
+            if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
+                    or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
+                    or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
+                    or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
+                problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
+                    where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
+            if commands is not None and (not isinstance(commands, list) or not set(commands) <= QUEUE_COMMANDS):
+                problems.append("{}: commands must be a list within {}".format(where, sorted(QUEUE_COMMANDS)))
+        rc_file = os.path.join(QUEUE, case, "add.rc")
+        if not os.path.exists(rc_file):
             continue
-        int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
-        if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
-                or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
-                or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
-                or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
-            problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
-                where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
+        where = "queue/{}/add".format(case)
+        rc = read(rc_file).strip()
+        out_file = os.path.join(QUEUE, case, "add.out")
+        out = read(out_file) if os.path.exists(out_file) else ""
+        err_file = os.path.join(QUEUE, case, "add.err")
+        err = read(err_file) if os.path.exists(err_file) else ""
+        if not rc.isdigit() or int(rc) > 6:
+            problems.append("{}.rc: {!r} is not an exit code of the D-10 table (0-6)".format(where, rc))
+            continue
+        rc = int(rc)
+        if rc == 0:
+            try:
+                d = json.loads(out)
+            except ValueError:
+                d = None
+            if (not isinstance(d, dict) or d.get("schema") != "queue-add/v1" or d.get("status") not in QUEUE_ADD_STATUS
+                    or not CLIENT_ID_RE.match(str(d.get("client_id"))) or not d.get("id") or not d.get("lane")):
+                problems.append("{}.out: rc 0 needs a queue-add/v1 object with status, id, lane and client_id ck-<12 hex>".format(where))
+        elif rc == 2 and "REFUSED:" in out + err:
+            problems.append("{}: exit 2 must carry no REFUSED line (it means an old tool without add)".format(where))
+        elif rc == 5 and not re.search(r"^REFUSED: draft: \S+", out + err, re.M):
+            problems.append("{}: exit 5 needs a `REFUSED: draft: <rule>` line".format(where))
+        sleep_file = os.path.join(QUEUE, case, "add.sleep")
+        if os.path.exists(sleep_file) and not read(sleep_file).strip().isdigit():
+            problems.append("{}.sleep must be whole seconds".format(where))
     return problems, njson
 
 
@@ -1197,7 +1236,7 @@ def check(b):
     # queue
     queue_problems, nqueue = check_queue()
     problems += queue_problems
-    print("queue: {} JSON list answers in the queue-stub/v1 shape".format(nqueue))
+    print("queue: {} JSON list answers in the queue-stub/v1 shape, add answers per the D-10 exit table".format(nqueue))
     # setups, settings
     setup_problems, nsetup = check_setups(b)
     problems += setup_problems
