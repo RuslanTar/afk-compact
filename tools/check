@@ -7,13 +7,23 @@ Usage: tools/check PHASE [--names FILE] [--no-drill]
            integration  the same with every skill required, plus X-H (every helper case:
                         tests/helper/run.* over tests/helper/cases, then the WP-watch driver)
            selftest     X-tools alone
+           xgen         X-gen alone (used by the X-tools probe of the canary baseline)
   --names  the competitor-name list (E-7); default $GATE_NAMES_FILE. Missing = X-gates fails.
   --no-drill  skip X-tools and BT-02 (used for the drill's own run inside its renamed copy)
 
+X-gen: tools/build --check, tools/fixtures-gen --check, tools/helper-replies-gen --check,
+tools/canary-baseline --check (pinned to the Claude Code binary the baseline records, so an
+update does not make it flaky; when that binary is gone, every part but the C8 counts is
+compared with a render from the newest binary) and tools/assemble --check (goldens and
+goldens.gen.ts), each byte for byte (BH-4, BH-5).
+
 X-tools: plant known faults in temp copies of the work tree (tmp/selftest/) and confirm that
-tools/build --check and tools/gates report every one, while the unplanted copy passes the
-same command: CRLF line ends in GEN files, stray files where only GEN tools write, other
-candidate names inside longer words, and npm manifests or node_modules under plugin/ (BT-06).
+the tool reports every one, while the unplanted copy passes the same command: CRLF line ends
+in GEN files (tools/build, helper-replies-gen, canary-baseline, assemble), stray files where
+only GEN tools write, other candidate names inside longer words, npm manifests or
+node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md
+description over the BT-09 rule, a cross-WP `git mv` (owners-check) and a checkout with
+core.autocrlf=true without the repo's .gitattributes (the launcher must keep LF and run).
 
 BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
@@ -166,8 +176,38 @@ def to_crlf(path):
         f.write(data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
 
 
+GIT_ID = ["-c", "user.name=selftest", "-c", "user.email=selftest@example.invalid", "-c", "commit.gpgsign=false",
+          "-c", "core.hooksPath=/dev/null", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false"]
+
+
+def git_in(d, *args):
+    r = subprocess.run(["git"] + GIT_ID + ["-C", d] + list(args), capture_output=True, text=True)
+    if r.returncode != 0:
+        raise Fail("X-tools: git {} in {}: {}".format(" ".join(args), d, r.stderr.strip()[-300:]))
+    return r.stdout
+
+
+def git_repo(d):
+    """The copy as a one-commit repo on main (the probes that need git history)."""
+    git_in(d, "init", "-q")
+    git_in(d, "add", "-A")
+    git_in(d, "commit", "-q", "-m", "selftest base")
+
+
+def pinned_claude(root=REPO):
+    """The Claude Code binary the canary baseline's C8 counts were taken from, if installed."""
+    try:
+        with open(os.path.join(root, "plugin", "assets", "canary-baseline.json"), encoding="utf-8") as f:
+            v = json.load(f)["c8"]["binary_version"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, None
+    b = os.path.join(os.path.expanduser("~"), ".local", "share", "claude", "versions", str(v))
+    return v, (b if os.path.isfile(b) else None)
+
+
 def probes(name):
-    """(id, finding, argv relative to the copy, plant(copy), [regex every stdout must hold])."""
+    """(id, finding, argv relative to the copy or a callable(dir) -> (exit, stdout), plant(copy),
+    [regex every stdout must hold], prep(copy) or None: run on the clean and the planted copy)."""
     gates_only = lambda g: ["tools/gates", "plugin", "--names", os.devnull, "--brand", name,
                             "--no-git-log", "--only", g]
 
@@ -191,20 +231,115 @@ def probes(name):
         write_text(os.path.join(d, "plugin", "node_modules", "left-pad", "index.js"), "module.exports = 1\n")
         write_text(os.path.join(d, "plugin", "helper", "package-lock.json"), "{}\n")
 
+    def crlf_file(*rel):
+        return lambda d: to_crlf(os.path.join(d, *rel))
+
+    def canary_edit(d):
+        p = os.path.join(d, "plugin", "assets", "canary-baseline.json")
+        with open(p, encoding="utf-8", newline="") as f:
+            doc = json.load(f)
+        counts = doc["c8"]["counts"]
+        k = sorted(counts)[0]
+        counts[k] = counts[k] + 9
+        write_text(p, json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+
+    def long_desc(d):
+        p = os.path.join(d, "plugin", "skills", "handoff", "SKILL.md")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        desc = ("Writes a document that a fresh session can pick up from later, with the state, the "
+                "decisions, the evidence and the next steps, kept outside the repo for the next run. "
+                "Use on handoff.")
+        t = re.sub(r"(?m)^description:.*$", "description: " + desc, t, count=1)
+        write_text(p, t)
+
+    def owners_prep(d):
+        git_repo(d)
+        git_in(d, "checkout", "-q", "-b", "wp/skills")
+
+    def owners_move(d):
+        git_in(d, "mv", "plugin/helper/lib/util.pm", "plugin/helper/lib/skills/moved_util.pm")
+        git_in(d, "commit", "-q", "-m", "move a core file into skills")
+
+    def drop_gitattributes(d):
+        git_in(d, "rm", "-q", ".gitattributes")
+        git_in(d, "commit", "-q", "-m", "no attributes")
+
+    def autocrlf_clone(d):
+        """Clone the copy with core.autocrlf=true (the Git for Windows default): the launcher,
+        hooks.json and the helper entry must come out with LF and the launcher must run."""
+        dst = d + "-autocrlf"
+        if os.path.lexists(dst):
+            shutil.rmtree(dst)
+        r = subprocess.run(["git", "-c", "core.autocrlf=true", "clone", "-q", "--no-local", d, dst], capture_output=True, text=True)
+        if r.returncode != 0:
+            return 2, "clone failed: " + r.stderr[-300:]
+        out, bad = [], 0
+        for rel in ("plugin/bin/{}-store".format(name), "plugin/hooks/hooks.json", "plugin/helper/main.pl"):
+            with open(os.path.join(dst, rel), "rb") as f:
+                data = f.read()
+            if b"\r\n" in data:
+                out.append("eol {}: CRLF".format(rel))
+                bad = 1
+        launcher = os.path.join(dst, "plugin", "bin", name + "-store")
+        try:
+            code = subprocess.run([launcher], capture_output=True, text=True).returncode
+        except OSError as e:    # `#!/bin/sh\r`: exec finds no such interpreter
+            code = "exec: " + (e.strerror or str(e))
+        if code in (126, 127) or not isinstance(code, int):
+            out.append("eol {}: does not run ({})".format("plugin/bin/{}-store".format(name), code))
+            bad = 1
+        out.append("EOL CLONE: " + ("FAIL" if bad else "PASS"))
+        return bad, "\n".join(out) + "\n"
+
     readme = r"plugin/README\.md:\d+: "
-    return [
+    v, pinned = pinned_claude()
+    canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
+    out = [
         ("crlf", "RN-4", ["tools/build", "--check"], crlf,
-         [r"^differs plugin/bin/" + re.escape(name) + r"-store$", r"^differs plugin/hooks/hooks\.json$"]),
+         [r"^differs plugin/bin/" + re.escape(name) + r"-store$", r"^differs plugin/hooks/hooks\.json$"], None),
         ("stray", "RN-5", ["tools/build", "--check"], stray,
          [r"^stale plugin/assets/old-asset\.txt$", r"^stale plugin/hooks/lib/old\.gen\.ts$",
           r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
-          r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"]),
+          r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"], None),
         ("other-names", "RN-3", gates_only("stale-name"), other_names,
-         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread")]),
+         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread")], None),
         ("npm", "RN-6", gates_only("npm"), npm,
          [r"^GATE npm plugin/package\.json: BT-06", r"^GATE npm plugin/node_modules/: BT-06",
-          r"^GATE npm plugin/helper/package-lock\.json: BT-06"]),
+          r"^GATE npm plugin/helper/package-lock\.json: BT-06"], None),
+        ("crlf-replies", "BH-5", ["tools/helper-replies-gen", "--check"],
+         crlf_file("plugin", "tests", "unit", "_gen", "helper-replies.gen.ts"), [r"^HELPER REPLIES CHECK: FAIL"], None),
+        ("crlf-goldens", "BH-5", ["tools/assemble", "--check"],
+         lambda d: (crlf_file("plugin", "tests", "unit", "_gen", "goldens.gen.ts")(d),
+                    crlf_file("tests", "fixtures", "assembly", "expected", "handoff-instructions__base.txt")(d)),
+         [r"^differs plugin/tests/unit/_gen/goldens\.gen\.ts$",
+          r"^differs tests/fixtures/assembly/expected/handoff-instructions__base\.txt$", r"^GOLDENS CHECK: FAIL"], None),
+        ("skill-desc", "BH-3", gates_only("skill-desc"), long_desc,
+         [r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: description \d+ chars > 150$",
+          r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: trigger 'handoff' not in the first 50 chars$"], None),
+        ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
+         [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
+        ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,
+         [r"^eol plugin/bin/" + re.escape(name) + r"-store: CRLF$", r"^EOL CLONE: FAIL$"], git_repo),
     ]
+    if pinned:
+        out += [
+            ("crlf-canary", "BH-5", canary, crlf_file("plugin", "assets", "canary-baseline.json"),
+             [r"differs from a fresh render"], None),
+            ("canary-edit", "BH-4", ["tools/check", "xgen"], canary_edit,
+             [r"differs from a fresh render", r"^CHECK xgen: FAIL at X-gen"], None),
+        ]
+    else:
+        print("X-tools: the canary probes are skipped: Claude Code {} (the baseline's C8 binary) is not "
+              "installed".format(v))
+    return out
+
+
+def probe_run(argv, d):
+    if callable(argv):
+        return argv(d)
+    r = subprocess.run([os.path.join(d, argv[0])] + argv[1:], cwd=d, capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
 
 
 def x_tools():
@@ -214,29 +349,79 @@ def x_tools():
     clean = os.path.join(SELFTEST_DIR, "clean")
     copy_tree(clean)
     failures = []
-    for pid, finding, argv, plant, want in probes(name):
-        r = subprocess.run([os.path.join(clean, argv[0])] + argv[1:], cwd=clean, capture_output=True, text=True)
-        if r.returncode != 0:
-            failures.append("{} ({}): `{}` fails on the unplanted copy:\n{}".format(
-                pid, finding, " ".join(argv), (r.stdout + r.stderr)[-1500:]))
+    plist = probes(name)
+    for pid, finding, argv, plant, want, prep in plist:
+        shown = argv.__name__ if callable(argv) else " ".join(argv)
+        base = clean
+        if prep:
+            base = os.path.join(SELFTEST_DIR, pid + "-clean")
+            shutil.copytree(clean, base, symlinks=True)
+            prep(base)
+        code, out = probe_run(argv, base)
+        if code != 0:
+            failures.append("{} ({}): `{}` fails on the unplanted copy:\n{}".format(pid, finding, shown, out[-1500:]))
             continue
         d = os.path.join(SELFTEST_DIR, pid)
         shutil.copytree(clean, d, symlinks=True)
+        if prep:
+            prep(d)
         plant(d)
-        r = subprocess.run([os.path.join(d, argv[0])] + argv[1:], cwd=d, capture_output=True, text=True)
-        lines = r.stdout.splitlines()
+        code, out = probe_run(argv, d)
+        lines = out.splitlines()
         missing = [w for w in want if not any(re.search(w, ln) for ln in lines)]
-        if r.returncode != 1 or missing:
+        if code != 1 or missing:
             failures.append("{} ({}): `{}` exit {}; not reported: {}\n{}".format(
-                pid, finding, " ".join(argv), r.returncode, missing, r.stdout[-1500:]))
+                pid, finding, shown, code, missing, out[-1500:]))
         else:
             print("X-tools {} ({}): {} planted faults reported".format(pid, finding, len(want)))
     if failures:
         for f in failures:
             print("X-tools FAIL " + f)
-        raise Fail("X-tools: {} of {} probes not caught".format(len(failures), len(probes(name))))
+        raise Fail("X-tools: {} of {} probes not caught".format(len(failures), len(plist)))
     shutil.rmtree(SELFTEST_DIR)
-    print("X-tools: PASS ({} probes)".format(len(probes(name))))
+    print("X-tools: PASS ({} probes)".format(len(plist)))
+
+
+# ---------------------------------------------------------------- X-gen
+
+def canary_check(root=REPO):
+    """canary-baseline --check pinned to the binary the file records (BH-4). When that binary is
+    gone, render with the newest one to a temp file and compare all but the C8 part."""
+    tool = os.path.join(root, "tools", "canary-baseline")
+    if not os.path.exists(tool):
+        return
+    v, pinned = pinned_claude(root)
+    if pinned:
+        run([tool, "--check", "--claude", pinned], "X-gen canary-baseline", cwd=root)
+        return
+    tmp = os.path.join(root, "tmp", "canary-render.json")
+    os.makedirs(os.path.dirname(tmp), exist_ok=True)
+    run([tool, "--out", tmp], "X-gen canary-baseline render", cwd=root, capture=True)
+    with open(os.path.join(root, "plugin", "assets", "canary-baseline.json"), encoding="utf-8") as f:
+        cur = json.load(f)
+    with open(tmp, encoding="utf-8") as f:
+        fresh = json.load(f)
+    os.unlink(tmp)
+    strip = lambda doc: {k: x for k, x in doc.items() if k not in ("c8", "cc_version")}
+    if strip(cur) != strip(fresh):
+        raise Fail("X-gen: canary-baseline.json differs from a fresh render (C8 not compared: Claude Code {} "
+                   "is not installed)".format(v))
+    print("canary-baseline: current except C8 (Claude Code {} not installed)".format(v))
+
+
+def x_gen(phase, root=REPO):
+    tools = os.path.join(root, "tools")
+    run([os.path.join(tools, "build"), "--check"], "X-gen build", cwd=root)
+    if os.path.exists(os.path.join(tools, "fixtures-gen")):
+        run([os.path.join(tools, "fixtures-gen"), "--check"], "X-gen fixtures", cwd=root)
+    elif phase == "integration":
+        raise Fail("X-gen: tools/fixtures-gen missing")
+    else:
+        print("X-gen: tools/fixtures-gen not present yet (WP-fix); build part only")
+    if os.path.exists(os.path.join(tools, "helper-replies-gen")):
+        run([os.path.join(tools, "helper-replies-gen"), "--check"], "X-gen helper replies", cwd=root)
+    canary_check(root)
+    run([os.path.join(tools, "assemble"), "--check"], "X-gen goldens", cwd=root, capture=True)
 
 
 # ---------------------------------------------------------------- BT-02 (rename drill)
@@ -292,7 +477,7 @@ def bt02(phase, names):
 
 
 def main(argv):
-    if not argv or argv[0] not in ("phase0", "integration", "selftest"):
+    if not argv or argv[0] not in ("phase0", "integration", "selftest", "xgen"):
         sys.exit(__doc__)
     phase = argv[0]
     names = os.environ.get("GATE_NAMES_FILE")
@@ -309,6 +494,15 @@ def main(argv):
             return 1
         print("CHECK selftest: PASS (X-tools)")
         return 0
+    if phase == "xgen":
+        try:
+            steps.append("X-gen")
+            x_gen("integration")
+        except Fail as e:
+            print("CHECK xgen: FAIL at X-gen ({})".format(e))
+            return 1
+        print("CHECK xgen: PASS (X-gen)")
+        return 0
     b = brand()
     name = b["name"]
     skills_required = ["handoff", "resume"] if phase == "phase0" else SKILLS_ALL
@@ -322,15 +516,7 @@ def main(argv):
         steps.append("X-types")
         run([os.path.join(tools, "typecheck")], "X-types")
         steps.append("X-gen")
-        run([os.path.join(tools, "build"), "--check"], "X-gen build")
-        if os.path.exists(os.path.join(tools, "fixtures-gen")):
-            run([os.path.join(tools, "fixtures-gen"), "--check"], "X-gen fixtures")
-        elif phase == "integration":
-            raise Fail("X-gen: tools/fixtures-gen missing")
-        else:
-            print("X-gen: tools/fixtures-gen not present yet (WP-fix); build part only")
-        if os.path.exists(os.path.join(tools, "helper-replies-gen")):
-            run([os.path.join(tools, "helper-replies-gen"), "--check"], "X-gen helper replies")
+        x_gen(phase)
         steps.append("X-assemble")
         x_assemble(name)
         steps.append("X-gates")
