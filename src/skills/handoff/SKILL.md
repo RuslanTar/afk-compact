@@ -44,7 +44,7 @@ Run together:
 - `{{plugin}}-store begin --sid '${CLAUDE_SESSION_ID}' --topic '<slug>' --root '${user_config.handoff_root}' --disposable-root '${user_config.disposable_root}' --keep-days '${user_config.disposable_keep_days}' --quota-mb '${user_config.evidence_quota_mb}' --queue-cmd '${user_config.queue_cmd}'`
 - each runtime listing tool you have for background agents, workflows, scheduled tasks and background tasks.
 
-`<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note. <!-- review-fix -->
+`<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. A topic from the arguments also takes `--topic-explicit`: the helper then re-pins the bucket to it unless another live session holds that bucket (`ownership.repin`). Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note. <!-- review-fix -->
 
 `begin` prints ≤3 KB of JSON: identity, git state, `stage`, `stem`, `checked_at`, `previous_handoff`, `own_latest`, `newer_foreign`, `ownership`, `gsd`, `queued_line`, `inflight_measured`, `tmp_candidates` (ephemeral paths cited this session) and the settings used.
 - `REFUSED` → B. A merge or rebase in progress that Step 0.2 did not already record as `MID-STEP` → apply Step 0.2 once, then continue; never loop back. <!-- review-fix: was an endless 0.2 ↔ 1 loop -->
@@ -108,7 +108,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 2. `Resume with: /{{plugin}}:resume <path>`
 3. Status word and Step 1.
 4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` Otherwise `nothing running (checked HH:MM)` or `nothing running known (not checked)`.
-5. The bucket, if it came from your slug or differs from a topic the user gave in the arguments (a session pin wins; say so). <!-- review-fix -->
+5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder). <!-- review-fix -->
 6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
 8. Advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
