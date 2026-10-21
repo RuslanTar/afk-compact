@@ -8,7 +8,9 @@ package settings;
 # single key whose part before `@` is the brand; several -> defaults + ambiguous.
 # Consent keys (DP-3, REVIEW A-3; %FILE_ONLY) are read from the settings file only: a
 # model-run Bash call can pass flags and env, so those two sources are ignored with the
-# note `<key>: settings file only`. Paths (dir and file keys) are UTF-8 bytes whatever
+# note `<key>: settings file only`. That file is the account's ~/.claude/settings.json: a
+# CLAUDE_CONFIG_DIR or HOME naming another folder gives the consent keys their safe values
+# (CR-F34, config_dir_foreign). Paths (dir and file keys) are UTF-8 bytes whatever
 # their source, as env, flag and file-system values are (SR 1.1).
 use strict;
 use warnings;
@@ -82,6 +84,39 @@ sub _coerce {
 
 sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne '' ? util::expand_tilde($ENV{CLAUDE_CONFIG_DIR}) : util::home() . '/.claude' }
 
+# CR-F34 (DP-3, provisional): the consent keys come from ~/.claude/settings.json only,
+# where ~ is the account's home from the user database (getpwuid), not $HOME. A command
+# the model runs can set CLAUDE_CONFIG_DIR and HOME, so a settings file they name cannot
+# grant consent: when the settings folder is another folder than the account's ~/.claude,
+# each consent key takes its safe value (%SAFE: no repository accepted, automatic relaunch
+# off, no allow patterns) with the note `<key>: CLAUDE_CONFIG_DIR is not ~/.claude, safe
+# value used` (CLAUDE_CONFIG_DIR set) or `<key>: HOME is not the account home, safe value
+# used`. Test seam: the helper test runner's staged plugin copy holds the file
+# $TEST_CONSENT_MARK at its root; only there and with STORE_TEST_MODE=1 is the consent
+# folder $HOME/.claude (each case runs in a fresh HOME). The shipped plugin has no such
+# file, so env alone cannot move the consent folder.
+our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '');
+our $TEST_CONSENT_MARK = '.test-consent-home';
+sub account_home { my $h = (getpwuid($<))[7]; return defined $h && $h ne '' ? $h : undef }
+sub consent_dir {
+    my $r = ctx::root();
+    return util::home() . '/.claude' if util::test_mode() && defined $r && -f "$r/$TEST_CONSENT_MARK";
+    my $h = account_home();
+    return defined $h ? "$h/.claude" : undef;
+}
+sub config_dir_foreign {
+    my $cd = config_dir();
+    my $home = consent_dir();
+    return 1 unless defined $home;
+    return 0 if util::clean_path($cd) eq util::clean_path($home);
+    my ($rc, $rh) = (util::real_path($cd), util::real_path($home));
+    return 0 if defined $rc && defined $rh && $rc eq $rh;
+    my @a = stat $cd;
+    my @b = stat $home;
+    return 0 if @a && @b && $a[0] == $b[0] && $a[1] == $b[1];
+    return 1;
+}
+
 # Returns (options hashref or undef, note) from the user's settings file.
 sub _settings_file_options {
     my $brand = ctx::brand();
@@ -118,6 +153,7 @@ sub resolve {
     my ($opts, $ckey) = _settings_file_options();
     my $ambiguous = (defined $ckey && $ckey eq 'ambiguous') ? 1 : 0;
     my $uc = ctx::user_config();
+    my $foreign = config_dir_foreign();
     for my $k (@KEYS) {
         my ($key, $type, $fallback) = @$k;
         my $default = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : $fallback;
@@ -125,7 +161,12 @@ sub resolve {
         my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
         my $file_only = $FILE_ONLY{$key};
         push @notes, "$key: settings file only" if $file_only && (!_unset($flags->{$key}) || !_unset($env));
-        if (!$file_only && !_unset($flags->{$key})) { ($v, $s) = ($flags->{$key}, 'flag') }
+        if ($file_only && $foreign) {
+            push @notes, ($ENV{CLAUDE_CONFIG_DIR} // '') ne '' ? "$key: CLAUDE_CONFIG_DIR is not ~/.claude, safe value used"
+                                                             : "$key: HOME is not the account home, safe value used";
+            ($v, $s) = ($SAFE{$key}, 'safe');
+        }
+        elsif (!$file_only && !_unset($flags->{$key})) { ($v, $s) = ($flags->{$key}, 'flag') }
         elsif (!$file_only && !_unset($env)) { ($v, $s) = ($env, 'env') }
         elsif (!$ambiguous && ref $opts eq 'HASH' && !_unset($opts->{$key})) { ($v, $s) = ($opts->{$key}, 'settings') }
         else { ($v, $s) = ($default, 'default') }

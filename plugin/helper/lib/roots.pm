@@ -39,7 +39,8 @@ sub check_path {
     my $clean = util::clean_path($path);
     my $real = util::real_path($clean) // $clean;
     my $r;
-    if (grep { $_ eq '.planning' } split m{/}, $real) {
+    # letter case ignored: on a case-insensitive file system (macOS default) .Planning is .planning
+    if (grep { lc($_) eq '.planning' } split m{/}, $real) {
         $r = { ok => 0, reason => 'root-in-planning' };
     } elsif (my $wt = _worktree_of($real)) {
         my $t = defined $DEADLINE ? $DEADLINE - util::clock_ms() : 2000;
@@ -74,8 +75,9 @@ sub repo_check {
     my $p = $rtop;
     for my $i (0 .. $#parts) {
         my $c = $parts[$i];
-        return { ok => 0, reason => 'repo-root-in-git-dir' } if $c =~ /^\.git/;
-        return { ok => 0, reason => 'repo-root-in-planning' } if $c eq '.planning';
+        # letter case ignored (CR-F1): on a case-insensitive file system .GIT is the .git folder
+        return { ok => 0, reason => 'repo-root-in-git-dir' } if $c =~ /^\.git/i;
+        return { ok => 0, reason => 'repo-root-in-planning' } if lc($c) eq '.planning';
         $p .= "/$c";
         next unless -e $p || -l $p;
         return { ok => 0, reason => 'repo-root-symlink' } if -l $p;

@@ -1,0 +1,30 @@
+{
+ "id": "CR-F34 (DP-3, REVIEW A-3; provisional)",
+ "note": "The consent keys (repo_roots, relaunch_auto, relaunch_allow) come from the account's ~/.claude/settings.json, the home of the user database (getpwuid), not $HOME. This case runs without the runner's consent seam (consent_home account), so its fresh HOME is not the account home: a settings file under HOME that accepts the repository, turns relaunch on and allows every command grants nothing. Each key takes its safe value with the note '<key>: HOME is not the account home, safe value used' and one config_note {note: home-not-account} row; with CLAUDE_CONFIG_DIR naming HOME/.claude the note names CLAUDE_CONFIG_DIR. The account's own settings file is not read for these keys here, so the result does not depend on it",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "consent_home": "account",
+ "steps": [
+  {"setup": [
+    {"repo": "$TMP/r20", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n"}},
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"repo_roots": "$TMP/r20", "relaunch_auto": "on", "relaunch_allow": "^.*"}}}}}
+  ]},
+  {"name": "a settings file under a HOME that is not the account home grants no consent", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff mode: private \\(not-accepted\\)$", "^automatic relaunch: off · relaunch_auto off$",
+                    "^note: repo_roots: HOME is not the account home, safe value used$",
+                    "^note: relaunch_auto: HOME is not the account home, safe value used$",
+                    "^note: relaunch_allow: HOME is not the account home, safe value used$"],
+     "stdout_lacks": ["relaunch_allow: \\d+ patterns", "repo \\(accepted\\)"],
+     "rows": [{"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "repo_roots", "note": "home-not-account"}},
+              {"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "relaunch_auto", "note": "home-not-account"}},
+              {"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "handoff_mode", "count": 1, "fields": {"mode": "private", "reason": "not-accepted"}}]}},
+  {"name": "CLAUDE_CONFIG_DIR naming that HOME's .claude grants none either", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr2", "CLAUDE_CONFIG_DIR": "$HOME/.claude"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff mode: private \\(not-accepted\\)$", "^automatic relaunch: off · relaunch_auto off$",
+                    "^note: repo_roots: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$"],
+     "stdout_lacks": ["relaunch_allow: \\d+ patterns", "repo \\(accepted\\)"]}}
+ ]
+}

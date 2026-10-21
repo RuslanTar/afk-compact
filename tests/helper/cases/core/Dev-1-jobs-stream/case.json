@@ -1,6 +1,6 @@
 {
  "id": "Dev-1-jobs-stream (AT-J-01 helper half, AT-J-03 write half, AT-J-09, AT-J-10 caller half)",
- "note": "Dev-1 D1, D5, D6; DP-2; REVIEW B-16. `log --stream jobs --stdin` completes the mod's raw fields into one job row in <watch>/<sid>/jobs.jsonl (owner from this session's live process record, command sha256, is_read_only true only when given true, output_path from the Bash result text only when it equals a task-file layout candidate (DP-24 (a): from the job cwd or from the session start cwd, since the slug is the project folder), else null with output_path_source none and output_path_check differs | no-path; both P-D1-6 candidates recorded); a TaskStop gives a stop row. A HARD secret in the command keeps only the sha and the rule ids. The writer guard refuses a caller whose session has no live record for this Claude Code process (no-record) and one whose parent is not that process (parent), with one jobs_caller_refused row each. A job whose command has the sha of a pending relaunch gets relaunch_of and epoch 2; a pending relaunch still unmatched at Stop gives one relaunch_unmatched row (once) and a status line. The Stop sidecar keeps the runtime's command only as command_sha256 and command_chars, and takes the task's output path from its job record. The runner stands in for Claude Code (STORE_TEST_CLAUDE_PID = the runner's pid and start time)",
+ "note": "Dev-1 D1, D5, D6; DP-2; REVIEW B-16. `log --stream jobs --stdin` completes the mod's raw fields into one job row in <watch>/<sid>/jobs.jsonl (owner from this session's live process record, command sha256, is_read_only true only when given true, output_path from the Bash result text only when it equals a task-file layout candidate (DP-24 (a): from the job cwd or from the session start cwd, since the slug is the project folder), else null with output_path_source none and output_path_check differs | no-path; both P-D1-6 candidates recorded); a TaskStop gives a stop row. A HARD secret in the command keeps only the sha and the rule ids. The writer guard refuses a caller whose session has no live record for this Claude Code process (no-record) and one whose parent is not that process (parent), with one jobs_caller_refused row each. A job whose command has the sha of a pending relaunch gets relaunch_of and epoch 2; a pending relaunch still unmatched at Stop gives one relaunch_unmatched row (once) and a status line. The Stop sidecar keeps the runtime's command only as command_sha256 and command_chars, and takes the task's output path from its job record. One stdin batch whose two rows share a pending sha fulfils it once (CR-F3). A row still over 4 KB after the command is withheld drops its candidate paths, then its cwd and output path, and is written (CR-F4). A launched_at over 64 chars or not ISO is replaced by the write time, and a row still over 4 KB at the last level is a usage error that writes nothing (CR-F4). The runner stands in for Claude Code (STORE_TEST_CLAUDE_PID = the runner's pid and start time)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {"STORE_TEST_CLAUDE_PID": "$RUNNER_PID:$RUNNER_LSTART"},
@@ -96,6 +96,33 @@
             "want_result_text": "/var/elsewhere/tasks/b9.output", "want_layout_tail": "/-w/$SID/tasks/b9.output", "want_check": "differs"}},
   {"name": "DP-24 (a): no cwd at all", "lib": "jobs_output_path",
    "args": {"sid": "$SID", "task": "b9", "text": "Output is being written to: $TBASE/-w/$SID/tasks/b9.output.",
-            "want_result_text": "$TBASE/-w/$SID/tasks/b9.output", "want_check": "no-layout"}}
+            "want_result_text": "$TBASE/-w/$SID/tasks/b9.output", "want_check": "no-layout"}},
+  {"name": "sha of a second relaunch line", "exec": ["/bin/sh", "-c", "printf %s \"$1\" | shasum -a 256", "x", "make lint"],
+   "capture": {"SHA2": "re:^([0-9a-f]{64})"}, "expect": {"exit": 0}},
+  {"setup": [{"write": "$WATCH/$SID/jobs-pending.jsonl", "jsonl": [
+      {"v": 1, "ts": "2026-10-21T14:05:01.000+03:00", "ev": "relaunch_pending", "sid": "$SID", "sha256": "$SHA", "origin_sid": "aaaaaaaa-0000-4000-8000-000000000001", "task_id": "b0", "epoch": 1},
+      {"v": 1, "ts": "2026-10-21T14:05:02.000+03:00", "ev": "relaunch_pending", "sid": "$SID", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "origin_sid": "aaaaaaaa-0000-4000-8000-000000000001", "task_id": "b9", "epoch": 1},
+      {"v": 1, "ts": "2026-10-21T14:05:03.000+03:00", "ev": "relaunch_pending", "sid": "$SID", "sha256": "$SHA2", "origin_sid": "aaaaaaaa-0000-4000-8000-000000000001", "task_id": "c0", "epoch": 1}]}]},
+  {"name": "CR-F3: two rows of one batch with the pending sha: only the first is the relaunch", "argv": ["log", "--sid", "$SID", "--stream", "jobs", "--stdin"],
+   "stdin_text": "{\"kind\":\"job\",\"task_id\":\"c1\",\"command\":\"make lint\",\"cwd\":\"$TMP/work\"}\n{\"kind\":\"job\",\"task_id\":\"c2\",\"command\":\"make lint\",\"cwd\":\"$TMP/work\"}\n",
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$SID/jobs.jsonl", "lines": 9,
+     "has": ["\"task_id\":\"c1\".*\"relaunch_of\":\"c0\",\"epoch\":2", "\"task_id\":\"c2\".*\"relaunch_of\":null,\"epoch\":1"]}]}},
+  {"name": "a deep cwd", "exec": ["/usr/bin/perl", "-e", "print '/' . join('/', ('d' x 99) x 9)"], "capture": {"DEEP": "re:^(\\S+)$"}, "expect": {"exit": 0}},
+  {"name": "a deep output folder", "exec": ["/usr/bin/perl", "-e", "print '/' . join('/', ('b' x 99) x 10)"], "capture": {"DEEPBG": "re:^(\\S+)$"}, "expect": {"exit": 0}},
+  {"name": "a long command", "exec": ["/usr/bin/perl", "-e", "print 'echo ' . ('x' x 3500)"], "capture": {"LONGCMD": "re:^(echo x+)$"}, "expect": {"exit": 0}},
+  {"name": "CR-F4: a withheld row still over 4 KB drops its candidate paths and is written", "argv": ["log", "--sid", "$SID", "--stream", "jobs", "--stdin"],
+   "stdin_json": {"kind": "job", "task_id": "c3", "command": "$LONGCMD", "cwd": "$DEEP",
+                  "result_text": "Command running in background with ID: c3. Output is being written to: $DEEPBG/tasks/c3.output",
+                  "background_output_path": "$DEEPBG/x.output"},
+   "expect": {"exit": 0, "stdout": "", "files": [{"path": "$WATCH/$SID/jobs.jsonl", "lines": 10,
+     "has": ["\"task_id\":\"c3\".*\"command\":null,\"command_sha256\":\"[0-9a-f]{64}\",\"command_withheld\":\\[\"row-too-large\"\\]",
+             "\"task_id\":\"c3\".*\"cwd\":\"$DEEP\"", "\"task_id\":\"c3\".*\"output_path_candidates\":null"]}]}},
+  {"name": "a launched_at with a 5,000-digit fraction", "exec": ["/usr/bin/perl", "-e", "print '2026-10-22T00:00:00.' . ('7' x 5000)"], "capture": {"LONGTS": "re:^(\\S+)$"}, "expect": {"exit": 0}},
+  {"name": "CR-F4: an over-long launched_at is replaced by the write time, so the last-level row fits", "argv": ["log", "--sid", "$SID", "--stream", "jobs", "--stdin"],
+   "stdin_json": {"kind": "job", "task_id": "c4", "command": "$LONGCMD", "cwd": "$DEEP", "launched_at": "$LONGTS",
+                  "result_text": "Command running in background with ID: c4. Output is being written to: $DEEPBG/tasks/c4.output"},
+   "expect": {"exit": 0, "stdout": "", "files": [{"path": "$WATCH/$SID/jobs.jsonl", "lines": 11,
+     "has": ["\"task_id\":\"c4\",\"launched_at\":\"2026-10-21T14:05:12", "\"task_id\":\"c4\".*\"command_withheld\":\\[\"row-too-large\"\\]"],
+     "lacks": ["7777777777"]}]}}
  ]
 }

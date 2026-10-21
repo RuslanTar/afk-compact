@@ -9,6 +9,8 @@ package handoff_turn;
 #   <ht>.published   the handoff path, written by `publish` before its rename (mark_published)
 #   <ht>.superseded  the nonce of a native compaction that ran during the turn (the race);
 #                    `<ht>.json` stays write-once, so superseded_by lives in this twin file
+#   <ht>.closed      why the mod closed the ht (cancelled | ended; `handoff-turn close`,
+#                    CR-F17/F25): begin no longer binds it (open_for_begin)
 # A second handoff for one ht cannot happen: bind_stage returns the existing stage
 # (`resumed`), mark_published refuses with the existing path.
 use strict;
@@ -16,6 +18,7 @@ use warnings;
 
 our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off);
 our $OPEN_MAX_AGE_S = 3600;
+our %CLOSE_WHY = map { $_ => 1 } qw(cancelled ended);
 
 sub valid_ht { return defined $_[0] && $_[0] =~ /\A[0-9a-f]{8}\z/ ? 1 : 0 }
 sub dir { my ($sid_dir) = @_; return "$sid_dir/handoff-turn" }
@@ -48,8 +51,8 @@ sub record {
     return $j;
 }
 
-# open_for_begin(sid_dir) -> the newest ht with a record, no .published and opened at most
-# 60 minutes ago, or undef (begin binds it; the model never types an ht, HK-06)
+# open_for_begin(sid_dir) -> the newest ht with a record, no .published, no .closed and
+# opened at most 60 minutes ago, or undef (begin binds it; the model never types an ht, HK-06)
 sub open_for_begin {
     my ($sid_dir) = @_;
     my $now = util::now();
@@ -57,7 +60,7 @@ sub open_for_begin {
     for my $f (util::list_dir(dir($sid_dir))) {
         next unless $f =~ /\A([0-9a-f]{8})\.json\z/;
         my $ht = $1;
-        next if -e _f($sid_dir, $ht, 'published');
+        next if -e _f($sid_dir, $ht, 'published') || -e _f($sid_dir, $ht, 'closed');
         my $r = record($sid_dir, $ht) or next;
         my $t = util::parse_iso($r->{opened_at} // '') // next;
         next if $now - $t > $OPEN_MAX_AGE_S || $t > $now + 60;
@@ -89,6 +92,18 @@ sub mark_published {
     return (0, _read_line($f) // $path);
 }
 
+# close_ht(sid_dir, ht, why) -> 1 created | 0 exists (CR-F17/F25: the mod closes an ht
+# whose turn it cancelled after the open, or that ended, so a later manual handoff in the
+# hour does not bind it)
+sub close_ht {
+    my ($sid_dir, $ht, $why) = @_;
+    die "handoff_turn: bad ht\n" unless valid_ht($ht);
+    die "handoff_turn: bad close reason\n" unless defined $why && $CLOSE_WHY{$why};
+    return util::write_excl(_f($sid_dir, $ht, 'closed'), "$why\n", 0600);
+}
+
+sub closed_of { my ($sid_dir, $ht) = @_; return valid_ht($ht) ? _read_line(_f($sid_dir, $ht, 'closed')) : undef }
+
 # supersede(sid_dir, ht, nonce) -> 1 created | 0 exists
 sub supersede {
     my ($sid_dir, $ht, $nonce) = @_;
@@ -115,14 +130,49 @@ sub finish_command {
     return ctx::store_cmd() . " publish --stage '$stage' --slug $slug --status $status";
 }
 
-# state(sid_dir, ht) -> {state => none|staged|published|superseded, path, stage, draft,
-# finish, nonce}. Precedence: published, staged, superseded, none: after a race the next
-# window still needs the finish command of a staged draft ([handoff-partial]); the mod
-# knows of the race it recorded, and `superseded` is what is left when nothing was staged.
+# published_ok(sid_dir, ht, path) -> 1 when the claimed handoff is in place: a regular file
+# (not a link) whose last non-empty line is a sentinel of the spec grammar, with the nonce
+# of the stage bound to this ht when that stage records one (CR-F9: publish claims before
+# it links the file into place, and a failed link leaves the claim naming a missing or
+# foreign file). Without a readable spec the regular file alone counts.
+sub published_ok {
+    my ($sid_dir, $ht, $path) = @_;
+    $path //= published_of($sid_dir, $ht);
+    return 0 unless defined $path && !-l $path && -f _;
+    my $size = -s _;
+    open(my $fh, '<:raw', $path) or return 0;
+    my $from = $size > 4096 ? $size - 4096 : 0;
+    seek($fh, $from, 0) or return 0;
+    my $tail = '';
+    defined read($fh, $tail, 4096) or return 0;
+    close $fh;
+    my ($last) = grep { /\S/ } reverse split /\n/, $tail;
+    return 0 unless defined $last;
+    $last =~ s/\r\z//;
+    utf8::decode($last);
+    my $sre = eval { spec::re('sentinel_re') } or return 1;
+    return 0 unless $last =~ $sre;
+    my $got = $1;
+    my $st = stage_of($sid_dir, $ht);
+    my $meta = defined $st ? eval { jsonc::decode(util::read_file("$st/settings.json", 262144) // '') } : undef;
+    my $want = ref $meta eq 'HASH' && defined $meta->{nonce} && !ref $meta->{nonce} ? $meta->{nonce} : undef;
+    return 0 if defined $want && (!defined $got || $got ne $want);
+    return 1;
+}
+
+# state(sid_dir, ht) -> {state => none|staged|published|publish-failed|superseded, path,
+# stage, draft, finish, nonce}. Precedence: published, staged, superseded, none: after a
+# race the next window still needs the finish command of a staged draft ([handoff-partial]);
+# the mod knows of the race it recorded, and `superseded` is what is left when nothing was
+# staged. A claim whose file is not in place (published_ok) is `publish-failed <path>`: no
+# second handoff can be published for that ht, so the mod falls back to the full summary.
 sub state {
     my ($sid_dir, $ht) = @_;
     my $p = published_of($sid_dir, $ht);
-    return { state => 'published', path => $p } if defined $p;
+    if (defined $p) {
+        return { state => 'published', path => $p } if published_ok($sid_dir, $ht, $p);
+        return { state => 'publish-failed', path => $p };
+    }
     my $r = record($sid_dir, $ht);
     my $st = stage_of($sid_dir, $ht);
     if ($r && defined $st && -d $st) {
