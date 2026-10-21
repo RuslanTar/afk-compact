@@ -1,0 +1,14 @@
+{
+ "id": "FX-runner-setups (fix-to-core §1, §2)",
+ "note": "Runner actions for the WP-fix recipes: fixture_setup runs every step of setups/<id>.json (case dir first, then tests/fixtures/setups/) in order; touch puts a file's mtime at a time on the case clock. assembly_runtime fills {{plugin}} in runtime.json values with the brand (BT-04-H against goldens rendered under the brand)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"setup": [{"fixture_setup": "fx-small.json"}, {"touch": "$TMP/fx/dir/out.log", "at": "2026-10-21T13:58:00+03:00"}]},
+  {"name": "the recipe ran", "exec": ["/bin/test", "-d", "$TMP/fx/repo/.git"], "expect": {"exit": 0, "files": [{"path": "$TMP/fx/dir/out.log", "contains": ["line 1"]}]}},
+  {"name": "mtime on the case clock", "exec": ["/usr/bin/perl", "-e", "print((stat shift)[9])", "$TMP/fx/dir/out.log"],
+   "expect": {"exit": 0, "stdout": "1792580280"}},
+  {"name": "{{plugin}} in runtime.json is filled", "lib": "assembly_runtime_fill",
+   "args": {"file": "$CASE/runtime.json", "want": {"queue_add": "$BRAND-store queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d", "nonce": "1a2b3c4d", "tokens": "7"}}}
+ ]
+}
