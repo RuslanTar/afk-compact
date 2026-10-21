@@ -1,5 +1,6 @@
 {
  "id": "HT-LO-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "locate: tiers 1-6 of resume R1, ordered by frontmatter date (not file name); lineage up to 3 hops, same chain (A-6), a 4th hop is not followed; relation from session ids; integrity ok / ok-trailer copy is ok (not unshaped) / unshaped / possibly truncated / legacy / s=sub with its parent; .staging/ drafts last and never picked (D-15); newer files and foreign state files reported",

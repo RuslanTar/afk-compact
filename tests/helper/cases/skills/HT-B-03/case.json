@@ -1,5 +1,6 @@
 {
  "id": "HT-B-03",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "begin: stage <bucket>/.staging/<sid8>-<nonce>/ 0700 with settings.json 0600 (settings stored there); a root inside a git work tree and not ignored -> REFUSED: root-in-git (D-12), ignored -> proceeds; inside .planning/ -> REFUSED: root-in-planning",

@@ -1,5 +1,6 @@
 {
  "id": "HT-B-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "begin: JSON <=3 KB with every HDN §6 key (+ reuse_window_min, D-14); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket",

@@ -1,5 +1,6 @@
 {
  "id": "HT-B-02",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "begin: own_latest.unchanged false after an edit to an already-dirty file (RV-18); previous_handoff never another session's file (RV-19), which goes to newer_foreign with its In flight line number (RV-26); age_min and reuse_window_min (D-14)",

@@ -1,4 +1,4 @@
-{"id":"HT-PB-03","layer":"H","owner":"skills",
+{"id":"HT-PB-03","tmp_base":"repo","layer":"H","owner":"skills",
  "note":"publish success: TPL §3 frontmatter (writer: handoff, D-1), marker on body line 1 with s=manual, sentinel last line, @self@ filled, exclusive create, MANIFEST rows (recipe sha256 + origin_session_id), pin under lock, receipt, handoff_publish row; a carried byte-identical [verified …] line is not a LINT (RV-7)",
  "now":"2026-10-21T14:05:12+03:00","tz":"Etc/GMT-3",
  "setup":[

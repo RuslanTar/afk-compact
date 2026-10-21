@@ -1,5 +1,6 @@
 {
  "id": "HT-PB-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "publish: one variant per blocking LINT rule of TPL §7 -> REFUSED: lint (<n> blocking); draft kept at <path>, exit 3, nothing published, one handoff_publish REFUSED:lint row each; the fixed draft then publishes",

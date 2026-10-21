@@ -1,5 +1,6 @@
 {
  "id": "HT-HC-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "heal-check: ok <recipe> for a same-session auto recipe whose script sha256 matches MANIFEST; --bump counts before the restart; a 2nd restart in the same resume and a 3rd in the chain are refused (counter); sha mismatch refused (sha); class ask or another session refused (class); heal rows",

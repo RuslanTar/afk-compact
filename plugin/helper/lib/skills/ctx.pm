@@ -63,6 +63,7 @@ sub new {
 sub set_sid {
     my ($ctx, $sid) = @_;
     $ctx->{sid} = $sid;
+    skills::core::bind_sid($sid);
     my $p = skills::core::paths($ctx->{settings}, $sid);
     $ctx->{watch} = $p->{watch};
     return $sid;

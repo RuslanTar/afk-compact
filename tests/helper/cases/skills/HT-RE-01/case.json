@@ -1,5 +1,6 @@
 {
  "id": "HT-RE-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "restore-evidence <handoff> --to DIR: copies the listed copies (not withheld, not ref-only) into DIR 0700 with files 0600, prints one line per file, never moves (the durable copies stay)",

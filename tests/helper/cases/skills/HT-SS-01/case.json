@@ -1,5 +1,6 @@
 {
  "id": "HT-SS-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "stash <path>: copies into today's <disposable_root>/<YYYY-MM-DD>/ (here stash/) with 0700/0600, prints the copy path, never moves; a deny-listed file is refused (withheld)",

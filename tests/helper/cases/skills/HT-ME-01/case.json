@@ -1,5 +1,6 @@
 {
  "id": "HT-ME-01",
+ "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "note": "measure <handoff>: Measured facts; no `Approvals (verified)` (D-2); commits the chain names are ours, every other commit is one foreign line (D-21); outward/destructive re-check commands print needs-ask; nothing taken from the handoff is executed (trace: only measure and git); a chain git_commit that is not a commit id never reaches git as an option (no --output file)",
