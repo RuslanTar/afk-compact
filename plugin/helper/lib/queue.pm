@@ -18,9 +18,13 @@ sub call {
 my $LANE_RE = qr/^(lane|auto):[A-Za-z0-9._\/-]+$/;
 
 # lane(sid, queue_cmd, budget_ms) -> {status: ok|off|unknown|timeout, lane, open, ids, label, queued_line}
-# The `list --json` reply shape is not fixed by design/ (E-21 escalation); this reads
-# an object with `lane` (string), `preview`/`minted` (bool), `label`, and the open
-# items as `items`/`open`/`pending` (array of ids or objects with `id`, or a count).
+# The `list --json` reply is the v1 contract `queue-stub/v1` (ROOT-RULINGS F2-8,
+# provisional): one object {"schema": "queue-stub/v1", "session", "lane": "lane:<repo>/<name>"
+# | "auto:…" | null, "open": n, "pending": n, "preview": bool, "held_by": sid | null,
+# "lanes": [{id, holder, open, preview}]}. A reply naming another schema is not read;
+# one without `schema` is read as v1. Also taken: `minted` as `preview`, `label`, and the
+# open items as `items`/`open`/`pending` arrays (ids, or objects with `id`).
+our $SCHEMA = 'queue-stub/v1';
 sub lane {
     my ($sid, $cmd, $budget_ms) = @_;
     return { status => 'off' } unless defined $cmd && $cmd ne '';
@@ -30,6 +34,7 @@ sub lane {
     return { status => 'unknown', why => 'exit' } unless $r->{exit} == 0;
     my $j = eval { jsonc::decode($r->{out}) };
     return { status => 'unknown', why => 'not-json' } unless ref $j eq 'HASH';
+    return { status => 'unknown', why => 'schema' } if defined $j->{schema} && (ref $j->{schema} || $j->{schema} ne $SCHEMA);
     my $lane = $j->{lane};
     return { status => 'unknown', why => 'no-lane' } unless defined $lane && !ref $lane && $lane =~ $LANE_RE;
     return { status => 'unknown', why => 'preview' } if $j->{preview} || $j->{minted};
@@ -50,7 +55,9 @@ sub lane {
         last if $count;
     }
     my $named = $lane =~ /^lane:/ ? 1 : 0;
-    return { status => 'unknown', why => 'auto-empty', silent => 1 } if !$named && !$count;
+    # "has something pending" (MOD-SPEC §10): v1's `pending` count when given, else the open count
+    my $pending = (defined $j->{pending} && !ref $j->{pending} && $j->{pending} =~ /^\d+$/) ? 0 + $j->{pending} : $count;
+    return { status => 'unknown', why => 'auto-empty', silent => 1 } if !$named && !$pending && !$count;
     my $label = (defined $j->{label} && !ref $j->{label} && $j->{label} =~ /^[^\n]{1,80}$/) ? $j->{label} : $lane;
     my $line;
     if ($count) {
