@@ -82,11 +82,13 @@ sub _enum {
     return (grep { $_ eq $v } @ok) ? $v : 'unknown';
 }
 
-sub _rows_of {
+# The `copy` rows of both streams (all previous_summary reads); every other
+# line is skipped before the JSON decode.
+sub _copy_rows {
     my ($ctx) = @_;
     my @r;
     for my $f (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
-        push @r, @{ watch::io::read_jsonl($f) } if -f $f;
+        push @r, @{ watch::io::read_jsonl($f, undef, qr/"ev"\s*:\s*"copy"/) } if -f $f;
     }
     return \@r;
 }
@@ -206,7 +208,7 @@ sub post_compact {
         my $cp = watch::io::read_json_file(watch::ctx::sid_dir($ctx) . "/checkpoint/$nonce.json");
         ($hhmm) = ($cp->{measured_block} // '') =~ /\b(\d\d:\d\d)\b/ if ref $cp eq 'HASH';
     }
-    my $rows = _rows_of($ctx);
+    my $rows = _copy_rows($ctx);
     my ($prev, $src) = previous_summary($ctx, $is_main, $nonce, $body, $rows);
     my $m = watch::shape::metrics(body => $body, spec => $ctx->{spec}, is_main => $is_main,
                                   measured => $measured, measured_hhmm => $hhmm, prev => $prev, prev_src => $src);

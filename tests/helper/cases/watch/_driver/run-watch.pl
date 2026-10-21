@@ -243,6 +243,12 @@ sub run_case {
         push @errs, "canary text in watch files: @hits" if @hits;
     }
     push @errs, @{ $E->{errs} };
+    # The rules may read only the row kinds the incremental cache keeps
+    # (watch::rules::KINDS); test mode records any other kind asked for.
+    if (%watch::rules::MISSED) {
+        push @errs, 'rules read kinds the cache does not keep: ' . join(',', sort keys %watch::rules::MISSED);
+        %watch::rules::MISSED = ();
+    }
     return @errs;
 }
 

@@ -166,6 +166,23 @@ sub excl_create {
     return 1;
 }
 
+# Whole-file write: a temp file beside the target (exclusive create, 0600),
+# then rename over it. Returns 1, or 0 with the target untouched.
+sub write_atomic {
+    my ($path, $content) = @_;
+    mkdir_p(dirname_of($path)) or return 0;
+    my $tmp = sprintf('%s.tmp-%d-%04x', $path, $$, int(rand(0x10000)));
+    my $old = umask 077;
+    my $ok = sysopen(my $fh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    umask $old;
+    return 0 unless $ok;
+    my $n = syswrite($fh, $content);
+    my $closed = close $fh;
+    if (defined $n && $n == length($content) && $closed && rename($tmp, $path)) { return 1 }
+    unlink $tmp;
+    return 0;
+}
+
 sub slurp {
     my ($path, $max) = @_;
     open(my $fh, '<:raw', $path) or return undef;
@@ -189,12 +206,15 @@ sub read_json_file {
 }
 
 # Read a JSONL file; returns [rows] (bad lines skipped, counted in $$bad).
+# With `$want` (a regex), a line that does not match is skipped before the
+# JSON decode (e.g. qr/"ev"\s*:\s*"copy"/ to decode only the copy rows).
 sub read_jsonl {
-    my ($path, $bad) = @_;
+    my ($path, $bad, $want) = @_;
     my @rows;
     open(my $fh, '<:raw', $path) or return \@rows;
     while (my $line = <$fh>) {
         next unless $line =~ /\S/;
+        next if $want && $line !~ $want;
         my $v = eval { watch::json::decode($line) };
         if (ref $v eq 'HASH') { push @rows, $v } elsif ($bad) { $$bad++ }
     }

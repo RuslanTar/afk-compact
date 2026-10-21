@@ -19,10 +19,13 @@ use watch::json;
 our $DELIVERY = 'status-only';    # or 'system-message' after P-W2
 my %SEV_RANK = (critical => 0, warn => 1, info => 2);
 
+# The alerts written so far: from a cache load (lib/watch/cache.pm) at Stop,
+# else read from the alerts log.
 sub load_existing {
-    my ($ctx) = @_;
+    my ($ctx, $C) = @_;
     my %e = (ids => {}, by_rule => {}, rows => []);
-    my $rows = watch::io::read_jsonl(watch::ctx::alerts_log($ctx));
+    my $rows = $C && ref $C->{rows} eq 'HASH' ? $C->{rows}{alerts}
+             : watch::io::read_jsonl(watch::ctx::alerts_log($ctx), undef, qr/"ev"\s*:\s*"alert"/);
     for my $r (@$rows) {
         next unless ($r->{ev} // '') eq 'alert' && defined $r->{alert_id};
         $e{ids}{ $r->{alert_id} } = 1;
@@ -64,10 +67,14 @@ sub text_for {
 }
 
 # Stop delivery (WATCH §7.2). Returns the one JSON line to print, or undef.
-# Status-only mode returns undef and touches nothing.
+# Status-only mode returns undef and touches nothing. `$deadline` (the Stop's
+# hard stop, watch::io::mono clock): past it nothing more is picked; an alert
+# not picked keeps no `delivered/` marker and is shown at a later Stop.
 sub deliver {
-    my ($ctx, $ex) = @_;
+    my ($ctx, $ex, $deadline) = @_;
     return undef unless $DELIVERY eq 'system-message';
+    my $late = sub { return defined $deadline && watch::io::mono() >= $deadline };
+    return undef if $late->();
     my $brand = $ctx->{brand} // 'plugin';
     my $dir = watch::ctx::sid_dir($ctx) . '/delivered';
     my %shown_rule;
@@ -80,7 +87,7 @@ sub deliver {
     }
     my @pick;
     for my $r (sort { $SEV_RANK{ $a->{severity} } <=> $SEV_RANK{ $b->{severity} } } @{ $ex->{rows} }) {
-        last if @pick >= 3;
+        last if @pick >= 3 || $late->();
         next if -e "$dir/$r->{alert_id}";
         my $sev = $r->{severity} // 'info';
         next if $sev eq 'info';
