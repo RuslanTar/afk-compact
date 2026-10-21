@@ -819,7 +819,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "published ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
+   "publish-failed ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
   ]
  },
  {
