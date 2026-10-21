@@ -141,16 +141,7 @@ RESUME_SKILL_MAX = 20480
 # Hits that wait for WP-text part 2 (REVIEW (D) step 6): (gate, rule, path in the target,
 # fragment of the offending line or None for a file-level hit). Remove a row once it prints
 # PENDING-DONE.
-PENDING = [
-    ("wait-text", "AT-W-01 blocking-read", "assets/resume-context.txt", "blocking read ≤4 min per call"),
-    ("wait-text", "AT-W-01 blocking-read", "skills/resume/SKILL.md", "Block on it in the foreground (a blocking output read"),
-    ("wait-text", "AT-W-01 foreground-wait", "skills/resume/SKILL.md", "Block on it in the foreground (a blocking output read"),
-    ("wait-text", "AT-W-01 notification-wait", "skills/resume/SKILL.md", "wait for a Monitor or task notification"),
-    ("wait-text", "AT-W-01 main-rule", "skills/resume/SKILL.md", None),
-    ("write-first", "AT-SK-03 before-final", "skills/handoff/SKILL.md", "or the user said they are leaving, write the handoff now"),
-    ("self-heal", "AT-J-13 table-missing", "skills/resume/references/self-heal.md", None),
-    ("self-heal", "AT-J-13 relaunch-line-missing", "skills/resume/references/self-heal.md", None),
-]
+PENDING = []
 
 
 def shipped_lines(path, brand):
