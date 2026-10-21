@@ -1,0 +1,161 @@
+{
+ "id": "F2-6-log-stdin",
+ "note": "ROOT-RULINGS F2-6 (SAFE-08): `log --stream paths --stdin` appends one row per JSON line in one write (blank lines skipped), so the mod sends one batch per tool call; a line that is not a JSON object (exit 64) or a row over 4 KB (REFUSED: row-too-large) writes nothing of the batch; the single-row --json form still works",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "batch of three",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stream",
+    "paths",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/tmpdir/a.log\", \"tool\": \"Bash\"}\n\n{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/tmpdir/b.json\", \"tool\": \"Bash\"}\n{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"/private/var/folders/zz/x/T/c.out\", \"tool\": \"Bash\"}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "count": 3
+     },
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "fields": {
+       "path": "$TMP/tmpdir/b.json"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/paths.jsonl",
+      "mode": "0600",
+      "json_lines": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "a bad line writes nothing",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stream",
+    "paths",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/tmpdir/d.log\", \"tool\": \"Bash\"}\nnot json\n",
+   "expect": {
+    "exit": 64,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "an oversized row writes nothing",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stream",
+    "paths",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/tmpdir/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", \"tool\": \"Bash\"}\n",
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: row-too-large\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "--json and --stdin together",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stream",
+    "paths",
+    "--stdin",
+    "--json",
+    "{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/tmpdir/e.log\", \"tool\": \"Bash\"}"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 64,
+    "rows": [
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "empty stdin",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stream",
+    "paths",
+    "--stdin"
+   ],
+   "stdin_text": "",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "the single-row form stays",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stream",
+    "paths",
+    "--json",
+    "{\"v\": 1, \"ts\": \"2026-10-21T14:05:12+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/tmpdir/f.log\", \"tool\": \"Bash\"}"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID/paths.jsonl",
+      "ev": "path",
+      "count": 4
+     }
+    ]
+   }
+  }
+ ]
+}
