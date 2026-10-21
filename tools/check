@@ -27,8 +27,10 @@ node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), 
 description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
 AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
 self-heal table and resume SKILL size), a resume protocol over its DP-8 hard cap (assemble), AT-WD-02 manifest defaults,
-a cross-WP `git mv` (owners-check) and a checkout with core.autocrlf=true without the repo's
-.gitattributes (the launcher must keep LF and run).
+a cross-WP `git mv` (owners-check), a checkout with core.autocrlf=true without the repo's
+.gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
+repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), and an X-H runner
+that dies after a KNOWN_RED case (CR-F42).
 
 BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
@@ -192,6 +194,13 @@ def git_in(d, *args):
     return r.stdout
 
 
+def same_dir(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 def git_repo(d):
     """The copy as a one-commit repo on main (the probes that need git history)."""
     git_in(d, "init", "-q")
@@ -350,6 +359,78 @@ def probes(name):
         out.append("EOL CLONE: " + ("FAIL" if bad else "PASS"))
         return bad, "\n".join(out) + "\n"
 
+    def build_out(d):
+        """CR-F40/F44: every --out at, above or inside the repo (but tmp/<name>/), through a
+        symlink or in other letter case, and an unmarked full folder elsewhere, is refused and
+        nothing is deleted. CR-F41/F45: a variant from a tree that differs from HEAD is refused
+        (exit 1 with VARIANT REFUSED); a clean one names its commit (exit 0)."""
+        tool = os.path.join(d, "tools", "build")
+        build = lambda *a: subprocess.run([tool] + list(a), cwd=d, capture_output=True, text=True)
+        count = lambda: sum(len(f) for top in ("plugin", "src", "tools")
+                            for _, _, f in os.walk(os.path.join(d, top)))
+        link, other = d + "-link", d + "-other"
+        for p in (link, other):
+            if os.path.islink(p):
+                os.unlink(p)
+            elif os.path.lexists(p):
+                shutil.rmtree(p)
+        os.symlink(d, link)
+        write_text(os.path.join(other, "keep.txt"), "user data\n")
+        outs = ["plugin", "src", "plugin/helper", ".", "..", "tmp", "tmp/store-h-1-ab", os.path.join(link, "src"), link, other]
+        if d.upper() != d and same_dir(d.upper(), d):
+            outs += [d.upper(), os.path.join(d.upper(), "plugin")]
+        before, msgs, bad = count(), [], []
+        for o in outs:
+            for args in (["--variant", "skills-only", "--allow-dirty"], ["--name", "zz-drill"]):
+                r = build(*(args + ["--out", o]))
+                if r.returncode != 2 or "build: --out" not in r.stderr:
+                    bad.append("not refused: --out {} {} (exit {})".format(o, " ".join(args), r.returncode))
+        if count() != before or not os.path.isfile(os.path.join(other, "keep.txt")):
+            bad.append("files were deleted")
+        os.unlink(link)
+        shutil.rmtree(other)
+        r = build("--variant", "skills-only", "--out", "tmp/variant")
+        if r.returncode == 0 and re.search(r"^tree sha256 [0-9a-f]{64} skills-only commit [0-9a-f]{40}$", r.stdout, re.M):
+            msgs.append("VARIANT BUILT from a commit")
+            code = 0
+        elif r.returncode == 2 and "differ from HEAD" in r.stderr:
+            u = build("--variant", "skills-only", "--out", "tmp/variant", "--allow-dirty")
+            if u.returncode != 0 or " UNVERIFIED (" not in u.stdout:
+                bad.append("--allow-dirty: exit {} {}".format(u.returncode, u.stdout[-300:]))
+            msgs.append("VARIANT REFUSED: " + r.stderr.strip()[-300:])
+            code = 1
+        else:
+            bad.append("variant build: exit {} {}{}".format(r.returncode, r.stdout[-300:], r.stderr[-300:]))
+        if bad:
+            return 2, "\n".join(bad) + "\n"
+        return code, "\n".join(msgs) + "\n"
+
+    def stray_helper_file(d):
+        write_text(os.path.join(d, "plugin", "helper", "lib", "foo.pm.orig"), "stray\n")
+
+    def xh_truncated(d):
+        """CR-F42: X-H takes a failing run as KNOWN_RED-only only when the runner finished (its
+        `1..N` and `# passed` lines, exit 1). The fake runner fails a known-red case and then,
+        when planted, dies before its plan line."""
+        runner = os.path.join(d, "fake-run.pl")
+        write_text(runner, "print \"ok 1 - FAKE-A\\nnot ok 2 - FAKE-KR\\n#   step 1: the known reason\\n\";\n"
+                   "if (-e \"$ARGV[0]/die\") { exit 255 }\n"
+                   "print \"ok 3 - FAKE-B\\n1..3\\n# passed 2, failed 1, skipped 0\\n\"; exit 1;\n")
+        saved = dict(KNOWN_RED)
+        KNOWN_RED.clear()
+        KNOWN_RED["FAKE-KR"] = r"the known reason"
+        try:
+            x_h(["/usr/bin/perl", runner, d])
+            return 0, "X-H ACCEPTED\n"
+        except Fail as e:
+            return 1, "X-H REFUSED: {}\n".format(e)
+        finally:
+            KNOWN_RED.clear()
+            KNOWN_RED.update(saved)
+
+    def xh_die(d):
+        write_text(os.path.join(d, "die"), "")
+
     readme = r"plugin/README\.md:\d+: "
     v, pinned = pinned_claude()
     canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
@@ -403,6 +484,10 @@ def probes(name):
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
         ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,
          [r"^eol plugin/bin/" + re.escape(name) + r"-store: CRLF$", r"^EOL CLONE: FAIL$"], git_repo),
+        ("build-out", "CR-F40/F41/F44/F45", build_out, stray_helper_file,
+         [r"^VARIANT REFUSED: build: --variant: 1 paths differ from HEAD: plugin/helper/lib/foo\.pm\.orig"], git_repo),
+        ("xh-truncated", "CR-F42", xh_truncated, xh_die,
+         [r"^X-H REFUSED: X-H: exit 255; the runner did not finish"], None),
     ]
     if pinned:
         out += [
@@ -560,15 +645,19 @@ def bt02(phase, names):
 
 # ---------------------------------------------------------------- X-variants
 
-VARIANTS_DIR = os.path.join(REPO, "tmp", "variants")
+# One folder per run (CR-F44: a fixed shared path is deleted under a concurrent run).
+VARIANTS_DIR = os.path.join(REPO, "tmp", "variants-{}".format(os.getpid()))
 
 
 def x_variants(name):
     """E-1 H11 arms (E1-plan-changes finding 2): tools/build --variant renders both; each must pass
-    strict validation; skills-only has no hooks/ or tests/, triggers-off pins triggers false."""
+    strict validation; skills-only has no hooks/ or tests/, triggers-off pins triggers false.
+    --allow-dirty: the check also runs on uncommitted trees and in the BT-02 copy (no git); the
+    clean-tree refusal itself is the X-tools build-out probe (CR-F41/F45)."""
     for v in ("skills-only", "triggers-off"):
         out = os.path.join(VARIANTS_DIR, v)
-        run([os.path.join(REPO, "tools", "build"), "--variant", v, "--out", out], "X-variants build " + v, capture=True)
+        run([os.path.join(REPO, "tools", "build"), "--variant", v, "--out", out, "--allow-dirty"],
+            "X-variants build " + v, capture=True)
         plugin_dir = os.path.join(out, "plugin")
         run(["claude", "plugin", "validate", plugin_dir, "--strict"], "X-variants validate " + v, capture=True)
         run(["claude", "plugin", "validate", out, "--strict"], "X-variants validate marketplace " + v, capture=True)
@@ -614,6 +703,12 @@ def x_h(argv):
         m = re.match(r"^#   (step \d+):", line)
         if cur and m and first.setdefault(cur, (m.group(1), []))[0] == m.group(1):
             first[cur][1].append(line)
+    # CR-F42: the runner prints its plan and summary only after the last case; a run that died
+    # part-way (a die outside a case, a signal, an OOM kill) lacks them and never passes.
+    finished = (re.search(r"(?m)^1\.\.\d+$", out) and re.search(r"(?m)^# passed \d+, failed \d+", out))
+    if not finished or r.returncode not in (0, 1):
+        raise Fail("X-H: exit {}; the runner did not finish (no `1..N` and `# passed` lines, or "
+                   "an exit other than 0/1)".format(r.returncode))
     if r.returncode == 0:
         for case in sorted(KNOWN_RED):
             print("KNOWN-RED-DONE {}: passes now; remove it from KNOWN_RED".format(case))

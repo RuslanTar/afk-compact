@@ -12,13 +12,22 @@ Usage:
                                                   (no hooks.json, no mod) and no plugin/tests/
                                     triggers-off  the full build with userConfig triggers
                                                   defaulting to false
-                                    It prints a tree sha256 (paths, modes and bytes) for FROZEN.md.
+                                    It prints a tree sha256 (paths, modes and bytes) for FROZEN.md,
+                                    and refuses unless the plugin/ files it copies, src/,
+                                    brand.json, LICENSE and tools/build match HEAD, untracked
+                                    files included (the arms come from one commit; the line
+                                    then names it). --allow-dirty builds anyway and marks
+                                    the hash UNVERIFIED (not for FROZEN.md).
+  DIR is refused when it is the repo, one of its parents, or inside the repo other than under
+  tmp/<name>/ (not tmp/store-h-*), compared after symlinks and letter case are resolved. An
+  existing DIR is replaced only when it is empty or holds the .tools-build-out mark a previous
+  --out run wrote; anything else is left alone (D-8).
 
 Build-time rules (compaction DESIGN-NOTES §2, BUILD-PLAN §3.4): strip
 `[ \\t]*<!--.*?-->` (multi-line) and fill `{{plugin}}`. Manifests also take
 `{{marketplace}}`, `{{version}}` and `{{description}}` from brand.json.
 """
-import hashlib, json, os, re, shutil, stat, sys
+import hashlib, json, os, re, shutil, stat, subprocess, sys
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -42,6 +51,9 @@ OTHER_GEN = {
 }
 IGNORED_FILES = {".DS_Store"}
 VARIANTS = ("skills-only", "triggers-off")   # E1-plan-changes finding 2 (H11 arms)
+OUT_MARK = ".tools-build-out"   # written into every --out DIR (CR-F40/F44)
+# Inputs of a variant besides the copied plugin/ files: they must match HEAD (CR-F41/F45).
+VARIANT_INPUTS = ("plugin", "src", "brand.json", "LICENSE", "tools/build")
 
 
 def die(msg):
@@ -220,8 +232,93 @@ def tree_sha(root):
     return h.hexdigest()
 
 
+def same_file(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def out_root(out_dir):
+    """CR-F40/F44: the real path of --out, or die. samefile (device and inode) sees through
+    symlinks and letter case, which a string compare does not (case-insensitive APFS)."""
+    root = os.path.realpath(os.path.abspath(out_dir))
+    repo = os.path.realpath(REPO)
+    p = repo
+    while True:
+        if same_file(p, root):
+            die("--out must not be the repo or one of its parents: " + out_dir)
+        up = os.path.dirname(p)
+        if up == p:
+            break
+        p = up
+    parts, p = [], root
+    while True:
+        if same_file(p, repo):
+            rel = parts[::-1]
+            in_tmp = bool(rel) and (rel[0] == "tmp" or same_file(os.path.join(p, rel[0]), os.path.join(repo, "tmp")))
+            if len(rel) < 2 or not in_tmp or rel[1].lower().startswith("store-h-"):
+                die("--out inside the repo must be under tmp/<name>/ (gitignored scratch, not "
+                    "tmp/store-h-*): " + out_dir)
+            break
+        up = os.path.dirname(p)
+        if up == p:
+            break
+        parts.append(os.path.basename(p))
+        p = up
+    if os.path.lexists(root):
+        if not os.path.isdir(root):
+            die("--out exists and is not a folder: " + out_dir)
+        if os.listdir(root) and not os.path.isfile(os.path.join(root, OUT_MARK)):
+            die("--out {} exists, is not empty and has no {} mark from an earlier --out run; "
+                "it is left alone: pick a new folder or empty it yourself".format(out_dir, OUT_MARK))
+    return root
+
+
+def ships(rel, old_gen, variant):
+    """A plugin/ file the --out copy takes from the work tree (GEN files are rendered instead)."""
+    if rel in old_gen or rel.startswith(("plugin/.claude-plugin/types/", "plugin/bin/", "plugin/skills/")):
+        return False
+    if os.path.basename(rel).startswith(".") and os.path.basename(rel) != ".gitkeep":
+        return False
+    return not (variant == "skills-only" and rel.startswith(("plugin/hooks/", "plugin/tests/")))
+
+
+def git(args):
+    try:
+        r = subprocess.run(["git", "-C", REPO] + args, capture_output=True, text=True)
+    except OSError:
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def variant_source(old_gen, variant):
+    """CR-F41/F45: (HEAD sha, tracked plugin/ files to copy) when every variant input matches
+    HEAD, else (None, reason). Untracked files count; uncommitted GEN files under plugin/ do
+    not (the variant renders those from src/)."""
+    top = git(["rev-parse", "--show-toplevel"])
+    if top is None or not same_file(top.strip(), REPO):
+        return None, "not a git checkout of its own"
+    head = (git(["rev-parse", "--verify", "HEAD"]) or "").strip()
+    st = git(["status", "--porcelain", "-z", "--untracked-files=all", "--no-renames", "--"] + list(VARIANT_INPUTS))
+    if not head or st is None:
+        return None, "git status failed"
+    dirty = []
+    for entry in st.split("\0"):
+        rel = entry[3:]
+        if rel and (not rel.startswith("plugin/") or ships(rel, old_gen, variant)):
+            dirty.append(rel)
+    if dirty:
+        return None, "{} paths differ from HEAD: {}".format(len(dirty), ", ".join(sorted(dirty)[:8]))
+    tracked = git(["ls-files", "-z", "--", "plugin"])
+    if tracked is None:
+        return None, "git ls-files failed"
+    return head, sorted(rel for rel in tracked.split("\0") if rel and ships(rel, old_gen, variant))
+
+
 def main(argv):
     check = False
+    allow_dirty = False
     name = None
     out_dir = None
     variant = None
@@ -230,6 +327,8 @@ def main(argv):
         a = argv[i]
         if a == "--check":
             check = True
+        elif a == "--allow-dirty":
+            allow_dirty = True
         elif a == "--name" and i + 1 < len(argv):
             name = argv[i + 1]
             i += 1
@@ -290,19 +389,23 @@ def main(argv):
         return 1 if problems else 0
 
     if out_dir is not None:
-        root = os.path.abspath(out_dir)
-        if root == REPO or REPO.startswith(root + os.sep):
-            die("--out must not be the repo or one of its parents")
-        if os.path.exists(root):
-            shutil.rmtree(root)
+        root = out_root(out_dir)
         old_gen = set(old["files"])
-        for rel in files_under("plugin"):
-            if rel in old_gen or rel.startswith("plugin/.claude-plugin/types/"):
-                continue
-            if rel.startswith("plugin/bin/") or rel.startswith("plugin/skills/"):
-                continue
-            if variant == "skills-only" and rel.startswith(("plugin/hooks/", "plugin/tests/")):
-                continue
+        commit, unverified, copy = None, None, None
+        if variant is not None:
+            commit, copy = variant_source(old_gen, variant)
+            if commit is None:
+                if not allow_dirty:
+                    die("--variant: {}; a frozen arm must come from one commit (commit or remove "
+                        "them, or pass --allow-dirty for a hash marked UNVERIFIED)".format(copy))
+                unverified, copy = copy, None
+        if copy is None:
+            copy = [rel for rel in files_under("plugin") if ships(rel, old_gen, variant)]
+        if os.path.lexists(root):
+            shutil.rmtree(root)
+        os.makedirs(root)
+        write_file(root, OUT_MARK, "written by tools/build --out; a later --out run may replace this folder\n", PLAIN)
+        for rel in copy:
             src = os.path.join(REPO, rel)
             dst = os.path.join(root, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -314,7 +417,11 @@ def main(argv):
         print("built {} files for {} into {}{}".format(len(gen), brand["name"], root,
                                                        " (variant {})".format(variant) if variant else ""))
         if variant is not None:
-            print("tree sha256 {} {}".format(tree_sha(os.path.join(root, "plugin")), variant))
+            sha = tree_sha(os.path.join(root, "plugin"))
+            if commit:
+                print("tree sha256 {} {} commit {}".format(sha, variant, commit))
+            else:
+                print("tree sha256 {} {} UNVERIFIED ({}): not for FROZEN.md".format(sha, variant, unverified))
         return 0
 
     for rel in old["files"]:
