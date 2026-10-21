@@ -14,7 +14,7 @@ When a Claude Code session compacts, {{plugin}} asks Claude Code's own summarize
 - **Delivers the resume block once.** After a compaction, the next turn gets one short block: the saved copy's path, a fresh git and project-state measurement, and a fallback note when the summary is not in handoff form.
 - **Copies evidence.** Temp files that the session cited are copied to a dated disposable folder, with caps and secret checks, so nothing the next window needs lives only in a temp folder.
 - **Writes a handoff before a last compaction.** When a run will not resume by itself (the hourly limit is reached, or auto-continue is off or halted), the plugin asks for one more turn that writes a handoff while the full context is still there. See [The handoff turn of a last cycle](#the-handoff-turn-of-a-last-cycle).
-- **Re-checks lost background jobs.** A background shell that is gone after a compaction or `/clear` is re-checked from facts the plugin recorded. A read-only job may start again by itself; everything else asks. See [Lost background jobs](#lost-background-jobs).
+- **Re-checks lost background jobs.** A background shell that is gone after the session ended is re-checked from facts the plugin recorded. A read-only job may start again by itself; everything else asks. See [Lost background jobs](#lost-background-jobs).
 - **Exports to a repository, only if both sides agree.** The private store stays the default. A repository can also receive a portable copy of each published handoff. See [Handoffs in git](#handoffs-in-git-repo-mode).
 - **Watches, never acts.** A shadow watcher writes content-free rows for every compaction, nudge, continue and resume, and raises alerts in `/{{plugin}}:status`.
 
@@ -104,6 +104,8 @@ The handoff and the compaction instructions share one format, so `/{{plugin}}:re
 Set on the install screen, or later in `/config` (rows named `{{plugin}}.<key>`). An empty value means the default.
 
 Three keys let the plugin act without asking: `repo_roots`, `relaunch_auto` and `relaunch_allow`. The plugin reads them **from your settings file only** (under the plugin's `options` in `pluginConfigs`). Flags and environment values are ignored for these keys, and `/{{plugin}}:status` prints a note when it ignores one. Nothing the plugin or the model runs can set them for you.
+
+Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. It does not read them from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -197,7 +199,7 @@ A job that the model will wait on is started with `; echo "__exit $?"` at the en
 | `pid-exit:<pid>[@<start-epoch>]` | the process is gone, or its start time changed |
 | `file:<path>` | the path exists as a regular file |
 | `marker:<path>:<regex>` | a line of the file matches the regex |
-| `exit:<path>` | the file holds an `__exit <n>` line; the code is printed |
+| `exit:<path>` | the file holds an `__exit <n>` line or ends with Claude Code's `[exited with code <n>]`; the code is printed. `[killed]` (stopped with TaskStop or at exit) prints `killed` |
 
 `--while <guard>` ends the wait early when a pid or file stops holding. `--stall <s>` ends it when the marker or exit file does not grow (or does not appear) for that long. `--deadline <epoch>` ends it when a time has passed. `--max <s>` takes 0 to 7200 and defaults to 270; `--max 0` checks once and returns at once.
 
@@ -205,7 +207,7 @@ It prints one line and exits with 0 (done), 10 (still pending, run it again), 11
 
 Limits and tips:
 
-- The command only reads, but whether your permission mode asks for it has not been checked on a live session. To silence the prompt, add the allow rule `Bash({{plugin}}-store wait *)`.
+- The command only reads. In auto mode it ran without a prompt (Claude Code 2.1.306). In default mode the allow rule `Bash({{plugin}}-store wait *)` silences the usual form, the bare name. When the helper is called by its full path (`<plugin folder>/bin/{{plugin}}-store wait …`), that rule does not match: add `Bash(<plugin folder>/bin/{{plugin}}-store wait *)` with the absolute folder too, the rule the prompt offers as "don't ask again".
 - Monitor is not available on Amazon Bedrock, Google Cloud Agent Platform or Microsoft Foundry, nor when `DISABLE_TELEMETRY` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set. Each Monitor watch ends after 5 minutes by default and 30 at most.
 - With `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` there is no `run_in_background` and no notification. Every wait then follows the subagent rule above.
 - In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. A `--max` of 1800 fits.
@@ -213,12 +215,12 @@ Limits and tips:
 
 ## Lost background jobs
 
-After a compaction, `/clear` or a restart, a background shell that a handoff lists may be gone. `/{{plugin}}:resume` does not trust the handoff's text for this. It uses a record the plugin wrote when the job started: the exact command, the folder, the time and the output file. The mod writes it from the tool call itself, so the model cannot edit it. A command that held a credential-like value is stored as a hash and rule ids only, and such a job is never started again by itself.
+Background shells survive a compaction and `/clear` (Claude Code 2.1.306). At exit they stop, unless you pick "Move to background and exit". So after `/clear` resume first checks a listed job with `{{plugin}}-store wait` and treats it as possibly still running; after an exit or a restart the job may be gone. `/{{plugin}}:resume` does not trust the handoff's text for this. It uses a record the plugin wrote when the job started: the exact command, the folder, the time and the output file. The mod writes it from the tool call itself, so the model cannot edit it. A command that held a credential-like value is stored as a hash and rule ids only, and such a job is never started again by itself.
 
 Resume re-checks seven facts:
 
 1. the record exists and matches the original transcript;
-2. the session that owned the job has ended;
+2. the process that owned the job has ended (a `/clear` does not count: the shell survives it);
 3. the job was still running at the end;
 4. the output holds no exit marker;
 5. the output has been quiet since the end;
@@ -227,9 +229,9 @@ Resume re-checks seven facts:
 
 Only when all seven hold, and the relation is the same session or a successor (`/clear` or a proven lineage), does resume start the job again, once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). The command is never run by the helper itself.
 
-What may start again by itself: **read-only jobs only**, as Claude Code's own read-only check decides. Anything with outside effects (a push, a deploy, a write to a service) always asks. `relaunch_allow` exists, but it has no effect in this version. Nothing is ever stopped to make room: an old process that may still run blocks the start.
+What may start again by itself: **read-only jobs only**, as Claude Code's own read-only check decides. Anything with outside effects (a push, a deploy, a write to a service) always asks. `relaunch_allow` exists, but it has no effect in this version. Nothing is ever stopped to make room: an old process that may still run blocks the start. A job whose output ends with `[killed]` (stopped with TaskStop or at exit) always asks.
 
-**Status.** Until the location of a job's output file has been confirmed on a live session, `/{{plugin}}:status` prints `automatic relaunch: inactive (no output path)` and every lost job asks. Set `relaunch_auto` to `shadow` to log the verdict and always ask, or to `off`. These keys are read from your settings file only (see [Settings](#settings)).
+**Status.** The plugin takes each job's output file from the Bash tool's result text and uses it only when it matches Claude Code's task-file layout; a job without a confirmed output file asks. `/{{plugin}}:status` prints `automatic relaunch: active for read-only jobs · relaunch_auto on` (or the `shadow` or `off` state) and how many of this session's jobs have a confirmed output file. Set `relaunch_auto` to `shadow` to log the verdict and always ask, or to `off`. These keys are read from your settings file only (see [Settings](#settings)).
 
 ## Handoffs in git (repo mode)
 
@@ -349,7 +351,7 @@ The managed-machine path is built and tested offline. It has not yet been run on
 - **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/{{plugin}}:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
 - **Subagents** get shaped summaries and copies, but no resume block. They also get no nudge and no handoff turn.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
-- **Automatic relaunch is inactive for now.** It needs the output file of each background job. Until that is confirmed on a live session, every lost job asks. Only read-only jobs will start again by themselves, and `relaunch_allow` has no effect yet.
+- **Automatic relaunch covers read-only jobs only.** `relaunch_allow` has no effect yet, and a job whose output file could not be confirmed asks.
 - **Repo mode exports only.** There is no command that accepts a repository for you, and the plugin never stages or commits an export.
 - **Handoff turn limits are advice.** The plugin adds notes to tool results and denies nothing, so a model that ignores a note can run past its budget. Native auto-compaction is the backstop.
 - **Not yet run live:** the end-to-end runs in a real session, on a managed machine, the handoff turn, the wait helper in a subagent, and the week-long shadow run.
