@@ -222,15 +222,21 @@ sub elements {
         $e{none_forms_used} = $forms;
     }
 
-    my $rows = 0;
-    my $more = 0;
+    # In-flight rows and the `+N more` marker by the spec's own literals
+    # (inflight_compact_row_re, more_compaction_re, inflight_max_rows; BUILD-PLAN
+    # §3.4): a missing literal leaves its element null.
+    my $row_rx = watch::spec::regex($spec, 'inflight_compact_row_re');
+    my $more_rx = watch::spec::regex($spec, 'more_compaction_re');
+    my $max = $spec->{inflight_max_rows};
+    $max = undef unless defined $max && !ref $max && $max =~ /\A[0-9]+\z/;
+    my ($rows, $more) = (0, 0);
     for my $l (@{ $nonblank->($by{in_flight}) }) {
-        $rows++ if $l =~ /^\s*(?:[-*|]\s*)?B-[0-9]+\b/;
-        $more = 1 if $l =~ /\+[0-9]+ more\b/;
+        $rows++ if $row_rx && $l =~ $row_rx;
+        $more = 1 if $more_rx && $l =~ $more_rx;
     }
-    $e{inflight_rows} = $rows;
-    $e{inflight_over_8} = $rows > 8 ? \1 : \0;
-    $e{inflight_more_marker} = $more ? \1 : \0;
+    $e{inflight_rows} = $row_rx ? $rows : undef;
+    $e{inflight_over_8} = ($row_rx && defined $max) ? ($rows > $max ? \1 : \0) : undef;
+    $e{inflight_more_marker} = $more_rx ? ($more ? \1 : \0) : undef;
 
     my $nob = 0;
     for my $l (@{ $nonblank->($by{decisions}) }) {
