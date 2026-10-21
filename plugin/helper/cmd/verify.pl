@@ -1,7 +1,8 @@
 # cmd/verify.pl: `verify` subcommand (BUILD-PLAN §3.1). Owner: WP-skills.
-# Phase 0 stub: not implemented, exit 70. Only the owner edits this file.
+# The logic lives in lib/skills/restore.pm; exit codes per §3.1 (0, 3, 64, 70).
 use strict;
 use warnings;
+use skills::cli;
+use skills::restore;
 
-print STDERR "verify: not implemented\n";
-exit 70;
+exit skills::cli::main('verify', \&skills::restore::verify, @ARGV);

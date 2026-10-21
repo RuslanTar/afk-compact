@@ -1,0 +1,136 @@
+{
+ "id": "HT-B-03",
+ "layer": "H",
+ "owner": "skills",
+ "note": "begin: stage <bucket>/.staging/<sid8>-<nonce>/ 0700 with settings.json 0600 (settings stored there); a root inside a git work tree and not ignored -> REFUSED: root-in-git (D-12), ignored -> proceeds; inside .planning/ -> REFUSED: root-in-planning",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "repo": {
+    "branch": "main"
+   },
+   "at": "$TMP/dot"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "begin",
+  "--sid",
+  "$SID",
+  "--topic",
+  "retry"
+ ],
+ "capture": {
+  "STAGE": "json:stage",
+  "NONCE": "json:nonce",
+  "STEM": "json:stem"
+ },
+ "expect": {
+  "exit": 0,
+  "files": [
+   {
+    "path": "$ROOT/repo/LAB-7/.staging/11111111-*",
+    "mode": "0700"
+   },
+   {
+    "path": "$ROOT/repo/LAB-7/.staging",
+    "mode": "0700"
+   },
+   {
+    "path": "$ROOT/repo/LAB-7/.staging/11111111-*/settings.json",
+    "mode": "0600",
+    "has": [
+     "\"handoff_root\":\"$ROOT\"",
+     "\"nonce\":\"[0-9a-f]{8}\"",
+     "\"bucket\":\"$ROOT/repo/LAB-7\""
+    ]
+   }
+  ]
+ },
+ "then": [
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--root",
+    "$TMP/dot/handoffs"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-in-git\n",
+    "absent": [
+     "$TMP/dot/handoffs"
+    ]
+   }
+  },
+  {
+   "write": "$TMP/dot/.gitignore",
+   "content": "/handoffs\n"
+  },
+  {
+   "git": [
+    "-C",
+    "$TMP/dot",
+    "add",
+    ".gitignore"
+   ]
+  },
+  {
+   "git": [
+    "-C",
+    "$TMP/dot",
+    "commit",
+    "-q",
+    "-m",
+    "ignore"
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--root",
+    "$TMP/dot/handoffs"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "bucket.path": "$TMP/dot/handoffs/repo/LAB-7"
+    }
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--root",
+    "$TMP/proj/.planning/h"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-in-planning\n"
+   }
+  }
+ ]
+}

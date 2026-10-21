@@ -1,0 +1,177 @@
+{
+ "id": "HT-PI-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "pin: writes <root>/.sessions/<sid>.json under the TPL §6 lock (bucket, resumed_from, worktree, lane); a lock whose owner pid is dead is taken over and logged lock_stale; a live owner's lock is never broken (REFUSED: pin-locked, pin unchanged); outside the root or an auto: lane refused",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a0b0c0d⟫\n"
+  },
+  {
+   "write": "$ROOT/repo/misc/2026-10-21_12-30-00_22222222_k.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:30:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a0b0c0d⟫\n"
+  },
+  {
+   "write": "$TMP/outside.md",
+   "content": "# x\n"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "pin",
+  "--sid",
+  "$SID",
+  "--resumed-from",
+  "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md"
+ ],
+ "expect": {
+  "exit": 0,
+  "stdout": "pinned repo/LAB-7\n",
+  "files": [
+   {
+    "path": "$ROOT/.sessions/$SID.json",
+    "mode": "0600",
+    "has": [
+     "\"bucket\":\"repo/LAB-7\"",
+     "\"resumed_from\":\"$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md\"",
+     "\"session_id\":\"$SID\"",
+     "\"worktree\":\"$TMP/repo\""
+    ]
+   }
+  ]
+ },
+ "then": [
+  {
+   "write": "$ROOT/.sessions/$SID.json.lock",
+   "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 999999, \"lstart\": \"Mon Jan  1 00:00:00 2001\", \"host\": \"h\"}"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "$SID",
+    "--resumed-from",
+    "$ROOT/repo/misc/2026-10-21_12-30-00_22222222_k.md",
+    "--lane",
+    "lane:abc"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "pinned repo/misc\n",
+    "files": [
+     {
+      "path": "$ROOT/.sessions/$SID.json",
+      "has": [
+       "\"bucket\":\"repo/misc\"",
+       "\"lane\":\"lane:abc\""
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lock_stale"
+     }
+    ]
+   }
+  },
+  {
+   "write": "$ROOT/.sessions/$SID.json.lock",
+   "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 1, \"lstart\": \"$LSTART1\", \"host\": \"h\"}"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "$SID",
+    "--resumed-from",
+    "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: pin-locked\n",
+    "files": [
+     {
+      "path": "$ROOT/.sessions/$SID.json",
+      "has": [
+       "\"bucket\":\"repo/misc\""
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/$SID.json.lock",
+      "has": [
+       "\"pid\": 1,"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$ROOT/.sessions/$SID.json.lock",
+   "content": ""
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "$SID",
+    "--resumed-from",
+    "$TMP/outside.md"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: not-under-root\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "$SID",
+    "--resumed-from",
+    "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md",
+    "--lane",
+    "auto:x"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: lane-id\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "${CLAUDE_SESSION_ID}",
+    "--resumed-from",
+    "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: no-session\n"
+   }
+  }
+ ]
+}

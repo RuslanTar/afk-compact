@@ -1,0 +1,31 @@
+{"id":"HT-PB-03","layer":"H","owner":"skills",
+ "note":"publish success: TPL §3 frontmatter (writer: handoff, D-1), marker on body line 1 with s=manual, sentinel last line, @self@ filled, exclusive create, MANIFEST rows (recipe sha256 + origin_session_id), pin under lock, receipt, handoff_publish row; a carried byte-identical [verified …] line is not a LINT (RV-7)",
+ "now":"2026-10-21T14:05:12+03:00","tz":"Etc/GMT-3",
+ "setup":[
+  {"repo":{"branch":"feature/LAB-7-retry","commits":[{"files":{"app/retry.rb":"x = 1\n"},"msg":"seed"}]},"at":"$TMP/repo"},
+  {"write":"$ROOT/repo/LAB-7/2026-10-20_09-00-00_11111111_retry.md","content":"---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-20T09:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — first pass\n## Decisions and do-not-re-raise\n- X-1: refuted \"cache is warm\" — it was cold [verified 09:12: rg -n cold app.log]\n⟪/$BRAND n=0a0b0c0d⟫\n"},
+  {"write":"$TMP/scratch/run-suite.sh","content":"echo suite\n","mode":"0700"}
+ ],
+ "cwd":"$TMP/repo",
+ "argv":["begin","--sid","$SID","--topic","retry"],
+ "capture":{"STAGE":"json:stage","NONCE":"json:nonce","STEM":"json:stem"},
+ "expect":{"exit":0,"json":{"bucket.source":"branch","previous_handoff":"$ROOT/repo/LAB-7/2026-10-20_09-00-00_11111111_retry.md"}},
+ "then":[
+  {"cwd":"$TMP/repo","argv":["evidence","--stage","$STAGE","--keep","$TMP/scratch/run-suite.sh"],
+   "expect":{"exit":0,"stdout_has":["^copied $ROOT/repo/LAB-7/evidence/$STEM/run-suite.sh 11 [0-9a-f]{8} $TMP/scratch/run-suite.sh$","^Evidence: $ROOT/repo/LAB-7/evidence/$STEM/ \\(1 files, 0.0 MB; MANIFEST.tsv\\)$"]}},
+  {"write":"$STAGE/restart/B-2.md","content":"item: B-2 · runtime id b8890 · class auto\nscript: evidence/$STEM/run-suite.sh\ncommand: sh evidence/$STEM/run-suite.sh\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/out.txt\nfinished parts: none yet\nidempotency check: ls $TMP/repo/out.txt\n"},
+  {"cwd":"$TMP/repo","argv":["stamp","--stage","$STAGE"],"expect":{"exit":0,"stdout":"14:05\n"}},
+  {"write":"$STAGE/body.md","content":"# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: 1 running: B-2 b8890; see In flight\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- X-1: refuted \"cache is warm\" — it was cold [verified 09:12: rg -n cold app.log]\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-2 · b8890 | shell · test suite · main | 14:40 · exit code (probe 14:05: running) | `tail -n 3 $TMP/repo/out.txt` | record pass/fail | /clear, exit | auto · restart/B-2.md |\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 14:05 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Evidence\nEvidence: $ROOT/repo/LAB-7/evidence/$STEM/ (1 files, 0.0 MB; MANIFEST.tsv)\n- $ROOT/repo/LAB-7/evidence/$STEM/run-suite.sh — the suite runner\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"},
+  {"cwd":"$TMP/repo","argv":["publish","--stage","$STAGE","--slug","retry","--status","in-progress"],
+   "capture":{"PUB":"re:^Wrote handoff to: (.+)$"},
+   "expect":{"exit":0,"stdout_lacks":["^LINT "],"stdout_has":["\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\n\\z"],
+    "files":[
+     {"path":"$ROOT/repo/LAB-7/$STEM.md","mode":"0600","has":["\\A---\\nkind: handoff\\nwriter: handoff\\nnonce: $NONCE\\ndate: 2026-10-21T14:05:12\\+03:00\\nsession_id: $SID\\nactor: main\\n","^lineage_reason: none$","^repository: repo$","^bucket: repo/LAB-7$","^branch: feature/LAB-7-retry$","^git_commit: [0-9a-f]{40}$","^status: in-progress$","^ticket: LAB-7$","^previous_handoff: $ROOT/repo/LAB-7/2026-10-20_09-00-00_11111111_retry.md$","\\n---\\n⟪$BRAND v1 n=$NONCE s=manual⟫\\n# LAB-7 — ","this handoff: $ROOT/repo/LAB-7/$STEM\\.md$","\\n⟪/$BRAND n=$NONCE⟫\\n\\z"],"lacks":["@self@","^transcript_path:"]},
+     {"path":"$ROOT/repo/LAB-7/evidence/$STEM/MANIFEST.tsv","mode":"0600","has":["\\Acopy_path\\torigin\\tbytes\\tsha256\\tmtime\\tcopied_at\\tmode\\tscan\\tregen_cmd\\tmeaning\\n","^$ROOT/repo/LAB-7/evidence/$STEM/run-suite.sh\\t$TMP/scratch/run-suite.sh\\t11\\t[0-9a-f]{64}\\t","^$ROOT/repo/LAB-7/evidence/$STEM/restart/B-2.md\\t$STAGE/restart/B-2.md\\t\\d+\\t[0-9a-f]{64}\\t.*\\tfull\\t-\\trestart recipe B-2$"]},
+     {"path":"$ROOT/repo/LAB-7/evidence/$STEM/restart/B-2.md","has":["^sha256: [0-9a-f]{64}$","^origin_session_id: $SID$"]},
+     {"path":"$ROOT/.sessions/$SID.json","mode":"0600","has":["\"bucket\":\"repo/LAB-7\"","\"last_handoff\":\\{[^}]*\"path\":\"$ROOT/repo/LAB-7/$STEM\\.md\""]},
+     {"path":"$STAGE/body.md"}],
+    "rows":[{"file":"$WATCH/$SID.classic.jsonl","ev":"handoff_publish","fields":{"result":"wrote","kind":"handoff","writer":"handoff","writer":"handoff","sid":"$SID","size_band":"lt6k"}}]}},
+  {"cwd":"$TMP/repo","argv":["publish","--stage","$STAGE","--slug","retry","--status","in-progress"],
+   "expect":{"exit":3,"stdout":"REFUSED: already-published\n","files":[{"path":"$ROOT/repo/LAB-7/*.md","count":2}]}}
+ ]}

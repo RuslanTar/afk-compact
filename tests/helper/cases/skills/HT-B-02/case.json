@@ -1,0 +1,156 @@
+{
+ "id": "HT-B-02",
+ "layer": "H",
+ "owner": "skills",
+ "note": "begin: own_latest.unchanged false after an edit to an already-dirty file (RV-18); previous_handoff never another session's file (RV-19), which goes to newer_foreign with its In flight line number (RV-26); age_min and reuse_window_min (D-14)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ],
+    "dirty": {
+     "app/retry.rb": "x = 2\n"
+    }
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/2026-10-21_13-00-00_99999999_other.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T13:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## Resume here\nStatus: active\n## User constraints\nnone stated\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "begin",
+  "--sid",
+  "$SID",
+  "--topic",
+  "retry"
+ ],
+ "capture": {
+  "STAGE": "json:stage",
+  "NONCE": "json:nonce",
+  "STEM": "json:stem"
+ },
+ "expect": {
+  "exit": 0,
+  "json": {
+   "previous_handoff": {
+    "null": 1
+   },
+   "own_latest": {
+    "null": 1
+   },
+   "newer_foreign": {
+    "len": 1
+   },
+   "newer_foreign.0.path": "$ROOT/repo/LAB-7/2026-10-21_13-00-00_99999999_other.md",
+   "newer_foreign.0.sid8": "99999999",
+   "newer_foreign.0.inflight_line": 15,
+   "porcelain.count": 1
+  }
+ },
+ "then": [
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 14:05)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 14:05 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 14:05 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "now": "2026-10-21T14:09:00+03:00",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_handoff": "$PUB",
+     "own_latest.path": "$PUB",
+     "own_latest.unchanged": 1,
+     "own_latest.age_min": 3,
+     "reuse_window_min": 15,
+     "newer_foreign": {
+      "len": 0
+     }
+    }
+   }
+  },
+  {
+   "write": "$TMP/repo/app/retry.rb",
+   "content": "x = 3\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "own_latest.unchanged": 0,
+     "porcelain.count": 1,
+     "previous_handoff": "$PUB"
+    }
+   }
+  },
+  {
+   "write": "$TMP/repo/notes.txt",
+   "content": "new\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "own_latest.unchanged": 0,
+     "porcelain.count": 2
+    }
+   }
+  }
+ ]
+}

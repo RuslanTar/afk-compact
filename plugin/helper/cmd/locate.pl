@@ -1,7 +1,8 @@
 # cmd/locate.pl: `locate` subcommand (BUILD-PLAN §3.1). Owner: WP-skills.
-# Phase 0 stub: not implemented, exit 70. Only the owner edits this file.
+# The logic lives in lib/skills/locate.pm; exit codes per §3.1 (0, 3, 64, 70).
 use strict;
 use warnings;
+use skills::cli;
+use skills::locate;
 
-print STDERR "locate: not implemented\n";
-exit 70;
+exit skills::cli::main('locate', \&skills::locate::run, @ARGV);

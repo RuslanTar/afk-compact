@@ -1,0 +1,272 @@
+{
+ "id": "HT-EV-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "evidence: every status (copied, dup, ref-only, redacted, withheld, missing); 10 MB per file and 50 MB per handoff caps -> ref-only; Evidence/Disposable/Ref-only/Volatile lines; WARN quota over evidence_quota_mb",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "repo": {
+    "branch": "feature/LAB-7-retry",
+    "commits": [
+     {
+      "files": {
+       "app/retry.rb": "x = 1\n"
+      },
+      "msg": "seed"
+     }
+    ]
+   },
+   "at": "$TMP/repo"
+  },
+  {
+   "write": "$TMP/s/notes.txt",
+   "content": "plain notes\n"
+  },
+  {
+   "write": "$TMP/s/copy-of-notes.txt",
+   "content": "plain notes\n"
+  },
+  {
+   "write": "$TMP/s/app.log",
+   "content_parts": [
+    "connect ok\npass",
+    "word=hunter2",
+    "xyz\n"
+   ]
+  },
+  {
+   "write": "$TMP/s/.env",
+   "content": "A=1\n"
+  },
+  {
+   "write": "$TMP/s/.env.example",
+   "content": "A=\n"
+  },
+  {
+   "write": "$TMP/s/scratch.txt",
+   "content": "dispose me\n"
+  },
+  {
+   "write": "$TMP/s/big.bin",
+   "content": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "write": "$TMP/s/n0.bin",
+   "content": "0"
+  },
+  {
+   "write": "$TMP/s/n1.bin",
+   "content": "1"
+  },
+  {
+   "write": "$TMP/s/n2.bin",
+   "content": "2"
+  },
+  {
+   "write": "$TMP/s/n3.bin",
+   "content": "3"
+  },
+  {
+   "write": "$TMP/s/n4.bin",
+   "content": "4"
+  },
+  {
+   "write": "$TMP/s/n5.bin",
+   "content": "5"
+  }
+ ],
+ "cwd": "$TMP/repo",
+ "argv": [
+  "begin",
+  "--sid",
+  "$SID",
+  "--topic",
+  "retry",
+  "--quota-mb",
+  "40"
+ ],
+ "capture": {
+  "STAGE": "json:stage",
+  "NONCE": "json:nonce",
+  "STEM": "json:stem"
+ },
+ "expect": {
+  "exit": 0
+ },
+ "then": [
+  {
+   "git": [
+    "-C",
+    "$TMP",
+    "init",
+    "-q",
+    "clone"
+   ]
+  },
+  {
+   "write": "$TMP/clone/a.txt",
+   "content": "a\n"
+  },
+  {
+   "git": [
+    "-C",
+    "$TMP/clone",
+    "add",
+    "a.txt"
+   ]
+  },
+  {
+   "git": [
+    "-C",
+    "$TMP/clone",
+    "commit",
+    "-q",
+    "-m",
+    "local work"
+   ]
+  },
+  {
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--keep",
+    "$TMP/s/notes.txt",
+    "$TMP/s/copy-of-notes.txt",
+    "$TMP/s/app.log",
+    "$TMP/s/.env",
+    "$TMP/s/.env.example",
+    "$TMP/s/gone.txt",
+    "--dispose",
+    "$TMP/s/scratch.txt",
+    "--clone",
+    "$TMP/clone"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/notes.txt 12 [0-9a-f]{8} $TMP/s/notes.txt$",
+     "^dup $ROOT/repo/LAB-7/evidence/$STEM/notes.txt 12 [0-9a-f]{8} $TMP/s/copy-of-notes.txt$",
+     "^redacted $ROOT/repo/LAB-7/evidence/$STEM/app.log \\d+ [0-9a-f]{8} $TMP/s/app.log$",
+     "^withheld - \\d+ [0-9a-f]{8} $TMP/s/.env$",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/.env.example ",
+     "^missing - 0 - $TMP/s/gone.txt$",
+     "^copied $DISP/2026-10-21/$STEM-evidence/scratch.txt 11 ",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0001-[0-9a-f]{8}.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8}$",
+     "^Evidence: $ROOT/repo/LAB-7/evidence/$STEM/ \\(4 files, 0.0 MB; MANIFEST.tsv\\)$",
+     "^Disposable: $DISP/2026-10-21/$STEM-evidence/ \\(kept until you remove it\\)$",
+     "^Volatile: $TMP/s/gone.txt — missing at 14:05$",
+     "^Volatile: $TMP/s/.env — withheld by the secret gate"
+    ],
+    "stdout_lacks": [
+     "hunter2",
+     "^WARN quota"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/app.log",
+      "mode": "0600",
+      "lacks": [
+       "hunter2"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM",
+      "mode": "0700"
+     },
+     {
+      "path": "$DISP/2026-10-21/$STEM-evidence/scratch.txt",
+      "mode": "0600"
+     },
+     {
+      "path": "$TMP/s/scratch.txt"
+     }
+    ],
+    "absent": [
+     "$ROOT/repo/LAB-7/evidence/$STEM/.env"
+    ]
+   }
+  },
+  {
+   "bigfile": "$TMP/s/big.bin",
+   "bytes": 11534336
+  },
+  {
+   "bigfile": "$TMP/s/n0.bin",
+   "bytes": 9437184,
+   "fill": "0"
+  },
+  {
+   "bigfile": "$TMP/s/n1.bin",
+   "bytes": 9437184,
+   "fill": "1"
+  },
+  {
+   "bigfile": "$TMP/s/n2.bin",
+   "bytes": 9437184,
+   "fill": "2"
+  },
+  {
+   "bigfile": "$TMP/s/n3.bin",
+   "bytes": 9437184,
+   "fill": "3"
+  },
+  {
+   "bigfile": "$TMP/s/n4.bin",
+   "bytes": 9437184,
+   "fill": "4"
+  },
+  {
+   "bigfile": "$TMP/s/n5.bin",
+   "bytes": 9437184,
+   "fill": "5"
+  },
+  {
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--keep",
+    "$TMP/s/big.bin",
+    "$TMP/s/n0.bin",
+    "$TMP/s/n1.bin",
+    "$TMP/s/n2.bin",
+    "$TMP/s/n3.bin",
+    "$TMP/s/n4.bin",
+    "$TMP/s/n5.bin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ref-only - 11534336 [0-9a-f]{8} $TMP/s/big.bin$",
+     "^copied \\S+/n0.bin 9437184 ",
+     "^copied \\S+/n4.bin 9437184 ",
+     "^ref-only - 9437184 [0-9a-f]{8} $TMP/s/n5.bin$",
+     "^Ref-only: $TMP/s/big.bin — 11534336 B, sha256 [0-9a-f]{8}$",
+     "^WARN quota $ROOT/repo/LAB-7 45$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 64
+   }
+  },
+  {
+   "note": "a stage whose settings.json names another bucket is not a stage: nothing is written there",
+   "write": "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b/settings.json",
+   "content": "{\"v\":1,\"session_id\":\"$SID\",\"sid8\":\"11111111\",\"nonce\":\"0b0b0b0b\",\"stem\":\"2026-10-21_14-05-12_11111111_retry\",\"date\":\"2026-10-21T14:05:12+03:00\",\"checked_at\":\"14:05\",\"bucket\":\"$TMP/elsewhere\",\"settings\":{}}\n"
+  },
+  {
+   "argv": ["evidence", "--stage", "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b", "--keep", "$TMP/s/scratch.txt"],
+   "expect": {"exit": 3, "stdout": "REFUSED: no-stage\n", "absent": ["$TMP/elsewhere"]}
+  }
+ ]
+}

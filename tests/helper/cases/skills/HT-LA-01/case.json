@@ -1,0 +1,110 @@
+{
+ "id": "HT-LA-01",
+ "layer": "H",
+ "owner": "skills",
+ "note": "lane adopt: `queue: not configured` without queue_cmd; the bound lane; a different bound lane -> mismatch line, nothing queued; an auto: id refused (D-21 lane: only); a held lane -> the refusal relayed, exit 3",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "setup": [
+  {
+   "write": "$TMP/bin/queue",
+   "content": "#!/bin/sh\n# queue stub: adopt --lane <id> [--if-free]\ncase \"$3\" in\n  lane:held) echo 'held by 22222222'; exit 1 ;;\n  lane:other) echo 'adopted lane:zzz'; exit 0 ;;\n  *) echo \"adopted $3\"; exit 0 ;;\nesac\n",
+   "mode": "0700"
+  }
+ ],
+ "argv": [
+  "lane",
+  "adopt",
+  "--lane",
+  "lane:abc",
+  "--if-free"
+ ],
+ "expect": {
+  "exit": 0,
+  "stdout": "queue: not configured\n",
+  "trace_absent": [
+   "queue_cmd"
+  ]
+ },
+ "then": [
+  {
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:abc",
+    "--if-free"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/queue"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "lane: lane:abc\n",
+    "trace_has": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:other",
+    "--if-free"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/queue"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "lane: lane:zzz\nmismatch: asked for lane:other; nothing queued\n"
+   }
+  },
+  {
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "auto:abc",
+    "--if-free"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/queue"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: lane-id (only lane: ids are adopted)\n"
+   }
+  },
+  {
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:held",
+    "--if-free"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/queue"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: held by 22222222\n"
+   }
+  },
+  {
+   "argv": [
+    "lane",
+    "list"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/queue"
+   },
+   "expect": {
+    "exit": 64
+   }
+  }
+ ]
+}
