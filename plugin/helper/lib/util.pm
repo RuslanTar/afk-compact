@@ -230,6 +230,10 @@ sub _bytes {
     return $s;
 }
 
+# to_bytes(text) -> the text as UTF-8 bytes (undef stays undef). Output lines are bytes:
+# a character string joined with a byte literal such as `·` prints double-encoded.
+sub to_bytes { return defined $_[0] ? _bytes($_[0]) : undef }
+
 sub _write_all {
     my ($fh, $data) = @_;
     my $off = 0;
