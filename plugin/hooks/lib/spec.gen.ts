@@ -307,7 +307,7 @@ export const SPEC = {
     {
       "id": "pem",
       "class": "HARD",
-      "re": "-----BEGIN [A-Z0-9 ]+-----"
+      "re": "-----BEGIN ([A-Z0-9 ]+)-----(?:(?:(?!-----BEGIN )[\\s\\S])*?-----END \\1-----|(?:(?:\\r?\\n|(?:\\\\r)?\\\\n)[ \\t]*(?:[A-Za-z0-9+/=]+|(?:Proc-Type|DEK-Info|Version|Comment|Hash|Charset): [^\\r\\n\\\\\"]*)?(?=[\\r\\n\\\\\"']|$))*)"
     },
     {
       "id": "aws-key-id",
@@ -372,7 +372,7 @@ export const SPEC = {
     {
       "id": "url-userinfo",
       "class": "HARD",
-      "re": "\\b[A-Za-z][A-Za-z0-9+.-]*://[^/\\s:@]+:[^/\\s@]+@[^/\\s]+"
+      "re": "\\b[A-Za-z][A-Za-z0-9+.-]*://[^/\\s:@]*:[^/\\s@]+@[^/\\s]+"
     },
     {
       "id": "key-value",
@@ -393,7 +393,7 @@ export const SPEC = {
     {
       "id": "cookie",
       "class": "WARN",
-      "re": "([Ss]et-)?[Cc]ookie:[ \\t]*[^=\\s;]+=[^;\\s]{8,}"
+      "re": "([Ss]et-)?[Cc]ookie:[ \\t]*([^=\\s;]+=[^;\\s]*;[ \\t]*)*[^=\\s;]+=[^;\\s]{8,}(;[ \\t]*[^=\\s;]+=[^;\\s]*)*"
     }
   ],
   "deny_names": {

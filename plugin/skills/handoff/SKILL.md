@@ -19,7 +19,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 | | When | Do instead |
 |---|---|---|
 | A | You are a subagent or workflow agent | Write no file. Read template §8, return that subagent form as text and stop. |
-| B | The helper prints `REFUSED` (other than `REFUSED: lint`, which is C), is missing or crashes | Relay it verbatim, say nothing was saved. Missing or crashed: then print the body here in the chat, never in a file, in template order without frontmatter, marker or sentinel, its first line `not saved, no secret scan`. Stop. Never write the handoff another way. |
+| B | The helper prints `REFUSED` (other than `REFUSED: lint`, which is C), is missing or crashes | Relay it verbatim, say nothing was saved. Missing, crashed or `REFUSED: helper-runtime`: then print the body here in the chat, never in a file, in template order without frontmatter, marker or sentinel, its first line `not saved, no secret scan`. Stop. Never write the handoff another way. |
 | C | Blocking `LINT` after 2 fix rounds | Relay the receipt (it names the kept draft) and stop. Never say "saved". |
 | D | An evidence row is `withheld` | Never copy it another way or retry. If a resume needs it, add an Open question naming where it lives. |
 | E | The user must decide something | Record it in Open questions with a recommendation. No interactive question tool here: it holds the turn open and blocks compaction. |
@@ -44,7 +44,7 @@ Run together:
 - `compactinue-store begin --sid '${CLAUDE_SESSION_ID}' --topic '<slug>' --root '${user_config.handoff_root}' --disposable-root '${user_config.disposable_root}' --keep-days '${user_config.disposable_keep_days}' --quota-mb '${user_config.evidence_quota_mb}' --queue-cmd '${user_config.queue_cmd}'`
 - each runtime listing tool you have for background agents, workflows, scheduled tasks and background tasks.
 
-`<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note.
+`<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. A topic from the arguments also takes `--topic-explicit`: the helper then re-pins the bucket to it unless another live session holds that bucket (`ownership.repin`). Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note.
 
 `begin` prints ≤3 KB of JSON: identity, git state, `stage`, `stem`, `checked_at`, `previous_handoff`, `own_latest`, `newer_foreign`, `ownership`, `gsd`, `queued_line`, `inflight_measured`, `tmp_candidates` (ephemeral paths cited this session) and the settings used.
 - `REFUSED` → B. A merge or rebase in progress that Step 0.2 did not already record as `MID-STEP` → apply Step 0.2 once, then continue; never loop back.
@@ -59,7 +59,7 @@ Run together:
 - Read the template (once per invocation).
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry.
 - Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
-- `ps -o pid=,lstart=,command= -p <pid>,<pid>` for pids recorded this session.
+- `ps -o pid=,lstart=,comm= -p <pid>,<pid>` for pids recorded this session.
 - One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on.
 
 Build In flight as the union by runtime id of the listings, `inflight_measured` and the probes, never from memory; assign each row its restart class (template §4.4). Record stalled-looking items as found. Work you started this session that no channel lists still gets a row, watched `not listed [unverified]`; never drop it (listings miss live tasks).
@@ -108,7 +108,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 2. `Resume with: /compactinue:resume <path>`
 3. Status word and Step 1.
 4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` Otherwise `nothing running (checked HH:MM)` or `nothing running known (not checked)`.
-5. The bucket, if it came from your slug or differs from a topic the user gave in the arguments (a session pin wins; say so).
+5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder).
 6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
 8. Advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.

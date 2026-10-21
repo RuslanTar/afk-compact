@@ -12,7 +12,7 @@ Gate: <blocker | none> · Don't: <likeliest mistake>
 Live: <N running: B-1 <runtime id>, …> | nothing running known (not checked)
 ## User constraints: U-n "<user's words>" — scope; approval: scope <action, target>, used | not yet used (context, not permission); ask: open | done | superseded. Only the user's words on this work, not instruction-file, memory, hook or these rules, nor your caveats. None: none stated
 ## Decisions and do-not-re-raise: D-n <choice> — because <reason> (user|agent|external); X-n rejected, refuted or failed <what> — why; Superseded: D-n by D-m
-## In flight, latest listing plus later starts, ≤8 rows, then +N more: <ids>. Row: B-n <runtime id> · kind · what · due · probe `<cmd>` · auto|ask|never (workflows, agent spawns: ask); restart: <literal command, cwd; agent model, effort> if known. None: Nothing in flight as of the last message (not checked)
+## In flight, latest listing plus later starts, ≤8 rows +N more: <ids>; B-n <runtime id> · kind · what · due · probe `<cmd>` · auto|ask|never (workflows, agent spawns: ask); restart: <literal command, cwd; agent model, effort> if known. None: Nothing in flight as of the last message (not checked)
 ## Live state: <remote claim> · last seen HH:MM [unverified] · re-check `<cmd>` ("auto-merge armed" is pending); uncommitted files: intent. None: none beyond git (not checked)
 ## Open questions, user-owned (yours: Next steps): Q-n what · why · options · recommendation · blocks · raised by user|agent · unasked|asked HH:MM|timed out|answered: <answer>. None: none
 ## Location, if changed: worktree, branch, cwd; GSD: STATE.md path; Guards in force: guard → blocks → allowed route
