@@ -1,7 +1,8 @@
 package skills::lint;
 # lib/skills/lint.pm: the publish lint of TPL §7. It flags and never edits.
-# Headings and the marker grammar come from assets/handoff-spec.json; the
-# secret rules from the core secrets seam.
+# Headings, the marker grammar, id_range_re, time_re, claim_tags.verified_re
+# and the clutter classes come from assets/handoff-spec.json (BUILD-PLAN §3.4);
+# the secret rules from the core secrets seam.
 #
 # lint(\%in) → {blocking => [[rule, where]…], advisory => [[rule, where]…]}
 # %in: body, recipes {name => text}, extra {name => text} (ledger, inflight),
@@ -169,21 +170,29 @@ sub lint {
         }
     }
 
-    # ---- checked / verified times only from the helper
+    # ---- checked / verified times only from the helper. The time is the spec's
+    # time_re after `checked`, or inside a claim_tags.verified_re tag.
     my $times = $in->{times} || {};
+    my ($tre, $vre) = (skills::spec::time_re(), skills::spec::verified_re());
+    my $checked = $tre ? qr/\bchecked[ \t]+($tre)(?![0-9])/ : undef;
     for my $i (0 .. $#lines) {
         my $l = $lines[$i];
         next if $prev_lines{$l};
-        while ($l =~ /(?:\bchecked|\[verified)\s+((?:\d\d-\d\d\s+)?\d\d:\d\d)\b/g) {
-            push @block, [ 'unprinted-time', 'line ' . ($i + 1) ] unless $times->{$1};
+        my @t;
+        if ($checked) { while ($l =~ /$checked/g) { push @t, $1 } }
+        if ($vre && $tre) {
+            while ($l =~ /$vre/g) {
+                my $tag = substr($l, $-[0], $+[0] - $-[0]);
+                push @t, $1 if $tag =~ /($tre)/;
+            }
         }
+        push @block, [ 'unprinted-time', 'line ' . ($i + 1) ] for grep { !$times->{$_} } @t;
     }
 
-    # ---- id ranges
-    for my $i (0 .. $#lines) {
-        my $l = $lines[$i];
-        if ($l =~ /\b([UDXQB])-\d+\s*(?:\.\.\.?|\x{e2}\x{80}\x{93}|\bto\b)\s*(?:\1-)?\d+\b/ || $l =~ /\b([UDXQB])-\d+-\1-\d+\b/) {
-            push @block, [ 'id-range', 'line ' . ($i + 1) ];
+    # ---- id ranges (the spec's id_range_re)
+    if (my $idr = skills::spec::id_range_re()) {
+        for my $i (0 .. $#lines) {
+            push @block, [ 'id-range', 'line ' . ($i + 1) ] if $lines[$i] =~ $idr;
         }
     }
 
@@ -229,25 +238,32 @@ sub lint {
         $chars += _chars($_->[1]) + 1 for @{ $s->{body} };
         push @adv, [ 'section-cap', "$name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
     }
-    my ($fence, $fl, $fc) = (0, 0, 0);
-    for my $i (0 .. $#lines) {
-        if ($lines[$i] =~ /\A\s*```/) {
-            if ($fence) { push @adv, [ 'code-block', "line $fl" ] if $fc > 5; $fence = 0 }
-            else { ($fence, $fl, $fc) = (1, $i + 1, 0) }
-            next;
+    # Clutter classes from the spec block (WATCHER M-13): code-block (max_lines),
+    # log-line and stack-line, hash-run (min_run).
+    my $cb = skills::spec::clutter_class('code-block');
+    if ($cb && defined $cb->{max_lines}) {
+        my ($fence, $fl, $fc) = (0, 0, 0);
+        for my $i (0 .. $#lines) {
+            if ($lines[$i] =~ $cb->{re}) {
+                if ($fence) { push @adv, [ 'code-block', "line $fl" ] if $fc > $cb->{max_lines}; $fence = 0 }
+                else { ($fence, $fl, $fc) = (1, $i + 1, 0) }
+                next;
+            }
+            $fc++ if $fence;
         }
-        $fc++ if $fence;
     }
-    my @loglike = grep {
-        $lines[$_] =~ /\A\s*(?:at\s+[\w.\$<>]+\s*\(|Traceback \(most recent call last\)|File "[^"]+", line \d+|\S+\.\w{1,4}:\d+:in\b|\[?(?:ERROR|WARN(?:ING)?|FATAL|DEBUG|INFO|TRACE)\]?[: ]|\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d[.,]\d+)/
-    } 0 .. $#lines;
+    my @logcl = grep { defined } map { skills::spec::clutter_class($_) } qw(log-line stack-line);
+    my @loglike = grep { my $l = $lines[$_]; grep { $l =~ $_->{re} } @logcl } 0 .. $#lines;
     push @adv, [ 'log-lines', 'line ' . ($loglike[0] + 1) . ' n=' . scalar(@loglike) ] if @loglike;
-    my $run = 0;
-    for my $i (0 .. $#lines) {
-        if ($lines[$i] =~ /\A\s*(?:[-*]\s+)?[0-9a-f]{7,40}\b/) {
-            $run++;
-            push @adv, [ 'hash-lines', 'line ' . ($i - 2) ] if $run == 4;
-        } else { $run = 0 }
+    my $hr = skills::spec::clutter_class('hash-run');
+    if ($hr && $hr->{min_run}) {
+        my $run = 0;
+        for my $i (0 .. $#lines) {
+            if ($lines[$i] =~ $hr->{re}) {
+                $run++;
+                push @adv, [ 'hash-lines', 'line ' . ($i + 2 - $run) ] if $run == $hr->{min_run};
+            } else { $run = 0 }
+        }
     }
     my ($wd_name) = grep { /\AWork done/ } map { $_->{name} } @$mains;
     if ($wd_name && (my $wd = $by_name{$wd_name})) {
