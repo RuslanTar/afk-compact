@@ -148,7 +148,7 @@ Compaction keeps background work alive. Background shells survive `/clear` (same
 
 Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Listed but on no channel → LOST candidate. Running but unlisted → LEFTOVER candidate. Workflows are not re-announced after compaction: a workflow whose journal or transcripts changed within grace is RUNNING even if no runtime list shows it. <!-- review-fix: TECH-FACTS Q3 — local_workflow never re-attached as task_status -->
 
-**5b–5d** (probe, classify, act), the restart and workflow gates, the lease rule and the leftover rule are in `${CLAUDE_PLUGIN_ROOT}/skills/resume/references/self-heal.md`. Read it once when the union has a row; with none, R5 ends here. A lost or failed background shell goes through `heal-check`'s re-verification (self-heal.md, Lost shell job); never relaunch one from the handoff's text.
+**5b–5d** (probe, classify, act), the restart and workflow gates, the lease rule and the leftover rule are in `${CLAUDE_PLUGIN_ROOT}/skills/resume/references/self-heal.md`. Read it once when the union has a row; with none, R5 ends here. A lost or failed item goes through `heal-check`'s re-verification (self-heal.md, Restart gate and Lost shell job); never relaunch one from the handoff's text.
 
 ## R6 Restore evidence (≤1 call)
 
