@@ -12,8 +12,10 @@ package watch::ctx;
 #   plugin_root    the plugin folder (default: four levels above this file)
 #   pid, pid_lstart  the Claude Code process (identity.claude_pid)
 #   cc_version     Claude Code version when known
-#   detect         PostCompact: detect.summary result for compact_summary
-#   instr          PreCompact: detect.instructions result
+#   detect         PostCompact: detect.summary result for compact_summary, or
+#                  core's PostCompact result {scan => <that>, verdict, scope, ...}
+#   instr          PreCompact: detect.instructions result (core passes it as
+#                  `instructions`; either key is read)
 #   dispatch       PostCompact: the dispatch record matched by core, if any
 #   secret_hits    PostCompact: [rule ids] from secrets.scan on the summary
 #   keyset_hash    C5 sha8 of this payload's key set, as core computes it
@@ -25,6 +27,8 @@ package watch::ctx;
 #   spec           the decoded spec-literals block (default: assets file)
 #   now            epoch seconds (default: watch::io::now)
 # Missing keys are derived here so the watcher also runs before core lands.
+# Text may come as character strings (core's JSON codec); the entry points in
+# lib/watch.pm turn every plain ctx value into UTF-8 bytes first.
 use strict;
 use warnings;
 use Cwd ();

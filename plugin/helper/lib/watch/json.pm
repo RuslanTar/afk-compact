@@ -96,6 +96,29 @@ sub _utf8_bytes {
         . chr(0x80 | (($cp >> 6) & 0x3F)) . chr(0x80 | ($cp & 0x3F));
 }
 
+# A deep copy with every character string (hash keys too) encoded to UTF-8
+# bytes, so text from a caller that decoded JSON into characters (core's
+# codec) compares with the watcher's byte literals and hashes without dying.
+# Code refs and blessed values are kept as they are.
+sub bytes {
+    my ($v) = @_;
+    my $r = ref $v;
+    if ($r eq 'HASH') {
+        my %h;
+        for my $k (keys %$v) {
+            my $kb = $k;
+            utf8::encode($kb) if utf8::is_utf8($kb);
+            $h{$kb} = bytes($v->{$k});
+        }
+        return \%h;
+    }
+    return [ map { bytes($_) } @$v ] if $r eq 'ARRAY';
+    return $v if $r || !defined $v || !utf8::is_utf8($v);
+    my $s = $v;
+    utf8::encode($s);
+    return $s;
+}
+
 sub encode {
     my ($v) = @_;
     return 'null' unless defined $v;

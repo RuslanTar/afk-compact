@@ -14,6 +14,7 @@ use strict;
 use warnings;
 use watch::ctx;
 use watch::io;
+use watch::json;
 
 # StopFailure and PermissionDenied have one writer, core's `hook` (ROOT-RULINGS
 # F2-5): core writes `stop_failure` and `permission_denied` (with its computed
@@ -25,11 +26,18 @@ my %HOOKS = (
 
 sub _sid_ok { return defined $_[0] && !ref $_[0] && $_[0] =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ }
 
+# Core decodes the payload into character strings; the watcher works on UTF-8
+# bytes (its codec and the spec literals). Every plain value of ctx (payload,
+# detect, instructions, settings, paths) is taken as bytes; code refs stay.
 sub _prepare {
     my ($ctx, $payload) = @_;
     $ctx = {} unless ref $ctx eq 'HASH';
     $ctx->{payload} = $payload if ref $payload eq 'HASH';
     $ctx->{payload} = {} unless ref $ctx->{payload} eq 'HASH';
+    for my $k (keys %$ctx) {
+        my $r = ref $ctx->{$k};
+        $ctx->{$k} = watch::json::bytes($ctx->{$k}) if !$r || $r eq 'HASH' || $r eq 'ARRAY';
+    }
     $ctx->{sid} //= $ctx->{payload}{session_id};
     return $ctx;
 }

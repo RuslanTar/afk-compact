@@ -47,10 +47,13 @@ sub foreign_header {
     return 0;
 }
 
+# Core's PreCompact passes its detect.instructions result as `instructions`
+# (`instr` in the ctx contract); either one is the answer.
 sub _ci_nonce {
     my ($ctx, $ci) = @_;
-    if (ref $ctx->{instr} eq 'HASH') {
-        return _nonce_ok($ctx->{instr}{nonce}) ? $ctx->{instr}{nonce} : undef;
+    my $in = ref $ctx->{instr} eq 'HASH' ? $ctx->{instr} : ref $ctx->{instructions} eq 'HASH' ? $ctx->{instructions} : undef;
+    if ($in) {
+        return _nonce_ok($in->{nonce}) ? $in->{nonce} : undef;
     }
     return undef unless defined $ci && length $ci;
     my $rx = watch::spec::regex($ctx->{spec}, 'instr_marker_re');
@@ -181,12 +184,25 @@ sub mod_alive_this_turn {
     return $at >= $start - 2 ? 1 : 0;
 }
 
+# The detector result for compact_summary. Core's PostCompact passes its own
+# result: the detect.summary fields (nonce, the marker's scope, normalized,
+# marker_line, sentinel_from_end) under `scan`, and its final verdict on top.
+sub _detect {
+    my ($ctx) = @_;
+    my $d = $ctx->{detect};
+    return undef unless ref $d eq 'HASH';
+    return $d unless ref $d->{scan} eq 'HASH';
+    my %m = %{ $d->{scan} };
+    $m{verdict} = $d->{verdict} if defined $d->{verdict};
+    return \%m;
+}
+
 # W6: `postcompact` with the shape metrics of compact_summary.
 sub post_compact {
     my ($ctx) = @_;
     my $p = $ctx->{payload};
     my $text = defined $p->{compact_summary} && !ref $p->{compact_summary} ? $p->{compact_summary} : '';
-    my $det = ref $ctx->{detect} eq 'HASH' ? $ctx->{detect} : undef;
+    my $det = _detect($ctx);
     if (!$det && defined &detect::summary) {
         my $d = eval { local $SIG{__DIE__}; detect::summary($text, $ctx->{dispatch}) };
         $det = $d if ref $d eq 'HASH';
