@@ -168,7 +168,13 @@ sub row {
     my ($ctx, $ev, $fields, %o) = @_;
     if (ref $ctx->{row} eq 'CODE') {
         my $r = eval { $ctx->{row}->($ev, $fields, $ctx) };
-        return $r if ref $r eq 'HASH';
+        if (ref $r eq 'HASH') {
+            # Core's builder takes (ev, fields, ctx) only: keep the actor and
+            # writer this row was written for.
+            $r->{actor} = $o{actor} if defined $o{actor};
+            $r->{writer} = $o{writer} if defined $o{writer};
+            return $r;
+        }
     }
     my %r = (
         v              => 1,
