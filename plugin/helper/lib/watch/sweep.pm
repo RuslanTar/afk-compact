@@ -12,6 +12,8 @@ package watch::sweep;
 # A run reads at most 5 MB in total; whole lines only. A changed path or inode,
 # or a file shorter than the offset, restarts that file at 0; rows up to the
 # last processed uuid are skipped and boundaries are deduplicated by uuid.
+# Reading stops at the soft time limit (`time_cut`); the 5 MB cap alone only
+# marks the run `partial` (the rest is read at the next Stop, WATCH §1.1).
 use strict;
 use warnings;
 use watch::ctx;
@@ -106,6 +108,9 @@ sub scan_file {
     my $last_uuid = $state->{last_uuid};
     my $pos = 0;
     while ($pos < length $chunk) {
+        # The time check comes before the next line is consumed, so every
+        # consumed line has been analyzed.
+        if ($n && $n % 200 == 0 && watch::io::mono() > $soft) { $res{partial} = 1; $res{time_cut} = 1; last }
         my $nl = index($chunk, "\n", $pos);
         if ($nl < 0) {
             if ($pos == 0 && length($chunk) == $budget && $budget > 0) {
@@ -122,7 +127,7 @@ sub scan_file {
         $pos = $nl + 1;
         $consumed = $pos;
         $carry->{line}++;
-        if (++$n % 200 == 0 && watch::io::mono() > $soft) { $res{partial} = 1; last }
+        $n++;
         next unless $line =~ /\S/;
         if (defined $skip_until) {
             if (index($line, $skip_until) >= 0) {
@@ -376,6 +381,7 @@ sub run {
     my $state = _load_state($fh);
     my $outward = watch::spec::classes($ctx->{spec}, 'outward_classes');
     my @files;
+    my @subs;
     my $budget = $RUN_BYTES;
     my $r = scan_file($ctx, $main, $state, $budget, $soft, 'main', 1, $outward);
     push @files, $r;
@@ -388,20 +394,35 @@ sub run {
             my $ss = _load_state($sfh);
             (my $agent = _basename($sf)) =~ s/\Aagent-|\.jsonl\z//g;
             my $sr = scan_file($ctx, $sf, $ss, $budget, $soft, $agent, 0, $outward);
-            _save_state($sfh, $ss);
-            close $sfh;
+            # Saved in finish(), with the main offsets, so an abandoned run
+            # keeps no progress for any file.
+            push @subs, [$sfh, $ss];
             $budget -= $sr->{bytes} || 0;
             push @files, $sr;
         }
     }
-    return { files => \@files, state => $state, fh => $fh };
+    return { files => \@files, state => $state, fh => $fh, subs => \@subs };
 }
 
 sub finish {
     my ($run) = @_;
-    return unless $run && $run->{fh};
+    return unless $run;
+    for my $s (@{ delete $run->{subs} || [] }) {
+        _save_state($s->[0], $s->[1]);
+        close $s->[0];
+    }
+    return unless $run->{fh};
     _save_state($run->{fh}, $run->{state});
     close $run->{fh};
+    delete $run->{fh};
+}
+
+# Drop a run without saving any offset: the next Stop reads the same bytes again.
+sub abandon {
+    my ($run) = @_;
+    return unless $run;
+    close $_->[0] for @{ delete $run->{subs} || [] };
+    close $run->{fh} if $run->{fh};
     delete $run->{fh};
 }
 

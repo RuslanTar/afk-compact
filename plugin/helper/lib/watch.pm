@@ -71,7 +71,11 @@ sub on_stop {
     $ctx = _prepare($ctx);
     my $start = watch::io::mono();
     my $hard = !defined $deadline ? $start + 3 : $deadline < 1e9 ? $start + $deadline : $deadline;
-    my $soft = $start + 2 < $hard ? $start + 2 : $hard;
+    # Reading stops at 2 s, or at two thirds of a shorter window, so the rules
+    # still fit before the hard stop.
+    my $soft = $start + 2;
+    my $room = $start + ($hard - $start) * 2 / 3;
+    $soft = $room if $room < $soft;
     my ($out, $stage) = (undef, 'stop');
     my $ok = eval {
         local $SIG{__DIE__};
@@ -86,6 +90,14 @@ sub on_stop {
         $stage = 'sweep';
         my $run = watch::sweep::run($ctx, $soft);
         return 1 if $run->{busy};
+        if (watch::io::mono() >= $hard) {
+            # Hard stop (WATCH W9): this run keeps nothing, so no swept
+            # boundary or event goes unevaluated; the next Stop reads it again.
+            watch::sweep::abandon($run);
+            watch::ctx::log_row($ctx, 'sweep_partial', { file => undef, from_off => undef, to_off => undef,
+                                                         reason => 'hard-stop' }, actor => 'main');
+            return 1;
+        }
         my $files = $run->{files} || [];
         my $state = $run->{state} || {};
         my $sess = $state->{session} = ref $state->{session} eq 'HASH' ? $state->{session} : {};
@@ -96,22 +108,19 @@ sub on_stop {
         $stage = 'rules';
         my $S = watch::rules::load_session($ctx);
         my $ex = watch::alerts::load_existing($ctx);
-        my $hard_stop = watch::io::mono() >= $hard;
-        watch::rules::evaluate($ctx, $S, $ex, $sess, $files) unless $hard_stop;
+        watch::rules::evaluate($ctx, $S, $ex, $sess, $files);
         $stage = 'sweep';
         for my $f (@$files) {
             watch::ctx::error_row($ctx, 'sweep', 'unreadable') if $f->{unreadable};
             watch::ctx::error_row($ctx, 'sweep', 'bad-json') if $f->{bad_lines};
             watch::ctx::log_row($ctx, 'sweep', $_, actor => $f->{actor}) for watch::sweep::rows_for($f);
-            if ($f->{partial}) {
+            # Only a time cut is a budget breach (WATCH W9, FR-22, A-25); a
+            # file left over by the 5 MB cap is `sweep.partial` alone.
+            if ($f->{time_cut}) {
                 watch::ctx::log_row($ctx, 'sweep_partial', { file => $f->{file}, from_off => $f->{from_off},
-                                                             to_off => $f->{to_off}, reason => 'budget' },
+                                                             to_off => $f->{to_off}, reason => 'time' },
                                     actor => $f->{actor});
             }
-        }
-        if ($hard_stop) {
-            watch::ctx::log_row($ctx, 'sweep_partial', { file => undef, from_off => undef, to_off => undef,
-                                                         reason => 'hard-stop' }, actor => 'main');
         }
         $sess->{last_stop_ts} = $ctx->{now};
         $carry->{last_stop_ts} = $ctx->{now} if %$carry;
