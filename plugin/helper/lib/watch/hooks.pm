@@ -162,9 +162,12 @@ sub mod_alive_this_turn {
         return 0 if defined $ctx->{pid_lstart} && defined $alive->{pid_lstart}
                     && "$alive->{pid_lstart}" ne "$ctx->{pid_lstart}";
     }
+    # The mod's turn_id is the `turn.start` turnId, minted per turn; the
+    # payload's prompt_id is a different id. Equal ids prove it; different ids
+    # prove nothing, so the time test below decides.
     my $pid_prompt = $ctx->{payload}{prompt_id};
     if (defined $alive->{turn_id} && defined $pid_prompt && !ref $pid_prompt) {
-        return "$alive->{turn_id}" eq "$pid_prompt" ? 1 : 0;
+        return 1 if "$alive->{turn_id}" eq "$pid_prompt";
     }
     my $at = watch::io::parse_iso($alive->{ts});
     return 0 unless defined $at;
