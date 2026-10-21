@@ -1,0 +1,64 @@
+{
+ "id": "AT-P-14",
+ "needs": [
+  "darwin"
+ ],
+ "note": "ROOT-RULINGS R-4/R-5: on macOS with xcode-select -p failing (stubbed through PATH) and git resolving to /usr/bin/git, no git process starts and the git facts read unavailable",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "path_prepend": [
+  "$TMP/bin"
+ ],
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": "$TMP/work",
+     "branch": "main"
+    },
+    {
+     "stub": "xcode-select",
+     "script": "exit 1"
+    }
+   ],
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "git: unavailable"
+    ],
+    "trace_absent": [
+     "git"
+    ]
+   }
+  },
+  {
+   "name": "checkpoint",
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_json": {
+     "git": "unavailable"
+    },
+    "trace_absent": [
+     "git"
+    ]
+   }
+  }
+ ]
+}
