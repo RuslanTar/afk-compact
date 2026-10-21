@@ -10,10 +10,10 @@
       {
         "file": "$WATCH/$SID.classic.jsonl",
         "ev": "watch_error",
-        "min_count": 2
+        "min_count": 1
       }
     ],
-    "note": "every step exits 0 with empty stdout; the malformed transcript line is skipped or logged, never fatal"
+    "note": "every step exits 0 with empty stdout; the malformed transcript line is skipped or logged, never fatal; step 1 (malformed stdin) cannot know the sid, so its row need not land in this file; the unreadable transcript (step 3) must give a watch_error row here"
   },
   "metrics": {}
 }
