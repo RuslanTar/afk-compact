@@ -905,6 +905,48 @@ sub builtin {
         push @e, 'no use/require found' unless $n;
         return @e;
     }
+    if ($name eq 'secret_corpus') {
+        # PRIV-05: every entry and name of tests/fixtures/secrets/corpus.json through the shipped
+        # gate. An entry's class: HARD -> a HARD hit, WARN -> a hit, none -> no hit. Redaction
+        # (all rules, the log/JSON path; HARD only, the summary path for HARD entries) leaves no
+        # fragment of 8+ characters. A name: withheld <-> denied by name. Rule ids are reported
+        # (the corpus ids are WP-fix's; they are not compared). `known_gaps` {id: reason} turns
+        # that entry's failures into TODO lines (a gap another work package owns).
+        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) };
+        return ('no secret corpus') unless ref $c eq 'HASH';
+        my %gap = %{ $a->{known_gaps} || {} };
+        my $n = 0;
+        for my $en (@{ $c->{entries} || [] }) {
+            my $v = join('', @{ $en->{fragments} || [] });
+            my @frag = grep { length >= 8 } @{ $en->{fragments} || [] };
+            my $hits = secrets::scan($v);
+            my $cls = $en->{class} // 'none';
+            my @mine;
+            push @mine, "class $cls: no HARD hit" if $cls eq 'HARD' && !secrets::has_hard($hits);
+            push @mine, "class $cls: no hit" if $cls eq 'WARN' && !@$hits;
+            push @mine, 'control: hit ' . secrets::rule_ids($hits) if $cls eq 'none' && @$hits;
+            if ($cls ne 'none') {
+                my ($all) = secrets::redact("x $v x");
+                push @mine, 'redacted (all rules) keeps a fragment' if grep { index($all, $_) >= 0 } @frag;
+                if ($cls eq 'HARD') {
+                    my ($hard) = secrets::redact("x $v x", ['HARD']);
+                    push @mine, 'redacted (HARD rules, the summary path) keeps a fragment' if grep { index($hard, $_) >= 0 } @frag;
+                }
+            }
+            $n++;
+            next unless @mine;
+            if (exists $gap{ $en->{id} }) { print "# TODO $en->{id}: @mine ($gap{ $en->{id} })\n"; next }
+            push @e, map { "entry $en->{id}: $_" } @mine;
+        }
+        for my $nm (@{ $c->{names} || [] }) {
+            my $want = ($nm->{expect} // '') eq 'withheld' ? 1 : 0;
+            my $got = secrets::denied_name("/tmp/corpus/$nm->{name}") ? 1 : 0;
+            $n++;
+            push @e, "name $nm->{name}: " . ($got ? 'withheld' : 'copied') . ", want $nm->{expect}" if $got != $want;
+        }
+        push @e, 'no corpus entries' unless $n;
+        return @e;
+    }
     if ($name eq 'live_peers') {
         # AT-M5-10 reader: a live- record counts only when its pid runs with the same start time
         # and no ended- record exists.
