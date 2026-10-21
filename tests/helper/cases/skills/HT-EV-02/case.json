@@ -1,0 +1,49 @@
+{
+ "id": "HT-EV-02",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "RRP-01 (TPL §5 scratch-clone patch series, handoff-spec §10 deny names and actions): evidence --clone gates each patch before anything is written. A patch that touches a deny-listed path (.netrc, *.sqlite, also as an uncommitted change) is withheld whole; a patch whose text has a HARD hit is withheld; a harmless patch is copied. No raw patch is left anywhere under the handoff root (.staging included): grep_absent of the .netrc password, the sqlite text and the token over $ROOT",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {"repo": {"branch": "feature/LAB-7-retry", "commits": [{"files": {"app/retry.rb": "x = 1\n"}, "msg": "seed"}]}, "at": "$TMP/repo"},
+    {"repo": {"commits": [
+       {"files": {"README.md": "scratch\n", "app.sqlite": "SQLite format 3 RRP01-SQLITE-CANARY-one\n"}, "msg": "seed with a db"},
+       {"files": {".netrc": "machine example.invalid login fixture password RRP01-NETRC-CANARY\n"}, "msg": "add netrc"},
+       {"files": {"config.txt": "token_ref $SECRET{github-token}\n"}, "msg": "add config"},
+       {"files": {"app/retry.rb": "x = 2\n"}, "msg": "plain change"}],
+      "dirty": {"app.sqlite": "SQLite format 3 RRP01-SQLITE-CANARY-two\n"}}, "at": "$TMP/clone"}
+   ],
+   "cwd": "$TMP/repo",
+   "argv": ["begin", "--sid", "$SID", "--topic", "retry"],
+   "capture": {"STAGE": "json:stage", "STEM": "json:stem"},
+   "expect": {"exit": 0}
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": ["evidence", "--stage", "$STAGE", "--clone", "$TMP/clone"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8}$",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0004-[0-9a-f]{8}\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8}$",
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/clone#uncommitted$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8} — withheld by the secret gate \\(deny-name\\)$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8} — withheld by the secret gate \\(github-token[^)]*\\)$",
+     "^Volatile: \\S+/clone#uncommitted — withheld by the secret gate \\(deny-name\\)$"
+    ],
+    "stdout_lacks": ["^copied \\S+/000[123]-", "^copied \\S+/uncommitted\\.patch", "^redacted "],
+    "grep_absent": [
+     {"dir": "$ROOT", "text": "RRP01-NETRC-CANARY"},
+     {"dir": "$ROOT", "text": "RRP01-SQLITE-CANARY"},
+     {"dir": "$ROOT", "text": "$SECRET{github-token}"},
+     {"dir": "$DISP", "text": "RRP01-NETRC-CANARY"},
+     {"dir": "$DISP", "text": "$SECRET{github-token}"}
+    ]
+   }
+  }
+ ]
+}
