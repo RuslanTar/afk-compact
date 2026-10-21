@@ -1,10 +1,10 @@
 <summary>
-⟪compactinue v1 n=1a2b3c4d s=main⟫
+⟪{{plugin}} v1 n=1a2b3c4d s=main⟫
 # LAB-42 — retry window fix in review
 ## Resume here
 Status: active · State: fix in review (checkpoint: clean)
 Step 1: `git status` — for "finish the review"
 ## User constraints: none stated
 ## Next steps: 1. git status — done when clean
-⟪/compactinue n=99999999⟫
+⟪/{{plugin}} n=99999999⟫
 </summary>

@@ -33,6 +33,8 @@
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
 #     write + jsonl_repeat {row, count} (then any jsonl rows);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
+#     (+ subst: true fills the placeholders in the copied text)
+#   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
@@ -503,7 +505,20 @@ sub setup {
         if (defined $s->{mtime_ago_s}) { my $t = time - $s->{mtime_ago_s}; utime($t, $t, $p) }
         return;
     }
-    if (exists $s->{copy}) { my $src = src_file($s->{copy}, $cdir); util::mkdir_p(util::dirname($s->{to})); util::copy_file($src, $s->{to}, mode => oct($s->{mode} // '0600')); return }
+    if (exists $s->{copy}) {
+        my $src = src_file($s->{copy}, $cdir);
+        util::mkdir_p(util::dirname($s->{to}));
+        # "subst": true fills the placeholders ({{plugin}}, $SID, ...) in the copied text, so a
+        # case file a helper reads itself (save-copy --from) carries no literal brand (RN-1).
+        if ($s->{subst}) {
+            my $t = util::read_file($src) // die "copy $src: unreadable\n";
+            utf8::decode($t);
+            write_text($s->{to}, subst($t, $V), $s->{mode} // '0600');
+            return;
+        }
+        util::copy_file($src, $s->{to}, mode => oct($s->{mode} // '0600'));
+        return;
+    }
     if (exists $s->{tempfiles}) { fixture_tempfiles($s, $V, $cdir); return }
     if (exists $s->{secret_files}) { fixture_secret_files($s, $V, $cdir); return }
     if (exists $s->{repo_fixture}) { fixture_repo($s, $V, $cdir); return }
@@ -762,8 +777,15 @@ sub builtin {
             }
             $vc{scope} = $r{proof} if defined $r{proof} && $r{proof} =~ /^(main|sub|unknown)$/;
             my $s = detect::summary($text, \%vc);
+            # "sha": "template" (case-local TSVs, RN-1): the sha of the normalized body with the
+            # brand written back as {{plugin}}, so the expected value holds under any brand.
+            my $sha = $s->{sha256};
+            if (($a->{sha} // '') eq 'template') {
+                (my $n = $s->{normalized}) =~ s/\Q$bn\E/{{plugin}}/g;
+                $sha = sha::hex256($n);
+            }
             my %got = (verdict => $s->{verdict}, marker_line => $s->{marker_line} // '-', sentinel_from_end => $s->{sentinel_from_end} // '-',
-                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $s->{sha256});
+                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $sha);
             for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256)) {
                 next unless exists $r{$k} && defined $r{$k} && $r{$k} ne '';
                 push @e, "$r{file}: $k $got{$k}, want $r{$k}" if $got{$k} ne $r{$k};
