@@ -140,7 +140,7 @@ Otherwise skip it and say why.
 
 **Authority.** 5d's second column covers `successor` and `other`. For `unselected`, or a resource with an ownership conflict, take inventory and report only.
 
-Compaction keeps background work alive. `/clear` and session end kill the old process's shells, Monitors and crons. A `--resume` keeps the session id but starts after the old process ended, so treat that work as gone unless a channel shows it. After `/clear` the old workflows can no longer be resumed. <!-- review-fix: --resume keeps the sid (HK-49), not the work (HK-25) -->
+Compaction keeps background work alive. Background shells survive `/clear` (same process): after `/clear` treat a shell as possibly running and probe it (`<store> wait --for <spec> --max 0`) before any LOST call. Session end kills shells unless the user moved them to background; `/clear` and session end end Monitors and crons. A `--resume` keeps the session id but starts after the old process ended, so treat that work as gone unless a channel shows it. After `/clear` the old workflows can no longer be resumed. <!-- review-fix: --resume keeps the sid (HK-49), not the work (HK-25) -->
 
 **5a Inventory** from runtime channels, never from the handoff alone:
 - `ListAgents`, `CronList`, and the background-task list or `task_status` where available;
