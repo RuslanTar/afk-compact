@@ -59,19 +59,23 @@ sub _manifest {
 }
 
 # copy(src, dest_dir, caps, index) -> row {status, origin, copy, bytes, sha256, sha8, mtime, scan, rules}
-#   caps: {used => \$bytes_so_far, file_max, total_max}
+#   caps: {used => \$bytes_so_far, file_max, total_max, manifest => 1, ref_file => 1}
 sub copy {
     my ($src, $dest_dir, $caps, $index) = @_;
     $caps ||= {};
     my $used = $caps->{used} || \(my $u = 0);
     my $fmax = $caps->{file_max} // $FILE_MAX;
     my $tmax = $caps->{total_max} // $TOTAL_MAX;
+    # caps.manifest => 0: no MANIFEST.tsv rows in dest_dir (the handoff skill writes its own at
+    # publish); caps.ref_file => 0: an over-cap file stays a ref-only row with no excerpt file.
+    my $mf = !(exists $caps->{manifest} && !$caps->{manifest});
+    my $rf = !(exists $caps->{ref_file} && !$caps->{ref_file});
     my %row = (origin => $src, copy => undef, bytes => undef, sha256 => undef, sha8 => undef, mtime => undef, rules => []);
     if (!-e $src || !-f _) { return { %row, status => 'missing' } }
     my @st = stat $src;
     @row{qw(bytes mtime)} = ($st[7], util::iso($st[9]));
     if (secrets::denied_name($src) || secrets::never_copy($src)) {
-        _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'withheld by name');
+        _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'withheld by name') if $mf;
         return { %row, status => 'withheld', rules => ['deny-name'] };
     }
     my $sha = sha::hex256_file($src);
@@ -83,6 +87,7 @@ sub copy {
     my $base = util::basename($src);
     my $is_task = $src =~ m{/tasks/[^/]+\.output$} ? 1 : 0;
     if (!$is_task && ($row{bytes} > $fmax || $$used + $row{bytes} > $tmax)) {
+        return { %row, status => 'ref-only' } unless $rf;
         my $head = util::read_file($src, 64 * 1024) // '';
         my $txt = "origin: $src\nbytes: $row{bytes}\nsha256: " . ($sha // 'unavailable') . "\nmtime: $row{mtime}\n";
         if (_is_text($head)) {
@@ -96,13 +101,13 @@ sub copy {
         }
         my $ref = _unique($dest_dir, "$base.ref.txt");
         util::write_excl($ref, $txt, 0600);
-        _manifest($dest_dir, %row, copy => $ref, scan => 'ref-only', mode => '0600', meaning => 'over the size cap');
+        _manifest($dest_dir, %row, copy => $ref, scan => 'ref-only', mode => '0600', meaning => 'over the size cap') if $mf;
         return { %row, status => 'ref-only', copy => $ref };
     }
     my ($class, $hits) = $is_task ? ('excerpt', []) : secrets::classify_file($src);
     my @rules = map { $_->{rule} } @$hits;
     if ($class eq 'withhold') {
-        _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'secret gate');
+        _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'secret gate') if $mf;
         return { %row, status => 'withheld', rules => \@rules };
     }
     my $dst = _unique($dest_dir, $base);
@@ -116,13 +121,13 @@ sub copy {
         util::write_excl($dst, $red, 0600);
         $$used += length $red;
         util::append($index, join("\t", $sha // '-', $dst, $src, $row{bytes}, util::iso(util::now())) . "\n") if defined $index && defined $sha;
-        _manifest($dest_dir, %row, copy => $dst, scan => $scan, mode => '0600', meaning => 'automatic evidence copy');
+        _manifest($dest_dir, %row, copy => $dst, scan => $scan, mode => '0600', meaning => 'automatic evidence copy') if $mf;
         return { %row, status => 'redacted', copy => $dst, rules => \@rules, scan => $scan };
     }
     util::copy_file($src, $dst, excl => 1, mode => 0600);
     $$used += $row{bytes};
     util::append($index, join("\t", $sha // '-', $dst, $src, $row{bytes}, util::iso(util::now())) . "\n") if defined $index && defined $sha;
-    _manifest($dest_dir, %row, copy => $dst, scan => 'full', mode => '0600', meaning => 'automatic evidence copy');
+    _manifest($dest_dir, %row, copy => $dst, scan => 'full', mode => '0600', meaning => 'automatic evidence copy') if $mf;
     return { %row, status => 'copied', copy => $dst };
 }
 
