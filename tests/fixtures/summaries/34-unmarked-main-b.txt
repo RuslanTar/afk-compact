@@ -14,7 +14,7 @@ Nothing in flight as of the last message (not checked)
 ## Live state
 none beyond git (not checked)
 ## Open questions
-Q-1 page size 50 or 200 · blocks Step 1 · options 50, 200 · recommendation 50 · raised by agent · asked 13:40
+Q-1 page size 50 or 200 · blocks Step 1 · options 50, 200 · recommendation 50 · raised by agent · asked 2026-10-21 13:40 +0300
 ## Work done and findings
 ImportReport pagination: tested — app/reports/import_report.rb#each_page; tests: 12 pass, `bin/test spec/reports`
 ## Next steps

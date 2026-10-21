@@ -31,6 +31,9 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
   queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8)
+  stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
+            fixture text, except the files listed in LEGACY_TIME_OK, which test the legacy
+            reading and must still hold one (a stale list entry fails too)
   rename a temp copy renamed to another brand passes --check after the plain regenerate
             step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
@@ -481,6 +484,43 @@ def check_sequences():
     return problems, count
 
 
+# RV-24 (small-rulings §3a): a time in fixture text is a stamp, `YYYY-MM-DD HH:MM ±hhmm`, or an
+# ISO timestamp with seconds. The short forms stay only in the files below, because the case
+# they feed checks that the legacy reading still works (WATCHER-SPEC T-10, M-10 `time_legacy_re`).
+WHOLE_TIME_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}"
+                           r"|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?")
+SHORT_TIME_RE = re.compile(r"(?<![0-9:.+\-])[0-2][0-9]:[0-5][0-9](?![0-9:.])"
+                           r"|[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}")
+LEGACY_TIME_OK = {
+    "tests/fixtures/watcher/T-10/payloads/01-PostCompact.json",   # `checked 14:05`, summary (a)
+    "tests/fixtures/transcripts/T-10/main.jsonl",                 # the same summary as a transcript row
+    "tests/fixtures/watcher/T-10/expected.json",                  # quotes the legacy form
+}
+
+
+def check_stamps():
+    problems, seen_legacy, nfiles = [], set(), 0
+    for p in walk(FIX):
+        rel = os.path.relpath(p, REPO)
+        if rel.startswith(os.path.join("tests", "fixtures", "assembly", "expected") + os.sep):
+            continue   # goldens: tools/assemble renders them from runtime.json, which is scanned
+        try:
+            text = read(p)
+        except UnicodeDecodeError:
+            continue
+        nfiles += 1
+        hits = [m.group(0) for m in SHORT_TIME_RE.finditer(WHOLE_TIME_RE.sub("@", text))]
+        if not hits:
+            continue
+        if rel in LEGACY_TIME_OK:
+            seen_legacy.add(rel)
+        else:
+            problems.append("stamps {}: short time {!r} (RV-24: write a stamp `YYYY-MM-DD HH:MM ±hhmm`)".format(rel, hits[0]))
+    for rel in sorted(LEGACY_TIME_OK - seen_legacy):
+        problems.append("stamps {}: listed in LEGACY_TIME_OK but holds no short time any more".format(rel))
+    return problems, nfiles, len(seen_legacy)
+
+
 # Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
 # answer has the queue-stub/v1 shape that ROOT-RULINGS F2-8 adopts as the v1 contract.
 QUEUE = os.path.join(FIX, "queue")
@@ -683,6 +723,10 @@ def check(b):
     queue_problems, nqueue = check_queue()
     problems += queue_problems
     print("queue: {} JSON list answers in the queue-stub/v1 shape".format(nqueue))
+    # stamps
+    stamp_problems, nstamp, nlegacy = check_stamps()
+    problems += stamp_problems
+    print("stamps: {} fixture files, no short time outside the {} legacy-reading files".format(nstamp, nlegacy))
     # drift
     gen_dir = os.path.join(REPO, GEN_REL)
     for name, text in sorted(rendered.items()):
