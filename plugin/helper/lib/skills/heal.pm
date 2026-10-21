@@ -1,12 +1,13 @@
 package skills::heal;
 # lib/skills/heal.pm: `heal-check --origin SID --item ID [--bump]` (resume R5
-# restart gate; TPL §4.4; S-11; MOD §7 heal counters). Prints `ok <recipe>`
-# or `REFUSED: counter|sha|class`. At most 1 restart per resume and 2 per
-# chain; the recipe script's sha256 must equal its MANIFEST row. --bump
-# counts the restart before it starts (locked read-modify-write).
+# restart gate; TPL §4.4; S-11; MOD §7 heal counters). Prints `ok <recipe>|job:<id>`
+# and `run:` only for a job the plugin recorded, else `REFUSED: <reason>`. At most
+# 1 restart per resume and 2 per chain; the recipe script's sha256 must equal its
+# MANIFEST row. --bump counts the restart before it starts (locked read-modify-write).
 #
-# Background shells (Dev-1 D3-D5; kind shell or server in the handoff's In flight, or a
-# job the plugin recorded): `signal:` lines V1-V7 (skills/jobs.pm), then
+# Every item (CR-F13, DP-27: Dev-5 wins over the old same-session restart gate, so no
+# recipe that came only from handoff text is ever `ok`): `signal:` lines V1-V7
+# (skills/jobs.pm), then
 #   verdict: <status> · confidence <high|low> · effects <class>[ · would-relaunch]
 # then `ok <recipe|job:<id>>` and `run: <line>` (the recorded command byte for byte,
 # `cd '<cwd>' && ` in front only when the cwd differs), or `REFUSED: <reason>` followed,
@@ -100,54 +101,12 @@ sub run {
     };
     $refuse->('recipe-not-local') if !$recipe && not_local($ctx, $origin, $docs);
 
-    # A background shell goes through the Dev-1 re-verification.
+    # CR-F13 (DP-27, Dev-5): every item goes through the Dev-1 re-verification. `ok` needs a
+    # job the plugin recorded, so a command found only in the handoff (no record: mod off,
+    # a subagent's shell, a refused record, a row in inflight.md, a mistyped kind) is never
+    # handed back as runnable; it is refused with `ask-source: handoff`.
     my $task = $recipe ? ($recipe->{rid} // $item) : $item;
-    my $kind = item_kind($docs, $item, $recipe);
-    my $watch = skills::core::watch_dir() // $ctx->{watch};
-    my $rec = skills::core::job_record("$watch/$origin", $task);
-    if (($kind && $kind =~ /\A(?:shell|server)\z/) || $rec) {
-        return shell($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse);
-    }
-
-    $refuse->('class') unless $recipe && ($recipe->{class} // 'ask') eq 'auto';
-    # `auto` holds only in the same session; a new session treats every row
-    # as `ask` (TPL §4.4).
-    $refuse->('class') if $id->{degraded} || $id->{sid} ne $origin;
-    $refuse->('sha') if recipe_state($recipe, $edir) ne 'match';
-    my $ss = script_state($recipe, $edir);
-    $refuse->('sha') unless $ss eq 'match' || $ss eq 'none';
-
-    # Counter: {chain: n, by_resume: {key: n}}; one resume = one Claude Code
-    # process (pid and start time), so a --resume in a new process counts anew.
-    my $key = $id->{pid} ? "pid:$id->{pid}:" . ($id->{lstart} // '') : $id->{sid};
-    # One counter per recipe item, whichever handle (B-n or runtime id) was given.
-    my $ckey = $recipe->{rid} // $recipe->{bn};
-    $ckey =~ s/[^A-Za-z0-9._:-]/_/g;
-    $row->{item} = $ckey;
-    my $dir = "$ctx->{watch}/heal/$origin";
-    skills::util::mkdir_p($dir);
-    my $file = "$dir/$ckey.count";
-    my ($ok, $res) = skills::core::with_lock("$file.lock", skills::core::lock_owner($id->{sid}, 'main'), sub {
-        my $c = eval { skills::util::json_decode(skills::util::read_file($file, 65536)) };
-        $c = {} unless ref $c eq 'HASH';
-        $c->{chain} //= 0;
-        $c->{by_resume} = {} unless ref $c->{by_resume} eq 'HASH';
-        my $mine = $c->{by_resume}{$key} // 0;
-        return { refused => 1, chain => $c->{chain} } if $c->{chain} >= $PER_CHAIN || $mine >= $PER_RESUME;
-        if ($o->{bump}) {
-            $c->{chain}++;
-            $c->{by_resume}{$key} = $mine + 1;
-            skills::util::write_replace($file, skills::util::json_encode($c) . "\n", 0600);
-        }
-        return { refused => 0, chain => $c->{chain} };
-    });
-    $refuse->('counter') unless $ok;
-    $row->{count} = $res->{chain};
-    $refuse->('counter') if $res->{refused};
-    $row->{result} = 'ok';
-    $ctx->log('heal', $row);
-    skills::cli::say("ok $recipe->{path}");
-    return 0;
+    return shell($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse);
 }
 
 # ---------------------------------------------------------------- Dev-1 shells
@@ -245,23 +204,6 @@ sub relation {
     return 'other' if $id->{degraded};
     return 'same-session' if $id->{sid} eq $origin;
     return (grep { $_->{sid} eq $origin } @{ skills::ctx::chain($ctx, $id->{sid}) }) ? 'successor' : 'other';
-}
-
-# The kind of the item in the origin's newest handoff In flight table (B-n or runtime id).
-sub item_kind {
-    my ($docs, $item, $recipe) = @_;
-    my %want = map { $_ => 1 } grep { defined } $item, ($recipe ? ($recipe->{bn}, $recipe->{rid}) : ());
-    for my $d (@{ $docs || [] }) {
-        my $in = 0;
-        for my $l (split /\n/, $d->{body} // '') {
-            if ($l =~ /\A##\s+(.*)/ && $l !~ /\A###/) { $in = $1 =~ /\AIn flight/ ? 1 : 0; next }
-            next unless $in && $l =~ /\A\|\s*(B-\d+)\s*(?:\x{c2}\x{b7}\s*([^|]*?))?\s*\|\s*([a-z]+)/;
-            my ($bn, $rid, $kind) = ($1, $2 // '', $3);
-            my ($last) = $rid =~ /(\S+)\s*\z/;
-            return $kind if $want{$bn} || (defined $last && $want{$last});
-        }
-    }
-    return undef;
 }
 
 # D-12 (AT-RM-11): the origin's handoffs here are only imported copies of exports, or the
