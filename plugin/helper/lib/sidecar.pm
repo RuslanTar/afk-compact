@@ -4,6 +4,12 @@ package sidecar;
 # background_tasks and the ids of session_crons (never last_assistant_message or
 # task text) into 20 slot files <watch>/<sid>/bg/slot-<k>.json, only when the set
 # hash changes; k = write counter mod 20, kept in the slot lock under flock.
+# Output paths (DP-13, Dev-1 incidental 1): BackgroundTaskSummary has no output path
+# (types :820-851), so a task's output_path comes from its Dev-1 job record
+# (lib/jobrec.pm; null until probe P-D1-6 picks the source). The runtime's own
+# `command` (shell tasks, at most 1000 chars) is kept only as command_sha256 and
+# command_chars, a runtime-owned cross-check for heal-check's V1 (REVIEW B-16); the text
+# never enters a slot. Readers pick the newest slot by `seq` (newest()), never by mtime.
 use strict;
 use warnings;
 use Fcntl qw(O_RDWR O_CREAT LOCK_EX LOCK_UN SEEK_SET);
@@ -14,15 +20,19 @@ my $ID_RE = qr/^[A-Za-z0-9._:\/-]{1,128}$/;
 sub _clean { my ($v, $re) = @_; return (defined $v && !ref $v && $v =~ ($re // qr/^[a-z0-9_ -]{1,40}$/i)) ? $v : undef }
 
 sub tasks_of {
-    my ($payload) = @_;
+    my ($payload, $sid_dir) = @_;
     my (%seen, @tasks, @crons);
     for my $t (@{ ref $payload->{background_tasks} eq 'ARRAY' ? $payload->{background_tasks} : [] }) {
         next unless ref $t eq 'HASH';
         my $id = _clean($t->{id}, $ID_RE) // next;
         next if $seen{"t:$id"}++;
-        my $out = _clean($t->{output_path} // $t->{outputFilePath}, qr{^/[^\n]{1,512}$});
+        my $job = defined $sid_dir ? jobrec::record_of($sid_dir, $id) : undef;
+        my $out = $job ? _clean($job->{output_path}, qr{^/[^\n]{1,1024}$}) : undef;
+        my $cmd = (defined $t->{command} && !ref $t->{command} && $t->{command} ne '') ? $t->{command} : undef;
         push @tasks, jsonc::obj(id => $id, type => _clean($t->{type}) // 'other', status => _clean($t->{status}) // 'other',
-                                output_path => $out);
+                                output_path => $out, output_path_source => ($job ? $job->{output_path_source} : undef),
+                                command_sha256 => (defined $cmd ? sha::hex256($cmd) : undef),
+                                command_chars => (defined $cmd ? length($cmd) : undef));
     }
     for my $c (@{ ref $payload->{session_crons} eq 'ARRAY' ? $payload->{session_crons} : [] }) {
         next unless ref $c eq 'HASH';
@@ -38,7 +48,7 @@ sub tasks_of {
 # write(sid_dir, payload, source) -> slot index written, or undef when unchanged
 sub write {
     my ($sid_dir, $payload, $source) = @_;
-    my ($tasks, $crons) = tasks_of($payload);
+    my ($tasks, $crons) = tasks_of($payload, $sid_dir);
     my $hash = substr(sha::hex256(jsonc::encode([$tasks, $crons])), 0, 8);
     my $dir = "$sid_dir/bg";
     util::mkdir_p($dir);

@@ -1211,6 +1211,29 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'jobs_output_path') {
+        # DP-2 / DP-13: the two output-path readers of lib/jobrec.pm (probe P-D1-6 decides
+        # which one is used; 'none' until then) and the switch between them.
+        require "jobrec.pm";
+        my $in = { task_id => $a->{task}, cwd => $a->{cwd}, result_text => $a->{text} };
+        my $rt = jobrec::path_from_result_text($a->{text}, $a->{task});
+        my $ly = jobrec::path_from_layout($a->{sid}, $a->{cwd}, $a->{task});
+        push @e, 'result text: ' . ($rt // 'none') . ', want ' . ($a->{want_result_text} // 'none')
+            unless ($rt // '') eq ($a->{want_result_text} // '');
+        # the layout sits under the system temp root and the user's uid: the case gives the rest
+        my $wl = defined $a->{want_layout_tail} ? ($^O eq 'darwin' ? '/private/tmp' : '/tmp') . "/claude-$<$a->{want_layout_tail}" : undef;
+        push @e, 'layout: ' . ($ly // 'none') . ', want ' . ($wl // 'none') unless ($ly // '') eq ($wl // '');
+        no warnings 'once';
+        for my $src (qw(none result-text layout)) {
+            local $jobrec::OUTPUT_PATH_SOURCE = $src;
+            my ($p, $s) = jobrec::output_path($in, $a->{sid});
+            my $want = $src eq 'layout' ? $ly : $src eq 'result-text' ? $rt : undef;
+            my $wsrc = defined $want ? $src : 'none';
+            push @e, "switch $src: path " . ($p // 'null') . ' source ' . $s . ', want ' . ($want // 'null') . " $wsrc"
+                unless ($p // '') eq ($want // '') && $s eq $wsrc;
+        }
+        return @e;
+    }
     if ($name eq 'live_peers') {
         # AT-M5-10 reader: a live- record counts only when its pid runs with the same start time
         # and no ended- record exists.

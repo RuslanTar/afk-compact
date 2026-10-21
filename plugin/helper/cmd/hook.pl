@@ -251,6 +251,8 @@ sub on_Stop {
     eval { sidecar::write($d, $p, 'Stop') };
     eval { util::write_atomic("$d/last-stop", util::iso_ms(util::now()) . "\n", 0600) };
     my $n = reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000, cutoff => reconcile::cutoff());
+    # Dev-1 D5: a relaunch bumped in this turn that no recorded job matched
+    eval { jobrec::on_stop($d) };
     return ('', { reconcile => $n });
 }
 
