@@ -10,7 +10,7 @@ import { assemble } from '../../hooks/lib/assemble'
 import type { DetectContext } from '../../hooks/lib/detect'
 import { detectSummary } from '../../hooks/lib/detect'
 import type { Deps, RunResult } from '../../hooks/lib/deps'
-import { checkpoint, claim, ident, measure, parseSave, prevCopy } from '../../hooks/lib/helper'
+import { checkpoint, claim, handoffState, handoffTurnOpen, handoffTurnSupersede, ident, logJobs, measure, parseHandoffState, parseSave, prevCopy } from '../../hooks/lib/helper'
 import { BRAND } from './_gen/brand.gen'
 import { CORPUS } from './_gen/corpus.gen'
 import { GOLDENS, GOLDEN_RUNTIME } from './_gen/goldens.gen'
@@ -93,6 +93,34 @@ describe('BT-05 recorded helper replies', () => {
     const block = await measure(depsFor(reply('measure')), REPLY_SID)
     expect(typeof block === 'string' && block.length > 0 && block.length <= 3000).toBe(true)
     expect([reply('log').exitCode, join(reply('log').stdout), reply('log-paths').exitCode]).toEqual([0, '', 0])
+    // D-18 B8 / Dev-1 D1: the handoff-turn calls, handoff-state in its five forms, the jobs log.
+    const sidOf = (n: string): string => argvOf(reply(n))[2] ?? ''
+    const htOf = (n: string): string => argvOf(reply(n))[argvOf(reply(n)).indexOf('--ht') + 1] ?? ''
+    expect(await handoffTurnOpen(depsFor(reply('handoff-turn-open')), sidOf('handoff-turn-open'), htOf('handoff-turn-open'), 'cap', 34, 64000)).toBe('ok')
+    expect(await handoffTurnOpen(depsFor(reply('handoff-turn-open-exists')), REPLY_SID, htOf('handoff-turn-open-exists'), 'cap', 34, 64000)).toBe('EXISTS')
+    expect(await handoffTurnSupersede(depsFor(reply('handoff-turn-supersede')), REPLY_SID, htOf('handoff-turn-supersede'), REPLY_NONCE)).toBe(true)
+    expect(await handoffTurnSupersede(depsFor(reply('handoff-turn-supersede-exists')), REPLY_SID, htOf('handoff-turn-supersede-exists'), REPLY_NONCE)).toBe(true)
+    expect([reply('handoff-turn-supersede-no-ht').exitCode, join(reply('handoff-turn-supersede-no-ht').stdout)]).toEqual([3, 'REFUSED: no-ht\n'])
+    expect(await handoffTurnSupersede(depsFor(reply('handoff-turn-supersede-no-ht')), REPLY_SID, htOf('handoff-turn-supersede-no-ht'), REPLY_NONCE)).toBe(false)
+    const hs = async (n: string) => handoffState(depsFor(reply(n)), REPLY_SID, htOf(n))
+    expect(await hs('handoff-state-none')).toEqual({ state: 'none' })
+    expect(await hs('handoff-state-staged')).toEqual({
+      state: 'staged', stage: '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03', draft: true,
+      finish: join(reply('handoff-state-staged').stdout).replace(/^.* finish=/, '').trimEnd(),
+    })
+    const staged = await hs('handoff-state-staged')
+    expect(staged.state === 'staged' && staged.finish?.startsWith(NAME + '-store publish --stage ')).toBe(true)
+    expect(await hs('handoff-state-staged-no-finish')).toEqual({
+      state: 'staged', stage: "~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
+    })
+    expect(await hs('handoff-state-published')).toEqual({ state: 'published', path: '~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md' })
+    expect(await hs('handoff-state-superseded')).toEqual({ state: 'superseded', nonce: REPLY_NONCE })
+    expect(parseHandoffState(join(reply('handoff-state-none').stdout))).toEqual({ state: 'none' })
+    const jobs = reply('log-jobs-caller')
+    expect([jobs.exitCode, join(jobs.stdout), jobs.stdin !== undefined]).toEqual([3, 'REFUSED: jobs-caller\n', true])
+    const jr = await logJobs(depsFor(jobs), REPLY_SID, join(jobs.stdin ?? []).split('\n').filter(l => l !== ''))
+    expect(jr?.exitCode).toBe(3)
+    expect(reply('dispatch-handoff-ht').exitCode).toBe(0)
   })
 
   test('the fake helper answers the same argv with the same exit code and form', () => {
@@ -103,8 +131,11 @@ describe('BT-05 recorded helper replies', () => {
       const argv = argvOf(r)
       // The fake's state knobs for what the real helper keeps on disk between calls.
       if (r.name === 'prev-copy-path') w.prevCopy = '~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md'
+      // handoff-state answers the recorded line; the jobs stream refuses as outside Claude Code.
+      if (r.name.startsWith('handoff-state-')) w.htStates.set(argv[argv.indexOf('--ht') + 1] ?? '', join(r.stdout).trimEnd())
+      w.jobsReply = r.name === 'log-jobs-caller' ? { exitCode: 3, stdout: 'REFUSED: jobs-caller\n' } : { exitCode: 0, stdout: '' }
       w.saveLine = r.name === 'save-copy-exists' ? 'EXISTS: ~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md sha-match' : undefined
-      const fake = w.helper([bin, ...argv], {})
+      const fake = w.helper([bin, ...argv], {}, r.stdin === undefined ? undefined : join(r.stdin))
       if (fake === 'reject') throw new Error('fake helper rejected ' + r.name)
       const real = join(r.stdout)
       if (r.name === 'measure') {
