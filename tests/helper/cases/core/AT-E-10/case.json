@@ -1,0 +1,104 @@
+{
+ "id": "AT-E-10",
+ "note": "MOD-SPEC §10 AT-E-10, HK-34: (a) queue_cmd unset: no queue call, lane null; (c) a queue_cmd that answers prose (tests/fixtures/bin/queue-stub with queue/prose): lane omitted with a lane_unknown row; only `list --json --session <sid>` is ever called, never adopt or add. (b) is blocked: design/ defines no structured `queue_cmd list --json` answer (tests/fixtures/README.md 'Not here'), so no case asserts it yet",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "(a) unset",
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/example-repo"
+    }
+   ],
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "lane": null,
+     "queued_line": null
+    },
+    "trace_absent": [
+     "queue_cmd"
+    ],
+    "trace_has": [
+     "checkpoint"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lane_unknown",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) prose",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
+    "QUEUE_STUB_DIR": "$FIX/queue/prose",
+    "QUEUE_STUB_LOG": "$TMP/queue.log"
+   },
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b3c4d5e",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "lane": null,
+     "queued_line": null,
+     "measured_block": {
+      "re": "\\A(?![\\s\\S]*Queued:)"
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
+    ],
+    "files": [
+     {
+      "path": "$TMP/queue.log",
+      "lines": 1,
+      "has": [
+       "\\Alist --json --session $SID$"
+      ],
+      "lacks": [
+       "^(adopt|add)\\b"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lane_unknown",
+      "count": 1,
+      "fields": {
+       "why": "not-json"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

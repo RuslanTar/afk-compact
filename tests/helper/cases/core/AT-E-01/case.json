@@ -1,0 +1,84 @@
+{
+ "id": "AT-E-01",
+ "note": "MOD-SPEC §10 AT-E-01: checkpoint --measured with tests/fixtures/bin/git-slow installed as git (3 s per call, past the 2 s git budget): the git section reads not measured (timeout) in the JSON and in the measured block, checkpoint_ms.git >= 2000, the total stays within the 10 s budget",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "path_prepend": [
+  "$TMP/bin"
+ ],
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/example-repo"
+    },
+    {
+     "copy": "bin/git-slow",
+     "to": "$TMP/bin/git",
+     "mode": "0755"
+    }
+   ],
+   "env": {
+    "GIT_SLOW_SECONDS": "3"
+   },
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 10000,
+    "json": {
+     "git": "not measured (timeout)",
+     "measured_block": {
+      "re": "(?m)^git: not measured \\(timeout\\)$"
+     },
+     "checkpoint_ms.git": {
+      "re": "^([2-9][0-9]{3}|[0-9]{5,})$"
+     },
+     "checkpoint_ms.total": {
+      "re": "^[0-9]{1,4}$"
+     },
+     "timeouts": [
+      "git"
+     ]
+    },
+    "trace_has": [
+     "checkpoint",
+     "git"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/checkpoint/1a2b3c4d.json",
+      "mode": "0600",
+      "json": {
+       "git": "not measured (timeout)"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "checkpoint",
+      "count": 1,
+      "fields": {
+       "nonce": "1a2b3c4d",
+       "timeouts": [
+        "git"
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

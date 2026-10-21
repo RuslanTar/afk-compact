@@ -1,0 +1,57 @@
+{
+ "id": "AT-E-08",
+ "note": "MOD-SPEC §10 AT-E-08: bucket evidence above evidence_quota_mb (tests/fixtures/tempfiles/at-e-08-quota.json: 2 MB under <bucket>/evidence/, quota 1 MB): WARN quota line and warn_quota row; the new file is still copied",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_EVIDENCE_QUOTA_MB": "1"
+ },
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "tempfiles": "at-e-08-quota.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/scratch/new-result\\.txt\\t\\S+/new-result\\.txt\\t4096\\t",
+     "^WARN quota example-repo/general 2$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/new-result.txt",
+      "mode": "0600"
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "warn_quota",
+      "count": 1,
+      "fields": {
+       "bucket": "example-repo/general",
+       "mb": 2,
+       "quota_mb": 1
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

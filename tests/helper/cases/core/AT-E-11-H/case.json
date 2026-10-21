@@ -1,0 +1,159 @@
+{
+ "id": "AT-E-11-H",
+ "note": "MOD-SPEC §10 and AT-E-11 on the helper side (BUILD-PLAN §3.1 checkpoint row): checkpoint --measured over a repo with 30 long-named untracked files and a 12-line STATE.md produces more than 3,000 B of facts; measured_block is cut at a line boundary with (+N lines) and stays <= 3,000 B including its header",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": "$TMP/example-repo",
+     "branch": "main",
+     "planning_state": "# Project State\n\nPhase line 1: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 2: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 3: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 4: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 5: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 6: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 7: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 8: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 9: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 10: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 11: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\nPhase line 12: gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-01-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 1\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-02-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 2\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-03-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 3\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-04-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 4\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-05-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 5\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-06-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 6\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-07-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 7\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-08-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 8\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-09-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 9\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-10-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 10\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-11-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 11\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 12\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-13-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 13\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-14-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 14\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-15-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 15\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-16-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 16\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-17-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 17\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-18-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 18\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-19-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 19\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-20-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 20\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-21-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 21\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-22-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 22\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-23-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 23\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-24-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 24\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-25-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 25\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-26-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 26\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-27-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 27\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-28-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 28\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-29-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 29\n"
+    },
+    {
+     "write": "$TMP/example-repo/evidence-of-the-retry-worker-investigation-with-a-long-descriptive-name-30-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.md",
+     "text": "note 30\n"
+    }
+   ],
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 6144,
+    "json": {
+     "measured_block": {
+      "max_bytes": 3000,
+      "re": "\\AMeasured facts \\([^)]*\\):\\n[\\s\\S]*\\n\\(\\+\\d+ lines\\)\\z"
+     }
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,92 @@
+{
+ "id": "AT-E-09",
+ "note": "MOD-SPEC §10 AT-E-09 (OD-8, S-13): checkpoint --measured in tests/fixtures/repos/planning-state.json: GSD lines from .planning/STATE.md are in the JSON and the measured block; git status --porcelain and the STATE.md mtime are unchanged, and no pin is written",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "porcelain before",
+   "setup": [
+    {
+     "repo_fixture": "planning-state.json",
+     "at": "$TMP/example-repo"
+    },
+    {
+     "age": "$TMP/example-repo/.planning/STATE.md",
+     "minutes": 120
+    }
+   ],
+   "exec": [
+    "git",
+    "-C",
+    "$TMP/example-repo",
+    "status",
+    "--porcelain"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": " M lib/retry_worker.rb\n"
+   }
+  },
+  {
+   "name": "checkpoint",
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "gsd": {
+      "len": 5
+     },
+     "gsd.0": "# Project State",
+     "gsd.1": "Current phase: 2 of 4 (retry worker)",
+     "measured_block": {
+      "re": "(?m)^GSD \\(\\S+/\\.planning/STATE\\.md\\):\\n  # Project State\\n  Current phase: 2 of 4"
+     }
+    },
+    "absent": [
+     "$ROOT/.sessions/*.json"
+    ]
+   }
+  },
+  {
+   "name": "porcelain after",
+   "exec": [
+    "git",
+    "-C",
+    "$TMP/example-repo",
+    "status",
+    "--porcelain"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": " M lib/retry_worker.rb\n"
+   }
+  },
+  {
+   "name": "STATE.md mtime unchanged (still 2 h old)",
+   "exec": [
+    "find",
+    "$TMP/example-repo/.planning/STATE.md",
+    "-mmin",
+    "+100"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "/\\.planning/STATE\\.md$"
+    ]
+   }
+  }
+ ]
+}

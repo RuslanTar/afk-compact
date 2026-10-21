@@ -1,0 +1,125 @@
+{
+ "id": "AT-E-03",
+ "note": "MOD-SPEC §10 AT-E-03 (S-09): the sweep writes under <disposable_root>/<today>/<stem>-evidence/ (0700 folders, 0600 files), never under <bucket>/evidence/, and the destination is not a git work tree; a disposable_root inside a git work tree or a .planning/ folder is refused and nothing is written there",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "tempfiles": "at-e-07-dup.json",
+     "tmp": "$TMP/tmpdir",
+     "record": true
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/scratch/shared-result\\.txt\\t~?/\\S+/2026-10-21/2026-10-21_14-05-12_11111111-1a2b3c-evidence/shared-result\\.txt\\t2048\\t"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21",
+      "mode": "0700"
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence",
+      "mode": "0700"
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/shared-result.txt",
+      "mode": "0600"
+     },
+     {
+      "path": "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence/MANIFEST.tsv",
+      "mode": "0600"
+     }
+    ],
+    "absent": [
+     "$ROOT/example-repo/general/evidence",
+     "$ROOT/*/*/evidence"
+    ]
+   }
+  },
+  {
+   "name": "the destination is no git work tree",
+   "exec": [
+    "git",
+    "-C",
+    "$DISP/2026-10-21/2026-10-21_14-05-12_$SID8-1a2b3c-evidence",
+    "rev-parse",
+    "--git-dir"
+   ],
+   "expect": {
+    "exit": 128
+   }
+  },
+  {
+   "name": "disposable_root inside a git work tree: refused",
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/tracked"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/tracked/trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b3c4d5e",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-in-git\n",
+    "absent": [
+     "$TMP/tracked/trash"
+    ]
+   }
+  },
+  {
+   "name": "disposable_root inside .planning: refused",
+   "setup": [
+    {
+     "mkdir": "$TMP/plan/.planning"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/plan/.planning/trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3c4d5e6f",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-in-planning\n",
+    "absent": [
+     "$TMP/plan/.planning/trash"
+    ]
+   }
+  }
+ ]
+}
