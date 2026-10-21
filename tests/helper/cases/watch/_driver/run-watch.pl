@@ -16,6 +16,7 @@
 # packages; at integration these cases also run through `hook <Event>`.
 use strict;
 use warnings;
+no warnings q(once);
 use Cwd ();
 use File::Basename ();
 use File::Temp ();
@@ -123,6 +124,9 @@ sub capture {
 sub run_case {
     my ($dir) = @_;
     T::reset_ids();
+    require watch::sweep;
+    $watch::alerts::DELIVERY = q(status-only);
+    $watch::sweep::RUN_BYTES = 5 << 20;
     my $case = do "$dir/case.pl";
     die "case.pl: $@" if $@;
     die "case.pl did not return a hash" unless ref $case eq 'HASH';
