@@ -16,7 +16,7 @@ export const AGENT = 'a9a00b3f363327444'
 /** 2026-10-21T14:05:12+03:00 */
 export const T0 = 1792580712000
 
-export type Call = { sub: string; args: string[]; env: Record<string, string> }
+export type Call = { sub: string; args: string[]; env: Record<string, string>; stdin?: string }
 export type Reply = { exitCode: number; stdout: string } | 'reject'
 export type Row = Record<string, unknown> & { ev: string }
 
@@ -86,7 +86,7 @@ export class World {
     })
     on('fs.exists', (_$, e) => ({ value: this.files.has(e.path) }))
     on('process.run', (_$, e) => {
-      const r = this.helper([...e.argv], { ...(e.init?.env ?? {}) })
+      const r = this.helper([...e.argv], { ...(e.init?.env ?? {}) }, e.init?.stdin)
       if (r === 'reject') return { deny: 'cannot start' }
       return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
@@ -157,7 +157,7 @@ export class World {
   }
 
   /** The fake helper: one answer per subcommand, the stdout forms of BUILD-PLAN §3.1. */
-  helper(argv: string[], env: Record<string, string>): Reply {
+  helper(argv: string[], env: Record<string, string>, stdin?: string): Reply {
     const bin = argv[0] ?? ''
     const m = /^(.*)\/bin\/(.+)-store$/.exec(bin)
     if (m && m[1] !== undefined && m[2]) {
@@ -166,7 +166,7 @@ export class World {
     }
     const sub = argv[1] ?? ''
     const args = argv.slice(2)
-    this.calls.push({ sub, args, env })
+    this.calls.push(stdin === undefined ? { sub, args, env } : { sub, args, env, stdin })
     if (this.helperDown) return 'reject'
     const own = this.replies[sub]
     if (own) return own(args)
@@ -180,9 +180,12 @@ export class World {
       case 'ident':
         return ok(JSON.stringify({ pid: 43210, pid_lstart: 'Tue Oct 21 14:00:00 2026', execpath_version: null, watch: this.identWatch }) + '\n')
       case 'log': {
-        const row = JSON.parse(flag('--json')) as Row
-        if (flag('--stream') === 'paths') this.pathRows.push(row)
-        else this.rows.push(row)
+        // `--stdin` (F2-6): one JSON object per line, each appended as a row.
+        const rows = args.includes('--stdin')
+          ? (stdin ?? '').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Row)
+          : [JSON.parse(flag('--json')) as Row]
+        if (flag('--stream') === 'paths') this.pathRows.push(...rows)
+        else this.rows.push(...rows)
         return ok()
       }
       case 'dispatch': {

@@ -1,7 +1,7 @@
 // The `session.compact` handler, steps 0–5 (MOD-SPEC §3.1), the dispatch record (§2.3) and the
 // after-step (§5.2), shared with the boundary self-call path (§4).
 import type { SessionCompactInput, SessionCompactResult, SessionMessage } from 'claude-code'
-import type { Deps } from './deps'
+import type { Deps, PendingResume } from './deps'
 import type { Tag } from './assemble'
 import type { Trigger } from './canary'
 import type { Verdict } from './detect'
@@ -10,10 +10,10 @@ import { keysetCanary, triggerCanary } from './canary'
 import { countVerdict } from './cont'
 import { detectSummary, isOk, lastInstrMarker } from './detect'
 import { checkpoint, dispatch, failClass, prevCopy, saveCopy, sweep } from './helper'
-import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce } from './log'
+import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
-import { buildBlock } from './resume'
+import { buildBlock, claimedElsewhere, logOutcome } from './resume'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -193,6 +193,9 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   let savedCopy: string | null = null
   let notSaved: string | undefined
   let chars = 0
+  // PRIV-04: the raw summary is stashed only under the watch folder the helper vetted (ident);
+  // refused (null) or unknown (no helper answer) means no stash, never the options' folder.
+  const stash = await vettedWatch(d, a.sid)
   const p = await d.paths()
   if (!summary) {
     notSaved = 'summary-not-found'
@@ -202,9 +205,9 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     const det = detectSummary(summary.text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
     verdict = det.verdict
     chars = det.normalized.length
-    const file = p ? `${p.watch}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
+    const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
     if (!file || !(await d.write(file, summary.text))) {
-      notSaved = 'pending-write-failed'
+      notSaved = file ? 'pending-write-failed' : s.ident?.watch === null ? 'unsafe-root' : 'helper-missing'
       await log(d, a.sid, 'copy_failed', { nonce: a.nonce, reason: notSaved }, actor)
       escalate(d, 'copy-failed')
     } else {
@@ -230,7 +233,10 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     }
     if (main && p && !(await d.exists(`${p.watch}/${a.sid}/swept/${a.nonce.slice(0, 6)}`))) await sweep(d, a.sid, a.nonce)
   }
-  if (!main) return { verdict }
+  if (!main) {
+    await logOutcome(d, a.sid, a.nonce, { nudged: false, continued: false, halt: s.halt.active }, 'none-subagent', actor)
+    return { verdict }
+  }
   if (s.mainCompactionsSid !== a.sid) {
     s.mainCompactionsSid = a.sid
     s.mainCompactions = 0
@@ -238,13 +244,25 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   }
   s.mainCompactions++
   const block = await buildBlock(d, a.sid, { nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved })
-  s.pending = { sid: a.sid, nonce: a.nonce, block, resumePref: a.resumePref, turnSeq: s.turnSeq }
+  // A block still pending is replaced by this one: its outcome is settled now (no channel
+  // will try it again).
+  const old = s.pending
+  if (old) {
+    s.pending = undefined
+    await logOutcome(d, old.sid, old.nonce, old.outcome, await claimedElsewhere(d, old))
+  }
+  const pend: PendingResume = {
+    sid: a.sid, nonce: a.nonce, block, resumePref: a.resumePref, turnSeq: s.turnSeq,
+    outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active },
+  }
+  s.pending = pend
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)
   if (!s.fourthToasted && (s.mainCompactions >= 4 || chars > 12000)) {
     s.fourthToasted = true
     d.toast(`${d.name}: 4 compactions in this session; consider /${d.name}:handoff and a fresh session.`)
   }
   await countVerdict(d, a.sid, isOk(verdict))
+  pend.outcome.halt = s.halt.active
   return { verdict }
 }
 

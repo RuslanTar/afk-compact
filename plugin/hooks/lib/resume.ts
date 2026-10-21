@@ -1,10 +1,10 @@
 // The resume block (MOD-SPEC §3.4): built after a main compaction, delivered once by the first
 // channel whose claim wins. The mod's channels are `prompt.context` (order 2) and the continue
 // text (order 3, cont.ts); classic SessionStart (order 1) is the helper's.
-import type { Deps } from './deps'
+import type { Deps, Outcome, PendingResume } from './deps'
 import type { Tag } from './assemble'
 import { assemble } from './assemble'
-import { claim, measure } from './helper'
+import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 
 /** MOD-SPEC §3.4: total ≤5,000 chars. */
@@ -52,10 +52,14 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   s.ctxSeen = true
   const pend = s.pending
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
-  const c = await claim(d, sid, pend.nonce, 'prompt.context')
+  const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
   s.pending = undefined
-  if (c === 'TAKEN') return undefined
-  if (c === 'failed') await helperMissing(d, sid, 'claim')
+  if (c.result === 'TAKEN') {
+    await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:' + (c.by ?? 'unknown'))
+    return undefined
+  }
+  if (c.result === 'failed') await helperMissing(d, sid, 'claim')
+  await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
   return pend.block
 }
 
@@ -68,8 +72,31 @@ export async function undeliveredCheck(d: Deps, sid: string): Promise<void> {
   const pend = s.pending
   if (!pend || pend.turnSeq >= s.turnSeq) return
   s.pending = undefined
+  const where = await claimedElsewhere(d, pend)
+  if (where === 'undelivered') {
+    await log(d, pend.sid, 'resume_undelivered', { nonce: pend.nonce, resume_pref: pend.resumePref })
+    escalate(d, 'resume-undelivered')
+  }
+  await logOutcome(d, pend.sid, pend.nonce, pend.outcome, where)
+}
+
+/**
+ * Where a block that no mod channel delivered went: `delivered:<channel>` when a claim exists
+ * (the classic SessionStart won it), else `undelivered`.
+ */
+export async function claimedElsewhere(d: Deps, pend: PendingResume): Promise<string> {
   const p = await d.paths()
-  if (p && (await d.exists(`${p.watch}/${pend.sid}/resume-claimed/${pend.nonce}`))) return
-  await log(d, pend.sid, 'resume_undelivered', { nonce: pend.nonce, resume_pref: pend.resumePref })
-  escalate(d, 'resume-undelivered')
+  const path = p ? `${p.watch}/${pend.sid}/resume-claimed/${pend.nonce}` : undefined
+  if (!path || !(await d.exists(path))) return 'undelivered'
+  const t = await d.read(path)
+  return 'delivered:' + (channelToken(t?.trim().split(/\s+/)[0]) ?? 'unknown')
+}
+
+/**
+ * F2-3: the mod's part of the rollup, one append-only row per compaction, written once its
+ * resume block has settled (subagent compactions at once, `none-subagent`). Readers join it to
+ * the rollup row by nonce; nothing is rewritten.
+ */
+export async function logOutcome(d: Deps, sid: string, nonce: string, o: Outcome, resume: string, actor = 'main'): Promise<void> {
+  await log(d, sid, 'mod_outcome', { nonce, nudged: o.nudged, continued: o.continued, halt: o.halt, resume }, actor)
 }

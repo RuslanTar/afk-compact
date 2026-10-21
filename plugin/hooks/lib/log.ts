@@ -4,7 +4,7 @@
 import type { Deps } from './deps'
 import { PLUGIN_VERSION } from './meta.gen'
 import { randomHex } from './nonce'
-import { call } from './helper'
+import { call, ident } from './helper'
 import { byteLength } from './normalize'
 
 export type Fields = Record<string, string | number | boolean | null | readonly string[] | Record<string, number>>
@@ -74,6 +74,28 @@ export async function helperMissing(d: Deps, sid: string, stage: string): Promis
   if (d.state.helperMissingLogged) return
   d.state.helperMissingLogged = true
   await log(d, sid, 'helper_missing', { stage })
+}
+
+/** One `ident` call per load: pid, its start time and the helper's effective watch folder. */
+export async function ensureIdent(d: Deps, sid: string): Promise<void> {
+  if (d.state.ident) return
+  const id = await ident(d, sid)
+  if (id) d.state.ident = id
+  else {
+    d.state.ident = { pid: null, pid_lstart: null }
+    await helperMissing(d, sid, 'ident')
+  }
+}
+
+/**
+ * The watch folder the helper vetted (MOD-SPEC §1.2 unsafe roots, PRIV-04), or undefined: when
+ * `ident` refused every log folder (null) or gave no answer. Raw text (the summary stash) is
+ * written only here, never under the folder the options name.
+ */
+export async function vettedWatch(d: Deps, sid: string): Promise<string | undefined> {
+  await ensureIdent(d, sid)
+  const w = d.state.ident?.watch
+  return typeof w === 'string' ? w.replace(/\/+$/, '') : undefined
 }
 
 /**

@@ -9,8 +9,17 @@ export const CHECKPOINT_MS = 12000
 /** Sweep after a main-proven compaction (the PostCompact budget is 8 s; same here). */
 export const SWEEP_MS = 10000
 
-export async function call(d: Deps, args: readonly string[], timeoutMs = HELPER_MS): Promise<RunResult> {
-  return d.run([d.helper, ...args], timeoutMs)
+export async function call(d: Deps, args: readonly string[], timeoutMs = HELPER_MS, stdin?: string): Promise<RunResult> {
+  return stdin === undefined ? d.run([d.helper, ...args], timeoutMs) : d.run([d.helper, ...args], timeoutMs, stdin)
+}
+
+/**
+ * `log --sid S --stream paths --stdin` (F2-6): several rows in one spawn, one JSON object per
+ * line on stdin, each appended as a row. Nothing is sent for an empty list.
+ */
+export async function logPaths(d: Deps, sid: string, lines: readonly string[]): Promise<RunResult | undefined> {
+  if (lines.length === 0) return undefined
+  return call(d, ['log', '--sid', sid, '--stream', 'paths', '--stdin'], HELPER_MS, lines.join('\n') + '\n')
 }
 
 /** A short class for a failed call, for rows (never the stderr text). */
@@ -156,11 +165,21 @@ export async function sweep(d: Deps, sid: string, nonce: string): Promise<boolea
 export type ClaimResult = 'CLAIMED' | 'TAKEN' | 'failed'
 
 export async function claim(d: Deps, sid: string, nonce: string, channel: 'prompt.context' | 'prompt.submit'): Promise<ClaimResult> {
+  return (await claimBy(d, sid, nonce, channel)).result
+}
+
+/** The claim and, for `TAKEN <channel>`, the channel that holds it (null when not given). */
+export async function claimBy(d: Deps, sid: string, nonce: string, channel: 'prompt.context' | 'prompt.submit'): Promise<{ result: ClaimResult; by: string | null }> {
   const r = await call(d, ['claim', '--sid', sid, '--nonce', nonce, '--channel', channel])
   const s = r.stdout.trim()
-  if (r.ok && s === 'CLAIMED') return 'CLAIMED'
-  if (r.ok && s.startsWith('TAKEN')) return 'TAKEN'
-  return 'failed'
+  if (r.ok && s === 'CLAIMED') return { result: 'CLAIMED', by: channel }
+  if (r.ok && s.startsWith('TAKEN')) return { result: 'TAKEN', by: channelToken(s.slice(5).trim().split(/\s+/)[0]) }
+  return { result: 'failed', by: null }
+}
+
+/** A claim channel as a row value: a short token, else null (never free text). */
+export function channelToken(v: string | undefined): string | null {
+  return v !== undefined && /^[a-z][a-z.]{1,30}$/.test(v) ? v : null
 }
 
 /**

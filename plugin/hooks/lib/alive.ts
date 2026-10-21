@@ -6,18 +6,7 @@ import { cancelBoundary } from './boundary'
 import { versionCanary } from './canary'
 import { effective } from './config'
 import { clearHalt, loadHalt } from './cont'
-import { ident } from './helper'
-import { helperMissing, isoLocal, log } from './log'
-
-export async function ensureIdent(d: Deps, sid: string): Promise<void> {
-  if (d.state.ident) return
-  const id = await ident(d, sid)
-  if (id) d.state.ident = id
-  else {
-    d.state.ident = { pid: null, pid_lstart: null }
-    await helperMissing(d, sid, 'ident')
-  }
-}
+import { ensureIdent, isoLocal, log } from './log'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
   const p = await d.paths()

@@ -1,7 +1,8 @@
 // Auto-continue, the hourly cap, halt mode and the thrash rule (MOD-SPEC §9, S-14).
 import type { Deps } from './deps'
-import { claim } from './helper'
+import { claimBy } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
+import { logOutcome } from './resume'
 
 export const HOUR_MS = 3600000
 
@@ -116,21 +117,33 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
     return
   }
   let text = continueLine(d.name)
-  const pend = s.pending
-  if (pend && pend.sid === sid) {
-    const c = await claim(d, sid, pend.nonce, 'prompt.submit')
-    if (c === 'failed') await helperMissing(d, sid, 'claim')
-    if (c !== 'TAKEN') text += '\n\n' + pend.block
+  const pend = s.pending && s.pending.sid === sid ? s.pending : undefined
+  /** Where this continue leaves the pending block (F2-3 `resume`). */
+  let resume: string | undefined
+  if (pend) {
+    const c = await claimBy(d, sid, pend.nonce, 'prompt.submit')
+    if (c.result === 'failed') await helperMissing(d, sid, 'claim')
+    if (c.result !== 'TAKEN') {
+      text += '\n\n' + pend.block
+      resume = 'delivered:prompt.submit'
+    } else resume = 'delivered:' + (c.by ?? 'unknown')
     s.pending = undefined
   }
   stamps.push(now)
   await d.storeSet(key, stamps)
   await log(d, sid, 'continue', { result: 'submitted', continues_last_hour: stamps.length })
   s.ourSubmitPending = true
+  let submitted = true
   try {
     await d.submit(text)
   } catch {
+    submitted = false
     s.ourSubmitPending = false
     await log(d, sid, 'continue', { result: 'skipped:submit-failed', continues_last_hour: stamps.length })
+  }
+  if (pend && resume !== undefined) {
+    pend.outcome.continued = submitted
+    pend.outcome.halt = s.halt.active
+    await logOutcome(d, sid, pend.nonce, pend.outcome, submitted || resume !== 'delivered:prompt.submit' ? resume : 'undelivered')
   }
 }
