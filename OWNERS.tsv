@@ -23,6 +23,7 @@ LICENSE	build
 brand.json	build
 OWNERS.tsv	build
 .gitignore	build
+.gitattributes	build
 package.json	build
 package-lock.json	build
 tsconfig.json	build

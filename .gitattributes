@@ -1,0 +1,4 @@
+# Line ends (BH-2): every text file is stored and checked out with LF, whatever
+# core.autocrlf says, so the launcher keeps `#!/bin/sh\n` and runs on a Git for Windows
+# checkout. tests/fixtures/.gitattributes keeps its CRLF fixtures byte-exact (-text).
+* text=auto eol=lf
