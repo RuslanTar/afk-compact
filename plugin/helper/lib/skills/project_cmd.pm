@@ -192,6 +192,10 @@ sub copy {
             my $dest = "$ctx->{root}/$w->{repo}/$topic/" . File::Basename::basename($x->{path});
             my $text = _imported_text($x->{text}, "repo:$rel");
             if (!defined $text) { $out->('skip unshaped', $rel); next }
+            # CR-F14 (DP-27): repository text is untrusted; a HARD secret hit is never
+            # copied into the private store (as publish refuses one). WARN hits import.
+            my ($why, $rules) = skills::export::scan($text);
+            if (($why // '') eq 'secret') { $out->('skip secret', $rel, '(rules ' . join(',', @$rules) . ')'); next }
             if (-e $dest || -l $dest) {
                 my $same = !-l $dest && (skills::util::sha256_file($dest) // '') eq skills::util::sha256_hex($text);
                 $out->($same ? ('exists', $rel, '->', $dest) : ('skip private-exists', $rel, '->', $dest));

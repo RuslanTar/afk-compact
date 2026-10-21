@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "D-12 §1.5.9, B-10: project copy --from repo --all is a dry run by default; --apply copies 2 exports with no private twin into the private bucket with imported_from: repo:<rel path>; the exports are untouched; a re-run finds the twins (exists); resume still reads the copies as foreign (relation other, from session) and heal-check refuses recipe-not-local",
+ "note": "D-12 §1.5.9, B-10: project copy --from repo --all is a dry run by default; --apply copies 2 exports with no private twin into the private bucket with imported_from: repo:<rel path>, and skips a third with a HARD secret hit (skip secret, rules named, in the dry run too; CR-F14, DP-27); the exports are untouched; a re-run finds the twins (exists); resume still reads the copies as foreign (relation other, from session) and heal-check refuses recipe-not-local",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -38,6 +38,10 @@
     {
      "write": "$TMP/repo/.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate.md",
      "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T16:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\nticket: LAB-9\nbucket: LAB-9\nexport: repo\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-9 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-9 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-9-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-9-retry · this handoff: .claude/handoffs/LAB-9/x.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    },
+    {
+     "write": "$TMP/repo/.claude/handoffs/LAB-9/2026-10-21_14-00-00_99999999_mate.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d0e0d0e\ndate: 2026-10-21T14:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\nticket: LAB-9\nbucket: LAB-9\nexport: repo\n---\n⟪$BRAND v1 n=0d0e0d0e s=manual⟫\n# LAB-9 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-9 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-9-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-9-retry · this handoff: .claude/handoffs/LAB-9/x.md\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n- token: $SECRET{github-token} — pasted by mistake\n⟪/$BRAND n=0d0e0d0e⟫\n"
     }
    ]
   },
@@ -54,7 +58,7 @@
    }
   },
   {
-   "name": "dry run",
+   "name": "dry run; CR-F14: a HARD secret hit is skipped",
    "cwd": "$TMP/repo",
    "argv": [
     "project",
@@ -66,8 +70,9 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "\\Awould-import \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md -> $ROOT/repo/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md\\nwould-import \\.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate\\.md -> ",
-     "^TOTAL 2 · would-import 2 \\(dry run; nothing written\\)$"
+     "\\Askip secret \\.claude/handoffs/LAB-9/2026-10-21_14-00-00_99999999_mate\\.md \\(rules [^)]+\\)\\n",
+     "^would-import \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md -> $ROOT/repo/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md\\nwould-import \\.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate\\.md -> ",
+     "^TOTAL 3 · would-import 2 · skip 1 \\(dry run; nothing written\\)$"
     ],
     "absent": [
      "$ROOT/repo"
@@ -75,7 +80,7 @@
    }
   },
   {
-   "name": "apply imports 2",
+   "name": "apply imports 2; CR-F14: the export with a HARD secret hit is not copied",
    "cwd": "$TMP/repo",
    "argv": [
     "project",
@@ -90,7 +95,11 @@
     "stdout_has": [
      "^imported \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md -> $ROOT/repo/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md$",
      "^imported \\.claude/handoffs/LAB-9/2026-10-21_16-00-00_99999999_mate\\.md -> ",
-     "^TOTAL 2 · imported 2$"
+     "^skip secret \\.claude/handoffs/LAB-9/2026-10-21_14-00-00_99999999_mate\\.md \\(rules [^)]+\\)$",
+     "^TOTAL 3 · imported 2 · skip 1$"
+    ],
+    "absent": [
+     "$ROOT/repo/LAB-9/2026-10-21_14-00-00_99999999_mate.md"
     ],
     "files": [
      {
@@ -157,7 +166,7 @@
     "exit": 0,
     "stdout_has": [
      "^exists \\.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md \\(private twin\\)$",
-     "^TOTAL 2 · exists 2$"
+     "^TOTAL 3 · exists 2 · skip 1$"
     ]
    }
   },
