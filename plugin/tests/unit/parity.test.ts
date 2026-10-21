@@ -24,10 +24,13 @@ describe('BT-04 TS assembler vs the goldens', () => {
   // D-10 (small-rulings §1.7): the mod applies `queue` whenever `queue_cmd` is set, so every
   // golden counts, the queue ones included.
   const cases = GOLDENS
+  // Runtime values that carry the build name (queue_add, handoff_finish) are rendered with NAME.
+  const runtime = Object.fromEntries(Object.entries(GOLDEN_RUNTIME)
+    .map(([k, v]) => [k, typeof v === 'string' ? v.split(BRAND.name).join(NAME) : v]))
   test('every golden, byte for byte', () => {
     expect(cases.length).toBeGreaterThan(20)
     for (const g of cases) {
-      const got = assemble(NAME, g.asset as AssetName, g.tags as Tag[], GOLDEN_RUNTIME)
+      const got = assemble(NAME, g.asset as AssetName, g.tags as Tag[], runtime)
       expect({ golden: g.asset + '__' + (g.tags.join('+') || 'base'), text: got })
         .toEqual({ golden: g.asset + '__' + (g.tags.join('+') || 'base'), text: g.parts.join(NAME) })
     }
