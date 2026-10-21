@@ -2,7 +2,7 @@
  "id": "HT-WA-01",
  "layer": "H",
  "owner": "skills",
- "note": "Dev-7 D2: pid-exit, file, marker and exit each end the wait with exit 0 and the documented line; exit: prints rc= for the active `__exit N` marker; the runtime `[exited with code N]` form is not matched while the spec marks it inactive (P-D1-2); any one of several --for conditions is enough; a marker appended during the wait is found",
+ "note": "Dev-7 D2: pid-exit, file, marker and exit each end the wait with exit 0 and the documented line; exit: prints rc= for the active `__exit N` marker; the runtime `[exited with code N]` form prints rc= too (P-D1-2 passed, DP-24 (b); HT-JV-04 covers it without a newline and `[killed]`); any one of several --for conditions is enough; a marker appended during the wait is found",
  "steps": [
   {
    "setup": [
@@ -87,7 +87,7 @@
    }
   },
   {
-   "name": "the runtime trailer is inactive until P-D1-2",
+   "name": "the runtime trailer is an end marker (P-D1-2 passed, DP-24 (b))",
    "argv": [
     "wait",
     "--for",
@@ -96,8 +96,8 @@
     "0"
    ],
    "expect": {
-    "exit": 10,
-    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
+    "exit": 0,
+    "stdout": "wait: done exit:$TMP/w/rt after 0s rc=0 line=1\n"
    }
   },
   {

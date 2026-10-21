@@ -217,6 +217,7 @@ sub _gate {
     return $report{ $v->{status} } if $report{ $v->{status} };
     return 'command-withheld' if $rec && !defined $rec->{command};
     return 'ended-unexplained' if $v->{status} eq 'ENDED-UNEXPLAINED';
+    return 'killed' if $v->{status} eq 'KILLED';
     if ($v->{status} eq 'LOST') {
         return 'lost-low' unless $v->{confidence} eq 'high';
     } elsif ($v->{status} eq 'FAILED') {

@@ -6,9 +6,11 @@ package skills::wait;
 #   cond   pid-exit:<pid>[@<start-epoch>] | file:<path> | marker:<path>:<perl-regex> | exit:<path>
 #   guard  pid:<pid>[@<start-epoch>] | file:<path>
 # Met when any --for holds; exit 12 as soon as a --while stops holding. exit: matches the
-# spec's exit_markers whose `active` is true (`__exit N`; the runtime's `[exited with code
-# N]` only once P-D1-2 turns it on). Every grammar, limit and exit code comes from the
-# spec's `wait` object; a missing key refuses (fail closed).
+# spec's exit_markers whose `active` is true (`__exit N`, the runtime's `[exited with code
+# N]`: rc=N) and, for an entry with `means: killed` (`[killed]`, DP-24 (b)), prints
+# `killed`, never an rc. The runtime writes its trailer without a newline (P-D1-2), so
+# exit: also reads the last unterminated line. Every grammar, limit and exit code comes
+# from the spec's `wait` object; a missing key refuses (fail closed).
 # Order per tick: conditions, guards, stall, deadline, cap. Polls every 0.25 s for the
 # first 2 s, then every 1 s, inside this process (no model-visible sleep).
 # Files: marker/exit read only the bytes appended since the last check and keep a partial
@@ -63,7 +65,8 @@ sub run {
     my @guards = map { _parse_guard($W, $_) } @{ $o->{while} || [] };
     my @watched = grep { $_->{kind} eq 'marker' || $_->{kind} eq 'exit' } @conds;
     die skills::cli::usage('--stall needs a marker: or exit: condition') if defined $stall && !@watched;
-    my @exit_res = map { qr/$_->{re}/ } grep { ref $_ eq 'HASH' && _true($_->{active}) && defined $_->{re} } @{ $W->{exit_markers} };
+    my @exit_res = map { { re => qr/$_->{re}/, killed => (($_->{means} // '') eq 'killed' ? 1 : 0) } }
+                   grep { ref $_ eq 'HASH' && _true($_->{active}) && defined $_->{re} } @{ $W->{exit_markers} };
 
     # B-15: no pattern runs past the cap. The regex engine checks signals between steps.
     local $SIG{ALRM} = sub { print STDERR "wait: overrun past --max $max s\n"; POSIX::_exit($X{internal}) };
@@ -84,6 +87,7 @@ sub run {
             @n = grep { !$seen{$_}++ } @n;
             my $line = sprintf('wait: done %s after %ds', $c->{spec}, int($el));
             $line .= " rc=$hit->{rc}" if defined $hit->{rc};
+            $line .= ' killed' if $hit->{killed};
             $line .= " line=$hit->{line}" if defined $hit->{line};
             $line .= ' match=' . _cut($hit->{match}, $cut) if defined $hit->{match};
             $line .= ' note=' . join(',', @n) if @n;
@@ -227,14 +231,27 @@ sub _check_cond {
     return _scan($c, $ctx);
 }
 
+# _exit_hit(ctx, line, n, notes) -> {line, rc | killed, notes} for the first active exit
+# marker the line matches, or undef.
+sub _exit_hit {
+    my ($ctx, $l, $n, $notes) = @_;
+    for my $e (@{ $ctx->{exit_res} }) {
+        next unless $l =~ $e->{re};
+        return { line => $n, killed => 1, notes => $notes } if $e->{killed};
+        return { line => $n, rc => 0 + $1, notes => $notes } if defined $1;
+    }
+    return undef;
+}
+
 sub _guard_broken {
     my ($g, $ctx, $first) = @_;
     if ($g->{kind} eq 'pid') { my $s = _pid_state($g, $ctx, $first); return $s eq 'alive' ? undef : $s }
     return _kind_of($g->{path}) eq 'regular' ? undef : 'deleted';
 }
 
-# scan(cond, ctx) -> a hit {line, match | rc, notes} or undef. Reads the new bytes of a
-# marker/exit file line by line; the last line counts only once it ends in a newline.
+# scan(cond, ctx) -> a hit {line, match | rc | killed, notes} or undef. Reads the new bytes
+# of a marker/exit file line by line; for marker: the last line counts only once it ends in
+# a newline, for exit: an unterminated last line is read too (the runtime trailer).
 sub _scan {
     my ($c, $ctx) = @_;
     sysopen(my $fh, $c->{path}, O_RDONLY | O_NONBLOCK) or die skills::cli::refuse("unreadable $c->{path}");
@@ -284,13 +301,17 @@ sub _scan {
             if ($c->{kind} eq 'marker') {
                 return { line => $c->{line}, match => $&, notes => \@notes } if $l =~ $c->{re};
             } else {
-                for my $re (@{ $ctx->{exit_res} }) {
-                    return { line => $c->{line}, rc => 0 + $1, notes => \@notes } if $l =~ $re;
-                }
+                my $hit = _exit_hit($ctx, $l, $c->{line}, \@notes);
+                return $hit if $hit;
             }
         }
     }
     close $fh;
+    if ($c->{kind} eq 'exit' && !$c->{skip_partial} && $c->{partial} ne '') {
+        (my $l = $c->{partial}) =~ s/\r\z//;
+        my $hit = _exit_hit($ctx, $l, $c->{line} + 1, \@notes);
+        return $hit if $hit;
+    }
     if (@notes) { push @{ $ctx->{notes} }, grep { my $n = $_; !grep { $_ eq $n } @{ $ctx->{notes} } } @notes }
     return undef;
 }

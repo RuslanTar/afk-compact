@@ -9,14 +9,16 @@ package skills::jobs;
 #                      carries this backgroundTaskId (bounded scan, no content printed);
 #                      the runtime's own BackgroundTaskSummary.command sha in the sidecar
 #                      agrees when it was kept whole (REVIEW B-16)
-#   V2 owner ended     the origin session's process: an ended- record, a later live record
-#                      of the same process under another session (/clear), or the pid
-#                      gone or restarted; this process in the same session fails (row 2b)
+#   V2 owner ended     the origin session's process: an ended- record, or the pid gone or
+#                      restarted; this process in the same session fails (row 2b), and so
+#                      does the same live process under a later session (/clear): shells
+#                      survive /clear (DP-24 (c), P-D1-3), so the job may still run
 #   V3 in flight       the origin session's newest sidecar slot (by seq) lists the task running
 #   V4 no completion   the output file exists and its last 200 bytes hold no active end
 #                      marker (spec wait.exit_markers); passes only when a marker is
 #                      expected (an active runtime marker, or the command ends with the
-#                      end suffix); unmeasured while the output path is unknown (P-D1-6)
+#                      end suffix); unmeasured while the output path is unknown (P-D1-6).
+#                      A `means: killed` marker (`[killed]`, DP-24 (b)) fails it: KILLED
 #   V5 quiet           output mtime <= owner end + 5 s; end unknown: <= now - relaunch_quiet_s
 #   V6 no effect yet   no recipe `expected outputs:` path has mtime >= launched_at
 #                      (stat only; the recipe's idempotency check is shown, never run)
@@ -27,7 +29,10 @@ package skills::jobs;
 # outward hit, a recipe with expected outputs) · outward (any outward lint hit; an allow
 # pattern never overrides it) · unknown (everything else, a missing record included).
 # Status: the Dev-1 D4 table, first match wins, except that a recorded stop (row 7) is
-# checked before rows 5 and 6, so a job stopped on purpose is never relaunched.
+# checked before rows 5 and 6, so a job stopped on purpose is never relaunched, and a
+# `[killed]` output right after row 1 (KILLED: it asks, never LOST, RUNNING or STOPPED).
+# A job of the same live process under a later session (owner state `cleared`, /clear)
+# with no end marker is RUNNING: probe it, never relaunch it.
 use strict;
 use warnings;
 use skills::util;
@@ -85,6 +90,7 @@ sub verify {
     if ($own->{state} eq 'unknown') { $sig{V2} = ['unmeasured', 'no owner record'] }
     elsif ($own->{state} eq 'ended') { $sig{V2} = ['pass', 'owner ended' . (defined $own->{end} ? ' ' . skills::util::stamp($own->{end}) : ' (time unknown)')] }
     elsif ($own->{state} eq 'this') { $sig{V2} = ['fail', 'owner is this process and session'] }
+    elsif ($own->{state} eq 'cleared') { $sig{V2} = ['fail', 'owner process still live after /clear' . (defined $own->{end} ? ' ' . skills::util::stamp($own->{end}) : '')] }
     else { $sig{V2} = ['fail', 'owner session live in another process'] }
 
     # V3
@@ -104,8 +110,9 @@ sub verify {
         $sig{V4} = ['unmeasured', 'output file missing'];
         $sig{V5} = ['unmeasured', 'output file missing'];
     } else {
-        my ($mrc, $expected) = exit_marker($out, $cmd);
-        if (defined $mrc) { $r{marker_rc} = $mrc; $sig{V4} = ['fail', "exit marker rc=$mrc"] }
+        my ($mrc, $expected, $killed) = exit_marker($out, $cmd);
+        if ($killed) { $r{killed} = 1; $sig{V4} = ['fail', 'killed'] }
+        elsif (defined $mrc) { $r{marker_rc} = $mrc; $sig{V4} = ['fail', "exit marker rc=$mrc"] }
         elsif ($expected) { $sig{V4} = ['pass', 'no exit marker'] }
         else { $sig{V4} = ['unmeasured', 'no exit marker expected'] }
         my $mt = (stat $out)[9];
@@ -143,6 +150,8 @@ sub verify {
     # Status: the D4 table.
     my $live_here = ($a{origin} eq ($a{current}{sid} // '')) && $sig{V3}[0] eq 'pass' && $own->{state} eq 'this';
     if ($own->{state} eq 'elsewhere') { $r{status} = 'RUNNING-ELSEWHERE' }
+    elsif ($r{killed}) { $r{status} = 'KILLED' }
+    elsif ($own->{state} eq 'cleared' && !defined $r{marker_rc}) { $r{status} = 'RUNNING' }
     elsif ($live_here || ($sig{V5}[0] eq 'fail' && $own->{state} ne 'ended')) { $r{status} = 'RUNNING' }
     elsif ($own->{state} eq 'this' && !defined $r{marker_rc}) { $r{status} = 'ENDED-UNEXPLAINED' }
     elsif ($own->{state} eq 'ended' && $sig{V5}[0] eq 'fail') { $r{status} = 'LEFTOVER' }
@@ -193,7 +202,8 @@ sub expected_outputs {
     return [ grep { m{\A/} } map { s/[,;]+\z//r } split /[\s,]+/, $v ];
 }
 
-# (rc of the last active end marker in the output's tail or undef, marker expected 0|1)
+# (rc of the last active end marker in the output's tail or undef, marker expected 0|1,
+#  killed 0|1: the last marker is a `means: killed` one)
 sub exit_marker {
     my ($path, $cmd) = @_;
     my $w = skills::spec::get('wait') // {};
@@ -206,12 +216,17 @@ sub exit_marker {
     seek($fh, $size > $TAIL_BYTES ? $size - $TAIL_BYTES : 0, 0);
     read($fh, my $tail, $TAIL_BYTES);
     close $fh;
-    my $rc;
+    my ($rc, $killed) = (undef, 0);
     for my $l (split /\n/, $tail // '') {
         $l =~ s/\r\z//;
-        for my $e (@m) { my $re = eval { qr/$e->{re}/ } or next; $rc = $1 if $l =~ $re }
+        for my $e (@m) {
+            my $re = eval { qr/$e->{re}/ } or next;
+            next unless $l =~ $re;
+            if (($e->{means} // '') eq 'killed') { ($rc, $killed) = (undef, 1) }
+            elsif (defined $1) { ($rc, $killed) = ($1, 0) }
+        }
     }
-    return ($rc, $expected);
+    return ($rc, $expected, $killed);
 }
 
 sub runnable {
@@ -226,7 +241,9 @@ sub runnable {
 }
 
 # owner_state(ctx, origin sid, record, current {sid, pid, lstart})
-#   -> {state => ended|this|elsewhere|unknown, end => epoch|undef}
+#   -> {state => ended|this|cleared|elsewhere|unknown, end => epoch|undef}
+#   cleared: the origin's process is alive under a later session (/clear); end = that
+#   session's start
 sub owner_state {
     my ($ctx, $origin, $rec, $cur) = @_;
     my $o = $rec ? $rec->{owner} : undef;
@@ -244,15 +261,30 @@ sub owner_state {
     my $epoch = $lrec ? $lrec->{epoch} : undef;
     if (defined $epoch) {
         my ($end) = grep { $_->{state} eq 'ended' && "$_->{pid}" eq "$pid" && $_->{epoch} eq $epoch && $_->{sid8} eq $s8 } @$all;
-        return { state => 'ended', end => skills::util::iso_to_epoch($end->{data}{ts}) } if $end;
+        if ($end) {
+            my $t = skills::util::iso_to_epoch($end->{data}{ts});
+            # /clear ends the session, not the process: its shells survive (DP-24 (c)).
+            my $live = ($end->{data}{reason} // '') eq 'clear' ? _cleared($pid, $lstart, $cur, $t) : undef;
+            return $live // { state => 'ended', end => $t };
+        }
         my $since = skills::util::iso_to_epoch($lrec->{data}{ts}) // 0;
         my @later = sort { $a <=> $b } grep { defined && $_ > $since } map { skills::util::iso_to_epoch($_->{data}{ts}) }
                     grep { $_->{state} eq 'live' && "$_->{pid}" eq "$pid" && $_->{epoch} eq $epoch && ($_->{data}{session_id} // '') ne $origin } @$all;
-        return { state => 'ended', end => $later[0] } if @later;
+        # /clear: the same process under a later session. Its shells survive (DP-24 (c)).
+        return _cleared($pid, $lstart, $cur, $later[0]) // { state => 'ended', end => $later[0] } if @later;
     }
     return { state => 'ended', end => undef } unless skills::ctx::pid_matches($pid, $lstart);
     my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
-    return { state => ($this && ($cur->{sid} // '') eq $origin) ? 'this' : ($this ? 'ended' : 'elsewhere') };
+    return { state => ($this && ($cur->{sid} // '') eq $origin) ? 'this' : ($this ? 'cleared' : 'elsewhere') };
+}
+
+# The origin's process after a /clear: undef when it is gone; `cleared` when it is this
+# process, else `elsewhere` (another live process runs the job, if it still runs).
+sub _cleared {
+    my ($pid, $lstart, $cur, $t) = @_;
+    return undef unless skills::ctx::pid_matches($pid, $lstart);
+    my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
+    return { state => ($this ? 'cleared' : 'elsewhere'), end => $t };
 }
 
 sub _same_ls { my ($x, $y) = @_; return 0 unless defined $x && defined $y; s/\s+/ /g, s/\A | \z//g for $x, $y; return $x eq $y }
