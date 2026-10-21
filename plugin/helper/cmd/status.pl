@@ -84,7 +84,7 @@ sub run {
     my $vraw = util::read_file(rc::watch() . '/version.json');
     my $v = defined $vraw ? eval { jsonc::decode($vraw) } : undef;
     if (ref $v eq 'HASH' && defined $v->{smokeDue} && $v->{smokeDue} ne '') {
-        push @out, "smokeDue: $v->{smokeDue} (Claude Code changed; run: ! $brand-store smoke)";
+        push @out, "smokeDue: $v->{smokeDue} (Claude Code changed; run: ! " . ctx::store_cmd() . " smoke)";
         push @out, '  the instruction text\'s "next window has / lacks" list was last reviewed for '
                    . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05';
     } else {

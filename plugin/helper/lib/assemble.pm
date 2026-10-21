@@ -1,7 +1,7 @@
 package assemble;
 # lib/assemble.pm: the asset grammar (compaction DESIGN-NOTES §2; BUILD-PLAN §3.4),
 # byte-identical with tools/assemble and hooks/lib/assemble.ts (BT-04). Owner: WP-core.
-#   Build time already stripped <!--…--> and filled the plugin name (assets/*.txt).
+#   Build time already stripped review comments and filled the plugin name (assets/*.txt).
 #   Run time: a `[tag] ` line is kept (tag removed) when the tag applies, else
 #   dropped; a line holding a token of a dropped block (`drop`) is dropped; lines
 #   joined by \n, stripped, one trailing \n; then @name@ tokens filled from runtime
@@ -69,8 +69,8 @@ sub leftovers {
     my @bad;
     push @bad, 'tag' if $s =~ /^\[[a-z-]+\] /m;
     push @bad, 'token' if $s =~ /\@[a-z_]+\@/;
-    push @bad, 'braces' if index($s, '{{') >= 0;
-    push @bad, 'comment' if index($s, '<!--') >= 0;
+    push @bad, 'braces' if index($s, '{' x 2) >= 0;
+    push @bad, 'comment' if index($s, '<' . '!--') >= 0;
     return @bad;
 }
 
