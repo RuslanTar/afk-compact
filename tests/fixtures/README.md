@@ -32,7 +32,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `transcripts/<case>/main.jsonl`, `subagents/agent-<id>.jsonl` | transcript rows, TF Q3 §1a shapes | AT-C-08, M3-02, M3-12, M4-03, T-01..T-25 |
 | `transcripts/scope-cases.json` | the scope-proof table: dispatch, summary, transcript dir, count seed, expected scope | AT-C-08, AT-M4-03 |
 | `watcher/T-NN/` | `input.json` (seeds, ordered hook steps), `payloads/`, `seed/`, `expected.json` | WATCH §9 T-01..T-25 |
-| `secrets/corpus.json` | secret values as fragments, file-name deny-list cases, sweep files | AT-E-04, E-06, S-10 |
+| `secrets/corpus.json` | secret values as fragments (with per-line and per-value parts), file-name deny-list cases, sweep files | AT-E-04, E-06, S-10 |
 | `tempfiles/<case>.json` | large or many-line files the runner creates at run time | AT-E-02, E-05, E-07, E-08 |
 | `repos/<case>.json` | git repo recipes the runner materialises as `$TMP/<dir>` | AT-M5-02, E-01, E-09, HT-B-02, D-12 |
 | `bin/git-slow`, `bin/queue-stub`, `bin/xcode-select-fail` | PATH stubs | AT-E-01, AT-E-10, HT-LA-01, AT-P-14 |
@@ -62,7 +62,9 @@ Groups worth knowing: 01–05, 11, 27, 29 and 38 share one normalized body (Post
 
 **Temp-file recipes.** `{v, id, env?, files: [{path, bytes, fill} | {path, lines, line}], paths_log, expect}`. `fill` is repeated up to `bytes`, and `line` takes `{n}`. `paths_log` lists the temp paths the mod would have recorded. The row form of `<watch>/<sid>/paths.jsonl` belongs to WP-core and WP-mod.
 
-**Secret corpus.** `entries[]`: `{id, rule, class (HARD | WARN | none), fragments[], note}`. Joining the fragments in order gives the value, and no fragment alone is secret-shaped. `names[]` lists file names with `withheld` or `copied`. `files[]` lists sweep files whose `content` lines hold `$SECRET{}` tokens, each with the expected action. `rule` ids are the provisional ones in `tools/fixtures-gen`. The spec-literals `secret_rules` of `assets/handoff-spec.md` own the final ids, and the check uses them once that block exists.
+**Secret corpus.** `entries[]`: `{id, rule, class (HARD | WARN | none), fragments[], part_of?, note}`. Joining the fragments in order gives the value, and no fragment alone is secret-shaped. `rule` is the spec-literals `secret_rules` id (`src/assets/handoff-spec.md`) that the joined value must hit, `-` for none. `part_of` lists entries whose value contains this one: a line or value of a larger secret, so a case can check that each piece is gone (`grep_absent`, `absent_text`), not only the whole value. A part's `class` is what it hits alone. `names[]` lists file names with `withheld` or `copied`. `files[]` lists sweep files whose `content` lines hold `$SECRET{}` tokens, each with the expected action (AT-E-04 counts them all, so a new sweep file changes its totals).
+- `pem-rsa-short-tail`: a PEM block with real newlines, three 64-character body lines and a 26-character last line. `pem-rsa-short-tail-json` is the same block with `\n` escapes: inside a JSON payload string it decodes to the real block, and inside a `.json` log it stays escaped. Parts `-l1`..`-l3` (each hits `high-entropy` alone), `-l4` (hits nothing alone) and `-end`. `payloads/PostCompact/pem-summary.json` carries the block in a summary, like `jwt-summary.json` (dispatch `1a2b3c4d`).
+- `cookie-multi`: one `Cookie:` header with three session-like pairs and `theme=dark`. Parts `-v1`..`-v3` are the three values.
 
 **Stubs.** Install `bin/git-slow` as `git` in a directory first on PATH: it sleeps `GIT_SLOW_SECONDS` (default 3), then runs the next `git`. `bin/queue-stub` answers `<subcommand>.out`/`.rc` from `QUEUE_STUB_DIR` (default `queue/prose`), logs each argv to `QUEUE_STUB_LOG` when set, and exits 64 for a subcommand without an answer. Install `bin/xcode-select-fail` as `xcode-select`: it exits 2.
 

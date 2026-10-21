@@ -250,25 +250,26 @@ def refresh_sha(b):
 # ---------------------------------------------------------------- secret rules
 
 BUILTIN_RULES = [
-    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (MOD §10, template §5)
+    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (MOD §10, template §5).
+    # Ids follow the spec-literals secret_rules, which the corpus `rule` column names.
     ("pem", "HARD", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     ("jwt", "HARD", r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
-    ("bearer", "HARD", r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"),
-    ("basic", "HARD", r"\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}"),
+    ("auth-header", "HARD", r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"),
+    ("auth-header", "HARD", r"\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}"),
     ("url-userinfo", "HARD", r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s/]+"),
     ("github-token", "HARD", r"\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,})"),
     ("slack-token", "HARD", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
-    ("aws-access-key", "HARD", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    ("aws-key-id", "HARD", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
     ("anthropic-key", "HARD", r"\bsk-ant-[A-Za-z0-9_-]{20,}"),
-    ("openai-style-key", "HARD", r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}"),
+    ("openai-key", "HARD", r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}"),
     ("google-api-key", "HARD", r"\bAIza[0-9A-Za-z_-]{35}"),
     ("stripe-key", "HARD", r"\b[sr]k_live_[0-9A-Za-z]{24,}"),
     ("gitlab-token", "HARD", r"\bglpat-[0-9A-Za-z_-]{20,}"),
     # WARN: key=value pairs, prefix-less cloud keys, high-entropy runs, cookies
     # MOD §10 writes (pass|secret|token|key)\s*[=:]\s*\S{6,}; taken literally it misses its own
     # AT-E-04 password example, so the provisional set allows the common suffixes.
-    ("kv-secret", "WARN", r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|key)\s*[=:]\s*\S{6,}"),
-    ("aws-secret-prefixless", "WARN",
+    ("key-value", "WARN", r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|key)\s*[=:]\s*\S{6,}"),
+    ("cloud-key-bare", "WARN",
      r"(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+]*[a-z])(?=[A-Za-z0-9/+]*[A-Z])(?=[A-Za-z0-9/+]*[0-9])"
      r"[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=])"),
     ("high-entropy", "WARN", "@entropy@"),
@@ -477,6 +478,7 @@ def check(b):
         for rid, cls in scan(fill(text, b), rules):
             problems.append("secret-shaped {} in {}".format(rid, rel))
     corpus = load_corpus()
+    joined_by_id = {e["id"]: "".join(e["fragments"]) for e in corpus["entries"]}
     for e in corpus["entries"]:
         joined = "".join(e["fragments"])
         hit = scan(joined, rules)
@@ -486,6 +488,14 @@ def check(b):
                 problems.append("secrets {}: control hits {}".format(e["id"], hit))
         elif e["class"] not in classes:
             problems.append("secrets {}: joined value does not hit class {} ({})".format(e["id"], e["class"], hit))
+        if e.get("rule", "-") != "-" and e["rule"] not in {r for r, _ in hit}:
+            problems.append("secrets {}: joined value does not hit its rule id {} ({} rule set hits {})".format(
+                e["id"], e["rule"], source, sorted({r for r, _ in hit})))
+        for parent in e.get("part_of", []):
+            if parent not in joined_by_id:
+                problems.append("secrets {}: part_of names no entry {}".format(e["id"], parent))
+            elif joined not in joined_by_id[parent]:
+                problems.append("secrets {}: joined value is not inside entry {}".format(e["id"], parent))
         for frag in e["fragments"]:
             if scan(frag, rules):
                 problems.append("secrets {}: a single fragment is secret-shaped".format(e["id"]))
