@@ -541,12 +541,7 @@ def bt02(phase, names):
 # Helper cases accepted as failing until a named later merge, each with the regex one line of
 # its first failing step must match (any other case failing, or a different first failure,
 # fails X-H). Remove a row when it prints KNOWN-RED-DONE.
-KNOWN_RED = {
-    # wp/text part 1 made time_re a full stamp, so `checked 14:05` no longer trips
-    # unprinted-time; WP-skills' time-format rule (RV-24, AT-TS-02) closes it (round 3).
-    "HT-PB-01": r"stdout lacks /\^LINT unprinted-time /",
-    "HT-PB-04": r"stdout lacks /\^LINT unprinted-time /",
-}
+KNOWN_RED = {}
 
 
 def x_h(argv):
