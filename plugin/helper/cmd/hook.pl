@@ -41,8 +41,14 @@ sub _watch_call {
     if (!$ok && $err !~ /not implemented/) { rc::emit('watch_error', [stage => $stage, error_class => _error_class($err)]) }
 }
 
+# Stop (8 s hook timeout): reconcile and the watcher share one budget from hook start,
+# on the real clock (STORE_TEST_NOW fixes the clock, never a budget).
+our $STOP_BUDGET_MS = 7000;
+our $WATCH_HARD_S = 3;
+
 sub run {
     my ($event) = @_;
+    my $t0 = util::clock_ms();
     my $raw = do { local $/; <STDIN> };
     return 0 unless defined $event && $EVENTS{$event};
     my $p = defined $raw && $raw =~ /\S/ ? eval { jsonc::decode($raw) } : undef;
@@ -70,8 +76,12 @@ sub run {
         eval { rc::emit('watch_error', [stage => "hook.$event", error_class => _error_class($e)]) };
     }
     if ($event eq 'Stop') {
-        my $deadline = util::now() + 6;
-        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $deadline) });
+        # Relative seconds (watch.on_stop reads a small value as "from now" on its own clock):
+        # at most the 3 s hard stop of WATCH W9, less when reconcile used the shared budget.
+        my $left = ($STOP_BUDGET_MS - (util::clock_ms() - $t0)) / 1000;
+        $left = $WATCH_HARD_S if $left > $WATCH_HARD_S;
+        $left = 0.2 if $left < 0.2;
+        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $left) });
     } else {
         _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra)) });
     }
