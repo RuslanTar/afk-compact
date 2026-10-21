@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@inline": {
+      "options": {
+        "handoff_root": "$TMP/from-inline"
+      }
+    }
+  }
+}

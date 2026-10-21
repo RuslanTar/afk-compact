@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "nonce": "4d5e6f70",
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "actor": "main",
+  "agent_id": null,
+  "trigger": "precompute",
+  "channel": "mod-hook",
+  "resume_pref": "prompt.context",
+  "midturn": true,
+  "tags": [
+    "midturn"
+  ],
+  "instructions_sha8": "9f2c01ab",
+  "instructions_bytes": 3994,
+  "cc_version": "2.1.306",
+  "load_id": "l0ad0001",
+  "pid": 43210,
+  "pid_lstart": "Wed Oct 21 09:00:00 2026",
+  "ts": "2026-10-21T14:05:00+03:00"
+}

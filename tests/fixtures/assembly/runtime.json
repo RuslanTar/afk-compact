@@ -1,0 +1,11 @@
+{
+  "nonce": "1a2b3c4d",
+  "previous_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_12-30-00_5e55a001_c1-5ca1ab.md",
+  "measured_at": "2026-10-21T14:05:00+03:00",
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "saved_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md",
+  "tokens": "612,345",
+  "queue_add": "queue add --lane lane:example-repo/LAB-123",
+  "measured_facts": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nGSD: phase 2 of 4, plan 2.3 in progress (checked 14:05)",
+  "remeasure": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none"
+}

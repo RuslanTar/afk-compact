@@ -1,0 +1,480 @@
+#!/usr/bin/python3
+"""tools/fixtures-gen: tests/fixtures -> plugin/tests/unit/_gen/*.gen.ts, and the fixture checks.
+
+Usage:
+  tools/fixtures-gen                 write plugin/tests/unit/_gen/{corpus,payloads,brand}.gen.ts
+  tools/fixtures-gen --out DIR       write the same three files under DIR/plugin/tests/unit/_gen/
+  tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
+                                     must equal a fresh render; exit 1 on any problem
+  tools/fixtures-gen --clean         remove the three generated files (nothing else)
+  tools/fixtures-gen --print-expected
+                                     print summaries/expected.tsv as the reference detector
+                                     computes it (authoring aid; never writes)
+  tools/fixtures-gen --refresh-sha   rewrite only the normalized_sha256 column of
+                                     summaries/expected.tsv for the current brand (after a rename)
+
+Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
+  parse     every *.json under tests/fixtures parses; every *.jsonl line parses
+  expected  summaries/expected.tsv equals the reference detector (MOD-SPEC §5.1) on every file
+  secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
+            secret-shaped string; every secrets/corpus.json entry hits its declared class once
+            its fragments are joined, and no single fragment hits anything
+  drift     the generated files are current
+
+Placeholders (tests/fixtures/README.md): `{{plugin}}` and `{{marketplace}}` are filled from
+brand.json; `$TMP`, `$HOME`, `$WATCH`, `$ROOT`, `$SID` stay for the case runner;
+`$SECRET{<id>}` is filled from secrets/corpus.json by the case runner only. Files that hold a
+`$SECRET{` token are left out of the generated modules (no secret corpus in U fixtures).
+
+Secret rules: the `secret_rules` and `deny_names` of the spec-literals block in
+src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the provisional
+built-in set below, written from MOD-SPEC §10 and the handoff template §5.
+"""
+import hashlib, json, math, os, re, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+FIX = os.path.join(REPO, "tests", "fixtures")
+GEN_REL = os.path.join("plugin", "tests", "unit", "_gen")
+GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts")
+SUMMARIES = os.path.join(FIX, "summaries")
+EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
+PAYLOADS = os.path.join(FIX, "payloads")
+SECRET_MARK = "$SECRET{"
+COLUMNS = ["file", "verdict", "marker_line", "sentinel_from_end", "nonce", "scope",
+           "normalized_sha256", "dispatch"]
+SKIP_DIRS = {".git", "node_modules", ".types", "__pycache__"}
+
+
+def die(msg):
+    print("fixtures-gen: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def brand():
+    with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def fill(text, b):
+    return text.replace("{{plugin}}", b["name"]).replace("{{marketplace}}", b["marketplace"])
+
+
+def read(path):
+    with open(path, encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+# ---------------------------------------------------------------- reference detector (MOD §5.1)
+
+def normalize(text):
+    """Normalized body: wrapper parts stripped from the head, cut at </summary>, \\n line ends.
+
+    Head (repeated until none applies, blank lines between parts dropped): a line starting
+    `This session is being continued`; a `<tools-used-before-summary>` block through its closing
+    tag; a `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
+    Tail: the body ends before the first line holding `</summary>` (text before the tag on that
+    line is body). Trailing blank lines are trimmed. Result: lines joined by \\n plus one final
+    \\n, or the empty string for an empty body.
+    """
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s == "":
+            i += 1
+        elif lines[i].startswith("This session is being continued"):
+            i += 1
+        elif s.startswith("<tools-used-before-summary>"):
+            while i < len(lines) and "</tools-used-before-summary>" not in lines[i]:
+                i += 1
+            i += 1
+        elif s == "Summary:":
+            i += 1
+        elif lines[i].startswith("<summary>"):
+            rest = lines[i][len("<summary>"):]
+            if rest.strip():
+                lines[i] = rest
+                break
+            i += 1
+        else:
+            break
+    body = []
+    for line in lines[i:]:
+        if "</summary>" in line:
+            head = line[:line.index("</summary>")]
+            if head.strip():
+                body.append(head)
+            break
+        body.append(line)
+    while body and not body[-1].strip():
+        body.pop()
+    return "\n".join(body) + "\n" if body else ""
+
+
+def detect(text, name, dispatch=None):
+    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256) per MOD §5.1.
+
+    dispatch: None = text alone; "none" = a PostCompact with no dispatch at all; else the
+    dispatch record (dict) of this compaction.
+    """
+    body = normalize(text)
+    lines = body.split("\n")[:-1] if body else []
+    marker_re = re.compile(r"^⟪" + re.escape(name) + r" v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$")
+    sentinel_re = re.compile(r"^⟪/" + re.escape(name) + r" n=([0-9a-f]{8})⟫$")
+    marker_line = nonce = scope = None
+    for idx, line in enumerate(lines[:5]):
+        m = marker_re.match(line)
+        if m:
+            marker_line, nonce, scope = idx + 1, m.group(1), m.group(2)
+            break
+    nonblank = [ln for ln in lines if ln.strip()]
+    sfe = s_nonce = None
+    for k in range(1, min(3, len(nonblank)) + 1):
+        m = sentinel_re.match(nonblank[-k])
+        if m:
+            sfe, s_nonce = k, m.group(1)
+            break
+    resume_heading = any(ln.startswith("## Resume here") for ln in lines)
+    verdict = None
+    if dispatch is not None:
+        if dispatch == "none":
+            if nonce:
+                verdict = "stale"
+        else:
+            sub = dispatch.get("agent_id") is not None
+            if nonce and nonce != dispatch["nonce"]:
+                verdict = "stale"
+            elif sub and (scope == "main" or (scope is None and resume_heading)):
+                verdict = "scope-leak"
+            elif not sub and scope == "sub":
+                verdict = "scope-leak"
+    if verdict is None:
+        if not nonce:
+            verdict = "unshaped"
+        elif sfe is None or s_nonce != nonce:
+            verdict = "truncated"
+        elif sfe > 1:
+            verdict = "ok-trailer"
+        else:
+            verdict = "ok"
+    sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    return verdict, marker_line, sfe, nonce, scope, sha
+
+
+def summary_files():
+    return sorted(f for f in os.listdir(SUMMARIES) if f.endswith(".txt"))
+
+
+def load_dispatch(ref):
+    if ref in ("", None):
+        return None
+    if ref == "none":
+        return "none"
+    with open(os.path.join(FIX, ref), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def read_expected():
+    rows = []
+    with open(EXPECTED, encoding="utf-8") as f:
+        header = f.readline().rstrip("\n").split("\t")
+        if header != COLUMNS:
+            die("expected.tsv header is {}, want {}".format(header, COLUMNS))
+        for line in f:
+            line = line.rstrip("\n")
+            if line:
+                parts = line.split("\t")
+                parts += [""] * (len(COLUMNS) - len(parts))
+                rows.append(dict(zip(COLUMNS, parts)))
+    return rows
+
+
+def dash(v):
+    return "-" if v is None else str(v)
+
+
+def expected_rows(b, dispatch_refs):
+    out = []
+    for f in summary_files():
+        ref = dispatch_refs.get(f, "")
+        v, ml, sfe, n, sc, sha = detect(fill(read(os.path.join(SUMMARIES, f)), b), b["name"],
+                                        load_dispatch(ref))
+        out.append({"file": f, "verdict": v, "marker_line": dash(ml), "sentinel_from_end": dash(sfe),
+                    "nonce": dash(n), "scope": dash(sc), "normalized_sha256": sha, "dispatch": ref})
+    return out
+
+
+def tsv(rows):
+    return "\t".join(COLUMNS) + "\n" + "".join("\t".join(r[c] for c in COLUMNS) + "\n" for r in rows)
+
+
+# ---------------------------------------------------------------- secret rules
+
+BUILTIN_RULES = [
+    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (MOD §10, template §5)
+    ("pem", "HARD", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
+    ("jwt", "HARD", r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    ("bearer", "HARD", r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"),
+    ("basic", "HARD", r"\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}"),
+    ("url-userinfo", "HARD", r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s/]+"),
+    ("github-token", "HARD", r"\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,})"),
+    ("slack-token", "HARD", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
+    ("aws-access-key", "HARD", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    ("anthropic-key", "HARD", r"\bsk-ant-[A-Za-z0-9_-]{20,}"),
+    ("openai-style-key", "HARD", r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}"),
+    ("google-api-key", "HARD", r"\bAIza[0-9A-Za-z_-]{35}"),
+    ("stripe-key", "HARD", r"\b[sr]k_live_[0-9A-Za-z]{24,}"),
+    ("gitlab-token", "HARD", r"\bglpat-[0-9A-Za-z_-]{20,}"),
+    # WARN: key=value pairs, prefix-less cloud keys, high-entropy runs, cookies
+    ("kv-secret", "WARN", r"(?i)(?:pass|secret|token|key)\s*[=:]\s*\S{6,}"),
+    ("aws-secret-prefixless", "WARN",
+     r"(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+]*[a-z])(?=[A-Za-z0-9/+]*[A-Z])(?=[A-Za-z0-9/+]*[0-9])"
+     r"[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=])"),
+    ("high-entropy", "WARN", "@entropy@"),
+    ("cookie", "WARN", r"(?i)\b(?:set-)?cookie:\s*[^\s=;]+=[^\s;]{8,}"),
+]
+BUILTIN_DENY = [r"^\.env(?:\..+)?$", r"^id_(?:rsa|dsa|ecdsa|ed25519)$", r"\.pem$", r"\.key$",
+                r"^\.netrc$", r"^\.npmrc$", r"^\.claude\.json$", r"^\.(?:bash|zsh|sh)_history$",
+                r"\.har$", r"\.sqlite3?$"]
+DENY_EXCEPT = r"^\.env\.(?:example|sample|template|dist)$"
+ENTROPY_RUN = re.compile(r"[A-Za-z0-9+/=_-]{32,}")
+
+
+def entropy(s):
+    counts = {}
+    for c in s:
+        counts[c] = counts.get(c, 0) + 1
+    return -sum(n / len(s) * math.log2(n / len(s)) for n in counts.values())
+
+
+def load_rules():
+    spec = os.path.join(REPO, "src", "assets", "handoff-spec.md")
+    if os.path.exists(spec):
+        m = re.search(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", read(spec), re.S | re.M)
+        if m:
+            try:
+                lit = json.loads(m.group(1))
+                rules = [(r["id"], r["class"], r["re"]) for r in lit.get("secret_rules", [])]
+                if rules:
+                    compiled = [(i, c, re.compile(x)) for i, c, x in rules]
+                    return compiled, "src/assets/handoff-spec.md"
+            except (ValueError, KeyError, re.error) as e:
+                print("fixtures-gen: spec secret_rules unusable ({}); built-in set used".format(e))
+    return [(i, c, None if x == "@entropy@" else re.compile(x)) for i, c, x in BUILTIN_RULES], "built-in"
+
+
+def scan(text, rules):
+    hits = []
+    for rid, cls, rx in rules:
+        if rx is None:
+            for m in ENTROPY_RUN.finditer(text):
+                if entropy(m.group(0)) >= 4.0:
+                    hits.append((rid, cls))
+                    break
+        elif rx.search(text):
+            hits.append((rid, cls))
+    return hits
+
+
+def deny_name(name):
+    if re.search(DENY_EXCEPT, name):
+        return False
+    return any(re.search(p, name) for p in BUILTIN_DENY)
+
+
+def load_corpus():
+    with open(os.path.join(FIX, "secrets", "corpus.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+# ---------------------------------------------------------------- generated modules
+
+HEADER = "// GEN by tools/fixtures-gen from tests/fixtures. Do not edit; edit the fixtures and run tools/fixtures-gen.\n"
+
+
+def js(v):
+    # ASCII-only output keeps markers out of the plain text of plugin/ (gates scan raw text).
+    return json.dumps(v, ensure_ascii=True, indent=1, sort_keys=False)
+
+
+def render(b):
+    out = {}
+    out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
+        {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
+         "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
+
+    dispatch_refs = {r["file"]: r["dispatch"] for r in read_expected()}
+    corpus = []
+    for r in read_expected():
+        text = read(os.path.join(SUMMARIES, r["file"]))
+        if SECRET_MARK in text:
+            continue
+        d = load_dispatch(dispatch_refs.get(r["file"], ""))
+        corpus.append({"file": r["file"], "text": fill(text, b), "verdict": r["verdict"],
+                       "marker_line": None if r["marker_line"] == "-" else int(r["marker_line"]),
+                       "sentinel_from_end": None if r["sentinel_from_end"] == "-" else int(r["sentinel_from_end"]),
+                       "nonce": None if r["nonce"] == "-" else r["nonce"],
+                       "scope": None if r["scope"] == "-" else r["scope"],
+                       "normalized_sha256": r["normalized_sha256"],
+                       "dispatch": json.loads(fill(json.dumps(d), b)) if isinstance(d, dict) else d})
+    out["corpus.gen.ts"] = (HEADER +
+        "export type CorpusEntry = {\n  file: string; text: string; verdict: string;\n"
+        "  marker_line: number | null; sentinel_from_end: number | null; nonce: string | null;\n"
+        "  scope: string | null; normalized_sha256: string;\n"
+        "  dispatch: null | 'none' | Readonly<Record<string, unknown>>\n}\n"
+        "export const CORPUS: readonly CorpusEntry[] = " + js(corpus) + "\n")
+
+    payloads, raw = {}, {}
+    for ev in sorted(os.listdir(PAYLOADS)):
+        d = os.path.join(PAYLOADS, ev)
+        if not os.path.isdir(d):
+            continue
+        for f in sorted(os.listdir(d)):
+            text = read(os.path.join(d, f))
+            if SECRET_MARK in text:
+                continue
+            key = ev + "/" + f.rsplit(".", 1)[0]
+            if f.endswith(".json"):
+                payloads[key] = json.loads(fill(text, b))
+            elif f.endswith(".invalid"):
+                raw[key] = fill(text, b)
+    out["payloads.gen.ts"] = (HEADER +
+        "export const PAYLOADS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = " + js(payloads) + "\n" +
+        "export const PAYLOADS_INVALID: Readonly<Record<string, string>> = " + js(raw) + "\n")
+    return out
+
+
+# ---------------------------------------------------------------- checks
+
+def walk(base):
+    for d, dirs, files in os.walk(base):
+        dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS)
+        for f in sorted(files):
+            yield os.path.join(d, f)
+
+
+def check(b):
+    problems = []
+    # parse
+    njson = 0
+    for p in walk(FIX):
+        rel = os.path.relpath(p, REPO)
+        if p.endswith(".json"):
+            njson += 1
+            try:
+                json.loads(read(p))
+            except ValueError as e:
+                problems.append("parse {}: {}".format(rel, e))
+        elif p.endswith(".jsonl"):
+            for no, line in enumerate(read(p).split("\n"), 1):
+                if line.strip():
+                    try:
+                        json.loads(line)
+                    except ValueError as e:
+                        problems.append("parse {}:{}: {}".format(rel, no, e))
+    print("parse: {} json files and every jsonl line checked".format(njson))
+    # expected
+    rows = read_expected()
+    want = {r["file"]: r for r in rows}
+    files = summary_files()
+    if sorted(want) != files:
+        problems.append("expected.tsv files {} != summaries {}".format(sorted(set(want) ^ set(files)), ""))
+    for r in expected_rows(b, {k: v["dispatch"] for k, v in want.items()}):
+        w = want.get(r["file"])
+        if w and w != r:
+            diff = ["{} {}!={}".format(c, w[c], r[c]) for c in COLUMNS if w[c] != r[c]]
+            problems.append("expected {}: {}".format(r["file"], ", ".join(diff)))
+    print("expected: {} corpus files against the reference detector".format(len(files)))
+    # secrets
+    rules, source = load_rules()
+    targets = list(walk(FIX)) + [os.path.join(REPO, "tools", "fixtures-gen")]
+    rendered = render(b)
+    texts = [(os.path.relpath(p, REPO), read(p)) for p in targets]
+    texts += [(os.path.join(GEN_REL, n), t) for n, t in rendered.items()]
+    for rel, text in texts:
+        for rid, cls in scan(fill(text, b), rules):
+            problems.append("secret-shaped {} in {}".format(rid, rel))
+    corpus = load_corpus()
+    for e in corpus["entries"]:
+        joined = "".join(e["fragments"])
+        hit = scan(joined, rules)
+        classes = {c for _, c in hit}
+        if e["class"] == "none":
+            if hit:
+                problems.append("secrets {}: control hits {}".format(e["id"], hit))
+        elif e["class"] not in classes:
+            problems.append("secrets {}: joined value does not hit class {} ({})".format(e["id"], e["class"], hit))
+        for frag in e["fragments"]:
+            if scan(frag, rules):
+                problems.append("secrets {}: a single fragment is secret-shaped".format(e["id"]))
+    for n in corpus["names"]:
+        if deny_name(n["name"]) != (n["expect"] == "withheld"):
+            problems.append("secrets name {}: deny-list says {}".format(n["name"], deny_name(n["name"])))
+    print("secrets: {} files scanned with the {} rule set; {} corpus entries, {} names".format(
+        len(texts), source, len(corpus["entries"]), len(corpus["names"])))
+    # drift
+    gen_dir = os.path.join(REPO, GEN_REL)
+    for name, text in sorted(rendered.items()):
+        p = os.path.join(gen_dir, name)
+        if not os.path.exists(p):
+            problems.append("drift missing " + os.path.join(GEN_REL, name))
+        elif read(p) != text:
+            problems.append("drift differs " + os.path.join(GEN_REL, name))
+    if os.path.isdir(gen_dir):
+        for f in sorted(os.listdir(gen_dir)):
+            if f.endswith(".gen.ts") and f not in rendered and f.startswith(("brand", "corpus", "payloads")):
+                problems.append("drift stale " + os.path.join(GEN_REL, f))
+    for p in problems:
+        print(p)
+    print("FIXTURES CHECK: " + ("FAIL ({} problems)".format(len(problems)) if problems else "PASS"))
+    return 1 if problems else 0
+
+
+def write(root, b):
+    d = os.path.join(root, GEN_REL)
+    os.makedirs(d, exist_ok=True)
+    for name, text in render(b).items():
+        with open(os.path.join(d, name), "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+    print("fixtures-gen: wrote {} files in {}".format(len(GEN_FILES), os.path.relpath(d, REPO) if root == REPO else d))
+
+
+def main(argv):
+    b = brand()
+    if argv == []:
+        write(REPO, b)
+        return 0
+    if argv == ["--check"]:
+        return check(b)
+    if len(argv) == 2 and argv[0] == "--out":
+        root = os.path.abspath(argv[1])
+        if root == REPO:
+            die("--out must not be the repo; run without arguments instead")
+        write(root, b)
+        return 0
+    if argv == ["--clean"]:
+        for name in GEN_FILES:
+            p = os.path.join(REPO, GEN_REL, name)
+            if os.path.exists(p):
+                os.unlink(p)
+                print("removed " + os.path.join(GEN_REL, name))
+        return 0
+    if argv == ["--print-expected"]:
+        refs = {r["file"]: r["dispatch"] for r in read_expected()} if os.path.exists(EXPECTED) else {}
+        sys.stdout.write(tsv(expected_rows(b, refs)))
+        return 0
+    if argv == ["--refresh-sha"]:
+        rows = read_expected()
+        fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
+        for r in rows:
+            r["normalized_sha256"] = fresh[r["file"]]["normalized_sha256"]
+        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
+            f.write(tsv(rows))
+        print("fixtures-gen: refreshed normalized_sha256 for {} rows".format(len(rows)))
+        return 0
+    die("unknown arguments {}\n{}".format(argv, __doc__))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
