@@ -107,15 +107,20 @@ sub record_live {
 }
 
 # 1 when the pid runs and its start time equals the recorded one.
-sub pid_matches {
+sub pid_matches { return pid_state(@_) eq 'match' ? 1 : 0 }
+
+# CR-F11: match (the pid runs with the recorded start time) | gone (no such pid, or its
+# start time differs) | unverified (the pid runs, but the recorded start time is missing
+# or `ps` could not read the current one). Only `gone` proves the recorded process ended.
+sub pid_state {
     my ($pid, $recorded) = @_;
-    return 0 unless defined $pid && $pid =~ /\A\d+\z/ && $pid > 0;
+    return 'gone' unless defined $pid && $pid =~ /\A\d+\z/ && $pid > 0;
     my $alive = kill(0, $pid) ? 1 : ($!{EPERM} ? 1 : 0);
-    return 0 unless $alive;
-    return 0 unless defined $recorded && $recorded ne '';
+    return 'gone' unless $alive;
+    return 'unverified' unless defined $recorded && $recorded ne '';
     my $now = skills::core::lstart($pid);
-    return 0 unless defined $now;
-    return _norm_ls($now) eq _norm_ls($recorded) ? 1 : 0;
+    return 'unverified' unless defined $now;
+    return _norm_ls($now) eq _norm_ls($recorded) ? 'match' : 'gone';
 }
 
 # The live record of the Claude Code process this helper runs under: a live-

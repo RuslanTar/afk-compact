@@ -88,6 +88,7 @@ sub verify {
     $r{owner} = $own;
     $r{owner_end} = $own->{end};
     if ($own->{state} eq 'unknown') { $sig{V2} = ['unmeasured', 'no owner record'] }
+    elsif ($own->{state} eq 'unverified') { $sig{V2} = ['unmeasured', 'owner pid alive; its start time could not be checked'] }
     elsif ($own->{state} eq 'ended') { $sig{V2} = ['pass', 'owner ended' . (defined $own->{end} ? ' ' . skills::util::stamp($own->{end}) : ' (time unknown)')] }
     elsif ($own->{state} eq 'this') { $sig{V2} = ['fail', 'owner is this process and session'] }
     elsif ($own->{state} eq 'cleared') { $sig{V2} = ['fail', 'owner process still live after /clear' . (defined $own->{end} ? ' ' . skills::util::stamp($own->{end}) : '')] }
@@ -241,7 +242,8 @@ sub runnable {
 }
 
 # owner_state(ctx, origin sid, record, current {sid, pid, lstart})
-#   -> {state => ended|this|cleared|elsewhere|unknown, end => epoch|undef}
+#   -> {state => ended|this|cleared|elsewhere|unverified|unknown, end => epoch|undef}
+#   unverified: the owner pid runs but its start time is missing or unreadable (CR-F11)
 #   cleared: the origin's process is alive under a later session (/clear); end = that
 #   session's start
 sub owner_state {
@@ -273,7 +275,10 @@ sub owner_state {
         # /clear: the same process under a later session. Its shells survive (DP-24 (c)).
         return _cleared($pid, $lstart, $cur, $later[0]) // { state => 'ended', end => $later[0] } if @later;
     }
-    return { state => 'ended', end => undef } unless skills::ctx::pid_matches($pid, $lstart);
+    # CR-F11: a live pid whose start time cannot be checked is not proof the owner ended.
+    my $ps = skills::ctx::pid_state($pid, $lstart);
+    return { state => 'ended', end => undef } if $ps eq 'gone';
+    return { state => 'unverified', end => undef } if $ps eq 'unverified';
     my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
     return { state => ($this && ($cur->{sid} // '') eq $origin) ? 'this' : ($this ? 'cleared' : 'elsewhere') };
 }
@@ -282,7 +287,9 @@ sub owner_state {
 # process, else `elsewhere` (another live process runs the job, if it still runs).
 sub _cleared {
     my ($pid, $lstart, $cur, $t) = @_;
-    return undef unless skills::ctx::pid_matches($pid, $lstart);
+    my $ps = skills::ctx::pid_state($pid, $lstart);
+    return undef if $ps eq 'gone';
+    return { state => 'unverified', end => $t } if $ps eq 'unverified';
     my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
     return { state => ($this ? 'cleared' : 'elsewhere'), end => $t };
 }
