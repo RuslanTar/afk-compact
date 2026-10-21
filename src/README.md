@@ -210,7 +210,7 @@ Limits and tips:
 - The command only reads. In auto mode it ran without a prompt (Claude Code 2.1.306). In default mode the allow rule `Bash({{plugin}}-store wait *)` silences the usual form, the bare name. When the helper is called by its full path (`<plugin folder>/bin/{{plugin}}-store wait …`), that rule does not match: add `Bash(<plugin folder>/bin/{{plugin}}-store wait *)` with the absolute folder too, the rule the prompt offers as "don't ask again".
 - Monitor is not available on Amazon Bedrock, Google Cloud Agent Platform or Microsoft Foundry, nor when `DISABLE_TELEMETRY` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set. Each Monitor watch ends after 5 minutes by default and 30 at most.
 - With `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` there is no `run_in_background` and no notification. Every wait then follows the subagent rule above.
-- In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. A `--max` of 1800 fits.
+- In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. `wait` prints its pending line only after `--max` has passed, so keep `--max` a little under the limit, for example `--max 1740`. With exactly 1800 the limit can end the wait before it prints exit code 10.
 - Cache: on a subscription within plan usage, the main conversation's prompt cache lives one hour. With an API key or a cloud provider it lives five minutes, so a long wait costs one cache rewrite when the session wakes. Set `promptCacheTtl` to `1h` in your Claude Code settings to avoid that (Claude Code 2.1.242 or newer). Polling to keep the cache warm costs more than it saves for most waits.
 
 ## Lost background jobs
