@@ -78,7 +78,9 @@ sub verify {
             $sig{V1} = ['unmeasured', 'origin transcript not found'];
         } else {
             my $t = transcript_has($tp, $rec->{command_sha256}, $a{task});
+            # CR-F12: a miss in a bounded scan of a longer transcript is not measured.
             $sig{V1} = !defined $t ? ['unmeasured', 'transcript unreadable']
+                     : $t eq 'partial' ? ['unmeasured', 'no matching Bash call in the scanned tail of the origin transcript']
                      : $t ? ['pass', 'record, sha and transcript agree'] : ['fail', 'no matching Bash call in the origin transcript'];
         }
     }
@@ -330,14 +332,20 @@ sub transcript_of {
 }
 
 # 1 when the transcript holds a Bash tool_use whose command has this sha and a tool result
-# for it naming this backgroundTaskId; 0 when not; undef when unreadable. Content is read
-# in memory and never printed.
+# for it naming this backgroundTaskId; 0 when not; 'partial' when not found in a
+# transcript longer than the scan window (only its last $TRANSCRIPT_MAX bytes are read;
+# STORE_TEST_TRANSCRIPT_MAX sets the window in test mode); undef when unreadable.
+# Content is read in memory and never printed.
 sub transcript_has {
     my ($path, $sha, $task) = @_;
     return 0 unless defined $sha && defined $task;
     my $size = -s $path;
     open(my $fh, '<:raw', $path) or return undef;
-    seek($fh, $size - $TRANSCRIPT_MAX, 0) if defined $size && $size > $TRANSCRIPT_MAX;
+    my $max = $TRANSCRIPT_MAX;
+    $max = 0 + $ENV{STORE_TEST_TRANSCRIPT_MAX}
+        if skills::util::test_mode() && ($ENV{STORE_TEST_TRANSCRIPT_MAX} // '') =~ /\A[1-9][0-9]{0,9}\z/;
+    my $partial = defined $size && $size > $max;
+    seek($fh, $size - $max, 0) if $partial;
     my (%use, $hit);
     while (my $l = <$fh>) {
         if (index($l, '"tool_use"') >= 0 && index($l, '"Bash"') >= 0) {
@@ -359,7 +367,7 @@ sub transcript_has {
         last if $hit;
     }
     close $fh;
-    return $hit ? 1 : 0;
+    return $hit ? 1 : $partial ? 'partial' : 0;
 }
 
 sub _content {
