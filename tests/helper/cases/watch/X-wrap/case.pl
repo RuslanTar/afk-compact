@@ -19,12 +19,12 @@ my $swap = sub {
         { call => 'code', code => sub {
               require watch::hooks; require watch::rules; require watch::status;
               $swap->('watch::hooks::post_compact', sub { warn "CANARY-TEXT-warn\n"; die "CANARY-TEXT-boom\n" });
-              $swap->('watch::hooks::stop_failure', sub { die "disk-full\n" });
+              $swap->('watch::hooks::pre_compact', sub { die "disk-full\n" });
               $swap->('watch::rules::evaluate', sub { die { CANARY => 'CANARY-TEXT-ref' } });
               $swap->('watch::status::lines', sub { die "CANARY-TEXT-status\n" });
           } },
         { call => 'hook', event => 'PostCompact', at => 11, payload => { trigger => 'auto', compact_summary => 'CANARY-TEXT-s' } },
-        { call => 'hook', event => 'StopFailure', at => 12, payload => { error => 'overloaded' } },
+        { call => 'hook', event => 'PreCompact', at => 12, payload => { trigger => 'manual' } },
         { call => 'stop', at => 30 },
         { call => 'status', at => 31 },
         { call => 'code', code => sub {
@@ -37,7 +37,7 @@ my $swap = sub {
     expect => sub {
         my ($E) = @_;
         my @e = map { "$_->{stage}/$_->{error_class}" } $E->rows('classic', 'watch_error');
-        $E->is(join(',', @e), 'hook-PostCompact/internal,hook-StopFailure/disk-full,rules/internal',
+        $E->is(join(',', @e), 'hook-PostCompact/internal,hook-PreCompact/disk-full,rules/internal',
                'one watch_error row per failed entry, classes only');
         my ($lines) = $E->outputs;
         $E->is(ref $lines eq 'ARRAY' ? join('|', @$lines) : undef, 'Watcher: status unavailable', 'status fallback line');

@@ -15,11 +15,12 @@ use warnings;
 use watch::ctx;
 use watch::io;
 
+# StopFailure and PermissionDenied have one writer, core's `hook` (ROOT-RULINGS
+# F2-5): core writes `stop_failure` and `permission_denied` (with its computed
+# classes) and the watcher only reads them, so on_hook does nothing for them.
 my %HOOKS = (
-    PreCompact       => 'pre_compact',
-    PostCompact      => 'post_compact',
-    StopFailure      => 'stop_failure',
-    PermissionDenied => 'permission_denied',
+    PreCompact  => 'pre_compact',
+    PostCompact => 'post_compact',
 );
 
 sub _sid_ok { return defined $_[0] && !ref $_[0] && $_[0] =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ }

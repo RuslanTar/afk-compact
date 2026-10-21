@@ -1,7 +1,9 @@
 package watch::hooks;
-# lib/watch/hooks.pm: rows written at hook time (WATCHER-SPEC W5, W6, W10, W11;
-# §6.3 field lists). Owner: WP-watch. Nothing here prints: PreCompact stdout
-# would become summarizer instructions (WATCH §0).
+# lib/watch/hooks.pm: rows written at hook time (WATCHER-SPEC W5, W6; §6.3
+# field lists). Owner: WP-watch. Nothing here prints: PreCompact stdout would
+# become summarizer instructions (WATCH §0). The W10 `stop_failure` and W11
+# `permission_denied` rows have one writer, core's `hook` (ROOT-RULINGS F2-5);
+# the watcher reads them and writes neither.
 use strict;
 use warnings;
 use watch::ctx;
@@ -263,66 +265,6 @@ sub _looks_main {
     my @main = watch::spec::list($spec, 'sections_main');
     my $has = sub { my $h = shift; return grep { length $_ && $body =~ /^\Q$_\E/m } @$h };
     return ($has->(\@sub) && !$has->(\@main)) ? 0 : 1;
-}
-
-# W10: `stop_failure {error_class}`; the class is the payload's error enum.
-sub stop_failure {
-    my ($ctx) = @_;
-    my $e = $ctx->{payload}{error};
-    my $class = defined $e && !ref $e && $e =~ /\A[a-z_]{1,40}\z/ ? $e : 'other';
-    watch::ctx::log_row($ctx, 'stop_failure', { error_class => $class },
-                        actor => (defined $ctx->{payload}{agent_id} ? 'unknown' : 'main'));
-}
-
-# W11: `permission_denied {tool_name, reason_class, guard_class, turn_kind, caused_by}`.
-# Never tool_input, never the reason text.
-sub permission_denied {
-    my ($ctx) = @_;
-    my $p = $ctx->{payload};
-    my $tool = defined $p->{tool_name} && !ref $p->{tool_name} && $p->{tool_name} =~ /\A[A-Za-z0-9_.:-]{1,80}\z/
-             ? $p->{tool_name} : 'other';
-    my ($kind, $by) = ('other', 'session');
-    unless (defined $p->{agent_id}) {
-        my $rows = watch::rows::tail_rows($p->{transcript_path}, 512 << 10, $ctx->{brand}, []);
-        ($kind, $by) = turn_kind($rows);
-    }
-    watch::ctx::log_row($ctx, 'permission_denied', {
-        tool_name    => $tool,
-        reason_class => 'other',
-        guard_class  => 'other',
-        turn_kind    => $kind,
-        caused_by    => $by,
-    }, actor => (defined $p->{agent_id} ? 'unknown' : 'main'));
-}
-
-sub turn_kind {
-    my ($rows) = @_;
-    my (@starts, $last_b, $last_inject, $last_heal);
-    my $calls = 0;
-    for my $i (0 .. $#$rows) {
-        my $k = $rows->[$i]{kind} // '';
-        push @starts, $i if $k eq 'prompt' || $k eq 'continue';
-        $last_b = $i if $k eq 'boundary';
-        if ($k eq 'continue' || $k eq 'nudge' || ($k eq 'hook_context' && ($rows->[$i]{hook_event} // '') eq 'SessionStart')) {
-            $last_inject = $calls;
-        }
-        if ($k eq 'assistant') {
-            for my $c (@{ $rows->[$i]{calls} || [] }) {
-                $calls++;
-                $last_heal = $calls if $c->{heal};
-            }
-        }
-    }
-    my $t = @starts ? $starts[-1] : -1;
-    my $t2 = @starts > 1 ? $starts[-2] : -1;
-    my $kind = 'other';
-    if (defined $last_b && $last_b > $t2) { $kind = 'post-compaction' }
-    elsif (grep { ($rows->[$_]{kind} // '') eq 'nudge' } ($t + 1 .. $#$rows)) { $kind = 'nudge' }
-    elsif ($t >= 0 && $rows->[$t]{resume_invocation}) { $kind = 'resume' }
-    my $by = 'session';
-    $by = 'plugin' if defined $last_inject && $calls - $last_inject < 10;
-    $by = 'plugin' if defined $last_heal && $calls - $last_heal < 10;
-    return ($kind, $by);
 }
 
 1;
