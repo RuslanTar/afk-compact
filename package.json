@@ -1,0 +1,9 @@
+{
+  "name": "plugin-dev-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only workspace for type-checking the plugin; never shipped (the plugin is plugin/).",
+  "devDependencies": {
+    "typescript": "5.6.3"
+  }
+}

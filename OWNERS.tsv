@@ -1,0 +1,53 @@
+# Path glob -> work package (BUILD-PLAN §2). Read by tools/owners-check.
+# First matching row wins, so specific rows sit above broader ones.
+# Globs: * = any characters except /, ** = any characters, {a,b} = either.
+# GEN paths (written only by tools/build, tools/assemble, tools/fixtures-gen,
+# tools/canary-baseline, tools/helper-replies-gen) belong to build: the
+# integrator commits them on main, never a WP branch.
+#
+# glob	wp
+README.md	build
+.claude-plugin/marketplace.json	build
+plugin/.claude-plugin/plugin.json	build
+plugin/README.md	build
+plugin/hooks/hooks.json	build
+plugin/hooks/lib/*.gen.ts	build
+plugin/assets/**	build
+plugin/skills/**	build
+plugin/bin/**	build
+plugin/tests/unit/_gen/**	build
+tests/fixtures/assembly/expected/**	build
+tools/build.state	build
+brand.json	build
+OWNERS.tsv	build
+.gitignore	build
+package.json	build
+package-lock.json	build
+tsconfig.json	build
+src/plugin.json	build
+src/marketplace.json	build
+src/hooks.json	build
+tools/{build,assemble,gates,owners-check,typecheck,check}	build
+src/assets/**	text
+src/skills/**	text
+tests/fixtures/**	fix
+tools/fixtures-gen	fix
+src/launcher.tmpl	core
+plugin/helper/main.*	core
+plugin/helper/lib/watch.*	watch
+plugin/helper/lib/watch/**	watch
+plugin/helper/lib/skills/**	skills
+plugin/helper/lib/**	core
+plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke}.*	core
+plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt}.*	skills
+plugin/helper/cmd/watch.*	watch
+tests/helper/run.*	core
+tests/helper/cases/core/**	core
+tests/helper/cases/skills/**	skills
+tests/helper/cases/watch/**	watch
+tools/canary-baseline	core
+tools/helper-replies-gen	core
+plugin/hooks/register.ts	mod
+plugin/hooks/lib/*.ts	mod
+plugin/tests/unit/*.test.ts	mod
+src/README.md	docs
