@@ -45,6 +45,7 @@ our %SOURCES = map { $_ => 1 } qw(none result-text layout);
 our $ID_RE = qr/\A[A-Za-z0-9._:-]{1,128}\z/;
 our %BACKGROUNDED = map { $_ => 1 } qw(flag user timeout other);
 our $RESULT_TEXT_MAX = 4000;
+our $LAUNCHED_MAX = 64;
 
 sub jobs_path    { my ($sid_dir) = @_; return "$sid_dir/jobs.jsonl" }
 sub pending_path { my ($sid_dir) = @_; return "$sid_dir/jobs-pending.jsonl" }
@@ -179,10 +180,14 @@ sub complete {
     return (undef, 'usage: command missing') unless defined $cmd && !ref $cmd && $cmd ne '';
     my $sha = sha::hex256($cmd);
     my $hits = secrets::scan($cmd);
-    my @hard = map { $_->{rule} } grep { $_->{class} eq 'HARD' } @$hits;
+    my %seen;
+    my @hard = grep { !$seen{$_}++ } map { $_->{rule} } grep { $_->{class} eq 'HARD' } @$hits;
     my $cwd = (defined $in->{cwd} && !ref $in->{cwd} && $in->{cwd} =~ m{^/}) ? $in->{cwd} : undef;
     my $bg = (defined $in->{backgrounded} && $BACKGROUNDED{ $in->{backgrounded} }) ? $in->{backgrounded} : 'other';
-    my $launched = (defined $in->{launched_at} && defined util::parse_iso($in->{launched_at})) ? $in->{launched_at} : util::iso(util::now());
+    # launched_at is kept only when it is a short ISO time (CR-F4: an unbounded fraction
+    # would make the row too large); else the time of this write.
+    my $launched = (defined $in->{launched_at} && !ref $in->{launched_at} && length($in->{launched_at}) <= $LAUNCHED_MAX
+                    && defined util::parse_iso($in->{launched_at})) ? $in->{launched_at} : util::iso(util::now());
     my ($opath, $osrc, $cand, $ocheck) = output_path({ %$in, cwd => $cwd, session_cwd => $owner->{cwd} }, $sid);
     my $d = rc::sid_dir();
     my $pend = defined $d ? _match_pending($d, $sha, $claimed) : undef;
@@ -209,11 +214,13 @@ sub complete {
     my $row = @hard ? $build->(undef, \@hard) : $build->($cmd, undef);
     # A command too long for one row is withheld like a secret: the job never relaunches by
     # itself. A row still too large (long cwd and paths, CR-F4) drops the candidate paths,
-    # then the cwd and the output path, so the row always fits one append.
+    # then the cwd and the output path. Every field left is bounded, so the level-2 row
+    # fits; should it not, the line is a usage error and the batch writes nothing.
     for my $level (0 .. 2) {
         last if $fits->($row);
         $row = $build->(undef, ['row-too-large'], $level);
     }
+    return (undef, 'usage: job row over 4 KB without its command, paths and cwd') unless $fits->($row);
     return ($row);
 }
 
