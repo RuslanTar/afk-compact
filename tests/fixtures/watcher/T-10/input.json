@@ -8,12 +8,24 @@
   "transcripts": "transcripts/T-10",
   "seed": [
     {
+      "copy": "watcher/T-10/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "to": "$WATCH/$SID.jsonl"
+    },
+    {
       "copy": "watcher/T-10/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/10a0b0c0.json",
       "to": "$WATCH/$SID/dispatch/10a0b0c0.json"
     },
     {
-      "copy": "watcher/T-10/seed/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
-      "to": "$WATCH/$SID.jsonl"
+      "copy": "watcher/T-10/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/10a0b0c1.json",
+      "to": "$WATCH/$SID/dispatch/10a0b0c1.json"
+    },
+    {
+      "copy": "watcher/T-10/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/dispatch/10a0b0c2.json",
+      "to": "$WATCH/$SID/dispatch/10a0b0c2.json"
+    },
+    {
+      "copy": "watcher/T-10/seed/5e55a001-0c0f-4f1e-9a00-00000000a001/checkpoint/10a0b0c2.json",
+      "to": "$WATCH/$SID/checkpoint/10a0b0c2.json"
     }
   ],
   "steps": [
@@ -30,12 +42,36 @@
       }
     },
     {
-      "now": "2026-10-21T14:06:00+03:00",
+      "now": "2026-10-21T14:10:06+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "watcher/T-10/payloads/02-PostCompact.json",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:15:06+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "watcher/T-10/payloads/03-PostCompact.json",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:16:00+03:00",
       "argv": [
         "hook",
         "Stop"
       ],
-      "stdin": "watcher/T-10/payloads/02-Stop.json",
+      "stdin": "watcher/T-10/payloads/04-Stop.json",
       "expect": {
         "exit": 0,
         "stdout": ""

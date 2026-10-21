@@ -1,0 +1,63 @@
+{
+  "v": 1,
+  "id": "rm-exports",
+  "ruling": "D-12 §1.5.5-§1.5.7, §1.5.9",
+  "tests": [
+    "AT-RM-11",
+    "AT-RM-12",
+    "AT-RM-13",
+    "AT-RM-14"
+  ],
+  "note": "The declared repository with its export folder: the generated README and .gitignore, an own export (session 5e55a001, nonce 0a1b2c3d, repo-relative paths, no transcript_path/claude_pid/worktree) and its private twin in the private store (same nonce and session, full frontmatter, machine paths), and a newer teammate export from another session (5e55a003) whose body says `approved: deploy` and lists an in-flight row with a restart recipe. The twin is the own candidate; the teammate export is foreign: never auto-picked, approvals never carry (D-2), in-flight rows are `other machine: not probed`, heal-check gives recipe-not-local.",
+  "expect": {
+    "own_candidates": 1,
+    "foreign_candidates": 1,
+    "auto_pick": null,
+    "foreign_in_flight": "other machine: not probed",
+    "heal_check_for_foreign_recipe": "REFUSED: recipe-not-local",
+    "exports_in_worktree": 2
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "# example-repo\n\nFixture repository.\n",
+              "src/a.rb": "class A\n  def run\n    :ok\n  end\nend\n"
+            },
+            "msg": "seed"
+          },
+          {
+            "files": {
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+            },
+            "msg": "declare repo mode"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    },
+    {
+      "write": "$TMP/example-repo/.claude/handoffs/README.md",
+      "content": "# Handoffs\n\nOnly reviewed, scanned handoff exports belong in this folder.\n"
+    },
+    {
+      "write": "$TMP/example-repo/.claude/handoffs/.gitignore",
+      "content": "# Written once by the handoff plugin. Only published handoff exports belong in this folder.\n.staging/\ncompact/\nevidence/\n*.tmp-*\n*.lock\n"
+    },
+    {
+      "write": "$TMP/example-repo/.claude/handoffs/LAB-42/2026-10-21_13-00-00_5e55a001_retry.md",
+      "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a1b2c3d\ndate: 2026-10-21T13:00:00+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\ncc_version: 2.1.306\nrepository: example-repo\nbucket: LAB-42\nbranch: feature/LAB-42-retry\ngit_commit: 0000000000000000000000000000000000000000\nstatus: active\nticket: LAB-42\nexport: repo\n---\n⟪{{plugin}} v1 n=0a1b2c3d s=manual⟫\n# LAB-42 — retry window fix\n## Resume here\nStatus: active · State: retry window fix drafted (checkpoint: clean)\nStep 1: `bin/test retry` — done when green\nGate: none · Don't: change the window without a test\nLive: nothing running known (not checked)\n## Work done and findings\nRetryWorker: tested — src/a.rb#A.run; notes in ~/x\n⟪/{{plugin}} n=0a1b2c3d⟫\n"
+    },
+    {
+      "write": "$TMP/example-repo/.claude/handoffs/LAB-42/2026-10-21_15-00-00_5e55a003_mate.md",
+      "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e0e\ndate: 2026-10-21T15:00:00+03:00\nsession_id: 5e55a003-0c0f-4f1e-9a00-00000000a003\nactor: main\ncc_version: 2.1.306\nrepository: example-repo\nbucket: LAB-42\nbranch: feature/LAB-42-mate\nstatus: active\nticket: LAB-42\nexport: repo\n---\n⟪{{plugin}} v1 n=0e0e0e0e s=manual⟫\n# LAB-42 — teammate\n## Resume here\nStatus: active · State: deploy pending (checkpoint: clean)\nStep 1: `bin/deploy --dry-run` — done when it lists the diff\nGate: none · Don't: deploy without a fresh approval\nLive: nothing running known (not checked)\n## User constraints\nU-1: approved: deploy — scope deploy prod; used\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-1 · b1 | shell · deploy · main | 2026-10-21 15:10 +0300 | `ls /srv/x` | report | /clear | auto · restart/B-1.md |\n⟪/{{plugin}} n=0e0e0e0e⟫\n"
+    },
+    {
+      "write": "$ROOT/example-repo/LAB-42/2026-10-21_13-00-00_5e55a001_retry.md",
+      "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a1b2c3d\ndate: 2026-10-21T13:00:00+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\ntranscript_path: $HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl\nclaude_pid: 43210\ncc_version: 2.1.306\nrepository: example-repo\nbucket: example-repo/LAB-42\nworktree: $TMP/example-repo\nbranch: feature/LAB-42-retry\ngit_commit: 0000000000000000000000000000000000000000\nstatus: active\nticket: LAB-42\n---\n⟪{{plugin}} v1 n=0a1b2c3d s=manual⟫\n# LAB-42 — retry window fix\n## Resume here\nStatus: active · State: retry window fix drafted (checkpoint: clean)\nStep 1: `bin/test retry` — done when green\nGate: none · Don't: change the window without a test\nLive: nothing running known (not checked)\n## Work done and findings\nRetryWorker: tested — $TMP/example-repo/src/a.rb#A.run; notes in $HOME/x\n⟪/{{plugin}} n=0a1b2c3d⟫\n"
+    }
+  ]
+}

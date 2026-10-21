@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "repo_roots": "$TMP/other-repo ; $TMP/example-repo ;"
+      }
+    }
+  }
+}

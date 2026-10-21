@@ -1,0 +1,74 @@
+{
+  "v": 1,
+  "id": "rm-worktrees",
+  "ruling": "D-12 §1.5.1, §1.5.4, §1.5.7",
+  "tests": [
+    "AT-RM-06",
+    "AT-RM-11",
+    "AT-RM-12",
+    "AT-RM-17"
+  ],
+  "note": "The declared main checkout plus two worktrees: example-repo-wt on branch wt/LAB-42-b (same declaration, so repo mode applies through main_checkout) and example-repo-old, a detached checkout of the first commit that has no declaration (a branch without one runs in private mode). Accept the main checkout only (settings/repo-roots-main.json); the worktree then matches through main_checkout.",
+  "expect": {
+    "worktrees": [
+      "$TMP/example-repo",
+      "$TMP/example-repo-wt",
+      "$TMP/example-repo-old"
+    ],
+    "mode_in_wt_with_main_accepted": "repo (accepted)",
+    "mode_in_old": "private (not-declared)",
+    "git_subcommands_the_helper_may_run": [
+      "rev-parse",
+      "symbolic-ref",
+      "check-ignore",
+      "worktree list",
+      "diff",
+      "status"
+    ]
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "# example-repo\n\nFixture repository.\n",
+              "src/a.rb": "class A\n  def run\n    :ok\n  end\nend\n"
+            },
+            "msg": "seed"
+          },
+          {
+            "files": {
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+            },
+            "msg": "declare repo mode"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    },
+    {
+      "git": [
+        "worktree",
+        "add",
+        "-q",
+        "-b",
+        "wt/LAB-42-b",
+        "$TMP/example-repo-wt"
+      ],
+      "cwd": "$TMP/example-repo"
+    },
+    {
+      "git": [
+        "worktree",
+        "add",
+        "-q",
+        "--detach",
+        "$TMP/example-repo-old",
+        "HEAD~1"
+      ],
+      "cwd": "$TMP/example-repo"
+    }
+  ]
+}

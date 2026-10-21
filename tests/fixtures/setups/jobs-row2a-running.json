@@ -1,0 +1,200 @@
+{
+  "v": 1,
+  "id": "jobs-row2a-running",
+  "ruling": "Dev-1 D4 row 2a",
+  "tests": [
+    "AT-J-04"
+  ],
+  "note": "The helper runs under the owner process in S1. The newest sidecar slot (by seq) lists b2a running, and the output was written 40 s ago.",
+  "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json); every time below is on that day",
+  "invoke": {
+    "argv": [
+      "heal-check",
+      "--origin",
+      "5e55a001-0c0f-4f1e-9a00-00000000a001",
+      "--item",
+      "b2a"
+    ],
+    "cwd": "$TMP/example-repo",
+    "env": {
+      "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+    },
+    "current_session": "5e55a001-0c0f-4f1e-9a00-00000000a001"
+  },
+  "expect": {
+    "status": "RUNNING",
+    "result": "REFUSED",
+    "relaunch": false,
+    "note": "leave it; attach or wait per Dev-7"
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-7-retry",
+        "commits": [
+          {
+            "files": {
+              "app/retry.rb": "x = 1\n",
+              "lib/retry.rb": "y = 2\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    },
+    {
+      "mkdir": "$TMP/example-repo/app"
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1760000000.live-5e55a001.json",
+      "json": {
+        "pid": 1,
+        "pid_lstart": "$LSTART1",
+        "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/jobs.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T13:00:01.000+03:00",
+          "ev": "job",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "helper",
+          "kind": "job",
+          "task_id": "b2a",
+          "launched_at": "2026-10-21T13:00:00+03:00",
+          "owner": {
+            "pid": 1,
+            "lstart": "$LSTART1"
+          },
+          "cwd": "$TMP/example-repo",
+          "command": "ls -la app; echo \"__exit $?\"",
+          "command_sha256": "849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5",
+          "command_withheld": null,
+          "is_read_only": true,
+          "sandbox_disabled": false,
+          "backgrounded": "flag",
+          "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b2a.output",
+          "output_path_source": "layout",
+          "relaunch_of": null,
+          "epoch": 1
+        }
+      ]
+    },
+    {
+      "write": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "jsonl": [
+        {
+          "parentUuid": null,
+          "isSidechain": false,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.306",
+          "gitBranch": "feature/LAB-7-retry",
+          "type": "assistant",
+          "uuid": "a0000000-0000-4000-8000-000000000038",
+          "timestamp": "2026-10-21T10:00:00.000Z",
+          "message": {
+            "id": "msg_toolu_b2a",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-fixture-model",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_b2a",
+                "name": "Bash",
+                "input": {
+                  "command": "ls -la app; echo \"__exit $?\"",
+                  "description": "background job",
+                  "run_in_background": true
+                }
+              }
+            ],
+            "stop_reason": "tool_use"
+          }
+        },
+        {
+          "parentUuid": "a0000000-0000-4000-8000-000000000038",
+          "isSidechain": false,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.306",
+          "gitBranch": "feature/LAB-7-retry",
+          "type": "user",
+          "uuid": "b0000000-0000-4000-8000-000000000038",
+          "timestamp": "2026-10-21T10:00:01.000Z",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_b2a",
+                "content": "Command running in background with ID: b2a",
+                "is_error": false
+              }
+            ]
+          },
+          "toolUseResult": {
+            "stdout": "",
+            "stderr": "",
+            "interrupted": false,
+            "isImage": false,
+            "backgroundTaskId": "b2a"
+          }
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot-6.json",
+      "json": {
+        "v": 1,
+        "ts": "2026-10-21T13:29:00.000+03:00",
+        "seq": 7,
+        "set_hash": "abcd0007",
+        "source": "Stop",
+        "tasks": [
+          {
+            "id": "b2a",
+            "type": "shell",
+            "status": "running",
+            "output_path": null,
+            "output_path_source": null,
+            "command_sha256": null,
+            "command_chars": null
+          }
+        ],
+        "crons": []
+      }
+    },
+    {
+      "touch": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot-6.json",
+      "at": "2026-10-21T13:29:00+03:00"
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot.lock",
+      "json": {
+        "n": 7,
+        "last": "abcd0007"
+      }
+    },
+    {
+      "write": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b2a.output",
+      "content": "step 1\nstep 2\n"
+    },
+    {
+      "touch": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b2a.output",
+      "at": "2026-10-21T14:04:32+03:00"
+    }
+  ]
+}

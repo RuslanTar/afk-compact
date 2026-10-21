@@ -1,0 +1,240 @@
+{
+  "v": 1,
+  "id": "jobs-row5-lost-high",
+  "ruling": "Dev-1 D4 row 5",
+  "tests": [
+    "AT-J-04",
+    "AT-J-06",
+    "AT-J-09"
+  ],
+  "note": "Record, sha and transcript agree (V1); S1 ended (V2); the newest slot lists b5 running (V3); the output has no marker and was last written at 13:10:00, before the end (V4, V5); no recipe, class none (V6); cwd and command exist (V7). Relaunch is allowed: `run:` is the recorded command byte for byte.",
+  "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json); every time below is on that day",
+  "invoke": {
+    "argv": [
+      "heal-check",
+      "--origin",
+      "5e55a001-0c0f-4f1e-9a00-00000000a001",
+      "--item",
+      "b5"
+    ],
+    "cwd": "$TMP/example-repo",
+    "env": {
+      "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+    },
+    "current_session": "5e55a002-0c0f-4f1e-9a00-00000000a002"
+  },
+  "expect": {
+    "status": "LOST",
+    "confidence": "high",
+    "effects": "none",
+    "result": "ok",
+    "relaunch": true,
+    "signals": {
+      "V1": "pass",
+      "V2": "pass",
+      "V3": "pass",
+      "V4": "pass",
+      "V5": "pass",
+      "V6": "pass",
+      "V7": "pass"
+    },
+    "run_line": "ls -la app; echo \"__exit $?\""
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-7-retry",
+        "commits": [
+          {
+            "files": {
+              "app/retry.rb": "x = 1\n",
+              "lib/retry.rb": "y = 2\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    },
+    {
+      "mkdir": "$TMP/example-repo/app"
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1760000000.live-5e55a001.json",
+      "json": {
+        "pid": 1,
+        "pid_lstart": "$LSTART1",
+        "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1760000000.ended-5e55a001.json",
+      "json": {
+        "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+        "reason": "clear",
+        "ts": "2026-10-21T13:30:00+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1760000000.live-5e55a002.json",
+      "json": {
+        "pid": 1,
+        "pid_lstart": "$LSTART1",
+        "session_id": "5e55a002-0c0f-4f1e-9a00-00000000a002",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "clear",
+        "ts": "2026-10-21T13:30:01+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/5e55a002-0c0f-4f1e-9a00-00000000a002.lineage.json",
+      "json": {
+        "previous_session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+        "lineage_reason": "clear"
+      }
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/jobs.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T13:00:01.000+03:00",
+          "ev": "job",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "helper",
+          "kind": "job",
+          "task_id": "b5",
+          "launched_at": "2026-10-21T13:00:00+03:00",
+          "owner": {
+            "pid": 1,
+            "lstart": "$LSTART1"
+          },
+          "cwd": "$TMP/example-repo",
+          "command": "ls -la app; echo \"__exit $?\"",
+          "command_sha256": "849ba01063dcf3ca3ed2fffa74973ae70295276f7fb8ce2e759dfac4461a88e5",
+          "command_withheld": null,
+          "is_read_only": true,
+          "sandbox_disabled": false,
+          "backgrounded": "flag",
+          "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b5.output",
+          "output_path_source": "layout",
+          "relaunch_of": null,
+          "epoch": 1
+        }
+      ]
+    },
+    {
+      "write": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "jsonl": [
+        {
+          "parentUuid": null,
+          "isSidechain": false,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.306",
+          "gitBranch": "feature/LAB-7-retry",
+          "type": "assistant",
+          "uuid": "a0000000-0000-4000-8000-00000000000b",
+          "timestamp": "2026-10-21T10:00:00.000Z",
+          "message": {
+            "id": "msg_toolu_b5",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-fixture-model",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_b5",
+                "name": "Bash",
+                "input": {
+                  "command": "ls -la app; echo \"__exit $?\"",
+                  "description": "background job",
+                  "run_in_background": true
+                }
+              }
+            ],
+            "stop_reason": "tool_use"
+          }
+        },
+        {
+          "parentUuid": "a0000000-0000-4000-8000-00000000000b",
+          "isSidechain": false,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.306",
+          "gitBranch": "feature/LAB-7-retry",
+          "type": "user",
+          "uuid": "b0000000-0000-4000-8000-00000000000b",
+          "timestamp": "2026-10-21T10:00:01.000Z",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_b5",
+                "content": "Command running in background with ID: b5",
+                "is_error": false
+              }
+            ]
+          },
+          "toolUseResult": {
+            "stdout": "",
+            "stderr": "",
+            "interrupted": false,
+            "isImage": false,
+            "backgroundTaskId": "b5"
+          }
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot-6.json",
+      "json": {
+        "v": 1,
+        "ts": "2026-10-21T13:29:00.000+03:00",
+        "seq": 7,
+        "set_hash": "abcd0007",
+        "source": "Stop",
+        "tasks": [
+          {
+            "id": "b5",
+            "type": "shell",
+            "status": "running",
+            "output_path": null,
+            "output_path_source": null,
+            "command_sha256": null,
+            "command_chars": null
+          }
+        ],
+        "crons": []
+      }
+    },
+    {
+      "touch": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot-6.json",
+      "at": "2026-10-21T13:29:00+03:00"
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot.lock",
+      "json": {
+        "n": 7,
+        "last": "abcd0007"
+      }
+    },
+    {
+      "write": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b5.output",
+      "content": "listing\n"
+    },
+    {
+      "touch": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b5.output",
+      "at": "2026-10-21T13:10:00+03:00"
+    }
+  ]
+}

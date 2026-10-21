@@ -30,7 +30,17 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
-  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8)
+  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8; optional
+            `commands`); a queue/<case>/add.rc follows the D-10 exit table (small-rulings §1.2)
+  setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
+            (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
+            repos (worktrees, submodule, symlinked root, declarations, exports against
+            frontmatter_keys_export) and the Dev-1 scenarios (job sha, process records, the
+            transcript stub as V1 reads it, sidecar seq against mtime, the case clock)
+  settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
+  stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
+            fixture text, except the files listed in LEGACY_TIME_OK, which test the legacy
+            reading and must still hold one (a stale list entry fails too)
   rename a temp copy renamed to another brand passes --check after the plain regenerate
             step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
@@ -481,6 +491,514 @@ def check_sequences():
     return problems, count
 
 
+# RV-24 (small-rulings §3a): a time in fixture text is a stamp, `YYYY-MM-DD HH:MM ±hhmm`, or an
+# ISO timestamp with seconds. The short forms stay only in the files below, because the case
+# they feed checks that the legacy reading still works (WATCHER-SPEC T-10, M-10 `time_legacy_re`).
+WHOLE_TIME_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}"
+                           r"|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?")
+SHORT_TIME_RE = re.compile(r"(?<![0-9:.+\-])[0-2][0-9]:[0-5][0-9](?![0-9:.])"
+                           r"|[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}")
+LEGACY_TIME_OK = {
+    "tests/fixtures/watcher/T-10/payloads/01-PostCompact.json",   # `checked 14:05`, summary (a)
+    "tests/fixtures/transcripts/T-10/main.jsonl",                 # the same summary as a transcript row
+    "tests/fixtures/watcher/T-10/expected.json",                  # quotes the legacy form
+}
+
+
+def check_stamps():
+    problems, seen_legacy, nfiles = [], set(), 0
+    for p in walk(FIX):
+        rel = os.path.relpath(p, REPO)
+        if rel.startswith(os.path.join("tests", "fixtures", "assembly", "expected") + os.sep):
+            continue   # goldens: tools/assemble renders them from runtime.json, which is scanned
+        if rel == os.path.join("tests", "fixtures", "README.md"):
+            continue   # documents the rule, so it quotes the short forms
+        try:
+            text = read(p)
+        except UnicodeDecodeError:
+            continue
+        nfiles += 1
+        hits = [m.group(0) for m in SHORT_TIME_RE.finditer(WHOLE_TIME_RE.sub("@", text))]
+        if not hits:
+            continue
+        if rel in LEGACY_TIME_OK:
+            seen_legacy.add(rel)
+        else:
+            problems.append("stamps {}: short time {!r} (RV-24: write a stamp `YYYY-MM-DD HH:MM ±hhmm`)".format(rel, hits[0]))
+    for rel in sorted(LEGACY_TIME_OK - seen_legacy):
+        problems.append("stamps {}: listed in LEGACY_TIME_OK but holds no short time any more".format(rel))
+    return problems, nfiles, len(seen_legacy)
+
+
+# Setups (README "Setups"): tests/fixtures/setups/<id>.json holds `setup`, a list of the case
+# runner's setup steps (tests/helper/run.pl `setup`) that builds one scenario: temp repos with
+# worktrees and a submodule (D-12), process records, sidecar slots, job rows and transcript
+# stubs (Dev-1). The reference interpreter below runs them in a temp dir with the runner's
+# placeholders, so the recipes are proven to build, and then checks what they built.
+SETUPS = os.path.join(FIX, "setups")
+SETUP_ACTIONS = ("write", "repo", "git", "mkdir", "symlink", "copy", "touch")
+CLOCK_NOW = "2026-10-21T14:05:12+03:00"   # ids.json now: the case clock of every scenario
+GIT_DATE = "2026-10-21T09:30:00+03:00"
+DEFAULT_SID = "5e55a001-0c0f-4f1e-9a00-00000000a001"
+JOB_STATUSES = {"RUNNING-ELSEWHERE", "RUNNING", "ENDED-UNEXPLAINED", "LEFTOVER", "DONE-UNREPORTED", "FAILED",
+                "STOPPED", "LOST", "NOT-LOST"}
+RECORD_RE = re.compile(r"^(\d+)-(\d+)\.(live|ended)-([0-9a-f]{8})\.json$")
+_LITERALS = {}
+
+
+def literals():
+    """The spec-literals block of src/assets/handoff-spec.md ({} when the file is absent)."""
+    if "v" not in _LITERALS:
+        spec = os.path.join(REPO, "src", "assets", "handoff-spec.md")
+        lit = {}
+        if os.path.exists(spec):
+            m = re.search(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", read(spec), re.S | re.M)
+            if m:
+                try:
+                    lit = json.loads(m.group(1))
+                except ValueError:
+                    lit = {}
+        _LITERALS["v"] = lit
+    return _LITERALS["v"]
+
+
+def parse_iso(s):
+    """ISO 8601 with an offset (or Z) -> epoch seconds (float), or None."""
+    m = re.match(r"^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d)(?::(\d\d)(\.\d+)?)?(Z|[+-]\d\d:?\d\d)$", s or "")
+    if not m:
+        return None
+    y, mo, d, h, mi, se, frac, tz = m.groups()
+    t = datetime.datetime(int(y), int(mo), int(d), int(h), int(mi), int(se or 0), tzinfo=datetime.timezone.utc).timestamp()
+    t += float(frac) if frac else 0
+    if tz != "Z":
+        sign = 1 if tz[0] == "+" else -1
+        t -= sign * (int(tz[1:3]) * 3600 + int(tz[-2:]) * 60)
+    return t
+
+
+def process_lstart(pid):
+    try:
+        r = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           universal_newlines=True, timeout=10)
+        return " ".join(r.stdout.split()) or "Thu Jan  1 00:00:00 1970"
+    except (OSError, subprocess.SubprocessError):
+        return "Thu Jan  1 00:00:00 1970"
+
+
+class Scenario:
+    """A temp dir in which one setup recipe is materialised, with the runner's placeholders."""
+
+    def __init__(self, b, sid=DEFAULT_SID):
+        self.b = b
+        self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="fixtures-gen-setup-"))
+        home = self.tmp + "/home"
+        os.makedirs(home)
+        root = home + "/.claude/handoffs"
+        self.v = {"TMP": self.tmp, "HOME": home, "ROOT": root, "WATCH": root + "/.watch", "SID": sid, "SID8": sid[:8],
+                  "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1)}
+        self.touched = {}
+
+    def sub(self, x):
+        if isinstance(x, list):
+            return [self.sub(i) for i in x]
+        if isinstance(x, dict):
+            return {self.sub(k): self.sub(v) for k, v in x.items()}
+        if not isinstance(x, str):
+            return x
+        x = fill(x, self.b)
+        return re.sub(r"\$\{?(TMP|HOME|ROOT|WATCH|SID8|SID|BRAND|FIXTURES|FIX|LSTART1)\b\}?", lambda m: self.v[m.group(1)], x)
+
+    def env(self):
+        e = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": self.v["HOME"], "GIT_CONFIG_NOSYSTEM": "1",
+             "GIT_CONFIG_GLOBAL": os.devnull, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.invalid",
+             "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.invalid",
+             "GIT_AUTHOR_DATE": GIT_DATE, "GIT_COMMITTER_DATE": GIT_DATE}
+        return e
+
+    def git(self, cwd, *args):
+        r = subprocess.run(["git", "-C", cwd] + list(args), env=self.env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           universal_newlines=True, timeout=60)
+        if r.returncode != 0:
+            raise RuntimeError("git {} in {}: exit {}: {}".format(" ".join(args), cwd, r.returncode, r.stdout.strip()[:200]))
+        return r.stdout
+
+    def write(self, path, text, mode=None):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        if mode:
+            os.chmod(path, int(mode, 8))
+
+    def run(self, step):
+        s = self.sub(step)
+        if "write" in s:
+            if "json" in s:
+                text = json.dumps(s["json"], ensure_ascii=False) + "\n"
+            elif "jsonl" in s:
+                text = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in s["jsonl"])
+            else:
+                text = s.get("content", s.get("text", ""))
+            self.write(s["write"], text, s.get("mode"))
+        elif isinstance(s.get("repo"), dict):
+            rc, at = s["repo"], s["at"]
+            base = rc.get("base", "main")
+            os.makedirs(at, exist_ok=True)
+            self.git(at, "init", "-q", "-b", base)
+            for cm in rc.get("commits", [{"files": {"README.md": "seed\n"}, "msg": "seed"}]):
+                for rel, text in sorted(cm.get("files", {}).items()):
+                    self.write(os.path.join(at, rel), text)
+                self.git(at, "add", "-A")
+                self.git(at, "commit", "-q", "--allow-empty", "-m", cm.get("msg", "commit"))
+            if rc.get("branch") and rc["branch"] != base:
+                self.git(at, "checkout", "-q", "-b", rc["branch"])
+            if rc.get("ignored"):
+                self.write(os.path.join(at, ".gitignore"), "\n".join(rc["ignored"]) + "\n")
+                self.git(at, "add", ".gitignore")
+                self.git(at, "commit", "-q", "-m", "ignore")
+            for key in ("dirty", "untracked"):
+                for rel, text in sorted(rc.get(key, {}).items()):
+                    self.write(os.path.join(at, rel), text)
+        elif "git" in s:
+            self.git(s.get("cwd", self.tmp), *s["git"])
+        elif "mkdir" in s:
+            os.makedirs(s["mkdir"], exist_ok=True)
+        elif "symlink" in s:
+            os.makedirs(os.path.dirname(s["symlink"]), exist_ok=True)
+            os.symlink(s["to"], s["symlink"])
+        elif "copy" in s:
+            text = read(os.path.join(FIX, s["copy"]))
+            self.write(s["to"], self.sub(text) if s.get("subst") else text, s.get("mode", "0600"))
+        elif "touch" in s:
+            t = parse_iso(s["at"])
+            if t is None:
+                raise RuntimeError("touch {}: bad time {!r}".format(s["touch"], s["at"]))
+            os.utime(s["touch"], (t, t))
+            self.touched[s["touch"]] = t
+        else:
+            raise RuntimeError("unknown setup action: " + ",".join(sorted(s)))
+
+    def done(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+def read_jsonl(path):
+    return [json.loads(l) for l in read(path).split("\n") if l.strip()]
+
+
+def jobs_semantics(doc, sc):
+    """What a Dev-1 setup must have built (AT-J-04 and friends)."""
+    p = []
+    ex = doc.get("expect", {})
+    sid = doc["invoke"]["argv"][doc["invoke"]["argv"].index("--origin") + 1]
+    task = doc["invoke"]["argv"][doc["invoke"]["argv"].index("--item") + 1]
+    watch, odir = sc.v["WATCH"], sc.v["WATCH"] + "/" + sid
+    now = parse_iso(CLOCK_NOW)
+    if ex.get("status") is not None and ex["status"] not in JOB_STATUSES:
+        p.append("expect.status {} is not a verdict name".format(ex["status"]))
+    if ex.get("result") not in ("ok", "REFUSED"):
+        p.append("expect.result must be ok or REFUSED")
+    if ex.get("result") == "ok" and not ex.get("relaunch"):
+        p.append("expect.result ok means a relaunch; set expect.relaunch true")
+    if ex.get("result") == "REFUSED" and ex.get("relaunch"):
+        p.append("expect.result REFUSED cannot relaunch")
+    # process records
+    byp = sc.v["ROOT"] + "/.sessions/by-pid"
+    live, ended = {}, {}
+    if os.path.isdir(byp):
+        for f in sorted(os.listdir(byp)):
+            m = RECORD_RE.match(f)
+            if not m:
+                p.append("process record name {} does not match <pid>-<epoch>.<live|ended>-<sid8>.json".format(f))
+                continue
+            d = json.loads(read(os.path.join(byp, f)))
+            (live if m.group(3) == "live" else ended)[(m.group(1), m.group(2), m.group(4))] = d
+            if d.get("session_id", "")[:8] != m.group(4):
+                p.append("process record {}: session_id does not start with {}".format(f, m.group(4)))
+            if m.group(3) == "live" and not (isinstance(d.get("pid"), int) and d.get("pid_lstart")):
+                p.append("process record {}: a live record needs pid and pid_lstart".format(f))
+            if parse_iso(d.get("ts")) is None:
+                p.append("process record {}: ts is not an ISO time with an offset".format(f))
+    for k in ended:
+        if k not in live:
+            p.append("ended record {} has no live twin".format("-".join(k)))
+    # job rows
+    rows = read_jsonl(odir + "/jobs.jsonl") if os.path.exists(odir + "/jobs.jsonl") else []
+    mine = [r for r in rows if r.get("task_id") == task and r.get("kind") == "job"]
+    if len(mine) != 1:
+        p.append("jobs.jsonl: expected one job row for {}, found {}".format(task, len(mine)))
+    for r in rows:
+        if r.get("kind") == "job":
+            cmd = r.get("command")
+            if cmd is None:
+                if not r.get("command_withheld"):
+                    p.append("job {}: a null command needs command_withheld rule ids".format(r.get("task_id")))
+            elif hashlib.sha256(cmd.encode("utf-8")).hexdigest() != r.get("command_sha256"):
+                p.append("job {}: command_sha256 is not the sha256 of the command".format(r.get("task_id")))
+            la = parse_iso(r.get("launched_at"))
+            if la is None or la >= now:
+                p.append("job {}: launched_at must be an earlier time of the case day".format(r.get("task_id")))
+        if r.get("sid") != sid:
+            p.append("jobs.jsonl row for {} names another session".format(r.get("task_id")))
+    # output files and the touched times
+    for r in mine:
+        out = r.get("output_path")
+        if out and not out.startswith(sc.tmp):
+            p.append("job {}: output_path is outside $TMP".format(task))
+        if out and os.path.exists(out) and out not in sc.touched:
+            p.append("job {}: the output file has no touch step (its mtime would be the run time)".format(task))
+        if out and ex.get("signals", {}).get("V5") == "pass" and out in sc.touched and mine[0].get("launched_at"):
+            if sc.touched[out] < parse_iso(mine[0]["launched_at"]):
+                p.append("job {}: output mtime precedes the launch".format(task))
+    # transcript stub: V1 as the helper reads it
+    tpath = sc.v["HOME"] + "/.claude/projects/-tmp-example-repo/{}.jsonl".format(sid)
+    matches = False
+    if os.path.exists(tpath) and mine:
+        use = {}
+        for row in read_jsonl(tpath):
+            msg = row.get("message") if isinstance(row.get("message"), dict) else {}
+            for c in (msg.get("content") if isinstance(msg.get("content"), list) else []):
+                if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                    cmd = (c.get("input") or {}).get("command")
+                    if cmd is not None and hashlib.sha256(cmd.encode("utf-8")).hexdigest() == mine[0].get("command_sha256"):
+                        use[c.get("id")] = True
+            tr = row.get("toolUseResult") if isinstance(row.get("toolUseResult"), dict) else {}
+            if use and tr.get("backgroundTaskId") == task:
+                for c in (msg.get("content") if isinstance(msg.get("content"), list) else []):
+                    if isinstance(c, dict) and c.get("tool_use_id") in use:
+                        matches = True
+        want = ex.get("signals", {}).get("V1") != "fail"
+        if matches != want:
+            p.append("transcript stub: V1 would {} but the scenario expects V1 {}".format(
+                "pass" if matches else "fail", "pass" if want else "fail"))
+    elif mine and ex.get("signals", {}).get("V1") != "fail":
+        p.append("no transcript stub at the path the helper reads")
+    # sidecar slots: seq and the ring counter
+    bg = odir + "/bg"
+    if os.path.isdir(bg):
+        slots = {}
+        for f in os.listdir(bg):
+            m = re.match(r"^slot-(\d+)\.json$", f)
+            if m:
+                d = json.loads(read(os.path.join(bg, f)))
+                if int(m.group(1)) >= 20:
+                    p.append("slot file {}: the ring has 20 slots (0-19)".format(f))
+                if not isinstance(d.get("seq"), int):
+                    p.append("slot file {}: seq must be an integer".format(f))
+                slots[int(m.group(1))] = (d.get("seq", 0), os.path.getmtime(os.path.join(bg, f)))
+        seqs = [s for s, _ in slots.values()]
+        if len(set(seqs)) != len(seqs):
+            p.append("slot seq values are not unique")
+        lock = bg + "/slot.lock"
+        if slots and os.path.exists(lock):
+            if json.loads(read(lock)).get("n") != max(seqs):
+                p.append("slot.lock n must equal the highest seq")
+        if doc["id"] == "jobs-slot-ring":
+            by_seq = [i for _, i in sorted((v[0], i) for i, v in slots.items())]
+            by_mtime = [i for _, i in sorted((v[1], i) for i, v in slots.items())]
+            if by_seq[-1] == by_mtime[-1]:
+                p.append("jobs-slot-ring: the newest slot by seq must not be the newest by mtime")
+    elif doc["id"] == "jobs-slot-ring":
+        p.append("jobs-slot-ring has no slots")
+    return p
+
+
+def rm_declaration_valid(text):
+    """D-12 §1.5.2 declaration validation (the reference reading)."""
+    if len(text.encode("utf-8")) > 4096:
+        return False
+    try:
+        d = json.loads(text)
+    except ValueError:
+        return False
+    if not isinstance(d, dict) or d.get("version") != 1 or d.get("mode") != "repo":
+        return False
+    root = d.get("root")
+    if not isinstance(root, str) or root.startswith("/"):
+        return False
+    parts = root.split("/")
+    if not 1 <= len(parts) <= 4:
+        return False
+    return all(re.match(r"^[A-Za-z0-9._-]+$", c) and c not in (".", "..") and not c.startswith(".git") and c != ".planning"
+               for c in parts)
+
+
+def frontmatter(text):
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    return dict(l.split(": ", 1) for l in m.group(1).split("\n") if ": " in l) if m else None
+
+
+def rm_semantics(doc, sc):
+    p = []
+    top = sc.tmp + "/example-repo"
+    id_ = doc["id"]
+    if id_ == "rm-bad-declarations":
+        for name, want in doc["expect"]["reasons"].items():
+            f = "{}/{}/.claude/handoffs.json".format(sc.tmp, name)
+            if not os.path.exists(f):
+                p.append("{}: no declaration file".format(name))
+                continue
+            valid = rm_declaration_valid(read(f))
+            if valid != want.startswith("repo ("):
+                p.append("{}: the reference reading of §1.5.2 says valid={}, the recipe expects {!r}".format(name, valid, want))
+        return p
+    decl = top + "/.claude/handoffs.json"
+    if not os.path.exists(decl):
+        return ["no declaration at " + decl]
+    if id_ == "rm-declared" or id_ == "rm-worktrees" or id_ == "rm-exports":
+        if not rm_declaration_valid(read(decl)):
+            p.append("the declaration is not valid by the §1.5.2 reading")
+        tracked = sc.git(top, "ls-files").split()
+        for f in ("README.md", "src/a.rb", ".claude/handoffs.json"):
+            if f not in tracked:
+                p.append("{} is not tracked".format(f))
+        if sc.git(top, "rev-parse", "--abbrev-ref", "HEAD").strip() != "feature/LAB-42-retry":
+            p.append("the main checkout is not on feature/LAB-42-retry")
+    if id_ == "rm-worktrees":
+        listing = sc.git(top, "worktree", "list", "--porcelain")
+        paths = [l[len("worktree "):] for l in listing.split("\n") if l.startswith("worktree ")]
+        if sorted(os.path.realpath(x) for x in paths) != sorted(sc.tmp + "/" + n for n in ("example-repo", "example-repo-old", "example-repo-wt")):
+            p.append("git worktree list names {}".format(paths))
+        if not os.path.exists(sc.tmp + "/example-repo-wt/.claude/handoffs.json"):
+            p.append("the declared worktree has no declaration")
+        if os.path.exists(sc.tmp + "/example-repo-old/.claude/handoffs.json"):
+            p.append("the old worktree must have no declaration")
+        if sc.git(sc.tmp + "/example-repo-old", "rev-parse", "--abbrev-ref", "HEAD").strip() != "HEAD":
+            p.append("the old worktree must be a detached checkout")
+    if id_ == "rm-submodule":
+        if not os.path.isfile(top + "/vendor/lib/.git"):
+            p.append("vendor/lib/.git must be a file (a submodule checkout)")
+        if "vendor/lib" not in sc.git(top, "submodule", "status"):
+            p.append("git submodule status does not list vendor/lib")
+        if not os.path.exists(top + "/.gitmodules"):
+            p.append("no .gitmodules")
+        if not json.loads(read(decl))["root"].startswith("vendor/lib/"):
+            p.append("the declared root must lie inside the submodule")
+    if id_ == "rm-symlink-root":
+        link = top + "/docs"
+        if not os.path.islink(link):
+            p.append("docs must be a symlink")
+        elif os.path.commonpath([os.path.realpath(link), os.path.realpath(top)]) == os.path.realpath(top):
+            p.append("docs must point outside the repository")
+        if not json.loads(read(decl))["root"].startswith("docs/"):
+            p.append("the declared root must pass through docs")
+    if id_ == "rm-exports":
+        keys = set(literals().get("frontmatter_keys_export") or [])
+        machine = {"transcript_path", "claude_pid", "worktree"}
+        base = top + "/.claude/handoffs"
+        for need in ("README.md", ".gitignore"):
+            if not os.path.exists(base + "/" + need):
+                p.append("export folder lacks the generated " + need)
+        exports = {}
+        for f in sorted(os.listdir(base + "/LAB-42")):
+            text = read(base + "/LAB-42/" + f)
+            fm = frontmatter(text)
+            if fm is None:
+                p.append("export {}: no frontmatter".format(f))
+                continue
+            exports[f] = fm
+            if keys and set(fm) - keys:
+                p.append("export {}: keys {} are not in frontmatter_keys_export".format(f, sorted(set(fm) - keys)))
+            if machine & set(fm):
+                p.append("export {}: machine-only keys {}".format(f, sorted(machine & set(fm))))
+            if fm.get("export") != (literals().get("export_value") or "repo"):
+                p.append("export {}: export key is {!r}".format(f, fm.get("export")))
+            for private in (sc.tmp, sc.v["HOME"]):
+                if private in text:
+                    p.append("export {}: holds the machine path {}".format(f, private))
+        own = [f for f, fm in exports.items() if fm.get("session_id") == DEFAULT_SID]
+        mate = [f for f, fm in exports.items() if fm.get("session_id") != DEFAULT_SID]
+        if len(own) != 1 or len(mate) != 1:
+            p.append("rm-exports needs one own and one teammate export")
+        else:
+            twins = [f for f in os.listdir(sc.v["ROOT"] + "/example-repo/LAB-42") if f == own[0]]
+            if not twins:
+                p.append("the own export has no private twin with the same file name")
+            else:
+                twin = frontmatter(read(sc.v["ROOT"] + "/example-repo/LAB-42/" + own[0]))
+                if twin.get("nonce") != exports[own[0]].get("nonce") or twin.get("session_id") != DEFAULT_SID:
+                    p.append("the private twin and the own export must share nonce and session")
+                if not machine <= set(twin):
+                    p.append("the private twin must keep transcript_path, claude_pid and worktree")
+            if exports[mate[0]].get("nonce") == exports[own[0]].get("nonce"):
+                p.append("the teammate export must have its own nonce")
+            if "approved: deploy" not in read(base + "/LAB-42/" + mate[0]) or "approved: deploy" in read(base + "/LAB-42/" + own[0]):
+                p.append("only the teammate export holds `approved: deploy`")
+    return p
+
+
+def check_setups(b):
+    problems, n = [], 0
+    if not os.path.isdir(SETUPS):
+        return problems, n
+    for fname in sorted(os.listdir(SETUPS)):
+        if not fname.endswith(".json"):
+            problems.append("setups/{}: only .json recipes belong here".format(fname))
+            continue
+        n += 1
+        where = "setups/" + fname
+        try:
+            doc = json.loads(read(os.path.join(SETUPS, fname)))
+        except ValueError as e:
+            problems.append("{}: {}".format(where, e))
+            continue
+        if doc.get("id") != fname[:-5]:
+            problems.append("{}: id {!r} must equal the file name".format(where, doc.get("id")))
+        for k in ("ruling", "tests", "note", "setup", "expect"):
+            if k not in doc:
+                problems.append("{}: missing {}".format(where, k))
+        if not doc.get("setup"):
+            continue
+        sc = Scenario(b)
+        try:
+            for i, step in enumerate(doc["setup"], 1):
+                try:
+                    sc.run(step)
+                except (RuntimeError, OSError, subprocess.SubprocessError, KeyError, ValueError) as e:
+                    problems.append("{} step {}: {}".format(where, i, e))
+                    break
+            else:
+                if doc["id"].startswith("jobs-"):
+                    sem = jobs_semantics(doc, sc)
+                elif doc["id"].startswith("rm-"):
+                    sem = rm_semantics(doc, sc)
+                else:
+                    sem = []
+                problems += ["{}: {}".format(where, x) for x in sem]
+        except (RuntimeError, OSError, subprocess.SubprocessError, KeyError, ValueError, IndexError) as e:
+            problems.append("{}: {}: {}".format(where, type(e).__name__, e))
+        finally:
+            sc.done()
+    return problems, n
+
+
+def check_settings():
+    """settings/*.json: pluginConfigs options name keys the plugin declares (src/plugin.json userConfig)."""
+    problems, n = [], 0
+    manifest = os.path.join(REPO, "src", "plugin.json")
+    keys = None
+    if os.path.exists(manifest):
+        try:
+            keys = set(json.loads(read(manifest)).get("userConfig", {}))
+        except ValueError:
+            keys = None
+    sdir = os.path.join(FIX, "settings")
+    for fname in sorted(os.listdir(sdir)) if os.path.isdir(sdir) else []:
+        if not fname.endswith(".json"):
+            continue
+        n += 1
+        try:
+            d = json.loads(read(os.path.join(sdir, fname)))
+        except ValueError:
+            continue   # the parse check reports it
+        for plug, cfg in (d.get("pluginConfigs") or {}).items():
+            if not plug.startswith("{{plugin}}@"):
+                continue   # another plugin's block (plugin-configs-other-plugin.json)
+            for k in (cfg.get("options") or {}):
+                if keys is not None and k not in keys:
+                    problems.append("settings/{}: option {} is not a userConfig key of src/plugin.json".format(fname, k))
+    return problems, n
+
+
 # Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
 # answer has the queue-stub/v1 shape that ROOT-RULINGS F2-8 adopts as the v1 contract.
 QUEUE = os.path.join(FIX, "queue")
@@ -489,27 +1007,65 @@ QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
 LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
 
 
+QUEUE_COMMANDS = {"list", "adopt", "add"}
+QUEUE_ADD_STATUS = {"queued", "exists"}
+CLIENT_ID_RE = re.compile(r"^ck-[0-9a-f]{12}$")
+
+
 def check_queue():
+    """List answers in the queue-stub/v1 shape (optional `commands`); add answers per D-10
+    (small-rulings §1.2): rc 0 prints a queue-add/v1 object, rc 2 has no REFUSED line, rc 5 a
+    `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the other refusals."""
     problems, njson = [], 0
     for case in sorted(os.listdir(QUEUE)) if os.path.isdir(QUEUE) else []:
         p = os.path.join(QUEUE, case, "list.out")
         text = read(p) if os.path.exists(p) else ""
-        if not text.lstrip().startswith("{"):
-            continue
-        njson += 1
         where = "queue/{}/list.out".format(case)
-        try:
-            doc = json.loads(text)
-        except ValueError as e:
-            problems.append("{}: {}".format(where, e))
+        if text.lstrip().startswith("{"):
+            njson += 1
+            try:
+                doc = json.loads(text)
+            except ValueError as e:
+                problems.append("{}: {}".format(where, e))
+                continue
+            commands = doc.pop("commands", None)
+            int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
+            if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
+                    or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
+                    or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
+                    or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
+                problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
+                    where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
+            if commands is not None and (not isinstance(commands, list) or not set(commands) <= QUEUE_COMMANDS):
+                problems.append("{}: commands must be a list within {}".format(where, sorted(QUEUE_COMMANDS)))
+        rc_file = os.path.join(QUEUE, case, "add.rc")
+        if not os.path.exists(rc_file):
             continue
-        int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
-        if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
-                or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
-                or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
-                or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
-            problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
-                where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
+        where = "queue/{}/add".format(case)
+        rc = read(rc_file).strip()
+        out_file = os.path.join(QUEUE, case, "add.out")
+        out = read(out_file) if os.path.exists(out_file) else ""
+        err_file = os.path.join(QUEUE, case, "add.err")
+        err = read(err_file) if os.path.exists(err_file) else ""
+        if not rc.isdigit() or int(rc) > 6:
+            problems.append("{}.rc: {!r} is not an exit code of the D-10 table (0-6)".format(where, rc))
+            continue
+        rc = int(rc)
+        if rc == 0:
+            try:
+                d = json.loads(out)
+            except ValueError:
+                d = None
+            if (not isinstance(d, dict) or d.get("schema") != "queue-add/v1" or d.get("status") not in QUEUE_ADD_STATUS
+                    or not CLIENT_ID_RE.match(str(d.get("client_id"))) or not d.get("id") or not d.get("lane")):
+                problems.append("{}.out: rc 0 needs a queue-add/v1 object with status, id, lane and client_id ck-<12 hex>".format(where))
+        elif rc == 2 and "REFUSED:" in out + err:
+            problems.append("{}: exit 2 must carry no REFUSED line (it means an old tool without add)".format(where))
+        elif rc == 5 and not re.search(r"^REFUSED: draft: \S+", out + err, re.M):
+            problems.append("{}: exit 5 needs a `REFUSED: draft: <rule>` line".format(where))
+        sleep_file = os.path.join(QUEUE, case, "add.sleep")
+        if os.path.exists(sleep_file) and not read(sleep_file).strip().isdigit():
+            problems.append("{}.sleep must be whole seconds".format(where))
     return problems, njson
 
 
@@ -682,7 +1238,18 @@ def check(b):
     # queue
     queue_problems, nqueue = check_queue()
     problems += queue_problems
-    print("queue: {} JSON list answers in the queue-stub/v1 shape".format(nqueue))
+    print("queue: {} JSON list answers in the queue-stub/v1 shape, add answers per the D-10 exit table".format(nqueue))
+    # setups, settings
+    setup_problems, nsetup = check_setups(b)
+    problems += setup_problems
+    print("setups: {} recipes built in temp dirs and checked (D-12 repos, Dev-1 scenarios)".format(nsetup))
+    settings_problems, nsettings = check_settings()
+    problems += settings_problems
+    print("settings: {} files name only declared userConfig keys".format(nsettings))
+    # stamps
+    stamp_problems, nstamp, nlegacy = check_stamps()
+    problems += stamp_problems
+    print("stamps: {} fixture files, no short time outside the {} legacy-reading files".format(nstamp, nlegacy))
     # drift
     gen_dir = os.path.join(REPO, GEN_REL)
     for name, text in sorted(rendered.items()):

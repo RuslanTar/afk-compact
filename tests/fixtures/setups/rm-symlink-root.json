@@ -1,0 +1,43 @@
+{
+  "v": 1,
+  "id": "rm-symlink-root",
+  "ruling": "D-12 §1.5.3 item 2",
+  "tests": [
+    "AT-RM-04"
+  ],
+  "note": "The declared root docs/handoffs passes through docs, a symlink to a folder outside the repository: repo_check lstat-s every component and refuses with repo-root-symlink.",
+  "expect": {
+    "mode": "private (repo-root-symlink)",
+    "writes_under_outside": 0
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/LAB-42-retry",
+        "commits": [
+          {
+            "files": {
+              "README.md": "# example-repo\n\nFixture repository.\n",
+              "src/a.rb": "class A\n  def run\n    :ok\n  end\nend\n"
+            },
+            "msg": "seed"
+          },
+          {
+            "files": {
+              ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \"docs/handoffs\"}\n"
+            },
+            "msg": "declare repo mode"
+          }
+        ]
+      },
+      "at": "$TMP/example-repo"
+    },
+    {
+      "mkdir": "$TMP/outside"
+    },
+    {
+      "symlink": "$TMP/example-repo/docs",
+      "to": "$TMP/outside"
+    }
+  ]
+}
