@@ -1,0 +1,60 @@
+#!/bin/sh
+# compactinue-store: launcher for the plugin helper (POSIX sh; dash, ash,
+# bash 3.2 and Git Bash). It finds perl 5.28+ and runs helper/main.pl.
+# Without a usable perl it takes the fallback path: a hook prints nothing
+# and exits 0 after one content-free row; any other command refuses.
+
+# Keep the user's perl library paths for queue_cmd children, then clear
+# every variable that can inject modules or change byte handling.
+STORE_ORIG_PERL5LIB=${PERL5LIB-}
+STORE_ORIG_PERLLIB=${PERLLIB-}
+export STORE_ORIG_PERL5LIB STORE_ORIG_PERLLIB
+unset PERL5OPT PERL5LIB PERLLIB PERL5DB PERL_UNICODE PERLIO
+
+# Resolve this file's real path (follow symlinks); the plugin root is the
+# parent of bin/.
+self=$0
+while [ -h "$self" ]; do
+  link=$(ls -ld "$self" | sed 's/^.* -> //')
+  case $link in
+    /*) self=$link ;;
+    *) self=${self%/*}/$link ;;
+  esac
+done
+case $self in
+  */*) here=${self%/*} ;;
+  *) here=. ;;
+esac
+root=$(cd "$here/.." 2>/dev/null && pwd -P) || root=$here/..
+
+perl=$(command -v perl 2>/dev/null)
+[ -n "$perl" ] || perl=/usr/bin/perl
+if [ -x "$perl" ] && "$perl" -e 'exit($] < 5.028 ? 1 : 0)' 2>/dev/null; then
+  exec "$perl" "$root/helper/main.pl" "$@"
+fi
+
+# Fallback: no perl, or one older than 5.28.
+if [ "${1-}" = hook ]; then
+  payload=$(cat 2>/dev/null | head -c 65536 2>/dev/null)
+  sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[ ]*:[ ]*"\([0-9A-Za-z-]\{8,64\}\)".*/\1/p' | head -n 1)
+  [ -n "$sid" ] || sid=unknown
+  ver=$(sed -n 's/.*"version"[ ]*:[ ]*"\([0-9A-Za-z.+-]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" 2>/dev/null | head -n 1)
+  watch=${CLAUDE_PLUGIN_OPTION_LOG_DIR-}
+  case $watch in '${user_config.'*) watch= ;; esac
+  if [ -z "$watch" ]; then
+    hroot=${CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT-}
+    case $hroot in '${user_config.'*) hroot= ;; esac
+    [ -n "$hroot" ] || hroot='~/.claude/handoffs'
+    watch=$hroot/.watch
+  fi
+  case $watch in '~'|'~/'*) watch=${HOME-}${watch#\~} ;; esac
+  event=$(printf '%s' "${2-}" | tr -cd 'A-Za-z')
+  ts=$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null | sed 's/\([0-9][0-9]\)$/:\1/')
+  umask 077
+  mkdir -p "$watch" 2>/dev/null &&
+    printf '{"v":1,"ts":"%s","ev":"helper_runtime_missing","sid":"%s","actor":"unknown","writer":"helper","pid":%s,"plugin_version":"%s","cc_version":null,"turn_seq":null,"event":"%s"}\n' \
+      "$ts" "$sid" "$$" "$ver" "$event" >>"$watch/$sid.classic.jsonl" 2>/dev/null
+  exit 0
+fi
+echo 'REFUSED: helper-runtime'
+exit 3
