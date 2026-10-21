@@ -538,9 +538,9 @@ def bt02(phase, names):
 
 # ---------------------------------------------------------------- X-H
 
-# Helper cases accepted as failing until a named later merge, each with the regex its first
-# failure line must match (any other failure, or another first failure, fails X-H). Remove a
-# row when it prints KNOWN-RED-DONE.
+# Helper cases accepted as failing until a named later merge, each with the regex one line of
+# its first failing step must match (any other case failing, or a different first failure,
+# fails X-H). Remove a row when it prints KNOWN-RED-DONE.
 KNOWN_RED = {
     # wp/text part 1 made time_re a full stamp, so `checked 14:05` no longer trips
     # unprinted-time; WP-skills' time-format rule (RV-24, AT-TS-02) closes it (round 3).
@@ -552,8 +552,9 @@ KNOWN_RED = {
 def x_h(argv):
     """X-H: the helper runner, with the KNOWN_RED cases allowed to fail as stated."""
     print("$ " + " ".join(argv), flush=True)
-    r = subprocess.run(argv, cwd=REPO, capture_output=True, text=True)
-    out = r.stdout + r.stderr
+    # One stream, in the order the runner writes it: a case's `#   ` lines follow its `not ok`.
+    r = subprocess.run(argv, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    out = r.stdout
     sys.stdout.write(out[-4000:])
     failed, first, cur = [], {}, None
     for line in out.splitlines():
@@ -563,18 +564,21 @@ def x_h(argv):
             if cur:
                 failed.append(cur)
             continue
-        if cur and cur not in first and line.startswith("#   "):
-            first[cur] = line
+        m = re.match(r"^#   (step \d+):", line)
+        if cur and m and first.setdefault(cur, (m.group(1), []))[0] == m.group(1):
+            first[cur][1].append(line)
     if r.returncode == 0:
         for case in sorted(KNOWN_RED):
             print("KNOWN-RED-DONE {}: passes now; remove it from KNOWN_RED".format(case))
         return
-    bad = [c for c in failed if c not in KNOWN_RED or not re.search(KNOWN_RED[c], first.get(c, ""))]
+    bad = [c for c in failed if c not in KNOWN_RED
+           or not any(re.search(KNOWN_RED[c], ln) for ln in first.get(c, ("", []))[1])]
     if bad or not failed:
         raise Fail("X-H: exit {}; failed beyond KNOWN_RED: {}".format(r.returncode, ", ".join(bad) or "(none parsed)"))
     for case in sorted(KNOWN_RED):
         if case in failed:
-            print("KNOWN-RED {}: {}".format(case, first[case].strip()[:160]))
+            hit = next(ln for ln in first[case][1] if re.search(KNOWN_RED[case], ln))
+            print("KNOWN-RED {}: {}".format(case, hit.strip()[:160]))
         else:
             print("KNOWN-RED-DONE {}: passes now; remove it from KNOWN_RED".format(case))
     print("X-H: PASS except KNOWN_RED ({} cases)".format(len(failed)))
