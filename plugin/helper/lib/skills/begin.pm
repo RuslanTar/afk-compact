@@ -270,6 +270,11 @@ sub run {
     if (!$resumed) {
         skills::util::write_excl("$stage/settings.json", skills::util::json_encode(\%stage_settings) . "\n", 0600)
             or die "stage settings exist\n";
+    } else {
+        # CR-F10: the stage keeps its first settings.json; the checked_at printed now is
+        # one more helper-printed time, so the publish lint accepts it (stamps.log, as
+        # `stamp` writes it).
+        skills::util::append_line("$stage/stamps.log", skills::util::iso_local($now) . "\t$out{checked_at}\n");
     }
 
     skills::cli::say(_fit(\%out));
