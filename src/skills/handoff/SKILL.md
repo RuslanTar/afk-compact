@@ -49,6 +49,7 @@ Run together:
 `begin` prints ≤3 KB of JSON: identity, git state, `stage`, `stem`, `checked_at`, `previous_handoff`, `own_latest`, `newer_foreign`, `ownership`, `gsd`, `queued_line`, `inflight_measured`, `tmp_candidates` (ephemeral paths cited this session) and the settings used.
 - `REFUSED` → B. A merge or rebase in progress that Step 0.2 did not already record as `MID-STEP` → apply Step 0.2 once, then continue; never loop back. <!-- review-fix: was an endless 0.2 ↔ 1 loop -->
 - `own_latest.unchanged` and nothing else happened since its `date` (no edit, decision, answer, new request or background change; this handoff request itself does not count): reply with its path and the resume line; stop. Reuse never patches it. <!-- review-fix -->
+- Self-invoked (the user did not ask for this handoff), `own_latest.age_min` under `reuse_window_min` (15), `own_latest.unchanged`, and no new decision or background change since: the same reply; stop.
 - `newer_foreign` or an `ownership` conflict → F, then continue.
 
 ## Step 2 — Read and probe (one batch)
