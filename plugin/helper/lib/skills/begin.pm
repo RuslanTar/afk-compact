@@ -152,7 +152,7 @@ sub run {
         $config{$k} = \%c;
     }
 
-    my %session = (id => $sid, sid8 => $id->{sid8}, actor => 'main', pid => $id->{pid},
+    my %session = (id => $sid, sid8 => $id->{sid8}, actor => 'main', pid => (defined $id->{pid} ? 0 + $id->{pid} : undef),
                    previous_session_id => $lin->{previous_session_id}, lineage_reason => $lin->{lineage_reason} // 'none');
     $session{identity} = "degraded ($id->{degraded})" if $id->{degraded};
 

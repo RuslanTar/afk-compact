@@ -14,7 +14,10 @@ use skills::core;
 
 # Ephemeral locations (TPL §5 "Rule").
 my $PATH_CH = qr{[^\s`'"<>()\[\],;]};
-my @EPHEMERAL = (qr{/private/tmp/$PATH_CH+}, qr{/tmp/$PATH_CH+}, qr{/var/folders/$PATH_CH+}, qr{(?<![\w/])tasks/$PATH_CH+\.output\b});
+# An ephemeral path starts the path: `/tmp/` inside a longer path is not one.
+my $START = qr{(?<![\w.\/~-])};
+my @EPHEMERAL = (qr{$START/private/tmp/$PATH_CH+}, qr{$START/tmp/$PATH_CH+}, qr{$START/private/var/folders/$PATH_CH+},
+                 qr{$START/var/folders/$PATH_CH+}, qr{(?<![\w/])tasks/$PATH_CH+\.output\b});
 
 sub lint {
     my ($in) = @_;

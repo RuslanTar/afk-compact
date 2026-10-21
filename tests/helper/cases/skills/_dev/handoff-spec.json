@@ -1,0 +1,19 @@
+{
+  "_note": "Dev-runner stand-in for plugin/assets/handoff-spec.json until WP-text's spec-literals block lands. @BRAND@ is filled from plugin.json at run time. Literals copied from the handoff template (TPL §3, §4) and CONSISTENCY §1.",
+  "sections_main": ["## Resume here", "## User constraints", "## Decisions and do-not-re-raise", "## In flight",
+                    "## Live state", "## Open questions", "## Location", "## Work done and findings", "## Evidence", "## Next steps"],
+  "sections_location": ["### GSD", "### Environment", "### Guards in force", "### Ownership"],
+  "none_forms_handoff": {
+    "## User constraints": ["none stated"],
+    "## In flight": ["Nothing in flight — checked HH:MM via <channels probed>", "Nothing in flight known (not checked)"],
+    "## Live state": ["none beyond git — checked HH:MM"],
+    "## Open questions": ["none"]
+  },
+  "marker_re": "^⟪@BRAND@ v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
+  "sentinel_re": "^⟪/@BRAND@ n=([0-9a-f]{8})⟫$",
+  "restart_classes": ["auto", "ask", "never"],
+  "outward_classes": {
+    "outward": ["\\bgit\\s+push\\b", "\\bgh\\s+pr\\s+(merge|create|comment)\\b", "\\bcurl\\b.*\\s-X\\s*(POST|PUT|PATCH|DELETE)\\b"],
+    "destructive": ["\\bgit\\s+reset\\s+--hard\\b", "\\bkubectl\\s+(delete|apply)\\b", "\\bdrop\\s+table\\b"]
+  }
+}
