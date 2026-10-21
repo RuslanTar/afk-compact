@@ -1,22 +1,54 @@
 package frontmatter;
-# lib/frontmatter.pm: library seam of BUILD-PLAN §3.6. Owner: WP-core.
-# Phase 0 stub: every call dies "not implemented" (main.pl turns an uncaught
-# die into exit 70). The names and argument lists below are the seam.
+# lib/frontmatter.pm: YAML-subset frontmatter for copies and handoffs. Owner: WP-core.
+#   write(\@pairs) -> "---\n<key>: <value>\n...---\n" (undef and '' values omitted;
+#     plain scalars when safe, else JSON-quoted strings, which YAML reads too;
+#     hashes and arrays as JSON flow values)
+#   read(text) -> ({key => value}, body) or () when there is no valid frontmatter.
+#     Values come back as strings, or as data for flow values.
 use strict;
 use warnings;
 
-# frontmatter::write(args) -> arguments not fixed by BUILD-PLAN §3.6; WP-core sets them
+my $PLAIN = qr/^[A-Za-z0-9_~\/][A-Za-z0-9_.:\/@+~ ,()=-]*$/;
+
+sub _scalar {
+    my ($v) = @_;
+    return jsonc::encode($v) if ref $v;
+    my $s = "$v";
+    return $s if $s =~ $PLAIN && $s !~ /\s$/ && $s !~ /: / && $s !~ / #/;
+    return jsonc::encode($s);
+}
+
 sub write {
-    my @args = @_;
-    _not_implemented('write');
+    my ($pairs) = @_;
+    my $out = "---\n";
+    for (my $i = 0; $i < @$pairs; $i += 2) {
+        my ($k, $v) = ($pairs->[$i], $pairs->[$i + 1]);
+        next if !defined $v || (!ref $v && $v eq '');
+        $out .= "$k: " . _scalar($v) . "\n";
+    }
+    return $out . "---\n";
 }
 
-# frontmatter::read(args) -> arguments not fixed by BUILD-PLAN §3.6; WP-core sets them
 sub read {
-    my @args = @_;
-    _not_implemented('read');
+    my ($text) = @_;
+    return () unless defined $text;
+    utf8::decode($text) unless utf8::is_utf8($text);
+    return () unless $text =~ /\A---\n(.*?)\n---\n(.*)\z/s;
+    my ($head, $body) = ($1, $2);
+    my %h;
+    for my $line (split /\n/, $head) {
+        next if $line =~ /^\s*$/;
+        return () unless $line =~ /^([A-Za-z0-9_]+): (.*)$/;
+        my ($k, $v) = ($1, $2);
+        if ($v =~ /^["\[{]/) {
+            my $d = eval { jsonc::decode($v) };
+            return () if $@;
+            $h{$k} = $d;
+        } else {
+            $h{$k} = $v;
+        }
+    }
+    return (\%h, $body);
 }
-
-sub _not_implemented { die "frontmatter::$_[0]: not implemented\n" }
 
 1;

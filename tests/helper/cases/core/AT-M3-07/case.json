@@ -1,0 +1,575 @@
+{
+ "id": "AT-M3-07, AT-S-02",
+ "note": "10-compaction fixture run with one unmarked summary (deferred, saved by the after-step) and one subagent compaction: 9 main copies + 1 subagent copy, 10 rollup rows, one non-ok verdict, failure counts exclude the subagent; then status lists 5 compactions, 1 non-ok, smokeDue, and no summary text",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.306",
+      "smokeDue": "2.1.306",
+      "previousVersion": "2.1.305"
+     }
+    }
+   ]
+  },
+  {
+   "name": "c1",
+   "now": "2026-10-21T14:03:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "71000001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=71000001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=71000001⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c2",
+   "now": "2026-10-21T14:06:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "72000002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=72000002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=72000002⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c3",
+   "now": "2026-10-21T14:09:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "73000003",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=73000003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=73000003⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c4",
+   "now": "2026-10-21T14:12:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "74000004",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=74000004 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=74000004⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c5",
+   "now": "2026-10-21T14:15:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "75000005",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=75000005 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=75000005⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c6 sub",
+   "now": "2026-10-21T14:18:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "76000006",
+      "actor": "a9a00b3f363327444",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID/subagents/agent-a9a00b3f363327444.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=76000006 s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=76000006⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c7",
+   "now": "2026-10-21T14:21:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "77000007",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=77000007 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=77000007⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c8 unmarked",
+   "now": "2026-10-21T14:24:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "78000008",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "fields": {
+       "nonce": "78000008"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "c8 after-step",
+   "now": "2026-10-21T14:24:00+03:00",
+   "setup": [
+    {
+     "write": "$TMP/c8.mod.md",
+     "text": "This session is being continued from a previous conversation.\n\nSummary:\n<summary>\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n</summary>"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "78000008",
+    "--from",
+    "$TMP/c8.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^VERDICT unshaped marker_line=- sentinel_from_end=-\\nSaved copy: .*_c7-780000\\.md\\n$"
+   }
+  },
+  {
+   "name": "c9",
+   "now": "2026-10-21T14:27:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "79000009",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=79000009 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=79000009⟫\n</summary>"
+   }
+  },
+  {
+   "name": "c10",
+   "now": "2026-10-21T14:30:00+03:00",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "70100000",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 15,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 3
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=70100000 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=70100000⟫\n</summary>"
+   }
+  },
+  {
+   "name": "totals",
+   "now": "2026-10-21T14:31:00+03:00",
+   "argv": [
+    "reconcile",
+    "--sid",
+    "$SID",
+    "--transcript",
+    "$TMP/proj/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^reconciled late=0 unresolved=0 ",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c*.md",
+      "count": 9
+     },
+     {
+      "path": "$ROOT/work/general/compact/subagents/*-aa9a00b3f_c1-760000.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/compactions.jsonl",
+      "lines": 10
+     },
+     {
+      "path": "$WATCH/$SID/boundaries.count",
+      "contains": [
+       "9"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 9,
+      "fields": {
+       "actor": "main"
+      }
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "actor": "a9a00b3f363327444",
+       "resume": "none-subagent"
+      }
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "verdict": "unshaped"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-S-02 status",
+   "now": "2026-10-21T14:31:00+03:00",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "compactions: 10 in this session; last 5 (1 not ok):",
+     "smokeDue: 2.1.306",
+     "! $BRAND-store smoke",
+     "AT-M1-13, AT-M2-05, AT-M4-05"
+    ],
+    "stdout_absent": [
+     "retry window",
+     "Resume here",
+     "finish the review",
+     "count the rows"
+    ],
+    "stdout_re": "(?m)^  2026-10-21T14:30:00\\.000\\+03:00 · main · mod-hook · auto · ok · copy ~/\\.claude/handoffs/work/general/compact/"
+   }
+  }
+ ]
+}

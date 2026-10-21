@@ -1,0 +1,46 @@
+{
+ "id": "AT-M4-04",
+ "note": "SessionStart(compact), classic dispatch, scope unknown: block printed with its subagent line. ESCALATED: AT-M4-04 wants @saved_copy@ = 'not saved (scope unknown)' while AT-M1-09 wants 'pending (...)' for the same classic SessionStart path; the helper follows MOD-SPEC 3.4 (pending) and this case does not assert the saved-copy text",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "unknown",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 3,
+      "midturn": false,
+      "resume_pref": "sessionstart"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_json": {
+     "hookSpecificOutput": {
+      "hookEventName": "SessionStart"
+     }
+    },
+    "context_max_chars": 5000,
+    "context_contains": [
+     "Subagent: skip step 3"
+    ]
+   }
+  }
+ ]
+}

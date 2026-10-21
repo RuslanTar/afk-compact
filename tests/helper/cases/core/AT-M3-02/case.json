@@ -1,0 +1,300 @@
+{
+ "id": "AT-M3-02",
+ "note": "five summaries: sentinel missing, trailer after the sentinel, no marker, boundary precomputed:true, s=main under a subagent-proven dispatch -> truncated, ok-trailer, unshaped, stale, scope-leak",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "sentinel missing",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "11111111",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "12222222-2222-4333-8444-555555555555"
+     }
+    },
+    {
+     "transcript": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=11111111 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "verdict": "truncated"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-111111.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "trailer",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "22222222",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "22222222-2222-4333-8444-555555555555"
+     }
+    },
+    {
+     "transcript": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "22222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/22222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=22222222 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=22222222⟫\nA closing remark after the end line.\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/22222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "verdict": "ok-trailer"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-222222.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "no marker",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/32222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "32222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/32222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/32222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "verdict": "unshaped"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-h*.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "precomputed boundary",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "44444444",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "42222222-2222-4333-8444-555555555555"
+     }
+    },
+    {
+     "transcript": "$TMP/proj/42222222-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": true
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "42222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/42222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=44444444 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=44444444⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/42222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "verdict": "stale"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-444444.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "s=main under a subagent dispatch",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "55555555",
+      "actor": "a9a00b3f363327444",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "52222222-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "52222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/52222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=55555555 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=55555555⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/52222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "fields": {
+       "verdict": "scope-leak"
+      }
+     },
+     {
+      "file": "$WATCH/52222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "scope_leak"
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/*-aa9a00b3f_c1-555555.md",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

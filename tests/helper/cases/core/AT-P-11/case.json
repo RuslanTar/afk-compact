@@ -1,0 +1,10 @@
+{
+ "id": "AT-P-11",
+ "note": "RUNTIME AT-P-11 / ROOT-RULINGS R-5: every use or require in plugin/helper is on the perl-base floor, a helper library, or (Digest::SHA, Time::HiRes) inside an eval with a fallback",
+ "steps": [
+  {
+   "lib": "floor_lint",
+   "args": {}
+  }
+ ]
+}

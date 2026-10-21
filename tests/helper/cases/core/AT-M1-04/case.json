@@ -1,0 +1,51 @@
+{
+ "id": "AT-M1-04",
+ "note": "PreCompact with another plugin's header text and no marker of ours: fallback printed; none of the foreign text in our stdout",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": "⟪other-tool v1 n=12345678 s=main⟫\nOTHER TOOL: keep the deployment table in full."
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_absent": [
+     "other-tool",
+     "OTHER TOOL",
+     "deployment table",
+     "12345678"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback"
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_marker_orphan"
+     }
+    ],
+    "stdout_golden": {
+     "files": [
+      "$FIX/assembly/expected/handoff-instructions__auto.txt",
+      "$FIX/assembly/expected/subagent-instructions__fallback.txt"
+     ],
+     "nonce": "a1b2c3d4"
+    }
+   }
+  }
+ ]
+}

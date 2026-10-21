@@ -1,0 +1,56 @@
+{
+ "id": "AT-M1-03",
+ "note": "PreCompact manual with a user note: fallback without the [auto] line; the note is not repeated",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "manual",
+    "custom_instructions": "keep the SQL"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_absent": [
+     "[auto] ",
+     "[fallback] ",
+     "[chain] ",
+     "[measured] ",
+     "@nonce@",
+     "Measured facts",
+     "This began mid-turn:",
+     "<!--",
+     "{{",
+     "If this began mid-turn, the last step is [unverified] unless shown done.",
+     "keep the SQL"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/*.json",
+      "count": 1,
+      "json": {
+       "trigger": "manual",
+       "tags": []
+      }
+     }
+    ],
+    "stdout_golden": {
+     "files": [
+      "$FIX/assembly/expected/handoff-instructions__base.txt",
+      "$FIX/assembly/expected/subagent-instructions__fallback.txt"
+     ],
+     "nonce": "a1b2c3d4"
+    }
+   }
+  }
+ ]
+}

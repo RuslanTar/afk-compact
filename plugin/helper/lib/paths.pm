@@ -1,16 +1,21 @@
 package paths;
-# lib/paths.pm: library seam of BUILD-PLAN §3.6. Owner: WP-core.
-# Phase 0 stub: every call dies "not implemented" (main.pl turns an uncaught
-# die into exit 70). The names and argument lists below are the seam.
+# lib/paths.pm: where things live (MOD-SPEC conventions). Owner: WP-core.
+# paths::for(settings, sid) -> {root, watch, disposable, watch_default}
 use strict;
 use warnings;
 
-# paths::for(settings, sid) -> {root, watch, disposable}
 sub for {
     my ($settings, $sid) = @_;
-    _not_implemented('for');
+    my $v = ref $settings eq 'HASH' && $settings->{values} ? $settings->{values} : $settings;
+    my $root = util::clean_path($v->{handoff_root});
+    my $watch = (defined $v->{log_dir} && $v->{log_dir} ne '') ? util::clean_path($v->{log_dir}) : "$root/.watch";
+    my $disp = util::clean_path($v->{disposable_root});
+    my $udef = ctx::user_config();
+    my $droot = ref $udef->{handoff_root} eq 'HASH' ? $udef->{handoff_root}{default} : '~/.claude/handoffs';
+    my $wdef = util::clean_path($droot // '~/.claude/handoffs') . '/.watch';
+    return { root => $root, watch => $watch, disposable => $disp, watch_default => $wdef };
 }
 
-sub _not_implemented { die "paths::$_[0]: not implemented\n" }
+sub sid_dir { my ($p, $sid) = @_; return "$p->{watch}/$sid" }
 
 1;

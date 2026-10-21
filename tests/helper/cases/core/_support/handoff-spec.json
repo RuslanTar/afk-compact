@@ -1,0 +1,36 @@
+{
+  "_note": "Interim spec literals for the WP-core helper cases only, used by tests/helper/run.pl when plugin/assets/handoff-spec.json does not exist yet (WP-text writes the real block in src/assets/handoff-spec.md). Values follow CONSISTENCY section 1 and MOD-SPEC 2.2, 5.1, 10. {{plugin}} is filled by the runner.",
+  "sections_main": ["## Resume here", "## User constraints", "## Decisions and do-not-re-raise", "## In flight", "## Live state", "## Open questions", "## Location", "## Work done and findings", "## Evidence", "## Next steps"],
+  "sections_location": ["### GSD", "### Environment", "### Guards in force", "### Ownership"],
+  "sections_subagent": ["## Task as assigned", "## Constraints from the parent", "## Report", "## Done", "## Findings", "## Produced but not yet delivered", "## Own background tasks", "## Next action"],
+  "marker_re": "^⟪{{plugin}} v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
+  "sentinel_re": "^⟪/{{plugin}} n=([0-9a-f]{8})⟫$",
+  "instr_marker_re": "⟪{{plugin}} v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
+  "verdicts": ["stale", "scope-leak", "unshaped", "truncated", "ok-trailer", "ok"],
+  "status_words": ["active", "blocked", "waiting-owner", "waiting-job", "done"],
+  "kinds": ["agent", "teammate", "workflow", "monitor", "cron", "shell", "server", "peer", "external"],
+  "writers": ["handoff", "mod", "postcompact-fallback"],
+  "copy_trailers": [],
+  "secret_rules": [
+    {"id": "pem", "class": "HARD", "re": "-----BEGIN [A-Z ]*PRIVATE KEY-----"},
+    {"id": "jwt", "class": "HARD", "re": "\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}"},
+    {"id": "bearer", "class": "HARD", "re": "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9._~+/=-]{16,}"},
+    {"id": "provider-prefix", "class": "HARD", "re": "\\b(?:ghp_|gho_|github_pat_|sk-|xox[abpr]-|AKIA)[A-Za-z0-9_-]{12,}"},
+    {"id": "url-userinfo", "class": "HARD", "re": "\\b[a-z][a-z0-9+.-]*://[^/\\s:@]+:[^/\\s@]+@"},
+    {"id": "kv-secret", "class": "WARN", "re": "(?i)\\b(?:pass|passwd|password|secret|token|key)\\s*[=:]\\s*\\S{6,}"},
+    {"id": "cloud-key-40", "class": "WARN", "re": "(?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])"},
+    {"id": "high-entropy", "class": "WARN", "re": "[A-Za-z0-9+/=_-]{32,}", "min_entropy": 4.0},
+    {"id": "cookie", "class": "WARN", "re": "(?i)\\b(?:set-)?cookie:\\s*\\S+"}
+  ],
+  "deny_names": [
+    "^\\.env(?!\\.(?:example|sample|template|dist)$)(?:\\..*)?$",
+    "^id_(?:rsa|dsa|ecdsa|ed25519)$",
+    "\\.(?:pem|key|p12|pfx)$",
+    "^\\.netrc$",
+    "^\\.npmrc$",
+    "^\\.claude\\.json$",
+    "^\\.(?:bash|zsh|sh)_history$",
+    "\\.har$",
+    "\\.sqlite3?$"
+  ]
+}

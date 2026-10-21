@@ -1,0 +1,56 @@
+{
+ "id": "AT-M1-08",
+ "note": "SessionStart(compact) whose newest dispatch has resume_pref prompt.context: no additionalContext, no claim",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 4,
+      "midturn": false
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-claimed/$SID"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-claimed/*",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/ss-seen/1a2b3c4d",
+      "count": 1
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject"
+     }
+    ]
+   }
+  }
+ ]
+}

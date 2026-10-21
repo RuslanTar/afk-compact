@@ -1,0 +1,10 @@
+{
+ "id": "BT-04-H",
+ "note": "the helper assembler gives byte-identical text to every tools/assemble golden in tests/fixtures/assembly/expected (AT-P-07 core goldens)",
+ "steps": [
+  {
+   "lib": "assemble_goldens",
+   "args": {}
+  }
+ ]
+}

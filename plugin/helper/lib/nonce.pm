@@ -1,16 +1,22 @@
 package nonce;
-# lib/nonce.pm: library seam of BUILD-PLAN §3.6. Owner: WP-core.
-# Phase 0 stub: every call dies "not implemented" (main.pl turns an uncaught
-# die into exit 70). The names and argument lists below are the seam.
+# lib/nonce.pm: per-compaction nonce (MOD-SPEC §2.2): 8 lowercase hex from
+# /dev/urandom, redrawn while <watch>/<sid>/dispatch/<nonce>.json exists.
+# Owner: WP-core.
 use strict;
 use warnings;
 
-# nonce::draw(sid) -> nonce
+# draw(sid [, watch]) -> nonce
 sub draw {
-    my ($sid) = @_;
-    _not_implemented('draw');
+    my ($sid, $watch) = @_;
+    $watch //= rc::watch();
+    for (1 .. 64) {
+        my $n = util::rand_hex(8);
+        next unless $n =~ /^[0-9a-f]{8}$/;
+        return $n unless defined $watch && defined $sid && -e "$watch/$sid/dispatch/$n.json";
+    }
+    die "nonce: no free draw\n";
 }
 
-sub _not_implemented { die "nonce::$_[0]: not implemented\n" }
+sub valid { return defined $_[0] && $_[0] =~ /^[0-9a-f]{8}$/ ? 1 : 0 }
 
 1;

@@ -1,0 +1,249 @@
+{
+ "id": "AT-M5-02",
+ "note": "buckets: (a) pin; (b) branch feature/LAB-42-retry -> LAB-42; (c) branch main -> general; (d) cwd outside git -> repo = cwd basename, general; (e) no pin for S2, S2.lineage.json -> S1 pinned to lab/x -> lab/x, pin-lineage",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "(a) pin",
+   "setup": [
+    {
+     "repo": "$TMP/wa",
+     "branch": "feature/LAB-42-retry"
+    },
+    {
+     "write": "$ROOT/.sessions/e1555555-2222-4333-8444-555555555555.json",
+     "json": {
+      "bucket": "wa/pinned-topic"
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "e5000001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "e1555555-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "e1555555-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/e1555555-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/wa",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=e5000001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=e5000001⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/wa/pinned-topic/compact/*_c1-e50000.md",
+      "count": 1,
+      "frontmatter": {
+       "bucket": "wa/pinned-topic",
+       "bucket_source": "pin"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) branch ticket",
+   "setup": [
+    {
+     "repo": "$TMP/wb",
+     "branch": "feature/LAB-42-retry"
+    },
+    {
+     "dispatch": {
+      "nonce": "e5000002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "e2555555-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "e2555555-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/e2555555-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/wb",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=e5000002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=e5000002⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/wb/LAB-42/compact/*_c1-e50000.md",
+      "count": 1,
+      "frontmatter": {
+       "bucket_source": "branch",
+       "branch": "feature/LAB-42-retry"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) branch main",
+   "setup": [
+    {
+     "repo": "$TMP/wc",
+     "branch": "main"
+    },
+    {
+     "dispatch": {
+      "nonce": "e5000003",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "e3555555-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "e3555555-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/e3555555-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/wc",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=e5000003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=e5000003⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/wc/general/compact/*_c1-e50000.md",
+      "count": 1,
+      "frontmatter": {
+       "bucket_source": "general"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(d) outside git",
+   "setup": [
+    {
+     "mkdir": "$TMP/plain-dir"
+    },
+    {
+     "dispatch": {
+      "nonce": "e5000004",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "e4555555-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "e4555555-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/e4555555-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/plain-dir",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=e5000004 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=e5000004⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/plain-dir/general/compact/*_c1-e50000.md",
+      "count": 1,
+      "frontmatter": {
+       "repository": "plain-dir",
+       "bucket_source": "general",
+       "branch": null
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(e) lineage hop to the predecessor's pin",
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/e6555555-2222-4333-8444-555555555555.json",
+     "json": {
+      "bucket": "lab/x"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/e5555555-2222-4333-8444-555555555555.lineage.json",
+     "json": {
+      "previous_session_id": "e6555555-2222-4333-8444-555555555555",
+      "lineage_reason": "clear"
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "e5000005",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false,
+      "session_id": "e5555555-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "e5555555-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/e5555555-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/wb",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=e5000005 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=e5000005⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/lab/x/compact/*_c1-e50000.md",
+      "count": 1,
+      "frontmatter": {
+       "bucket": "lab/x",
+       "bucket_source": "pin-lineage",
+       "previous_session_id": "e6555555-2222-4333-8444-555555555555",
+       "lineage_reason": "clear"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

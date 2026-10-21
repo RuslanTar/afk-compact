@@ -1,0 +1,133 @@
+{
+ "id": "AT-M4-03",
+ "note": "PostCompact, no marker, no dispatch match: (a) main boundary count +1 -> compact/; (b) only subagents/agent-x.jsonl gained a boundary -> compact/subagents/ with -a from the file name; (c) neither -> compact/unattributed/",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "(a) main boundary +1",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "transcript": "$TMP/proj/a3333333-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "a3333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/a3333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nnative summary a\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/2026-10-21_14-05-12_a3333333_c1-h*.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/a3333333-2222-4333-8444-555555555555/boundaries.count",
+      "contains": [
+       "1"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) only a subagent transcript gained a boundary",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/b3333333-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 300
+       }
+      }
+     ]
+    },
+    {
+     "transcript": "$TMP/proj/b3333333-2222-4333-8444-555555555555/subagents/agent-x.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "age_s": 4
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "b3333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/b3333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nnative summary b\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/2026-10-21_14-05-12_b3333333-ax_c1-h*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/work/general/compact/*b3333333*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) neither",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "c3333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/c3333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nnative summary c\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/2026-10-21_14-05-12_c3333333_h*.md",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

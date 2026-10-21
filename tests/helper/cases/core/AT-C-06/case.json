@@ -1,0 +1,62 @@
+{
+ "id": "AT-C-06",
+ "note": "2 concurrent claim calls on one nonce: exactly one CLAIMED; the other TAKEN with the winner's channel; one resume_inject row",
+ "now": "2026-10-21T14:05:12+03:00",
+ "steps": [
+  {
+   "argv": [
+    "claim",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--channel",
+    "prompt.context"
+   ],
+   "parallel": 2,
+   "expect": {
+    "exit": 0,
+    "parallel_stdout_count": {
+     "CLAIMED\n": 1,
+     "TAKEN prompt.context\n": 1
+    },
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-claimed/1a2b3c4d",
+      "contains": [
+       "prompt.context"
+      ],
+      "mode": "0600"
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject",
+      "count": 1,
+      "fields": {
+       "nonce": "1a2b3c4d",
+       "channel": "prompt.context"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "later channel",
+   "argv": [
+    "claim",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--channel",
+    "sessionstart"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "TAKEN prompt.context\n"
+   }
+  }
+ ]
+}

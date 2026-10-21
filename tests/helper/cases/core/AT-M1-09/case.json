@@ -1,0 +1,119 @@
+{
+ "id": "AT-M1-09",
+ "note": "SessionStart(compact) with a classic dispatch, then a second SessionStart for the same nonce: the first prints the block (<= 5,000 chars, subagent line, [midturn] for trigger auto, @saved_copy@ pending (...)) and claims sessionstart; the second prints nothing",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "unknown",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 3,
+      "midturn": false,
+      "resume_pref": "sessionstart"
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_json": {
+     "hookSpecificOutput": {
+      "hookEventName": "SessionStart"
+     }
+    },
+    "stdout_lines": 1,
+    "context_max_chars": 5000,
+    "context_contains": [
+     "Subagent: skip step 3",
+     "Compacted mid-turn or precomputed: the last step is [unverified].",
+     "saved copy of this summary: pending (saved after this message; /$BRAND:status shows the path)",
+     "heal-check --origin $SID --item"
+    ],
+    "context_absent": [
+     "Summary not in handoff format",
+     "@",
+     "[midturn] ",
+     "$TMP/proj"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-claimed/1a2b3c4d",
+      "contains": [
+       "sessionstart"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject",
+      "count": 1,
+      "fields": {
+       "nonce": "1a2b3c4d",
+       "channel": "sessionstart"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "second SessionStart",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "resume_inject",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "claim afterwards",
+   "argv": [
+    "claim",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--channel",
+    "prompt.context"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "TAKEN sessionstart\n"
+   }
+  }
+ ]
+}

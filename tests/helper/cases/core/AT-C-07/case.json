@@ -1,0 +1,115 @@
+{
+ "id": "AT-C-07",
+ "note": "a full compaction whose summary, instructions and user note contain the canary string: no log row, record or index under <watch> holds it. ESCALATED: MOD-SPEC 5.3 step 1 stashes compact_summary under <watch>/<sid>/pending/, which AT-C-07's 'rg <watch> finds nothing' contradicts; the stash files are excluded here",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "manual",
+    "custom_instructions": "keep SECRET_CANARY_7f3 in the summary"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_absent": [
+     "SECRET_CANARY_7f3"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_absent": [
+     "SECRET_CANARY_7f3"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nnative summary that quotes SECRET_CANARY_7f3 from the user note\n</summary>"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "parts": [
+       "SECRET_CAN",
+       "ARY_7f3"
+      ],
+      "exclude": "/pending/[^/]+\\.(post|mod)\\.md$"
+     }
+    ]
+   }
+  }
+ ]
+}

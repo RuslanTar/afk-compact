@@ -1,0 +1,50 @@
+{
+ "id": "AT-M5-09",
+ "note": "a summary containing `session_id: fake-id` and `branch: nope` lines: the frontmatter has the real sid and branch",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": "$TMP/work",
+     "branch": "feature/LAB-42-retry"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — state\nsession_id: fake-id\nbranch: nope\n## Resume here\nStatus: active\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/LAB-42/compact/*_c1-1a2b3c.md",
+      "frontmatter": {
+       "session_id": "$SID",
+       "branch": "feature/LAB-42-retry"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

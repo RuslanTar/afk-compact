@@ -1,0 +1,90 @@
+{
+ "id": "AT-M3-06",
+ "note": "dispatch 11 min old, trigger auto, no PostCompact; a second one with trigger precompute: compaction_unresolved for the first, precompute_not_reused for the second; failure count 1; rows written once",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "aaaa0001",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 660,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "bbbb0002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "precompute",
+      "age_s": 650,
+      "midturn": false
+     }
+    }
+   ],
+   "argv": [
+    "reconcile",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "reconciled late=0 unresolved=1 precompute_not_reused=1 order_anomaly=0 undelivered=0\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "compaction_unresolved",
+      "count": 1,
+      "fields": {
+       "nonce": "aaaa0001"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompute_not_reused",
+      "count": 1,
+      "fields": {
+       "nonce": "bbbb0002"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop again",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "compaction_unresolved",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompute_not_reused",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,68 @@
+{
+ "id": "AT-M4-02",
+ "note": "PostCompact with an s=sub summary whose nonce maps to that agent's dispatch: copy compact/subagents/<stamp>_<sid8>-aa9a00b3f_c1-<nonce6>.md; nothing new at the compact/ top level; no sweep",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "a9a00b3f363327444",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=sub⟫\n## Task as assigned: \"count the rows\"\n## Report: text to parent\n## Next action: report\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/subagents/2026-10-21_14-05-12_${SID8}-aa9a00b3f_c1-1a2b3c.md",
+      "mode": "0400",
+      "frontmatter": {
+       "kind": "subagent-summary",
+       "actor": "a9a00b3f363327444",
+       "verdict": "ok"
+      }
+     },
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     }
+    ],
+    "trace_absent": [
+     "sweep"
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence"
+     }
+    ],
+    "absent": [
+     "$WATCH/$SID/boundaries.count"
+    ]
+   }
+  }
+ ]
+}
