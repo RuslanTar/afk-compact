@@ -1,0 +1,857 @@
+{
+ "id": "AT-Q-01..07",
+ "note": "D-10 (small-rulings §1.2-1.6): queue-add against stub queue tools that log their argv. 01: draft on stdin -> the tool gets `add --json --session S --client-id ck-<12 hex> --lane-name <pinned bucket slug>` and the queue-add/v1 draft, QUEUED <id>, a ledger row, a queue_add row without the question text. 02: the same draft again -> EXISTS from the ledger, no exec; with the ledger gone the tool answers exists -> EXISTS. 03: queue_cmd unset or not executable -> NOT QUEUED (off), no exec. 04: a v1 tool (add exits 2, no REFUSED line) -> NOT QUEUED (unsupported), caps cache written, the next call execs nothing; a v1 list reply (no commands) cached by measure also gives unsupported with no exec. 05: exits 3/4/5/6 and a 6 s sleep -> held / no-lane / invalid / error / timeout, exit 0, one row each. 06: a HARD secret never reaches the tool (secret); a WARN secret reaches it redacted. 07: queue-add never runs adopt or passes --lane; the checkpoint only lists. Plus: an unbounded draft is NOT QUEUED (invalid) naming the rule",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "stub": "q-ok",
+     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/ok.calls\"\ncase \"$1\" in\n add) cat > \"$d/ok.stdin\"; if grep -qx \"$6\" \"$d/ok.seen\" 2>/dev/null; then st=exists; else st=queued; echo \"$6\" >> \"$d/ok.seen\"; fi; printf '{\"schema\":\"queue-add/v1\",\"status\":\"%s\",\"id\":\"proj/11111111-01\",\"lane\":\"lane:repo/lab-123\",\"client_id\":\"%s\"}\\n' \"$st\" \"$6\";;\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":0,\"pending\":0,\"commands\":[\"list\",\"adopt\",\"add\"]}\\n';;\nesac\nexit 0"
+    },
+    {
+     "stub": "q-v1",
+     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/v1.calls\"\ncase \"$1\" in\n add) echo 'usage: catchup add --file DRAFT' >&2; exit 2;;\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":0,\"pending\":0}\\n'; exit 0;;\nesac\nexit 2"
+    },
+    {
+     "stub": "q-list-v1",
+     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/lv1.calls\"\ncase \"$1\" in\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":1,\"pending\":1,\"items\":[\"proj/x-01\"]}\\n'; exit 0;;\nesac\nexit 9"
+    },
+    {
+     "stub": "q-held",
+     "script": "echo 'REFUSED: held: lane held by a live session'; exit 3"
+    },
+    {
+     "stub": "q-nolane",
+     "script": "echo 'REFUSED: no-lane: name it'; exit 4"
+    },
+    {
+     "stub": "q-invalid",
+     "script": "echo 'REFUSED: draft: plain_lines'; exit 5"
+    },
+    {
+     "stub": "q-error",
+     "script": "echo 'REFUSED: store: locked'; exit 6"
+    },
+    {
+     "stub": "q-slow",
+     "script": "sleep 6; exit 0"
+    },
+    {
+     "write": "$TMP/bin/not-exec",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": "0644"
+    },
+    {
+     "write": "$ROOT/.sessions/$SID.json",
+     "json": {
+      "bucket": "example-repo/LAB-123",
+      "session_id": "$SID"
+     }
+    },
+    {
+     "write": "$TMP/draft.json",
+     "json": {
+      "question": "Should the retry window be 30 s or 60 s?",
+      "kind": "choice",
+      "options": [
+       {
+        "label": "30 s",
+        "description": "faster feedback",
+        "recommended": true
+       },
+       {
+        "label": "60 s",
+        "description": "fewer false alarms"
+       }
+      ],
+      "blocks": "the retry fix"
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    }
+   ]
+  },
+  {
+   "name": "AT-Q-01 queued",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "QUEUED proj/11111111-01\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 1,
+      "has": [
+       "^add --json --session $SID --client-id ck-[0-9a-f]{12} --lane-name lab-123$"
+      ]
+     },
+     {
+      "path": "$TMP/bin/ok.stdin",
+      "has": [
+       "^\\{\"schema\":\"queue-add/v1\",\"client_id\":\"ck-[0-9a-f]{12}\",\"session\":\"$SID\",\"asked_at\":\"2026-10-21T14:05:12\\+03:00\",\"source\":\\{\"plugin\":\"$BRAND\",\"kind\":\"checkpoint\",\"nonce\":\"1a2b3c4d\"\\},\"question\":\"Should the retry window be 30 s or 60 s\\?\",\"kind\":\"choice\",\"options\":\\[\\{\"label\":\"30 s\",\"description\":\"faster feedback\",\"recommended\":true,\"long_term\":false\\}"
+      ]
+     },
+     {
+      "path": "$WATCH/$SID/queue-adds.jsonl",
+      "mode": "0600",
+      "lines": 1,
+      "has": [
+       "\"client_id\":\"ck-[0-9a-f]{12}\",\"result\":\"queued\",\"id\":\"proj/11111111-01\""
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_add",
+      "count": 1,
+      "fields": {
+       "result": "queued",
+       "exit": 0
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "retry window"
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-02 again: ledger",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e6f7a8b"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "should  the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "other words",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "EXISTS proj/11111111-01\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 1
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "run": [
+      "log",
+      "--sid",
+      "$SID",
+      "--json",
+      "{\"v\":1}"
+     ]
+    },
+    {
+     "write": "$WATCH/$SID/queue-adds.jsonl",
+     "text": ""
+    }
+   ]
+  },
+  {
+   "name": "AT-Q-02 ledger gone: the tool says exists",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--file",
+    "$TMP/draft.json"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "EXISTS proj/11111111-01\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-03 unset",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (off): keep it in Questions\n",
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-03 not executable",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/not-exec"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (off): keep it in Questions\n",
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-04 v1 add",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for v1 tools?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-v1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (unsupported): keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/v1.calls",
+      "lines": 1
+     },
+     {
+      "path": "$WATCH/queue-caps.json",
+      "mode": "0600",
+      "has": [
+       "\"add\":\"unsupported\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-04 cached",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for v1 tools?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-v1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (unsupported): keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/v1.calls",
+      "lines": 1
+     }
+    ],
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-04 a v1 list reply is cached",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-list-v1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Queued: 1 open in lane:repo/lab-123"
+    ],
+    "files": [
+     {
+      "path": "$TMP/bin/lv1.calls",
+      "lines": 1,
+      "has": [
+       "^list --json --session $SID$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-04 then no add exec",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for v1 tools?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-list-v1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (unsupported): keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/lv1.calls",
+      "lines": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-05 held",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for held?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-held"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (held): keep it in Questions\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_add",
+      "count": 1,
+      "fields": {
+       "result": "held",
+       "exit": 3
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-05 no-lane",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for no-lane?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-nolane"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (no-lane): keep it in Questions\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_add",
+      "count": 1,
+      "fields": {
+       "result": "no-lane",
+       "exit": 4
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-05 invalid",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for invalid?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-invalid"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (invalid): keep it in Questions\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_add",
+      "count": 1,
+      "fields": {
+       "result": "invalid",
+       "exit": 5
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-05 error",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for error?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-error"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (error): keep it in Questions\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_add",
+      "count": 1,
+      "fields": {
+       "result": "error",
+       "exit": 6
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-05 timeout",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Which retry window for timeout?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-slow"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (timeout): keep it in Questions\n",
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_add",
+      "count": 1,
+      "fields": {
+       "result": "timeout"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-06 HARD secret",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "May I rotate $SECRET{github-token} today?",
+    "kind": "open",
+    "blocks": "the rotation"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (secret): github-token; keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 2
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$TMP/bin",
+      "text": "$SECRET{github-token}"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "$SECRET{github-token}"
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-06 WARN secret is redacted",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "The config sets $SECRET{kv-password}; keep it?",
+    "kind": "open",
+    "blocks": "the config review"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^QUEUED proj/11111111-01\\n\\z",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 3
+     },
+     {
+      "path": "$TMP/bin/ok.stdin",
+      "has": [
+       "\\[redacted:key-value\\]"
+      ]
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$TMP/bin",
+      "text": "$SECRET{kv-password}"
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-Q-07 the checkpoint only lists",
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "9a9b9c9d",
+    "--budget-ms",
+    "10000",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 4,
+      "has": [
+       "\\Alist --json --session $SID\\n|\\nlist --json --session $SID\\n"
+      ],
+      "lacks": [
+       "adopt",
+       "--lane( |$)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "unbounded draft",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "No question mark here",
+    "kind": "open",
+    "blocks": "x"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (invalid): question; keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 4
+     }
+    ]
+   }
+  },
+  {
+   "name": "choice with one option",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "Which?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "a",
+      "description": "b",
+      "recommended": true
+     }
+    ],
+    "blocks": "x"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (invalid): options; keep it in Questions\n"
+   }
+  },
+  {
+   "name": "bad usage still exits 0",
+   "argv": [
+    "queue-add",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {},
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^NOT QUEUED \\(invalid\\): usage"
+   }
+  }
+ ]
+}
