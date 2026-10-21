@@ -53,7 +53,7 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 - **Dies on**: `/clear` · exit · 7-day expiry · nothing.
 - **Frontmatter `status`**: `in-progress` · `blocked` · `completed`. **`lineage_reason`**: `clear` · `fork` · `bg-copy` · `handoff-resume` · `none`.
 - **Resume relation**: `same-session` · `successor` · `other` · `unselected`. **Integrity**: `ok` · `possibly truncated` · `legacy` · `unshaped` · `s=sub`.
-- **Queue lane**: `^(lane|auto):[A-Za-z0-9._/-]+$`; only the helper writes it.
+- **Queue lane**: `^(lane|auto):[A-Za-z0-9._/-]+$`; only the helper writes it. A resume adopts only `lane:` ids.
 
 ## 5. Explicit none-forms
 
@@ -218,6 +218,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "relations": ["same-session", "successor", "other", "unselected"],
   "integrity": ["ok", "possibly truncated", "legacy", "unshaped", "s=sub"],
   "lane_re": "^(lane|auto):[A-Za-z0-9._/-]+$",
+  "lane_adopt_re": "^lane:[A-Za-z0-9._/-]+$",
   "none_forms_handoff": {
     "## User constraints": ["^none stated$"],
     "## In flight": ["^Nothing in flight — checked ([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2} via .+$", "^Nothing in flight known \\(not checked\\)$"],
