@@ -1,0 +1,174 @@
+{
+ "id": "HT-LT-05 (CR-F9)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Code review 2026-10-22, CR-F9 residual: a publish that made the <ht>.published claim and died before its file was placed (link error, kill) leaves a claim naming a missing file; a retry of the same stage places the handoff at the claimed path (exclusive link, never over a file), so the claim is fulfilled; a claim naming any other missing path, or an existing file, is still REFUSED: handoff-exists",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "the mod opens a handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "name": "begin binds the open ht",
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+     "content": "$ROOT/repo/LAB-7/other-name.md\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "now": "2026-10-21T14:10:00+03:00",
+   "name": "a claim naming a missing file that is not this stage's name: still refused",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: handoff-exists .*/other-name\\.md"
+    ],
+    "absent": [
+     "$STAGE/published"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+     "content": "$ROOT/repo/LAB-7/$STEM.md\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "now": "2026-10-21T14:12:00+03:00",
+   "name": "CR-F9: the claim names this stage's missing file: the retry places it there",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^# LAB-7 — retry fix drafted"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/.*.publish-*",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+      "has": [
+       "\\A$ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "published",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "published $ROOT/repo/LAB-7/$STEM.md\n"
+   }
+  }
+ ]
+}
