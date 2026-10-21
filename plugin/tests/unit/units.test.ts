@@ -1,10 +1,11 @@
-// U tests of the pure libs: nonce (AT-C-01), detector (AT-C-02), assembler budgets (AT-P-07),
-// clamp (AT-P-03/04 arithmetic), the run-time brand in the marker (BT-01 U part), sha256.
+// U tests of the pure libs: nonce (AT-C-01), detector (AT-C-02), assembler budgets (AT-P-07,
+// D-17/DP-8 table), clamp (AT-P-03/04/15/16 arithmetic), the run-time brand in the marker
+// (BT-01 U part), sha256.
 import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, leftovers } from '../../hooks/lib/assemble'
-import { DEFAULTS, clamp } from '../../hooks/lib/config'
+import { DEFAULTS, clamp, parseOptions } from '../../hooks/lib/config'
 import { CLOSE, OPEN, detectSummary, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
@@ -102,14 +103,17 @@ describe('AT-C-02 detector', () => {
 const PREV = '~/.claude/handoffs/example-repo/LAB-123/' + 'p'.repeat(141 - '~/.claude/handoffs/example-repo/LAB-123/'.length)
 const WORST = {
   nonce: 'a1b2c3d4', previous_copy: PREV, measured_at: '2026-10-21T04:40:00+03:00', session_id: '00000000-0000-4000-8000-000000000000',
-  saved_copy: PREV, tokens: '612,345', queue_add: 'queue-cmd add --lane example-repo/LAB-123', measured_facts: '', remeasure: '',
+  saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4',
+  measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
+  draft_state: 'present', handoff_finish: '`' + NAME + "-store publish --stage '" + PREV + "' --slug lab-123-retry --status in-progress`",
 }
 const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
-  'handoff-instructions': ['midturn', 'auto', 'chain', 'measured'],
+  'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok'],
-  'checkpoint-nudge': ['continue', 'halt', 'queue'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial'],
+  'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
+  'handoff-turn': ['submit', 'near', 'spent', 'imminent'],
 }
 
 function combos(tags: Tag[]): Tag[][] {
@@ -130,11 +134,11 @@ describe('AT-P-07 assembler (14-character name)', () => {
       }
     }
   })
-  test('main static core ≤4,000 chars on every mod and classic path', () => {
-    for (const tags of [[], ['midturn'], ['chain'], ['midturn', 'chain'], ['auto'], ['auto', 'chain']] as Tag[][]) {
-      const core = assembleText(text('handoff-instructions'), tags, BLANK, ['measured'])
-      expect(core.length <= 4000).toBe(true)
-    }
+  // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
+  // the hard guard is the channel total below, with the D-18 `[handoff]` line included.
+  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,192 B (the hard channel total)', () => {
+    const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'handoff', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
+    expect(byteLength(s) <= 8192).toBe(true)
   })
   test('classic fallback (main [auto]+[chain] + subagent [fallback]) ≤8,192 B', () => {
     const s = assembleText(text('handoff-instructions'), ['auto', 'chain'], WORST, ['measured']) + assembleText(text('subagent-instructions'), ['fallback'], WORST)
@@ -144,15 +148,21 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('resume protocol ≤2,000 chars for every tag combination', () => {
-    for (const tags of combos(['midturn', 'nonok'])) {
+  test('resume protocol ≤2,500 chars (DP-8 hard; ADVISORY above 2,000) for every tag combination the mod builds', () => {
+    // `[handoff]` and `[handoff-partial]` never come together (MOD-SPEC §3.4).
+    for (const tags of combos(['midturn', 'nonok', 'handoff', 'handoff-partial']).filter(t => !(t.includes('handoff') && t.includes('handoff-partial')))) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 2000).toBe(true)
+      expect(s.length <= 2500).toBe(true)
     }
   })
-  test('the queue tag is never applied (D-10)', () => {
-    const s = assembleText(text('checkpoint-nudge'), ['continue', 'queue'], WORST)
-    expect(s).toBe(assembleText(text('checkpoint-nudge'), ['continue'], WORST))
+  test('the queue tag is applied when given (D-10: the mod gives it only with queue_cmd set)', () => {
+    const t = text('checkpoint-nudge')
+    const s = assembleText(t, ['continue', 'queue'], WORST)
+    const without = assembleText(t, ['continue'], WORST)
+    if (t.includes('\n[queue] ')) {
+      expect(s).not.toBe(without)
+      if (t.includes('@queue_add@')) expect(s).toContain(WORST.queue_add)
+    } else expect(s).toBe(without)
   })
   test('heading literals equal the spec-literals block (skipped until handoff-spec.md exists)', () => {
     const heads = specValue('sections_main')
@@ -179,11 +189,42 @@ test('clamp arithmetic: AT-P-03 and AT-P-04', () => {
   expect([p3.soft_max, p3.target, p3.disabled]).toEqual([640000, 400000, null])
   expect(p3.clamped).toEqual([{ key: 'soft_max', configured: 900000, effective: 640000 }])
   const p4 = clamp(DEFAULTS, 200000)
-  expect([p4.soft_max, p4.target, p4.disabled]).toEqual([67000, 44666, 'trigger-disabled-small-window'])
+  expect([p4.soft_max, p4.target, p4.disabled]).toEqual([51000, 34000, 'trigger-disabled-small-window'])
   const off = clamp({ ...DEFAULTS, triggers: false }, 1000000)
   expect([off.disabled, off.clamped]).toEqual(['triggers-off', []])
   const small = clamp(DEFAULTS, 350000)
   expect(small.disabled).toBeNull()
+})
+
+test('AT-P-15: clamp at windows 329000 and 328999, defaults: enabled (target 120000) / disabled', () => {
+  const on = clamp(DEFAULTS, 329000)
+  expect([on.soft_max, on.target, on.disabled]).toEqual([180000, 120000, null])
+  const off = clamp(DEFAULTS, 328999)
+  expect(off.disabled).toBe('trigger-disabled-small-window')
+})
+
+// AT-P-16's "off → 567000" is N − 100,000; the same §1.2 formula's floor(0.8 × window) = 560,000
+// binds first, so the off value is 560000 (needs/mod-escalations.md E-M-2).
+test('AT-P-16: window 700000: soft max 551000 + clamped; handoff_turn off: 560000 (reserve 52,000 + allowance, else 100,000)', () => {
+  const on = clamp(DEFAULTS, 700000)
+  expect(on.soft_max).toBe(551000)
+  expect(on.clamped).toEqual([{ key: 'soft_max', configured: 600000, effective: 551000 }, { key: 'target', configured: 400000, effective: 367333 }])
+  expect(clamp({ ...DEFAULTS, handoff_turn: 'off' }, 700000).soft_max).toBe(560000)
+  expect(clamp({ ...DEFAULTS, handoff_turn: 'off' }, 720000).soft_max).toBe(576000)
+  expect(clamp({ ...DEFAULTS, handoff_turn: 'off', native_window_tokens: 640000 }, 1000000).soft_max).toBe(507000)
+  expect(clamp(DEFAULTS, 800000).soft_max).toBe(600000)
+  expect(clamp({ ...DEFAULTS, handoff_turn_max_tokens: 150000 }, 800000).soft_max).toBe(565000)
+})
+
+test('handoff_turn / handoff_turn_max_tokens / queue_cmd options: validation, clamp, notes', () => {
+  const a = parseOptions({ handoff_turn: ' OFF ', handoff_turn_max_tokens: 5000, queue_cmd: '/q/bin/queue' })
+  expect([a.handoff_turn, a.handoff_turn_max_tokens, a.queue_cmd]).toEqual(['off', 20000, '/q/bin/queue'])
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'handoff_turn_max_tokens', configured: 5000, effective: 20000 }] })
+  const b = parseOptions({ handoff_turn: 'fork', handoff_turn_max_tokens: '900000' })
+  expect([b.handoff_turn, b.handoff_turn_max_tokens]).toEqual(['halt', 150000])
+  expect(b.notes.invalid).toEqual(['handoff_turn'])
+  const c = parseOptions({ handoff_turn: '${user_config.handoff_turn}', queue_cmd: '' })
+  expect([c.handoff_turn, c.handoff_turn_max_tokens, c.queue_cmd, c.notes]).toEqual(['halt', 64000, '', { invalid: [], clamped: [] }])
 })
 
 test('sha256 of known vectors', () => {

@@ -1,12 +1,17 @@
 // The mid-turn nudge (MOD-SPEC §9): main `tool.call` results only, never subagents, once per
-// main turn, at or above the effective soft max, never on a denied call. Also: the open
+// main turn (never in the handoff turn, §9.1), at or above the effective soft max, never on a
+// denied call; `[halt]` with its reason in a last cycle, `[queue]` when `queue_cmd` is set. Also: the open
 // AskUserQuestion count, and the temp paths cited in tool inputs (MOD-SPEC §10 sweep scope).
 import type { Deps } from './deps'
-import type { Tag } from './assemble'
+import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
+import { dispatchExists } from './compact'
 import { effective } from './config'
+import { lastCycleOf } from './cont'
+import { HALT_REASON_TEXT, handoffPossible } from './handoff-turn'
 import { logPaths } from './helper'
 import { log, makeRow } from './log'
+import { drawNonce } from './nonce'
 import { byteLength } from './normalize'
 
 export const ASK_TOOL = 'AskUserQuestion'
@@ -31,9 +36,23 @@ export async function nudgeText(d: Deps, sid: string): Promise<string | undefine
   if (tokens === undefined || tokens < eff.soft_max) return undefined
   s.nudgedThisTurn = true
   s.resumeAfter = true
-  const tags: Tag[] = [s.halt.active ? 'halt' : 'continue']
-  await log(d, sid, 'nudge', { tokens, askq_open: s.askOpen > 0, halt: s.halt.active })
-  return assemble(d.name, 'checkpoint-nudge', tags, { tokens: formatTokens(tokens) })
+  // A last cycle (MOD-SPEC §9.1) gets `[halt]` with its reason, and the handoff-turn sentence
+  // only when that turn can run, so the nudge never promises a resume or a turn that won't come.
+  const last = await lastCycleOf(d, sid)
+  s.lastCycle = last
+  const tags: Tag[] = last === null ? ['continue'] : ['halt']
+  if (last !== null && (await handoffPossible(d, sid))) tags.push('halt-handoff')
+  const runtime: Runtime = { tokens: formatTokens(tokens) }
+  if (last !== null) runtime.halt_reason = HALT_REASON_TEXT[last]
+  // D-10: `[queue]` whenever `queue_cmd` is set (no I/O here); the nonce it names is the one this
+  // cycle's plugin compaction then uses.
+  if (d.cfg.queue_cmd !== '') {
+    s.nudgeNonce = await drawNonce(n => dispatchExists(d, sid, n))
+    tags.push('queue')
+    runtime.queue_add = d.name + `-store queue-add --sid ${sid} --nonce ${s.nudgeNonce}`
+  }
+  await log(d, sid, 'nudge', { tokens, askq_open: s.askOpen > 0, halt: s.halt.active, last_cycle: last })
+  return assemble(d.name, 'checkpoint-nudge', tags, runtime)
 }
 
 // A temp path starts a path (RRP-08): at the string's start or after whitespace, a quote, a

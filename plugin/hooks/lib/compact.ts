@@ -9,7 +9,10 @@ import { assemble } from './assemble'
 import { keysetCanary, triggerCanary } from './canary'
 import { countVerdict } from './cont'
 import { detectSummary, isOk, lastInstrMarker } from './detect'
-import { checkpoint, dispatch, failClass, prevCopy, saveCopy, sweep } from './helper'
+import type { RaceBlock } from './handoff-turn'
+import { raceBlock, racedTurn } from './handoff-turn'
+import type { HandoffState } from './helper'
+import { checkpoint, dispatch, failClass, handoffState, handoffTurnSupersede, prevCopy, saveCopy, sweep } from './helper'
 import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
@@ -27,6 +30,8 @@ export type DispatchRecord = {
   midturn: boolean
   tags: readonly Tag[]
   text: string
+  /** MOD-SPEC §2.3: the handoff turn this dispatch follows or interrupts. */
+  handoffHt?: string
 }
 
 async function dispatchPath(d: Deps, sid: string, nonce: string): Promise<string | undefined> {
@@ -63,6 +68,7 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
   const res = await dispatch(d, {
     sid: r.sid, nonce: r.nonce, actor: r.agentId ?? 'main', trigger: r.trigger, channel: r.channel,
     resumePref: r.resumePref, tags: r.tags, midturn: r.midturn, instrSha8, instrBytes, ccVersion: s.ccVersion, loadId: s.loadId,
+    ...(r.handoffHt !== undefined ? { handoffHt: r.handoffHt } : {}),
   })
   if (res.ok) return
   const path = await dispatchPath(d, r.sid, r.nonce)
@@ -72,6 +78,7 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
       channel: r.channel, resume_pref: r.resumePref, midturn: r.midturn, tags: r.tags, instructions_sha8: instrSha8,
       instructions_bytes: instrBytes, cc_version: s.ccVersion, load_id: s.loadId, pid: s.ident?.pid ?? null,
       pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
+      ...(r.handoffHt !== undefined ? { handoff_ht: r.handoffHt } : {}),
     }
     await d.write(path, JSON.stringify(rec) + '\n')
   }
@@ -86,14 +93,20 @@ export type MainText = { text: string; tags: Tag[] }
 
 /**
  * The main text for a dispatch: `[midturn]` when asked, `[chain]` when `prev-copy` returns a
- * path, `[measured]` when the checkpoint returned a measured block.
+ * path, `[measured]` when the checkpoint returned a measured block, `[handoff]` with its path
+ * when a handoff turn published one just before (MOD-SPEC §9.1; mod path only).
  */
-export async function mainText(d: Deps, nonce: string, midturn: boolean, prev: string | undefined, measured: string | null): Promise<MainText> {
+export async function mainText(
+  d: Deps, nonce: string, midturn: boolean, prev: string | undefined, measured: string | null, handoffPath?: string,
+): Promise<MainText> {
   const tags: Tag[] = []
   if (midturn) tags.push('midturn')
   if (prev !== undefined) tags.push('chain')
+  if (handoffPath !== undefined) tags.push('handoff')
   if (measured !== null) tags.push('measured')
-  const runtime = { nonce, previous_copy: prev, measured_at: isoLocal(await d.now(), false), measured_facts: measured ?? undefined }
+  const runtime = {
+    nonce, previous_copy: prev, measured_at: isoLocal(await d.now(), false), measured_facts: measured ?? undefined, handoff_path: handoffPath,
+  }
   return { text: assemble(d.name, 'handoff-instructions', tags, runtime), tags }
 }
 
@@ -122,6 +135,13 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   const actor = agentId ?? 'main'
   const nonce = await drawNonce(n => dispatchExists(d, sid, n))
   const midturn = main && (trigger === 'precompute' || (trigger === 'auto' && s.mainTurnRunning))
+  // MOD-SPEC §9.1 race: a native compaction while the handoff turn runs keeps the full text and
+  // names the turn; §3.1: a native idle auto right after a published handoff gets `[handoff]`.
+  const raced = main ? racedTurn(d, trigger) : undefined
+  const after = main && trigger === 'auto' && !s.mainTurnRunning ? s.published : undefined
+  const handoffHt = raced?.ht ?? after?.ht ?? undefined
+  let raceState: HandoffState | undefined
+  if (raced && raced.ht !== null && trigger === 'auto') raceState = await handoffState(d, sid, raced.ht)
   let text: string
   let tags: Tag[] = []
   if (!main) text = assemble(d.name, 'subagent-instructions', [], { nonce })
@@ -133,12 +153,13 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
       const cp = await checkpoint(d, sid, nonce, wantMeasured)
       if (wantMeasured && cp) measured = cp.measured_block
     }
-    const m = await mainText(d, nonce, midturn, prev, measured)
+    const m = await mainText(d, nonce, midturn, prev, measured, after?.path)
     text = m.text
     tags = m.tags
   }
   await writeDispatch(d, {
     sid, nonce, agentId, trigger, channel: 'mod-hook', resumePref: main ? 'prompt.context' : 'none', midturn, tags, text,
+    ...(handoffHt !== undefined ? { handoffHt } : {}),
   })
   const t0 = await d.now()
   const r = await next({ ...e, instructions: [e.instructions, text].filter(Boolean).join('\n\n') })
@@ -152,10 +173,24 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   }
   await log(d, sid, 'compacted', {
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
-    usage_present: r.usage !== undefined, ms: (await d.now()) - t0,
+    usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...(handoffHt !== undefined ? { handoff_ht: handoffHt } : {}),
   }, actor)
+  // §9.1: a compaction after the nudge already shrank the context the handoff turn would use.
+  if (main && s.mainTurnRunning && s.nudgedThisTurn) s.compactedInTurn = s.turnSeq
+  let block: RaceBlock | undefined
+  if (raced && raced.ht !== null && raceState) {
+    // The plugin compaction for this ht is dropped; the next window gets the finish command.
+    raced.race = { nonce, trigger }
+    await handoffTurnSupersede(d, sid, raced.ht, nonce)
+    await log(d, sid, 'handoff_race', {
+      trigger, draft: raceState.state === 'staged' && raceState.draft, published: raceState.state === 'published', ht: raced.ht,
+    })
+    block = await raceBlock(d, raceState)
+  }
   await guarded(d, sid, 'after-step', () => afterStep(d, {
     sid, nonce, agentId, midturn, resumePref: 'prompt.context', messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
+    ...(block !== undefined ? { handoff: block } : after !== undefined ? { handoff: { published: after.path } } : {}),
+    ...(raced && raced.ht !== null && block !== undefined ? { stats: { handoff_turn: 'race', handoff_ht: raced.ht } } : {}),
   }))
   return r
 }
@@ -179,6 +214,10 @@ export type AfterArgs = {
   messages: readonly SessionMessage[]
   tokensBefore: number | undefined
   tokensAfter: number | undefined
+  /** The resume block's `[handoff]` path, or `[handoff-partial]` after a race (MOD-SPEC §3.4). */
+  handoff?: RaceBlock
+  /** The handoff-turn rollup fields for this compaction's `mod_outcome` row (MOD-SPEC §2.5). */
+  stats?: Record<string, string | number | null>
 }
 
 export const SUMMARY_PREFIX = 'This session is being continued'
@@ -243,7 +282,11 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     s.fourthToasted = false
   }
   s.mainCompactions++
-  const block = await buildBlock(d, a.sid, { nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved })
+  // A published handoff names the next window's compaction once (MOD-SPEC §3.1).
+  s.published = undefined
+  const block = await buildBlock(d, a.sid, {
+    nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
+  })
   // A block still pending is replaced by this one: its outcome is settled now (no channel
   // will try it again).
   const old = s.pending
@@ -253,7 +296,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   }
   const pend: PendingResume = {
     sid: a.sid, nonce: a.nonce, block, resumePref: a.resumePref, turnSeq: s.turnSeq,
-    outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active },
+    outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active, ...(a.stats !== undefined ? { handoff: a.stats } : {}) },
   }
   s.pending = pend
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)

@@ -3,6 +3,7 @@
 // test hooks answer `$`) or with a fake Deps.
 import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claude-code'
 import type { Config, Effective, Paths } from './config'
+import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
 import { optionEnv, parseOptions, paths } from './config'
 
 export type RunResult = {
@@ -28,6 +29,8 @@ export interface Deps {
   readonly cfg: Config
   readonly state: LoadState
   sessionId(): Promise<string>
+  /** `HOME`, for `~`-abbreviated paths in texts; undefined when it cannot be read. */
+  home(): Promise<string | undefined>
   usage(): Promise<Usage>
   version(): Promise<Version>
   /** `$.session.compact`; rejects while a turn runs. */
@@ -101,6 +104,16 @@ export type LoadState = {
   mainCompactionsSid: string | null
   /** Escalation kinds already toasted in this load. */
   toasted: Set<string>
+  /** The nudged main turn's last-cycle reason (MOD-SPEC §9.1), set at the nudge, read at its end. */
+  lastCycle: HaltReason | null
+  /** The nonce the nudge named (`@queue_add@`); the compaction of that cycle uses it. */
+  nudgeNonce: string | undefined
+  /** The handoff turn from its scheduling to its end (MOD-SPEC §9.1). */
+  handoffTurn: HandoffTurn | undefined
+  /** Main turn (`turnSeq`) in which a main compaction other than ours ran after the nudge, or -1. */
+  compactedInTurn: number
+  /** The handoff a handoff turn published, while no later main turn or compaction has run. */
+  published: Published | undefined
 }
 
 export type PendingResume = {
@@ -119,7 +132,13 @@ export type PendingResume = {
  * turn this compaction ended or interrupted; `continued` = an auto-continue was submitted after
  * it; `halt` = halt mode was on once the mod had handled it.
  */
-export type Outcome = { nudged: boolean; continued: boolean; halt: boolean }
+export type Outcome = {
+  nudged: boolean
+  continued: boolean
+  halt: boolean
+  /** The handoff turn this compaction followed or interrupted (MOD-SPEC §2.5 rollup fields). */
+  handoff?: Record<string, string | number | null>
+}
 
 export function newState(loadId: string): LoadState {
   return {
@@ -158,6 +177,11 @@ export function newState(loadId: string): LoadState {
     pathsMemo: undefined,
     mainCompactionsSid: null,
     toasted: new Set(),
+    lastCycle: null,
+    nudgeNonce: undefined,
+    handoffTurn: undefined,
+    compactedInTurn: -1,
+    published: undefined,
   }
 }
 
@@ -172,6 +196,13 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     cfg,
     state,
     sessionId: () => $.session.id(),
+    async home() {
+      try {
+        return await $.env.get('HOME')
+      } catch {
+        return undefined
+      }
+    },
     async usage() {
       const u = await $.session.usage()
       return { tokens: u.context.tokens, window: u.context.window }

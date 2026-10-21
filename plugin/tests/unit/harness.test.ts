@@ -33,6 +33,8 @@ export class World {
   calls: Call[] = []
   rows: Row[] = []
   pathRows: Row[] = []
+  /** `handoff-state` line per ht (`*` for any); default `none`, or `published` once `<ht>.published` exists. */
+  htStates = new Map<string, string>()
   toasts: string[] = []
   submits: string[] = []
   /** Instructions each compaction reached the bottom with (self-calls and raised ones). */
@@ -188,6 +190,30 @@ export class World {
         else this.rows.push(...rows)
         return ok()
       }
+      case 'handoff-turn': {
+        // D-18 B8 (core): `open` exclusive-creates <ht>.json; `supersede` writes the write-once twin.
+        const ht = flag('--ht')
+        const rec = `${WATCH}/${sid}/handoff-turn/${ht}.json`
+        if (args[0] === 'open') {
+          if (this.files.has(rec)) return ok('EXISTS\n')
+          this.files.set(rec, JSON.stringify({ v: 1, ht, session_id: sid, reason: flag('--reason'), max_calls: Number(flag('--max-calls')), max_tokens: Number(flag('--max-tokens')) }) + '\n')
+          return ok('ok\n')
+        }
+        if (args[0] === 'supersede') {
+          if (!this.files.has(rec)) return { exitCode: 3, stdout: 'REFUSED: no-ht\n' }
+          const twin = `${WATCH}/${sid}/handoff-turn/${ht}.superseded`
+          if (this.files.has(twin)) return ok('EXISTS\n')
+          this.files.set(twin, flag('--nonce') + '\n')
+          return ok('ok\n')
+        }
+        return { exitCode: 64, stdout: '' }
+      }
+      case 'handoff-state': {
+        const ht = flag('--ht')
+        const pub = this.files.get(`${WATCH}/${sid}/handoff-turn/${ht}.published`)
+        if (pub !== undefined) return ok(`published ${pub.trim()}\n`)
+        return ok((this.htStates.get(ht) ?? this.htStates.get('*') ?? 'none') + '\n')
+      }
       case 'dispatch': {
         const nonce = flag('--nonce')
         const path = `${WATCH}/${sid}/dispatch/${nonce}.json`
@@ -233,6 +259,17 @@ export class World {
 
   rowsOf(ev: string): Row[] {
     return this.rows.filter(r => r.ev === ev)
+  }
+
+  /** The ht of the newest `handoff-turn open` call. */
+  lastHt(): string | undefined {
+    const opens = this.callsOf('handoff-turn').filter(c => c.args[0] === 'open')
+    return this.flag(opens[opens.length - 1], '--ht')
+  }
+
+  /** The skill published the handoff of this ht (as `publish` writes `<ht>.published`). */
+  publish(ht: string, path: string): void {
+    this.files.set(`${WATCH}/${this.sid}/handoff-turn/${ht}.published`, path + '\n')
   }
 
   flag(c: Call | undefined, k: string): string | undefined {

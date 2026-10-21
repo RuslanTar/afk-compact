@@ -161,7 +161,7 @@ test('after-step: saved copy, verdict ok, main sweep, block via prompt.context o
   expect(block?.text).not.toContain('Summary not in handoff format')
   expect(block?.text).toContain(`--origin ${SID_A} --item`)
   expect(block?.text).toContain('Git: main @ 3f9c2e1')
-  expect((block?.text.length ?? 0) <= 5000).toBe(true)
+  expect((block?.text.length ?? 0) <= 6000).toBe(true)
   expect(w.claims.get(nonce)).toBe('prompt.context')
   const again = await $.prompt.context({ blocks: [] })
   expect(again.blocks.length).toBe(0)
