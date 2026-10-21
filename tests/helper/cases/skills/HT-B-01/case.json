@@ -2,7 +2,7 @@
  "id": "HT-B-01",
  "layer": "H",
  "owner": "skills",
- "note": "begin: JSON <=3 KB with every HDN §6 key (+ reuse_window_min, D-14); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted; --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket",
+ "note": "begin: JSON <=3 KB with every HDN §6 key (+ reuse_window_min, D-14); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -154,6 +154,20 @@
      "bucket.path": "$HOME/elsewhere/repo/t2",
      "config.handoff_root.value": "$HOME/elsewhere",
      "config.handoff_root.source": "flag"
+    }
+   }
+  },
+  {
+   "note": "TPL §6, HDN §8: the passed id is a cross-check only; on a mismatch the per-process record's id wins and the identity is degraded",
+   "cwd": "$TMP/repo",
+   "argv": ["begin", "--sid", "99999999-9999-4999-8999-999999999999", "--topic", "mismatch"],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "session.id": "$SID",
+     "session.sid8": "11111111",
+     "session.identity": "degraded (sid-mismatch)",
+     "stage": {"re": "/repo/mismatch/\\.staging/11111111-[0-9a-f]{8}$"}
     }
    }
   },

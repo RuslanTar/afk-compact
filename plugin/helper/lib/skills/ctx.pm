@@ -132,6 +132,8 @@ sub own_record {
 }
 
 # Session identity (TPL §6): the record, cross-checked with the passed id.
+# The passed id is a cross-check only (HDN §8): on a mismatch the record
+# wins and the identity is marked degraded.
 # Returns {sid, sid8, source, degraded, pid, lstart}.
 sub resolve_sid {
     my ($ctx, $flag) = @_;
@@ -141,7 +143,7 @@ sub resolve_sid {
     $rsid = undef unless valid_sid($rsid);
     my %id = (pid => ($cp ? $cp->{pid} : undef), lstart => ($cp ? $cp->{lstart} : undef), degraded => undef);
     if ($given && $rsid && $given ne $rsid) {
-        @id{qw(sid source degraded)} = ($given, 'flag', 'sid-mismatch');
+        @id{qw(sid source degraded)} = ($rsid, 'record', 'sid-mismatch');
     } elsif ($given) {
         @id{qw(sid source)} = ($given, $rsid ? 'flag+record' : 'flag');
     } elsif ($rsid) {
