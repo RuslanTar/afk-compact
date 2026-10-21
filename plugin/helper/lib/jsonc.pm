@@ -150,10 +150,23 @@ sub _string {
 
 my %ESC = ('"' => '\\"', '\\' => '\\\\', "\n" => '\\n', "\r" => '\\r', "\t" => '\\t', "\x08" => '\\b', "\x0c" => '\\f');
 
+# Set by encode_bytes: every string is made UTF-8 bytes before it is joined, so a byte
+# string (a `·` literal, a path) and a character string never mix (CR-F2).
+our $BYTES;
+
 sub _str {
     my ($s) = @_;
+    if ($BYTES) {
+        if (utf8::is_utf8($s)) { utf8::encode($s) }
+        elsif ($s =~ /[\x80-\xff]/) {
+            # bytes that are not UTF-8 are taken as Latin-1, so the line stays valid UTF-8
+            my $c = $s;
+            utf8::encode($s) unless utf8::decode($c);
+        }
+    }
     $s =~ s/(["\\\n\r\t\x08\x0c])/$ESC{$1}/g;
     $s =~ s/([\x00-\x1f\x7f\x{2028}\x{2029}])/sprintf('\\u%04x', ord $1)/ge;
+    if ($BYTES) { $s =~ s/\xe2\x80\xa8/\\u2028/g; $s =~ s/\xe2\x80\xa9/\\u2029/g }
     return '"' . $s . '"';
 }
 
@@ -195,10 +208,12 @@ sub encode {
     return _str("$v");
 }
 
-# encode to UTF-8 bytes
+# encode to UTF-8 bytes. Character strings are encoded once and byte strings (taken as
+# UTF-8) pass as they are, so neither comes out double-encoded (CR-F2, SR 1.1).
 sub encode_bytes {
+    local $BYTES = 1;
     my $s = encode($_[0]);
-    utf8::encode($s);
+    utf8::encode($s) if utf8::is_utf8($s);
     return $s;
 }
 

@@ -33,7 +33,7 @@ sub row {
 # Encode a row (object or already-encoded line) and append it.
 sub append {
     my ($path, $row) = @_;
-    my $line = ref $row ? jsonc::encode($row) : $row;
+    my $line = ref $row ? jsonc::encode_bytes($row) : $row;
     $line =~ s/\n+\z//;
     utf8::encode($line) if utf8::is_utf8($line);
     die "row-too-large\n" if length($line) + 1 > $MAX;
