@@ -1,0 +1,115 @@
+{
+ "id": "PRIV-02-symlinks",
+ "note": "PRIV-02 (MOD-SPEC §10 'never transcripts'; handoff-spec §10 deny names; HK-44): the name gate runs on a path and on its real target. A tasks/<id>.output link to a subagent transcript, a harmless-named link to a .netrc, and a link to a *.jsonl under CLAUDE_CONFIG_DIR/projects are withheld and none of their text reaches a copy; a link whose target passes the gate is still followed and copied",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_CONFIG_DIR": "$TMP/cfg"
+ },
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "write": "$HOME/.claude/projects/-work/$SID/subagents/agent-a1b2c3.jsonl",
+     "text": "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"PRIV02-CANARY-transcript a prompt\"}}\n"
+    },
+    {
+     "symlink": "$TMP/tmpdir/claude/tasks/b1q2w3.output",
+     "to": "$HOME/.claude/projects/-work/$SID/subagents/agent-a1b2c3.jsonl"
+    },
+    {
+     "write": "$TMP/vault/.netrc",
+     "text": "machine example.invalid login fixture password PRIV02-CANARY-netrc\n"
+    },
+    {
+     "symlink": "$TMP/tmpdir/notes.txt",
+     "to": "$TMP/vault/.netrc"
+    },
+    {
+     "write": "$TMP/cfg/projects/-p/0000.jsonl",
+     "text": "{\"note\":\"PRIV02-CANARY-cfg\"}\n"
+    },
+    {
+     "symlink": "$TMP/tmpdir/run.log",
+     "to": "$TMP/cfg/projects/-p/0000.jsonl"
+    },
+    {
+     "write": "$TMP/vault/real.txt",
+     "text": "PRIV02 control text\n"
+    },
+    {
+     "symlink": "$TMP/tmpdir/control.txt",
+     "to": "$TMP/vault/real.txt"
+    },
+    {
+     "paths": [
+      "$TMP/tmpdir/claude/tasks/b1q2w3.output",
+      "$TMP/tmpdir/notes.txt",
+      "$TMP/tmpdir/run.log",
+      "$TMP/tmpdir/control.txt"
+     ]
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^withheld\\t\\S+/tasks/b1q2w3\\.output\\t-\\t",
+     "^withheld\\t\\S+/tmpdir/notes\\.txt\\t-\\t",
+     "^withheld\\t\\S+/tmpdir/run\\.log\\t-\\t",
+     "^copied\\t\\S+/tmpdir/control\\.txt\\t\\S+/control\\.txt\\t",
+     "^TOTAL copied=1 dup=0 ref_only=0 redacted=0 withheld=3 referenced_budget=0$"
+    ],
+    "grep_absent": [
+     {
+      "dir": "$DISP",
+      "text": "PRIV02-CANARY-transcript"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "PRIV02-CANARY-transcript"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "PRIV02-CANARY-transcript"
+     },
+     {
+      "dir": "$DISP",
+      "text": "PRIV02-CANARY-netrc"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "PRIV02-CANARY-netrc"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "PRIV02-CANARY-netrc"
+     },
+     {
+      "dir": "$DISP",
+      "text": "PRIV02-CANARY-cfg"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "PRIV02-CANARY-cfg"
+     },
+     {
+      "dir": "$ROOT",
+      "text": "PRIV02-CANARY-cfg"
+     }
+    ]
+   }
+  }
+ ]
+}

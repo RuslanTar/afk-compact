@@ -11,7 +11,7 @@
 # Step: {"argv", "stdin" (file in the case dir or tests/fixtures/), "stdin_json", "stdin_text",
 #   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N (+ "kill_signal", default KILL),
 #   "expect": {...}}
-# Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir,
+# Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir, symlink (+ to),
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
@@ -353,7 +353,7 @@ sub make_repo {
 
 sub is_setup_action {
     my ($s) = @_;
-    return scalar grep { exists $s->{$_} } qw(write copy mkdir stub repo dispatch transcript run git bigfile age
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
                                                tempfiles secret_files repo_fixture paths);
 }
 
@@ -524,6 +524,11 @@ sub setup {
     if (exists $s->{repo_fixture}) { fixture_repo($s, $V, $cdir); return }
     if (exists $s->{paths}) { record_paths($V, $s->{sid}, @{ $s->{paths} }); return }
     if (exists $s->{mkdir}) { util::mkdir_p($s->{mkdir}); chmod(oct($s->{mode}), $s->{mkdir}) if $s->{mode}; return }
+    if (exists $s->{symlink}) {
+        util::mkdir_p(util::dirname($s->{symlink}));
+        symlink($s->{to}, $s->{symlink}) or die "symlink $s->{symlink}: $!\n";
+        return;
+    }
     if (exists $s->{stub}) {
         my $dir = $s->{dir} // "$V->{TMP}/bin";
         write_text("$dir/$s->{stub}", "#!/bin/sh\n" . ($s->{script} // 'exit 0') . "\n", '0755');

@@ -60,7 +60,20 @@ sub redact {
     return ($text, \@hits);
 }
 
-sub denied_name {
+# The path as given and, when a symlink anywhere on the way makes it differ, its real
+# target. The name gates run on both forms, so a harmless-named link cannot copy a
+# deny-listed file or a transcript (PRIV-02: tasks/<id>.output links to a subagent
+# transcript; notes.txt -> .netrc). A target that passes the gate may be followed.
+sub _forms {
+    my ($path) = @_;
+    return () unless defined $path && $path ne '';
+    my @f = ($path);
+    my $real = eval { util::real_path($path) };
+    push @f, $real if defined $real && $real ne $path;
+    return @f;
+}
+
+sub _denied_base {
     my ($path) = @_;
     my $b = util::basename($path);
     my $deny = spec::deny_names();
@@ -68,11 +81,36 @@ sub denied_name {
     return (grep { $b =~ $_ } @$deny) ? 1 : 0;
 }
 
-# Never copied: transcripts, session JSONL, environment dumps.
+sub denied_name {
+    my ($path) = @_;
+    for my $p (_forms($path)) { return 1 if _denied_base($p) }
+    return 0;
+}
+
+# The Claude Code config folder (CLAUDE_CONFIG_DIR, else ~/.claude) as given and real.
+sub _config_dirs {
+    my $cd = eval { settings::config_dir() };
+    return () unless defined $cd && $cd ne '';
+    $cd =~ s{/+\z}{};
+    my $real = eval { util::real_path($cd) };
+    return grep { defined && $_ ne '' } ($cd, (defined $real && $real ne $cd ? $real : ()));
+}
+
+sub _never {
+    my ($p) = @_;
+    if ($p =~ /\.jsonl\z/i) {
+        return 1 if $p =~ m{/\.claude/projects/};
+        for my $cd (_config_dirs()) { return 1 if index($p, "$cd/projects/") == 0 }
+    }
+    return 1 if util::basename($p) =~ /^(environ|env\.(txt|dump|out))$/i;
+    return 0;
+}
+
+# Never copied: transcripts and session JSONL (any *.jsonl under <config dir>/projects/),
+# environment dumps; checked on the path and on its real target.
 sub never_copy {
     my ($path) = @_;
-    return 1 if $path =~ m{/\.claude/projects/} && $path =~ /\.jsonl$/;
-    return 1 if util::basename($path) =~ /^(environ|env\.(txt|dump|out))$/i;
+    for my $p (_forms($path)) { return 1 if _never($p) }
     return 0;
 }
 
