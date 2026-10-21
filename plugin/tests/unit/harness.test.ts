@@ -33,6 +33,11 @@ export class World {
   calls: Call[] = []
   rows: Row[] = []
   pathRows: Row[] = []
+  /** Raw lines the mod sent to `log --stream jobs` (Dev-1), and the reply that stream gives. */
+  jobLines: Record<string, unknown>[] = []
+  jobsReply: Reply = { exitCode: 0, stdout: '' }
+  /** `$.session.cwd()`. */
+  cwd = '/w/repo'
   /** `handoff-state` line per ht (`*` for any); default `none`, or `published` once `<ht>.published` exists. */
   htStates = new Map<string, string>()
   toasts: string[] = []
@@ -72,6 +77,7 @@ export class World {
     on('session.id', () => ({ value: this.sid }))
     on('session.usage', () => ({ value: { startedAt: T0, rateLimits: [], context: { tokens: this.tokens, window: this.window } } }))
     on('session.version', () => ({ value: this.version }))
+    on('session.cwd', () => ({ value: this.cwd }))
     on('settings.read', () => ({ value: this.policy }))
     on('ui.toast', (_$, e) => {
       this.toasts.push(e.text)
@@ -186,6 +192,10 @@ export class World {
         const rows = args.includes('--stdin')
           ? (stdin ?? '').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Row)
           : [JSON.parse(flag('--json')) as Row]
+        if (flag('--stream') === 'jobs') {
+          this.jobLines.push(...rows)
+          return this.jobsReply
+        }
         if (flag('--stream') === 'paths') this.pathRows.push(...rows)
         else this.rows.push(...rows)
         return ok()

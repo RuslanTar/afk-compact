@@ -29,6 +29,8 @@ export interface Deps {
   readonly cfg: Config
   readonly state: LoadState
   sessionId(): Promise<string>
+  /** `$.session.cwd()`: the directory the session runs in (read inside the hook that needs it). */
+  cwd(): Promise<string | undefined>
   /** `HOME`, for `~`-abbreviated paths in texts; undefined when it cannot be read. */
   home(): Promise<string | undefined>
   usage(): Promise<Usage>
@@ -196,6 +198,13 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     cfg,
     state,
     sessionId: () => $.session.id(),
+    async cwd() {
+      try {
+        return await $.session.cwd()
+      } catch {
+        return undefined
+      }
+    },
     async home() {
       try {
         return await $.env.get('HOME')

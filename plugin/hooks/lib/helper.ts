@@ -125,6 +125,15 @@ export function parseHandoffState(stdout: string): HandoffState {
   return { state: 'failed' }
 }
 
+/**
+ * `log --sid S --stream jobs --stdin` (Dev-1 D1): one raw job or stop object per line; the helper
+ * completes and appends the row, or refuses (`REFUSED: jobs-caller`, exit 3) and logs why.
+ */
+export async function logJobs(d: Deps, sid: string, lines: readonly string[]): Promise<RunResult | undefined> {
+  if (lines.length === 0) return undefined
+  return call(d, ['log', '--sid', sid, '--stream', 'jobs', '--stdin'], HELPER_MS, lines.join('\n') + '\n')
+}
+
 /** Path of this session's newest main copy, or undefined (`none`, or a failed call). */
 export async function prevCopy(d: Deps, sid: string): Promise<string | undefined> {
   const r = await call(d, ['prev-copy', '--sid', sid, '--actor', 'main'])

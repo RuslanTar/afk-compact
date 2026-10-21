@@ -7,6 +7,7 @@ import { onTurnComplete } from './lib/boundary'
 import { onCompact } from './lib/compact'
 import { newState, realDeps } from './lib/deps'
 import { countCall, limitText, onInterjection } from './lib/handoff-turn'
+import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { blockName, contextBlock } from './lib/resume'
@@ -55,6 +56,8 @@ export const register: Register = (on, options) => {
       state.askOpen++
       state.askedThisTurn = true
     }
+    // Dev-1: the session's directory as the job will see it is read before the call runs.
+    const job = await jobStart(d, tool)
     // The temp paths of this call are recorded beside it, never before it: the tool does not
     // wait for the helper (one spawn per new path), and nothing is recorded with auto_evidence off.
     if (d.cfg.auto_evidence) trackPaths(state, recordPaths(d, sid, tool, input))
@@ -66,6 +69,7 @@ export const register: Register = (on, options) => {
       if (isAsk) state.askOpen--
     }
     if (r.deny !== undefined) return r
+    if (job) await recordJob(d, sid, tool, input, r, job)
     const text = (await limitText(d, sid, r.text)) ?? (await nudgeText(d, sid))
     if (text === undefined) return r
     return { ...r, context: [...(r.context ?? []), text] }
