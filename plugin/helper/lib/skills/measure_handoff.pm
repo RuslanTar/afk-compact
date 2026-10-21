@@ -43,7 +43,8 @@ sub run {
     if ($g->{in_git}) {
         my $rel = 'git_commit unknown';
         if ($gc) {
-            my $gc_ok = skills::gitfacts::git($g->{worktree}, 'cat-file', '-e', "$gc^{commit}")->{rc} == 0;
+            my $gc_ok = skills::gitfacts::rev_ok($gc)
+                && skills::gitfacts::git($g->{worktree}, 'cat-file', '-e', "$gc^{commit}")->{rc} == 0;
             if (!$gc_ok) { $rel = 'git_commit ' . substr($gc, 0, 8) . ' not found here' }
             elsif (($g->{head_full} // '') eq $gc || index($g->{head_full} // '', $gc) == 0) { $rel = 'same as git_commit' }
             elsif (skills::gitfacts::is_ancestor($g->{worktree}, $gc, 'HEAD')) { $rel = 'ahead of git_commit ' . substr($gc, 0, 8) }

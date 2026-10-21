@@ -2,7 +2,7 @@
  "id": "HT-ME-01",
  "layer": "H",
  "owner": "skills",
- "note": "measure <handoff>: Measured facts; no `Approvals (verified)` (D-2); commits the chain names are ours, every other commit is one foreign line (D-21); outward/destructive re-check commands print needs-ask; nothing taken from the handoff is executed (trace: only measure and git)",
+ "note": "measure <handoff>: Measured facts; no `Approvals (verified)` (D-2); commits the chain names are ours, every other commit is one foreign line (D-21); outward/destructive re-check commands print needs-ask; nothing taken from the handoff is executed (trace: only measure and git); a chain git_commit that is not a commit id never reaches git as an option (no --output file)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -87,8 +87,12 @@
    }
   },
   {
+   "write": "$ROOT/repo/LAB-7/2026-10-20_12-00-00_11111111_p.md",
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0e0d0c\ndate: 2026-10-20T12:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: --output=$TMP/pwned\n---\n⟪$BRAND v1 n=0f0e0d0c s=manual⟫\n# LAB-7 — earlier\n⟪/$BRAND n=0f0e0d0c⟫\n"
+  },
+  {
    "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_11111111_m.md",
-   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\nworktree: $TMP/repo\ngit_commit: $C0\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n## Work done and findings\n- Commits: $C1 (retry fix)\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| branch pushed | 14:00 | `git push origin feature/LAB-7-retry` | verified |\n| marker file | 14:00 | `touch $TMP/ran` | measured |\n## In flight\n| B-1 · hook | external · webhook · main | 15:00 · reply | `curl -s -X POST https://example.invalid/hook` | report | nothing | ask |\n⟪/$BRAND n=0a0b0c0d⟫\n"
+   "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\nworktree: $TMP/repo\ngit_commit: $C0\nprevious_handoff: $ROOT/repo/LAB-7/2026-10-20_12-00-00_11111111_p.md\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n## Work done and findings\n- Commits: $C1 (retry fix)\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| branch pushed | 14:00 | `git push origin feature/LAB-7-retry` | verified |\n| marker file | 14:00 | `touch $TMP/ran` | measured |\n## In flight\n| B-1 · hook | external · webhook · main | 15:00 · reply | `curl -s -X POST https://example.invalid/hook` | report | nothing | ask |\n⟪/$BRAND n=0a0b0c0d⟫\n"
   }
  ],
  "cwd": "$TMP/repo",
@@ -107,15 +111,16 @@
    "^  [0-9a-f]{7,} Test ours$",
    "^foreign: 1 commits this chain did not make: [0-9a-f]{7,} \\(authors: Other Dev\\)$",
    "^handoff worktree: $TMP/repo exists$",
-   "^needs-ask outward line 18$",
-   "^needs-ask outward line 21$"
+   "^needs-ask outward line 19$",
+   "^needs-ask outward line 22$"
   ],
   "stdout_lacks": [
    "Approvals",
-   "needs-ask \\S+ line 19"
+   "needs-ask \\S+ line 20"
   ],
   "absent": [
-   "$TMP/ran"
+   "$TMP/ran",
+   "$TMP/pwned*"
   ],
   "trace_has": [
    "measure",

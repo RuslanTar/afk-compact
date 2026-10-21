@@ -91,10 +91,15 @@ sub work_hash {
     return skills::util::sha256_hex($acc);
 }
 
+# A revision read from a file (frontmatter git_commit) must be a commit id,
+# never an option: `--output=<path>..HEAD` would make git write a file.
+sub rev_ok { my ($r) = @_; return (defined $r && $r =~ /\A(?:[0-9a-fA-F]{7,64}|HEAD)\z/) ? 1 : 0 }
+
 # Commits in <base>..HEAD: [{hash, short, author, ctime}]
 sub commits_since {
     my ($top, $base, $max) = @_;
     $max //= 200;
+    return undef unless rev_ok($base);
     my $r = git($top, 'log', "--max-count=$max", '--format=%H%x09%h%x09%an%x09%ct', "$base..HEAD");
     return undef if $r->{rc} != 0;
     my @c;
@@ -107,6 +112,7 @@ sub commits_since {
 
 sub is_ancestor {
     my ($top, $a, $b) = @_;
+    return 0 unless rev_ok($a) && rev_ok($b);
     my $r = git($top, 'merge-base', '--is-ancestor', $a, $b);
     return $r->{rc} == 0 ? 1 : 0;
 }
@@ -114,7 +120,7 @@ sub is_ancestor {
 sub check_ignore {
     my ($top, $path) = @_;
     return undef unless defined $top;
-    my $r = git($top, 'check-ignore', '-q', $path);
+    my $r = git($top, 'check-ignore', '-q', '--', $path);
     return $r->{rc} == 0 ? 1 : ($r->{rc} == 1 ? 0 : undef);
 }
 
