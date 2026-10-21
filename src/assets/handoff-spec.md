@@ -152,7 +152,7 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 `{{plugin}}-store wait --for <cond> [--for <cond>…] [--while <guard>…] [--max <s>] [--stall <s>] [--deadline <epoch>]`
 
 - **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`.
-- The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once.
+- The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once. `wait` prints its pending line only after `--max` has passed, and an unattended session ends a background command at 1800 s by default, so a main session waits with `--max 1740` (`main_max_s`).
 - `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) or the runtime trailer `[exited with code <n>]` prints `rc=<n>`. The trailer `[killed]` (a TaskStop, or the tasks stopped at exit) prints `killed`: the job was killed, never finished; a killed job is asked about, never relaunched by itself.
 - **End marker (DP-1):** a job you will wait on is started with `; echo "__exit $?"` at the end of its command. A relaunch replays the recorded command byte for byte, so it carries the suffix when the original did; restart text never adds it.
 - **Regex limits:** a `marker` pattern longer than 200 characters, or holding `(?{`, `(??{` or `(*`, is refused with exit 64. An overrun past `--max` plus 5 seconds ends with exit 70. Core Perl code never runs from a pattern.
@@ -319,7 +319,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     },
     "max_default_s": 270,
     "max_range_s": [0, 7200],
-    "main_max_s": 1800,
+    "main_max_s": 1740,
     "subagent_bash_timeout_ms": 300000,
     "marker_regex_max_chars": 200,
     "marker_regex_forbidden": ["(?{", "(??{", "(*"],
