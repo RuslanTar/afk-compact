@@ -151,7 +151,7 @@ def detect(text, name, dispatch=None):
             main = not sub and dispatch.get("channel") in ("mod-hook", "mod-self")
             if nonce and nonce != dispatch["nonce"]:
                 verdict = "stale"
-            elif sub and (scope == "main" or (scope is None and resume_heading)):
+            elif sub and (scope == "main" or resume_heading):
                 verdict = "scope-leak"
             elif main and scope == "sub":
                 verdict = "scope-leak"

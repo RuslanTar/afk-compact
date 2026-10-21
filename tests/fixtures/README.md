@@ -22,7 +22,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `ids.json` | sids S1–S3, agent ids A1–A3, pids, start times (`STORE_TEST_CLAUDE_PID` values), nonces by role, the case clock (`2026-10-21T14:05:12+03:00`, `Etc/GMT-3`), canary strings | everything |
 | `payloads/<Event>/<case>.json` | classic hook stdin, d.ts input fields only (BUILD-PLAN §3.5) | H, U |
 | `payloads/<Event>/{malformed,empty}.invalid` | broken and empty stdin for every event (BT-07, WATCH T-16) | H |
-| `summaries/NN-<slug>.txt`, `summaries/expected.tsv` | the 40-summary corpus | AT-C-02, C-03, C-09, M3-02, M3-17 |
+| `summaries/NN-<slug>.txt`, `summaries/expected.tsv` | the 41-summary corpus | AT-C-02, C-03, C-09, M3-02, M3-17 |
 | `watch/dispatch-<nonce>.json` | dispatch records (BUILD-PLAN §3.4), roles below | H |
 | `watch/run10/` | the ten-compaction run of AT-M3-07 / AT-S-02 (`sequence.json`, dispatches) | H |
 | `watch/*.json`, `watch/*.count` | `mod-alive.json`, `classic-alive.json`, `version.json` states, `boundaries.count` seeds, sample `log` rows | H |
@@ -47,7 +47,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 - Head stripping repeats over the leading lines: blank lines, the `This session is being continued` line, the `<tools-used-before-summary>` block, a `Summary:` line and a `<summary>` tag. So the marker after the full wrapper is body line 1 (AT-C-02 a).
 - The body ends before the first `</summary>`. Trailing blank lines are trimmed. Line ends become `\n`. The normalized body is the lines joined by `\n` plus one final `\n` (empty body: empty string). `normalized_sha256` is computed over that text with `{{plugin}}` filled.
 - The marker is the first anchored match in body lines 1–5. The sentinel is searched in the last 3 non-blank lines, and `sentinel_from_end` is reported whenever one is found there, also for `unshaped`.
-- With a dispatch, the checks run in this order: `stale` (marker nonce ≠ the dispatch nonce; or dispatch `none` and a marker), then `scope-leak` (dispatch `agent_id` set and `s=main` or a `## Resume here` heading; dispatch main, meaning `agent_id` null with channel `mod-hook` or `mod-self` (MOD §2.4 P1), and `s=sub`; a `classic` dispatch proves neither scope), then the text verdicts.
+- With a dispatch, the checks run in this order: `stale` (marker nonce ≠ the dispatch nonce; or dispatch `none` and a marker), then `scope-leak` (dispatch `agent_id` set and `s=main` or a `## Resume here` heading, with any marker or none (41); dispatch main, meaning `agent_id` null with channel `mod-hook` or `mod-self` (MOD §2.4 P1), and `s=sub`; a `classic` dispatch proves neither scope), then the text verdicts.
 - The corpus brand is `{{plugin}}`, so the sha column changes with a rename. After editing `brand.json`, run `tools/fixtures-gen --refresh-sha` and commit `expected.tsv`.
 
 Groups worth knowing: 01–05, 11, 27, 29 and 38 share one normalized body (PostCompact, mod wrapper with and without tags, bare, CRLF, blank tail, leading blanks, text after `</summary>`), and so do 17 and 18 (subagent). 37 adds an unlisted trailer to the mod form only. Its PostCompact twin is 01 (AT-M3-17).
