@@ -38,7 +38,7 @@
     "queue_cmd": {
       "type": "file",
       "title": "Queue command",
-      "description": "Executable answering 'list --json --session <sid>', 'adopt --lane <id> [--if-free]' and 'add --json …' (draft on stdin). Empty = off.",
+      "description": "Executable answering 'list --json --session <sid>', 'adopt --lane <id> [--if-free]' and 'add --json ...' (draft on stdin). Empty = off.",
       "default": ""
     },
     "triggers": {
