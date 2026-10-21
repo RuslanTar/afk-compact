@@ -1,5 +1,6 @@
 // U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
 import { expect, test } from 'claude-code/testing'
+import { markerText, sentinelText } from '../../hooks/lib/detect'
 import { AGENT, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce = record; [midturn]', async ($, on) => {
@@ -42,8 +43,9 @@ test('AT-M4-01: subagent: [e.instructions, subagent text] only; no checkpoint, n
   await raiseCompact($, { trigger: 'auto', agentId: AGENT, instructions: 'parent note' })
   const instr = w.compacts[0]?.instructions ?? ''
   expect(instr.startsWith('parent note\n\nThe user\'s ')).toBe(true)
-  expect(instr).toContain(`s=sub⟫`)
-  expect(instr).not.toContain('s=main⟫')
+  expect(markerNonce(w, instr)).toBe(w.flag(w.callsOf('dispatch')[0], '--nonce'))
+  expect(instr).toContain(' s=sub' + CLOSE_MARK)
+  expect(instr).not.toContain(' s=main' + CLOSE_MARK)
   expect(instr).not.toContain('Only if this is a subagent')
   expect(instr).not.toContain('## Resume here')
   expect(w.callsOf('checkpoint').length).toBe(0)
@@ -75,7 +77,7 @@ test('AT-M6-02: manual without a note: instructions = main text only', async ($,
   expect(instr.startsWith(`The user's ${w.name} plugin asks for this form`)).toBe(true)
   expect(instr).not.toContain('This began mid-turn')
   expect(instr).not.toContain('If this began mid-turn')
-  expect(instr.match(/v1 n=[0-9a-f]{8} s=main⟫/g)?.length).toBe(1)
+  expect(instr.match(MAIN_MARKS)?.length).toBe(1)
 })
 
 test('AT-M6-05: trigger plugin from another plugin: foreign text first, ours appended once, no checkpoint', async ($, on) => {
@@ -83,7 +85,7 @@ test('AT-M6-05: trigger plugin from another plugin: foreign text first, ours app
   await raiseCompact($, { trigger: 'plugin', instructions: '[other-plugin] keep the migration notes' })
   const instr = w.compacts[0]?.instructions ?? ''
   expect(instr.startsWith('[other-plugin] keep the migration notes\n\n')).toBe(true)
-  expect(instr.match(/v1 n=[0-9a-f]{8} s=main⟫/g)?.length).toBe(1)
+  expect(instr.match(MAIN_MARKS)?.length).toBe(1)
   expect(w.callsOf('checkpoint').length).toBe(0)
   expect(w.callsOf('save-copy').length).toBe(1)
 })
@@ -93,7 +95,7 @@ test('AT-M2-02: our marker with a mod-self record: e unchanged; no nonce, checkp
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   const nonce = '1a2b3c4d'
   w.files.set(`${WATCH}/${SID_A}/dispatch/${nonce}.json`, JSON.stringify({ nonce, channel: 'mod-self' }))
-  const own = `First line inside <summary>: ⟪${w.name} v1 n=${nonce} s=main⟫`
+  const own = 'First line inside <summary>: ' + markerText(w.name, nonce, 'main')
   const before = w.callsOf('dispatch').length
   await raiseCompact($, { trigger: 'plugin', instructions: own })
   await raiseCompact($, { trigger: 'plugin', instructions: own })
@@ -108,7 +110,7 @@ test('AT-M2-02: our marker with a mod-self record: e unchanged; no nonce, checkp
 test('AT-C-10 (mod): a pasted old marker with no record is no marker: our text appended, new nonce', async ($, on) => {
   const w = new World().install(on)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
-  const note = `keep this old summary in mind: ⟪${w.name} v1 n=deadbeef s=main⟫ … ⟪/${w.name} n=deadbeef⟫`
+  const note = 'keep this old summary in mind: ' + markerText(w.name, 'deadbeef', 'main') + ' … ' + sentinelText(w.name, 'deadbeef')
   await raiseCompact($, { trigger: 'manual', instructions: note })
   const instr = w.compacts[0]?.instructions ?? ''
   expect(instr.startsWith(note + '\n\n')).toBe(true)
@@ -228,6 +230,9 @@ test('helper down: dispatch record written with $.fs.write, helper_missing in a 
   expect(events.some(r => r.ev === 'helper_missing')).toBe(true)
   expect(events.some(r => r.ev === 'dispatch')).toBe(true)
 })
+
+const CLOSE_MARK = '\u27eb'
+const MAIN_MARKS = new RegExp(' v1 n=[0-9a-f]{8} s=main' + CLOSE_MARK, 'g')
 
 function bytes(s: string): number {
   let n = 0

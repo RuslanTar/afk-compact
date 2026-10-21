@@ -152,10 +152,20 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
     usage_present: r.usage !== undefined, ms: (await d.now()) - t0,
   }, actor)
-  await afterStep(d, {
+  await guarded(d, sid, 'after-step', () => afterStep(d, {
     sid, nonce, agentId, midturn, resumePref: 'prompt.context', messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
-  })
+  }))
   return r
+}
+
+/** Runs one step; an internal error becomes one `watch_error {stage, error_class}` row. */
+export async function guarded(d: Deps, sid: string, stage: string, fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn()
+  } catch (err) {
+    const cls = err instanceof Error ? err.name : typeof err
+    await log(d, sid, 'watch_error', { stage, error_class: cls.slice(0, 40) }).catch(() => undefined)
+  }
 }
 
 export type AfterArgs = {

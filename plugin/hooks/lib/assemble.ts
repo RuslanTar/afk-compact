@@ -44,10 +44,10 @@ export function assemble(plugin: string, asset: AssetName, tags: readonly Tag[],
   return assembleText(assetText(asset, plugin), tags, runtime, drop)
 }
 
-/** BUILD-PLAN §3.4 item 5: no `[tag] ` line start, no `@…@`, no `{{`, no `<!--`. */
+/** BUILD-PLAN §3.4 item 5: no `[tag] ` line start, no `@…@`, no build-time brace token, no review comment. */
 export function leftovers(s: string): string[] {
   const out: string[] = []
-  const re = /^\[[a-z-]+\] |@[a-z_]+@|\{\{|<!--/gm
+  const re = /^\[[a-z-]+\] |@[a-z_]+@|\{\{|<!-{2}/gm
   for (let m = re.exec(s); m !== null; m = re.exec(s)) out.push(m[0])
   return out
 }

@@ -5,7 +5,7 @@ import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, leftovers } from '../../hooks/lib/assemble'
 import { DEFAULTS, clamp } from '../../hooks/lib/config'
-import { detectSummary, lastInstrMarker, specValue } from '../../hooks/lib/detect'
+import { CLOSE, OPEN, detectSummary, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
@@ -37,8 +37,8 @@ describe('AT-C-01 nonce', () => {
 describe('AT-C-02 detector', () => {
   const P = 'compactinue-test'
   const n = '1a2b3c4d'
-  const marker = `⟪${P} v1 n=${n} s=main⟫`
-  const sentinel = `⟪/${P} n=${n}⟫`
+  const marker = markerText(P, n, 'main')
+  const sentinel = sentinelText(P, n)
   const body = `${marker}\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n${sentinel}`
 
   test('(a) wrapper lines then the marker: found on line 1', () => {
@@ -59,7 +59,7 @@ describe('AT-C-02 detector', () => {
     expect(d.verdict).toBe('ok')
   })
   test("(d) another plugin's header line only: not ours, unshaped", () => {
-    const d = detectSummary('⟪otherplug v1 n=1a2b3c4d s=main⟫\n# x\n⟪/otherplug n=1a2b3c4d⟫', P)
+    const d = detectSummary(markerText('otherplug', n, 'main') + '\n# x\n' + sentinelText('otherplug', n), P)
     expect(d.nonce).toBeNull()
     expect(d.verdict).toBe('unshaped')
   })
@@ -80,7 +80,7 @@ describe('AT-C-02 detector', () => {
     expect(detectSummary(body, P, { precomputed: true }).verdict).toBe('stale')
     expect(detectSummary(body, P, { dispatchNonce: n, scope: 'sub' }).verdict).toBe('scope-leak')
     expect(detectSummary('# t\n## Resume here\nx', P, { scope: 'sub' }).verdict).toBe('scope-leak')
-    const sub = `⟪${P} v1 n=${n} s=sub⟫\n## Task as assigned: x\n${sentinel}`
+    const sub = markerText(P, n, 'sub') + '\n## Task as assigned: x\n' + sentinel
     expect(detectSummary(sub, P, { dispatchNonce: n, scope: 'main' }).verdict).toBe('scope-leak')
     expect(detectSummary(sub, P, { dispatchNonce: n, scope: 'sub' }).verdict).toBe('ok')
   })
@@ -92,10 +92,10 @@ describe('AT-C-02 detector', () => {
     expect(strip(post).body.endsWith(sentinel + '\n')).toBe(true)
   })
   test('instruction marker: unanchored, the last match counts', () => {
-    const t = `note ⟪${P} v1 n=deadbeef s=main⟫ then\nFirst line inside <summary>: ⟪${P} v1 n=${n} s=main⟫`
+    const t = 'note ' + markerText(P, 'deadbeef', 'main') + ' then\nFirst line inside <summary>: ' + markerText(P, n, 'main')
     expect(lastInstrMarker(t, P)).toEqual({ nonce: n, scope: 'main' })
     expect(lastInstrMarker('no marker', P)).toBeUndefined()
-    expect(lastInstrMarker(`⟪${P} v1 n=${n} s=manual⟫`, P)).toBeUndefined()
+    expect(lastInstrMarker(markerText(P, n, 'manual'), P)).toBeUndefined()
   })
 })
 
@@ -121,7 +121,7 @@ function combos(tags: Tag[]): Tag[][] {
 describe('AT-P-07 assembler (14-character name)', () => {
   const text = (a: (typeof ASSET_NAMES)[number]) => assetText(a, NAME)
 
-  test('every asset, every tag combination: no [tag] line, no @name@, {{ or <!-- survives', () => {
+  test('every asset, every tag combination: no [tag] line, @name@, brace token or review comment survives', () => {
     for (const a of ASSET_NAMES) {
       for (const tags of combos(TAGS[a] ?? [])) {
         const s = assembleText(text(a), tags, WORST)
@@ -169,9 +169,9 @@ describe('AT-P-07 assembler (14-character name)', () => {
 
 test('BT-01 (U part): the marker in assets.gen.ts takes the run-time plugin name', () => {
   const t = assetText('handoff-instructions', 'zz-rename-probe')
-  expect(t).toContain('⟪zz-rename-probe v1 n=@nonce@ s=main⟫')
-  expect(t).toContain('⟪/zz-rename-probe n=@nonce@⟫')
-  expect(assetText('subagent-instructions', 'q')).toContain('⟪q v1 n=@nonce@ s=sub⟫')
+  expect(t).toContain(OPEN + 'zz-rename-probe v1 n=@nonce@ s=main' + CLOSE)
+  expect(t).toContain(OPEN + '/zz-rename-probe n=@nonce@' + CLOSE)
+  expect(assetText('subagent-instructions', 'q')).toContain(OPEN + 'q v1 n=@nonce@ s=sub' + CLOSE)
 })
 
 test('clamp arithmetic: AT-P-03 and AT-P-04', () => {
@@ -189,7 +189,7 @@ test('clamp arithmetic: AT-P-03 and AT-P-04', () => {
 test('sha256 of known vectors', () => {
   expect(sha256('')).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
   expect(sha256('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
-  expect(sha256('⟪x⟫ é')).toBe('99d8cf184eeb3db97df1f55a5e1312a85c348074d1f5d516793b97a95bc8d12f')
+  expect(sha256(OPEN + 'x' + CLOSE + ' é')).toBe('99d8cf184eeb3db97df1f55a5e1312a85c348074d1f5d516793b97a95bc8d12f')
 })
 
 test('small helpers: token format, question end, temp paths', () => {

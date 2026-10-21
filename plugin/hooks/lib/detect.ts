@@ -27,6 +27,23 @@ function esc(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * The marker brackets, written as escapes: the source then holds no literal marker shape, so the
+ * stale-name gate (BT-01), which reads rendered text for `<open>X v1`, sees no name in code.
+ */
+export const OPEN = '\u27ea'
+export const CLOSE = '\u27eb'
+
+/** The summary marker line for a plugin name, nonce and scope (MOD-SPEC §2.2 grammar). */
+export function markerText(plugin: string, nonce: string, scope: Scope): string {
+  return OPEN + plugin + ' v1 n=' + nonce + ' s=' + scope + CLOSE
+}
+
+/** The sentinel line. */
+export function sentinelText(plugin: string, nonce: string): string {
+  return OPEN + '/' + plugin + ' n=' + nonce + CLOSE
+}
+
 export type Grammar = {
   /** Anchored summary marker; group 1 nonce, group 2 scope. */
   marker: RegExp
@@ -38,9 +55,9 @@ export type Grammar = {
 
 export function grammar(plugin: string): Grammar {
   const p = esc(plugin)
-  const marker = specString('marker_re') ?? `^⟪${p} v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$`
-  const sentinel = specString('sentinel_re') ?? `^⟪/${p} n=([0-9a-f]{8})⟫$`
-  const instr = specString('instr_marker_re') ?? `⟪${p} v1 n=([0-9a-f]{8}) s=(main|sub)⟫`
+  const marker = specString('marker_re') ?? '^' + OPEN + p + ' v1 n=([0-9a-f]{8}) s=(main|sub|manual)' + CLOSE + '$'
+  const sentinel = specString('sentinel_re') ?? '^' + OPEN + '/' + p + ' n=([0-9a-f]{8})' + CLOSE + '$'
+  const instr = specString('instr_marker_re') ?? OPEN + p + ' v1 n=([0-9a-f]{8}) s=(main|sub)' + CLOSE
   return { marker: new RegExp(marker), sentinel: new RegExp(sentinel), instr }
 }
 

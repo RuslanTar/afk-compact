@@ -5,7 +5,7 @@
 import type { On, SessionCompactResult, SessionMessage } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
-import { detectSummary } from '../../hooks/lib/detect'
+import { CLOSE, OPEN, detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
 
 export const HOME = '/hh/u'
 export const ROOT = HOME + '/.claude/handoffs'
@@ -138,7 +138,7 @@ export class World {
   summaryMessages(instructions: string | undefined): SessionMessage[] {
     const kept: SessionMessage = { role: 'assistant', text: 'kept', toolUses: [] }
     if (this.summaryMode === 'missing') return [{ role: 'user', text: 'something else', toolUses: [] }, kept]
-    const re = new RegExp(`⟪${this.name.replace(/[-]/g, '\\-')} v1 n=([0-9a-f]{8}) s=(main|sub)⟫`, 'g')
+    const re = markerRe(this.name)
     let nonce = '00000000'
     let scope = 'main'
     for (const m of (instructions ?? '').matchAll(re)) {
@@ -149,8 +149,8 @@ export class World {
     const body =
       this.summaryMode === 'unshaped'
         ? '# LAB-42 retry work\nNo marker here.\n'
-        : `⟪${this.name} v1 n=${nonce} s=${scope}⟫\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n` +
-          (this.summaryMode === 'truncated' ? '' : `⟪/${this.name} n=${nonce}⟫\n`)
+        : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n' +
+          (this.summaryMode === 'truncated' ? '' : sentinelText(this.name, nonce) + '\n')
     return [{ role: 'user', text: head + body + '</summary>', toolUses: [] }, kept]
   }
 
@@ -250,10 +250,15 @@ export class World {
 
 /** The nonce of the last marker of ours in instruction text. */
 export function markerNonce(w: World, text: string | undefined): string | undefined {
-  const re = new RegExp(`⟪${w.name} v1 n=([0-9a-f]{8}) s=(main|sub)⟫`, 'g')
+  const re = markerRe(w.name)
   let n: string | undefined
   for (const m of (text ?? '').matchAll(re)) n = m[1]
   return n
+}
+
+/** Our instruction-marker pattern for a plugin name (global). */
+export function markerRe(name: string): RegExp {
+  return new RegExp(OPEN + name.replace(/[.*+?^$()|[\]\\]/g, '\\$&') + ' v1 n=([0-9a-f]{8}) s=(main|sub)' + CLOSE, 'g')
 }
 
 export const KEPT: SessionMessage = { role: 'user', text: 'hello', toolUses: [] }
@@ -268,8 +273,9 @@ export async function raiseCompact(
 
 test('harness: the fake helper answers ident and claim', () => {
   const w = new World()
-  const r = w.helper(['/p/bin/x-store', 'claim', '--sid', SID_A, '--nonce', '1a2b3c4d', '--channel', 'prompt.context'], {})
+  const bin = '/p/bin/x' + '-store'
+  const r = w.helper([bin, 'claim', '--sid', SID_A, '--nonce', '1a2b3c4d', '--channel', 'prompt.context'], {})
   expect(r).toEqual({ exitCode: 0, stdout: 'CLAIMED\n' })
-  expect(w.helper(['/p/bin/x-store', 'claim', '--sid', SID_A, '--nonce', '1a2b3c4d', '--channel', 'prompt.submit'], {})).toEqual({ exitCode: 0, stdout: 'TAKEN prompt.context\n' })
+  expect(w.helper([bin, 'claim', '--sid', SID_A, '--nonce', '1a2b3c4d', '--channel', 'prompt.submit'], {})).toEqual({ exitCode: 0, stdout: 'TAKEN prompt.context\n' })
   expect(w.name).toBe('x')
 })

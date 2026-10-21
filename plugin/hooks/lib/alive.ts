@@ -69,6 +69,7 @@ export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
   s.turnId = turnId
   s.nudgedThisTurn = false
   s.askedThisTurn = false
+  s.resumeAfter = false
   if (s.ourSubmitPending) s.ourSubmitPending = false
   else await clearHalt(d, sid)
   await writeAlive(d, sid, turnId)

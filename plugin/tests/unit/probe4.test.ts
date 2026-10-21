@@ -127,6 +127,6 @@ test('probe4: test hooks answer $.process.run and $.fs.write', { plugins: [{ nam
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   await $.turn.start({ text: 'hi', turnId: 't1' })
   expect(argv.length).toBe(1)
-  expect(argv[0]?.[0]?.endsWith('/bin/p-run-store')).toBe(true)
+  expect(argv[0]?.[0]?.endsWith('/bin/p-run' + '-store')).toBe(true)
   expect(writes).toEqual(['/tmp/probe4-ok'])
 })

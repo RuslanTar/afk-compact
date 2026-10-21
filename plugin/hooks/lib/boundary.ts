@@ -2,7 +2,7 @@
 // `session.compact` hook for our `$.session.compact`, so everything happens at the call site.
 import type { Deps } from './deps'
 import type { ResumePref } from './compact'
-import { afterStep, mainText, writeDispatch, dispatchExists } from './compact'
+import { afterStep, dispatchExists, guarded, mainText, writeDispatch } from './compact'
 import { effective } from './config'
 import { autoContinue, thrashCheck } from './cont'
 import { checkpoint, prevCopy } from './helper'
@@ -112,10 +112,10 @@ export async function boundary(d: Deps): Promise<void> {
     })
     s.lastPluginCompactAt = await d.now()
     s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
-    await afterStep(d, {
+    await guarded(d, sid, 'after-step', () => afterStep(d, {
       sid, nonce, agentId: null, midturn: false, resumePref: pref, messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
-    })
-    await autoContinue(d, sid)
+    }))
+    await guarded(d, sid, 'continue', () => autoContinue(d, sid))
   } finally {
     s.busy = false
   }
