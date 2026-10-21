@@ -12,17 +12,18 @@ my $core_row = sub {
 };
 {
     files => [ { path => "\$WATCH/\$SID/dispatch/$n.json", json => T::dispatch($n, 8, actor => $agent, agent_id => $agent) } ],
+    transcript => [ T::prompt(0), T::assistant_text(1) ],
     steps => [
-        { call => 'hook', event => 'StopFailure', at => 12, payload => { error => 'overloaded' }, ctx => { row => $core_row } },
         { call => 'hook', event => 'PostCompact', at => 13, payload => { trigger => 'auto', compact_summary => $body },
           ctx => { row => $core_row,
                    detect => { verdict => 'ok', nonce => $n, scope => 'sub', marker_line => 1, sentinel_from_end => 1,
                                normalized => $body } } },
+        { call => 'stop', at => 30, ctx => { row => $core_row } },
     ],
     expect => sub {
         my ($E) = @_;
-        my ($s) = $E->rows('classic', 'stop_failure');
-        $E->is($s->{actor}, 'main', 'stop_failure keeps actor main');
+        my ($s) = $E->rows('classic', 'sweep');
+        $E->is($s->{actor}, 'main', 'the sweep row keeps actor main');
         $E->is($s->{writer}, 'helper', "core's writer kept when the watcher names none");
         $E->is($s->{turn_seq}, 41, "core's envelope fields kept");
         $E->is($s->{built_by_core}, 1, "core's builder was used");

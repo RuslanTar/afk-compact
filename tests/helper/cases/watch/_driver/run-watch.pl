@@ -7,8 +7,9 @@
 # place), `transcript` / `subagents` (synthetic JSONL rows), `steps` (hook,
 # stop, append, move, cli calls) and `expect` (a sub given the checker).
 # Steps call watch::on_hook / watch::on_stop in-process with the ctx core will
-# pass, plus `cli` steps that run the real launcher. Every call's stdout and
-# stderr are captured and must be empty unless a step says otherwise.
+# pass, plus `cli` steps that run the real launcher (`stdin_vars => 1` fills
+# $WATCH, $SID, $PROJ, ... in their stdin). Every call's stdout and stderr are
+# captured and must be empty unless a step says otherwise.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
@@ -205,6 +206,7 @@ sub run_case {
             my %env = (%{ $s->{env} || {} });
             local @ENV{ keys %env } = map { sub_vars($_, \%v) } values %env;
             my $stdin = defined $s->{stdin} ? $s->{stdin} : '';
+            $stdin = sub_vars($stdin, \%v) if $s->{stdin_vars};
             my $inf = File::Temp->new;
             print $inf $stdin;
             close $inf;
@@ -243,6 +245,12 @@ sub run_case {
         push @errs, "canary text in watch files: @hits" if @hits;
     }
     push @errs, @{ $E->{errs} };
+    # The rules may read only the row kinds the incremental cache keeps
+    # (watch::rules::KINDS); test mode records any other kind asked for.
+    if (%watch::rules::MISSED) {
+        push @errs, 'rules read kinds the cache does not keep: ' . join(',', sort keys %watch::rules::MISSED);
+        %watch::rules::MISSED = ();
+    }
     return @errs;
 }
 

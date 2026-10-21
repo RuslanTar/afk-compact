@@ -1,8 +1,16 @@
 # T-18 (WATCH §9, §8.2): canary strings planted in instructions, summary,
 # commands, user text, denial input and reason, error details and the last
 # assistant message reach no watcher row (the driver greps every file under
-# <watch> after each case; this case touches every hook-time writer).
+# <watch> after each case; this case touches every hook-time writer). The
+# denial and the failed stop also run through the real launcher, whose core
+# hook is the one writer of their rows (ROOT-RULINGS F2-5).
 my $n = '5e5e0018';
+my $deny = '{"session_id":"' . $T::SID . '","transcript_path":"/nonexistent/t.jsonl","cwd":"/nonexistent",'
+         . '"hook_event_name":"PermissionDenied","tool_name":"Bash","tool_input":{"command":"CANARY-TEXT-denied"},'
+         . '"tool_use_id":"toolu_9","reason":"CANARY-TEXT-reason"}';
+my $fail = '{"session_id":"' . $T::SID . '","transcript_path":"/nonexistent/t.jsonl","cwd":"/nonexistent",'
+         . '"hook_event_name":"StopFailure","error":"rate_limit","error_details":"CANARY-TEXT-details",'
+         . '"last_assistant_message":"CANARY-TEXT-last"}';
 my $body = T::main_body(nonce => $n, W => ['CANARY-TEXT-work /tmp/CANARY-TEXT-path', 'WARN CANARY-TEXT-log']);
 {
     files => [ { path => "\$WATCH/\$SID/dispatch/$n.json", json => T::dispatch($n, 8) } ],
@@ -24,12 +32,17 @@ my $body = T::main_body(nonce => $n, W => ['CANARY-TEXT-work /tmp/CANARY-TEXT-pa
                        reason => 'CANARY-TEXT-reason' } },
         { call => 'hook', event => 'StopFailure', at => 16,
           payload => { error => 'rate_limit', error_details => 'CANARY-TEXT-details', last_assistant_message => 'CANARY-TEXT-last' } },
+        { call => 'cli', at => 15, argv => ['hook', 'PermissionDenied'], stdin => $deny },
+        { call => 'cli', at => 16, argv => ['hook', 'StopFailure'], stdin => $fail },
         { call => 'stop', at => 30, payload => { last_assistant_message => 'CANARY-TEXT-last' } },
     ],
     expect => sub {
         my ($E) = @_;
-        for my $ev (qw(precompact postcompact permission_denied stop_failure sweep)) {
+        for my $ev (qw(precompact postcompact sweep)) {
             $E->ok(scalar($E->rows('classic', $ev)), "a $ev row was written");
+        }
+        for my $ev (qw(permission_denied stop_failure)) {
+            $E->count([ $E->rows('classic', $ev) ], 1, "one $ev row (core's)");
         }
         $E->count([ $E->alerts('A-21') ], 1, 'A-21 on a HARD secret rule id');
         my @f = sort map { $_->{evidence}{failed} } $E->alerts('A-17');

@@ -4,9 +4,17 @@ package watch::rules;
 # session's rows (classic, mod, mod fallback events, dispatch records, rollup,
 # sidecar slots) and the sweeper's new boundaries and events. Output: alert
 # rows and `precompute_or_failed` info rows. Never acts (WATCH §7.2).
+#
+# Time (WATCH W9, ROOT-RULINGS F2-4): with `$ctx->{_deadline}` set (the Stop's
+# hard stop, on the watch::io::mono clock) the engine checks the clock between
+# compactions, events and rule blocks and dies "hard-stop\n" once it has
+# passed. Everything the rules write is idempotent (alert ids; one
+# `precompute_or_failed` row per PreCompact, deduped against the stream), so
+# the caller drops the run and the next Stop evaluates the same input again.
 use strict;
 use warnings;
 use watch::alerts;
+use watch::cache;
 use watch::ctx;
 use watch::io;
 use watch::spec;
@@ -15,49 +23,61 @@ my %OKV = map { $_ => 1 } qw(ok ok-trailer);
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
 my $JOIN_S = 120;
 
+# The row kinds the rules read from the classic and mod streams and from the
+# mod's events/ files. Only these are decoded and kept (lib/watch/cache.pm);
+# rows_of() of any other kind is empty, and test mode records the miss.
+our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_exists copy_failed
+                copy_mismatch dispatch handoff_publish heal keyset_change order_anomaly postcompact
+                precompact precompute_or_failed resume_inject resume_receipt stop_failure sweep_partial
+                thrash trigger_disabled_small_window trigger_unknown triggers_off version_change
+                warn_quota watch_error);
+my %KIND = map { $_ => 1 } @KINDS;
+our %MISSED;
+
 sub _t { my $r = shift; $r->{_t} //= watch::io::parse_iso($r->{ts}); return $r->{_t} }
+
+# Die "hard-stop\n" once the run's deadline has passed.
+sub tick {
+    my ($ctx) = @_;
+    die "hard-stop\n" if defined $ctx->{_deadline} && watch::io::mono() >= $ctx->{_deadline};
+    return 1;
+}
 
 # --- session model ----------------------------------------------------------
 
+# The session model from a cache load (lib/watch/cache.pm). Without one, the
+# rows are read here in full and nothing is persisted.
 sub load_session {
-    my ($ctx) = @_;
+    my ($ctx, $C) = @_;
+    $C ||= watch::cache::load($ctx, kinds => \@KINDS);
     my %S = (by => {}, disp => {}, disp_list => []);
-    my @rows;
-    push @rows, @{ watch::io::read_jsonl(watch::ctx::classic_log($ctx)) };
-    push @rows, @{ watch::io::read_jsonl(watch::ctx::mod_log($ctx)) };
-    my $ev_dir = watch::ctx::sid_dir($ctx) . '/events';
-    for my $f (watch::io::list_dir($ev_dir)) {
-        next unless $f =~ /\.json\z/;
-        my $r = watch::io::read_json_file("$ev_dir/$f");
-        push @rows, $r if ref $r eq 'HASH';
-    }
-    for my $r (@rows) {
-        next unless defined $r->{ev};
+    for my $r (@{ $C->{rows}{classic} }, @{ $C->{rows}{mod} }, @{ $C->{rows}{events} }) {
+        next unless defined $r->{ev} && $KIND{ $r->{ev} };
         _t($r);
         push @{ $S{by}{ $r->{ev} } }, $r;
     }
     for my $ev (keys %{ $S{by} }) {
         $S{by}{$ev} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } @{ $S{by}{$ev} } ];
     }
-    my $dd = watch::ctx::sid_dir($ctx) . '/dispatch';
-    for my $f (watch::io::list_dir($dd)) {
-        next unless $f =~ /\A([0-9a-f]{8})\.json\z/;
-        my $d = watch::io::read_json_file("$dd/$f");
-        next unless ref $d eq 'HASH';
-        $d->{nonce} //= $1;
+    for my $d (@{ $C->{rows}{dispatch} }) {
+        next unless defined $d->{nonce} && !ref $d->{nonce};
         _t($d);
         $S{disp}{ $d->{nonce} } = $d;
     }
     $S{disp_list} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } values %{ $S{disp} } ];
     $S{rollup} = {};
-    for my $r (@{ watch::io::read_jsonl(watch::ctx::sid_dir($ctx) . '/compactions.jsonl') }) {
+    for my $r (@{ $C->{rows}{rollup} }) {
         $S{rollup}{ $r->{nonce} } = $r if defined $r->{nonce};
     }
     $S{bg} = _bg_slots($ctx);
     return \%S;
 }
 
-sub rows_of { my ($S, $ev) = @_; return @{ $S->{by}{$ev} || [] } }
+sub rows_of {
+    my ($S, $ev) = @_;
+    $MISSED{$ev}++ if !$KIND{$ev} && ($ENV{STORE_TEST_MODE} || '') eq '1';
+    return @{ $S->{by}{$ev} || [] };
+}
 
 sub _bg_slots {
     my ($ctx) = @_;
@@ -159,6 +179,7 @@ sub build_compactions {
         push @out, $C;
     };
     for my $B (sort { ($a->{ts_epoch} // 0) <=> ($b->{ts_epoch} // 0) } @$boundaries) {
+        tick($ctx);
         my ($P, $pd);
         if (defined $B->{ts_epoch}) {
             for my $p (@post) {
@@ -175,6 +196,7 @@ sub build_compactions {
         next if $jp{ _pkey($p) };
         my $pt = _t($p) // next;
         next if $ctx->{now} - $pt <= $JOIN_S;
+        tick($ctx);
         $mk->(undef, $p);
     }
     my @jp = sort keys %jp;
@@ -291,6 +313,7 @@ sub evaluate {
     my $once = sub { my $rule = shift; return ($ex->{by_rule}{$rule} // 0) ? 'info' : 'warn' };
 
     for my $c (@$C) {
+        tick($ctx);
         my ($B, $P, $D) = @$c{qw(B P D)};
         my @idp = ($c->{id});
         my %k = (key => $c->{key}, actor => $c->{actor});
@@ -399,7 +422,9 @@ sub evaluate {
                  evidence => { mod_off => watch::ctx::B($c->{mod_off}), channel => $c->{channel} });
         }
     }
+    tick($ctx);
     _event_rules($ctx, $S, $ex, $sess, \@events, $C);
+    tick($ctx);
     _session_rules($ctx, $S, $ex, $sess);
     return $C;
 }
@@ -429,6 +454,7 @@ sub _event_rules {
         }
     }
     for my $e (@$events) {
+        tick($ctx);
         my $k = $e->{k};
         if ($k eq 'outward' && !$approved{ $e->{class} }) {
             $R->(rule => 'A-12', severity => 'critical', id_parts => [$e->{win_uuid} // $e->{win_line}, $e->{class}, $e->{call_no}],
@@ -522,7 +548,11 @@ sub _session_rules {
         my ($q) = grep { !$paired{$_} && _t($pre[$_]) <= _t($p) + 1 } reverse 0 .. $#pre;
         $paired{$q} = 1 if defined $q;
     }
+    # One info row per PreCompact: the rows already in the stream count too, so
+    # a run dropped at the hard stop (which keeps no session state) and
+    # evaluated again writes none twice.
     my %pof = map { $_ => 1 } @{ $sess->{pof} || [] };
+    $pof{ $_->{precompact_ts} } = 1 for grep { defined $_->{precompact_ts} } rows_of($S, 'precompute_or_failed');
     for my $i (0 .. $#pre) {
         next if $paired{$i};
         my $later = grep { $paired{$_} } ($i + 1 .. $#pre);
@@ -543,7 +573,9 @@ sub _session_rules {
     my @pof = sort keys %pof;
     @pof = @pof[-200 .. -1] if @pof > 200;
     $sess->{pof} = \@pof;
-    # A-17 (d): a StopFailure within 60 s of a counted dispatch.
+    tick($ctx);
+    # A-17 (d): a StopFailure within 60 s of a counted dispatch. Core's hook
+    # writes the one `stop_failure` row (ROOT-RULINGS F2-5); the watcher reads it.
     for my $sf (rows_of($S, 'stop_failure')) {
         my $st = _t($sf) // next;
         my ($d) = grep { !$excluded->($_) && defined _t($_) && $st - _t($_) >= 0 && $st - _t($_) <= 60 } @{ $S->{disp_list} };
@@ -580,12 +612,13 @@ sub _session_rules {
                  evidence => { canary => $ev });
         }
     }
+    tick($ctx);
     # A-24: quota warnings from the sweep; the watch dir over 50 MB.
     for my $r (rows_of($S, 'warn_quota')) {
         $R->(rule => 'A-24', severity => 'warn', id_parts => ['quota', $r->{ts}], evidence => { mb => $r->{mb} });
     }
     unless (grep { ($_->{rule} // '') eq 'A-24' && ref $_->{evidence} eq 'HASH' && $_->{evidence}{watch_dir} } @{ $ex->{rows} }) {
-        my $mb = _dir_mb($ctx->{watch}, 20000);
+        my $mb = _dir_mb($ctx->{watch}, 20000, $ctx);
         if (defined $mb && $mb > 50) {
             $R->(rule => 'A-24', severity => 'warn', id_parts => ['watch-size'], evidence => { watch_dir => \1, mb => int $mb });
         }
@@ -600,6 +633,7 @@ sub _session_rules {
         next unless $day{$d} >= 5;
         $R->(rule => 'A-25', severity => 'warn', id_parts => [$d], evidence => { rows => $day{$d}, date => $d });
     }
+    tick($ctx);
     # A-11: an item listed running for >= stall_min whose output has not moved.
     my @slots = @{ $S->{bg} };
     if (@slots) {
@@ -628,7 +662,7 @@ sub _session_rules {
 }
 
 sub _dir_mb {
-    my ($dir, $cap) = @_;
+    my ($dir, $cap, $ctx) = @_;
     my ($bytes, $n) = (0, 0);
     my @q = ($dir);
     while (@q) {
@@ -637,6 +671,7 @@ sub _dir_mb {
         for my $e (readdir $dh) {
             next if $e eq '.' || $e eq '..';
             return undef if ++$n > $cap;
+            tick($ctx) if $ctx && $n % 256 == 0;
             my $p = "$d/$e";
             my @st = lstat $p or next;
             if (-l _) { next }

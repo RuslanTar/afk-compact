@@ -1,7 +1,9 @@
 package watch::hooks;
-# lib/watch/hooks.pm: rows written at hook time (WATCHER-SPEC W5, W6, W10, W11;
-# §6.3 field lists). Owner: WP-watch. Nothing here prints: PreCompact stdout
-# would become summarizer instructions (WATCH §0).
+# lib/watch/hooks.pm: rows written at hook time (WATCHER-SPEC W5, W6; §6.3
+# field lists). Owner: WP-watch. Nothing here prints: PreCompact stdout would
+# become summarizer instructions (WATCH §0). The W10 `stop_failure` and W11
+# `permission_denied` rows have one writer, core's `hook` (ROOT-RULINGS F2-5);
+# the watcher reads them and writes neither.
 use strict;
 use warnings;
 use watch::ctx;
@@ -45,10 +47,13 @@ sub foreign_header {
     return 0;
 }
 
+# Core's PreCompact passes its detect.instructions result as `instructions`
+# (`instr` in the ctx contract); either one is the answer.
 sub _ci_nonce {
     my ($ctx, $ci) = @_;
-    if (ref $ctx->{instr} eq 'HASH') {
-        return _nonce_ok($ctx->{instr}{nonce}) ? $ctx->{instr}{nonce} : undef;
+    my $in = ref $ctx->{instr} eq 'HASH' ? $ctx->{instr} : ref $ctx->{instructions} eq 'HASH' ? $ctx->{instructions} : undef;
+    if ($in) {
+        return _nonce_ok($in->{nonce}) ? $in->{nonce} : undef;
     }
     return undef unless defined $ci && length $ci;
     my $rx = watch::spec::regex($ctx->{spec}, 'instr_marker_re');
@@ -80,11 +85,13 @@ sub _enum {
     return (grep { $_ eq $v } @ok) ? $v : 'unknown';
 }
 
-sub _rows_of {
+# The `copy` rows of both streams (all previous_summary reads); every other
+# line is skipped before the JSON decode.
+sub _copy_rows {
     my ($ctx) = @_;
     my @r;
     for my $f (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
-        push @r, @{ watch::io::read_jsonl($f) } if -f $f;
+        push @r, @{ watch::io::read_jsonl($f, undef, qr/"ev"\s*:\s*"copy"/) } if -f $f;
     }
     return \@r;
 }
@@ -177,12 +184,25 @@ sub mod_alive_this_turn {
     return $at >= $start - 2 ? 1 : 0;
 }
 
+# The detector result for compact_summary. Core's PostCompact passes its own
+# result: the detect.summary fields (nonce, the marker's scope, normalized,
+# marker_line, sentinel_from_end) under `scan`, and its final verdict on top.
+sub _detect {
+    my ($ctx) = @_;
+    my $d = $ctx->{detect};
+    return undef unless ref $d eq 'HASH';
+    return $d unless ref $d->{scan} eq 'HASH';
+    my %m = %{ $d->{scan} };
+    $m{verdict} = $d->{verdict} if defined $d->{verdict};
+    return \%m;
+}
+
 # W6: `postcompact` with the shape metrics of compact_summary.
 sub post_compact {
     my ($ctx) = @_;
     my $p = $ctx->{payload};
     my $text = defined $p->{compact_summary} && !ref $p->{compact_summary} ? $p->{compact_summary} : '';
-    my $det = ref $ctx->{detect} eq 'HASH' ? $ctx->{detect} : undef;
+    my $det = _detect($ctx);
     if (!$det && defined &detect::summary) {
         my $d = eval { local $SIG{__DIE__}; detect::summary($text, $ctx->{dispatch}) };
         $det = $d if ref $d eq 'HASH';
@@ -204,7 +224,7 @@ sub post_compact {
         my $cp = watch::io::read_json_file(watch::ctx::sid_dir($ctx) . "/checkpoint/$nonce.json");
         ($hhmm) = ($cp->{measured_block} // '') =~ /\b(\d\d:\d\d)\b/ if ref $cp eq 'HASH';
     }
-    my $rows = _rows_of($ctx);
+    my $rows = _copy_rows($ctx);
     my ($prev, $src) = previous_summary($ctx, $is_main, $nonce, $body, $rows);
     my $m = watch::shape::metrics(body => $body, spec => $ctx->{spec}, is_main => $is_main,
                                   measured => $measured, measured_hhmm => $hhmm, prev => $prev, prev_src => $src);
@@ -263,66 +283,6 @@ sub _looks_main {
     my @main = watch::spec::list($spec, 'sections_main');
     my $has = sub { my $h = shift; return grep { length $_ && $body =~ /^\Q$_\E/m } @$h };
     return ($has->(\@sub) && !$has->(\@main)) ? 0 : 1;
-}
-
-# W10: `stop_failure {error_class}`; the class is the payload's error enum.
-sub stop_failure {
-    my ($ctx) = @_;
-    my $e = $ctx->{payload}{error};
-    my $class = defined $e && !ref $e && $e =~ /\A[a-z_]{1,40}\z/ ? $e : 'other';
-    watch::ctx::log_row($ctx, 'stop_failure', { error_class => $class },
-                        actor => (defined $ctx->{payload}{agent_id} ? 'unknown' : 'main'));
-}
-
-# W11: `permission_denied {tool_name, reason_class, guard_class, turn_kind, caused_by}`.
-# Never tool_input, never the reason text.
-sub permission_denied {
-    my ($ctx) = @_;
-    my $p = $ctx->{payload};
-    my $tool = defined $p->{tool_name} && !ref $p->{tool_name} && $p->{tool_name} =~ /\A[A-Za-z0-9_.:-]{1,80}\z/
-             ? $p->{tool_name} : 'other';
-    my ($kind, $by) = ('other', 'session');
-    unless (defined $p->{agent_id}) {
-        my $rows = watch::rows::tail_rows($p->{transcript_path}, 512 << 10, $ctx->{brand}, []);
-        ($kind, $by) = turn_kind($rows);
-    }
-    watch::ctx::log_row($ctx, 'permission_denied', {
-        tool_name    => $tool,
-        reason_class => 'other',
-        guard_class  => 'other',
-        turn_kind    => $kind,
-        caused_by    => $by,
-    }, actor => (defined $p->{agent_id} ? 'unknown' : 'main'));
-}
-
-sub turn_kind {
-    my ($rows) = @_;
-    my (@starts, $last_b, $last_inject, $last_heal);
-    my $calls = 0;
-    for my $i (0 .. $#$rows) {
-        my $k = $rows->[$i]{kind} // '';
-        push @starts, $i if $k eq 'prompt' || $k eq 'continue';
-        $last_b = $i if $k eq 'boundary';
-        if ($k eq 'continue' || $k eq 'nudge' || ($k eq 'hook_context' && ($rows->[$i]{hook_event} // '') eq 'SessionStart')) {
-            $last_inject = $calls;
-        }
-        if ($k eq 'assistant') {
-            for my $c (@{ $rows->[$i]{calls} || [] }) {
-                $calls++;
-                $last_heal = $calls if $c->{heal};
-            }
-        }
-    }
-    my $t = @starts ? $starts[-1] : -1;
-    my $t2 = @starts > 1 ? $starts[-2] : -1;
-    my $kind = 'other';
-    if (defined $last_b && $last_b > $t2) { $kind = 'post-compaction' }
-    elsif (grep { ($rows->[$_]{kind} // '') eq 'nudge' } ($t + 1 .. $#$rows)) { $kind = 'nudge' }
-    elsif ($t >= 0 && $rows->[$t]{resume_invocation}) { $kind = 'resume' }
-    my $by = 'session';
-    $by = 'plugin' if defined $last_inject && $calls - $last_inject < 10;
-    $by = 'plugin' if defined $last_heal && $calls - $last_heal < 10;
-    return ($kind, $by);
 }
 
 1;
