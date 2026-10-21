@@ -7,7 +7,7 @@ import { afterStep, dispatchExists, guarded, mainText, writeDispatch } from './c
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
 import type { HandoffTurn } from './handoff-turn'
-import { compactsAfter, endHandoffTurn, openAndSubmit, planHandoff } from './handoff-turn'
+import { compactsAfter, endHandoffTurn, haltWins, openAndSubmit, planHandoff } from './handoff-turn'
 import { checkpoint, prevCopy } from './helper'
 import { log, skipClass } from './log'
 import { drawNonce } from './nonce'
@@ -27,7 +27,13 @@ export type BoundaryOpts = {
   /** A last cycle's compaction for `cap` or `continue-off` runs although halt is on (DP-4). */
   exemptHalt?: boolean
   /** The compaction after a handoff turn: also exempt from cooldown and the target check. */
-  afterHandoff?: { ht: string; path: string | undefined; stats: Record<string, string | number | null> }
+  afterHandoff?: {
+    ht: string
+    path: string | undefined
+    stats: Record<string, string | number | null>
+    /** `nativeCompactSeq` when scheduled: a native compaction since then makes it a second one. */
+    seq: number
+  }
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -40,10 +46,10 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   const end = await endHandoffTurn(d, sid, t.reason)
   if (end.kind === 'done') return
   if (end.kind === 'compact') {
-    schedule(d, 500, { exemptHalt: true, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats } })
+    schedule(d, 500, { exemptHalt: true, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq: s.nativeCompactSeq } })
     return
   }
-  const last = s.lastCycle
+  const nudged = s.lastCycle
   s.lastCycle = null
   const eff = await effective(d, sid)
   if (eff.disabled) return
@@ -56,6 +62,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   }
   if (tokens === undefined) return
   await thrashCheck(d, sid, tokens >= eff.target)
+  // A thrash halt found just now outranks the cap or continue-off the nudge saw (DP-4).
+  const last = nudged === null ? null : haltWins(d, nudged)
   let exemptHalt = false
   if (last !== null) {
     // A last cycle: no continue; its handoff turn comes before the compaction (§9.1).
@@ -109,7 +117,7 @@ function startHandoffTimer(d: Deps, sid: string, h: HandoffTurn): void {
       if (s.handoffTurn !== h || h.phase !== 'delay' || s.mainTurnRunning) return
       if (await openAndSubmit(d, sid, h, n => dispatchExists(d, sid, n))) return
       s.handoffTurn = undefined
-      if (compactsAfter(h.reason)) await boundary(d, { exemptHalt: true })
+      if (compactsAfter(haltWins(d, h.reason))) await boundary(d, { exemptHalt: true })
     })().catch(() => undefined)
   })
 }
@@ -137,6 +145,11 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
   const ah = opts.afterHandoff
   if (s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
   const sid = await d.sessionId()
+  // §9.1 End: one compaction after the handoff turn; a native one that ran since was it (§3.1).
+  if (ah && s.nativeCompactSeq !== ah.seq) {
+    await log(d, sid, 'skip', { why: 'compacted', ht: ah.ht })
+    return
+  }
   const eff = await effective(d, sid)
   if (eff.disabled) return
   const now = await d.now()

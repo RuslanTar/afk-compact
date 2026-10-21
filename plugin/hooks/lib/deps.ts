@@ -116,6 +116,8 @@ export type LoadState = {
   compactedInTurn: number
   /** The handoff a handoff turn published, while no later main turn or compaction has run. */
   published: Published | undefined
+  /** Main compactions other than ours that completed in this load (the post-handoff check). */
+  nativeCompactSeq: number
 }
 
 export type PendingResume = {
@@ -184,6 +186,7 @@ export function newState(loadId: string): LoadState {
     handoffTurn: undefined,
     compactedInTurn: -1,
     published: undefined,
+    nativeCompactSeq: 0,
   }
 }
 

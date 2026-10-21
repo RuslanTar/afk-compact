@@ -456,6 +456,97 @@ test('the handoff turn is never started for a subagent turn, nor on the 400K tur
   expect(w.rowsOf('handoff_skipped').length).toBe(0)
 })
 
+/**
+ * Two plugin compactions at 410K turn ends, the first re-reaching target the next turn: the
+ * next turn end that is at target again finds thrash (AT-B-07's rule).
+ */
+async function refillTwice($: Engine, w: World): Promise<void> {
+  w.tokens = 410000
+  for (let i = 0; i < 2; i++) {
+    await w.turnStart($)
+    await w.turnEnd($)
+    await w.advance(2000)
+    await w.advance(60000)
+  }
+  expect(w.compacts.length).toBe(2)
+  expect(w.rowsOf('halt').length).toBe(0)
+}
+
+const THRASH_VARIANTS: { name: 'cap' | 'continue-off'; options: Record<string, number>; store: Record<string, unknown> }[] = [
+  { name: 'cap', options: {}, store: CAPPED },
+  { name: 'continue-off', options: { max_auto_continues_per_hour: 0 }, store: {} },
+]
+for (const opt of THRASH_VARIANTS) {
+  test(`CR-F18, CR-F24, AT-LT-17 (thrash): thrash found at the end of a ${opt.name} nudged turn wins: handoff turn for thrash, then no plugin compaction (DP-4)`, { options: opt.options }, async ($, on) => {
+    const w = new World().install(on, opt.store)
+    await w.start($)
+    await refillTwice($, w)
+    await lastCycleTurn($, w)
+    expect(w.rowsOf('nudge').slice(-1)[0]?.last_cycle).toBe(opt.name)
+    expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['thrash', true]])
+    expect(w.rowsOf('continue').map(r => r.result)).toEqual(['halt:thrash'])
+    expect(w.rowsOf('continue_capped').length).toBe(0)
+    if (!TURN) {
+      expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
+      await w.advance(5000)
+      expect(w.compacts.length).toBe(2)
+      return
+    }
+    await w.advance(2000)
+    expect(w.submits).toEqual([submitText(w, 'thrash')])
+    expect(w.flag(w.callsOf('handoff-turn')[0], '--reason')).toBe('thrash')
+    await handoffTurnStarts($, w)
+    const ht = w.lastHt() ?? ''
+    w.publish(ht, PUBLISHED)
+    await w.turnEnd($, 'Handoff written.')
+    await w.advance(60000)
+    expect(w.compacts.length).toBe(2)
+    expect(w.rowsOf('handoff_turn_end').map(r => [r.handoff_turn, r.compaction])).toEqual([['published', false]])
+    expect(w.toasts.filter(t => t.includes(SHOWN) && t.includes(HALT_REASON_TEXT.thrash)).length).toBe(1)
+    expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(0)
+  })
+}
+
+test('CR-F18, CR-F24: handoff_turn off: thrash found at a capped nudged turn\'s end: skip why=halt, no plugin compaction (DP-4, DP-22)', { options: { handoff_turn: 'off' } }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await refillTwice($, w)
+  await lastCycleTurn($, w)
+  expect(w.rowsOf('halt').map(r => r.reason)).toEqual(['thrash'])
+  expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
+  await w.advance(5000)
+  expect(w.compacts.length).toBe(2)
+  expect(w.submits.length).toBe(0)
+})
+
+test('CR-F26, AT-LT-05 (2-nonok): H < 20K: why=headroom, then no plugin compaction (DP-4, E-M-3)', async ($, on) => {
+  const w = new World({ window: 800000 }).install(on)
+  await w.start($)
+  await haltTwoNonOk($, w)
+  w.tokens = 610000
+  await w.tool($)
+  w.tokens = 745000
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: x')
+  await w.advance(5000)
+  expect(w.rowsOf('handoff_skipped').map(r => r.why)).toEqual([TURN ? 'headroom' : 'no-asset'])
+  expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
+  expect(w.compacts.length).toBe(0)
+  expect(w.submits.length).toBe(0)
+})
+
+test('CR-F26, AT-LT-05 (thrash): thrash at a continue-off nudged turn\'s end, H < 20K: why=headroom, then no plugin compaction', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+  const w = new World({ window: 800000 }).install(on)
+  await w.start($)
+  await refillTwice($, w)
+  await lastCycleTurn($, w, 'Checkpoint: clean · Step 1: x', 745000)
+  await w.advance(5000)
+  expect(w.rowsOf('halt').map(r => r.reason)).toEqual(['thrash'])
+  expect(w.rowsOf('handoff_skipped').map(r => r.why)).toEqual([TURN ? 'headroom' : 'no-asset'])
+  expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
+  expect(w.compacts.length).toBe(2)
+  expect(w.submits.length).toBe(0)
+})
+
 test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submit, why=user-turn, that turn is not the handoff turn', async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
@@ -508,4 +599,22 @@ test('CR-F21: a prompt queued with wait=true during the handoff turn is no inter
   expect(w.rowsOf('handoff_user_interjected').length).toBe(0)
   w.tokens = 704000
   expect((await w.tool($)).context).toEqual([bandText(w, 'spent')])
+})
+
+test('CR-F19: a native compaction inside the 500 ms after the handoff turn ends: no second compaction, skip why=compacted', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compacts.length).toBe(1)
+  await w.advance(500)
+  await w.advance(60000)
+  expect(w.compacts.length).toBe(1)
+  expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
 })

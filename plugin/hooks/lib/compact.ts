@@ -171,6 +171,8 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     await log(d, sid, 'precompute_dispatched', { nonce }, actor)
     return r
   }
+  // The post-handoff compaction scheduled before this one is now a second one (boundary.ts).
+  if (main) s.nativeCompactSeq++
   await log(d, sid, 'compacted', {
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
     usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...(handoffHt !== undefined ? { handoff_ht: handoffHt } : {}),

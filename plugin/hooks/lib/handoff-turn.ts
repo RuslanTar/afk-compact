@@ -33,6 +33,17 @@ export function compactsAfter(reason: HaltReason): boolean {
   return reason === 'cap' || reason === 'continue-off'
 }
 
+/**
+ * The last cycle's reason as it stands now: a `thrash` or `2-nonok` halt that started after the
+ * nudge (thrash is found at the nudged turn's end) wins over the `cap` or `continue-off` the
+ * nudge saw, so DP-4 gives that cycle no plugin compaction. A halt for `cap` changes nothing.
+ */
+export function haltWins(d: Deps, reason: HaltReason): HaltReason {
+  const h = d.state.halt
+  if (!compactsAfter(reason) || !h.active || h.reason === 'cap') return reason
+  return h.reason === 'thrash' ? 'thrash' : '2-nonok'
+}
+
 /** The pre-flight skip: below this allowance no handoff turn starts. */
 export const MIN_ALLOWANCE = 20000
 /** Bands below the native trigger `N` (MOD-SPEC §9.1). */
@@ -292,7 +303,9 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   const path = state.state === 'published' ? state.path : undefined
   const shown = path === undefined ? undefined : await tilde(d, path)
   if (path !== undefined) s.published = { ht: h.ht, path: shown ?? path }
-  const compact = reason === 'answer' && h.race === null && !h.interjected && compactsAfter(h.reason)
+  // DP-4: a thrash or 2-nonok halt that started since the plan still rules out the compaction.
+  const why = HALT_REASON_TEXT[haltWins(d, h.reason)]
+  const compact = reason === 'answer' && h.race === null && !h.interjected && compactsAfter(haltWins(d, h.reason))
   await log(d, sid, 'handoff_turn_end', { ...stats, reason: h.reason, turn_id: h.turnId, interjected: h.interjected, compaction: compact })
   // The user took the turn over: halt clears at its end as for any user turn (§9.1).
   if (h.interjected) {
@@ -300,7 +313,6 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
     return { kind: 'normal' }
   }
   if (reason !== 'answer' || h.race !== null) return { kind: 'done' }
-  const why = HALT_REASON_TEXT[h.reason]
   if (compact) {
     if (shown !== undefined) d.toast(`${d.name}: auto-continue paused (${why}); handoff saved: ${shown}`)
     return { kind: 'compact', ht: h.ht, path: shown, stats }
