@@ -76,8 +76,7 @@
      "files": [
       "$FIX/assembly/expected/handoff-instructions__auto.txt",
       "$FIX/assembly/expected/subagent-instructions__fallback.txt"
-     ],
-     "nonce": "a1b2c3d4"
+     ]
     }
    }
   },
