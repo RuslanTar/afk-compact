@@ -156,6 +156,9 @@ sub stage_plugin {
     copy_tree($PLUGIN_SRC // "$REPO/plugin", $dst);
     my $launcher = "$dst/bin/$BRAND-store";
     die "run.pl: no launcher at plugin/bin/$BRAND-store (run tools/build)\n" unless -x $launcher;
+    # CR-F34: in this staged copy (and with STORE_TEST_MODE=1) the consent keys come from the
+    # case's $HOME/.claude/settings.json; without the file, from the account's home.
+    util::write_atomic("$dst/.test-consent-home", "helper test stage\n", 0644);
     if (!-f "$dst/assets/handoff-spec.json") {
         my $tmpl = util::read_file("$HERE/cases/core/_support/handoff-spec.json");
         die "run.pl: no assets/handoff-spec.json and no interim spec\n" unless defined $tmpl;
@@ -354,6 +357,14 @@ sub run_case {
     # "manifest": {dotted path in plugin.json: value}: this case runs against its own
     # staged copy whose plugin.json holds these values (e.g. a non-ASCII description).
     $V{PLUGIN} = stage_variant($case->{manifest}, "$V{TMP}/plugin") if ref $case->{manifest} eq 'HASH';
+    # "consent_home": "account": this case runs against a staged copy without the test
+    # consent seam, so the consent folder is the account's ~/.claude (CR-F34); the case's
+    # HOME is then foreign and the consent keys take their safe values.
+    if (($case->{consent_home} // '') eq 'account') {
+        copy_tree($V{PLUGIN}, "$V{TMP}/plugin-account");
+        unlink "$V{TMP}/plugin-account/.test-consent-home";
+        $V{PLUGIN} = "$V{TMP}/plugin-account";
+    }
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
