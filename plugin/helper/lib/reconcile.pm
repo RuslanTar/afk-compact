@@ -33,7 +33,10 @@ our $READ_MAX = 32 * 1024 * 1024;   # bytes read from one file per Stop; the res
 our $SETTLE_S = 10;                 # an unproven PostCompact younger than this waits
 our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long after its PostCompact
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
-our $TOL_S = 2;                     # stash times have whole seconds
+our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
+# A main boundary row's PostCompact is one at or before the row, never after it (RR-S21-01):
+# the row is written after PostCompact and the mod after-step (S-21), and the stash time
+# has milliseconds, so a later PostCompact (an unproven subagent one) cannot take its place.
 
 # ---------------------------------------------------------------- state
 sub _load {
@@ -160,7 +163,7 @@ sub _match {
     for my $bd (@{ $st->{sbounds} }) { my $it = defined $bd->{by} ? $by{ $bd->{by} } : undef; $it->{sb} = $bd if $it }
     for my $bd (sort { $a->{e} <=> $b->{e} } grep { !defined $_->{by} } @{ $st->{bounds} }) {
         my @c = grep { !$_->{mb} && !$_->{sb} && $_->{scope} ne 'sub'
-                       && $_->{e} <= $bd->{e} + $TOL_S && $bd->{e} - $_->{e} <= $MAIN_WINDOW_S } @$pool;
+                       && $_->{e} <= $bd->{e} && $bd->{e} - $_->{e} <= $MAIN_WINDOW_S } @$pool;
         my @proven = grep { $_->{scope} eq 'main' } @c;
         my ($it) = sort { $b->{e} <=> $a->{e} } (@proven ? @proven : @c);
         next unless $it;
@@ -329,6 +332,16 @@ sub _run {
         $copied->{"n:$mn"} = $save->{rel} if defined $mn;
         rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
         $logged->{"copy_late:" . ($mn // $save->{id6})} = 1;
+        # Main-proven: sweep (MOD-SPEC §5.3 step 5), as step 0 does (RR-S21-04). The
+        # swept/<id6> claim (the nonce's first 6, as the mod's after-step claims it) keeps a
+        # compaction from being swept twice.
+        my $sweep;
+        if ($scope eq 'main') {
+            (my $stem = util::basename($save->{path} // '')) =~ s/\.md$//;
+            $sweep = sweep::run(sid => $sid, id6 => $save->{id6}, stem => $stem, transcript => $m{transcript} // $a{transcript},
+                                budget_ms => $left->(), bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $mn);
+        }
+        my $tot = $sweep ? $sweep->{totals} : undef;
         my $rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
         if (!$rolled) {
             my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
@@ -339,7 +352,9 @@ sub _run {
                           verdict => $save->{verdict}, verdict_source => ($kind eq 'mod' ? 'after-step' : 'postcompact'),
                           marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end},
                           summary_chars => $s->{chars}, shape_class => detect::shape_class($s),
-                          copy => 'late', copy_path => $save->{rel});
+                          copy => 'late', copy_path => $save->{rel},
+                          evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
+                                                redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef));
             push @{ $st->{rolls_l} }, { id6 => $save->{id6}, nonce => $mn, e => $now, actor => $actor, pc => 0, join => 'reconcile' };
         }
     }

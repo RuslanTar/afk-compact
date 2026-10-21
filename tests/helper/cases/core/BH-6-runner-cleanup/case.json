@@ -1,0 +1,7 @@
+{
+ "id": "BH-6-runner-cleanup",
+ "note": "BH-6: the runner removes its work dirs at the end of a passing run: the one under the system temp folder and the one under the repo's git-ignored tmp/ (tmp_base \"repo\" cases), which no OS cleaner visits. A run with a failed case keeps both for a look (as --keep does). The child runs use their own TMPDIR",
+ "steps": [
+  {"lib": "runner_cleanup", "args": {"tmp": "$TMP"}}
+ ]
+}

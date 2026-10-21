@@ -176,7 +176,8 @@ def main(argv):
            "copy_trailers": []}
     text_out = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     if check:
-        cur = open(out, encoding="utf-8").read() if os.path.isfile(out) else ""
+        # bytes as written (newline=""): CRLF drift is a difference too (BH-5)
+        cur = open(out, encoding="utf-8", newline="").read() if os.path.isfile(out) else ""
         if cur != text_out:
             print("canary-baseline: {} differs from a fresh render".format(os.path.relpath(out, REPO)))
             return 1

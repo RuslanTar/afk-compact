@@ -125,7 +125,8 @@ def main(argv):
         sys.exit(__doc__)
     text = record()
     if argv == ["--check"]:
-        cur = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else None
+        # bytes as written (newline=""): CRLF drift is a difference too (BH-5)
+        cur = open(OUT, encoding="utf-8", newline="").read() if os.path.exists(OUT) else None
         ok = cur == text
         print("HELPER REPLIES CHECK: " + ("PASS" if ok else "FAIL (run tools/helper-replies-gen)"))
         return 0 if ok else 1
