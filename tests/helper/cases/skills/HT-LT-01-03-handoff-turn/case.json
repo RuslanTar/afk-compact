@@ -1,0 +1,293 @@
+{
+ "id": "HT-LT-01, HT-LT-02, HT-LT-03",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-18 B7/B8: begin binds the newest open handoff turn of the session (<ht>.stage, the ht in the stage meta, handoff_turn {ht, max_calls}); a second begin returns that stage with resumed true and makes no stage; handoff-state reads none -> staged draft=0|1 with a literal finish command (slug from the stage meta, no session id) -> published; publish writes <ht>.published before the handoff file; another stage naming the same ht is refused with handoff-exists <path> and writes nothing",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "HT-LT-03 none",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "none\n"
+   }
+  },
+  {
+   "name": "the mod opens a handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn.ht": "a1b2c3d4",
+     "handoff_turn.max_calls": 34,
+     "resumed": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "HT-LT-01 begin binds the open ht"
+  },
+  {
+   "name": "HT-LT-01 a second begin returns that stage",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "other"
+   ],
+   "now": "2026-10-21T14:20:00+03:00",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": "$STAGE",
+     "nonce": "$NONCE",
+     "stem": "$STEM",
+     "resumed": 1,
+     "handoff_turn.ht": "a1b2c3d4"
+    },
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/.staging/*",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.stage",
+      "mode": "0600",
+      "has": [
+       "\\A$STAGE\\n\\z"
+      ]
+     },
+     {
+      "path": "$STAGE/settings.json",
+      "has": [
+       "\"handoff_ht\":\"a1b2c3d4\"",
+       "\"slug\":\"retry\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "HT-LT-03 staged, no draft",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Astaged $STAGE draft=0 finish=\\S+-store publish --stage '$STAGE' --slug retry --status in-progress\\n\\z"
+    ],
+    "stdout_lacks": [
+     "$SID"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "HT-LT-03 staged with a draft",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Astaged $STAGE draft=1 finish="
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+      "mode": "0600",
+      "has": [
+       "\\A$ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "handoff_ht": "a1b2c3d4"
+      }
+     }
+    ]
+   },
+   "name": "HT-LT-02 publish claims the ht"
+  },
+  {
+   "name": "HT-LT-03 published",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "published $ROOT/repo/LAB-7/$STEM.md\n"
+   }
+  },
+  {
+   "name": "after the turn, begin makes a new stage",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn": {
+      "null": 1
+     },
+     "resumed": {
+      "null": 1
+     }
+    }
+   }
+  },
+  {
+   "name": "a second stage that names the same ht",
+   "setup": [
+    {
+     "mkdir": "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b/settings.json",
+     "content": "{\"v\":1,\"session_id\":\"$SID\",\"sid8\":\"11111111\",\"nonce\":\"0b0b0b0b\",\"stem\":\"2026-10-21_14-30-00_11111111_retry\",\"date\":\"2026-10-21T14:30:00+03:00\",\"checked_at\":\"2026-10-21 14:05 +0300\",\"bucket\":\"$ROOT/repo/LAB-7\",\"bucket_rel\":\"repo/LAB-7\",\"cwd\":\"$TMP/repo\",\"handoff_ht\":\"a1b2c3d4\",\"settings\":{}}\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b/body.md",
+     "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$ROOT/repo/LAB-7/.staging/11111111-0b0b0b0b",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: handoff-exists $ROOT/repo/LAB-7/$STEM.md\n",
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "REFUSED:handoff-exists"
+      }
+     }
+    ]
+   },
+   "name": "HT-LT-02 a second publish for the ht"
+  }
+ ]
+}

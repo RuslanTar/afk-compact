@@ -1,0 +1,378 @@
+{
+ "id": "AT-RM-01, AT-RM-02, AT-RM-08, AT-RM-10",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-12 §1.5.5 in publish: a declared repository that the user has not accepted gets the private handoff, no write under the repository and the /config accept route (no mod command before PR-2, DP-5); accepted, begin prints mode repo and the export target and publish writes the portable export (spec frontmatter_keys_export: no machine-only or private-chain key, bucket = topic, export: repo, previous_handoff decl.root-relative when its export has the same nonce; toplevel paths relative, the home as ~/; @self@ the export path); in repo mode the lint flags private paths left after the rewrite (private-path); an export target with other bytes is refused, never overwritten, and publish still exits 0",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "mode.mode": "private",
+     "mode.reason": "not-accepted",
+     "export_target": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "AT-RM-01 declared, not accepted"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- moved `$TMP/repo/src/a.rb` and the notes in `$HOME/x`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\nNot exported: repository asks for repo mode; accept it by adding $TMP/repo to repo_roots in /config\\n\\z"
+    ],
+    "absent": [
+     "$TMP/repo/.claude/handoffs"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_mode",
+      "count": 1,
+      "fields": {
+       "mode": "private",
+       "reason": "not-accepted",
+       "declared": true
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_export",
+      "count": 1,
+      "fields": {
+       "result": "not-exported"
+      }
+     }
+    ]
+   },
+   "name": "AT-RM-01 publish: private handoff, no export, accept route"
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "repo_roots": "$TMP/repo"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "mode.mode": "repo",
+     "mode.reason": "accepted",
+     "export_target": {
+      "re": "^\\.claude/handoffs/LAB-7/2026-10-21_14-05-20_11111111_retry\\.md$"
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "AT-RM-02 accepted: repo mode",
+   "now": "2026-10-21T14:05:20+03:00"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- moved `$TMP/repo/src/a.rb` and the notes in `$HOME/x`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\nExported to repository: \\.claude/handoffs/LAB-7/$STEM\\.md \\(untracked; review and commit it yourself\\)\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md",
+      "mode": "0600",
+      "frontmatter": {
+       "kind": "handoff",
+       "nonce": "$NONCE",
+       "bucket": "LAB-7",
+       "export": "repo",
+       "session_id": "$SID",
+       "transcript_path": null,
+       "claude_pid": null,
+       "worktree": null,
+       "previous_kind": null,
+       "own_previous_handoff": null,
+       "previous_handoff": null
+      },
+      "has": [
+       "^- moved `src/a\\.rb` and the notes in `~/x`$",
+       "this handoff: \\.claude/handoffs/LAB-7/$STEM\\.md$",
+       "^⟪$BRAND v1 n=$NONCE s=manual⟫$",
+       "\\n⟪/$BRAND n=$NONCE⟫\\n\\z",
+       "worktree \\. ·"
+      ],
+      "lacks": [
+       "$TMP/repo",
+       "@self@"
+      ]
+     },
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7",
+      "mode": "0700"
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^- moved `$TMP/repo/src/a\\.rb`",
+       "this handoff: $ROOT/repo/LAB-7/$STEM\\.md$"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_export",
+      "fields": {
+       "result": "exported"
+      }
+     }
+    ]
+   },
+   "name": "AT-RM-02 export: portable frontmatter and body"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "third stage",
+   "now": "2026-10-21T14:05:30+03:00"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- the transcript is `~/.claude/projects/-Users-a-x/s.jsonl`; see `/Users/bob/k`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT private-path line 23 claude-projects,claude-jsonl,other-home$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ]
+   },
+   "name": "AT-RM-10 repo mode: private-path"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "write": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md",
+   "content": "someone else's file\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\nExport refused: export-exists\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md",
+      "has": [
+       "\\Asomeone else's file\\n\\z"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_export",
+      "fields": {
+       "result": "refused",
+       "reason": "export-exists"
+      }
+     }
+    ]
+   },
+   "name": "AT-RM-08 an export target with other bytes is never overwritten"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "fourth stage",
+   "now": "2026-10-21T14:05:40+03:00"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content_parts": [
+    "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- Finding: config had pass",
+    "word=hunter2xyz\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY secret-warn rules=\\S+$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$",
+     "^Export refused: secret-warn \\S+$"
+    ],
+    "absent": [
+     "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_export",
+      "fields": {
+       "result": "refused",
+       "reason": "secret-warn"
+      }
+     }
+    ]
+   },
+   "name": "AT-RM-09 variant: a WARN hit stays private; the export is refused"
+  }
+ ]
+}
