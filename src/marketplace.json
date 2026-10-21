@@ -1,6 +1,7 @@
 {
   "name": "{{marketplace}}",
-  "owner": { "name": "{{marketplace}}" },
+  "owner": { "name": "Ruslan Taranenko" },
+  "description": "{{description}}",
   "plugins": [
     {
       "name": "{{plugin}}",

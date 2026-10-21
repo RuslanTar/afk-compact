@@ -2,6 +2,8 @@
   "name": "compactinue",
   "version": "0.1.0",
   "description": "Shapes Claude Code's native compaction into a handoff, keeps a read-only copy of every summary, and resumes from it. Adds handoff, resume and status skills.",
+  "author": { "name": "Ruslan Taranenko" },
+  "license": "MIT",
   "userConfig": {
     "handoff_root": {
       "type": "directory",

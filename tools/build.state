@@ -4,6 +4,7 @@
     ".claude-plugin/marketplace.json",
     "README.md",
     "plugin/.claude-plugin/plugin.json",
+    "plugin/LICENSE",
     "plugin/README.md",
     "plugin/assets/checkpoint-nudge.txt",
     "plugin/assets/handoff-instructions.txt",

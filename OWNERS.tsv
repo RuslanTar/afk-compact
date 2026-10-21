@@ -18,6 +18,8 @@ plugin/bin/**	build
 plugin/tests/unit/_gen/**	build
 tests/fixtures/assembly/expected/**	build
 tools/build.state	build
+plugin/LICENSE	build
+LICENSE	build
 brand.json	build
 OWNERS.tsv	build
 .gitignore	build
