@@ -227,12 +227,12 @@ sub run_case {
             push @errs, map { "$label: $_" } @le;
             next;
         }
-        if (!$st->{argv} && !$st->{setup} && is_setup_action($st)) {
+        if (!$st->{argv} && !$st->{exec} && !$st->{setup} && is_setup_action($st)) {
             my $e = eval { setup($st, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; return @errs }
             next;
         }
-        next unless $st->{argv};
+        next unless $st->{argv} || $st->{exec};
         my $res = invoke($st, $case, \%V, $cdir, $i);
         push @errs, map { "$label: $_" } check($st->{expect} || {}, $res, \%V, $st);
         capture($st->{capture}, $res->[0]{out}, \%V) if $st->{capture} && @$res;
@@ -280,6 +280,7 @@ sub subst_deep {
 
 sub src_file {
     my ($name, $cdir) = @_;
+    return $name if $name =~ m{^/} && -e $name;
     return "$cdir/$name" if -e "$cdir/$name";
     return "$REPO/tests/fixtures/$name" if -e "$REPO/tests/fixtures/$name";
     die "no file $name in the case dir or tests/fixtures\n";
@@ -649,7 +650,7 @@ sub spawn {
 sub invoke {
     my ($st, $case, $V, $cdir, $i) = @_;
     my $env = child_env($st, $case, $V, $i);
-    my @argv = ("$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} });
+    my @argv = ("$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} || [] });
     @argv = map { subst($_, $V) } @{ $st->{exec} } if $st->{exec};
     my $stdin = stdin_of($st, $V, $cdir);
     my @inputs = $st->{parallel_inputs} ? @{ $st->{parallel_inputs} } : ((undef) x ($st->{parallel} // 1));
