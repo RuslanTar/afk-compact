@@ -94,8 +94,33 @@ sub _settings {
         $s{$k} = $DEFAULTS{$k} unless defined $s{$k} && $s{$k} =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         $s{$k} = 0 + $s{$k};
     }
-    $s{watcher} = lc $s{watcher};
+    ($s{watcher}, $s{watcher_unknown}) = _watcher_value($given);
     return \%s;
+}
+
+# `watcher` (WATCHER-SPEC §8 item 6; REVIEW B-22): trimmed and case-folded; `shadow` and
+# `off` are the only values, anything else (`of`, `Shadow2`, an empty string) counts as
+# `shadow` and is flagged, so a typo can never switch the watcher on or off unseen.
+# Returns (value, unknown). Unset, or an unresolved `${user_config.` placeholder, is the
+# default and not unknown.
+sub _watcher_value {
+    my ($given) = @_;
+    my $raw;
+    $raw = $given->{watcher} if $given && exists $given->{watcher} && defined $given->{watcher} && !ref $given->{watcher};
+    $raw = $ENV{CLAUDE_PLUGIN_OPTION_WATCHER} unless defined $raw;
+    return ('shadow', 0) if !defined $raw || index($raw, '${user_config.') == 0;
+    (my $v = lc $raw) =~ s/\A\s+|\s+\z//g;
+    return ($v, 0) if $v eq 'shadow' || $v eq 'off';
+    return ('shadow', 1);
+}
+
+# One `config_note` row per session when the `watcher` value was not `shadow`/`off`
+# (marker file, exclusive create). Content-free: the value itself is never logged.
+sub note_watcher_value {
+    my ($ctx) = @_;
+    return 0 unless $ctx->{settings}{watcher_unknown};
+    return 0 unless watch::io::excl_create(sid_dir($ctx) . '/config-note-watcher', '');
+    return log_row($ctx, 'config_note', { key => 'watcher', note => 'watcher_value_unknown' });
 }
 
 # Fill the derived keys in place and return ctx.

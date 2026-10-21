@@ -61,6 +61,7 @@ sub on_hook {
         watch::ctx::init($ctx);
         return 1 unless watch::ctx::watcher_on($ctx);
         return 1 if watch::ctx::refused($ctx);
+        watch::ctx::note_watcher_value($ctx);
         require watch::hooks;
         no strict 'refs';
         &{"watch::hooks::$fn"}($ctx);
@@ -104,6 +105,7 @@ sub on_stop {
         watch::ctx::init($ctx);
         return 1 unless watch::ctx::watcher_on($ctx);
         return 1 if watch::ctx::refused($ctx);
+        watch::ctx::note_watcher_value($ctx);
         return 1 if defined $ctx->{payload}{agent_id};
         require watch::sweep;
         require watch::rules;
