@@ -1,0 +1,9 @@
+<summary>
+⟪other-tool v1 n=12345678 s=main⟫
+# LAB-42 — retry window fix in review
+## Resume here
+Status: active · State: fix in review (checkpoint: clean)
+Step 1: `git status` — for "finish the review"
+## User constraints: none stated
+## Next steps: 1. git status — done when clean
+</summary>

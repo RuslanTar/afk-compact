@@ -135,7 +135,7 @@ for my $cf (@CASES) {
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
-                      || ($_ eq 'docker' && !util::which('docker')) } @{ $case->{needs} || [] };
+                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv") } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -189,6 +189,12 @@ sub run_case {
         for my $s (@{ $st->{setup} || [] }) {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; return @errs }
+        }
+        if ($st->{lib}) {
+            my @le = eval { builtin($st->{lib}, subst_deep($st->{args} || {}, \%V), $cdir) };
+            push @le, "builtin error: $@" if $@;
+            push @errs, map { "$label: $_" } @le;
+            next;
         }
         next unless $st->{argv};
         my $res = invoke($st, $case, \%V, $cdir, $i);
@@ -426,6 +432,124 @@ sub invoke {
         $p->{trace} = util::read_file($env->{STORE_TEST_TRACE}) // '';
     }
     return \@procs;
+}
+
+# ---------------------------------------------------------------- built-in checks
+# In-process checks over the staged helper's own libraries (no subprocess):
+#   detect_tsv        {tsv, dir}: detector vs expected.tsv (AT-C-03 / AT-C-02 H)
+#   assemble_goldens  {dir, runtime}: helper assembler vs tools/assemble goldens (BT-04)
+#   sha_vectors       {}: embedded SHA-256 vs Digest::SHA and a known vector
+#   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
+my $LIBS_READY;
+sub _libs {
+    return if $LIBS_READY;
+    for my $l (qw(ctx spec settings paths roots log rc identity lock nonce git detect assemble secrets dispatch)) { require "$l.pm" }
+    ctx::init("$STAGE/helper");
+    $LIBS_READY = 1;
+}
+
+sub builtin {
+    my ($name, $a, $cdir) = @_;
+    _libs();
+    my @e;
+    if ($name eq 'detect_tsv') {
+        my $tsv = src_file($a->{tsv}, $cdir);
+        my $dir = $a->{dir} ? src_file($a->{dir}, $cdir) : util::dirname($tsv);
+        open(my $fh, '<:raw', $tsv) or return ("cannot read $tsv");
+        my $head = <$fh>;
+        chomp $head;
+        my @cols = split /\t/, $head;
+        my $n = 0;
+        while (my $l = <$fh>) {
+            chomp $l;
+            next if $l =~ /^\s*(#|$)/;
+            my %r;
+            @r{@cols} = split /\t/, $l, -1;
+            $n++;
+            my $text = util::read_file("$dir/$r{file}");
+            if (!defined $text) { push @e, "$r{file}: missing"; next }
+            my %vc;
+            $vc{dispatch_nonce} = $r{dispatch} if defined $r{dispatch} && $r{dispatch} =~ /^[0-9a-f]{8}$/;
+            $vc{scope} = $r{proof} if defined $r{proof} && $r{proof} =~ /^(main|sub|unknown)$/;
+            my $s = detect::summary($text, \%vc);
+            my %got = (verdict => $s->{verdict}, marker_line => $s->{marker_line} // '-', sentinel_from_end => $s->{sentinel_from_end} // '-',
+                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $s->{sha256});
+            for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256)) {
+                next unless exists $r{$k} && defined $r{$k} && $r{$k} ne '';
+                push @e, "$r{file}: $k $got{$k}, want $r{$k}" if $got{$k} ne $r{$k};
+            }
+        }
+        close $fh;
+        push @e, "no rows in $tsv" unless $n;
+        return @e;
+    }
+    if ($name eq 'assemble_goldens') {
+        my $dir = $a->{dir} // "$REPO/tests/fixtures/assembly/expected";
+        my $rt = assembly_runtime($a->{runtime});
+        my %stem = map { (my $f = $assemble::FILES{$_}) =~ s/\.txt$//; ($f => $_) } keys %assemble::FILES;
+        my $n = 0;
+        for my $f (util::list_dir($dir)) {
+            next unless $f =~ /^(.+?)__(.+)\.txt$/;
+            my ($s, $t) = ($1, $2);
+            my $asset = $stem{$s} // do { push @e, "$f: unknown asset"; next };
+            my @tags = $t eq 'base' ? () : split /\+/, $t;
+            my $want = util::read_file("$dir/$f");
+            utf8::decode($want);
+            my $got = assemble::asset($asset, \@tags, $rt);
+            $n++;
+            next if $got eq $want;
+            my $i = 0;
+            $i++ while $i < length($got) && $i < length($want) && substr($got, $i, 1) eq substr($want, $i, 1);
+            push @e, "$f differs at char $i: got " . jsonc::encode(substr($got, $i, 40)) . ' want ' . jsonc::encode(substr($want, $i, 40));
+        }
+        push @e, "no goldens in $dir" unless $n;
+        return @e;
+    }
+    if ($name eq 'sha_vectors') {
+        push @e, 'abc vector' unless sha::pure_hex256('abc') eq 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+        push @e, 'empty vector' unless sha::pure_hex256('') eq 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+        if (eval { require Digest::SHA; 1 }) {
+            for my $n (0, 1, 55, 56, 57, 63, 64, 65, 119, 120, 121, 1000, 70000) {
+                my $s = join '', map { chr(($_ * 31 + $n) % 256) } 0 .. $n - 1;
+                push @e, "length $n differs" unless sha::pure_hex256($s) eq Digest::SHA::sha256_hex($s);
+            }
+        }
+        return @e;
+    }
+    if ($name eq 'json_roundtrip') {
+        return () unless eval { require JSON::PP; 1 };
+        my $pp = JSON::PP->new->canonical(1);
+        my @stack = ($a->{dir} // "$REPO/tests");
+        while (@stack) {
+            my $d = pop @stack;
+            if (-d $d) { push @stack, map { "$d/$_" } util::list_dir($d); next }
+            next unless $d =~ /\.json$/;
+            my $raw = util::read_file($d);
+            my $mine = eval { jsonc::decode($raw) };
+            my $theirs = eval { $pp->decode($raw) };
+            if (!defined $theirs) { push @e, "$d: JSON::PP refuses it" if defined $mine; next }
+            if (!defined $mine) { push @e, "$d: embedded codec refuses it"; next }
+            my $a1 = $pp->encode($theirs);
+            my $a2 = $pp->encode($pp->decode(jsonc::encode_bytes($mine)));
+            push @e, "$d: round trip differs" unless $a1 eq $a2;
+        }
+        return @e;
+    }
+    return ("unknown builtin $name");
+}
+
+# The runtime values tools/assemble uses for goldens: tests/fixtures/assembly/runtime.json
+# when present, else its worst-case defaults (path length 141).
+sub assembly_runtime {
+    my ($file) = @_;
+    my $prefix = '~/.claude/handoffs/example-repo/LAB-123/';
+    my $prev = $prefix . ('p' x (141 - length $prefix));
+    my %rt = (nonce => 'a1b2c3d4', previous_copy => $prev, measured_at => '2026-10-21T04:40:00+03:00',
+              session_id => '00000000-0000-4000-8000-000000000000', saved_copy => $prev, tokens => '612,345',
+              queue_add => 'queue-cmd add --lane example-repo/LAB-123', measured_facts => '', remeasure => '');
+    my $rf = $file // "$REPO/tests/fixtures/assembly/runtime.json";
+    if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, %$j) if ref $j eq 'HASH' }
+    return \%rt;
 }
 
 # ---------------------------------------------------------------- assertions

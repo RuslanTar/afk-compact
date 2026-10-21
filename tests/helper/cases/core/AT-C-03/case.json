@@ -1,0 +1,15 @@
+{
+ "id": "AT-C-03",
+ "needs": [
+  "corpus"
+ ],
+ "note": "helper detector on the 40-summary WP-fix corpus vs tests/fixtures/summaries/expected.tsv (the TS detector checks the same file in U)",
+ "steps": [
+  {
+   "lib": "detect_tsv",
+   "args": {
+    "tsv": "summaries/expected.tsv"
+   }
+  }
+ ]
+}

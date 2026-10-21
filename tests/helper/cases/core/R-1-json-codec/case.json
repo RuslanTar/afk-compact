@@ -1,0 +1,10 @@
+{
+ "id": "R-1-json-codec",
+ "note": "ROOT-RULINGS R-1: the embedded JSON codec agrees with JSON::PP (when present) on every JSON file under tests/",
+ "steps": [
+  {
+   "lib": "json_roundtrip",
+   "args": {}
+  }
+ ]
+}

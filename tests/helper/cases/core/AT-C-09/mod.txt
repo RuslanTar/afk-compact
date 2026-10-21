@@ -1,0 +1,17 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+<tools-used-before-summary>
+Read, Bash, Edit
+</tools-used-before-summary>
+
+Summary:
+<summary>
+⟪compactinue v1 n=1a2b3c4d s=main⟫
+# LAB-42 — retry window fix in review
+## Resume here
+Status: active · State: fix in review (checkpoint: clean)
+Step 1: `git status` — for "finish the review"
+## User constraints: none stated
+## Next steps: 1. git status — done when clean
+⟪/compactinue n=1a2b3c4d⟫
+</summary>

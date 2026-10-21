@@ -1,0 +1,12 @@
+{
+ "id": "AT-C-02-H",
+ "note": "AT-C-02 shapes (a)-(f) plus a nonce-differs and a subagent summary, through the helper detector in process (the H half of AT-C-02/AT-C-03 until the WP-fix corpus lands)",
+ "steps": [
+  {
+   "lib": "detect_tsv",
+   "args": {
+    "tsv": "summaries/expected.tsv"
+   }
+  }
+ ]
+}
