@@ -191,6 +191,20 @@
     ]
    },
    "name": "AT-CF-04 tagged lines publish; frontmatter keeps the carry"
+  },
+  {
+   "name": "small-rulings 2.5: measure follows the foreign hop and labels it",
+   "argv": [
+    "measure",
+    "$ROOT/repo/LAB-7/$STEM.md"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^chain: $STEM <- 2026-10-21_12-00-00_99999999_other \\(foreign 99999999\\)$"
+    ]
+   }
   }
  ]
 }

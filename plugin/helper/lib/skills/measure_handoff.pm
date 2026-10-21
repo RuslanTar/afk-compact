@@ -62,6 +62,12 @@ sub run {
     } else {
         push @out, 'worktree: not a git work tree' . (skills::gitfacts::usable() ? '' : ' (git not available)');
     }
+    my @chain = chain_docs($d, $ctx);
+    if (@chain > 1) {
+        push @out, 'chain: ' . join(' <- ', map {
+            skills::store::stem_of($_->{path}) . ($_->{foreign} ? ' (foreign ' . skills::ctx::sid8($_->{fm}{session_id}) . ')' : '')
+        } @chain);
+    }
     if (my $wt = $fm->{worktree}) {
         push @out, "handoff worktree: $wt " . (-d $wt ? 'exists' : 'missing');
     }
@@ -94,7 +100,9 @@ sub _commits {
     my ($ctx, $g, $d) = @_;
     my $gc = $d->{fm}{git_commit};
     my $cs = skills::gitfacts::commits_since($g->{worktree}, $gc) or return ('commits: not measured');
-    my @chain = chain_docs($d);
+    # Only the handoff's own chain names "our" commits: a foreign hop (another session's
+    # handoff carried as the base, small-rulings §2.5) never does.
+    my @chain = grep { !$_->{foreign} } chain_docs($d, $ctx);
     my $named = join "\n", map { $_->{body} } @chain;
     my %in_range;
     my @gcs = grep { defined } map { $_->{fm}{git_commit} } reverse @chain;
@@ -118,15 +126,21 @@ sub _commits {
     return @l;
 }
 
-# The handoff and its predecessors by previous_handoff, newest first (≤10).
+# The handoff and its predecessors by previous_handoff, newest first (≤10), across
+# foreign hops: a predecessor whose session is neither the handoff's nor in its lineage
+# (A-6, 3 hops) is marked {foreign} (small-rulings §2.5).
 sub chain_docs {
-    my ($d) = @_;
+    my ($d, $ctx) = @_;
+    my $hs = $d->{fm}{session_id} // '';
+    my %own = ($hs => 1);
+    if ($ctx && skills::ctx::valid_sid($hs)) { $own{ $_->{sid} } = 1 for @{ skills::ctx::chain($ctx, $hs) } }
     my @c = ($d);
     my %seen = ($d->{path} => 1);
     while (@c < 10) {
         my $p = $c[-1]{fm}{previous_handoff} or last;
         last if $seen{$p}++ || !-f $p;
         my $n = skills::store::read_doc($p) or last;
+        $n->{foreign} = $own{ $n->{fm}{session_id} // '' } ? 0 : 1;
         push @c, $n;
     }
     return @c;

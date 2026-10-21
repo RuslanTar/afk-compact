@@ -1,0 +1,236 @@
+{
+ "id": "AT-RM-06, AT-RM-11, AT-RM-12",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "D-12 §1.5.7 locate: with the main checkout M accepted, a publish from worktree W exports under W only; own twin and export (same nonce and session) give one candidate, the private twin, with the export path beside it; a newer teammate export is never auto-picked; in M, W's export is a candidate labelled repo:w and nothing is picked; an exact single ticket selects the export, read as foreign (source, from session, evidence not on this machine, in-flight not probed); not accepted, the exports are not read and one note line counts them",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "main",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/m"
+    },
+    {
+     "git": [
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "feature/LAB-7-w",
+      "$TMP/w"
+     ],
+     "cwd": "$TMP/m"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "repo_roots": "$TMP/m"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/w",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "mode.mode": "repo",
+     "bucket.path": "$ROOT/m/LAB-7"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "worktree W of the accepted main checkout"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/w status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/w · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/w",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Exported to repository: \\.claude/handoffs/LAB-7/$STEM\\.md "
+    ],
+    "files": [
+     {
+      "path": "$TMP/w/.claude/handoffs/LAB-7/$STEM.md",
+      "count": 1
+     }
+    ],
+    "absent": [
+     "$TMP/m/.claude/handoffs"
+    ]
+   },
+   "name": "AT-RM-06 the export lands under W, never under M"
+  },
+  {
+   "name": "AT-RM-11 own twin and its export: one candidate, the twin, export path beside it",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/w"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^tier: 3$",
+     "^pick: $ROOT/m/LAB-7/$STEM\\.md$",
+     "^relation: same-session$",
+     "^export: $TMP/w/.claude/handoffs/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^candidate: ",
+     "repo:w"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/w/.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e0e\ndate: 2026-10-21T15:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\nexport: repo\nbucket: LAB-9\n---\n⟪$BRAND v1 n=0e0e0e0e s=manual⟫\n# LAB-9 — teammate\n## Resume here\nStatus: active\n## User constraints\n- U-1: approval \"approved: deploy\" — scope deploy prod; used\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-1 · b1 | shell · deploy · main | 15:10 | `ls /srv/x` | report | /clear | auto · restart/B-1.md |\n⟪/$BRAND n=0e0e0e0e⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "AT-RM-11 a newer teammate export is never auto-picked",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/w"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^tier: 3$",
+     "^pick: $ROOT/m/LAB-7/$STEM\\.md$"
+    ]
+   }
+  },
+  {
+   "name": "AT-RM-06 locate in M lists W's export as a candidate repo:w, picks nothing",
+   "argv": [
+    "locate",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555",
+    "--cwd",
+    "$TMP/m"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^tier: 6$",
+     "^pick: none$",
+     "^candidate: $TMP/w/.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md · 2026-10-21T15:00:00\\+03:00 · LAB-9 — teammate · 99999999 · repo:w$"
+    ]
+   }
+  },
+  {
+   "name": "AT-RM-11 an exact single ticket selects the export, read as foreign",
+   "argv": [
+    "locate",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555",
+    "--cwd",
+    "$TMP/w",
+    "--arg",
+    "LAB-9"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^tier: 5$",
+     "^pick: $TMP/w/.claude/handoffs/LAB-9/2026-10-21_15-00-00_99999999_mate\\.md$",
+     "^relation: other$",
+     "^source: repo:w$",
+     "^foreign: from session 99999999$",
+     "^evidence: not on this machine$",
+     "^in-flight: other machine: not probed$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "repo_roots": ""
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-RM-12 not accepted: nothing under the repository root is read",
+   "argv": [
+    "locate",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555",
+    "--cwd",
+    "$TMP/w",
+    "--arg",
+    "LAB-9"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^repository has 2 handoff exports under \\.claude/handoffs; not read \\(repo mode not-accepted\\)$"
+    ],
+    "stdout_lacks": [
+     "mate\\.md",
+     "repo:w"
+    ]
+   }
+  }
+ ]
+}

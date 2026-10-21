@@ -49,6 +49,7 @@ use queue;
 use bucket;
 use detect;
 use rc;
+use repomode;
 use handoff_turn;
 use sidecar;
 use jobrec;
@@ -280,6 +281,14 @@ sub mode {
     return { mode => 'private', reason => 'repo-root-unchecked' } unless ref $m eq 'HASH' && $m->{mode};
     return $m;
 }
+
+# A worktree's declaration and repository-root check (D-12 §1.5.2, §1.5.3), read-only.
+sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? $d : { present => 0 } }
+sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? $c : { ok => 0, reason => 'repo-root-unchecked' } }
+sub gitignore_text { return repomode::gitignore_text() }
+sub default_root { return $repomode::DEFAULT_ROOT }
+sub decl_name { return $repomode::DECL }
+sub valid_root { return repomode::valid_root($_[0]) }
 
 # The handoff-turn store (D-18), all read through lib/handoff_turn.pm.
 sub ht_open_for_begin { my ($d) = @_; return defined $d ? handoff_turn::open_for_begin($d) : undef }

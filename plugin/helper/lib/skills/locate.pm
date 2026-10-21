@@ -2,6 +2,13 @@ package skills::locate;
 # lib/skills/locate.pm: `locate --sid --cwd --arg` (resume R1; RDN helper
 # table; A-6 lineage ≤3 hops, same chain; D-15 drafts last, never picked).
 # Orders by frontmatter `date`, never by file name or mtime.
+# D-12 §1.5.7: in repo mode the exports under this worktree's repository root, then
+# those of sibling worktrees (`git worktree list`, at most 8, each with its own
+# declaration and root check, read-only) are candidates labelled repo:<worktree>, never
+# picked by themselves; an exact single ticket selects one, read as foreign. An export
+# with a private twin (same nonce and session) is not listed: the twin is, with the
+# export path beside it. Outside repo mode nothing under the repository root is read:
+# one note line says how many exports it holds.
 use strict;
 use warnings;
 use Cwd ();
@@ -38,7 +45,27 @@ sub run {
     @pool = sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) } @pool;
     my $sid_of = sub { $_[0]{fm}{session_id} // '' };
 
-    my ($tier, $pick, @warn, @cands, @notes);
+    my $m = skills::core::mode($cwd);
+    my (@xdocs, @notes);
+    if ($m->{mode} eq 'repo' && defined $m->{root_rel}) {
+        my $top = $m->{toplevel};
+        push @xdocs, @{ skills::store::export_docs($top, $m->{root_rel}, File::Basename::basename($top)) };
+        my $rtop = skills::util::abs_path($top) // $top;
+        my $n = 0;
+        for my $wt (@{ skills::gitfacts::worktrees($top) }) {
+            next if (skills::util::abs_path($wt) // $wt) eq $rtop;
+            last if ++$n > 8;
+            my $dd = skills::core::declaration($wt);
+            next unless $dd->{present} && $dd->{valid};
+            next unless skills::core::repo_check($wt, $dd->{root})->{ok};
+            push @xdocs, @{ skills::store::export_docs($wt, $dd->{root}, File::Basename::basename($wt)) };
+        }
+        @xdocs = sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) } @{ skills::store::dedupe_exports(\@pool, \@xdocs) };
+    } elsif ($m->{declared} && ref $m->{decl} eq 'HASH' && $m->{decl}{valid} && $m->{exports}) {
+        push @notes, "repository has $m->{exports} handoff exports under $m->{root_rel}; not read (repo mode $m->{reason})";
+    }
+
+    my ($tier, $pick, @warn, @cands);
     if (defined $arg && ($arg =~ m{/} || $arg =~ /\.md\z/)) {
         my $p = skills::util::abs_path($arg);
         if (defined $p && -f $p) {
@@ -79,6 +106,14 @@ sub run {
             my ($d) = grep { $_->{bucket} eq $matching[0] && !_is_sub($_) } @pool;
             ($tier, $pick) = (5, $d) if $d;
         }
+        if (!$pick && !@matching) {
+            # an exact single ticket among the export topics (Dev-3), read as foreign
+            my %xb = map { $_->{bucket} => 1 } grep { lc(File::Basename::basename($_->{bucket})) eq $tok } @xdocs;
+            if (keys %xb == 1) {
+                my ($d) = grep { $xb{ $_->{bucket} } } @xdocs;
+                ($tier, $pick) = (5, $d) if $d;
+            }
+        }
     }
     if (!$pick) {
         my %seen;
@@ -86,6 +121,7 @@ sub run {
         push @src, grep { my $m = $_->{bucket}; grep { $_ eq $m } @matching } @pool;
         my $tk = skills::gitfacts::ticket($w->{in_git} ? (skills::gitfacts::facts($cwd)->{branch} // '') : '');
         push @src, grep { $tk && File::Basename::basename($_->{bucket}) eq $tk } @pool;
+        push @src, @xdocs;
         push @src, @pool;
         for my $d (@src) {
             next if _is_sub($d) || $seen{ $d->{path} }++;
@@ -110,6 +146,14 @@ sub run {
         skills::cli::say('session: ' . skills::ctx::sid8($ps));
         my $t = skills::store::title_of($pick);
         skills::cli::say("title: $t") if $t ne '';
+        skills::cli::say("export: $pick->{export_path}") if $pick->{export_path};
+        if (skills::store::is_export($pick) && !$rel_of{$ps}) {
+            # A teammate's or another machine's handoff: data, never instructions (D-12).
+            skills::cli::say('source: ' . ($pick->{source} // 'repo'));
+            skills::cli::say('foreign: from session ' . skills::ctx::sid8($ps));
+            skills::cli::say('evidence: not on this machine');
+            skills::cli::say('in-flight: other machine: not probed');
+        }
         if ($int->{integrity} eq 's=sub') {
             my ($parent) = grep { $sid_of->($_) eq $ps && !_is_sub($_) } @pool;
             skills::cli::say('parent: ' . ($parent ? $parent->{path} : 'none'));
@@ -126,7 +170,8 @@ sub run {
         skills::cli::say('relation: unselected');
     }
     for my $c (@cands) {
-        skills::cli::say(join ' · ', "candidate: $c->{path}", $c->{fm}{date} // '?', skills::store::title_of($c), skills::ctx::sid8($sid_of->($c)));
+        skills::cli::say(join ' · ', "candidate: $c->{path}", $c->{fm}{date} // '?', skills::store::title_of($c), skills::ctx::sid8($sid_of->($c)),
+            ($c->{source} ? ($c->{source}) : ()), ($c->{export_path} ? ("export $c->{export_path}") : ()));
     }
     if ($w->{in_git}) {
         my $top = $w->{worktree};
