@@ -2,16 +2,19 @@
 """tools/fixtures-gen: tests/fixtures -> plugin/tests/unit/_gen/*.gen.ts, and the fixture checks.
 
 Usage:
-  tools/fixtures-gen                 write plugin/tests/unit/_gen/{corpus,payloads,brand}.gen.ts
+  tools/fixtures-gen                 the regenerate step (BUILD-PLAN §4.3, §4.6): refresh the
+                                     brand-dependent normalized_sha256 column of
+                                     summaries/expected.tsv (written only when a value changed),
+                                     then write plugin/tests/unit/_gen/{corpus,payloads,brand}.gen.ts
   tools/fixtures-gen --out DIR       write the same three files under DIR/plugin/tests/unit/_gen/
+                                     (sha column refreshed in memory; the repo is not written)
   tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
                                      must equal a fresh render; exit 1 on any problem
   tools/fixtures-gen --clean         remove the three generated files (nothing else)
   tools/fixtures-gen --print-expected
                                      print summaries/expected.tsv as the reference detector
                                      computes it (authoring aid; never writes)
-  tools/fixtures-gen --refresh-sha   rewrite only the normalized_sha256 column of
-                                     summaries/expected.tsv for the current brand (after a rename)
+  tools/fixtures-gen --refresh-sha   only the sha-column refresh of the regenerate step
 
 Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   parse     every *.json under tests/fixtures parses; every *.jsonl line parses
@@ -20,6 +23,8 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
             its fragments are joined, and no single fragment hits anything
   drift     the generated files are current
+  rename    a temp copy renamed to another brand passes --check after the plain regenerate
+            step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
 Placeholders (tests/fixtures/README.md): `{{plugin}}` and `{{marketplace}}` are filled from
 brand.json; `$TMP`, `$HOME`, `$WATCH`, `$ROOT`, `$SID` stay for the case runner;
@@ -31,7 +36,7 @@ src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the pr
 built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
 deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
-import hashlib, json, math, os, re, sys
+import hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -181,9 +186,9 @@ def load_dispatch(ref):
         return json.load(f)
 
 
-def read_expected():
+def read_expected(path=EXPECTED):
     rows = []
-    with open(EXPECTED, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         header = f.readline().rstrip("\n").split("\t")
         if header != COLUMNS:
             die("expected.tsv header is {}, want {}".format(header, COLUMNS))
@@ -213,6 +218,33 @@ def expected_rows(b, dispatch_refs):
 
 def tsv(rows):
     return "\t".join(COLUMNS) + "\n" + "".join("\t".join(r[c] for c in COLUMNS) + "\n" for r in rows)
+
+
+def sha_refreshed(b):
+    """(rows of expected.tsv with normalized_sha256 recomputed for brand b, number changed).
+
+    Only the sha column is touched: it is a function of the text and the brand alone, so a
+    rename changes it (README "Corpus"). The other columns stay as authored for --check.
+    """
+    rows = read_expected()
+    fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
+    changed = 0
+    for r in rows:
+        f = fresh.get(r["file"])
+        if f and f["normalized_sha256"] != r["normalized_sha256"]:
+            r["normalized_sha256"] = f["normalized_sha256"]
+            changed += 1
+    return rows, changed
+
+
+def refresh_sha(b):
+    rows, changed = sha_refreshed(b)
+    if changed:
+        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
+            f.write(tsv(rows))
+        print("fixtures-gen: refreshed normalized_sha256 for {} rows of {} (brand {})".format(
+            changed, os.path.relpath(EXPECTED, REPO), b["name"]))
+    return changed
 
 
 # ---------------------------------------------------------------- secret rules
@@ -306,15 +338,16 @@ def js(v):
     return json.dumps(v, ensure_ascii=True, indent=1, sort_keys=False)
 
 
-def render(b):
+def render(b, rows=None):
     out = {}
     out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
         {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
          "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
 
-    dispatch_refs = {r["file"]: r["dispatch"] for r in read_expected()}
+    rows = read_expected() if rows is None else rows
+    dispatch_refs = {r["file"]: r["dispatch"] for r in rows}
     corpus = []
-    for r in read_expected():
+    for r in rows:
         text = read(os.path.join(SUMMARIES, r["file"]))
         if SECRET_MARK in text:
             continue
@@ -360,6 +393,46 @@ def walk(base):
         dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS)
         for f in sorted(files):
             yield os.path.join(d, f)
+
+
+# The rename drill (BUILD-PLAN §4.6, fixture side): a temp copy with another brand must pass
+# --check after the plain regenerate step alone. The corpus sha column depends on the brand
+# (README "Corpus"), so this fails whenever the regenerate step leaves that column stale.
+DRILL_BRAND = {"name": "zq-rename-drill", "marketplace": "zq-rename-market"}
+NO_DRILL_ENV = "FIXTURES_GEN_NO_DRILL"   # set for the drill's own inner --check (no recursion)
+
+
+def rename_drill(b):
+    problems = []
+    tmp = tempfile.mkdtemp(prefix="fixtures-gen-drill-")
+    try:
+        for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md")):
+            if os.path.exists(os.path.join(REPO, rel)):
+                os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
+                shutil.copy2(os.path.join(REPO, rel), os.path.join(tmp, rel))
+        shutil.copytree(FIX, os.path.join(tmp, "tests", "fixtures"), symlinks=True)
+        with open(os.path.join(tmp, "brand.json"), "w", encoding="utf-8", newline="\n") as f:
+            json.dump(dict(b, **DRILL_BRAND), f, indent=2)
+        tool = os.path.join(tmp, "tools", "fixtures-gen")
+        env = dict(os.environ, **{NO_DRILL_ENV: "1"})
+        for args in ([], ["--check"]):
+            r = subprocess.run([sys.executable, tool] + args, env=env, cwd=tmp, timeout=120,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+            if r.returncode != 0:
+                lines = [ln for ln in r.stdout.splitlines() if not ln.startswith(("parse:", "expected:", "secrets:"))]
+                problems.append("rename drill: `tools/fixtures-gen {}` exit {} after renaming to {}: {}".format(
+                    " ".join(args), r.returncode, DRILL_BRAND["name"], " | ".join(lines[:4])))
+                break
+        before = {r["file"]: r["normalized_sha256"] for r in read_expected()}
+        after = {r["file"]: r["normalized_sha256"]
+                 for r in read_expected(os.path.join(tmp, "tests", "fixtures", "summaries", "expected.tsv"))}
+        changed = sum(1 for k in before if after.get(k) != before[k])
+        if changed == 0 and not problems:
+            problems.append("rename drill: no normalized_sha256 changed with the brand, so the drill proves nothing")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("rename: regenerate + check in a copy renamed to {} ({} sha rows changed)".format(DRILL_BRAND["name"], changed))
+    return problems
 
 
 def check(b):
@@ -433,16 +506,19 @@ def check(b):
         for f in sorted(os.listdir(gen_dir)):
             if f.endswith(".gen.ts") and f not in rendered and f.startswith(("brand", "corpus", "payloads")):
                 problems.append("drift stale " + os.path.join(GEN_REL, f))
+    # rename
+    if not os.environ.get(NO_DRILL_ENV):
+        problems += rename_drill(b)
     for p in problems:
         print(p)
     print("FIXTURES CHECK: " + ("FAIL ({} problems)".format(len(problems)) if problems else "PASS"))
     return 1 if problems else 0
 
 
-def write(root, b):
+def write(root, b, rows=None):
     d = os.path.join(root, GEN_REL)
     os.makedirs(d, exist_ok=True)
-    for name, text in render(b).items():
+    for name, text in render(b, rows).items():
         with open(os.path.join(d, name), "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
     print("fixtures-gen: wrote {} files in {}".format(len(GEN_FILES), os.path.relpath(d, REPO) if root == REPO else d))
@@ -451,6 +527,7 @@ def write(root, b):
 def main(argv):
     b = brand()
     if argv == []:
+        refresh_sha(b)
         write(REPO, b)
         return 0
     if argv == ["--check"]:
@@ -459,7 +536,7 @@ def main(argv):
         root = os.path.abspath(argv[1])
         if root == REPO:
             die("--out must not be the repo; run without arguments instead")
-        write(root, b)
+        write(root, b, sha_refreshed(b)[0])
         return 0
     if argv == ["--clean"]:
         for name in GEN_FILES:
@@ -473,13 +550,8 @@ def main(argv):
         sys.stdout.write(tsv(expected_rows(b, refs)))
         return 0
     if argv == ["--refresh-sha"]:
-        rows = read_expected()
-        fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
-        for r in rows:
-            r["normalized_sha256"] = fresh[r["file"]]["normalized_sha256"]
-        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
-            f.write(tsv(rows))
-        print("fixtures-gen: refreshed normalized_sha256 for {} rows".format(len(rows)))
+        if not refresh_sha(b):
+            print("fixtures-gen: normalized_sha256 already current for brand {}".format(b["name"]))
         return 0
     die("unknown arguments {}\n{}".format(argv, __doc__))
 

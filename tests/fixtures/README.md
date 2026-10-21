@@ -2,7 +2,7 @@
 
 Every file here is synthetic. No row, summary or payload comes from a real session. Owner: WP-fix (`OWNERS.tsv`), except `assembly/expected/`, which `tools/assemble --goldens` writes.
 
-`tools/fixtures-gen` renders the fixtures into `plugin/tests/unit/_gen/{brand,corpus,payloads}.gen.ts` for U tests (the kit has no fs). `tools/fixtures-gen --check` runs the WP-fix exit checks: every JSON file and JSONL line parses, `expected.tsv` matches the reference detector, no secret-shaped string sits in any file, and the generated files are current.
+`tools/fixtures-gen` renders the fixtures into `plugin/tests/unit/_gen/{brand,corpus,payloads}.gen.ts` for U tests (the kit has no fs). `tools/fixtures-gen --check` runs the WP-fix exit checks: every JSON file and JSONL line parses, `expected.tsv` matches the reference detector, no secret-shaped string sits in any file, the generated files are current, and a renamed temp copy passes after the plain regenerate step.
 
 ## Placeholders
 
@@ -48,7 +48,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 - The body ends before the first `</summary>`. Trailing blank lines are trimmed. Line ends become `\n`. The normalized body is the lines joined by `\n` plus one final `\n` (empty body: empty string). `normalized_sha256` is computed over that text with `{{plugin}}` filled.
 - The marker is the first anchored match in body lines 1–5. The sentinel is searched in the last 3 non-blank lines, and `sentinel_from_end` is reported whenever one is found there, also for `unshaped`.
 - With a dispatch, the checks run in this order: `stale` (marker nonce ≠ the dispatch nonce; or dispatch `none` and a marker), then `scope-leak` (dispatch `agent_id` set and `s=main` or a `## Resume here` heading, with any marker or none (41); dispatch main, meaning `agent_id` null with channel `mod-hook` or `mod-self` (MOD §2.4 P1), and `s=sub`; a `classic` dispatch proves neither scope), then the text verdicts.
-- The corpus brand is `{{plugin}}`, so the sha column changes with a rename. After editing `brand.json`, run `tools/fixtures-gen --refresh-sha` and commit `expected.tsv`.
+- The corpus brand is `{{plugin}}`, so the sha column changes with a rename. The plain regenerate step `tools/fixtures-gen` (BUILD-PLAN §4.6) rewrites that column for the current brand, so a rename commits `expected.tsv` with the other regenerated files. `--check` runs the same rename in a temp copy (check `rename`).
 
 Groups worth knowing: 01–05, 11, 27, 29 and 38 share one normalized body (PostCompact, mod wrapper with and without tags, bare, CRLF, blank tail, leading blanks, text after `</summary>`), and so do 17 and 18 (subagent). 37 adds an unlisted trailer to the mod form only. Its PostCompact twin is 01 (AT-M3-17).
 
