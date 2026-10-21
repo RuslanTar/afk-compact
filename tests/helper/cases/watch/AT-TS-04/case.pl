@@ -33,6 +33,12 @@ my $S = '2026-10-21 14:05 +0300';
             $got{unmeasured_stamps_ignored} = $f->("checked $S", 0, \@st);
             $got{two} = $f->("checked $S, checked 2026-10-21 15:15 +0300, [verified 14:07: a]", 1, \@st);
             $got{no_spec_keys} = watch::shape::fabricated("checked $S checked 14:05", 0, [], {});
+            $got{near_no_zone} = $f->("checked 2026-10-21 14:05 done", 0, []);
+            $got{near_colon_zone} = $f->("checked 2026-10-21 14:05 +03:00", 0, []);
+            $got{near_iso} = $f->("checked 2026-10-21T14:05:12+03:00", 0, []);
+            $got{near_measured} = $f->("checked 2026-10-21 14:05", 1, \@st);
+            $got{near_once} = $f->("checked $S and checked 2026-10-21 14:05", 0, []);
+            $got{date_only} = $f->("checked 2026-10-21 by hand", 0, []);
         } },
     ],
     expect => sub {
@@ -58,5 +64,11 @@ my $S = '2026-10-21 14:05 +0300';
         $E->is($got{unmeasured_stamps_ignored}, 1, 'stamps count only with measured:true');
         $E->is($got{two}, 2, 'one other stamp and one legacy verified');
         $E->is($got{no_spec_keys}, 2, 'a spec without the keys uses the RV-24 forms');
+        $E->is($got{near_no_zone}, 1, 'checked <date> <time> with no zone counts');
+        $E->is($got{near_colon_zone}, 1, 'checked <date> <time> +hh:mm counts');
+        $E->is($got{near_iso}, 1, 'checked <ISO time> counts');
+        $E->is($got{near_measured}, 1, 'a near-stamp never equals a measured stamp');
+        $E->is($got{near_once}, 2, 'a stamp and a near-stamp: one each');
+        $E->is($got{date_only}, 0, 'a date with no time is not a check time');
     },
 };

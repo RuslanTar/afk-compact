@@ -73,6 +73,8 @@ sub size_band {
 # and counted, never written. The fallbacks below only serve a spec without the keys.
 my $TIME_RE = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
 my $LEGACY_RE = '(?:[0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}';
+# M-10 only: a date plus a time that is not a whole stamp (no zone, `+hh:mm`, ISO `T`/`Z`).
+my $NEAR_RE = qr/[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?![0-9])/;
 
 sub time_res {
     my ($spec) = @_;
@@ -114,8 +116,11 @@ sub fabricated {
         my $t = shift;
         $n++ unless $measured && defined $t && $ok{$t};
     };
-    while ($body =~ /\bchecked (?:(?<f>$full)|(?<l>$legacy)(?![0-9]))/g) {
-        $count->(defined $+{f} ? $+{f} : $+{l});
+    # A near-stamp (a date and a time with the zone dropped or in another form, e.g.
+    # `2026-10-21 14:05`, `... +03:00`, `2026-10-21T14:05:12Z`) is a check time too and
+    # counts, as `[verified <near-stamp>` does below (CR-F16); it never equals a whole stamp.
+    while ($body =~ /\bchecked (?:(?<f>$full)|(?<n>$NEAR_RE)|(?<l>$legacy)(?![0-9]))/g) {
+        $count->(defined $+{f} ? $+{f} : defined $+{n} ? $+{n} : $+{l});
     }
     while ($body =~ /\[verified (?:(?<f>$full)|(?<o>[^\]\n]{0,40}))/g) {
         my $t = $+{f};
