@@ -6,7 +6,7 @@ argument-hint: "[ticket-or-topic] [note for the next session]"
 
 # Handoff
 
-Write one new handoff file that a cold session resumes with `/{{plugin}}:resume <path>`. Format and lint rules: `references/handoff-template.md` (read in Step 2).
+Write one new handoff file that a cold session resumes with `/{{plugin}}:resume <path>`. Format and lint rules: `${CLAUDE_PLUGIN_ROOT}/skills/handoff/references/handoff-template.md` (the template; read in Step 2).
 
 **Code measures, you judge.** The helper `{{plugin}}-store` (on the Bash PATH while the plugin is enabled) produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
 
@@ -19,7 +19,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 | | When | Do instead |
 |---|---|---|
 | A | You are a subagent or workflow agent | Write no file. Read template §8, return that subagent form as text and stop. <!-- review-fix --> |
-| B | The helper prints `REFUSED` (other than `REFUSED: lint`, which is C), is missing or crashes | Relay it verbatim, say nothing was saved, stop. Never write the handoff another way. <!-- review-fix --> |
+| B | The helper prints `REFUSED` (other than `REFUSED: lint`, which is C), is missing or crashes | Relay it verbatim, say nothing was saved. Missing or crashed: then print the body here in the chat, never in a file, in template order without frontmatter, marker or sentinel, its first line `not saved, no secret scan`. Stop. Never write the handoff another way. <!-- review-fix --> |
 | C | Blocking `LINT` after 2 fix rounds | Relay the receipt (it names the kept draft) and stop. Never say "saved". |
 | D | An evidence row is `withheld` | Never copy it another way or retry. If a resume needs it, add an Open question naming where it lives. |
 | E | The user must decide something | Record it in Open questions with a recommendation. No interactive question tool here: it holds the turn open and blocks compaction. |
@@ -29,7 +29,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 
 Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edit STATE.md; delete or move files; give the helper transcripts, session logs, shell history, environment dumps or credentials; read the transcript; act outward (push, merge, deploy, post, comment) or commit just to clean the tree; <!-- review-fix: "mutate" contradicted Step 0.2 finishing an atomic step --> restart, wake or stop background work (healing is the resume's job); spawn verification agents; sleep or poll; route around a permission or guard denial (record it under Guards in force; retry a classifier outage once).
 
-**Budget.** Step 1 ≤4 calls · Step 2 ≤10 · Step 4 ≤2 · Step 6 1 · Step 7 ≤5 (publish plus 2 rounds of Edit and publish). Typical 10–14, hard cap 22; recipe Writes (Step 5, ≤8) on top.
+**Budget.** Step 1 ≤4 calls · Step 2 ≤10 · Step 4 ≤2 · Step 6 1 · Step 7 ≤5 (publish plus 2 rounds of one Write and publish). Typical 10–14, hard cap 22; recipe Writes (Step 5, ≤8) on top.
 
 ## Step 0 — Gate
 
@@ -49,15 +49,16 @@ Run together:
 `begin` prints ≤3 KB of JSON: identity, git state, `stage`, `stem`, `checked_at`, `previous_handoff`, `own_latest`, `newer_foreign`, `ownership`, `gsd`, `queued_line`, `inflight_measured`, `tmp_candidates` (ephemeral paths cited this session) and the settings used.
 - `REFUSED` → B. A merge or rebase in progress that Step 0.2 did not already record as `MID-STEP` → apply Step 0.2 once, then continue; never loop back. <!-- review-fix: was an endless 0.2 ↔ 1 loop -->
 - `own_latest.unchanged` and nothing else happened since its `date` (no edit, decision, answer, new request or background change; this handoff request itself does not count): reply with its path and the resume line; stop. Reuse never patches it. <!-- review-fix -->
+- Self-invoked (the user did not ask for this handoff), `own_latest.age_min` under `reuse_window_min` (15), `own_latest.unchanged`, and no new decision or background change since: the same reply; stop.
 - `newer_foreign` or an `ownership` conflict → F, then continue.
 
 ## Step 2 — Read and probe (one batch)
 
 Run together:
 - `{{plugin}}-store stamp --stage <stage>`: its time is the as-of for this batch.
-- Read `references/handoff-template.md` (once per invocation).
+- Read the template (once per invocation).
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry.
-- Read the first 60 lines of each `newer_foreign` handoff (≤2); record overlap under Ownership and never overwrite their decisions.
+- Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
 - `ps -o pid=,lstart=,command= -p <pid>,<pid>` for pids recorded this session.
 - One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on.
 
@@ -96,8 +97,9 @@ Write the body to `<stage>/body.md`, from the `#` title to Next steps in templat
 `{{plugin}}-store publish --stage <stage> --slug <kebab-slug> --status <in-progress|blocked|completed>`
 
 It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`.
-- `LINT` → Edit the draft or recipe, publish again; after 2 failed rounds → C.
+- `LINT` → fix every LINT line in one Write of `body.md` (or of the recipe), publish again; after 2 failed rounds → C.
 - `ADVISORY` → fix if one Edit does it, else list it in the report.
+- `ADVISORY secret-warn rules=<ids>` → take the value out and say where it lives, or report those rule ids; never the value.
 - Saved only when the receipt says so.
 
 ## Step 8 — Report (≤8 lines, this order)
@@ -109,4 +111,4 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 5. The bucket, if it came from your slug or differs from a topic the user gave in the arguments (a session pin wins; say so). <!-- review-fix -->
 6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
-8. Advisories, ownership conflicts, what could not be verified; omit when none.
+8. Advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
