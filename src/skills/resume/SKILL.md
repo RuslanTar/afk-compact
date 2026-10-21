@@ -179,19 +179,19 @@ Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Li
 
 ## R8 Report, then ask once
 
-About 15 lines, this order, `None` where empty, no recap. Lines marked `*` are the read-back.
+About 15 lines, this order, `None` where empty, no recap. The Status, Goal, Drift, Binding, Could not verify and Next lines are the read-back.
 
 ```
-* Status: on-track | drifted | blocked
-  Handoff: <path> · <age> · <relation> · <integrity> · Location: <worktree> · <branch> · <HEAD>
-* Goal: <ticket goal>; latest request: <quote or paraphrase>
-* Drift: <changed rows only> | no drift (checked HH:MM)
-  In flight: <B-n id: status → action> | nothing running (checked HH:MM)
-  Evidence: <n ok; n missing/withheld/redacted> | no manifest
-  Queue: <lane and open count | held by … | not configured | none>
-* Binding: U-1 …, U-2 … (pointer if >5) · settled: D-…, X-…
-* Could not verify: <items> | None
-* Next: Starting <Step 1> now | Stopped: <stop rule>
+Status: on-track | drifted | blocked
+Handoff: <path> · <age> · <relation> · <integrity> · Location: <worktree> · <branch> · <HEAD>
+Goal: <ticket goal>; latest request: <quote or paraphrase>
+Drift: <changed rows only> | no drift (checked HH:MM)
+In flight: <B-n id: status → action> | nothing running (checked HH:MM)
+Evidence: <n ok; n missing/withheld/redacted> | no manifest
+Queue: <lane and open count | held by … | not configured | none>
+Binding: U-1 …, U-2 … (pointer if >5) · settled: D-…, X-…
+Could not verify: <items> | None
+Next: Starting <Step 1> now | Stopped: <stop rule>
 ```
 
 End with one numbered **Questions** block in plain language. For each question give:
