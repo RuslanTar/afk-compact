@@ -43,7 +43,8 @@ sub copy_sha {
     my ($fm, $body) = frontmatter::read($raw);
     return (undef, {}) unless $fm;
     if (defined $fm->{redacted} && $fm->{redacted} =~ /sha256 ([0-9a-f]{64})/) { return ($1, $fm) }
-    $body =~ s/\n\z//;
+    # The copy holds the normalized body (final \n); an empty body is written as one \n.
+    $body = '' if $body eq "\n";
     return (sha::hex256($body), $fm);
 }
 
@@ -198,7 +199,7 @@ sub save {
                 redacted            => $redacted,
             ]);
             util::mkdir_p($dir);
-            my $ok = util::write_excl($path, $fm . $body . "\n", 0400);
+            my $ok = util::write_excl($path, $fm . ($body =~ /\n\z/ ? $body : $body . "\n"), 0400);
             return { kind => 'race', path => $path } unless $ok;
             my $back = util::read_file($path);
             my ($pfm) = frontmatter::read($back);

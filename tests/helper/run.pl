@@ -478,8 +478,28 @@ sub builtin {
             $n++;
             my $text = util::read_file("$dir/$r{file}");
             if (!defined $text) { push @e, "$r{file}: missing"; next }
+            # The corpus carries the brand as {{plugin}} (tests/fixtures/README.md).
+            utf8::decode($text) unless utf8::is_utf8($text);
+            my $bn = ctx::brand();
+            $text =~ s/\{\{plugin\}\}/$bn/g;
             my %vc;
-            $vc{dispatch_nonce} = $r{dispatch} if defined $r{dispatch} && $r{dispatch} =~ /^[0-9a-f]{8}$/;
+            # dispatch column: '' text alone; 'none' a PostCompact with no dispatch at all;
+            # a fixtures path (watch/dispatch-<nonce>.json) the record of this compaction,
+            # whose agent_id / channel give the proven scope (MOD-SPEC §2.4 P1); an 8-hex
+            # nonce is still taken as the dispatch nonce alone.
+            my $d = $r{dispatch} // '';
+            if ($d eq 'none') {
+                $vc{marker_has_record} = 0;
+            } elsif ($d =~ /^[0-9a-f]{8}$/) {
+                $vc{dispatch_nonce} = $d;
+            } elsif ($d ne '') {
+                my $raw = util::read_file(src_file($d, $cdir));
+                my $rec = defined $raw ? eval { jsonc::decode($raw) } : undef;
+                if (ref $rec ne 'HASH') { push @e, "$r{file}: dispatch $d unreadable"; next }
+                $vc{dispatch_nonce} = $rec->{nonce};
+                $vc{scope} = defined $rec->{agent_id} ? 'sub'
+                           : ($rec->{channel} // '') =~ /^mod-(hook|self)$/ ? 'main' : 'unknown';
+            }
             $vc{scope} = $r{proof} if defined $r{proof} && $r{proof} =~ /^(main|sub|unknown)$/;
             my $s = detect::summary($text, \%vc);
             my %got = (verdict => $s->{verdict}, marker_line => $s->{marker_line} // '-', sentinel_from_end => $s->{sentinel_from_end} // '-',
@@ -628,7 +648,8 @@ sub assembly_runtime {
 }
 
 # ---------------------------------------------------------------- assertions
-# stdout_golden {files: [golden...], nonce: "<the goldens' nonce>"}: stdout must equal
+# stdout_golden {files: [golden...], nonce?: "<the goldens' nonce>"}: stdout must equal
+# (nonce defaults to tests/fixtures/assembly/runtime.json's, the one tools/assemble used)
 # the goldens joined, with the goldens' nonce replaced by the first n=<8 hex> in
 # stdout (the helper draws its own). Exact bytes, so no banner, prefix or trailer
 # can pass (BUILD-PLAN §3.3 "exactly as tools/assemble composes it").
@@ -644,7 +665,9 @@ sub golden_diff {
         $want .= $t;
     }
     return ('stdout_golden: no files') if $want eq '';
-    $want =~ s/\Q$g->{nonce}\E/$n/g if defined $g->{nonce} && $g->{nonce} ne '';
+    # The goldens' nonce is the one tools/assemble used: runtime.json, unless the case names one.
+    my $gn = defined $g->{nonce} && $g->{nonce} ne '' ? $g->{nonce} : assembly_runtime()->{nonce};
+    $want =~ s/\Q$gn\E/$n/g if defined $gn && $gn ne '';
     return () if $got eq $want;
     my $i = 0;
     $i++ while $i < length($got) && $i < length($want) && substr($got, $i, 1) eq substr($want, $i, 1);

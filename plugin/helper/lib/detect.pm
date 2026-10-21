@@ -4,10 +4,12 @@ package detect;
 #
 # Normalized body: strip the head parts (a `This session is being continued…`
 # line, a <tools-used-before-summary>…</tools-used-before-summary> block, a
-# `Summary:` line, a `<summary>` tag, and blank lines between them), cut at the
-# last `</summary>` when present, else cut installed-message trailers
+# `Summary:` line, a `<summary>` tag, and blank lines between them), cut before
+# the first `</summary>` when present, else cut installed-message trailers
 # (spec `copy_trailers`, canary-baseline `copy_trailers`), trim trailing blank
-# lines; line ends `\n`. Marker: anchored grammar in the first 5 body lines.
+# lines; line ends `\n`; the body lines joined by `\n` plus one final `\n`
+# (empty body: empty string), the reading of tests/fixtures/summaries/expected.tsv
+# and hooks/lib/normalize.ts. Marker: anchored grammar in the first 5 body lines.
 # Sentinel: the last 3 non-blank lines.
 use strict;
 use warnings;
@@ -64,7 +66,7 @@ sub normalize {
     }
     my @b = @l[$i .. $#l];
     my $cut;
-    for (my $j = $#b; $j >= 0; $j--) {
+    for (my $j = 0; $j <= $#b; $j++) {
         if ($b[$j] =~ m{^(.*?)</summary>}) {
             my $before = $1;
             $cut = 1;
@@ -83,7 +85,7 @@ sub normalize {
         }
     }
     pop @b while @b && $b[-1] =~ /^\s*$/;
-    return (\@b, join("\n", @b));
+    return (\@b, @b ? join("\n", @b) . "\n" : '');
 }
 
 sub _rstrip { my $s = $_[0]; $s =~ s/\s+$//; return $s }
