@@ -1,0 +1,8 @@
+{
+ "id": "AT-RN-03-inner-sleep",
+ "tmp_base": "repo",
+ "note": "the parent sends TERM while this step sleeps",
+ "steps": [
+  {"exec": ["/bin/sleep", "30"], "timeout_s": 90, "expect": {"exit": 0}}
+ ]
+}

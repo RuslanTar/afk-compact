@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-01-inner-b",
+ "note": "runs second (c2): the first case's dir c1 is already gone",
+ "steps": [
+  {"exec": ["/bin/test", "-d", "$TMP"], "expect": {"exit": 0, "absent": ["$TMP/../c1"]}}
+ ]
+}

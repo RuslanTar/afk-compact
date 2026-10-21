@@ -71,7 +71,7 @@ sub run {
     # evidence: the sweep (claims swept/<nonce6>)
     $s0 = util::clock_ms();
     my $bk = bucket::resolve($sid, $a{cwd}, undef, $where->{in_git} ? $where : undef);
-    my $stem = util::stamp(util::now()) . '_' . substr($sid, 0, 8) . '-' . substr($a{nonce}, 0, 6);
+    my $stem = util::file_stamp(util::now()) . '_' . substr($sid, 0, 8) . '-' . substr($a{nonce}, 0, 6);
     my $sw = $left->(8000) > 50
         ? sweep::run(sid => $sid, id6 => substr($a{nonce}, 0, 6), stem => $stem, transcript => $a{transcript},
                      budget_ms => $left->(8000), bucket => $bk->{path}, nonce => $a{nonce})

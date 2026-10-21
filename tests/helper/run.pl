@@ -54,15 +54,39 @@ require "util.pm";
 require "jsonc.pm";
 require "sha.pm";
 
-my ($FILTER, $KEEP, $VERBOSE, @ARGS);
+# DP-12: messages hold characters (decoded case text and helper output); raw bytes are
+# decoded before they are printed (see say_raw), so nothing prints "Wide character".
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+# BH-6 (small-rulings §5.3 R1-R5): the work dirs go as soon as they are not needed. A
+# passing case's c<N> is removed when it passes; at the end a failing run keeps only the
+# failed cases' c<N> and stage/ (`# kept:`); a run that dies or is killed (INT, TERM,
+# HUP) cleans up the same way in END. Only this process cleans: forked children never do.
+my $OWNER_PID = $$;
+my ($RUN_TMP, $REPO_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
+my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, @ARGS);
+$SIG{$_} = sub { exit 130 } for qw(INT TERM HUP);
+END {
+    my $code = $?;
+    cleanup() if defined $OWNER_PID && $$ == $OWNER_PID;
+    $? = $code;
+}
+
 while (@ARGV) {
     my $a = shift @ARGV;
     if ($a eq '--filter') { $FILTER = shift @ARGV; next }
     if ($a eq '--keep') { $KEEP = 1; next }
     if ($a eq '-v') { $VERBOSE = 1; next }
+    # Self-test hooks (AT-RN-04, AT-RN-05): stage another plugin tree; use another folder
+    # in place of <repo>/tmp for tmp_base "repo" cases.
+    if ($a eq '--plugin') { $PLUGIN_SRC = shift @ARGV; next }
+    if ($a eq '--repo-tmp') { $REPO_TMP_BASE = shift @ARGV; next }
     push @ARGS, $a;
 }
 @ARGS = ("$HERE/cases") unless @ARGS;
+$REPO_TMP_BASE //= "$REPO/tmp";
+$REPO_TMP_BASE =~ s{/+$}{};
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
 my $HOSTNAME = (POSIX::uname())[1];
@@ -83,7 +107,7 @@ sub find_claude_bin {
 }
 
 # ---------------------------------------------------------------- staging
-my $RUN_TMP = do {
+$RUN_TMP = do {
     my $base = $ENV{TMPDIR} && -d $ENV{TMPDIR} ? $ENV{TMPDIR} : '/tmp';
     $base =~ s{/+$}{};
     my $d = "$base/store-h-" . $$ . '-' . util::rand_hex(6);
@@ -92,12 +116,19 @@ my $RUN_TMP = do {
 };
 my %STAGE_INFO;
 my $STAGE = stage_plugin("$RUN_TMP/stage/plugin");
-my $REPO_TMP;
 sub repo_tmp {
     return $REPO_TMP if $REPO_TMP;
-    $REPO_TMP = "$REPO/tmp/store-h-" . $$ . '-' . util::rand_hex(6);
+    $REPO_TMP = "$REPO_TMP_BASE/store-h-" . $$ . '-' . util::rand_hex(6);
     util::mkdir_p($REPO_TMP);
     return $REPO_TMP;
+}
+my $RUNNER_LSTART;
+sub runner_lstart {
+    return $RUNNER_LSTART if defined $RUNNER_LSTART;
+    my $r = util::run(['ps', '-o', 'lstart=', '-p', $$], timeout_ms => 5000, env => { LC_ALL => 'C' });
+    ($RUNNER_LSTART = $r->{out} // '') =~ s/\s+/ /g;
+    $RUNNER_LSTART =~ s/\A | \z//g;
+    return $RUNNER_LSTART;
 }
 my $LSTART1 = do {
     my $r = util::run(['ps', '-o', 'lstart=', '-p', '1'], timeout_ms => 5000);
@@ -121,7 +152,7 @@ sub copy_tree {
 
 sub stage_plugin {
     my ($dst) = @_;
-    copy_tree("$REPO/plugin", $dst);
+    copy_tree($PLUGIN_SRC // "$REPO/plugin", $dst);
     my $launcher = "$dst/bin/$BRAND-store";
     die "run.pl: no launcher at plugin/bin/$BRAND-store (run tools/build)\n" unless -x $launcher;
     if (!-f "$dst/assets/handoff-spec.json") {
@@ -145,6 +176,24 @@ sub stage_plugin {
     } else {
         $STAGE_INFO{baseline} = 'plugin/assets';
     }
+    return $dst;
+}
+
+# stage_variant({dotted path => value}, dst) -> a copy of the staged plugin at dst whose
+# .claude-plugin/plugin.json has those values set (paths below the top level object).
+sub stage_variant {
+    my ($patch, $dst) = @_;
+    copy_tree($STAGE, $dst);
+    my $mf = "$dst/.claude-plugin/plugin.json";
+    my $m = jsonc::decode(util::read_file($mf));
+    for my $path (sort keys %$patch) {
+        my @k = split /\./, $path;
+        my $last = pop @k;
+        my $h = $m;
+        for my $k (@k) { $h->{$k} = {} unless ref $h->{$k} eq 'HASH'; $h = $h->{$k} }
+        $h->{$last} = $patch->{$path};
+    }
+    util::write_atomic($mf, jsonc::encode_bytes($m) . "\n", 0644);
     return $dst;
 }
 
@@ -180,38 +229,91 @@ for my $cf (@CASES) {
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
+    # The case's work dirs: c<N> under the system temp folder and, for tmp_base "repo"
+    # cases, under the repo's tmp/.
+    my @cdirs = grep { -d } map { "$_/c$N" } grep { defined } ($RUN_TMP, $REPO_TMP);
     if (@errs) {
         $FAILED++;
         push @FAIL_IDS, $id;
+        push @FAILED_DIRS, @cdirs;
         print "not ok $N - $id\n";
         print map { "#   $_\n" } @errs;
     } else {
         print "ok $N - $id\n";
+        # R1: a passing case's dirs go now, so a kill later leaves at most the case in flight.
+        remove_in(util::dirname($_), util::basename($_)) for $KEEP ? () : @cdirs;
     }
 }
 print "1..$N\n";
 print "# passed " . ($N - $FAILED - $SKIPPED) . ", failed $FAILED, skipped $SKIPPED\n";
 print "# failed: @FAIL_IDS\n" if @FAIL_IDS;
-# BH-6: the work dirs (under the system temp folder, and under the repo's tmp/ for
-# tmp_base "repo" cases, which no OS cleaner visits) go at the end of a passing run;
-# --keep or a failed case keeps them for a look.
-{
-    my @work = grep { defined } ($RUN_TMP, $REPO_TMP);
-    if ($KEEP || $FAILED) {
-        print "# work dirs kept: @work\n";
+cleanup();
+exit($FAILED ? 1 : 0);
+
+# cleanup(): R2-R4, once per run (the normal end, or END after a die or a signal). --keep
+# keeps everything; a failed case keeps its c<N> dirs and stage/ (the staged plugin it ran
+# against) and everything else goes; otherwise both work dirs go. Helper processes still
+# running (a killed run) are stopped first, so none of them writes into a removed dir.
+sub cleanup {
+    return if $CLEANED++;
+    for my $pid (keys %KIDS) { kill 'TERM', $pid }
+    for my $pid (keys %KIDS) {
+        my $t0 = util::clock_ms();
+        while (waitpid($pid, POSIX::WNOHANG()) == 0) {
+            if (util::clock_ms() - $t0 > 2000) { kill 'KILL', $pid; waitpid($pid, 0); last }
+            util::sleep_ms(10);
+        }
+    }
+    %KIDS = ();
+    my @work = grep { defined && -d } ($RUN_TMP, $REPO_TMP);
+    if ($KEEP) {
+        print "# work dirs kept: @work\n" if @work;
+    } elsif (@FAILED_DIRS) {
+        my %keep = map { ($_ => 1) } @FAILED_DIRS, (defined $RUN_TMP ? "$RUN_TMP/stage" : ());
+        for my $w (@work) {
+            remove_in($w, grep { !$keep{"$w/$_"} } util::list_dir($w));
+            rmdir $w;
+        }
+        print '# kept: ' . join(' ', sort grep { -d } keys %keep) . "\n";
     } else {
         remove_tree($_) for @work;
         print "# work dirs removed\n" if $VERBOSE;
     }
+    # R4: the repo's tmp/ goes too when nothing else is in it (rmdir fails otherwise).
+    rmdir $REPO_TMP_BASE if defined $REPO_TMP && -d $REPO_TMP_BASE;
 }
-exit($FAILED ? 1 : 0);
 
-# remove_tree(dir): only a work dir this runner made (store-h-<pid>-<hex>); links are
-# removed, never followed; folders a case made read-only are opened up first.
+# R5: a work dir this runner made (store-h-<pid>-<6 hex>) directly under the system temp
+# folder, /tmp or the repo's tmp/ (or a folder the caller names, for the self-tests).
+sub _work_dir_ok {
+    my ($d, @parents) = @_;
+    return 0 unless defined $d && util::basename($d) =~ /\Astore-h-\d+-[0-9a-f]{6}\z/ && -d $d && !-l $d;
+    @parents = (($ENV{TMPDIR} // ()), '/tmp', $REPO_TMP_BASE) unless @parents;
+    my $parent = Cwd::abs_path(util::dirname($d)) // return 0;
+    for my $p (@parents) {
+        next unless defined $p && $p ne '';
+        my $rp = Cwd::abs_path($p) // next;
+        return 1 if $rp eq $parent;
+    }
+    return 0;
+}
+
+# remove_tree(dir [, parents...]): only a work dir (R5); links are removed, never
+# followed; folders a case made read-only are opened up first.
 sub remove_tree {
-    my ($d) = @_;
-    return unless defined $d && util::basename($d) =~ /\Astore-h-\d+-[0-9a-f]{6}\z/ && -d $d && !-l $d;
+    my ($d, @parents) = @_;
+    return unless _work_dir_ok($d, @parents);
     _rm_tree($d);
+}
+
+# remove_in(work dir, names...): entries of a work dir (R5 applies to the work dir).
+sub remove_in {
+    my ($w, @names) = @_;
+    return unless _work_dir_ok($w);
+    for my $n (@names) {
+        next if !defined $n || $n eq '' || $n =~ m{/} || $n eq '.' || $n eq '..';
+        _rm_tree("$w/$n");
+    }
 }
 
 sub _rm_tree {
@@ -244,6 +346,13 @@ sub run_case {
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
     $V{LSTART1} = $LSTART1;
     $V{TYPES} = types_file();
+    # The runner's own pid and start time: the parent every helper call it starts sees
+    # (the launcher execs perl), for cases that stand the runner in for Claude Code.
+    $V{RUNNER_PID} = $$;
+    $V{RUNNER_LSTART} = runner_lstart();
+    # "manifest": {dotted path in plugin.json: value}: this case runs against its own
+    # staged copy whose plugin.json holds these values (e.g. a non-ASCII description).
+    $V{PLUGIN} = stage_variant($case->{manifest}, "$V{TMP}/plugin") if ref $case->{manifest} eq 'HASH';
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
@@ -279,10 +388,20 @@ sub run_case {
         push @errs, map { "$label: $_" } check($st->{expect} || {}, $res, \%V, $st);
         capture($st->{capture}, $res->[0]{out}, \%V) if $st->{capture} && @$res;
         if ($VERBOSE) {
-            for my $r (@$res) { print "#   [$label] exit $r->{exit}\n"; print map { "#   | $_\n" } split /\n/, substr($r->{out}, 0, 4000) }
+            for my $r (@$res) { print "#   [$label] exit $r->{exit}\n"; print map { "#   | $_\n" } split /\n/, chars(substr($r->{out}, 0, 4000)) }
         }
     }
     return @errs;
+}
+
+# chars(bytes) -> the text as characters (UTF-8 decoded when it is valid UTF-8), for
+# printing helper output through the UTF-8 STDOUT layer.
+sub chars {
+    my ($s) = @_;
+    $s //= '';
+    return $s if utf8::is_utf8($s);
+    my $c = $s;
+    return utf8::decode($c) ? $c : $s;
 }
 
 my %SECRET;
@@ -708,13 +827,14 @@ sub spawn {
         { no warnings "exec"; exec { $argv->[0] } @$argv; }
         POSIX::_exit(127);
     }
+    $KIDS{$pid} = 1;
     return $pid;
 }
 
 sub invoke {
     my ($st, $case, $V, $cdir, $i) = @_;
     my $env = child_env($st, $case, $V, $i);
-    my @argv = ("$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} || [] });
+    my @argv = ("$V->{PLUGIN}/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} || [] });
     @argv = map { subst($_, $V) } @{ $st->{exec} } if $st->{exec};
     my $stdin = stdin_of($st, $V, $cdir);
     my @inputs = $st->{parallel_inputs} ? @{ $st->{parallel_inputs} } : ((undef) x ($st->{parallel} // 1));
@@ -725,7 +845,7 @@ sub invoke {
         $k++;
         my ($av, $sin) = (\@argv, $stdin);
         if ($in) {
-            $av = ["$STAGE/bin/$BRAND-store", map { subst($_, $V) } @{ $in->{argv} }] if $in->{argv};
+            $av = ["$V->{PLUGIN}/bin/$BRAND-store", map { subst($_, $V) } @{ $in->{argv} }] if $in->{argv};
             $sin = stdin_of($in, $V, $cdir) if grep { exists $in->{$_} } qw(stdin stdin_json stdin_text stdin_parts);
         }
         push @prepared, [$av, $sin, "$V->{TMP}/out-$i-$k", "$V->{TMP}/err-$i-$k"];
@@ -747,6 +867,7 @@ sub invoke {
             util::sleep_ms(5);
         }
         my $st_ = $?;
+        delete $KIDS{ $p->{pid} };
         $p->{exit} = ($st_ & 127) ? 128 + ($st_ & 127) : ($st_ >> 8);
         $p->{ms} = util::clock_ms() - $p->{t0};
         $p->{out} = util::read_file($p->{outf}) // '';
@@ -1001,11 +1122,161 @@ sub builtin {
             if ($t->[1]) {
                 push @e, "failing run: no work dir kept under its TMPDIR" unless @new_tmp;
                 push @e, "failing run: no work dir kept under the repo tmp/" unless @new_repo;
-                remove_tree($_) for @new_tmp, @new_repo;
+                remove_tree($_, $td, $base) for @new_tmp, @new_repo;
             } else {
                 push @e, "passing run: left $_" for @new_tmp, @new_repo;
-                remove_tree($_) for @new_tmp, @new_repo;
+                remove_tree($_, $td, $base) for @new_tmp, @new_repo;
             }
+        }
+        return @e;
+    }
+    if ($name eq 'runner_hygiene') {
+        # AT-RN-01..05 (small-rulings §5.3 R1-R5): child runs of this runner on the case-local
+        # _rn<NN> folders (discovery skips them), each with its own TMPDIR and, for tmp_base
+        # "repo" cases, its own --repo-tmp folder, so the real <repo>/tmp is not touched.
+        my $which = $a->{which} // die "runner_hygiene: no which\n";
+        my $root = ($a->{tmp} // die "runner_hygiene: no tmp\n") . "/rn$which";
+        my $td = "$root/tmpdir";
+        my $rt = "$root/repotmp";
+        util::mkdir_p($td);
+        my $work = sub { my ($d) = @_; return map { "$d/$_" } grep { /\Astore-h-\d+-[0-9a-f]{6}\z/ } util::list_dir($d) };
+        my $child = sub {
+            my (@extra) = @_;
+            return util::run(['/usr/bin/perl', "$HERE/run.pl", '--repo-tmp', $rt, @extra], timeout_ms => 180000, env => { TMPDIR => $td });
+        };
+        if ($which eq '01') {
+            my $r = $child->("$cdir/_rn01");
+            push @e, "two passing cases: exit $r->{exit}: " . chars(substr($r->{out}, -600)) if $r->{exit} != 0;
+            push @e, "passing run left $_" for $work->($td);
+        } elsif ($which eq '02') {
+            my $r = $child->("$cdir/_rn02");
+            push @e, "pass+fail run: exit $r->{exit}, want 1" if $r->{exit} != 1;
+            my @w = $work->($td);
+            if (@w != 1) { push @e, scalar(@w) . " work dirs under TMPDIR, want 1" }
+            else {
+                my $got = join(',', util::list_dir($w[0]));
+                push @e, "kept [$got], want [c2,stage]" unless $got eq 'c2,stage';
+                my ($line) = $r->{out} =~ /^(# kept: [^\n]*)$/m;
+                my $want = "# kept: $w[0]/c2 $w[0]/stage";
+                push @e, 'kept line ' . ($line // 'missing') . ", want $want" unless defined $line && $line eq $want;
+            }
+            remove_tree($_, $td) for @w;
+        } elsif ($which eq '03') {
+            for my $keep (0, 1) {
+                my $pid = fork();
+                die "fork: $!\n" unless defined $pid;
+                if ($pid == 0) {
+                    $ENV{TMPDIR} = $td;
+                    open(STDOUT, '>', "$root/child-$keep.out");
+                    open(STDERR, '>&', \*STDOUT);
+                    no warnings 'exec';
+                    exec('/usr/bin/perl', "$HERE/run.pl", '--repo-tmp', $rt, ($keep ? ('--keep') : ()), "$cdir/_rn03");
+                    POSIX::_exit(127);
+                }
+                my $t0 = util::clock_ms();
+                my $seen;
+                while (util::clock_ms() - $t0 < 60000) {
+                    ($seen) = grep { -d "$_/c1" } $work->($rt);
+                    last if $seen;
+                    util::sleep_ms(50);
+                }
+                util::sleep_ms(300);
+                kill 'TERM', $pid;
+                my $st;
+                my $t1 = util::clock_ms();
+                while (waitpid($pid, POSIX::WNOHANG()) == 0) {
+                    if (util::clock_ms() - $t1 > 30000) { kill 'KILL', $pid; waitpid($pid, 0); push @e, "keep=$keep: no exit 30 s after TERM"; last }
+                    util::sleep_ms(20);
+                }
+                $st = $?;
+                my $code = ($st & 127) ? 128 + ($st & 127) : ($st >> 8);
+                push @e, "keep=$keep: the case dir never appeared" unless $seen;
+                push @e, "keep=$keep: exit $code after TERM, want 130" if $code != 130;
+                my @left = ($work->($td), $work->($rt));
+                if ($keep) { push @e, 'keep=1: --keep left nothing' unless @left; remove_tree($_, $td, $rt) for @left }
+                else { push @e, "TERM left $_" for @left }
+            }
+        } elsif ($which eq '04') {
+            util::mkdir_p("$root/noplugin");
+            my $r = $child->('--plugin', "$root/noplugin", "$cdir/_rn01");
+            push @e, 'run without a launcher exited 0' if $r->{exit} == 0;
+            push @e, "die before the first case left $_" for $work->($td);
+        } elsif ($which eq '05') {
+            my $r = $child->("$cdir/_rn05");
+            push @e, "tmp_base repo run: exit $r->{exit}" if $r->{exit} != 0;
+            push @e, "empty repo tmp folder kept ($rt)" if -e $rt;
+            push @e, "passing run left $_" for $work->($td);
+        } else {
+            push @e, "runner_hygiene: unknown which $which";
+        }
+        return @e;
+    }
+    if ($name eq 'stamp_spec') {
+        # RV-24: util::stamp against the spec's time_re once the spec carries the RV-24 grammar
+        # (WP-text part 1 changes time_re and adds time_legacy_re); until then only the
+        # built-in shape is checked and a TODO line says so.
+        my $re = eval { spec::has('time_legacy_re') ? spec::get('time_re') : undef };
+        print "# TODO stamp_spec: the spec has no RV-24 time_re yet (WP-text part 1)\n" unless defined $re;
+        my $shape = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
+        for my $tz (@{ $a->{tz} || ['UTC'] }) {
+            local $ENV{TZ} = $tz;
+            POSIX::tzset();
+            for my $e (@{ $a->{epochs} || [] }) {
+                my $s = util::stamp($e);
+                push @e, "$tz $e: '$s' is not YYYY-MM-DD HH:MM +hhmm" unless $s =~ /\A$shape\z/;
+                push @e, "$tz $e: '$s' does not match the spec time_re" if defined $re && $s !~ /\A(?:$re)\z/;
+                my $want = POSIX::strftime('%Y-%m-%d %H:%M %z', localtime $e);
+                push @e, "$tz $e: '$s', want '$want'" unless $s eq $want;
+            }
+        }
+        POSIX::tzset();
+        return @e;
+    }
+    if ($name eq 'handoff_turn_api') {
+        # D-18 B7/B8: the seams begin and publish call (lib/handoff_turn.pm): the open ht
+        # begin binds (newest, no .published, at most 60 min old), one stage per ht
+        # (resumed), one published handoff per ht.
+        for my $l (qw(bucket handoff_turn)) { require "$l.pm" }
+        local $ENV{STORE_TEST_MODE} = '1';
+        local $ENV{STORE_TEST_NOW} = $a->{now};
+        my $d = $a->{sid_dir};
+        my $open = handoff_turn::open_for_begin($d);
+        push @e, 'open ht ' . ($open ? $open->{ht} : 'none') . ', want ' . ($a->{want_open} // 'none')
+            unless ($open ? $open->{ht} : '') eq ($a->{want_open} // '');
+        if (my $ht = $a->{bind}) {
+            my ($s1, $r1) = handoff_turn::bind_stage($d, $ht, $a->{stage});
+            my ($s2, $r2) = handoff_turn::bind_stage($d, $ht, "$a->{stage}-other");
+            push @e, "first bind: $s1 resumed=$r1" unless $s1 eq $a->{stage} && !$r1;
+            push @e, "second bind: $s2 resumed=$r2" unless $s2 eq $a->{stage} && $r2;
+            my ($p1, $q1) = handoff_turn::mark_published($d, $ht, $a->{path});
+            my ($p2, $q2) = handoff_turn::mark_published($d, $ht, "$a->{path}.other");
+            push @e, "first publish: $p1 $q1" unless $p1 && $q1 eq $a->{path};
+            push @e, "second publish: $p2 $q2" unless !$p2 && $q2 eq $a->{path};
+            my $after = handoff_turn::open_for_begin($d);
+            push @e, 'published ht still open' if $after && $after->{ht} eq $ht;
+        }
+        return @e;
+    }
+    if ($name eq 'jobs_output_path') {
+        # DP-2 / DP-13: the two output-path readers of lib/jobrec.pm (probe P-D1-6 decides
+        # which one is used; 'none' until then) and the switch between them.
+        require "jobrec.pm";
+        my $in = { task_id => $a->{task}, cwd => $a->{cwd}, result_text => $a->{text} };
+        my $rt = jobrec::path_from_result_text($a->{text}, $a->{task});
+        my $ly = jobrec::path_from_layout($a->{sid}, $a->{cwd}, $a->{task});
+        push @e, 'result text: ' . ($rt // 'none') . ', want ' . ($a->{want_result_text} // 'none')
+            unless ($rt // '') eq ($a->{want_result_text} // '');
+        # the layout sits under the system temp root and the user's uid: the case gives the rest
+        my $wl = defined $a->{want_layout_tail} ? ($^O eq 'darwin' ? '/private/tmp' : '/tmp') . "/claude-$<$a->{want_layout_tail}" : undef;
+        push @e, 'layout: ' . ($ly // 'none') . ', want ' . ($wl // 'none') unless ($ly // '') eq ($wl // '');
+        no warnings 'once';
+        for my $src (qw(none result-text layout)) {
+            local $jobrec::OUTPUT_PATH_SOURCE = $src;
+            my ($p, $s) = jobrec::output_path($in, $a->{sid});
+            my $want = $src eq 'layout' ? $ly : $src eq 'result-text' ? $rt : undef;
+            my $wsrc = defined $want ? $src : 'none';
+            push @e, "switch $src: path " . ($p // 'null') . ' source ' . $s . ', want ' . ($want // 'null') . " $wsrc"
+                unless ($p // '') eq ($want // '') && $s eq $wsrc;
         }
         return @e;
     }
@@ -1117,7 +1388,7 @@ sub check {
         my $outc = $out;
         utf8::decode($outc);
         push @e, "timed out" if $r->{timed_out};
-        push @e, "exit $r->{exit}, want $x->{exit}" . ($r->{err} ? " (stderr: " . substr($r->{err}, 0, 300) . ")" : '')
+        push @e, "exit $r->{exit}, want $x->{exit}" . ($r->{err} ? " (stderr: " . chars(substr($r->{err}, 0, 300)) . ")" : '')
             if defined $x->{exit} && $r->{exit} != $x->{exit};
         push @e, "stdout differs: got " . jsonc::encode(substr($outc, 0, 400)) if defined $x->{stdout} && $outc ne $x->{stdout};
         push @e, "stdout does not match /$x->{stdout_re}/: " . jsonc::encode(substr($outc, 0, 300)) if defined $x->{stdout_re} && $outc !~ /$x->{stdout_re}/m;
@@ -1154,7 +1425,7 @@ sub check {
         }
         push @e, "stdout is " . length($out) . " bytes > $x->{stdout_max_bytes}" if defined $x->{stdout_max_bytes} && length($out) > $x->{stdout_max_bytes};
         push @e, golden_diff($x->{stdout_golden}, $outc) if $x->{stdout_golden};
-        push @e, "stderr not empty: " . substr($r->{err}, 0, 200) if $x->{stderr_empty} && length $r->{err};
+        push @e, "stderr not empty: " . chars(substr($r->{err}, 0, 200)) if $x->{stderr_empty} && length $r->{err};
         if (defined $x->{stdout_lines}) { my $n = () = $out =~ /\n/g; push @e, "stdout has $n lines, want $x->{stdout_lines}" if $n != $x->{stdout_lines} }
         if ($x->{stdout_json}) {
             my $j = eval { jsonc::decode($out) };

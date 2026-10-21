@@ -1,0 +1,6 @@
+{
+ "id": "AT-RN-02-inner-fail",
+ "steps": [
+  {"exec": ["/usr/bin/false"], "expect": {"exit": 0}}
+ ]
+}

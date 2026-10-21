@@ -1,0 +1,16 @@
+{
+ "id": "AT-TS-03 (core), AT-TS-05 (measure part)",
+ "note": "RV-24 (small-rulings §3a): util::stamp prints YYYY-MM-DD HH:MM ±hhmm, the offset of that instant; `measure --compact` names the sidecar time as a full stamp (`In flight (sidecar <stamp>)`), on both sides of a DST change in a zone with a negative offset and in one with a positive offset. The stamp matches the spec's time_re when the spec has one (WP-text part 1)",
+ "steps": [
+  {"setup": [{"mkdir": "$TMP/work"},
+             {"write": "$WATCH/$SID/bg/slot-0.json", "json": {"v": 1, "ts": "2026-03-08T06:30:00.000Z", "seq": 1, "set_hash": "aaaaaaaa", "source": "Stop", "tasks": [], "crons": []}}]},
+  {"name": "before the change, New York", "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"], "tz": "America/New_York",
+   "expect": {"exit": 0, "stdout_has": ["^In flight \\(sidecar 2026-03-08 01:30 -0500\\): nothing listed$"]}},
+  {"setup": [{"write": "$WATCH/$SID/bg/slot-1.json", "json": {"v": 1, "ts": "2026-03-08T07:30:00.000Z", "seq": 2, "set_hash": "bbbbbbbb", "source": "Stop", "tasks": [{"id": "b1", "type": "shell", "status": "running", "output_path": null}], "crons": []}}]},
+  {"name": "after the change, New York", "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"], "tz": "America/New_York",
+   "expect": {"exit": 0, "stdout_has": ["^In flight \\(sidecar 2026-03-08 03:30 -0400\\):$", "^  b1 · shell · running$"]}},
+  {"name": "Berlin, summer", "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"], "tz": "Europe/Berlin",
+   "expect": {"exit": 0, "stdout_has": ["^In flight \\(sidecar 2026-03-08 08:30 \\+0100\\):$"]}},
+  {"name": "the spec's time_re", "lib": "stamp_spec", "args": {"epochs": [1772951400, 1789286400], "tz": ["America/New_York", "Asia/Kolkata", "UTC"]}}
+ ]
+}

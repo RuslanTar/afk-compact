@@ -3,8 +3,11 @@ package jsonc;
 # Owner: WP-core. Floor modules only.
 #
 # decode(TEXT) -> data. TEXT may be bytes (UTF-8) or characters; strings come
-#   back as Perl character strings. true/false decode to $jsonc::true()/$jsonc::false().
-#   Dies "json: <reason> at <offset>" on bad input.
+#   back as Perl character strings. A string that is all ASCII comes back without
+#   the UTF-8 flag (SR 1.1): one non-ASCII character elsewhere in a document must not
+#   make its ASCII values character strings, which then mix with the helper's byte
+#   literals (`·`) and print double-encoded. true/false decode to
+#   $jsonc::true()/$jsonc::false(). Dies "json: <reason> at <offset>" on bad input.
 # encode(DATA) -> one line of JSON as a character string. Hash keys are sorted;
 #   an ordered object is jsonc::obj(k => v, ...). Numbers are scalars that were
 #   made as numbers (a string of digits stays a string). Non-ASCII is kept as
@@ -122,7 +125,7 @@ sub _string {
     pos($$t) = $$p;
     while (1) {
         if ($$t =~ /\G([^"\\\x00-\x1f]+)/gc) { $out .= $1; next }
-        if ($$t =~ /\G"/gc) { $$p = pos($$t); return $out }
+        if ($$t =~ /\G"/gc) { $$p = pos($$t); utf8::downgrade($out) if $out !~ /[^\x00-\x7f]/; return $out }
         if ($$t =~ /\G\\u([0-9a-fA-F]{4})/gc) {
             my $cp = hex $1;
             if ($cp >= 0xD800 && $cp <= 0xDBFF) {

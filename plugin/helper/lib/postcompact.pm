@@ -216,7 +216,7 @@ sub run {
         # disposable root, which sweep checks on its own.
         if ($scope eq 'main') {
             (my $stem = util::basename($save->{path} // '')) =~ s/\.md$//;
-            $stem = util::stamp($now) . '_' . substr($sid, 0, 8) . "-$id6" if $stem eq '';
+            $stem = util::file_stamp($now) . '_' . substr($sid, 0, 8) . "-$id6" if $stem eq '';
             $sweep = sweep::run(sid => $sid, id6 => $id6, stem => $stem, transcript => $tp, budget_ms => 8000,
                                 bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $emn);
         }

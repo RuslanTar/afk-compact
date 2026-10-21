@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-05-inner-repo",
+ "tmp_base": "repo",
+ "steps": [
+  {"exec": ["/bin/test", "-d", "$TMP"], "expect": {"exit": 0}}
+ ]
+}

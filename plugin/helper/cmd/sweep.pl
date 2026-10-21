@@ -16,7 +16,7 @@ sub run {
     my $id6 = substr($opt->{nonce}, 0, 6);
     my $copy = copies::find($bk->{path}, $id6);
     (my $stem = util::basename($copy // '')) =~ s/\.md$//;
-    $stem = util::stamp(util::now()) . '_' . substr($sid, 0, 8) . "-$id6" if $stem eq '';
+    $stem = util::file_stamp(util::now()) . '_' . substr($sid, 0, 8) . "-$id6" if $stem eq '';
     my $r = sweep::run(sid => $sid, id6 => $id6, stem => $stem, transcript => $opt->{transcript},
                        budget_ms => 8000, bucket => $bk->{path}, nonce => $opt->{nonce});
     args::out(@{ $r->{lines} });

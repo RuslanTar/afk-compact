@@ -1,0 +1,38 @@
+{
+ "id": "AT-RM-05, AT-J-14",
+ "note": "DP-3 / REVIEW A-3: the consent keys repo_roots, relaunch_auto and relaunch_allow are read from the user settings file only (settings.pm %FILE_ONLY). Given as a flag (--repo-roots, --relaunch-auto, --relaunch-allow) or as CLAUDE_PLUGIN_OPTION_* env they are ignored with the note '<key>: settings file only' and one config_note row per key: a declared repository stays private (not-accepted), relaunch_auto keeps the file's value, a '^.*' allow pattern does not appear. Values in the file are validated (Dev-1 config keys): an unknown relaunch_auto is off, a pattern without ^ or one that does not compile is dropped, relaunch_quiet_s is clamped to 30-3600. Other keys still take flag and env (handoff_root by env)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"setup": [
+    {"repo": "$TMP/r20", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n"}},
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"relaunch_auto": "shadow"}}}}}
+  ]},
+  {"name": "env forms ignored", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
+   "env": {"CLAUDE_PLUGIN_OPTION_REPO_ROOTS": "$TMP/r20", "CLAUDE_PLUGIN_OPTION_RELAUNCH_AUTO": "on", "CLAUDE_PLUGIN_OPTION_RELAUNCH_ALLOW": "^.*",
+           "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff mode: private \\(not-accepted\\)$", "^automatic relaunch: inactive \\(no output path\\) · relaunch_auto shadow$",
+                    "^note: repo_roots: settings file only$", "^note: relaunch_auto: settings file only$", "^note: relaunch_allow: settings file only$"],
+     "stdout_lacks": ["relaunch_allow: \\d+ patterns"],
+     "rows": [{"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "repo_roots", "note": "settings-file-only"}},
+              {"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "relaunch_allow"}},
+              {"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "handoff_mode", "count": 1, "fields": {"mode": "private", "reason": "not-accepted"}}]}},
+  {"name": "flag forms ignored", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20", "--repo-roots", "$TMP/r20", "--relaunch-auto", "on", "--relaunch-allow", "^.*"],
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff mode: private \\(not-accepted\\)$", "^automatic relaunch: inactive \\(no output path\\) · relaunch_auto shadow$",
+                    "^note: repo_roots: settings file only$", "^note: relaunch_auto: settings file only$", "^note: relaunch_allow: settings file only$"],
+     "rows": [{"file": "$TMP/hr/.watch/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "repo_roots"}}]}},
+  {"name": "file values validated", "setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"repo_roots": "$TMP/r20", "relaunch_auto": "sometimes", "relaunch_allow": "^make test$; no-caret ;^([unclosed", "relaunch_quiet_s": 5}}}}}],
+   "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff mode: repo \\(accepted\\)$", "^automatic relaunch: inactive \\(no output path\\) · relaunch_auto off$",
+                    "^  relaunch_allow: 1 patterns, no effect in this version \\(read-only jobs only\\)$",
+                    "^  config: relaunch_auto invalid, off used$", "^  config: relaunch_allow invalid, pattern dropped$",
+                    "^  config: relaunch_quiet_s 5 clamped to 30$"],
+     "stdout_lacks": ["^note: "]}}
+ ]
+}
