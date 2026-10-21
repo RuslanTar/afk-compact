@@ -98,6 +98,7 @@ Write the body to `<stage>/body.md`, from the `#` title to Next steps in templat
 It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`.
 - `LINT` → Edit the draft or recipe, publish again; after 2 failed rounds → C.
 - `ADVISORY` → fix if one Edit does it, else list it in the report.
+- `ADVISORY secret-warn rules=<ids>` → take the value out and say where it lives, or report those rule ids; never the value.
 - Saved only when the receipt says so.
 
 ## Step 8 — Report (≤8 lines, this order)
@@ -109,4 +110,4 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 5. The bucket, if it came from your slug or differs from a topic the user gave in the arguments (a session pin wins; say so). <!-- review-fix -->
 6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
-8. Advisories, ownership conflicts, what could not be verified; omit when none.
+8. Advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
