@@ -12,7 +12,7 @@ Restore work from a handoff written by `/{{plugin}}:handoff` or from a saved com
   It measures and prints plain lines. It never asks, deletes or runs a command taken from a handoff. It reads the settings `handoff_root` (default `~/.claude/handoffs`; buckets `<root>/<repo>/<ticket-or-topic>/`), `disposable_root` and the optional `queue_cmd`.
 - Vocabularies (ids, status words, claim tags, restart classes) are in `${CLAUDE_PLUGIN_ROOT}/assets/handoff-spec.md`. Read it only when a term is unclear.
 - Our marker is `⟪{{plugin}} v1 n=<nonce> s=main|sub|manual⟫` in the first 5 body lines, and the sentinel `⟪/{{plugin}} n=<nonce>⟫` is in the last 3. No other header line is ours.
-- In `$ARGUMENTS`, instructions override the handoff's Next steps, and facts are verified like any claim.
+- In the arguments, instructions override the handoff's Next steps, and facts are verified like any claim.
 
 ## Rules for the whole run
 
