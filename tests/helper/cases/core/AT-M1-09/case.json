@@ -1,6 +1,6 @@
 {
  "id": "AT-M1-09",
- "note": "SessionStart(compact) with a classic dispatch, then a second SessionStart for the same nonce: the first prints the block (<= 5,000 chars, subagent line, [midturn] for trigger auto, @saved_copy@ pending (...)) and claims sessionstart; the second prints nothing",
+ "note": "SessionStart(compact) with a classic dispatch, then a second SessionStart for the same nonce: the first prints the block (<= 6,000 chars, DP-8; subagent line, [midturn] for trigger auto, @saved_copy@ pending (...)) and claims sessionstart; the second prints nothing",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -40,7 +40,7 @@
      }
     },
     "stdout_lines": 1,
-    "context_max_chars": 5000,
+    "context_max_chars": 6000,
     "context_contains": [
      "Subagent: skip step 3",
      "Compacted mid-turn or precomputed: the last step is [unverified].",

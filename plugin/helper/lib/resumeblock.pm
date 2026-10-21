@@ -1,12 +1,13 @@
 package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
 # resume-context.txt with [midturn]/[nonok], @session_id@, @saved_copy@,
-# @measured_at@, @remeasure@ (<= 3,000 B). Total <= 5,000 chars; no transcript path.
+# @measured_at@, @remeasure@ (<= 3,000 B). Total <= 6,000 chars (DP-8; was 5,000),
+# never over the 10,000-char SessionStart cutoff; no transcript path.
 # Owner: WP-core.
 use strict;
 use warnings;
 
-our $MAX_CHARS = 5000;
+our $MAX_CHARS = 6000;
 
 sub build {
     my (%a) = @_;
