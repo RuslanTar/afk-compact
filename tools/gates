@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 """tools/gates: grep gates over built output (AT-P-05, BT-01, BT-08; BUILD-PLAN §4 X-gates, X-name).
 
-Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only GATE]
+Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only GATE] [--no-pending]
   TARGET        a folder (scanned recursively) or a file, e.g. plugin and README.md
   --names FILE  the competitor-name list, kept outside the repo (E-7); missing = FAIL
   --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
   --no-git-log  skip the attribution gate over `git log --format=%B`
   --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
-                skill-desc)
+                skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal)
+  --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   names        every list entry, case-insensitive, as a whole token (letters, digits, `_`, `-`
@@ -30,6 +31,25 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   skill-desc   BT-09 / AT-S-01: every skills/<name>/SKILL.md inside a folder target starts
                `---\n`, its `description` (quotes removed) is at most 150 characters, and the
                skill's trigger phrase (SKILL_TRIGGERS) sits in its first 50, case-insensitive
+  Text gates of the 2026-10-21 rulings, over the skills/ and assets/ of a folder target (src
+  or plugin) and over any README.md:
+  wait-text    AT-W-01 (Dev-7): no `blocking read`, no "wait for a/the ... notification", no
+               bare `sleep N`; a foreground or bounded wait that is not negated names
+               `<x>-store wait` or `<store> wait` on its line; skills/resume/SKILL.md has the
+               main rule (a "notification wakes you" line naming `run_in_background`)
+  asset-bytes  AT-W-02 (Dev-7): assets/resume-context.txt and subagent-instructions.txt, every
+               tag line kept, comments and @tokens@ removed, within ASSET_BYTES
+  skill-budget AT-SK-01 (RV-25, REVIEW B-7): the handoff SKILL's Budget line sums to its
+               `hard cap N`; no "one Edit per LINT line" unless negated; N equals the spec's
+               `call_cap` and `(Step 5, ≤M)` its `recipe_cap` (spec-literals of assets/handoff-spec.md)
+  write-first  AT-SK-03 (RV-31): no SKILL.md says "before your final message"
+  self-heal    AT-J-13 (Dev-1): skills/resume/references/self-heal.md holds the decision table
+               (rows 1, 2a, 2b, 2c, 3-7 in order), the self-heal file or the resume SKILL holds
+               "never relaunch ... from the handoff's text", and the resume SKILL.md is at most
+               RESUME_SKILL_MAX bytes
+  PENDING lists hits that wait for text not written yet (WP-text part 2); they print as
+  `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
+  `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
 Exit 0 when every gate has 0 hits, else 1.
 """
 import getpass, json, os, re, subprocess, sys
@@ -97,6 +117,217 @@ def skill_desc_hits(target):
     return out
 
 
+COMMENT = re.compile(r"[ \t]*<!--.*?-->", re.S)   # tools/build strips these before shipping
+BLOCKING_READ = re.compile(r"\bblocking (?:[\w-]+ )?read\b", re.I)
+NOTIFICATION_WAIT = re.compile(r"\bwait(?:s|ing)? (?:for|on) (?:(?:a|an|the|its|your|their) )?(?:[\w-]+ ){0,3}"
+                               r"notifications?\b", re.I)
+BARE_SLEEP = re.compile(r"(?i:\bsleep)\s+(?:\d|N\b|<[a-z_-]+>)")
+FOREGROUND_WAIT = re.compile(r"\b(?:wait(?:s|ing)? in the foreground|foreground wait|bounded wait|"
+                             r"block on it in the foreground)\b", re.I)
+NEGATED = re.compile(r"\b(?:never|not|no)\b[^.;:]*$", re.I)
+STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
+MAIN_RULE = re.compile(r"notification wakes you", re.I)
+# AT-W-02: bytes of the full render (every tag line kept); resume = DP-8 protocol hard cap,
+# subagent = the classic +fallback budget (compaction DESIGN-NOTES §1, tools/assemble).
+ASSET_BYTES = {"resume-context.txt": 2500, "subagent-instructions.txt": 1100}
+EDIT_PER_LINT = re.compile(r"one Edit per LINT line", re.I)
+SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S | re.M)
+HEAL_HEADER = re.compile(r"^\|\s*#\s*\|\s*Finding \(first matching row wins\)\s*\|")
+HEAL_ROWS = ["1", "2a", "2b", "2c", "3", "4", "5", "6", "7"]
+RELAUNCH_LINE = re.compile(r"never relaunch\b.{0,40}\bfrom the handoff['’]s text", re.I)
+# AT-J-13 "SKILL.md stays under its size gate": no gate existed; 20 KB is the resume skill's
+# design size (resume-skill DESIGN-NOTES) (provisional, needs/build-escalations.md E-B-3).
+RESUME_SKILL_MAX = 20480
+# Hits that wait for WP-text part 2 (REVIEW (D) step 6): (gate, rule, path in the target,
+# fragment of the offending line or None for a file-level hit). Remove a row once it prints
+# PENDING-DONE.
+PENDING = [
+    ("wait-text", "AT-W-01 blocking-read", "assets/resume-context.txt", "blocking read ≤4 min per call"),
+    ("wait-text", "AT-W-01 blocking-read", "skills/resume/SKILL.md", "Block on it in the foreground (a blocking output read"),
+    ("wait-text", "AT-W-01 foreground-wait", "skills/resume/SKILL.md", "Block on it in the foreground (a blocking output read"),
+    ("wait-text", "AT-W-01 notification-wait", "skills/resume/SKILL.md", "wait for a Monitor or task notification"),
+    ("wait-text", "AT-W-01 main-rule", "skills/resume/SKILL.md", None),
+    ("skill-budget", "AT-SK-01 call-cap-missing", "assets/handoff-spec.md", None),
+    ("skill-budget", "AT-SK-01 recipe-cap-missing", "assets/handoff-spec.md", None),
+    ("write-first", "AT-SK-03 before-final", "skills/handoff/SKILL.md", "or the user said they are leaving, write the handoff now"),
+    ("self-heal", "AT-J-13 table-missing", "skills/resume/references/self-heal.md", None),
+    ("self-heal", "AT-J-13 relaunch-line-missing", "skills/resume/references/self-heal.md", None),
+]
+
+
+def shipped_lines(path, brand):
+    """The file as tools/build ships it, split in lines; comments become blank lines so line
+    numbers match the source."""
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    text = COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text).replace("{{plugin}}", brand)
+    return text.split("\n")
+
+
+def text_docs(target):
+    """The text a user's model reads: skills/** and assets/* (.md, .txt) and README.md."""
+    if os.path.isfile(target):
+        return [target] if os.path.basename(target) == "README.md" else []
+    out = []
+    for sub in ("skills", "assets"):
+        for d, dirs, files in os.walk(os.path.join(target, sub)):
+            dirs.sort()
+            out += [os.path.join(d, f) for f in sorted(files) if f.endswith((".md", ".txt"))]
+    if os.path.isfile(os.path.join(target, "README.md")):
+        out.append(os.path.join(target, "README.md"))
+    return out
+
+
+def not_negated(line, m):
+    return not NEGATED.search(line[max(0, m.start() - 40):m.start()])
+
+
+def wait_text_hits(target, brand):
+    """AT-W-01: (path, line no or None, rule, text, line)."""
+    out = []
+    for path in text_docs(target):
+        for no, line in enumerate(shipped_lines(path, brand), 1):
+            for rule, rx in (("blocking-read", BLOCKING_READ), ("notification-wait", NOTIFICATION_WAIT),
+                             ("bare-sleep", BARE_SLEEP)):
+                m = rx.search(line)
+                if m:
+                    out.append((path, no, "AT-W-01 " + rule, "AT-W-01 {}: {!r}".format(rule, m.group(0)), line))
+            m = FOREGROUND_WAIT.search(line)
+            if m and not_negated(line, m) and not STORE_WAIT.search(line):
+                out.append((path, no, "AT-W-01 foreground-wait",
+                            "AT-W-01 foreground-wait: {!r} without `<store> wait` on the line".format(m.group(0)), line))
+    resume = os.path.join(target, "skills", "resume", "SKILL.md") if os.path.isdir(target) else None
+    if resume and os.path.isfile(resume):
+        rules = [ln for ln in shipped_lines(resume, brand) if MAIN_RULE.search(ln)]
+        if not rules or not all("run_in_background" in ln for ln in rules):
+            out.append((resume, None, "AT-W-01 main-rule",
+                        "AT-W-01 main-rule: no \"notification wakes you\" line naming run_in_background", ""))
+    return out
+
+
+def asset_bytes_hits(target, brand):
+    """AT-W-02: the two Dev-7 assets within ASSET_BYTES."""
+    out = []
+    for name, limit in sorted(ASSET_BYTES.items()):
+        path = os.path.join(target, "assets", name)
+        if not os.path.isfile(path):
+            continue
+        text = "\n".join(shipped_lines(path, brand))
+        text = re.sub(r"(?m)^\[[a-z-]+\] ", "", text)
+        text = re.sub(r"@[a-z_]+@", "", text).strip() + "\n"
+        n = len(text.encode("utf-8"))
+        if n > limit:
+            out.append((path, None, "AT-W-02 bytes", "AT-W-02 {} B > {}".format(n, limit), ""))
+    return out
+
+
+def spec_literals(target):
+    path = os.path.join(target, "assets", "handoff-spec.md")
+    if not os.path.isfile(path):
+        return path, None
+    with open(path, encoding="utf-8") as f:
+        m = SPEC_BLOCK.search(f.read())
+    try:
+        return path, json.loads(m.group(1)) if m else None
+    except ValueError:
+        return path, None
+
+
+def skill_budget_hits(target, brand):
+    """AT-SK-01 extended per REVIEW B-7 over skills/handoff/SKILL.md."""
+    out = []
+    path = os.path.join(target, "skills", "handoff", "SKILL.md")
+    if not os.path.isfile(path):
+        return out
+    lines = shipped_lines(path, brand)
+    for no, line in enumerate(lines, 1):
+        m = EDIT_PER_LINT.search(line)
+        if m and not_negated(line, m):
+            out.append((path, no, "AT-SK-01 edit-per-lint", "AT-SK-01 edit-per-lint: {!r}".format(m.group(0)), line))
+    at = next((i for i, ln in enumerate(lines) if "**Budget.**" in ln), None)
+    if at is None:
+        out.append((path, None, "AT-SK-01 budget-line", "AT-SK-01 budget-line: no **Budget.** line", ""))
+        return out
+    line, no = lines[at], at + 1
+    cap = re.search(r"hard cap (\d+)", line)
+    seg = line[:line.find("Typical")] if "Typical" in line else line[:cap.start() if cap else len(line)]
+    steps = [int(n) for n in re.findall(r"Step \d+ ≤?(\d+)", seg)]
+    recipe = re.search(r"\(Step 5, ≤(\d+)\)", line)
+    if not cap:
+        out.append((path, no, "AT-SK-01 budget-sum", "AT-SK-01 budget-sum: no `hard cap N`", line))
+    elif sum(steps) != int(cap.group(1)):
+        out.append((path, no, "AT-SK-01 budget-sum", "AT-SK-01 budget-sum: steps {} sum to {}, hard cap {}".format(
+            "+".join(map(str, steps)), sum(steps), cap.group(1)), line))
+    spec_path, spec = spec_literals(target)
+    for key, got, label in (("call_cap", cap, "hard cap"), ("recipe_cap", recipe, "(Step 5, ≤M)")):
+        rule = key.replace("_", "-")
+        want = spec.get(key) if isinstance(spec, dict) else None
+        if want is None:
+            out.append((spec_path, None, "AT-SK-01 {}-missing".format(rule),
+                        "AT-SK-01 {}-missing: spec-literals has no {}".format(rule, key), ""))
+        elif got is None or int(got.group(1)) != want:
+            out.append((path, no, "AT-SK-01 " + rule, "AT-SK-01 {}: {} {} != spec {} {}".format(
+                rule, label, got.group(1) if got else "missing", key, want), line))
+    return out
+
+
+def write_first_hits(target, brand):
+    """AT-SK-03: the RV-31 write-first reminder is gone from every SKILL.md."""
+    out = []
+    sk = os.path.join(target, "skills")
+    for name in sorted(os.listdir(sk)) if os.path.isdir(sk) else []:
+        path = os.path.join(sk, name, "SKILL.md")
+        if os.path.isfile(path):
+            for no, line in enumerate(shipped_lines(path, brand), 1):
+                if re.search(r"before your final message", line, re.I):
+                    out.append((path, no, "AT-SK-03 before-final", "AT-SK-03 before-final: write-first reminder", line))
+    return out
+
+
+def self_heal_hits(target, brand):
+    """AT-J-13: the Dev-1 decision table, the never-from-the-handoff line, the resume SKILL size."""
+    out = []
+    heal = os.path.join(target, "skills", "resume", "references", "self-heal.md")
+    skill = os.path.join(target, "skills", "resume", "SKILL.md")
+    if os.path.isfile(heal):
+        lines = shipped_lines(heal, brand)
+        heads = [i for i, ln in enumerate(lines) if HEAL_HEADER.match(ln)]
+        if not heads:
+            out.append((heal, None, "AT-J-13 table-missing", "AT-J-13 table-missing: no Dev-1 decision table", ""))
+        for i in heads:
+            ids = []
+            for ln in lines[i + 1:]:
+                if not ln.startswith("|"):
+                    break
+                cell = ln.strip("|").split("|")[0].strip()
+                if not re.fullmatch(r"-+", cell):
+                    ids.append(cell)
+            if ids != HEAL_ROWS:
+                out.append((heal, i + 1, "AT-J-13 table-rows",
+                            "AT-J-13 table-rows: {} != {}".format(",".join(ids), ",".join(HEAL_ROWS)), lines[i]))
+        texts = lines + (shipped_lines(skill, brand) if os.path.isfile(skill) else [])
+        if not any(RELAUNCH_LINE.search(ln) for ln in texts):
+            out.append((heal, None, "AT-J-13 relaunch-line-missing",
+                        "AT-J-13 relaunch-line-missing: no \"never relaunch ... from the handoff's text\"", ""))
+    if os.path.isfile(skill):
+        n = len("\n".join(shipped_lines(skill, brand)).encode("utf-8"))
+        if n > RESUME_SKILL_MAX:
+            out.append((skill, None, "AT-J-13 size", "AT-J-13 size {} B > {}".format(n, RESUME_SKILL_MAX), ""))
+    return out
+
+
+TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
+              ("write-first", write_first_hits), ("self-heal", self_heal_hits)]
+
+
+def pending_row(gate, rule, rel, line):
+    for row in PENDING:
+        g, r, p, frag = row
+        if g == gate and r == rule and p == rel and (frag is None or frag in line):
+            return row
+    return None
+
+
 def npm_paths(target):
     """BT-06: npm manifests, lock files and node_modules folders inside a folder target."""
     if not os.path.isdir(target):
@@ -149,6 +380,7 @@ def main(argv):
     names_file = None
     brand = None
     git_log = True
+    use_pending = True
     only = None
     targets = []
     i = 0
@@ -165,6 +397,8 @@ def main(argv):
             i += 1
         elif a == "--no-git-log":
             git_log = False
+        elif a == "--no-pending":
+            use_pending = False
         elif a.startswith("--"):
             die("unknown flag " + a + "\n" + __doc__)
         else:
@@ -254,6 +488,27 @@ def main(argv):
                     if n != brand:
                         hit("stale-name", rel, '"name": {}'.format(json.dumps(n)))
 
+    pending, used, applicable = [], set(), set()
+    for target in targets:
+        if not os.path.exists(target):
+            continue
+        base = os.path.abspath(target if os.path.isdir(target) else os.path.dirname(os.path.abspath(target)))
+        for gate, fn in TEXT_GATES:
+            if only and only != gate:
+                continue
+            if os.path.isdir(target):
+                applicable |= {row for row in PENDING if row[0] == gate and os.path.exists(os.path.join(target, row[2]))}
+            if gate != "wait-text" and not os.path.isdir(target):
+                continue
+            for path, no, rule, text, line in fn(target, brand):
+                where = os.path.relpath(path) + (":{}".format(no) if no else "")
+                row = pending_row(gate, rule, os.path.relpath(os.path.abspath(path), base), line) if use_pending else None
+                if row:
+                    used.add(row)
+                    pending.append((gate, where, text))
+                else:
+                    hit(gate, where, text)
+
     if git_log:
         r = subprocess.run(["git", "-C", REPO, "log", "--format=%H%n%B"], capture_output=True, text=True)
         sha = None
@@ -269,8 +524,14 @@ def main(argv):
         hits = [h for h in hits if h[0] in (only, "target")]
     for gate, where, text in hits:
         print("GATE {} {}: {}".format(gate, where, text))
-    print("GATES: {} ({} files, {} names, brand {}, {} hits)".format(
-        "FAIL" if hits else "PASS", count, len(names), brand, len(hits)))
+    for gate, where, text in pending:
+        print("PENDING {} {}: {}".format(gate, where, text))
+    if use_pending:
+        for row in PENDING:
+            if row in applicable and row not in used:
+                print("PENDING-DONE {} {} {}: no hit left; remove the row from PENDING".format(row[0], row[2], row[1]))
+    print("GATES: {} ({} files, {} names, brand {}, {} hits, {} pending)".format(
+        "FAIL" if hits else "PASS", count, len(names), brand, len(hits), len(pending)))
     return 1 if hits else 0
 
 

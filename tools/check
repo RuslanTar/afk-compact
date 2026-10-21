@@ -22,8 +22,11 @@ the tool reports every one, while the unplanted copy passes the same command: CR
 in GEN files (tools/build, helper-replies-gen, canary-baseline, assemble), stray files where
 only GEN tools write, other candidate names inside longer words, npm manifests or
 node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md
-description over the BT-09 rule, a cross-WP `git mv` (owners-check) and a checkout with
-core.autocrlf=true without the repo's .gitattributes (the launcher must keep LF and run).
+description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
+AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
+self-heal table and resume SKILL size), a resume protocol over its DP-8 hard cap (assemble),
+a cross-WP `git mv` (owners-check) and a checkout with core.autocrlf=true without the repo's
+.gitattributes (the launcher must keep LF and run).
 
 BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
@@ -253,6 +256,45 @@ def probes(name):
         t = re.sub(r"(?m)^description:.*$", "description: " + desc, t, count=1)
         write_text(p, t)
 
+    def append(d, rel, text):
+        write_text(os.path.join(d, *rel.split("/")), text, "a")
+
+    def wait_text(d):
+        append(d, "plugin/assets/subagent-instructions.txt",
+               "Subagent: do a blocking read of the output, run sleep 30, then wait for the task notification.\n")
+        append(d, "plugin/skills/handoff/SKILL.md", "\nWait in the foreground until the job ends.\n")
+
+    def asset_grow(d):
+        append(d, "plugin/assets/resume-context.txt", "x" * 600 + "\n")
+        append(d, "plugin/assets/subagent-instructions.txt", "y" * 200 + "\n")
+
+    def budget_drift(d):
+        p = os.path.join(d, "plugin", "skills", "handoff", "SKILL.md")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t = re.sub(r"Step 2 ≤\d+", "Step 2 ≤13", t, count=1)
+        write_text(p, t + "\n- `LINT` → one Edit per LINT line, then publish again.\n")
+        p = os.path.join(d, "plugin", "assets", "handoff-spec.md")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        m = re.search(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", t, re.S | re.M)
+        spec = json.loads(m.group(1))
+        spec.update({"call_cap": 30, "recipe_cap": 9})
+        write_text(p, t[:m.start(1)] + json.dumps(spec, indent=2, ensure_ascii=False) + t[m.end(1):])
+
+    def write_first(d):
+        append(d, "plugin/skills/handoff/SKILL.md",
+               "\nIf the turn ends with a question, write the handoff before your final message.\n")
+
+    def self_heal(d):
+        append(d, "plugin/skills/resume/SKILL.md", "\n" + "z" * 4000 + "\n")
+        rows = ["| # | Finding (first matching row wins) | Status | Same session or successor | Other relation |",
+                "|---|---|---|---|---|"] + ["| {} | f | s | a | b |".format(r) for r in ("1", "2a", "2b", "3", "4", "5", "6", "7")]
+        append(d, "plugin/skills/resume/references/self-heal.md", "\n" + "\n".join(rows) + "\n")
+
+    def resume_hard(d):
+        append(d, "src/assets/resume-context.txt", "x" * 600 + "\n")
+
     def owners_prep(d):
         git_repo(d)
         git_in(d, "checkout", "-q", "-b", "wp/skills")
@@ -317,6 +359,23 @@ def probes(name):
         ("skill-desc", "BH-3", gates_only("skill-desc"), long_desc,
          [r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: description \d+ chars > 150$",
           r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: trigger 'handoff' not in the first 50 chars$"], None),
+        ("wait-text", "AT-W-01", gates_only("wait-text"), wait_text,
+         [r"^GATE wait-text plugin/assets/subagent-instructions\.txt:\d+: AT-W-01 " + r for r in
+          ("blocking-read", "bare-sleep", "notification-wait")]
+         + [r"^GATE wait-text plugin/skills/handoff/SKILL\.md:\d+: AT-W-01 foreground-wait"], None),
+        ("asset-bytes", "AT-W-02", gates_only("asset-bytes"), asset_grow,
+         [r"^GATE asset-bytes plugin/assets/resume-context\.txt: AT-W-02 \d+ B > 2500$",
+          r"^GATE asset-bytes plugin/assets/subagent-instructions\.txt: AT-W-02 \d+ B > 1100$"], None),
+        ("skill-budget", "AT-SK-01", gates_only("skill-budget"), budget_drift,
+         [r"^GATE skill-budget plugin/skills/handoff/SKILL\.md:\d+: AT-SK-01 " + r for r in
+          ("budget-sum", "edit-per-lint", "call-cap", "recipe-cap")], None),
+        ("write-first", "AT-SK-03", gates_only("write-first"), write_first,
+         [r"^GATE write-first plugin/skills/handoff/SKILL\.md:\d+: AT-SK-03 before-final"], None),
+        ("self-heal", "AT-J-13", gates_only("self-heal"), self_heal,
+         [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 20480$",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows"], None),
+        ("resume-hard", "DP-8", ["tools/assemble"], resume_hard,
+         [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
         ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
         ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,
