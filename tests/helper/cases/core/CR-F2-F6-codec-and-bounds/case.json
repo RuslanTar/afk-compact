@@ -1,0 +1,8 @@
+{
+ "id": "CR-F2-F6-codec-and-bounds",
+ "note": "CR-F2 (SR 1.1): jsonc::encode_bytes and log::append give every string once as UTF-8, a byte literal such as the measured block's `·`, a path held as bytes and a character string alike, in one row; bytes that are not UTF-8 are taken as Latin-1 so the row stays valid UTF-8; U+2028 is escaped. CR-F6: repomode::exports stops reading at its entry bound: with the bound at 7, a tree of 4 topic folders of 5 exports reads 7 entries from 2 folders, not every folder",
+ "steps": [
+  {"name": "encode_bytes and log::append", "lib": "jsonc_bytes", "args": {"dir": "$TMP/rows"}},
+  {"name": "the exports walk stops at the bound", "lib": "exports_bound", "args": {"dir": "$TMP/exp", "topics": 4, "files": 5, "max": 7, "max_reads": 2}}
+ ]
+}

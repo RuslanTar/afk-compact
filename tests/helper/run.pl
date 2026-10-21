@@ -36,7 +36,8 @@
 #     (+ subst: true fills the placeholders in the copied text)
 #   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
-#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it)
+#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "nocase-fs" skips
+#     where the temp folder is case-sensitive)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -225,7 +226,7 @@ for my $cf (@CASES) {
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
                       || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv")
-                      || ($_ eq 'types' && !-f types_file()) } @{ $case->{needs} || [] };
+                      || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs()) } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -903,6 +904,14 @@ sub _libs {
     $LIBS_READY = 1;
 }
 
+# nocase_fs() -> 1 when the system temp folder (where the cases run) ignores letter case
+# (macOS default APFS): a case "needs": ["nocase-fs"] skips elsewhere.
+sub nocase_fs {
+    my $d = $RUN_TMP // ($ENV{TMPDIR} || "/tmp");
+    my $u = uc $d;
+    return ($u ne $d && -d $u) ? 1 : 0;
+}
+
 sub builtin {
     my ($name, $a, $cdir) = @_;
     _libs();
@@ -1317,6 +1326,72 @@ sub builtin {
         my $want = join(',', sort @{ $a->{expect} || [] });
         my $got = join(',', sort @live);
         push @e, "live peers [$got], want [$want]" unless $got eq $want;
+        return @e;
+    }
+    if ($name eq 'repo_check') {
+        # CR-F1: roots::repo_check(top, root) for each root of `cases` -> 'ok' or the reason
+        my $c = $a->{cases} || {};
+        for my $root (sort keys %$c) {
+            my $r = roots::repo_check($a->{top}, $root);
+            my $got = $r->{ok} ? 'ok' : $r->{reason};
+            push @e, "repo_check $root: $got, want $c->{$root}" unless $got eq $c->{$root};
+        }
+        return @e;
+    }
+    if ($name eq 'exports_bound') {
+        # CR-F6: repomode::exports reads no folder entry past $EXPORTS_MAX in all. The tree
+        # `dir` holds `topics` topic folders of `files` exports each.
+        require "repomode.pm";
+        my $d = $a->{dir};
+        for my $t (1 .. $a->{topics}) {
+            util::mkdir_p("$d/t$t");
+            util::write_atomic("$d/t$t/e$_.md", "x\n") for 1 .. $a->{files};
+        }
+        my $all = repomode::exports($d);
+        my $want_all = $a->{topics} * $a->{files};
+        push @e, "exports without the bound: $all, want $want_all" unless $all == $want_all;
+        no warnings qw(once redefine);
+        my $orig = \&util::list_dir_max;
+        my ($reads, $entries) = (0, 0);
+        local *util::list_dir_max = sub { $reads++; my @x = $orig->(@_); $entries += @x; return @x };
+        local $repomode::EXPORTS_MAX = $a->{max};
+        my $n = repomode::exports($d);
+        push @e, "entries read $entries, want at most $a->{max}" if $entries > $a->{max};
+        push @e, "folders read $reads, want at most $a->{max_reads}" if $reads > $a->{max_reads};
+        push @e, "exports under the bound: $n, want fewer than $want_all" unless $n < $want_all;
+        return @e;
+    }
+    if ($name eq 'jsonc_bytes') {
+        # CR-F2: encode_bytes gives every string once as UTF-8, whether it came in as
+        # characters or as bytes; log::append writes the same bytes.
+        my $mid = "\xc2\xb7";                                  # `·` as a byte literal (no `use utf8`)
+        my $chars = "\x{414}ok";                               # a character string
+        my $path = "/Users/r/\x{414}ok/h";
+        utf8::encode($path);                                   # a path as bytes
+        my $latin = "caf\xe9";                                 # bytes that are not UTF-8
+        my $obj = jsonc::obj(m => "a ${mid} b", c => $chars, p => $path, l => $latin, n => 42, u => "\x{2028}", "k\x{414}" => 1);
+        my $out = jsonc::encode_bytes($obj);
+        push @e, 'encode_bytes returned a character string' if utf8::is_utf8($out);
+        my $back = eval { jsonc::decode($out) };
+        if (ref $back ne 'HASH') { return (@e, "encode_bytes output does not decode: $@") }
+        my $want_mid = "a \x{b7} b";
+        my $want_path = "/Users/r/\x{414}ok/h";
+        my %want = (m => $want_mid, c => "\x{414}ok", p => $want_path, l => "caf\x{e9}", u => "\x{2028}");
+        for my $k (sort keys %want) {
+            my $g = $back->{$k} // '';
+            utf8::decode($g) unless utf8::is_utf8($g);
+            push @e, "$k: " . join(' ', map { sprintf 'U+%04X', ord } split //, $g) . ' after the round trip' unless $g eq $want{$k};
+        }
+        push @e, 'number came back as ' . ($back->{n} // 'null') unless ($back->{n} // '') eq '42';
+        push @e, 'non-ASCII key lost' unless exists $back->{"k\x{414}"};
+        push @e, 'U+2028 not escaped' unless index($out, '\\u2028') >= 0;
+        # a mixed row written by log::append comes back the same
+        my $f = "$a->{dir}/rows.jsonl";
+        util::mkdir_p($a->{dir});
+        log::append($f, $obj);
+        my $line = util::read_file($f) // '';
+        $line =~ s/\n\z//;
+        push @e, 'log::append wrote other bytes than encode_bytes' unless $line eq $out;
         return @e;
     }
     return ("unknown builtin $name");

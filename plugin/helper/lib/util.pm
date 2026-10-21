@@ -334,6 +334,22 @@ sub list_dir {
     return sort @e;
 }
 
+# list_dir_max(dir, max) -> at most max entries of dir (no . or ..), in readdir order;
+# reading stops at max, so a huge folder costs no more than the bound.
+sub list_dir_max {
+    my ($dir, $max) = @_;
+    return () unless defined $max && $max > 0;
+    opendir(my $dh, $dir) or return ();
+    my @e;
+    while (defined(my $x = readdir $dh)) {
+        next if $x eq '.' || $x eq '..';
+        push @e, $x;
+        last if @e >= $max;
+    }
+    closedir $dh;
+    return @e;
+}
+
 # ---------------------------------------------------------------- processes
 
 sub which {
