@@ -202,3 +202,13 @@ test('small helpers: token format, question end, temp paths', () => {
   ])
   expect(tempPaths({ command: 'cat repo/src/main.ts' })).toEqual([])
 })
+
+test('detector: an s=sub marker with the main Resume here heading in a subagent-proven compaction is scope-leak (MOD-SPEC 5.1, corpus 41)', () => {
+  const name = 'x'.repeat(14)
+  const text = '<summary>\n' + markerText(name, '5e6f7081', 'sub') + '\n## Task as assigned\nfind callers\n## Resume here\nStatus: active\n' +
+    sentinelText(name, '5e6f7081') + '\n</summary>'
+  expect(detectSummary(text, name, { dispatchNonce: '5e6f7081', scope: 'sub' }).verdict).toBe('scope-leak')
+  expect(detectSummary(text, name, { dispatchNonce: '5e6f7081', scope: 'main' }).verdict).toBe('scope-leak')
+  const noHeading = text.replace('## Resume here\nStatus: active\n', '')
+  expect(detectSummary(noHeading, name, { dispatchNonce: '5e6f7081', scope: 'sub' }).verdict).toBe('ok')
+})

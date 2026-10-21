@@ -18,17 +18,24 @@ export function failClass(r: RunResult): string {
   return r.exitCode === null ? 'rejected' : 'exit-' + String(r.exitCode)
 }
 
-export type Ident = { pid: number | null; pid_lstart: string | null }
+/**
+ * `watch`: the helper's effective log folder after its unsafe-root checks (MOD-SPEC §1.2), null
+ * when every candidate was refused, undefined when the reply has no such key.
+ */
+export type Ident = { pid: number | null; pid_lstart: string | null; watch?: string | null }
 
 export async function ident(d: Deps, sid: string): Promise<Ident | undefined> {
   const r = await call(d, ['ident', '--sid', sid])
   if (!r.ok) return undefined
   try {
-    const j = JSON.parse(r.stdout.trim()) as { pid?: unknown; pid_lstart?: unknown }
-    return {
+    const j = JSON.parse(r.stdout.trim()) as { pid?: unknown; pid_lstart?: unknown; watch?: unknown }
+    const id: Ident = {
       pid: typeof j.pid === 'number' ? j.pid : null,
       pid_lstart: typeof j.pid_lstart === 'string' ? j.pid_lstart : null,
     }
+    if (j.watch === null) id.watch = null
+    else if (typeof j.watch === 'string' && j.watch.startsWith('/')) id.watch = j.watch
+    return id
   } catch {
     return undefined
   }
@@ -156,8 +163,11 @@ export async function claim(d: Deps, sid: string, nonce: string, channel: 'promp
   return 'failed'
 }
 
-/** The re-measure block (`measure --sid --compact`), or undefined. */
-export async function measure(d: Deps, sid: string): Promise<string | undefined> {
-  const r = await call(d, ['measure', '--sid', sid, '--compact'], CHECKPOINT_MS)
+/**
+ * The re-measure block (`measure --sid --compact --nonce N`), or undefined. The nonce makes the
+ * evidence map this compaction's (its checkpoint, else its own sweep), never a newer one's.
+ */
+export async function measure(d: Deps, sid: string, nonce?: string): Promise<string | undefined> {
+  const r = await call(d, ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : [])], CHECKPOINT_MS)
   return r.ok ? r.stdout.replace(/\s+$/, '') : undefined
 }

@@ -7,7 +7,7 @@ import { onTurnComplete } from './lib/boundary'
 import { onCompact } from './lib/compact'
 import { newState, realDeps } from './lib/deps'
 import { randomHex } from './lib/nonce'
-import { ASK_TOOL, nudgeText, recordPaths } from './lib/nudge'
+import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { blockName, contextBlock } from './lib/resume'
 
 export const register: Register = (on, options) => {
@@ -42,9 +42,11 @@ export const register: Register = (on, options) => {
       state.askOpen++
       state.askedThisTurn = true
     }
+    // The temp paths of this call are recorded beside it, never before it: the tool does not
+    // wait for the helper (one spawn per new path), and nothing is recorded with auto_evidence off.
+    if (d.cfg.auto_evidence) trackPaths(state, recordPaths(d, sid, String(e.tool), e as unknown as Record<string, unknown>))
     let r
     try {
-      await recordPaths(d, sid, String(e.tool), e as unknown as Record<string, unknown>)
       r = await next(e)
     } finally {
       if (isAsk) state.askOpen--

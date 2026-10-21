@@ -60,6 +60,13 @@ export function tempPaths(input: Record<string, unknown>, seen: (p: string) => b
   return found
 }
 
+/** Keeps a background `recordPaths` run where a test can await it; its failure is swallowed. */
+export function trackPaths(state: Deps['state'], run: Promise<void>): void {
+  const safe = run.catch(() => undefined)
+  const prev = state.pathsInflight
+  state.pathsInflight = prev ? Promise.all([prev, safe]) : safe
+}
+
 /** Appends the cited temp paths to `<watch>/<sid>/paths.jsonl` (`log --stream paths`). */
 export async function recordPaths(d: Deps, sid: string, tool: string, input: Record<string, unknown>): Promise<void> {
   const seen = d.state.recordedPaths

@@ -54,7 +54,7 @@ export type LoadState = {
   loadId: string
   initDone: boolean
   eff: Effective | undefined
-  ident: { pid: number | null; pid_lstart: string | null } | undefined
+  ident: { pid: number | null; pid_lstart: string | null; watch?: string | null } | undefined
   ccVersion: string | null
   helperMissingLogged: boolean
   /** Main turn bookkeeping. */
@@ -93,7 +93,9 @@ export type LoadState = {
   recordedPaths: Set<string>
   /** Background work a test awaits (boundary runs from a timer). */
   inflight: Promise<unknown> | undefined
-  /** `<root>`/`<watch>`, resolved once per load. */
+  /** Temp-path recording running beside the tool calls (nudge.ts trackPaths). */
+  pathsInflight: Promise<unknown> | undefined
+  /** `<root>`/`<watch>` from the options, resolved once per load (see `paths()`). */
   pathsMemo: Promise<Paths | undefined> | undefined
   /** Main compactions per session id (the fourth-compaction toast). */
   mainCompactionsSid: string | null
@@ -143,6 +145,7 @@ export function newState(loadId: string): LoadState {
     keysetLoggedFor: new Set(),
     recordedPaths: new Set(),
     inflight: undefined,
+    pathsInflight: undefined,
     pathsMemo: undefined,
     mainCompactionsSid: null,
     toasted: new Set(),
@@ -230,9 +233,21 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
           return paths(cfg, home)
         })()
       }
-      return state.pathsMemo
+      return state.pathsMemo.then(p => withHelperWatch(p, state.ident))
     },
   }
+}
+
+/**
+ * The mod writes where the helper does (MOD-SPEC §1.2 unsafe roots): the helper's effective watch
+ * from `ident` when it gave one, nothing at all when it refused every log folder (null), and the
+ * folders from the options only while no helper answer is known (the helper-missing fallback).
+ */
+export function withHelperWatch(p: Paths | undefined, id: LoadState['ident']): Paths | undefined {
+  const w = id?.watch
+  if (w === undefined || p === undefined) return p
+  if (w === null) return undefined
+  return { root: p.root, watch: w.replace(/\/+$/, '') }
 }
 
 export function errText(err: unknown): string {

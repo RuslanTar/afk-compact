@@ -213,3 +213,53 @@ test('AT-M5-06: full mod lifecycle under an fs trace: no pin write; every write 
   }
   expect(w.writes.some(p => p.startsWith(HOME + '/.claude/handoffs/.watch/'))).toBe(true)
 })
+
+test('unsafe roots: ident watch null (every log folder refused): the mod writes no file at all', async ($, on) => {
+  const w = new World().install(on)
+  w.identWatch = null
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(w.callsOf('ident').length).toBe(1)
+  expect(w.writes).toEqual([])
+})
+
+test('unsafe roots: the mod writes under the watch folder ident gives, not the configured one', async ($, on) => {
+  const w = new World().install(on)
+  const other = HOME + '/.claude/handoffs-default/.watch'
+  w.identWatch = other
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(w.writes.length).toBeGreaterThan(0)
+  expect(w.writes.filter(p => !p.startsWith(other + '/'))).toEqual([])
+  expect(w.files.has(`${other}/${SID_A}/mod-alive.json`)).toBe(true)
+  expect(w.writes.some(p => p.startsWith(`${other}/${SID_A}/pending/`))).toBe(true)
+})
+
+test('tool.call: the tool starts before its temp paths are recorded (no helper spawn ahead of the tool)', async ($, on) => {
+  const w = new World().install(on)
+  let atStart = -1
+  w.toolAnswer = () => {
+    atStart = w.pathRows.length
+    return { result: {} }
+  }
+  await w.start($)
+  await w.turnStart($)
+  await $.tool.call({ tool: 'Bash', command: 'tail -n 20 /tmp/build.log' } as never)
+  expect(atStart).toBe(0)
+  await w.settle()
+  expect(w.pathRows.map(r => r.path)).toEqual(['/tmp/build.log'])
+})
+
+test('tool.call: auto_evidence off records no temp paths', { options: { auto_evidence: false } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.turnStart($)
+  await $.tool.call({ tool: 'Bash', command: 'tail -n 20 /tmp/build.log' } as never)
+  await w.settle()
+  expect(w.pathRows).toEqual([])
+  expect(w.callsOf('log').filter(c => c.args.includes('paths')).length).toBe(0)
+})

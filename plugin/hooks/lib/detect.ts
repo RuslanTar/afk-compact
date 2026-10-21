@@ -143,7 +143,7 @@ export function detectSummary(raw: string, plugin: string, ctx: DetectContext = 
     if (ctx.precomputed) return 'stale'
     if (nonce !== null && ctx.noDispatch) return 'stale'
     if (nonce !== null && ctx.dispatchNonce !== undefined && nonce !== ctx.dispatchNonce) return 'stale'
-    if (ctx.scope === 'sub' && (scope === 'main' || (scope === null && hasResumeHeading()))) return 'scope-leak'
+    if (ctx.scope === 'sub' && (scope === 'main' || hasResumeHeading())) return 'scope-leak'
     if (ctx.scope === 'main' && scope === 'sub') return 'scope-leak'
     if (nonce === null) return 'unshaped'
     if (sentinelFromEnd === null || sentinelNonce !== nonce) return 'truncated'

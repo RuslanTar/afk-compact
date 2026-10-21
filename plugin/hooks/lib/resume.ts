@@ -11,6 +11,8 @@ import { escalate, helperMissing, isoLocal, log } from './log'
 export const BLOCK_MAX = 5000
 
 export type BlockArgs = {
+  /** This compaction's dispatch nonce (the re-measure reads its evidence). */
+  nonce?: string
   midturn: boolean
   nonok: boolean
   /** Path of this compaction's copy, or null with `notSaved` as the reason. */
@@ -22,7 +24,7 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs): Promise<st
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
-  const remeasure = await measure(d, sid)
+  const remeasure = await measure(d, sid, a.nonce)
   const measuredAt = isoLocal(await d.now(), false)
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const runtime = { session_id: sid, saved_copy: saved, measured_at: measuredAt }

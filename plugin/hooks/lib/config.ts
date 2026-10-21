@@ -16,6 +16,7 @@ export type Config = {
   cooldown_ms: number
   max_auto_continues_per_hour: number
   measured_block: boolean
+  auto_evidence: boolean
   warn_ui: boolean
 }
 
@@ -31,6 +32,7 @@ export const DEFAULTS: Config = {
   cooldown_ms: 30000,
   max_auto_continues_per_hour: 3,
   measured_block: false,
+  auto_evidence: true,
   warn_ui: true,
 }
 
@@ -72,6 +74,7 @@ export function parseOptions(o: PluginOptions): Config {
     cooldown_ms: num(o, 'cooldown_ms', DEFAULTS.cooldown_ms),
     max_auto_continues_per_hour: Math.max(0, Math.min(10, Math.floor(num(o, 'max_auto_continues_per_hour', DEFAULTS.max_auto_continues_per_hour)))),
     measured_block: bool(o, 'measured_block', DEFAULTS.measured_block),
+    auto_evidence: bool(o, 'auto_evidence', DEFAULTS.auto_evidence),
     warn_ui: bool(o, 'warn_ui', DEFAULTS.warn_ui),
   }
 }
