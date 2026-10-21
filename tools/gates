@@ -147,8 +147,6 @@ PENDING = [
     ("wait-text", "AT-W-01 foreground-wait", "skills/resume/SKILL.md", "Block on it in the foreground (a blocking output read"),
     ("wait-text", "AT-W-01 notification-wait", "skills/resume/SKILL.md", "wait for a Monitor or task notification"),
     ("wait-text", "AT-W-01 main-rule", "skills/resume/SKILL.md", None),
-    ("skill-budget", "AT-SK-01 call-cap-missing", "assets/handoff-spec.md", None),
-    ("skill-budget", "AT-SK-01 recipe-cap-missing", "assets/handoff-spec.md", None),
     ("write-first", "AT-SK-03 before-final", "skills/handoff/SKILL.md", "or the user said they are leaving, write the handoff now"),
     ("self-heal", "AT-J-13 table-missing", "skills/resume/references/self-heal.md", None),
     ("self-heal", "AT-J-13 relaunch-line-missing", "skills/resume/references/self-heal.md", None),

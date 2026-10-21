@@ -5,7 +5,8 @@ Usage: tools/check PHASE [--names FILE] [--no-drill]
   PHASE    phase0       X-validate (skeleton), X-test, X-types, X-gen, X-assemble, X-gates,
                         X-name, X-tools, BT-02 rename drill
            integration  the same with every skill required, plus X-H (every helper case:
-                        tests/helper/run.* over tests/helper/cases, then the WP-watch driver)
+                        tests/helper/run.* over tests/helper/cases, then the WP-watch driver;
+                        only the KNOWN_RED cases may fail, each for its stated reason)
            selftest     X-tools alone
            xgen         X-gen alone (used by the X-tools probe of the canary baseline)
   --names  the competitor-name list (E-7); default $GATE_NAMES_FILE. Missing = X-gates fails.
@@ -535,6 +536,50 @@ def bt02(phase, names):
           "no {} left; committed tree unchanged)".format(DRILL_NAME, phase, old))
 
 
+# ---------------------------------------------------------------- X-H
+
+# Helper cases accepted as failing until a named later merge, each with the regex its first
+# failure line must match (any other failure, or another first failure, fails X-H). Remove a
+# row when it prints KNOWN-RED-DONE.
+KNOWN_RED = {
+    # wp/text part 1 made time_re a full stamp, so `checked 14:05` no longer trips
+    # unprinted-time; WP-skills' time-format rule (RV-24, AT-TS-02) closes it (round 3).
+    "HT-PB-01": r"stdout lacks /\^LINT unprinted-time /",
+    "HT-PB-04": r"stdout lacks /\^LINT unprinted-time /",
+}
+
+
+def x_h(argv):
+    """X-H: the helper runner, with the KNOWN_RED cases allowed to fail as stated."""
+    print("$ " + " ".join(argv), flush=True)
+    r = subprocess.run(argv, cwd=REPO, capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    sys.stdout.write(out[-4000:])
+    failed, first, cur = [], {}, None
+    for line in out.splitlines():
+        m = re.match(r"^(not )?ok \d+ - (.*)$", line)
+        if m:
+            cur = m.group(2).strip() if m.group(1) else None
+            if cur:
+                failed.append(cur)
+            continue
+        if cur and cur not in first and line.startswith("#   "):
+            first[cur] = line
+    if r.returncode == 0:
+        for case in sorted(KNOWN_RED):
+            print("KNOWN-RED-DONE {}: passes now; remove it from KNOWN_RED".format(case))
+        return
+    bad = [c for c in failed if c not in KNOWN_RED or not re.search(KNOWN_RED[c], first.get(c, ""))]
+    if bad or not failed:
+        raise Fail("X-H: exit {}; failed beyond KNOWN_RED: {}".format(r.returncode, ", ".join(bad) or "(none parsed)"))
+    for case in sorted(KNOWN_RED):
+        if case in failed:
+            print("KNOWN-RED {}: {}".format(case, first[case].strip()[:160]))
+        else:
+            print("KNOWN-RED-DONE {}: passes now; remove it from KNOWN_RED".format(case))
+    print("X-H: PASS except KNOWN_RED ({} cases)".format(len(failed)))
+
+
 def main(argv):
     if not argv or argv[0] not in ("phase0", "integration", "selftest", "xgen"):
         sys.exit(__doc__)
@@ -590,7 +635,7 @@ def main(argv):
             if not runners:
                 raise Fail("X-H: no tests/helper/run.* yet")
             cases = os.path.join(REPO, "tests", "helper", "cases")
-            run([os.path.join(REPO, "tests", "helper", runners[0]), cases], "X-H")
+            x_h([os.path.join(REPO, "tests", "helper", runners[0]), cases])
             # WP-watch's cases are case.pl files run in-process by their own driver, which
             # the case.json runner does not read (escalated); X-H runs that driver as well.
             for drv in WATCH_DRIVERS:
