@@ -69,12 +69,15 @@ sub run {
         }
         my $s = detect::scan($text);
         my $mn = $nonce // $m{nonce} // $s->{nonce};
-        my $drec = defined $mn ? $disp{$mn} : (defined $m{deferred} ? $disp{ $m{deferred} } : undef);
-        # a deferred stash belongs to its pending mod dispatch: save it under that nonce
+        # P1 (MOD-SPEC §2.4): the record of the nonce in the mod stash name or the summary marker
+        my $p1 = defined $mn ? $disp{$mn} : undef;
+        my $drec = $p1 // (defined $m{deferred} ? $disp{ $m{deferred} } : undef);
+        # a deferred stash is named under its pending mod dispatch (as the after-step would
+        # save it), but that dispatch is no scope proof: the scope stays the stash's own
         if (!defined $mn && $drec && dispatch::is_mod($drec)) { $mn = $drec->{nonce} }
         my $scope = $m{scope} // 'unknown';
-        if ($drec && dispatch::is_mod($drec)) { $scope = defined $drec->{agent_id} ? 'sub' : 'main' }
-        my $agent = $m{agent} // ($drec ? $drec->{agent_id} : undef);
+        if ($p1 && dispatch::is_mod($p1)) { $scope = defined $p1->{agent_id} ? 'sub' : 'main' }
+        my $agent = $m{agent} // ($p1 ? $p1->{agent_id} : undef);
         my $exists = defined $mn && $copied{ 'n:' . $mn };
         next if $exists;
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn,

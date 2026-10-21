@@ -1,0 +1,319 @@
+{
+ "id": "M4-defer-open-only",
+ "note": "MOD-SPEC §2.4 (P1 is the record of the nonce found in the summary or custom_instructions), §5.3 step 2, §5.4, §6 (unknown scope -> compact/unattributed/): (a) a mod-self dispatch whose $.session.compact got no compaction, followed by a seated PreCompact fallback: the unmarked summary is not deferred to the mod dispatch, it is saved now as unattributed, and the mod dispatch is later compaction_unresolved; (b) a mod dispatch the mod logged as compact_rejected is neither deferred to nor time-joined; (c) a deferred stash with no scope proof is saved late under the dispatch nonce in unattributed/, not promoted to the main slot",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "(a) rejected mod-self dispatch, then a seated PreCompact fallback",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "5e1f0001",
+      "actor": "main",
+      "channel": "mod-self",
+      "trigger": "plugin",
+      "age_s": 60,
+      "resume_pref": "sessionstart"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "(a) PostCompact, unmarked summary: saved now, no defer to the older mod dispatch",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n1. Primary Request and Intent: keep going\n2. Key Technical Concepts: none\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "unattributed",
+       "slot": "unattributed"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_${SID8}_h*.md",
+      "count": 1,
+      "frontmatter": {
+       "actor": "unknown",
+       "channel": "classic"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(a) Stop: nothing late, nothing in the main slot; the rejected dispatch stays open",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_late",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "(a) 11 min later the rejected dispatch is compaction_unresolved",
+   "now": "2026-10-21T14:16:12+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "compaction_unresolved",
+      "count": 1,
+      "fields": {
+       "nonce": "5e1f0001"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) a mod-hook dispatch the mod logged as compact_rejected, no PreCompact: no defer to it",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "6a2b0002",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 30,
+      "session_id": "12222222-2222-4333-8444-555555555555"
+     }
+    },
+    {
+     "write": "$WATCH/12222222-2222-4333-8444-555555555555.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-21T14:04:42.000+03:00",
+       "ev": "compact_rejected",
+       "sid": "12222222-2222-4333-8444-555555555555",
+       "actor": "main",
+       "writer": "mod",
+       "pid": 424242,
+       "plugin_version": "0.1.0",
+       "cc_version": null,
+       "turn_seq": null,
+       "nonce": "6a2b0002",
+       "attempt": 1
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "12222222-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/12222222-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n1. Primary Request and Intent: keep going\n2. Key Technical Concepts: none\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "unattributed"
+      }
+     },
+     {
+      "file": "$WATCH/12222222-2222-4333-8444-555555555555/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "seat_state": "none",
+       "channel": "none",
+       "actor": "unattributed"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) a legitimate defer with no scope proof: the late copy keeps scope unknown",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "7c3d0003",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "session_id": "13333333-2222-4333-8444-555555555555"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "13333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/13333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n1. Primary Request and Intent: keep going\n2. Key Technical Concepts: none\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/13333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "nonce": "7c3d0003"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) Stop with no after-step: saved late in unattributed/, never as actor main",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "13333333-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/13333333-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/13333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_late",
+      "count": 1,
+      "fields": {
+       "nonce": "7c3d0003"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_13333333_*.md",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_13333333_7c3d00.md",
+      "count": 1,
+      "frontmatter": {
+       "actor": "unknown"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}
