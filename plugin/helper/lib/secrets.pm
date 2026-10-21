@@ -49,18 +49,32 @@ sub scan {
 sub has_hard { return scalar grep { $_->{class} eq 'HARD' } @{ $_[0] || [] } }
 
 # redact(text [, classes]) -> (text with each hit replaced by [redacted:<rule>], \@hits)
+# Every selected rule runs on the text as given, as scan() does, so the copy and the gate
+# agree (RRP-02): a rule applied to another rule's output can miss, e.g. key-value
+# rewrites `csrftoken=…` first and the cookie rule then no longer sees the header's
+# later pairs. Overlapping or touching spans merge (labelled by the one that starts
+# first), then each merged span is replaced once, right to left.
 sub redact {
     my ($text, $only) = @_;
     my %only = map { $_ => 1 } @{ $only || [] };
-    my @hits;
+    my (@hits, @spans);
     for my $r (@{ spec::secret_rules() }) {
         next if %only && !$only{ $r->{class} };
         my @s = _matches($text, $r);
         next unless @s;
         push @hits, { rule => $r->{id}, class => $r->{class}, count => scalar @s };
-        for my $sp (reverse @s) {
-            substr($text, $sp->[0], $sp->[1] - $sp->[0]) = "[redacted:$r->{id}]";
+        push @spans, map { [$_->[0], $_->[1], $r->{id}] } @s;
+    }
+    my @merged;
+    for my $sp (sort { $a->[0] <=> $b->[0] || $b->[1] <=> $a->[1] } @spans) {
+        if (@merged && $sp->[0] <= $merged[-1][1]) {
+            $merged[-1][1] = $sp->[1] if $sp->[1] > $merged[-1][1];
+            next;
         }
+        push @merged, [@$sp];
+    }
+    for my $sp (reverse @merged) {
+        substr($text, $sp->[0], $sp->[1] - $sp->[0]) = "[redacted:$sp->[2]]";
     }
     return ($text, \@hits);
 }
