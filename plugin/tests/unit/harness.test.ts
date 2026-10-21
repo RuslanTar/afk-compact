@@ -48,6 +48,8 @@ export class World {
   saveLine: string | undefined
   helperDown = false
   name = ''
+  /** `$.plugin.root`, read off the helper path. */
+  root = ''
   clock!: MockClock
   /** Called at the bottom of every `session.compact`, before it answers. */
   atCompact: (() => void) | undefined
@@ -155,8 +157,11 @@ export class World {
   /** The fake helper: one answer per subcommand, the stdout forms of BUILD-PLAN §3.1. */
   helper(argv: string[], env: Record<string, string>): Reply {
     const bin = argv[0] ?? ''
-    const m = /\/bin\/(.+)-store$/.exec(bin)
-    if (m && m[1]) this.name = m[1]
+    const m = /^(.*)\/bin\/(.+)-store$/.exec(bin)
+    if (m && m[1] !== undefined && m[2]) {
+      this.root = m[1]
+      this.name = m[2]
+    }
     const sub = argv[1] ?? ''
     const args = argv.slice(2)
     this.calls.push({ sub, args, env })
