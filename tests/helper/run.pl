@@ -1279,12 +1279,16 @@ sub builtin {
         return @e;
     }
     if ($name eq 'jobs_output_path') {
-        # DP-2 / DP-13: the two output-path readers of lib/jobrec.pm (probe P-D1-6 decides
-        # which one is used; 'none' until then) and the switch between them.
+        # DP-2 / DP-13 / DP-24 (a): the two output-path readers of lib/jobrec.pm and the
+        # switch between them. The default source is the result text, used only when it
+        # equals a layout candidate (job cwd, or session_cwd when given): want_check.
         require "jobrec.pm";
-        my $in = { task_id => $a->{task}, cwd => $a->{cwd}, result_text => $a->{text} };
+        my $in = { task_id => $a->{task}, cwd => $a->{cwd}, session_cwd => $a->{session_cwd}, result_text => $a->{text} };
         my $rt = jobrec::path_from_result_text($a->{text}, $a->{task});
         my $ly = jobrec::path_from_layout($a->{sid}, $a->{cwd}, $a->{task});
+        my $ls = jobrec::path_from_layout($a->{sid}, $a->{session_cwd}, $a->{task});
+        push @e, "default source $jobrec::OUTPUT_PATH_SOURCE, want result-text" unless $jobrec::OUTPUT_PATH_SOURCE eq 'result-text';
+        my $agrees = defined $rt && grep { defined && $_ eq $rt } ($ly, $ls);
         push @e, 'result text: ' . ($rt // 'none') . ', want ' . ($a->{want_result_text} // 'none')
             unless ($rt // '') eq ($a->{want_result_text} // '');
         # the layout sits under the system temp root and the user's uid: the case gives the rest
@@ -1293,11 +1297,13 @@ sub builtin {
         no warnings 'once';
         for my $src (qw(none result-text layout)) {
             local $jobrec::OUTPUT_PATH_SOURCE = $src;
-            my ($p, $s) = jobrec::output_path($in, $a->{sid});
-            my $want = $src eq 'layout' ? $ly : $src eq 'result-text' ? $rt : undef;
+            my ($p, $s, undef, $c) = jobrec::output_path($in, $a->{sid});
+            my $want = $src eq 'layout' ? $ly : $src eq 'result-text' && $agrees ? $rt : undef;
             my $wsrc = defined $want ? $src : 'none';
             push @e, "switch $src: path " . ($p // 'null') . ' source ' . $s . ', want ' . ($want // 'null') . " $wsrc"
                 unless ($p // '') eq ($want // '') && $s eq $wsrc;
+            push @e, 'check ' . ($c // 'null') . ", want $a->{want_check}"
+                if $src eq 'result-text' && defined $a->{want_check} && ($c // '') ne $a->{want_check};
         }
         return @e;
     }

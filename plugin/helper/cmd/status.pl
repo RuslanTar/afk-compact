@@ -153,14 +153,28 @@ sub mode_lines {
     return @l;
 }
 
-# Dev-1 (DP-2): automatic relaunch needs a job's output file, and no output path source
-# has passed its probe (P-D1-6); pending relaunches no recorded job matched.
+# Dev-1 (DP-2, DP-24 (a)): automatic relaunch needs a job's output file; the source is the
+# Bash result text (P-D1-6), checked against the task-file layout. The state follows
+# relaunch_auto; this session's jobs without a confirmed output path ask. Then pending
+# relaunches no recorded job matched.
+my %RELAUNCH_STATE = (on => 'active for read-only jobs', shadow => 'shadow (reports would-relaunch, runs nothing)', off => 'off');
 sub relaunch_lines {
     my ($d) = @_;
     my $rl = settings::relaunch(rc::settings());
     my @l;
-    my $state = $jobrec::OUTPUT_PATH_SOURCE eq 'none' ? 'inactive (no output path)' : "output path from $jobrec::OUTPUT_PATH_SOURCE";
+    my $src = $jobrec::OUTPUT_PATH_SOURCE;
+    my $state = $src eq 'none' ? 'inactive (no output path)' : $RELAUNCH_STATE{ $rl->{auto} } // 'off';
     push @l, "automatic relaunch: $state · relaunch_auto $rl->{auto}";
+    if ($src ne 'none') {
+        my @jobs = grep { ($_->{ev} // '') eq 'job' } @{ jobrec::read_rows(jobrec::jobs_path($d)) };
+        my $with = grep { defined $_->{output_path} } @jobs;
+        my $differs = grep { ($_->{output_path_check} // '') eq 'differs' } @jobs;
+        my $line = $src eq 'layout' ? '  output path: from the task-file layout'
+                 : '  output path: from the Bash result text, checked against the task-file layout';
+        $line .= ' · this session ' . scalar(@jobs) . " jobs, $with with an output path" if @jobs;
+        $line .= ", $differs differ from the layout" if $differs;
+        push @l, $line;
+    }
     push @l, '  relaunch_allow: ' . scalar(@{ $rl->{allow} }) . ' patterns, no effect in this version (read-only jobs only)'
         if @{ $rl->{allow} };
     push @l, "  config: $_->{key} invalid, " . ($_->{key} eq 'relaunch_auto' ? 'off used' : 'pattern dropped') for @{ $rl->{invalid} };
