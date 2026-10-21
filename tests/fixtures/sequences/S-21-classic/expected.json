@@ -1,6 +1,6 @@
 {
   "id": "S-21-classic",
-  "spec": "MOD-SPEC §2.4 scope proof, §5.3, §5.4; ROOT-RULINGS F2-1",
+  "spec": "MOD-SPEC §2.4 scope proof, §5.3, §5.4, AT-C-11; ROOT-RULINGS F2-1",
   "observed_order": [
     "mod session.compact before (writes the dispatch record; mod variant only)",
     "PreCompact",
@@ -25,6 +25,10 @@
         {
           "path": "$WATCH/$SID/pending/*.post.md",
           "count": 1
+        },
+        {
+          "path": "$WATCH/$SID/boundaries.count",
+          "count": 0
         }
       ],
       "absent_rows": [
@@ -32,11 +36,32 @@
           "file": "$WATCH/$SID.classic.jsonl",
           "ev": "sweep_evidence"
         }
+      ],
+      "rows": [
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "copy_deferred",
+          "count": 1,
+          "fields": {
+            "why": "scope",
+            "nonce": "$NONCE"
+          }
+        },
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "copy",
+          "count": 0
+        },
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 0
+        }
       ]
     },
     {
       "after_step": 5,
-      "why": "F2-1: the next Stop (reconcile) sees the new boundary row: P3-main with no subagent signal proves main, and the deferred summary is saved in the main slot",
+      "why": "F2-1: the next Stop (reconcile) sees the new boundary row: P3-main with no subagent signal proves main, and the deferred summary is saved in the main slot; AT-C-11: boundaries.count becomes the observed main count (1) at this reconcile",
       "files": [
         {
           "path": "$ROOT/example-repo/general/compact/*_c1-*.md",
@@ -45,6 +70,53 @@
         {
           "path": "$ROOT/example-repo/general/compact/subagents/*.md",
           "count": 0
+        },
+        {
+          "path": "$WATCH/$SID/boundaries.count",
+          "contains": [
+            "1"
+          ]
+        },
+        {
+          "path": "$WATCH/$SID/pending/*.post.md",
+          "count": 0
+        }
+      ],
+      "rows": [
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "copy",
+          "count": 1,
+          "fields": {
+            "result": "saved",
+            "slot": "main",
+            "proof": "p3-main",
+            "nonce": "$NONCE"
+          }
+        },
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "sweep_evidence",
+          "count": 1
+        },
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "copy_late",
+          "count": 0
+        },
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "order_anomaly",
+          "count": 0
+        },
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 1,
+          "fields": {
+            "actor": "main",
+            "nonce": "$NONCE"
+          }
         }
       ]
     }

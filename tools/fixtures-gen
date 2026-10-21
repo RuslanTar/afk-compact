@@ -511,6 +511,8 @@ def check_stamps():
         rel = os.path.relpath(p, REPO)
         if rel.startswith(os.path.join("tests", "fixtures", "assembly", "expected") + os.sep):
             continue   # goldens: tools/assemble renders them from runtime.json, which is scanned
+        if rel == os.path.join("tests", "fixtures", "README.md"):
+            continue   # documents the rule, so it quotes the short forms
         try:
             text = read(p)
         except UnicodeDecodeError:
