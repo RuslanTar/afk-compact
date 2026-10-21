@@ -1,6 +1,6 @@
 {
  "id": "AT-C-08",
- "note": "scope proof table (MOD-SPEC 2.4): each P1/P2/P3 combination incl. the conflicting pair -> main (compact/), sub (compact/subagents/) or unknown (compact/unattributed/)",
+ "note": "scope proof table (MOD-SPEC 2.4, ordered by ROOT-RULINGS F2-1 after the S-21 probe): P1 and P2 prove the scope inside PostCompact and the copy is saved there; P3 waits for the next Stop, since the boundary row is written after PostCompact (S-21 order: the row's ts is 50 ms after the hook). PostCompact without P1/P2 stashes and defers (copy_deferred why=scope, no file); the Stop then saves main (compact/), sub (compact/subagents/ with -a from the file name) or, with no boundary row at all after SETTLE_S, unknown (compact/unattributed/); the conflicting pair P1-main + P2-sub is unknown",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -120,12 +120,6 @@
        "prompt": {
         "age_s": 120
        }
-      },
-      {
-       "boundary": {
-        "age_s": 5,
-        "precomputed": false
-       }
       }
      ]
     }
@@ -146,26 +140,84 @@
     "exit": 0,
     "files": [
      {
+      "path": "$ROOT/work/general/compact/**/*_d4444444_*.md",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/*_d4444444_*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d4444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "P3-main alone: the next Stop",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/d4444444-2222-4333-8444-555555555555.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00",
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "d4444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d4444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
       "path": "$ROOT/work/general/compact/*_d4444444_c1-h*.md",
-      "count": 1
+      "count": 1,
+      "frontmatter": {
+       "actor": "main"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d4444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "saved",
+       "proof": "p3-main",
+       "slot": "main"
+      }
      }
     ]
    }
   },
   {
    "name": "P3-sub alone",
-   "setup": [
-    {
-     "transcript": "$TMP/proj/d5444444-2222-4333-8444-555555555555/subagents/agent-q7.jsonl",
-     "rows": [
-      {
-       "boundary": {
-        "age_s": 2
-       }
-      }
-     ]
-    }
-   ],
+   "setup": [],
    "argv": [
     "hook",
     "PostCompact"
@@ -182,8 +234,71 @@
     "exit": 0,
     "files": [
      {
+      "path": "$ROOT/work/general/compact/subagents/*_d5444444*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d5444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "P3-sub alone: the next Stop",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/d5444444-2222-4333-8444-555555555555/subagents/agent-q7.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "d5444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d5444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
       "path": "$ROOT/work/general/compact/subagents/*_d5444444-aq7_c1-h*.md",
       "count": 1
+     },
+     {
+      "path": "$ROOT/work/general/compact/*_d5444444*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d5444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "proof": "p3-sub"
+      }
      }
     ]
    }
@@ -262,7 +377,80 @@
     "files": [
      {
       "path": "$ROOT/work/general/compact/unattributed/*_d7444444_c70000.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d7444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "conflicting pair: P1-main and P2-sub: a Stop 3 s later waits",
+   "now": "2026-10-21T14:05:15+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "d7444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d7444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_d7444444_c70000.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "conflicting pair: P1-main and P2-sub: the Stop after SETTLE_S",
+   "now": "2026-10-21T14:05:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "d7444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d7444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_d7444444_c70000.md",
       "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d7444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "unattributed",
+       "proof": "none"
+      }
      }
     ]
    }
@@ -287,7 +475,80 @@
     "files": [
      {
       "path": "$ROOT/work/general/compact/unattributed/*_d8444444_h*.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d8444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "neither: a Stop 3 s later waits",
+   "now": "2026-10-21T14:05:15+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "d8444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d8444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_d8444444_h*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "neither: the Stop after SETTLE_S",
+   "now": "2026-10-21T14:05:40+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "d8444444-2222-4333-8444-555555555555",
+    "transcript_path": "$TMP/proj/d8444444-2222-4333-8444-555555555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/*_d8444444_h*.md",
       "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/d8444444-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "unattributed",
+       "proof": "none"
+      }
      }
     ]
    }

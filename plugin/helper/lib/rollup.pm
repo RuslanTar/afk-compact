@@ -13,7 +13,8 @@ our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn 
 sub write {
     my (%f) = @_;
     my @pairs = map { ($_ => $f{$_}) } @FIELDS;
-    return rc::emit('compaction', \@pairs, stream => 'compactions', actor => $f{actor});
+    # ts: the compaction's own time when the row is written later (reconcile, F2-1)
+    return rc::emit('compaction', \@pairs, stream => 'compactions', actor => $f{actor}, ts => $f{ts});
 }
 
 sub rows {

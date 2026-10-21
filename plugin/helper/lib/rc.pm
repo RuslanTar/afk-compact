@@ -81,10 +81,11 @@ sub envelope {
     my (%o) = @_;
     my $c = claude();
     return { sid => $R{sid}, actor => $o{actor} // $R{actor}, writer => $o{writer} // $R{writer},
-             pid => $c->{pid}, cc_version => cc_version(), turn_seq => undef };
+             pid => $c->{pid}, cc_version => cc_version(), turn_seq => undef, ts => $o{ts} };
 }
 
-# emit(ev, fields, stream => classic|mod|compactions|<path>, actor => ..)
+# emit(ev, fields, stream => classic|mod|compactions|<path>, actor => .., ts => ISO)
+# (ts: a row written later for an earlier event, e.g. reconcile's rollup of a deferred save)
 sub emit {
     my ($ev, $fields, %o) = @_;
     my $path = stream_path($o{stream} // 'classic');

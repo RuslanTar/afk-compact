@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-16",
- "note": "two different unmarked summaries for one sid in the same second, no dispatch (seated, unknown scope): two files in compact/unattributed/ with different h<sha5> ids; a replay of the first prints EXISTS sha-match",
+ "note": "two different unmarked summaries for one sid in the same second, no dispatch (seated, unknown scope): PostCompact stashes both under different h<sha5> ids and defers them (ROOT-RULINGS F2-1: no proof in the hook); the Stop after SETTLE_S, with no boundary row for either, saves two files in compact/unattributed/; a replay of the first prints EXISTS sha-match",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -40,7 +40,52 @@
     "exit": 0,
     "files": [
      {
-      "path": "$ROOT/work/general/compact/unattributed/2026-10-21_14-05-12_${SID8}_h*.md",
+      "path": "$ROOT/work/general/compact/unattributed/*.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/h*.post.md",
+      "count": 2
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 2,
+      "fields": {
+       "why": "scope"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "layers_missing",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "the next Stop saves both",
+   "now": "2026-10-21T14:05:30+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/unattributed/2026-10-21_14-05-30_${SID8}_h*.md",
       "count": 2,
       "mode": "0400"
      }
@@ -55,9 +100,12 @@
       }
      },
      {
-      "file": "$WATCH/$SID.classic.jsonl",
-      "ev": "layers_missing",
-      "count": 2
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 2,
+      "fields": {
+       "actor": "unattributed"
+      }
      }
     ]
    }
@@ -94,7 +142,8 @@
       "count": 2
      }
     ]
-   }
+   },
+   "now": "2026-10-21T14:05:31+03:00"
   }
  ]
 }

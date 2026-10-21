@@ -1,0 +1,225 @@
+{
+ "id": "F2-4-reconcile-state",
+ "note": "ROOT-RULINGS F2-4 (SAFE-02, reconcile side): reconcile keeps its incremental state in <watch>/<sid>/reconcile.json (0600, atomic write): byte offsets of the main transcript and the classic stream, and what it read from them. A later Stop reads only the bytes past the kept offsets (a row inserted before the offset of a file rewritten in place is not read again, so it raises no order_anomaly, which a full re-read would), and a row appended after it is read: the boundary row of a later unproven PostCompact proves it main",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "Stop 1 reads the transcript and the streams to their end and keeps the offsets",
+   "now": "2026-10-21T14:04:30+03:00",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "user",
+       "uuid": "u-1",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:04:00+03:00",
+       "message": {
+        "role": "user",
+        "content": "synthetic prompt"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$WATCH/$SID/reconcile.json",
+      "mode": "0600",
+      "json": {
+       "v": 1
+      },
+      "keys": [
+       "classic",
+       "rolls",
+       "main",
+       "subs",
+       "copied",
+       "logged",
+       "done",
+       "pre",
+       "rolls_l",
+       "bounds",
+       "sbounds"
+      ],
+      "has": [
+       "\"main\":\\{\"ino\":\"\\d+:\\d+\",\"off\":[1-9]\\d*,\"path\":\"[^\"]+\\.jsonl\"\\}",
+       "\"classic\":\\{\"ino\":\"\\d+:\\d+\",\"off\":[1-9]\\d*\\}"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop 2 reads only the bytes past the kept offset: a row written before it is not read again",
+   "now": "2026-10-21T14:05:30+03:00",
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "system",
+       "subtype": "compact_boundary",
+       "content": "Conversation compacted",
+       "uuid": "b-inserted-early",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:04:40+03:00",
+       "compactMetadata": {
+        "trigger": "auto",
+        "preTokens": 1,
+        "postTokens": 1,
+        "durationMs": 1
+       }
+      },
+      {
+       "type": "user",
+       "uuid": "u-1",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:04:00+03:00",
+       "message": {
+        "role": "user",
+        "content": "synthetic prompt"
+       }
+      },
+      {
+       "type": "assistant",
+       "uuid": "a-pad",
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T14:04:45+03:00",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "text",
+          "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "order_anomaly",
+      "count": 0
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/reconcile.json",
+      "lacks": [
+       "b-inserted-early"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a PostCompact with no proof",
+   "now": "2026-10-21T14:06:00+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\nincremental\n</summary>"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "Stop 3 reads the appended boundary row from the kept offset and proves main",
+   "now": "2026-10-21T14:06:30+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:06:00.050+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_${SID8}_c1-h*.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/reconcile.json",
+      "has": [
+       "\"bounds\":\\[\\{[^\\]]*\"by\":\"h[0-9a-f]{5}\""
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "order_anomaly",
+      "count": 0
+     }
+    ]
+   }
+  }
+ ]
+}

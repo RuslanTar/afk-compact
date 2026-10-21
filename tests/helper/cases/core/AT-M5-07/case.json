@@ -1,6 +1,6 @@
 {
  "id": "AT-M5-07",
- "note": "one session, three compactions: the same sid in every dispatch, copy and row; no state file renamed or reset (boundaries.count grows to 3)",
+ "note": "one session, three compactions: the same sid in every dispatch, copy and row; no state file renamed or reset (boundaries.count grows to 3); S-21 event order (ROOT-RULINGS F2-1): each boundary row is written 50 ms after its PostCompact, and the next Stop matches the three rows to the three PostCompacts, so boundaries.count is 3",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -22,16 +22,6 @@
       "age_s": 10,
       "midturn": false
      }
-    },
-    {
-     "transcript": "$TMP/proj/$SID.jsonl",
-     "rows": [
-      {
-       "boundary": {
-        "age_s": 2
-       }
-      }
-     ]
     }
    ],
    "argv": [
@@ -65,7 +55,7 @@
      "rows": [
       {
        "boundary": {
-        "age_s": 2
+        "ts": "2026-10-21T14:05:00.050+03:00"
        }
       }
      ]
@@ -102,7 +92,7 @@
      "rows": [
       {
        "boundary": {
-        "age_s": 2
+        "ts": "2026-10-21T14:10:00.050+03:00"
        }
       }
      ]
@@ -119,6 +109,56 @@
     "hook_event_name": "PostCompact",
     "trigger": "auto",
     "compact_summary": "<summary>\n⟪$BRAND v1 n=53700003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=53700003⟫\n</summary>"
+   }
+  },
+  {
+   "name": "Stop",
+   "now": "2026-10-21T14:19:00+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:15:00.050+03:00"
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$WATCH/$SID/boundaries.count",
+      "contains": [
+       "3"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "order_anomaly",
+      "count": 0,
+      "fields": {
+       "kind": "boundary-without-postcompact"
+      }
+     }
+    ]
    }
   },
   {

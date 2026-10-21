@@ -1,6 +1,6 @@
 {
  "id": "AT-M1-10",
- "note": "SessionStart(compact) with no dispatch in the last 600 s: block printed with the [nonok] line; row layers_missing at the following PostCompact",
+ "note": "SessionStart(compact) with no dispatch in the last 600 s: block printed with the [nonok] line; row layers_missing at the following PostCompact; in the S-21 event order (ROOT-RULINGS F2-1) the boundary row comes after PostCompact, so the copy and its rollup row (seat_state none, channel none) are written at the next Stop, which proves main with P3",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -58,12 +58,6 @@
        "prompt": {
         "age_s": 120
        }
-      },
-      {
-       "boundary": {
-        "age_s": 5,
-        "precomputed": false
-       }
       }
      ]
     }
@@ -89,11 +83,56 @@
       "count": 1
      },
      {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the next Stop",
+   "now": "2026-10-21T14:05:40+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:12.050+03:00",
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
       "file": "$WATCH/$SID/compactions.jsonl",
       "ev": "compaction",
+      "count": 1,
       "fields": {
        "seat_state": "none",
-       "channel": "none"
+       "channel": "none",
+       "actor": "main"
       }
      }
     ]
