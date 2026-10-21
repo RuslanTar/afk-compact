@@ -47,7 +47,14 @@
    "expect": {
     "exit": 0,
     "stderr_empty": true,
-    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z"
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_golden": {
+     "files": [
+      "$FIX/assembly/expected/handoff-instructions__auto.txt",
+      "$FIX/assembly/expected/subagent-instructions__fallback.txt"
+     ],
+     "nonce": "a1b2c3d4"
+    }
    }
   },
   {

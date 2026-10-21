@@ -42,7 +42,14 @@
        "tags": []
       }
      }
-    ]
+    ],
+    "stdout_golden": {
+     "files": [
+      "$FIX/assembly/expected/handoff-instructions__base.txt",
+      "$FIX/assembly/expected/subagent-instructions__fallback.txt"
+     ],
+     "nonce": "a1b2c3d4"
+    }
    }
   }
  ]

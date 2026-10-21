@@ -602,6 +602,7 @@ sub builtin {
         # AT-M5-10 reader: a live- record counts only when its pid runs with the same start time
         # and no ended- record exists.
         for my $l (qw(sessions)) { require "$l.pm" }
+        no warnings 'once';
         local %rc::R = (paths => { root => $a->{root} });
         my @live = map { $_->{session_id} } @{ sessions::live_peers() };
         my $want = join(',', sort @{ $a->{expect} || [] });
@@ -627,6 +628,30 @@ sub assembly_runtime {
 }
 
 # ---------------------------------------------------------------- assertions
+# stdout_golden {files: [golden...], nonce: "<the goldens' nonce>"}: stdout must equal
+# the goldens joined, with the goldens' nonce replaced by the first n=<8 hex> in
+# stdout (the helper draws its own). Exact bytes, so no banner, prefix or trailer
+# can pass (BUILD-PLAN §3.3 "exactly as tools/assemble composes it").
+sub golden_diff {
+    my ($g, $got) = @_;
+    my ($n) = $got =~ /\bn=([0-9a-f]{8})\b/;
+    return ('stdout_golden: no nonce in stdout') unless defined $n;
+    my $want = '';
+    for my $f (@{ $g->{files} || [] }) {
+        my $t = util::read_file($f);
+        return ("stdout_golden: no golden $f") unless defined $t;
+        utf8::decode($t);
+        $want .= $t;
+    }
+    return ('stdout_golden: no files') if $want eq '';
+    $want =~ s/\Q$g->{nonce}\E/$n/g if defined $g->{nonce} && $g->{nonce} ne '';
+    return () if $got eq $want;
+    my $i = 0;
+    $i++ while $i < length($got) && $i < length($want) && substr($got, $i, 1) eq substr($want, $i, 1);
+    return ("stdout differs from the goldens at char $i: got " . jsonc::encode(substr($got, $i, 60))
+            . ' want ' . jsonc::encode(substr($want, $i, 60)));
+}
+
 sub expand_glob {
     my ($pat) = @_;
     return ($pat) unless $pat =~ /[*?\[]/;
@@ -685,6 +710,7 @@ sub check {
         for my $c (@{ $x->{stdout_contains} || [] }) { push @e, "stdout lacks " . jsonc::encode($c) if index($outc, $c) < 0 }
         for my $c (@{ $x->{stdout_absent} || [] }) { push @e, "stdout has " . jsonc::encode($c) if index($outc, $c) >= 0 }
         push @e, "stdout is " . length($out) . " bytes > $x->{stdout_max_bytes}" if defined $x->{stdout_max_bytes} && length($out) > $x->{stdout_max_bytes};
+        push @e, golden_diff($x->{stdout_golden}, $outc) if $x->{stdout_golden};
         push @e, "stderr not empty: " . substr($r->{err}, 0, 200) if $x->{stderr_empty} && length $r->{err};
         if (defined $x->{stdout_lines}) { my $n = () = $out =~ /\n/g; push @e, "stdout has $n lines, want $x->{stdout_lines}" if $n != $x->{stdout_lines} }
         if ($x->{stdout_json}) {
