@@ -4,6 +4,14 @@ package skills::publish;
 # file the stage into evidence/<stem>/ (recipes gain sha256 and
 # origin_session_id), MANIFEST.tsv, the handoff by exclusive create, read
 # back, pin under lock, one receipt and one handoff_publish row.
+# 2026-10-21 rulings: the lint also sees the own chain's file when the carry base is
+# foreign (small-rulings §2.4) and, in repo mode, the export text (private-path); the
+# frontmatter keys and their order are the spec's frontmatter_keys_handoff (with
+# previous_kind and own_previous_handoff, RV-19); a stage bound to a plugin handoff turn
+# publishes once (`<ht>.published` before the handoff file, else REFUSED: handoff-exists
+# <path>, D-18 B8); shell recipes of a recorded job carry `job:` and the recorded
+# command (Dev-1 D2); in repo mode the handoff is then exported (D-12 §1.5.5,
+# skills/export.pm) and one receipt line says what happened to the export.
 use strict;
 use warnings;
 use File::Basename ();
@@ -16,13 +24,12 @@ use skills::store;
 use skills::spec;
 use skills::lint;
 use skills::gitfacts;
+use skills::export;
 
 my %STATUS = map { $_ => 1 } qw(in-progress blocked completed);
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
-# TPL §3 key order; empty values are omitted.
-our @FM_KEYS = qw(kind writer nonce date session_id actor previous_session_id lineage_reason transcript_path
-                  claude_pid cc_version repository bucket worktree branch git_commit status ticket queue_lane
-                  previous_handoff gsd);
+# Frontmatter keys and their order: the spec's frontmatter_keys_handoff (TPL §3); empty
+# values are omitted. The list is read at publish time (fail closed: spec-missing).
 
 sub run {
     my ($argv) = @_;
@@ -41,6 +48,14 @@ sub run {
     my $body = skills::util::read_file("$dir/body.md");
     _refuse($ctx, $row, 'no-draft') unless defined $body && $body =~ /\S/;
     _refuse($ctx, $row, 'spec-missing') unless skills::spec::available();
+    my $need = eval { skills::spec::need(qw(frontmatter_keys_handoff frontmatter_keys_export time_re lint_ids carry.tag_re private_path_classes)); 1 };
+    _refuse($ctx, $row, ($@ =~ s/\s+\z//r)) unless $need;
+    my $ht = (defined $s->{handoff_ht} && skills::core::ht_valid($s->{handoff_ht})) ? $s->{handoff_ht} : undef;
+    my $sid_dir = skills::core::sid_dir();
+    if ($ht && defined $sid_dir) {
+        my $done = skills::core::ht_record($sid_dir, $ht) && handoff_turn::published_of($sid_dir, $ht);
+        _refuse($ctx, $row, "handoff-exists $done") if $done;
+    }
 
     my %recipes;
     for my $f (skills::util::list_dir("$dir/restart")) {
@@ -51,17 +66,30 @@ sub run {
     for my $f ('ledger.md', 'inflight.md') {
         $extra{$f} = skills::util::read_file("$dir/$f") if -f "$dir/$f";
     }
-    my $prev_text;
+    my ($prev_text, $own_text);
     if ($s->{previous_handoff} && -f $s->{previous_handoff}) {
         my $pd = skills::store::read_doc($s->{previous_handoff});
         $prev_text = $pd->{body} if $pd;
     }
+    if (($s->{previous_kind} // '') eq 'foreign' && $s->{own_previous_handoff} && -f $s->{own_previous_handoff}) {
+        my $od = skills::store::read_doc($s->{own_previous_handoff});
+        $own_text = $od->{body} if $od;
+    }
+    # D-12: the mode of this worktree, decided again for this call; in repo mode the lint
+    # sees the text the export would hold.
+    my $m = skills::core::mode($s->{cwd} // $s->{worktree} // $s->{bucket});
+    my $repo = $m->{mode} eq 'repo' && defined $m->{root_path};
+    my $xplan = $repo ? skills::export::plan($m, "$s->{bucket}/$s->{stem}.md") : undef;
+    my $jobs = _jobs($s);
     my $ev = skills::stage::evidence_rows($dir);
-    my $res = skills::lint::lint({
+    my $res = eval { skills::lint::lint({
         body => $body, recipes => \%recipes, extra => \%extra, previous => $prev_text,
-        times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
+        previous_kind => $s->{previous_kind}, own_previous => $own_text,
+        repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
+        jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
         brand => $ctx->{brand},
-    });
+    }) };
+    if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
     $row->{bytes} = length $body;
     $row->{size_band} = _band(length $body);
     my @b = @{ $res->{blocking} };
@@ -101,6 +129,7 @@ sub run {
             my $abs = $sp =~ m{\A/} ? $sp : "$bucket/$sp";
             $script_sha = $by_copy{$abs} ? $by_copy{$abs}{sha256} : (skills::util::sha256_file($abs) // 'none');
         }
+        $t = _job_lines($t, $jobs);
         $t .= "\n" unless $t =~ /\n\z/;
         $t .= "sha256: $script_sha\norigin_session_id: $s->{session_id}\n";
         my ($item) = $f =~ /\A(.+)\.md\z/;
@@ -142,8 +171,11 @@ sub run {
         ticket => skills::gitfacts::ticket($g->{branch} // $s->{branch}) // skills::gitfacts::ticket(File::Basename::basename($bucket)),
         queue_lane => (defined $s->{queue_lane} && $s->{queue_lane} =~ $LANE_RE ? $s->{queue_lane} : undef),
         previous_handoff => $s->{previous_handoff}, gsd => $s->{gsd_state},
+        previous_kind => $s->{previous_kind},
+        own_previous_handoff => (($s->{previous_kind} // '') eq 'foreign' ? $s->{own_previous_handoff} : undef),
     );
-    my $fm = "---\n" . join('', map { "$_: $fm{$_}\n" } grep { defined $fm{$_} && $fm{$_} ne '' } @FM_KEYS) . "---\n";
+    my $fm = "---\n" . join('', map { "$_: $fm{$_}\n" } grep { defined $fm{$_} && $fm{$_} ne '' }
+                               @{ skills::spec::frontmatter_keys('handoff') }) . "---\n";
     my $brand = $ctx->{brand};
     my $marker = "\x{e2}\x{9f}\x{aa}$brand v1 n=$s->{nonce} s=manual\x{e2}\x{9f}\x{ab}";
     my $sentinel = "\x{e2}\x{9f}\x{aa}/$brand n=$s->{nonce}\x{e2}\x{9f}\x{ab}";
@@ -155,7 +187,13 @@ sub run {
         $path = skills::util::unique_path($bucket, $s->{stem}, '.md');
         (my $bb = $btxt) =~ s/\@self\@/$path/g;
         $content = $fm . $marker . "\n" . $bb . "\n" . $sentinel . "\n";
+        if ($ht && defined $sid_dir) {
+            # One handoff per plugin handoff turn: the claim comes first (D-18 B8).
+            my ($ok, $have) = skills::core::ht_mark_published($sid_dir, $ht, $path);
+            if (!$ok) { _refuse($ctx, $row, "handoff-exists $have") }
+        }
         last if skills::util::write_excl($path, $content, 0600);
+        die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
         undef $path;
     }
     die "no free handoff name\n" unless $path;
@@ -184,9 +222,62 @@ sub run {
     }
     $row->{result} = 'wrote';
     $row->{bucket_source} = $s->{bucket_source};
+    $row->{handoff_ht} = $ht if $ht;
     $ctx->log('handoff_publish', $row);
     skills::cli::say("Wrote handoff to: $path");
+
+    # ---- D-12 export (repo mode only), after the private handoff is safe.
+    if ($repo) {
+        my %pfm = map { $_ => $fm{$_} } grep { defined $fm{$_} } keys %fm;
+        my $x = skills::export::export_one(mode => $m, private => $path, fm => \%pfm, body => $btxt,
+                                           marker => $marker, sentinel => $sentinel);
+        $ctx->log('handoff_export', { result => $x->{result}, reason => $x->{reason}, bytes => $x->{bytes}, rules => $x->{rules} });
+        if ($x->{result} eq 'exported' || $x->{result} eq 'exists') {
+            skills::cli::say("Exported to repository: $x->{rel} (untracked; review and commit it yourself)");
+        } else {
+            my $why = $x->{reason} // 'unknown';
+            $why .= ' ' . join(',', @{ $x->{rules} }) if $why =~ /\Asecret/ && @{ $x->{rules} };
+            skills::cli::say("Export refused: $why");
+        }
+    } elsif (($m->{reason} // '') eq 'not-accepted') {
+        my $mc = $m->{main_checkout} // $m->{toplevel} // 'this repository';
+        $ctx->log('handoff_export', { result => 'not-exported', reason => 'not-accepted', bytes => 0, rules => [] });
+        skills::cli::say("Not exported: repository asks for repo mode; accept it by adding $mc to repo_roots in /config");
+    }
     return 0;
+}
+
+# Dev-1 job rows of this stage's session, newest per task: {task id => row}.
+sub _jobs {
+    my ($s) = @_;
+    my $d = skills::core::sid_dir() // return {};
+    my %j;
+    for my $r (@{ skills::core::job_rows($d) }) {
+        next unless ($r->{ev} // $r->{kind} // '') eq 'job' && defined $r->{task_id};
+        $j{ $r->{task_id} } = $r;
+    }
+    return \%j;
+}
+
+# Dev-1 D2: a recipe for a task the plugin recorded gets `job: <id> · recorded` and the
+# recorded command (a withheld one is named, never printed); one with a runtime id and
+# no record gets `job: <id> · not recorded`. Hand-typed text is shown, never run.
+sub _job_lines {
+    my ($t, $jobs) = @_;
+    my ($rid) = $t =~ /^\s*item:\s*B-\d+.*?runtime id\s+([A-Za-z0-9._:-]+)/m;
+    return $t unless defined $rid && $t !~ /^\s*job:/m;
+    my $job = $jobs->{$rid};
+    if (!$job) {
+        $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · not recorded\n/m;
+        return $t;
+    }
+    my $cmd = defined $job->{command} ? $job->{command}
+            : '(withheld: ' . join(',', @{ ref $job->{command_withheld} eq 'ARRAY' ? $job->{command_withheld} : ['secret'] }) . ')';
+    $cmd =~ s/[\r\n]+/ /g;
+    if ($t =~ /^\s*command:/m) { $t =~ s/^(\s*)command:[^\n]*/$1command: $cmd/m }
+    else { $t =~ s/^(\s*item:[^\n]*\n)/$1command: $cmd\n/m }
+    $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · recorded\n/m;
+    return $t;
 }
 
 sub _refuse {

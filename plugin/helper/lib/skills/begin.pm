@@ -128,8 +128,7 @@ sub run {
     # Carry base (small-rulings §2.1, RV-19 refined): the newest handoff in the bucket by
     # frontmatter date, name as tiebreak, whoever wrote it; never one with imported_from.
     # own_chain = this session or a lineage predecessor (A-6, 3 hops).
-    my $docs = [ sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) || $b->{path} cmp $a->{path} }
-                 grep { skills::store::is_handoff($_) } @{ skills::store::docs_in($bucket) } ];
+    my $docs = [ sort _newest_first grep { skills::store::is_handoff($_) } @{ skills::store::docs_in($bucket) } ];
     my $is_own = sub { ($_[0]{fm}{session_id} // '') eq $sid };
     my $is_pred = sub { $chain_sids{ $_[0]{fm}{session_id} // '' } ? 1 : 0 };
     my @cands = grep { !skills::store::imported($_) } @$docs;
@@ -276,6 +275,10 @@ sub run {
     skills::cli::say(_fit(\%out));
     return 0;
 }
+
+# Newest frontmatter date first, file name as the tiebreak (a named sub: run() has a
+# lexical $b).
+sub _newest_first { return ($b->{epoch} // 0) <=> ($a->{epoch} // 0) || $b->{path} cmp $a->{path} }
 
 # The settings.json of a stage that begin made, or undef.
 sub _stage_meta {
