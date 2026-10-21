@@ -2,7 +2,8 @@
 """tools/owners-check: fail when a branch touches a path its work package does not own.
 
 Usage: tools/owners-check WP [BASE]      (BASE defaults to main)
-  Lists `git diff --name-only BASE...HEAD` plus uncommitted and untracked changes, maps each
+  Lists `git diff --name-only --no-renames BASE...HEAD` (both sides of a move) plus
+  uncommitted and untracked changes, maps each
   path through OWNERS.tsv (first matching row wins) and fails on any path owned by another WP
   or by none. WP ids: build text fix core skills watch mod docs.
 """
@@ -74,8 +75,10 @@ def main(argv):
     wp = argv[0]
     base = argv[1] if len(argv) > 1 else "main"
     rules = load_owners()
-    paths = set(git("diff", "--name-only", "{}...HEAD".format(base)))
-    paths |= set(git("diff", "--name-only", "HEAD"))
+    # --no-renames: a move lists its source path too, so a WP cannot move another WP's file
+    # into its own folder unseen (BH-1)
+    paths = set(git("diff", "--name-only", "--no-renames", "{}...HEAD".format(base)))
+    paths |= set(git("diff", "--name-only", "--no-renames", "HEAD"))
     paths |= set(git("ls-files", "--others", "--exclude-standard"))
     bad = 0
     for p in sorted(paths):
