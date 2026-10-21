@@ -10,16 +10,20 @@ package postcompact;
 use strict;
 use warnings;
 
+# _resolved(sid_dir, classic) -> (\%nonce_resolved, \%nonce_copy_rels): nonces this session
+# already compacted under, and the copies (paths under <root>) its copy rows name for each.
 sub _resolved {
     my ($sid_dir, $classic) = @_;
-    my %r;
+    my (%r, %rel);
     for my $row (@{ rollup::rows($sid_dir) }) { $r{ $row->{nonce} } = 1 if defined $row->{nonce} }
     for my $row (@{ rollup::stream_rows($classic, evs => [qw(copy copy_deferred)]) }) {
         next unless ($row->{ev} // '') =~ /^(copy|copy_deferred)$/ && defined $row->{nonce};
         next if ($row->{ev} eq 'copy') && ($row->{result} // '') =~ /^failed/;
         $r{ $row->{nonce} } = 1;
+        push @{ $rel{ $row->{nonce} } }, $row->{rel_path}
+            if $row->{ev} eq 'copy' && defined $row->{rel_path} && !ref $row->{rel_path} && $row->{rel_path} ne '';
     }
-    return \%r;
+    return (\%r, \%rel);
 }
 
 # Nonces of mod dispatches that will get no after-step: the mod logged the
@@ -73,10 +77,21 @@ sub stale_marker {
     my $st = util::read_file("$sid_dir/pending/" . substr($mn, 0, 6) . '.post.md');
     if (defined $st) { return sha::hex256(detect::scan($st)->{normalized}) ne $sha ? 1 : 0 }
     return 0 unless $a{dispatch} && $a{resolved}{$mn};
+    # The earlier copy wherever it is (RR-S21-06): the bucket can change between two
+    # compactions (a pin, a branch ticket, another cwd), so the copies this session's copy
+    # rows name for the nonce come first, then the current bucket.
+    my $root = rc::root();
+    my @cand = map { "$root/$_" } @{ ($a{copy_rels} || {})->{$mn} || [] };
     my $bk = bucket::resolve($sid, $a{cwd});
-    my $ex = copies::find($bk->{path}, substr($mn, 0, 6)) // return 0;
-    my ($esha, $efm) = copies::copy_sha($ex);
-    return (defined $esha && ($efm->{session_id} // '') eq $sid && ($efm->{nonce} // '') eq $mn && $esha ne $sha) ? 1 : 0;
+    my $here = copies::find($bk->{path}, substr($mn, 0, 6));
+    push @cand, $here if defined $here;
+    my %seen;
+    for my $ex (grep { !$seen{$_}++ && -f $_ } @cand) {
+        my ($esha, $efm) = copies::copy_sha($ex);
+        next unless defined $esha && ($efm->{session_id} // '') eq $sid && ($efm->{nonce} // '') eq $mn;
+        return $esha ne $sha ? 1 : 0;
+    }
+    return 0;
 }
 
 # The boundary row of this compaction, when it is already written (S-21: usually not):
@@ -115,12 +130,12 @@ sub run {
     my $rec = defined $mn ? dispatch::read($watch, $sid, $mn) : undef;
     my @all = dispatch::all($watch, $sid);
     my $classic_path = rc::stream_path('classic');
-    my $resolved = _resolved($sid_dir, $classic_path);
+    my ($resolved, $copy_rels) = _resolved($sid_dir, $classic_path);
     my $closed = _mod_closed();
 
     # A stale marker counts as no marker for the name, the dispatch and the proof (F2-2).
     my $stale = stale_marker(nonce => $mn, sha => $s->{sha256}, sid => $sid, sid_dir => $sid_dir, cwd => $cwd,
-                             dispatch => $rec, resolved => $resolved);
+                             dispatch => $rec, resolved => $resolved, copy_rels => $copy_rels);
     my $emn = $stale ? undef : $mn;
     my $erec = $stale ? undef : $rec;
     my $id6 = copies::id6($emn, $s->{sha256});
@@ -160,7 +175,7 @@ sub run {
         util::write_excl("$sid_dir/pending/$id6.post.json", jsonc::encode_bytes(jsonc::obj(
             id6 => $id6, nonce => $emn, scope => $scope, agent => $agent, trigger => $p->{trigger}, cwd => $cwd,
             transcript => $tp, tokens => $tokens, precomputed => jsonc::bool($precomputed),
-            ts => util::iso($now), dispatch => ($drec ? $drec->{nonce} : undef), deferred => ($deferred ? $deferred->{nonce} : undef),
+            ts => util::iso_ms($now), dispatch => ($drec ? $drec->{nonce} : undef), deferred => ($deferred ? $deferred->{nonce} : undef),
             scope_deferred => jsonc::bool($scope_deferred), stale => jsonc::bool($stale), marker => $mn,
             join => $join)) . "\n", 0600);
     };

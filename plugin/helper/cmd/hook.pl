@@ -236,7 +236,12 @@ sub on_SessionEnd {
     my $c = rc::claude();
     rc::emit('session', [phase => 'end', source => undef, reason => $reason, mod_loaded => undef,
                          previous_session_id => undef, lineage_reason => undef, pid => $c->{pid}, pid_lstart => $c->{lstart}]);
-    return ('', {});
+    # RR-S21-02: a PostCompact deferred for want of proof is decided by reconcile (P3,
+    # F2-1). A session that ends before its next Stop (/clear, exit) gets that reconcile
+    # here, with the same 2 s budget: the boundary row has landed by now (S-21).
+    my $n = eval { reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000,
+                                  cutoff => reconcile::cutoff()) };
+    return ('', { reconcile => $n });
 }
 
 # ------------------------------------------------------------------ Stop / SubagentStop (MOD-SPEC §5.4, §7)
