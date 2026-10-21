@@ -210,7 +210,7 @@ sub run_case {
             close $inf;
             my $of = File::Temp->new;
             my $ef = File::Temp->new;
-            my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } ("$REPO/plugin/bin/$T::BRAND-store", @argv));
+            my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } ("$REPO/plugin/bin/" . $T::BRAND . q(-store), @argv));
             system("$cmd < '" . $inf->filename . "' > '" . $of->filename . "' 2> '" . $ef->filename . "'");
             my $code = $? >> 8;
             $out = watch::io::slurp($of->filename);
