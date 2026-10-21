@@ -29,7 +29,8 @@ sub open_stage {
     return ($dir, $s, $ctx);
 }
 
-# Times the helper printed for this stage (checked_at plus every stamp).
+# Stamps the helper printed for this stage (checked_at plus every stamp), whole:
+# date, time and offset (RV-24).
 sub printed_times {
     my ($dir, $s) = @_;
     my %t;
@@ -39,7 +40,6 @@ sub printed_times {
         my (undef, $shown) = split /\t/, $l, 2;
         next unless defined $shown;
         $t{$shown} = 1;
-        $t{$1} = 1 if $shown =~ /(\d\d:\d\d)\z/;
     }
     return \%t;
 }

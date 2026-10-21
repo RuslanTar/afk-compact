@@ -158,7 +158,7 @@ sub run {
 
     my $wh_now = $g->{in_git} ? skills::gitfacts::work_hash($g->{worktree}) : undef;
     my %out = (
-        checked_at        => skills::util::hhmm($now),
+        checked_at        => skills::util::stamp($now),
         session           => \%session,
         repo              => $g->{repo},
         worktree          => $g->{worktree},

@@ -26,7 +26,7 @@ sub run {
     skills::util::trace('measure');
     my @out;
     my $now = skills::util::now();
-    push @out, 'Measured facts (' . skills::util::hhmm($now) . ')';
+    push @out, 'Measured facts (' . skills::util::stamp($now) . ')';
     my $path = skills::util::abs_path($handoff);
     my $d = (defined $path && -f $path) ? skills::store::read_doc($path) : undef;
     if (!$d) {
