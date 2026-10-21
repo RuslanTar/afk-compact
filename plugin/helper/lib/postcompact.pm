@@ -139,7 +139,10 @@ sub run {
                              scope => $scope, agent => $agent, tokens => $tokens, cwd => $cwd, transcript => $tp,
                              trigger => $trigger, dispatch => $rec, seat_state => $seat, channel => $channel,
                              precomputed => $precomputed, verdict => $verdict, queue_lane => $lane, evidence => $evid);
-        if ($scope eq 'main' && $save->{exit} == 0) {
+        # Main-proven: sweep whatever the save outcome (MOD-SPEC §5.3 step 5); a refused
+        # copy under an unsafe handoff_root does not stop evidence going to the
+        # disposable root, which sweep checks on its own.
+        if ($scope eq 'main') {
             (my $stem = util::basename($save->{path} // '')) =~ s/\.md$//;
             $stem = util::stamp($now) . '_' . substr($sid, 0, 8) . "-$id6" if $stem eq '';
             $sweep = sweep::run(sid => $sid, id6 => $id6, stem => $stem, transcript => $tp, budget_ms => 8000,
