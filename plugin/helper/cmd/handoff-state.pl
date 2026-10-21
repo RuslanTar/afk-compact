@@ -5,6 +5,10 @@
 #                                                 body.md has text; <command> is the literal
 #                                                 publish command for it (no session id)
 #   published <path>                              publish wrote the handoff of this ht
+#   publish-failed <path>                         publish claimed this ht but <path> is not
+#                                                 a regular file ending with the stage's
+#                                                 sentinel (CR-F9); the mod reads it as a
+#                                                 failed state (full-summary fallback)
 #   superseded <nonce>                            a native compaction ran during the turn
 #                                                 and nothing was staged
 use strict;
@@ -21,6 +25,7 @@ sub run {
     if (!defined $d) { args::out('REFUSED: ' . (rc::root_reason('log_dir') // 'no-watch')); return 3 }
     my $s = handoff_turn::state($d, $opt->{ht});
     if ($s->{state} eq 'published') { args::out("published $s->{path}") }
+    elsif ($s->{state} eq 'publish-failed') { args::out("publish-failed $s->{path}") }
     elsif ($s->{state} eq 'staged') { args::out("staged $s->{stage} draft=$s->{draft} finish=" . ($s->{finish} // 'none')) }
     elsif ($s->{state} eq 'superseded') { args::out("superseded $s->{nonce}") }
     else { args::out('none') }

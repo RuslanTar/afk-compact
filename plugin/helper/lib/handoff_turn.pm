@@ -130,14 +130,49 @@ sub finish_command {
     return ctx::store_cmd() . " publish --stage '$stage' --slug $slug --status $status";
 }
 
-# state(sid_dir, ht) -> {state => none|staged|published|superseded, path, stage, draft,
-# finish, nonce}. Precedence: published, staged, superseded, none: after a race the next
-# window still needs the finish command of a staged draft ([handoff-partial]); the mod
-# knows of the race it recorded, and `superseded` is what is left when nothing was staged.
+# published_ok(sid_dir, ht, path) -> 1 when the claimed handoff is in place: a regular file
+# (not a link) whose last non-empty line is a sentinel of the spec grammar, with the nonce
+# of the stage bound to this ht when that stage records one (CR-F9: publish claims before
+# it links the file into place, and a failed link leaves the claim naming a missing or
+# foreign file). Without a readable spec the regular file alone counts.
+sub published_ok {
+    my ($sid_dir, $ht, $path) = @_;
+    $path //= published_of($sid_dir, $ht);
+    return 0 unless defined $path && !-l $path && -f _;
+    my $size = -s _;
+    open(my $fh, '<:raw', $path) or return 0;
+    my $from = $size > 4096 ? $size - 4096 : 0;
+    seek($fh, $from, 0) or return 0;
+    my $tail = '';
+    defined read($fh, $tail, 4096) or return 0;
+    close $fh;
+    my ($last) = grep { /\S/ } reverse split /\n/, $tail;
+    return 0 unless defined $last;
+    $last =~ s/\r\z//;
+    utf8::decode($last);
+    my $sre = eval { spec::re('sentinel_re') } or return 1;
+    return 0 unless $last =~ $sre;
+    my $got = $1;
+    my $st = stage_of($sid_dir, $ht);
+    my $meta = defined $st ? eval { jsonc::decode(util::read_file("$st/settings.json", 262144) // '') } : undef;
+    my $want = ref $meta eq 'HASH' && defined $meta->{nonce} && !ref $meta->{nonce} ? $meta->{nonce} : undef;
+    return 0 if defined $want && (!defined $got || $got ne $want);
+    return 1;
+}
+
+# state(sid_dir, ht) -> {state => none|staged|published|publish-failed|superseded, path,
+# stage, draft, finish, nonce}. Precedence: published, staged, superseded, none: after a
+# race the next window still needs the finish command of a staged draft ([handoff-partial]);
+# the mod knows of the race it recorded, and `superseded` is what is left when nothing was
+# staged. A claim whose file is not in place (published_ok) is `publish-failed <path>`: no
+# second handoff can be published for that ht, so the mod falls back to the full summary.
 sub state {
     my ($sid_dir, $ht) = @_;
     my $p = published_of($sid_dir, $ht);
-    return { state => 'published', path => $p } if defined $p;
+    if (defined $p) {
+        return { state => 'published', path => $p } if published_ok($sid_dir, $ht, $p);
+        return { state => 'publish-failed', path => $p };
+    }
     my $r = record($sid_dir, $ht);
     my $st = stage_of($sid_dir, $ht);
     if ($r && defined $st && -d $st) {
