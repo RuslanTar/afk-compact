@@ -36,7 +36,11 @@ export async function nudgeText(d: Deps, sid: string): Promise<string | undefine
   return assemble(d.name, 'checkpoint-nudge', tags, { tokens: formatTokens(tokens) })
 }
 
-const TEMP = /(?:\/private)?\/tmp\/[^\s'"`;|&<>()]+|\/var\/folders\/[^\s'"`;|&<>()]+|\/[^\s'"`;|&<>()]*\/scratchpad\/[^\s'"`;|&<>()]+|[^\s'"`;|&<>()]*tasks\/[^\s/'"`;|&<>()]+\.output/g
+// A temp path starts a path (RRP-08): at the string's start or after whitespace, a quote, a
+// backtick, `=`, `(`, `<` or `>`, never inside a URL (`https://host/tmp/...`). `?` and `#`
+// end it, so a query string or fragment (which can hold a token) is never recorded.
+const TEMP =
+  /(?<=^|[\s'"`=(<>])(?:(?:\/private)?\/tmp\/[^\s'"`;|&<>()?#]+|(?:\/private)?\/var\/folders\/[^\s'"`;|&<>()?#]+|\/[^\s'"`;|&<>()?#]*\/scratchpad\/[^\s'"`;|&<>()?#]+|[^\s'"`;|&<>()?#]*tasks\/[^\s/'"`;|&<>()?#]+\.output)/g
 
 function strings(v: unknown, out: string[], depth = 0): void {
   if (depth > 4 || out.length > 64) return

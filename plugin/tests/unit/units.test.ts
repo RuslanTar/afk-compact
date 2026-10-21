@@ -203,6 +203,16 @@ test('small helpers: token format, question end, temp paths', () => {
   expect(tempPaths({ command: 'cat repo/src/main.ts' })).toEqual([])
 })
 
+test('RRP-08 temp paths: a temp root counts only at a path start; a URL path, query or fragment is never recorded', () => {
+  expect(tempPaths({ url: 'https://bucket.s3.example.invalid/tmp/upload.zip?X-Amz-Credential=abc%2F20261021' })).toEqual([])
+  expect(tempPaths({ command: 'curl -s https://api.example.invalid/v1/tmp/export?access_token=abc -o out.json' })).toEqual([])
+  expect(tempPaths({ command: 'open https://h.example.invalid/x/scratchpad/notes.md#top' })).toEqual([])
+  expect(tempPaths({ command: 'cat /tmp/report.txt?raw=1 /tmp/page.html#part' })).toEqual(['/tmp/report.txt', '/tmp/page.html'])
+  expect(tempPaths({ command: 'X=/tmp/a.log; cat "/tmp/b.log" `cat /tmp/c.log` $(ls /private/var/folders/x1/T/d.log) >/tmp/e.log' })).toEqual([
+    '/tmp/a.log', '/tmp/b.log', '/tmp/c.log', '/private/var/folders/x1/T/d.log', '/tmp/e.log',
+  ])
+})
+
 test('detector: an s=sub marker with the main Resume here heading in a subagent-proven compaction is scope-leak (MOD-SPEC 5.1, corpus 41)', () => {
   const name = 'x'.repeat(14)
   const text = '<summary>\n' + markerText(name, '5e6f7081', 'sub') + '\n## Task as assigned\nfind callers\n## Resume here\nStatus: active\n' +
