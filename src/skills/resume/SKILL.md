@@ -28,7 +28,7 @@ Restore work from a handoff written by `/{{plugin}}:handoff` or from a saved com
 
 ## R0 Pick the path
 
-- **You are a subagent:** this skill is not for you. Reconcile your summary with the kept messages, check your own background tasks' output yourself, and re-check the condition your next action needs. Then continue and report to your parent as text. Never end your turn while your own job runs: a notification may not wake you. Start a job you will wait on with `; echo "__exit $?"` at the end. Wait in the foreground with `<store> wait --for <spec> --max 270` (Bash `timeout` 300000), run it again on exit 10, then read the output yourself. Past the job's due time plus grace (exit 13), report it to your parent as still running (task id, output path, spec) and do not stop it. <!-- review-fix: a subagent's "wait for the notification" is the H-5 never-woken failure -->
+- **You are a subagent:** this skill is not for you. Reconcile your summary with the kept messages, check your own background tasks' output yourself, and re-check the condition your next action needs. Then continue and report to your parent as text. Never end your turn while your own job runs: a notification may not wake you. Start a job you will wait on with `; echo "__exit $?"` at the end. Wait in the foreground with `<store> wait --for <spec> --max 270` (Bash `timeout` 300000; add `--deadline <epoch>` at the due time plus grace), run it again on exit 10, then read the output yourself. Past the deadline (exit 13), report it to your parent as still running (task id, output path, spec) and do not stop it. <!-- review-fix: a subagent's "wait for the notification" is the H-5 never-woken failure -->
 - **Just compacted, and the user did not invoke this skill:** take the light path.
 - **Otherwise** (the user asked to resume; a new session; `/clear`; an explicit path): run R1–R10. In the same session, the summary in context counts as read.
 
@@ -144,7 +144,7 @@ Compaction keeps background work alive. `/clear` and session end kill the old pr
 
 **5a Inventory** from runtime channels, never from the handoff alone:
 - `ListAgents`, `CronList`, and the background-task list or `task_status` where available;
-- `<store> inventory <handoff>`: last Stop sidecar, task output files (size, mtime), workflow journals and transcript dirs, recorded pids and ports (start-time match), recipes and restart counters.
+- `<store> inventory <handoff>`: last Stop sidecar, task output files (size, mtime), workflow journals and transcript dirs, recorded pids and ports (start-time match), recipes and restart counters, and one `job:` line per background shell the plugin recorded (its verdict and signals).
 
 Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Listed but on no channel → LOST candidate. Running but unlisted → LEFTOVER candidate. Workflows are not re-announced after compaction: a workflow whose journal or transcripts changed within grace is RUNNING even if no runtime list shows it. <!-- review-fix: TECH-FACTS Q3 — local_workflow never re-attached as task_status -->
 

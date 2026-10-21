@@ -31,7 +31,7 @@ Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edi
 
 **Budget.** Step 1 ≤4 calls · Step 2 ≤11 · Step 4 ≤2 · Step 6 1 · Step 7 ≤7 (publish; up to 2 LINT rounds, each one Write and one publish; one ADVISORY round, one Edit and one publish). Typical 10–14, hard cap 25; recipe Writes (Step 5, ≤8) on top.
 
-**Plugin handoff turn.** When `begin` prints `handoff_turn`, the plugin asked for this handoff because it will not resume the work by itself. Its call limit is on top of yours. When it says the budget is spent, go to Step 6 with what you have (H, skipping Steps 3–5), or stop if nothing is drafted. Its other stop conditions are yours. Never write a second handoff in that turn, even after a compaction: `"resumed": true` means the stage is the one already begun, so continue its draft; `REFUSED: handoff-exists <path>` means it is published at `<path>`, so report that path as the receipt (not B).
+**Plugin handoff turn.** When `begin` prints `handoff_turn`, the plugin asked for this handoff because it will not resume the work by itself. Its call limit is on top of yours. When it says the budget is spent, go to Step 6 with what you have (H, skipping Steps 3–5), or stop if nothing is drafted. Its other stop conditions are yours. Never write a second handoff in that turn, even after a compaction: a `resumed` key means the stage is the one already begun, so continue its draft; `REFUSED: handoff-exists <path>` means it is published at `<path>`, so report that path as the receipt (not B).
 
 ## Step 0 — Gate
 

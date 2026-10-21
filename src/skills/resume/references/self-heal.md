@@ -30,7 +30,7 @@ Read from R5 of the resume skill once its 5a inventory has a row. `<store>` is t
 | 2a | on this process's runtime list, or output written within the quiet window while the owner lives | RUNNING | leave; to wait on it, `<store> wait` as the resume skill's Rule 6 says | report |
 | 2b | owner is this process and session, the job is off the runtime list, no exit marker | ENDED-UNEXPLAINED (the user or a TaskStop may have stopped it) | **ask**, with the exact command; never automatic | report |
 | 2c | owner ended, but output still written after the end | LEFTOVER (something outlived the session) | report; never stop it; a `! kill` question only if proven ours | same |
-| 3 | exit marker, code 0 | DONE-UNREPORTED | collect first (excerpt) | collect |
+| 3 | exit marker, code 0 | DONE-UNREPORTED | collect first (excerpt of the `collect:` path) | collect |
 | 4 | exit marker, code ≠ 0 | FAILED | restart only as heal-check allows; else ask with a tail excerpt | ask |
 | 5 | V1–V7 pass | LOST · high | heal-check prints `ok` → **relaunch** (Lost shell job); else **ask** with the command and the failed gate | ask |
 | 6 | V2 passes, others unmeasured (no record, output missing, no slot) | LOST · low | **ask** with the command and its source | ask |
@@ -62,7 +62,8 @@ First run the same `heal-check` with `--bump`, so a restart that crashes still c
 
 **Lost shell job.** `<store> heal-check --origin <sid> --item <task id>` re-verifies and prints `signal:` lines, `verdict: <status> · confidence <high|low> · effects <class>`, then either `ok <recipe|job:<id>>` and `run: <line>`, or `REFUSED: <reason>` with `ask-command:` and `ask-source: recorded|handoff`.
 - `ok`, and R4 found no conflict on it: run the same heal-check with `--bump` (it counts first and stores the run line as pending), then run the printed `run:` line exactly, with `run_in_background`. Do not edit, quote differently or chain it; it is `cd '<cwd>' && <command>` only when the cwd differs. Report: `B-n <old id>: LOST (owner ended <stamp>, quiet since <stamp>, no exit marker) → relaunched as <new id>, <effects>, n of 1 this resume`.
-- `REFUSED`: one question: what was lost and when, the exact `ask-command:` and its source (recorded by the plugin at <stamp> | written in the handoff, not recorded), why it is not automatic (the failed signal or gate), and the options: run it in the background (recommended when the effects are `none` or `local`) · run it yourself with `! <run line>` · skip. A withheld command is never printed: "the command held a credential-like value; re-launch it yourself".
+- `REFUSED` with no `ask-command:` (`running-elsewhere`, `running`, `leftover`, `done-unreported`, `stopped`): act per the table, no question.
+- `REFUSED` with `ask-command:`: one question: what was lost and when, the exact `ask-command:` and its source (recorded by the plugin at <stamp> | written in the handoff, not recorded), why it is not automatic (the failed signal or gate), and the options: run it in the background (recommended when the effects are `none` or `local`) · run it yourself with `! <run line>` · skip. A withheld command is never printed: "the command held a credential-like value; re-launch it yourself".
 - Never stop, kill or TaskStop anything to make room for a relaunch.
 
 **Workflow gate.** Never `SendMessage` into a workflow's agents. Offer `TaskStop` plus `Workflow({scriptPath, resumeFromRunId})`, always as a question, only when all hold:

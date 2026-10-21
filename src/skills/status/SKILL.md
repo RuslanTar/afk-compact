@@ -14,4 +14,6 @@ Run `{{plugin}}-store status --sid "${CLAUDE_SESSION_ID}"` (the plugin's helper,
 - `smokeDue`, with the user-run line `! {{plugin}}-store smoke`;
 - policy flags.
 
+Repo mode is set up by the user, never by you: `! {{plugin}}-store project status --cwd <repo>`, then `! {{plugin}}-store project init --cwd <repo>` (writes the declaration, README and `.gitignore`; commits nothing), then adding the repository to `repo_roots` in `/config`. `project copy` is a dry run unless the user adds `--apply`.
+
 No content, no transcript reads, no actions.
