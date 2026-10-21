@@ -1,0 +1,104 @@
+{
+ "id": "ident-watch",
+ "note": "BUILD-PLAN §3.1 ident row (+ watch), MOD-SPEC §1.2 unsafe roots: ident gives the mod the effective log folder, so the mod never writes under a refused root: log_dir (default <root>/.watch) when safe; the default root's .watch when log_dir or handoff_root is inside a git work tree or a .planning folder; null when that default is unsafe too",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/r"
+ },
+ "steps": [
+  {
+   "name": "safe root",
+   "argv": [
+    "ident",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "json_keys": [
+     "pid",
+     "pid_lstart",
+     "execpath_version",
+     "watch"
+    ],
+    "json": {
+     "watch": "$TMP/r/.watch"
+    }
+   }
+  },
+  {
+   "name": "log_dir inside a git work tree: the default root's .watch",
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/example-repo"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/example-repo/logs"
+   },
+   "argv": [
+    "ident",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "watch": "$HOME/.claude/handoffs/.watch"
+    }
+   }
+  },
+  {
+   "name": "handoff_root inside .planning: the default root's .watch",
+   "setup": [
+    {
+     "mkdir": "$TMP/p/.planning"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/p/.planning/h"
+   },
+   "argv": [
+    "ident",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "watch": "$HOME/.claude/handoffs/.watch"
+    }
+   }
+  },
+  {
+   "name": "handoff_root inside a git work tree and the default root unsafe too: null",
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$HOME/.claude/handoffs"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/example-repo/handoffs"
+   },
+   "argv": [
+    "ident",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "watch": {
+      "null": true
+     }
+    },
+    "absent": [
+     "$TMP/example-repo/handoffs"
+    ]
+   }
+  }
+ ]
+}
