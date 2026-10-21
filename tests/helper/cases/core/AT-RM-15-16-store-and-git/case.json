@@ -1,0 +1,25 @@
+{
+ "id": "AT-RM-15, AT-RM-16",
+ "note": "D-12 Block A, §1.5.3. AT-RM-15: handoff_root set to a tracked path inside the accepted repository keeps the private-store refusal (root-in-git) and status prints the 'must stay outside' line. AT-RM-16: without git the mode is private (repo-git-unavailable); a git that does not answer within the budget gives private (repo-root-unchecked); status still prints its other lines",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"setup": [
+    {"repo": "$TMP/r30", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n", "hr/keep.md": "tracked\n"}},
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"repo_roots": "$TMP/r30", "handoff_root": "$TMP/r30/hr"}}}}},
+    {"stub": "git", "dir": "$TMP/slowbin", "script": "sleep 6\nexit 0"}
+  ]},
+  {"name": "store inside the repository", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r30"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^root: handoff_root refused \\(root-in-git\\); copies and evidence under it are not written$",
+                    "^handoff mode: repo \\(accepted\\)$",
+                    "^handoff_root must stay outside the repository; repo mode only exports into it$"],
+     "absent": ["$TMP/r30/hr/.watch", "$TMP/r30/.claude/handoffs"]}},
+  {"name": "git unavailable", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r30"],
+   "env": {"PATH": "/bin"},
+   "expect": {"exit": 0, "stdout_has": ["^handoff mode: private \\(repo-git-unavailable\\)$", "^halt: off"]}},
+  {"name": "git too slow", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r30"],
+   "path_prepend": ["$TMP/slowbin"],
+   "expect": {"exit": 0, "stdout_has": ["^handoff mode: private \\(repo-root-unchecked\\)$", "^halt: off"]}}
+ ]
+}

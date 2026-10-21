@@ -32,9 +32,9 @@ binmode STDIN;
 # Subcommands of the §3.1 table. Each one lives in cmd/<sub>.pl.
 my %KNOWN = map { $_ => 1 } qw(
     hook ident dispatch prev-copy checkpoint save-copy sweep claim measure log
-    reconcile status smoke
+    reconcile status smoke handoff-turn handoff-state queue-add
     begin stamp evidence publish locate inventory heal-check verify
-    restore-evidence stash lane pin receipt
+    restore-evidence stash lane pin receipt wait project
     watch
 );
 
@@ -56,7 +56,7 @@ if ($IS_HOOK) {
 for my $lib (qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
                 git gsd queue bucket frontmatter detect assemble secrets evidence
                 dispatch transcript scope sessions sidecar copies measure checkpoint
-                sweep reconcile keyset resumeblock args rollup postcompact)) {
+                sweep reconcile keyset resumeblock args rollup postcompact repomode jobrec)) {
     my $ok = eval { require "$lib.pm"; 1 };
     if (!$ok) {
         if ($IS_HOOK) { local $/; my $d = <STDIN>; exit 0 }

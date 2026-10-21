@@ -104,7 +104,20 @@ sub once {
     return $ok ? 1 : 0;
 }
 
-# Rows every subcommand writes once per session: test mode, unsafe roots, ambiguity.
+# mode(cwd) -> the handoff-root mode of cwd's worktree (lib/repomode.pm, MOD-SPEC §1.5),
+# decided once per call; the first call for each distinct (mode, reason) in a session
+# logs `handoff_mode {mode, reason, declared, accepted}`.
+sub mode {
+    my ($cwd) = @_;
+    my $m = repomode::decide($cwd);
+    emit('handoff_mode', [mode => $m->{mode}, reason => $m->{reason}, declared => jsonc::bool($m->{declared}),
+                          accepted => jsonc::bool($m->{accepted})])
+        if once("handoff_mode.$m->{mode}.$m->{reason}");
+    return $m;
+}
+
+# Rows every subcommand writes once per session: test mode, unsafe roots, ambiguity,
+# and the settings notes (consent keys given as a flag or env: `config_note`).
 sub preamble {
     return unless defined $R{watch} && defined $R{sid};
     emit('test_mode', []) if util::test_mode() && once('test_mode');
@@ -117,6 +130,10 @@ sub preamble {
         }
     }
     emit('config_ambiguous', [candidates => 'several']) if $R{settings}{ambiguous} && once('config_ambiguous');
+    for my $n (@{ $R{settings}{notes} || [] }) {
+        next unless $n =~ /^([a-z_]+): settings file only$/;
+        emit('config_note', [key => $1, note => 'settings-file-only']) if once("config_note.$1");
+    }
 }
 
 1;

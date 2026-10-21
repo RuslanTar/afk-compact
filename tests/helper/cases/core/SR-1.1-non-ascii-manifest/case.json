@@ -1,0 +1,31 @@
+{
+ "id": "SR-1.1-non-ascii-manifest",
+ "note": "build-to-core round 1: one non-ASCII character in a userConfig description, a non-ASCII handoff_root in the user's settings file and a non-ASCII copy path in a rollup row must not change the encoding of any status line: every line is UTF-8 once, the middle dots included (they came out double-encoded when the manifest held '…'). Step 3: the same manifest with no mod row (the settings line)",
+ "manifest": {"userConfig.queue_cmd.description": "Executable answering 'list --json --session <sid>'… (draft on stdin). Empty = off.",
+              "userConfig.watcher.description": "shadow (default) · off — the watcher’s rows"},
+ "tz": "Etc/GMT-3",
+ "now": "2026-10-21T14:05:12+03:00",
+ "env": {"CLAUDE_PLUGIN_ROOT": "$PLUGIN"},
+ "steps": [
+  {"setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@inline": {"options": {"handoff_root": "$TMP/räume/handoffs"}}}}},
+    {"write": "$TMP/räume/handoffs/.watch/$SID.jsonl", "jsonl": [
+      {"v": 1, "ts": "2026-10-21T14:00:00.000+03:00", "ev": "config_effective", "sid": "$SID", "actor": "main", "writer": "mod", "target": 400000, "soft_max": 600000, "window": 800000, "native_trigger": 767000}
+    ]},
+    {"write": "$TMP/räume/handoffs/.watch/$SID/compactions.jsonl", "jsonl": [
+      {"v": 1, "ts": "2026-10-21T14:01:00.000+03:00", "ev": "compaction", "session_id": "$SID", "actor": "main", "compaction_seq": 1, "nonce": "1a2b3c4d", "seat_state": "mod-hook", "trigger": "auto", "verdict": "ok", "copy_path": "wörk/general/compact/2026-10-21_14-01-00_11111111-1a2b3c.md"}
+    ]}
+  ]},
+  {"argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^thresholds: target 400000 · soft_max 600000 · window 800000 · native_trigger 767000$",
+                    "^  2026-10-21T14:01:00\\.000\\+03:00 · main · mod-hook · auto · ok · copy $TMP/räume/handoffs/wörk/general/compact/2026-10-21_14-01-00_11111111-1a2b3c\\.md$",
+                    "^halt: off · continues this hour: 0 of 3$"],
+     "stdout_lacks": ["Â", "Ã", "â€"]}},
+  {"setup": [{"write": "$TMP/räume/handoffs/.watch/$SID.jsonl", "text": ""}]},
+  {"argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^thresholds: no mod row yet \\(settings: target 400000 · soft max 600000\\)$"],
+     "stdout_lacks": ["Â", "Ã", "â€"]}}
+ ]
+}
