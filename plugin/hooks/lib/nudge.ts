@@ -5,8 +5,9 @@ import type { Deps } from './deps'
 import type { Tag } from './assemble'
 import { assemble } from './assemble'
 import { effective } from './config'
-import { call } from './helper'
+import { logPaths } from './helper'
 import { log, makeRow } from './log'
+import { byteLength } from './normalize'
 
 export const ASK_TOOL = 'AskUserQuestion'
 
@@ -67,13 +68,18 @@ export function trackPaths(state: Deps['state'], run: Promise<void>): void {
   state.pathsInflight = prev ? Promise.all([prev, safe]) : safe
 }
 
-/** Appends the cited temp paths to `<watch>/<sid>/paths.jsonl` (`log --stream paths`). */
+/**
+ * Appends the cited temp paths to `<watch>/<sid>/paths.jsonl`: one `log --stream paths --stdin`
+ * spawn per tool call, all its new paths as JSON lines (F2-6). A row over 4 KB is not sent.
+ */
 export async function recordPaths(d: Deps, sid: string, tool: string, input: Record<string, unknown>): Promise<void> {
   const seen = d.state.recordedPaths
   const found = tempPaths(input, p => seen.has(sid + '\n' + p))
+  const lines: string[] = []
   for (const p of found) {
     seen.add(sid + '\n' + p)
-    const row = await makeRow(d, sid, 'path', { path: p, tool })
-    await call(d, ['log', '--sid', sid, '--stream', 'paths', '--json', JSON.stringify(row)])
+    const line = JSON.stringify(await makeRow(d, sid, 'path', { path: p, tool }))
+    if (byteLength(line) + 1 <= 4096) lines.push(line)
   }
+  await logPaths(d, sid, lines)
 }

@@ -116,6 +116,8 @@ export async function boundary(d: Deps): Promise<void> {
       sid, nonce, agentId: null, midturn: false, resumePref: pref, messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
     }))
     await guarded(d, sid, 'continue', () => autoContinue(d, sid))
+    // The block not carried by a continue waits for prompt.context; the cap may have entered halt.
+    if (s.pending && s.pending.nonce === nonce) s.pending.outcome.halt = s.halt.active
   } finally {
     s.busy = false
   }

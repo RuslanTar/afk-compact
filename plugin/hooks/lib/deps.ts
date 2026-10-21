@@ -33,8 +33,8 @@ export interface Deps {
   /** `$.session.compact`; rejects while a turn runs. */
   compact(instructions: string): Promise<SessionCompactResult>
   submit(text: string): Promise<void>
-  /** `$.process.run` with rejections caught. */
-  run(argv: readonly string[], timeoutMs: number): Promise<RunResult>
+  /** `$.process.run` with rejections caught; `stdin` is written to the child, then closed. */
+  run(argv: readonly string[], timeoutMs: number, stdin?: string): Promise<RunResult>
   /** Whole-file write; false when it failed. */
   write(path: string, text: string): Promise<boolean>
   exists(path: string): Promise<boolean>
@@ -110,7 +110,16 @@ export type PendingResume = {
   resumePref: 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
   /** Main turn count when it became pending (an undelivered block survives a whole turn). */
   turnSeq: number
+  /** What the mod decided for this compaction, logged as `mod_outcome` once the block settles. */
+  outcome: Outcome
 }
+
+/**
+ * The mod's part of the rollup (MOD-SPEC §2.5, F2-3): `nudged` = a nudge was given in the main
+ * turn this compaction ended or interrupted; `continued` = an auto-continue was submitted after
+ * it; `halt` = halt mode was on once the mod had handled it.
+ */
+export type Outcome = { nudged: boolean; continued: boolean; halt: boolean }
 
 export function newState(loadId: string): LoadState {
   return {
@@ -175,9 +184,9 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     async submit(text) {
       await $.prompt.submit({ text })
     },
-    async run(argv, timeoutMs) {
+    async run(argv, timeoutMs, stdin) {
       try {
-        const r = await $.process.run(argv, { timeoutMs, env })
+        const r = await $.process.run(argv, stdin === undefined ? { timeoutMs, env } : { timeoutMs, env, stdin })
         return { ok: r.exitCode === 0, exitCode: r.exitCode, stdout: r.stdout, error: r.stderr }
       } catch (err) {
         return { ok: false, exitCode: null, stdout: '', error: 'rejected: ' + errText(err) }

@@ -254,6 +254,61 @@ test('tool.call: the tool starts before its temp paths are recorded (no helper s
   expect(w.pathRows.map(r => r.path)).toEqual(['/tmp/build.log'])
 })
 
+test('F2-6: one tool call citing three new temp paths: one log --stream paths --stdin spawn, three JSON lines; a repeat call spawns nothing', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.turnStart($)
+  await $.tool.call({ tool: 'Bash', command: 'diff /tmp/a.log /tmp/b.log > /private/tmp/c.diff' } as never)
+  await w.settle()
+  const calls = w.callsOf('log').filter(c => w.flag(c, '--stream') === 'paths')
+  expect(calls.length).toBe(1)
+  expect(calls[0]?.args).toContain('--stdin')
+  expect(calls[0]?.args).not.toContain('--json')
+  const lines = (calls[0]?.stdin ?? '').split('\n').filter(l => l !== '')
+  expect(lines.map(l => (JSON.parse(l) as { path: string }).path)).toEqual(['/tmp/a.log', '/tmp/b.log', '/private/tmp/c.diff'])
+  expect(w.pathRows.map(r => [r.ev, r.tool, r.sid])).toEqual([['path', 'Bash', SID_A], ['path', 'Bash', SID_A], ['path', 'Bash', SID_A]])
+  await $.tool.call({ tool: 'Bash', command: 'cat /tmp/a.log /tmp/b.log' } as never)
+  await w.settle()
+  expect(w.callsOf('log').filter(c => w.flag(c, '--stream') === 'paths').length).toBe(1)
+})
+
+test('PRIV-04: no ident answer (helper failed it): the raw summary is stashed nowhere, not under the configured watch', async ($, on) => {
+  const w = new World().install(on)
+  w.replies['ident'] = () => ({ exitCode: 70, stdout: '' })
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(w.writes.filter(p => p.includes('/pending/'))).toEqual([])
+  expect([...w.files.keys()].filter(p => p.endsWith('.mod.md'))).toEqual([])
+  expect(w.callsOf('save-copy').length).toBe(0)
+  expect(w.rowsOf('copy_failed').map(r => r.reason)).toEqual(['helper-missing'])
+})
+
+test('PRIV-04: a compaction before any session.start or turn.start in this load asks ident first and stashes under its watch only', async ($, on) => {
+  const w = new World().install(on)
+  const other = HOME + '/.claude/handoffs-default/.watch'
+  w.identWatch = other
+  await raiseCompact($, { trigger: 'manual' })
+  await w.settle()
+  expect(w.callsOf('ident').length).toBe(1)
+  const stashed = w.writes.filter(p => p.endsWith('.mod.md'))
+  expect(stashed.length).toBe(1)
+  expect(stashed[0]?.startsWith(`${other}/${SID_A}/pending/`)).toBe(true)
+  expect(w.flag(w.callsOf('save-copy')[0], '--from')).toBe(stashed[0])
+})
+
+test('PRIV-04: ident watch null: no stash, copy_failed unsafe-root (row through the helper log)', async ($, on) => {
+  const w = new World().install(on)
+  w.identWatch = null
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(w.writes).toEqual([])
+  expect(w.rowsOf('copy_failed').map(r => r.reason)).toEqual(['unsafe-root'])
+})
+
 test('tool.call: auto_evidence off records no temp paths', { options: { auto_evidence: false } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)

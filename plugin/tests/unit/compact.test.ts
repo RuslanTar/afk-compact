@@ -231,6 +231,32 @@ test('helper down: dispatch record written with $.fs.write, helper_missing in a 
   expect(events.some(r => r.ev === 'dispatch')).toBe(true)
 })
 
+test('F2-1 (S-21 order, mod side): inside next(), where PreCompact, SessionStart(compact) and PostCompact run before the boundary row exists, the dispatch record already carries the P1 proof; nothing is saved or swept yet', async ($, on) => {
+  const w = new World().install(on)
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  const atBottom: { records: string[][]; saves: number; sweeps: number }[] = []
+  w.atCompact = () => {
+    atBottom.push({
+      records: w.callsOf('dispatch').map(c => [w.flag(c, '--actor') ?? '', w.flag(c, '--channel') ?? '', w.flag(c, '--resume-pref') ?? '']),
+      saves: w.callsOf('save-copy').length,
+      sweeps: w.callsOf('sweep').length,
+    })
+  }
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  expect(atBottom).toEqual([
+    { records: [['main', 'mod-hook', 'prompt.context']], saves: 0, sweeps: 0 },
+    { records: [['main', 'mod-hook', 'prompt.context'], [AGENT, 'mod-hook', 'none']], saves: 1, sweeps: 1 },
+  ])
+  // Helper down: the $.fs.write record carries the agent id the same way.
+  w.atCompact = undefined
+  w.helperDown = true
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  const nonce = markerNonce(w, w.compacts[2]?.instructions) ?? ''
+  const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/dispatch/${nonce}.json`) ?? '{}') as Record<string, unknown>
+  expect([rec.agent_id, rec.actor, rec.channel, rec.resume_pref]).toEqual([AGENT, AGENT, 'mod-hook', 'none'])
+})
+
 const CLOSE_MARK = '\u27eb'
 const MAIN_MARKS = new RegExp(' v1 n=[0-9a-f]{8} s=main' + CLOSE_MARK, 'g')
 
