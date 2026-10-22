@@ -4,6 +4,7 @@ package watch::rows;
 # compute classes and is dropped; the result holds ids, counts and classes.
 use strict;
 use warnings;
+use utf8;
 use watch::io;
 use watch::spec;
 use watch::json;

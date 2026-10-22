@@ -31,6 +31,7 @@ package watch::ctx;
 # lib/watch.pm turn every plain ctx value into UTF-8 bytes first.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use File::Basename ();
 use watch::io;

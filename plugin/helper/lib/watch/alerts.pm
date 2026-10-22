@@ -11,6 +11,7 @@ package watch::alerts;
 # and no `delivered/` marker is created; `/status` lists the alerts.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::spec;

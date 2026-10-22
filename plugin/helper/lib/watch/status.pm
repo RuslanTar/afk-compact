@@ -4,6 +4,7 @@ package watch::status;
 # Owner: WP-watch. Fixed texts, ids and counts only; never content.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::alerts;

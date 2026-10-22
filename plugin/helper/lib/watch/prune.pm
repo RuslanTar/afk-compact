@@ -11,6 +11,7 @@ package watch::prune;
 # symlink or a non-regular file anywhere in a session's set keeps the set.
 use strict;
 use warnings;
+use utf8;
 
 my $UUID = qr/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 

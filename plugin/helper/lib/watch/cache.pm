@@ -20,6 +20,7 @@ package watch::cache;
 # the load says it is incomplete, so no rule runs on part of a stream.
 use strict;
 use warnings;
+use utf8;
 use Fcntl qw(O_RDWR O_CREAT SEEK_END);
 use watch::ctx;
 use watch::io;

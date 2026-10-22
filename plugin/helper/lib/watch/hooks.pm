@@ -6,6 +6,7 @@ package watch::hooks;
 # the watcher reads them and writes neither.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::json;

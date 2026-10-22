@@ -5,6 +5,7 @@ package watch::spec;
 # list, and the metric that needs it is logged as null.
 use strict;
 use warnings;
+use utf8;
 
 sub list {
     my ($spec, $key) = @_;

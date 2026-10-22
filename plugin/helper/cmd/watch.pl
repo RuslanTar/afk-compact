@@ -8,6 +8,7 @@
 # Exit: 0 ran, 64 usage, 70 internal error.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::prune;

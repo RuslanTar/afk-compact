@@ -12,6 +12,7 @@ package watch;
 # plugin-core writes are core's and are not here.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::json;

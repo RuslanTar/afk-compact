@@ -5,6 +5,7 @@ package watch::shape;
 # classes and ids, never text (WATCH §8.2).
 use strict;
 use warnings;
+use utf8;
 use watch::spec;
 use watch::io;
 

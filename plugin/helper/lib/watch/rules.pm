@@ -13,6 +13,7 @@ package watch::rules;
 # the caller drops the run and the next Stop evaluates the same input again.
 use strict;
 use warnings;
+use utf8;
 use watch::alerts;
 use watch::cache;
 use watch::ctx;

@@ -11,6 +11,7 @@ package watch::hturn;
 # files, never writes them.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 
