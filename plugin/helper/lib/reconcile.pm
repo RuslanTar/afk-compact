@@ -466,7 +466,21 @@ sub _run {
                                 budget_ms => $left->(), bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $mn);
         }
         my $tot = $sweep ? $sweep->{totals} : undef;
-        my $rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
+        my @rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
+        my $rolled = scalar @rolled;
+        # CORE-20 (C-STORE incidental 1, DP-31 (4)): the rollup row PostCompact wrote names the
+        # deferred dispatch's actor; when the slot this save took differs, a copy_attributed row
+        # says where the copy is and whose it is (readers take it over the rollup row; data only).
+        if ($rolled) {
+            my $slot_actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
+            my ($r0) = @rolled;
+            if (($r0->{actor} // '') ne $slot_actor && !$logged->{"copy_attributed:$id6"}++) {
+                my $tk = ref $m{tokens} eq 'ARRAY' ? $m{tokens} : [];
+                rc::emit('copy_attributed', [id6 => $r0->{id6} // $id6, nonce => $mn, from_rel => undef, rel_path => $save->{rel},
+                                             actor => $slot_actor, proof => 'slot', seq => $save->{seq},
+                                             pre_tokens => $tk->[0], post_tokens => $tk->[1]]);
+            }
+        }
         if (!$rolled) {
             my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
             rollup::write(session_id => $sid, actor => $actor,
