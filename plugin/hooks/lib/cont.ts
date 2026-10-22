@@ -5,6 +5,7 @@ import type { HaltReason } from './handoff-turn'
 import { claimBy } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 import { logOutcome } from './resume'
+import { submitDropped } from './idle'
 
 export const HOUR_MS = 3600000
 
@@ -164,6 +165,13 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
       resume = 'delivered:prompt.submit'
     } else resume = 'delivered:' + (c.by ?? 'unknown')
     s.pending = undefined
+  }
+  // IC-1 D7 (ii): a `/clear` since the compaction: the old session's continue (and its block)
+  // never reaches the new conversation.
+  if ((await d.sessionId()) !== sid) {
+    await submitDropped(d, sid, 'continue')
+    if (pend && resume !== undefined) await logOutcome(d, sid, pend.nonce, pend.outcome, resume === 'delivered:prompt.submit' ? 'dropped:session-end' : resume)
+    return
   }
   stamps.push(now)
   await d.storeSet(key, stamps)

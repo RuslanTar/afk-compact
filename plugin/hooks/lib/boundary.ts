@@ -10,6 +10,8 @@ import type { HandoffTurn } from './handoff-turn'
 import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHandoff, planPrecompact } from './handoff-turn'
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
+import { armIdle } from './idle'
+import { isHuman } from './deps'
 import { log, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
@@ -60,6 +62,13 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   const seq = s.nativeCompactSeq
   s.lastTurnAsksUser = s.askedThisTurn || endsWithQuestion(t.answer)
   if (t.reason !== 'answer') s.resumeAfter = false
+  // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
+  // main turn end, whatever its origin.
+  const endAt = await d.now()
+  s.lastTurnEndAt = endAt
+  s.lastTurnAnswer = t.reason === 'answer'
+  if (isHuman(s.turnOrigin)) s.idleEpisode = { since: endAt, done: false }
+  await armIdle(d, sid, endAt)
   await undeliveredCheck(d, sid)
   const end = await endHandoffTurn(d, sid, t.reason)
   if (end.kind === 'done') return

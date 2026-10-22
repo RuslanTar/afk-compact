@@ -4,6 +4,7 @@
 import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claude-code'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
+import type { BlockArgs } from './resume'
 import { optionEnv, parseOptions, paths } from './config'
 
 export type RunResult = {
@@ -16,7 +17,7 @@ export type RunResult = {
   error: string
 }
 
-export type Usage = { tokens: number | undefined; window: number }
+export type Usage = { tokens: number | undefined; window: number; rateLimits: { percentUsed: number }[] }
 export type Version = { version: string; base?: string; builtAt?: string }
 
 /** The launcher's folder under the plugin root (PKG-RUNTIME A.1): this spelling lives here only. */
@@ -155,12 +156,28 @@ export type LoadState = {
   afterNative: (() => void) | undefined
   /** A pre-compaction turn ran since this load's last main compaction (§9.3 `again`). */
   precompactRan: boolean
+  /** Origin kinds of the prompts counted in `foreignPrompts`, oldest first (IC-1 D6). */
+  enteringKinds: string[]
+  /** The origin kind of the prompt that opened the current main turn: `plugin` for ours, undefined when none was seen. */
+  turnOrigin: string | undefined
+  /** When the last main turn ended, and whether it ended `answer` (§9.4, the idle predicate). */
+  lastTurnEndAt: number | undefined
+  lastTurnAnswer: boolean
+  /** The pre-idle timer (§9.4). */
+  idleTimer: { cancel: () => void } | undefined
+  /** The idle episode: from a human-origin turn's end to the next human-origin turn.start (§9.4). */
+  idleEpisode: { since: number; done: boolean } | undefined
+  /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
+  publishedSinceHuman: boolean
 }
 
 export type PendingResume = {
   sid: string
   nonce: string
   block: string
+  /** When the block was built, and what it was built from: a block delivered more than 600 s later is built again with a fresh measure (IC-1 D3). */
+  builtAt: number
+  args: BlockArgs
   resumePref: 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
   /** Main turn count when it became pending (an undelivered block survives a whole turn). */
   turnSeq: number
@@ -232,6 +249,13 @@ export function newState(loadId: string): LoadState {
     nativeCompacting: 0,
     afterNative: undefined,
     precompactRan: false,
+    enteringKinds: [],
+    turnOrigin: undefined,
+    lastTurnEndAt: undefined,
+    lastTurnAnswer: false,
+    idleTimer: undefined,
+    idleEpisode: undefined,
+    publishedSinceHuman: false,
   }
 }
 
@@ -262,7 +286,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     async usage() {
       const u = await $.session.usage()
-      return { tokens: u.context.tokens, window: u.context.window }
+      return { tokens: u.context.tokens, window: u.context.window, rateLimits: (u.rateLimits ?? []).map(l => ({ percentUsed: l.percentUsed })) }
     },
     async version() {
       const v = await $.session.version()
@@ -384,22 +408,45 @@ export function isOurText(turnText: string, sent: string | undefined): boolean {
 export function claimTurn(s: LoadState, turnText: string): boolean {
   const foreign = s.foreignPrompts > 0
   const ours = s.ourSubmitPending && (!foreign || isOurText(turnText, s.ourSubmitText))
-  if (ours) submitSettled(s)
-  else if (foreign) s.foreignPrompts--
+  if (ours) {
+    submitSettled(s)
+    s.turnOrigin = 'plugin'
+  } else {
+    if (foreign) s.foreignPrompts--
+    // A prompt queued beside a turn of ours starts its turn after that turn's end, where the
+    // entering count was reset (a bound): its origin kind is still the oldest one kept.
+    s.turnOrigin = s.enteringKinds.shift()
+  }
   return ours
 }
 
-/** `prompt.submit` of a prompt entering an idle session (no `turnId`): its turn starts next. */
-export function promptEntering(s: LoadState): void {
-  s.foreignPrompts++
+/** IC-1 D6: the origin kinds of a person's prompt (typed, remote bridge, SDK). */
+export const HUMAN_ORIGINS: readonly string[] = ['composer', 'bridge', 'sdk']
+
+export function isHuman(kind: string | undefined): boolean {
+  return kind !== undefined && HUMAN_ORIGINS.includes(kind)
 }
+
+/** `prompt.submit` of a prompt entering an idle session (no `turnId`): its turn starts next. */
+export function promptEntering(s: LoadState, kind = 'unknown'): void {
+  s.foreignPrompts++
+  s.enteringKinds.push(kind)
+  // A bound, as for the count: a kind whose prompt never started a turn is not kept for long.
+  if (s.enteringKinds.length > MAX_ENTERING) s.enteringKinds.shift()
+}
+
+/** The origin kinds kept for prompts that entered and have not started their turns. */
+export const MAX_ENTERING = 4
 
 /**
  * That prompt did not enter (`{ drop }` or a failed chain): no turn of its own will start. A
  * handoff turn it deferred (CR-F17) runs its delay again once no other prompt is entering.
  */
-export function promptNotEntered(s: LoadState): void {
+export function promptNotEntered(s: LoadState, kind = 'unknown'): void {
   if (s.foreignPrompts > 0) s.foreignPrompts--
+  const i = s.enteringKinds.lastIndexOf(kind)
+  if (i >= 0) s.enteringKinds.splice(i, 1)
+  else s.enteringKinds.pop()
   const again = s.afterForeign
   if (s.foreignPrompts > 0 || again === undefined || s.mainTurnRunning) return
   s.afterForeign = undefined

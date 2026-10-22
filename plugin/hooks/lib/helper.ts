@@ -65,9 +65,15 @@ export type DispatchArgs = {
   loadId: string
   /** The handoff turn this dispatch follows or interrupts (MOD-SPEC §2.3 `handoff_ht`). */
   handoffHt?: string
+  /** IC-1 D1: an idle dispatch, with the seconds since the last main turn end. */
+  idle?: { gapS: number }
 }
 
-/** `dispatch … [--handoff-ht H]` → `ok`; exit 3 `REFUSED: nonce-exists`. */
+/**
+ * `dispatch … [--handoff-ht H] [--idle=true --idle-gap-s=N]` → `ok`; exit 3 `REFUSED: nonce-exists`.
+ * `--idle` is given only for an idle dispatch (absent = false), in the `=` form, which the
+ * helper's parser reads alike for a value flag and a boolean one (CORE-14).
+ */
 export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
   return call(d, [
     'dispatch', '--sid', a.sid, '--nonce', a.nonce, '--actor', a.actor, '--trigger', a.trigger,
@@ -75,6 +81,7 @@ export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
     '--midturn', a.midturn ? 'true' : 'false', '--instr-sha8', a.instrSha8, '--instr-bytes', String(a.instrBytes),
     '--cc-version', a.ccVersion ?? '', '--load-id', a.loadId,
     ...(a.handoffHt !== undefined ? ['--handoff-ht', a.handoffHt] : []),
+    ...(a.idle !== undefined ? ['--idle=true', '--idle-gap-s=' + String(a.idle.gapS)] : []),
   ])
 }
 
@@ -265,7 +272,7 @@ export function channelToken(v: string | undefined): string | null {
  * The re-measure block (`measure --sid --compact --nonce N`), or undefined. The nonce makes the
  * evidence map this compaction's (its checkpoint, else its own sweep), never a newer one's.
  */
-export async function measure(d: Deps, sid: string, nonce?: string): Promise<string | undefined> {
-  const r = await call(d, ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : [])], CHECKPOINT_MS)
+export async function measure(d: Deps, sid: string, nonce?: string, timeoutMs = CHECKPOINT_MS): Promise<string | undefined> {
+  const r = await call(d, ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : [])], timeoutMs)
   return r.ok ? r.stdout.replace(/\s+$/, '') : undefined
 }

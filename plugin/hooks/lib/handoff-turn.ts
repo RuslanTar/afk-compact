@@ -18,6 +18,7 @@ import { log } from './log'
 import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
 import { storeRuntime } from './resume'
+import { IDLE_MIN_TEXT, gapSeconds, submitDropped } from './idle'
 
 /** Why a cycle will not auto-continue (the `handoff-turn open --reason` values of a last cycle). */
 export type HaltReason = '2-nonok' | 'thrash' | 'cap' | 'continue-off'
@@ -147,11 +148,11 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
 }
 
 /** One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`). */
-async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason): Promise<void> {
+export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason): Promise<void> {
   await log(d, sid, 'handoff_skipped', { why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}) })
 }
 
-function newTurn(reason: TurnReason, tokens: number, allowance: number, native: number, maxCalls: number): HandoffTurn {
+export function newTurn(reason: TurnReason, tokens: number, allowance: number, native: number, maxCalls: number): HandoffTurn {
   return {
     reason, phase: 'delay', ht: null, t0: tokens, allowance, native, maxCalls,
     calls: 0, resultChars: 0, bands: [], turnSeq: -1, turnId: null, startedAt: 0, interjected: false, race: null,
@@ -217,6 +218,7 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   const store = storeRuntime(d)
   const runtime: Runtime = { max_calls: String(h.maxCalls), ...store.runtime }
   if (isHalt(h.reason)) runtime.halt_reason = HALT_REASON_TEXT[h.reason]
+  if (h.reason === 'idle') runtime.idle_min = IDLE_MIN_TEXT
   const text = submitText(d.name, kindOf(h.reason), runtime, store.drop)
   if (text === undefined) {
     await skipped(d, sid, 'no-asset', null, h.reason)
@@ -253,6 +255,15 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
     h.stamped = true
     const now = await d.now()
     await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
+  }
+  // IC-1 D7 (ii): the session this turn was planned for is still the one running (a `/clear`
+  // in the delay leaves it to the old conversation): else nothing is submitted, and nothing
+  // compacts in its place.
+  if ((await d.sessionId()) !== sid) {
+    if (s.handoffTurn === h) s.handoffTurn = undefined
+    await submitDropped(d, sid, 'handoff-turn')
+    await handoffTurnClose(d, sid, opened, 'cancelled')
+    return true
   }
   if (cancelled()) {
     await handoffTurnClose(d, sid, opened, 'cancelled')
@@ -306,7 +317,10 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     s.nudgedThisTurn = true
     // §9.3 `again`: one pre-compaction turn per main compaction, whatever its end.
     if (h.reason === 'precompact') s.precompactRan = true
-    await log(d, sid, 'handoff_turn_start', { ht: h.ht, reason: h.reason, turn_id: turnId, t0: h.t0, max_calls: h.maxCalls, max_tokens: h.allowance })
+    await log(d, sid, 'handoff_turn_start', {
+      ht: h.ht, reason: h.reason, turn_id: turnId, t0: h.t0, max_calls: h.maxCalls, max_tokens: h.allowance,
+      ...(h.reason === 'idle' ? { gap_s: await gapSeconds(d) } : {}),
+    })
     return
   }
   if (!ours) {
@@ -426,14 +440,22 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   }
   const path = state.state === 'published' ? state.path : undefined
   const shown = path === undefined ? undefined : await tilde(d, path)
-  if (path !== undefined) s.published = { ht: h.ht, path: shown ?? path }
+  if (path !== undefined) {
+    s.published = { ht: h.ht, path: shown ?? path }
+    s.publishedSinceHuman = true
+  }
   const halt = isHalt(h.reason) ? h.reason : undefined
   // DP-4: a thrash or 2-nonok halt that started since the plan still rules out the compaction.
   // §9.3: a pre-compaction turn ending `answer` is always followed by its compaction (`[handoff]`
   // when published, else the full text); §9.4: a pre-idle turn never is.
   const follows = halt !== undefined ? compactsAfter(haltWins(d, halt)) : h.reason === 'precompact'
   const compact = reason === 'answer' && h.race === null && !h.interjected && follows
-  await log(d, sid, 'handoff_turn_end', { ...stats, reason: h.reason, turn_id: h.turnId, interjected: h.interjected, compaction: compact })
+  // §9.4 `cache_read_share`: the first request's cache-read share is not in `$.session.usage()`;
+  // null until a source exists (P-IC-6 measures it from the transcript).
+  await log(d, sid, 'handoff_turn_end', {
+    ...stats, reason: h.reason, turn_id: h.turnId, interjected: h.interjected, compaction: compact,
+    ...(h.reason === 'idle' ? { cache_read_share: null } : {}),
+  })
   // The user took the turn over: halt clears at its end as for any user turn (§9.1).
   if (h.interjected) {
     await clearHalt(d, sid)
@@ -473,4 +495,14 @@ export async function raceBlock(d: Deps, st: HandoffState): Promise<RaceBlock> {
   if (st.state === 'published') return { published: await tilde(d, st.path) }
   if (st.state === 'staged') return { draft: st.draft, finish: st.finish }
   return { draft: false, finish: null }
+}
+
+/**
+ * A pre-idle turn that `openAndSubmit` deferred because a user prompt came first: the user is
+ * back, so it is dropped (no rerun), with its `user-turn` row unless that turn already wrote it.
+ */
+export async function dropDeferred(d: Deps, sid: string, h: HandoffTurn): Promise<void> {
+  if (d.state.handoffTurn !== h) return
+  d.state.handoffTurn = undefined
+  await skipped(d, sid, 'user-turn', h.ht, h.reason)
 }

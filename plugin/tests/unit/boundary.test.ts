@@ -19,7 +19,7 @@ const CONT = 'the session was compacted at the checkpoint you reached. Continue 
 
 /** A main turn that crosses the soft max (nudge), ends with `answer`, and compacts at 500 ms. */
 async function nudgedTurn($: Engine, w: World, answer = 'Checkpoint: clean · Step 1: run the tests'): Promise<void> {
-  await w.turnStart($)
+  await w.userTurn($)
   w.tokens = 610000
   await w.tool($)
   await w.turnEnd($, answer)
@@ -357,7 +357,7 @@ test('halt mode survives a reload (halt.json) until a user-typed turn clears it'
   await raiseCompact($, { trigger: 'auto', agentId: undefined })
   await $.turn.complete({ answer: 'x', durationMs: 1, isAborted: false, turnId: 't0', reason: 'answer' })
   expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
-  await w.turnStart($)
+  await w.userTurn($)
   expect(w.rowsOf('halt').map(r => r.active)).toEqual([false])
 })
 

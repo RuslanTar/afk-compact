@@ -27,7 +27,14 @@ export type BlockArgs = {
   handoff?: RaceBlock
   /** `[prod-allow]` instead of `[prod-forbid]` (see `prodAllowed`). */
   prodAllow?: boolean
+  /** An idle compaction: `[idle]` (IC-1 D3), never with `[midturn]`. */
+  idle?: boolean
 }
+
+/** IC-1 D3: a block delivered later than this after it was built is built again. */
+export const REMEASURE_AFTER_MS = 600000
+/** The re-measure's budget at delivery (one helper call). */
+export const REMEASURE_MS = 3000
 
 /**
  * MOD-SPEC §3.4 step 4 (S-SETTINGS B): `[prod-allow]` only when the mod's own option and the
@@ -50,13 +57,15 @@ export function storeRuntime(d: Deps): { runtime: Runtime; drop: string[] } {
   return { runtime: {}, drop: ['store'] }
 }
 
-export async function buildBlock(d: Deps, sid: string, a: BlockArgs): Promise<string> {
+/** The resume block; `fresh` is a measure already taken (the delivery-time re-measure), else one is taken now. */
+export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: string): Promise<string> {
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
+  if (a.idle === true && !a.midturn) tags.push('idle')
   // Exactly one of the two step-4 lines (BLD-04 exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
-  const remeasure = await measure(d, sid, a.nonce)
+  const remeasure = fresh ?? (await measure(d, sid, a.nonce))
   const measuredAt = isoLocal(await d.now(), false)
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)
@@ -103,8 +112,29 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     return undefined
   }
   if (c.result === 'failed') await helperMissing(d, sid, 'claim')
+  const block = await freshBlock(d, pend)
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
-  return pend.block
+  return block
+}
+
+/**
+ * IC-1 D3 delivery rule: a block built more than 600 s ago (an idle block is read hours later)
+ * is built again with a fresh `measure --compact` (3 s budget): `resume_remeasured`; on a
+ * timeout or failure the stored block goes out: `resume_remeasure_failed`. Its
+ * `@measured_at@` stamp shows the age either way.
+ */
+async function freshBlock(d: Deps, pend: PendingResume): Promise<string> {
+  const t0 = await d.now()
+  const ageS = Math.round((t0 - pend.builtAt) / 1000)
+  if (t0 - pend.builtAt <= REMEASURE_AFTER_MS) return pend.block
+  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS)
+  if (fresh === undefined) {
+    await log(d, pend.sid, 'resume_remeasure_failed', { nonce: pend.nonce, age_s: ageS })
+    return pend.block
+  }
+  const block = await buildBlock(d, pend.sid, pend.args, fresh)
+  await log(d, pend.sid, 'resume_remeasured', { nonce: pend.nonce, age_s: ageS, ms: (await d.now()) - t0 })
+  return block
 }
 
 /**

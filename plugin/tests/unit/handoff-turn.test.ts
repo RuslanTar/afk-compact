@@ -187,7 +187,7 @@ test('AT-LT-03: a user turn.start during the delay cancels the submit: handoff_s
   await lastCycleTurn($, w)
   if (!TURN) return
   await w.advance(1000)
-  await w.turnStart($, 'actually, stop here')
+  await w.userTurn($, 'actually, stop here')
   await w.advance(10000)
   expect(w.submits.length).toBe(0)
   expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.ht])).toEqual([['user-turn', null]])
@@ -580,7 +580,7 @@ test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submi
   w.atHelper = async (sub, args) => {
     if (raced || sub !== 'handoff-turn' || args[0] !== 'open') return
     raced = true
-    await w.turnStart($, 'actually, stop here')
+    await w.userTurn($, 'actually, stop here')
   }
   await w.advance(2000)
   expect(raced).toBe(true)
@@ -612,7 +612,7 @@ test('CR-F20: a handoff-turn submit answered { drop }: why=submit-failed with th
   expect(w.callsOf('handoff-turn').map(c => c.args[0])).toEqual(['open', 'close'])
   expect(w.compacts.length).toBe(1)
   w.submitDrop = undefined
-  await w.turnStart($, 'what happened?')
+  await w.userTurn($, 'what happened?')
   expect(w.rowsOf('handoff_turn_start').length).toBe(0)
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
 })
@@ -912,7 +912,7 @@ test('CR-F17 (REG-register-42): a peer hook beneath rewrites our handoff-turn pr
   await w.advance(500)
   expect(w.compacts.length).toBe(1)
   // Our submit is settled: the user's next turn is theirs (halt clears), not taken as ours.
-  await w.turnStart($, 'what now?')
+  await w.userTurn($, 'what now?')
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
 })
 
@@ -1052,7 +1052,7 @@ test('CR-F17: a user prompt entering beside our submit while our own turn starts
   await w.turnEnd($, 'Handoff written.')
   open()
   await held
-  await w.turnStart($, 'run the tests next')
+  await w.userTurn($, 'run the tests next')
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
   expect(w.rowsOf('handoff_skipped').length).toBe(0)
 })
