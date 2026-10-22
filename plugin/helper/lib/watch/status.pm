@@ -46,9 +46,48 @@ sub lines {
     push @out, @$counts
         ? 'Alerts, last 7 days: ' . join(', ', map { "$_->[0] $_->[1]" } @$counts) . " ($sessions sessions)"
         : 'Alerts, last 7 days: none';
+    push @out, stash_lines($ctx);
     my $last = last_row_ts($ctx);
     push @out, 'Last watcher row: ' . ($last // 'none');
     return \@out;
+}
+
+# C-STORE D4/D10 (MOD-SPEC §5.8): the stashes kept after a real mismatch
+# (`pending/*.mismatch.md`, never deleted by the plugin), and the stashes the cross-session
+# finish cannot reach because their session left no per-process record
+# (<root>/.sessions/by-pid/*.{live,ended}-<sid8>.json). Counts and sid8s only; one line
+# each, shown only when the count is not zero. Read-only (F2-5: core writes these files).
+our $STASH_SIDS = 5;
+sub stash_lines {
+    my ($ctx) = @_;
+    my $w = $ctx->{watch};
+    my %rec;
+    for my $f (watch::io::list_dir(($ctx->{root} // '') . '/.sessions/by-pid')) {
+        $rec{$1} = 1 if $f =~ /\A[0-9]+-[0-9]+\.(?:live|ended)-([0-9A-Za-z-]{1,8})\.json\z/;
+    }
+    my $own = $ctx->{sid} // '';
+    my ($kept, $kept_own, @unreached) = (0, 0);
+    for my $sid (watch::io::list_dir($w)) {
+        next unless $sid =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ && -d "$w/$sid/pending";
+        my ($k, $open) = (0, 0);
+        for my $p (watch::io::list_dir("$w/$sid/pending")) {
+            if ($p =~ /\.(?:post|mod)\.mismatch\.md\z/) { $k++ }
+            elsif ($p =~ /\.(?:post|mod)\.md\z/) { $open++ }
+        }
+        $kept += $k;
+        $kept_own += $k if $sid eq $own;
+        push @unreached, substr($sid, 0, 8) if $open && $sid ne $own && !$rec{ substr($sid, 0, 8) };
+    }
+    my @o;
+    push @o, sprintf('Stashes kept after a copy mismatch: %d (this session %d); the plugin never deletes them',
+                     $kept, $kept_own) if $kept;
+    if (@unreached) {
+        my @show = @unreached[0 .. ($#unreached < $STASH_SIDS - 1 ? $#unreached : $STASH_SIDS - 1)];
+        push @o, sprintf('Stashes no other session can finish (their session left no process record): %d session%s (%s%s)',
+                         scalar @unreached, (@unreached == 1 ? '' : 's'), join(', ', @show),
+                         (@unreached > @show ? sprintf(', +%d more', @unreached - @show) : ''));
+    }
+    return @o;
 }
 
 sub week_counts {

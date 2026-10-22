@@ -93,9 +93,23 @@ sub _copy_rows {
     my ($ctx) = @_;
     my @r;
     for my $f (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
-        push @r, @{ watch::io::read_jsonl($f, undef, qr/"ev"\s*:\s*"copy"/) } if -f $f;
+        push @r, @{ watch::io::read_jsonl($f, undef, qr/"ev"\s*:\s*"copy(?:_attributed)?"/) } if -f $f;
     }
     return \@r;
+}
+
+# C-STORE D5 (MOD-SPEC §5.9 step 4): a reconcile fill renames a `sub-unknown` copy; the
+# newest `copy_attributed` row for the copy's id6 has the path that exists now.
+sub _attributed_path {
+    my ($rows, $id6) = @_;
+    return undef unless defined $id6 && !ref $id6;
+    my ($best, $bt);
+    for my $r (@$rows) {
+        next unless ($r->{ev} // '') eq 'copy_attributed' && ($r->{id6} // '') eq $id6;
+        my $t = watch::io::parse_iso($r->{ts}) // 0;
+        if (!defined $bt || $t >= $bt) { $best = $r; $bt = $t }
+    }
+    return $best ? $best->{rel_path} : undef;
 }
 
 sub _strip_frontmatter {
@@ -120,7 +134,7 @@ sub previous_summary {
         if (!defined $best_t || $t >= $best_t) { $best = $r; $best_t = $t }
     }
     if ($best) {
-        my $rel = $best->{rel_path} // $best->{copy_path} // $best->{path};
+        my $rel = _attributed_path($rows, $best->{id6}) // $best->{rel_path} // $best->{copy_path} // $best->{path};
         if (defined $rel && !ref $rel && $rel !~ m{(?:\A|/)\.\.(?:/|\z)}) {
             my $path = $rel =~ m{\A/} ? $rel : $ctx->{root} . '/' . $rel;
             my $t = watch::io::slurp($path, 1 << 20);

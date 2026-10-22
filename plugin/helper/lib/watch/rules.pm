@@ -35,7 +35,9 @@ our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_e
                 warn_quota watch_error
                 handoff_export handoff_mode handoff_race handoff_skipped handoff_turn_open
                 handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched
-                permission_denied);
+                permission_denied
+                stash_dropped stash_kept copy_attributed copy_attribution_ambiguous copy_attribution_failed
+                orphan_finished);
 my %KIND = map { $_ => 1 } @KINDS;
 our %MISSED;
 
@@ -71,6 +73,7 @@ sub load_session {
     }
     $S{disp_list} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } values %{ $S{disp} } ];
     ($S{rollup}, $S{boundary}, $S{join_conflict}) = join_rollup($C->{rows}{rollup});
+    $S{attributed} = attributed_by_id6(rows_of(\%S, 'copy_attributed'));
     $S{bg} = _bg_slots($ctx);
     return \%S;
 }
@@ -110,6 +113,18 @@ sub join_rollup {
         $roll{$n} = $r;
     }
     return (\%roll, \%bound, $conflicts);
+}
+
+# C-STORE D5/D10 (MOD-SPEC §5.9 step 4): the newest `copy_attributed` row per id6. The
+# copy-path and actor joins take it over the `copy` row and the rollup row (read-only).
+sub attributed_by_id6 {
+    my (@rows) = @_;
+    my %a;
+    for my $r (sort { (_t($a) // 0) <=> (_t($b) // 0) } @rows) {
+        next unless defined $r->{id6} && !ref $r->{id6};
+        $a{ $r->{id6} } = $r;
+    }
+    return \%a;
 }
 
 # `permission_denied` rows (core's hook, WATCHER-SPEC §6.3; D-13 deny_rate): counts by
@@ -322,6 +337,18 @@ sub _derive {
     elsif ($D && defined $D->{agent_id}) { $actor = $D->{agent_id} }
     elsif ($D && ($D->{actor} // '') eq 'main' && ($D->{channel} // '') =~ /\Amod-/) { $actor = 'main' }
     else { $actor = 'unattributed' }
+    # A reconcile fill (copy_attributed, by id6) names the agent of a copy saved as
+    # `sub-unknown`; it never turns a main compaction into a subagent one.
+    my $rk0 = $D ? $D->{nonce} : $P ? $P->{nonce_found} : undef;
+    my $id6 = (defined $rk0 && $S->{rollup}{$rk0}) ? $S->{rollup}{$rk0}{id6} : undef;
+    $id6 //= $D->{id6} if $D;
+    my $att = defined $id6 ? $S->{attributed}{$id6} : undef;
+    if ($att && defined $att->{actor} && !ref $att->{actor} && $actor ne 'main') {
+        $actor = $att->{actor};
+        $C->{actor_src} = 'copy_attributed';
+    }
+    $C->{copy_path} = $att->{rel_path} if $att && defined $att->{rel_path};
+    $C->{id6} = $id6;
     $C->{actor} = $actor;
     $C->{main} = $actor eq 'main' ? 1 : 0;
     $C->{precompute} = (($B && ${ $B->{precomputed} }) || ($D && ($D->{trigger} // '') eq 'precompute')) ? 1 : 0;
