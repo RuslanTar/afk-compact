@@ -13,7 +13,7 @@ export STORE_ORIG_PERL5LIB STORE_ORIG_PERLLIB
 unset PERL5OPT PERL5LIB PERLLIB PERL5DB PERL_UNICODE PERLIO
 
 # Resolve this file's real path (follow symlinks); the plugin root is the
-# parent of bin/.
+# parent of its folder, scripts/.
 self=$0
 while [ -h "$self" ]; do
   link=$(ls -ld "$self" | sed 's/^.* -> //')

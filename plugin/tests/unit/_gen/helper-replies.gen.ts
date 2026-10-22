@@ -1,6 +1,6 @@
 // GEN by tools/helper-replies-gen from real helper runs (BT-05). Do not edit; run the tool.
 // Strings are kept in parts split at the plugin name: join the parts with a name.
-// $TMP stands for the run's temp dir and ~ for its HOME.
+// $PLUGIN stands for the plugin folder, $TMP for the run's temp dir and ~ for its HOME.
 
 export type RecordedReply = { name: string; argv: readonly (readonly string[])[]; exitCode: number; stdout: readonly string[]; stdin?: readonly string[] }
 
@@ -770,8 +770,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "staged ~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=",
-   "-store publish --stage '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
+   "staged ~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=\"$PLUGIN/scripts/",
+   "-store\" publish --stage '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
   ]
  },
  {
