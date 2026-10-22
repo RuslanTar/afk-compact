@@ -111,19 +111,68 @@ sub thresholds {
                  soft_max => $g->(qw(soft_max soft_max_tokens compact_soft_max_tokens)),
                  window => $g->(qw(window native_window_tokens context_window)),
                  native => $g->(qw(native_trigger native_trigger_tokens)));
-        $t{native} //= $t{window} - 33000 if defined $t{window};
+        $t{native} //= $t{window} - clamp_constants($ctx->{spec})->{native_offset} if defined $t{window};
         return \%t if defined $t{target} && defined $t{soft_max} && defined $t{native};
     }
-    my $s = $ctx->{settings};
-    return { off => 1 } if lc($s->{triggers} // 'true') eq 'false';
+    return fallback_thresholds($ctx->{settings}, $ctx->{spec});
+}
+
+# The clamp constants (P5-FOLD A3): one shared source, the spec's `clamp` object
+# (assets/handoff-spec.json, rendered for the mod too). A missing or non-numeric key takes
+# the built-in value, which equals the mod's config.ts constant.
+our %CLAMP = (native_offset => 33000, min_target => 120000, reserve_base => 52000,
+              reserve_no_handoff => 100000, window_floor => 100000, soft_ratio => 0.8,
+              target_num => 2, target_den => 3, handoff_tokens_min => 20000, handoff_tokens_max => 150000);
+
+sub clamp_constants {
+    my ($spec) = @_;
+    my $c = ref $spec eq 'HASH' && ref $spec->{clamp} eq 'HASH' ? $spec->{clamp} : {};
+    my %k;
+    for my $n (keys %CLAMP) {
+        my $v = $c->{$n};
+        $k{$n} = (defined $v && !ref $v && $v =~ /\A[0-9]+(?:\.[0-9]+)?\z/ && $v > 0) ? 0 + $v : $CLAMP{$n};
+    }
+    return \%k;
+}
+
+# WATCHER-SPEC M-04 fallback: with no mod row (classic-only), the MOD-SPEC §1.2 clamp over
+# the settings, the same formula as the mod's clamp(): the window below the floor counts
+# as the floor; `reserve` from `handoff_turn`/`handoff_turn_max_tokens`; disabled below
+# `min_target`. `min_window` is the smallest window that stays enabled ('never' when the
+# configured pair alone is below the minimum). Unknown window (0): undef.
+sub fallback_thresholds {
+    my ($s, $spec) = @_;
+    return { off => 1, why => 'triggers-off' } if lc($s->{triggers} // 'true') eq 'false';
     my $w = $s->{native_window_tokens};
     return undef unless $w && $w > 0;
-    my $native = $w - 33000;
-    my $soft = _min($s->{compact_soft_max_tokens}, $native - 100000, int(0.8 * $w));
-    my $target = _min($s->{compact_target_tokens}, int($soft * 2 / 3));
-    return { off => 1 } if $target < 120000;
-    return { target => $target, soft_max => $soft, window => $w, native => $native };
+    my $K = clamp_constants($spec);
+    $w = $K->{window_floor} if $w < $K->{window_floor};
+    my $ht = int($s->{handoff_turn_max_tokens} // 64000);
+    $ht = $K->{handoff_tokens_min} if $ht < $K->{handoff_tokens_min};
+    $ht = $K->{handoff_tokens_max} if $ht > $K->{handoff_tokens_max};
+    my $reserve = ($s->{handoff_turn} // 'halt') eq 'off' ? $K->{reserve_no_handoff} : $K->{reserve_base} + $ht;
+    my $native = $w - $K->{native_offset};
+    my $soft = _min($s->{compact_soft_max_tokens}, $native - $reserve, _floor($K->{soft_ratio} * $w));
+    my $tq = sub { _floor(($_[0] * $K->{target_num}) / $K->{target_den}) };
+    my $target = _min($s->{compact_target_tokens}, $tq->($soft));
+    # The smallest soft_max whose target reaches min_target, then the smallest window giving it.
+    # Integer steps from a close start, with the same float expressions as the clamp.
+    my $s0 = _ceil(($K->{min_target} * $K->{target_den}) / $K->{target_num});
+    $s0-- while $s0 > 0 && $tq->($s0 - 1) >= $K->{min_target};
+    $s0++ while $tq->($s0) < $K->{min_target};
+    my $w0 = _ceil($s0 / $K->{soft_ratio});
+    $w0-- while $w0 > 0 && _floor($K->{soft_ratio} * ($w0 - 1)) >= $s0;
+    $w0++ while _floor($K->{soft_ratio} * $w0) < $s0;
+    my $min_window = ($s->{compact_soft_max_tokens} >= $s0 && $s->{compact_target_tokens} >= $K->{min_target})
+        ? _max($s0 + $K->{native_offset} + $reserve, $w0, $K->{window_floor}) : 'never';
+    return { off => 1, why => 'trigger-disabled-small-window', window => $w, min_window => $min_window,
+             soft_max_raw => $soft, target_raw => $target } if $target < $K->{min_target};
+    return { target => $target, soft_max => $soft, window => $w, native => $native, min_window => $min_window };
 }
+
+sub _floor { my $x = shift; my $i = int $x; return $i > $x ? $i - 1 : $i }
+sub _ceil { my $x = shift; my $i = int $x; return $i < $x ? $i + 1 : $i }
+sub _max { my $m = shift; for (@_) { $m = $_ if $_ > $m } return $m }
 
 sub _min { my $m = shift; for (@_) { $m = $_ if $_ < $m } return $m }
 

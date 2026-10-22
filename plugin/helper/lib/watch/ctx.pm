@@ -46,11 +46,12 @@ my %DEFAULTS = (
     compact_target_tokens       => 400000,
     compact_soft_max_tokens     => 600000,
     native_window_tokens        => 0,
-    max_auto_continues_per_hour => 3,
+    max_auto_continues_per_hour => 6,
     evidence_quota_mb           => 500,
     triggers                    => 'true',
     deny_class_patterns         => '',
     handoff_turn                => 'halt',
+    handoff_turn_max_tokens     => 64000,
 );
 
 my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
@@ -96,7 +97,8 @@ sub _settings {
     }
     $s{handoff_root} = _expand($s{handoff_root}) || _expand($DEFAULTS{handoff_root});
     for my $k (qw(stall_min cache_ttl_s compact_target_tokens compact_soft_max_tokens
-                  native_window_tokens max_auto_continues_per_hour evidence_quota_mb)) {
+                  native_window_tokens max_auto_continues_per_hour evidence_quota_mb
+                  handoff_turn_max_tokens)) {
         $s{$k} = $DEFAULTS{$k} unless defined $s{$k} && $s{$k} =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         $s{$k} = 0 + $s{$k};
     }
@@ -105,6 +107,10 @@ sub _settings {
     my $t = $s{triggers};
     $t = UNIVERSAL::isa($t, 'SCALAR') ? ($$t ? 1 : 0) : undef if ref $t;
     $s{triggers} = (defined $t && !ref $t && $t =~ /\A\s*(?:1|true|yes|on)\s*\z/i) ? 'true' : 'false';
+    # `handoff_turn` as the mod parses it (config.ts handoffTurn): trimmed and case-folded;
+    # anything but `halt` or `off` is the default. It sets the clamp's reserve (rules::thresholds).
+    (my $ht = lc(ref $s{handoff_turn} ? '' : $s{handoff_turn})) =~ s/\A\s+|\s+\z//g;
+    $s{handoff_turn} = ($ht eq 'halt' || $ht eq 'off') ? $ht : $DEFAULTS{handoff_turn};
     ($s{watcher}, $s{watcher_unknown}) = _watcher_value($given);
     return \%s;
 }
