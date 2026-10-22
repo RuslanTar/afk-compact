@@ -1192,7 +1192,9 @@ sub builtin {
         my %floor = map { $_ => 1 } qw(strict warnings constant Fcntl POSIX Errno Cwd File::Spec File::Path File::Temp
             File::Basename IPC::Open3 Getopt::Long IO::Handle List::Util Scalar::Util Text::ParseWords IO::File IO::Select
             Socket Exporter Carp parent integer bytes overload lib utf8 feature);
-        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes);
+        # optional: loaded only inside an eval on the same line (W-BETA B.6 allows DEFLATE for the
+        # report zip only when present: watch-to-core W2C-4)
+        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes IO::Compress::RawDeflate IO::Uncompress::RawInflate);
         my $root = defined $a->{root} ? $a->{root} : "$REPO/plugin/helper";
         # The floor value has one source in the helper: main.pl's guard (`$] < 5.028`).
         my ($floor_v) = (util::read_file("$REPO/plugin/helper/main.pl") // '') =~ /\$\]\s*<\s*(5\.\d+)/;
