@@ -1,7 +1,7 @@
 package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
 # resume-context.txt with [midturn]/[nonok] and exactly one of [prod-forbid]/[prod-allow],
-# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B). Total <= 6,500 chars
+# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total <= 6,500 chars
 # (compaction-rem-6, T-TEXT E3: a 3,000-char protocol and a 3,000-byte measured block fit
 # untrimmed), never over the 10,000-char SessionStart cutoff; no transcript path.
 # Owner: WP-core.
@@ -21,13 +21,18 @@ sub build {
     # no idle signal at SessionStart, so it never pushes idle (never with midturn).
     my $prod = eval { settings::prod(rc::settings()) };
     push @tags, (($prod && ($prod->{reads} // '') eq 'allow') ? 'prod-allow' : 'prod-forbid');
+    # @store@ (TXT-06 line 1 defines <store>; PKG-RUNTIME A.2): the launcher word that
+    # handoff_turn::finish_command stands for, as the mod's storeRuntime fills it. A root no
+    # quoting can carry (store_path_unquotable) has no word: drop the lines that hold the token.
+    my $store = ctx::store_cmd();
     my $re = $a{remeasure} // '';
     my $max = 3000;
     my $text;
     for (1 .. 12) {
         $text = assemble::asset('res', \@tags, { session_id => $a{sid}, saved_copy => $a{saved_copy},
                                                   measured_at => $a{measured_at} // util::iso(util::now()),
-                                                  remeasure => $re });
+                                                  remeasure => $re, (defined $store ? (store => $store) : ()) },
+                                defined $store ? [] : ['store']);
         last if length($text) <= $MAX_CHARS;
         $max -= 400;
         last if $max < 200;

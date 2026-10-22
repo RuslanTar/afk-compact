@@ -1,6 +1,6 @@
 {
  "id": "AT-PK-03-store-word",
- "note": "PKG-RUNTIME A.1, AT-PK-03 (helper half; the mod's parity test compares storeWord with these words): ctx::store_cmd() is the plugin's own launcher, <root>/scripts/<name>-store, by its real path as one shell word. Double quotes by default (a root with a space or a single quote), single quotes when the root holds a double quote, $, a backquote or a backslash, and no word at all when it holds both quote kinds: the status smoke line then names store_path_unquotable instead of a command. Each step runs a copy of the staged plugin under such a root",
+ "note": "PKG-RUNTIME A.1, AT-PK-03 (helper half; the mod's parity test compares storeWord with these words): ctx::store_cmd() is the plugin's own launcher, <root>/scripts/<name>-store, by its real path as one shell word. Double quotes by default (a root with a space or a single quote), single quotes when the root holds a double quote, $, a backquote or a backslash, and no word at all when it holds both quote kinds: the status smoke line then names store_path_unquotable instead of a command. The classic SessionStart(compact) resume block fills @store@ with the same word (C-5, as the mod's storeRuntime does) and drops that line when there is no word. Each step runs a copy of the staged plugin under such a root",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -88,6 +88,41 @@
     "exit": 0,
     "stdout_contains": ["smokeDue: 2.1.306 (Claude Code changed; run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)"],
     "stdout_absent": ["-store smoke", "run: !"]
+   }
+  },
+  {
+   "name": "setup: a classic dispatch for the next SessionStart(compact)",
+   "setup": [
+    {"dispatch": {"nonce": "2b3c4d5e", "actor": "unknown", "channel": "classic", "trigger": "manual", "age_s": 3, "midturn": false, "resume_pref": "sessionstart"}},
+    {"mkdir": "$TMP/work"}
+   ]
+  },
+  {
+   "name": "resume block under the dollar-sign root: <store> is the single-quoted word",
+   "exec": ["$TMP/d$x/p/scripts/$BRAND-store", "hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "compact"},
+   "expect": {
+    "exit": 0,
+    "context_max_chars": 6500,
+    "context_contains": ["(<store> = '$TMP/d$x/p/scripts/$BRAND-store'): "],
+    "context_absent": ["@"]
+   }
+  },
+  {
+   "name": "setup: another classic dispatch",
+   "setup": [
+    {"dispatch": {"nonce": "3c4d5e6f", "actor": "unknown", "channel": "classic", "trigger": "manual", "age_s": 3, "midturn": false, "resume_pref": "sessionstart"}}
+   ]
+  },
+  {
+   "name": "resume block under both quote kinds: the <store> line is dropped, no raw token",
+   "exec": ["$TMP/q\"it's/p/scripts/$BRAND-store", "hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "compact"},
+   "expect": {
+    "exit": 0,
+    "context_max_chars": 6500,
+    "context_contains": ["heal-check --origin $SID --item"],
+    "context_absent": ["@", "<store> = ", "q\"it's"]
    }
   }
  ]
