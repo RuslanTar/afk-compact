@@ -17,7 +17,9 @@ use strict;
 use warnings;
 use utf8;
 
-our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off);
+# precompact: the OD-4 pre-compaction turn (MOD-SPEC §9.3, S-SETTINGS D); idle: the pre-idle
+# handoff turn (§9.4, IC-1 D5)
+our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off precompact idle);
 our $OPEN_MAX_AGE_S = 3600;
 our %CLOSE_WHY = map { $_ => 1 } qw(cancelled ended);
 
