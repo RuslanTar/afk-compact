@@ -1325,6 +1325,25 @@ sub builtin {
         push @e, 'no corpus entries' unless $n;
         return @e;
     }
+    if ($name eq 'resume_block') {
+        # AT-TX-11 H half (T-TEXT E3) and text-to-core C-1: resumeblock::build over a stand-in
+        # protocol of protocol_chars, the fixed lines (frame_chars, default 300) and a measured block of
+        # remeasure_bytes keeps the block
+        # untrimmed within max; the tags it asks the asset for are exactly `tags`.
+        for my $l (qw(measure resumeblock)) { require "$l.pm" }
+        no warnings qw(redefine once);
+        my @seen;
+        local *assemble::asset = sub { my ($n, $tags, $rt) = @_; @seen = @{ $tags || [] };
+                                       return ('P' x ($a->{protocol_chars} // 3000)) . "\n" . ('F' x ($a->{frame_chars} // 300)) . "\n" . ($rt->{remeasure} // '') };
+        local %rc::R = (settings => { values => { unattended_prod_reads => $a->{reads} // 'forbid' } });
+        my $n = int(($a->{remeasure_bytes} // 3000) / 100);
+        my $re = join("\n", map { sprintf('%-99s', "fact $_") } 1 .. $n);
+        my $t = resumeblock::build(sid => 'x', midturn => $a->{midturn}, nonok => $a->{nonok}, saved_copy => 'p', measured_at => 'now', remeasure => $re);
+        push @e, 'block is ' . length($t) . " chars > $a->{max}" if defined $a->{max} && length($t) > $a->{max};
+        push @e, 'the measured block was trimmed' if $a->{untrimmed} && index($t, $re) < 0;
+        push @e, 'tags [' . join(',', @seen) . '], want [' . join(',', @{ $a->{tags} }) . ']' if $a->{tags} && join(',', @seen) ne join(',', @{ $a->{tags} });
+        return @e;
+    }
     if ($name eq 'bd2_pins') {
         # AT-ST-12 (BD-2, C-STORE D6): the corpus pins `redacted` (the exact text after redaction
         # with every rule) and `markers` (the marker count) hold, and across every entry's output
