@@ -106,6 +106,7 @@ sub run {
         repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
         jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
         brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
+        queue_mode => $s->{queue_mode},
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
     $row->{bytes} = skills::util::blen($body);

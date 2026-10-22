@@ -1,0 +1,772 @@
+{
+ "id": "AT-QA-02-04-skills",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Q-ADAPTER QA-1, QA-2, QA-B2 (AT-QA-02, AT-QA-04, skills half): begin and locate read the queue mode through queue::lane, the one list parser: queue_cmd empty -> \"queue\": {\"mode\": \"off\"} and `queue: off` with no exec and no queue_cmd trace; not executable -> degraded (not-executable), no exec; a tagged v1 reply -> on with the Queued: line and the lane in the stage meta; another schema -> degraded (schema), no Queued: line, no lane. lane adopt maps the adopt exit codes of tests/fixtures/queue/adopt-*: 0 -> `lane: <id>`, 3 -> `held holder=<sid> kind=<kind>`, 4 -> no-lane, 6 -> error, 2 -> unsupported, and passes --must-exist exactly when the cached list reply's commands hold adopt:must-exist.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "AT-QA-02 queue_cmd empty: mode off, no Queued: line, no queue call",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "off",
+     "queue.why": {
+      "null": 1
+     },
+     "queued_line": {
+      "null": 1
+     }
+    },
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stage meta {\"queue_mode\": \"off\"}",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$STAGE/settings.json",
+      "json": {
+       "queue_mode": "off"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-02 locate: queue: off, no queue call",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: off$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!off$)"
+    ],
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/bin/notexec",
+     "content": "#!/bin/sh\nexit 0\n",
+     "mode": "0600"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "queue_cmd": "$TMP/bin/notexec"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-QA-02 a queue_cmd that is not executable: degraded (not-executable), no exec",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "degraded",
+     "queue.why": "not-executable",
+     "queued_line": {
+      "null": 1
+     }
+    },
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v1-tagged"
+   }
+  },
+  {
+   "name": "AT-QA-02 locate: degraded (not-executable), no exec",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: degraded \\(not-executable\\)$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!degraded \\(not-executable\\)$)"
+    ],
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "name": "lane adopt with a queue_cmd that is not executable: refused, no exec",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: queue degraded (not-executable)\n",
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "bin/queue-stub",
+     "to": "$TMP/bin/queue",
+     "mode": "0755"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "queue_cmd": "$TMP/bin/queue"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-QA-02 an executable queue_cmd with a tagged v1 reply: on, the Queued: line",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     },
+     "queued_line": {
+      "re": "^Queued: 2 open in repo x \\(q-0007, q-0009\\); answered only via the queue; never re-ask\\.$"
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
+    ]
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v1-tagged"
+   }
+  },
+  {
+   "name": "stage meta {\"queue_mode\": \"on\", \"queue_lane\": \"lane:repo/x\"}",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$STAGE/settings.json",
+      "json": {
+       "queue_mode": "on",
+       "queue_lane": "lane:repo/x"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-02 locate: queue: on",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ],
+    "trace_has": [
+     "queue_cmd"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v1-tagged"
+   }
+  },
+  {
+   "name": "QA-1 a reply with another schema: degraded (schema), no Queued: line, no lane",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "degraded",
+     "queue.why": "schema",
+     "queued_line": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
+    ]
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v2"
+   }
+  },
+  {
+   "name": "stage meta {\"queue_mode\": \"degraded\"}",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$STAGE/settings.json",
+      "json": {
+       "queue_mode": "degraded"
+      },
+      "lacks": [
+       "\"queue_lane\":\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "QA-1 locate: degraded (schema)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: degraded \\(schema\\)$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!degraded \\(schema\\)$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v2"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-ok: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-ok",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-ok.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-ok: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-ok",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-ok.log"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "lane: lane:repo/x\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-ok.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-ok-nocaps: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-ok-nocaps",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-ok-nocaps.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-ok-nocaps: lane adopt does not pass --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-ok-nocaps",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-ok-nocaps.log"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "lane: lane:repo/x\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-ok-nocaps.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free$"
+      ],
+      "lacks": [
+       "--must-exist"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-held-heartbeat: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-held-heartbeat",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-held-heartbeat.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-held-heartbeat: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-held-heartbeat",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-held-heartbeat.log"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: held holder=5e55a002-0c0f-4f1e-9a00-00000000a002 kind=heartbeat\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-held-heartbeat.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-held-process: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-held-process",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-held-process.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-held-process: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-held-process",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-held-process.log"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: held holder=5e55a002-0c0f-4f1e-9a00-00000000a002 kind=process\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-held-process.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-nolane: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-nolane",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-nolane.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-nolane: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/z",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-nolane",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-nolane.log"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: no-lane\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-nolane.log",
+      "has": [
+       "^adopt --lane lane:repo\\/z --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-untrusted: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-untrusted",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-untrusted.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-untrusted: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-untrusted",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-untrusted.log"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: error\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-untrusted.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-damaged: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-damaged",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-damaged.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-damaged: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-damaged",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-damaged.log"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: error\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-damaged.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-usage: the list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$"
+    ],
+    "stdout_lacks": [
+     "^queue: (?!on$)"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-usage",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-usage.log"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-usage: lane adopt passes --must-exist",
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:repo/x",
+    "--if-free"
+   ],
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/adopt-usage",
+    "QUEUE_STUB_LOG": "$TMP/q-adopt-usage.log"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: unsupported\n",
+    "files": [
+     {
+      "path": "$TMP/q-adopt-usage.log",
+      "has": [
+       "^adopt --lane lane:repo\\/x --if-free --must-exist$"
+      ],
+      "lacks": []
+     }
+    ]
+   }
+  }
+ ]
+}

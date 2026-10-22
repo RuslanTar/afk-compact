@@ -15,20 +15,27 @@ use skills::gitfacts;
 my $ADOPT_RE = qr/\Alane:[A-Za-z0-9._\/-]+\z/;
 my $LANE_RE  = qr/(?:lane|auto):[A-Za-z0-9._\/-]+/;
 
-# lane adopt --lane ID --if-free → the bound lane, a refusal, or
-# `queue: not configured`. Never adds or answers anything.
+# Q-ADAPTER QA-2: adopt refusals by exit code (the reason line is read from stdout).
+my %ADOPT_EXIT = (3 => 'held', 4 => 'no-lane', 6 => 'error', 2 => 'unsupported');
+
+# lane adopt --lane ID [--if-free] → `lane: <id>`, a refusal, or `queue: off`. Passes
+# --must-exist when the cached list reply's commands hold adopt:must-exist. Exit 3 is
+# `held holder=<sid> kind=<process|heartbeat>` (the pair as the tool printed it), 4 no-lane,
+# 6 error, 2 unsupported, any other code `queue exit N`. Never adds or answers anything.
 sub lane {
     my ($argv) = @_;
     my $o = skills::cli::opts($argv, 'lane=s', 'if-free');
     die skills::cli::usage('lane adopt --lane ID [--if-free]') unless @$argv == 1 && $argv->[0] eq 'adopt';
     my $ctx = skills::ctx::new({});
     my $cmd = $ctx->{settings}{queue_cmd};
-    if (skills::util::unset_value($cmd)) { skills::cli::say('queue: not configured'); return 0 }
+    if (skills::util::unset_value($cmd)) { skills::cli::say('queue: off'); return 0 }
     die skills::cli::usage('--lane ID') unless defined $o->{lane} && $o->{lane} ne '';
     die skills::cli::refuse('lane-id (only lane: ids are adopted)') unless $o->{lane} =~ $ADOPT_RE;
+    die skills::cli::refuse('queue degraded (not-executable)') unless -f skills::util::bytes($cmd) && -x _;
     skills::ctx::resolve_sid($ctx, undef);
     my @argv = ($cmd, 'adopt', '--lane', $o->{lane});
     push @argv, '--if-free' if $o->{'if-free'};
+    push @argv, '--must-exist' if grep { $_ eq 'adopt:must-exist' } @{ skills::core::queue_commands($cmd) };
     my $r = skills::core::queue_call(\@argv, 5000);
     die skills::cli::refuse('queue-timeout') if $r->{timed_out};
     my ($first) = grep { /\S/ } split /\n/, ($r->{out} // '');
@@ -36,8 +43,14 @@ sub lane {
     $first =~ s/[\x00-\x1f\x7f-\x9f]//g;
     $first = substr($first, 0, 200);
     if ($r->{rc} != 0) {
-        $first =~ s/\AREFUSED:\s*//;
-        die skills::cli::refuse($first eq '' ? "queue exit $r->{rc}" : $first);
+        my $kind = $ADOPT_EXIT{ $r->{rc} } // "queue exit $r->{rc}";
+        if ($kind eq 'held') {
+            my ($h) = $first =~ /\bholder=([A-Za-z0-9._:-]{1,64})(?=\s|\z)/;
+            my ($k) = $first =~ /\bkind=(process|heartbeat)(?=\s|\z)/;
+            $kind .= " holder=$h" if defined $h;
+            $kind .= " kind=$k" if defined $k;
+        }
+        die skills::cli::refuse($kind);
     }
     my ($bound) = $first =~ /($LANE_RE)/;
     if (!defined $bound) {

@@ -21,6 +21,11 @@ package skills::core;
 #   evidence::copy($src,$dir,\%caps,$index) -> {status, copy, bytes, sha256, mtime, scan, rules}
 #   gsd::read($worktree)               -> arrayref of lines | {lines=>[...]} | undef
 #   queue::call(\@argv, $budget_ms)    -> {rc|exit, out|stdout, timed_out|timeout}
+#   queue::lane($sid, $cmd, $budget_ms) -> {status => ok|off|unknown|timeout, why, lane, open,
+#                                        ids, label, queued_line}: the one `list --json` parser
+#                                        (Q-ADAPTER QA-1; CORE-18 makes the queue-stub/v1 tag
+#                                        required: why untagged|schema)
+#   queue::caps_get($cmd)              -> {commands => [..]|undef, listed, add}
 #   bucket::resolve($sid, $cwd, $topic, $settings) -> {path, source}; path absolute
 #                                        (<root>/<repo>/<bucket>); settings passed as a 4th
 #                                        argument because a skill flag can move the root
@@ -258,6 +263,45 @@ sub queue_call {
         out       => skills::util::text($r->{out} // $r->{stdout} // ''),
         timed_out => $r->{timed_out} // $r->{timeout} // 0,
     };
+}
+
+# ---- queue adapter (Q-ADAPTER QA-1, QA-B2): one parser (queue::lane) for begin and locate.
+# Mode: off (queue_cmd empty: no exec, no trace) · degraded (<why>) when the setting is not
+# an executable file or the list reply broke the contract (untagged · schema · not-json ·
+# exit · timeout) · else on (a reply that keeps the contract but names no usable lane is on).
+my %QUEUE_ON_WHY = map { $_ => 1 } qw(no-lane preview auto-empty);
+
+sub queue_lane {
+    my ($sid, $cmd, $budget) = @_;
+    return { status => 'off' } if skills::util::unset_value($cmd);
+    my $r = eval { queue::lane(skills::util::bytes($sid // 'unknown'), skills::util::bytes($cmd), $budget // 5000) };
+    return { status => 'unknown', why => 'exit' } unless ref $r eq 'HASH';
+    return skills::util::text_deep($r);
+}
+
+# {mode => off|on|degraded, why => …} from a queue_lane result.
+sub queue_mode {
+    my ($l) = @_;
+    my $st = (ref $l eq 'HASH' ? $l->{status} : undef) // 'unknown';
+    return { mode => 'off' } if $st eq 'off';
+    return { mode => 'on' } if $st eq 'ok';
+    return { mode => 'degraded', why => 'timeout' } if $st eq 'timeout';
+    my $why = $l->{why} // 'exit';
+    return { mode => 'on' } if $QUEUE_ON_WHY{$why};
+    return { mode => 'degraded', why => $why };
+}
+
+# `off`, `on` or `degraded (<why>)`: the form begin's queue line, locate and /status print.
+sub queue_mode_text {
+    my ($m) = @_;
+    return $m->{mode} eq 'degraded' ? "degraded ($m->{why})" : $m->{mode};
+}
+
+# The cached `commands` of the last list reply for this queue_cmd file ([] when none).
+sub queue_commands {
+    my ($cmd) = @_;
+    my $c = eval { queue::caps_get(skills::util::bytes($cmd)) };
+    return (ref $c eq 'HASH' && ref $c->{commands} eq 'ARRAY') ? skills::util::text_deep($c->{commands}) : [];
 }
 
 sub bucket_resolve {

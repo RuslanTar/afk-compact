@@ -14,7 +14,8 @@ package skills::lint;
 #      repo_mode and export_text (the body after the D-12 §1.5.5 rewrite) for
 #        private-path (repo mode only);
 #      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2);
-#      2026-10-22 (T-TEXT E6): acuity_floor (the stage meta's) for the acuity advisory.
+#      2026-10-22 (T-TEXT E6): acuity_floor (the stage meta's) for the acuity advisory;
+#      (Q-ADAPTER QA-4) queue_mode (the stage meta's: off|on|degraded) for queue-off.
 # The result also carries `acuity`: the rating found in Resume here, or undef.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
 # private-path classes come from the spec too (fail closed: spec-missing <key>).
@@ -283,6 +284,21 @@ sub lint {
                 my $v = $1;
                 push @block, [ 'recipe-spawn', "restart/$name:$n" ] if $v =~ /agent/i && !($v =~ /\bmodel\s+\S/ && $v =~ /\beffort\s+\S/);
             }
+        }
+    }
+
+    # ---- queue-off (Q-ADAPTER QA-4): with no queue configured (begin measured mode off),
+    # nothing was queued: a typed `Queued:` line anywhere, or a `· queued` mark on an Open
+    # questions row, blocks. On with a spec that lists the id (T-TEXT E2).
+    if (($in->{queue_mode} // '') eq 'off' && skills::spec::lint_ids()->{blocking}{'queue-off'}) {
+        for my $i (0 .. $#lines) {
+            push @block, [ 'queue-off', 'line ' . ($i + 1) ] if $lines[$i] =~ /\A[\s>|*-]*Queued:/;
+        }
+        my ($oq) = grep { /\AOpen questions/ } map { $_->{name} } @$mains;
+        my $qs = $oq ? $by_name{$oq} : undef;
+        for my $r (@{ $qs ? $qs->{body} : [] }) {
+            next if $r->[1] =~ /\A[\s>|*-]*Queued:/;
+            push @block, [ 'queue-off', "line $r->[0]" ] if $r->[1] =~ /·\s*queued\b/;
         }
     }
 

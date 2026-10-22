@@ -3,13 +3,13 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "lane adopt: `queue: not configured` without queue_cmd; the bound lane; a different bound lane -> mismatch line, nothing queued; an auto: id refused (D-21 lane: only); a held lane -> the refusal relayed, exit 3; queue_cmd comes from the settings file only (Q-ADAPTER QA-B1, AT-QA-05)",
+ "note": "lane adopt: `queue: off` without queue_cmd (Q-ADAPTER QA-1); the bound lane; a different bound lane -> mismatch line, nothing queued; an auto: id refused (D-21 lane: only); a held lane (exit 3) -> `held holder=<sid> kind=<kind>`; an exit outside the contract codes -> `queue exit N`; queue_cmd comes from the settings file only (Q-ADAPTER QA-B1, AT-QA-05)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
   {
    "write": "$TMP/bin/queue",
-   "content": "#!/bin/sh\n# queue stub: adopt --lane <id> [--if-free]\ncase \"$3\" in\n  lane:held) echo 'held by 22222222'; exit 1 ;;\n  lane:other) echo 'adopted lane:zzz'; exit 0 ;;\n  *) echo \"adopted $3\"; exit 0 ;;\nesac\n",
+   "content": "#!/bin/sh\n# queue stub: adopt --lane <id> [--if-free]\ncase \"$3\" in\n  lane:held) echo 'REFUSED: held: holder=22222222 kind=process lane=lane:held'; exit 3 ;;\n  lane:odd) echo 'held by 22222222'; exit 1 ;;\n  lane:other) echo 'adopted lane:zzz'; exit 0 ;;\n  *) echo \"adopted $3\"; exit 0 ;;\nesac\n",
    "mode": "0700"
   }
  ],
@@ -22,7 +22,7 @@
  ],
  "expect": {
   "exit": 0,
-  "stdout": "queue: not configured\n",
+  "stdout": "queue: off\n",
   "trace_absent": [
    "queue_cmd"
   ]
@@ -94,7 +94,20 @@
    ],
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: held by 22222222\n"
+    "stdout": "REFUSED: held holder=22222222 kind=process\n"
+   }
+  },
+  {
+   "argv": [
+    "lane",
+    "adopt",
+    "--lane",
+    "lane:odd",
+    "--if-free"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: queue exit 1\n"
    }
   },
   {
