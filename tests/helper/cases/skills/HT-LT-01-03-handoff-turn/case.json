@@ -140,7 +140,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "\\Astaged $STAGE draft=0 finish=\\S+-store publish --stage '$STAGE' --slug retry --status in-progress\\n\\z"
+     "\\Astaged $STAGE draft=0 finish=\"$STORE\" publish --stage '$STAGE' --slug retry --status in-progress\\n\\z"
     ],
     "stdout_lacks": [
      "$SID"
