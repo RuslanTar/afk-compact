@@ -9,7 +9,11 @@ use utf8;
 our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn idle channel seat_state
                  verdict verdict_source marker_line sentinel_from_end sentinel_place fabricated_check_tokens
                  instructions_bytes summary_chars shape_class pre_tokens post_tokens duration_ms precomputed
-                 copy copy_path resume checkpoint_ms evidence nudged continued halt);
+                 copy copy_path resume checkpoint_ms evidence nudged continued halt
+                 proof proof_lag_ms settle_waited_ms acuity acuity_floor);
+# proof P1 | P3 | none, proof_lag_ms, settle_waited_ms: BD-3 window logging (T-TEXT E5, MOD-SPEC
+# §5.4); acuity (the summary's Acuity word or -) and acuity_floor (from the dispatch's
+# checkpoint facts, else -): T-TEXT E6. Enum values and numbers only.
 
 sub write {
     my (%f) = @_;
@@ -38,16 +42,50 @@ sub resume_state {
     return undef;
 }
 
+# rows(sid_dir) -> the compaction rows, each joined by nonce with the first compaction_boundary
+# row for it (PKG-RUNTIME E.2): a null rollup size takes the boundary value; a non-null one is
+# never replaced, and a disagreement sets join_conflict 1 on the row (0 when joined and equal).
+our @JOIN = qw(pre_tokens post_tokens duration_ms precomputed);
 sub rows {
     my ($sid_dir) = @_;
-    my @out;
+    my (@out, %b);
     open(my $fh, '<:raw', "$sid_dir/compactions.jsonl") or return \@out;
     while (my $l = <$fh>) {
         my $j = eval { jsonc::decode($l) } or next;
-        push @out, $j if ref $j eq 'HASH';
+        next unless ref $j eq 'HASH';
+        if (($j->{ev} // 'compaction') eq 'compaction_boundary') { $b{ $j->{nonce} } //= $j if defined $j->{nonce}; next }
+        push @out, $j;
     }
     close $fh;
+    for my $r (@out) {
+        my $bd = defined $r->{nonce} ? $b{ $r->{nonce} } : undef;
+        next unless $bd;
+        my $conflict = 0;
+        for my $k (@JOIN) {
+            next unless defined $bd->{$k};
+            if (!defined $r->{$k}) { $r->{$k} = $bd->{$k}; next }
+            my ($x, $y) = map { jsonc::is_bool($_) ? ($_ ? 1 : 0) : "$_" } ($r->{$k}, $bd->{$k});
+            $conflict = 1 if $x ne $y;
+        }
+        $r->{join_conflict} = $conflict;
+    }
     return \@out;
+}
+
+# acuity_floor(sid_dir, nonce) -> the floor from the dispatch's checkpoint facts (T-TEXT E6):
+# the checkpoint's own acuity_floor when present; else unstable when git reports an operation
+# in progress, watch when the inventory lists a running or pending job, else stable; - when the
+# dispatch ran no checkpoint.
+sub acuity_floor {
+    my ($sid_dir, $nonce) = @_;
+    return '-' unless defined $sid_dir && defined $nonce;
+    my $raw = util::read_file("$sid_dir/checkpoint/$nonce.json") // return '-';
+    my $c = eval { jsonc::decode($raw) };
+    return '-' unless ref $c eq 'HASH';
+    return $c->{acuity_floor} if defined $c->{acuity_floor} && !ref $c->{acuity_floor} && $c->{acuity_floor} =~ /\A(?:stable|watch|unstable)\z/;
+    return 'unstable' if ref $c->{git} eq 'HASH' && ref $c->{git}{in_progress} eq 'ARRAY' && @{ $c->{git}{in_progress} };
+    return 'watch' if grep { ref $_ eq 'HASH' && ($_->{kind} // '') ne 'cron' && ($_->{status} // '') =~ /\A(?:running|pending)\z/ } @{ ref $c->{inventory} eq 'ARRAY' ? $c->{inventory} : [] };
+    return 'stable';
 }
 
 # Rows of a log stream (classic or mod), decoded.

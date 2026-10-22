@@ -69,7 +69,10 @@ sub run {
     my $rolls = _bytes_deep(rollup::rows($d));
     my @last = @$rolls > 5 ? @$rolls[-5 .. -1] : @$rolls;
     my $nonok = grep { defined $_->{verdict} && $_->{verdict} !~ /^ok(-trailer)?$/ } @last;
-    push @out, sprintf('compactions: %d in this session; last %d (%d not ok):', scalar @$rolls, scalar @last, $nonok);
+    # a kept rollup size that disagrees with the boundary row joined by nonce (PKG-RUNTIME E.2)
+    my $jc = grep { $_->{join_conflict} } @$rolls;
+    push @out, sprintf('compactions: %d in this session; last %d (%d not ok)%s:', scalar @$rolls, scalar @last, $nonok,
+                       ($jc ? " · join_conflict $jc" : ''));
     for my $r (reverse @last) {
         push @out, sprintf('  %s · %s · %s · %s · %s · copy %s', $r->{ts} // '-', $r->{actor} // '-', $r->{seat_state} // '-',
                            $r->{trigger} // '-', $r->{verdict} // '-',

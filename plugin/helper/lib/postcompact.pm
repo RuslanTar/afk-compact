@@ -259,6 +259,13 @@ sub run {
         evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                               redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
         nudged => undef, continued => undef, halt => undef,
+        # BD-3: P1 (or P2) proved the scope inside this hook; a row for a deferred summary names
+        # the mod dispatch by time only (no proof). The lag only when this compaction's own
+        # boundary row was already written (S-21: usually not).
+        proof => ($deferred ? 'none' : 'P1'),
+        proof_lag_ms => ($boundary && !$deferred ? int(($boundary->{epoch} - $now) * 1000 + ($boundary->{epoch} >= $now ? 0.5 : -0.5)) : undef),
+        settle_waited_ms => undef,
+        acuity => detect::acuity($s), acuity_floor => rollup::acuity_floor($sid_dir, ($drec ? $drec->{nonce} : undef)),
     ) unless $scope_deferred;
     rc::emit('scope_leak', [nonce => $mn, scope => $scope, marker_scope => $s->{scope}]) if $verdict eq 'scope-leak';
     rc::emit('layers_missing', [id6 => $id6, trigger => $trigger]) if $seat eq 'none' && $scope ne 'sub';

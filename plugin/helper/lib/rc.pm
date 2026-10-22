@@ -131,10 +131,10 @@ sub envelope {
     my (%o) = @_;
     my $c = claude();
     return { sid => $R{sid}, actor => $o{actor} // $R{actor}, writer => $o{writer} // $R{writer},
-             pid => $c->{pid}, cc_version => cc_version(), turn_seq => undef, ts => $o{ts} };
+             pid => $c->{pid}, cc_version => (exists $o{cc_version} ? $o{cc_version} : cc_version()), turn_seq => undef, ts => $o{ts} };
 }
 
-# emit(ev, fields, stream => classic|mod|compactions|<path>, actor => .., ts => ISO)
+# emit(ev, fields, stream => classic|mod|compactions|<path>, actor => .., ts => ISO, cc_version => V)
 # (ts: a row written later for an earlier event, e.g. reconcile's rollup of a deferred save)
 sub emit {
     my ($ev, $fields, %o) = @_;

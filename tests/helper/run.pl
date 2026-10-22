@@ -345,8 +345,65 @@ sub _rm_tree {
 }
 
 # ---------------------------------------------------------------- one case
+# sequence_case(case) -> the case with its steps from tests/fixtures/sequences/<id>/ (the WP-fix
+# sequence format, tests/fixtures/README.md "Sequences"): input.json's sid, now, env,
+# store_test_claude_pid, repo and seed, then each step with its transcript_append appended to
+# the payload's transcript_path before it runs; expected.json's step_asserts join the expect of
+# the step they follow (absent_rows -> rows_absent; an assert's fields_ge goes on its last
+# rows entry that names fields). The case's own keys (tz, note, needs) stay.
+sub sequence_case {
+    my ($case) = @_;
+    my $dir = "sequences/$case->{sequence}";
+    my $in = jsonc::decode(util::read_file("$FIXTURES_DIR/$dir/input.json") // die "no $dir/input.json\n");
+    my $ex = -f "$FIXTURES_DIR/$dir/expected.json" ? jsonc::decode(util::read_file("$FIXTURES_DIR/$dir/expected.json")) : {};
+    my %c = %$case;
+    $c{sid} //= $in->{sid};
+    $c{now} //= $in->{now};
+    $c{env} = { %{ $in->{env} || {} }, (defined $in->{store_test_claude_pid} ? (STORE_TEST_CLAUDE_PID => $in->{store_test_claude_pid}) : ()), %{ $case->{env} || {} } };
+    my @setup;
+    if (defined $in->{repo}) {
+        my $rc = jsonc::decode(util::read_file("$FIXTURES_DIR/$in->{repo}"));
+        (my $name = $in->{repo}) =~ s{^repos/}{};
+        push @setup, { repo_fixture => $name, at => '$TMP/' . ($rc->{dir} // 'repo') };
+    }
+    push @setup, map { my %s = %$_; delete $s{note}; $s{subst} = jsonc::true() if exists $s{copy}; \%s } @{ $in->{seed} || [] };
+    my %asserts;
+    for my $a (@{ $ex->{step_asserts} || [] }) { push @{ $asserts{ $a->{after_step} } }, $a }
+    my @steps = ({ name => "$case->{sequence}: setup", setup => \@setup });
+    my $i = 0;
+    for my $s (@{ $in->{steps} || [] }) {
+        $i++;
+        my %st = (name => "$case->{sequence} step $i" . (defined $s->{note} ? ": $s->{note}" : ''), now => $s->{now}, argv => $s->{argv},
+                  stdin => $s->{stdin}, (exists $s->{env} ? (env => $s->{env}) : ()), (exists $s->{capture} ? (capture => $s->{capture}) : ()));
+        my %x = %{ $s->{expect} || {} };
+        delete $x{stdout} if exists $x{stdout} && !defined $x{stdout};
+        if (defined $s->{transcript_append}) {
+            my $p = jsonc::decode(util::read_file("$FIXTURES_DIR/$s->{stdin}") // die "no $s->{stdin}\n");
+            $st{setup} = [{ append => $s->{transcript_append}, to => $p->{transcript_path} }];
+        }
+        for my $a (@{ $asserts{$i} || [] }) {
+            push @{ $x{files} }, @{ $a->{files} || [] };
+            my @rows = @{ $a->{rows} || [] };
+            if ($a->{fields_ge}) { my ($last) = grep { $_->{fields} } reverse @rows; $last->{fields_ge} = $a->{fields_ge} if $last }
+            push @{ $x{rows} }, @rows;
+            push @{ $x{rows_absent} }, @{ $a->{absent_rows} || [] };
+            push @{ $x{joined} }, @{ $a->{joined} || [] };
+        }
+        $st{expect} = \%x;
+        push @steps, \%st;
+    }
+    # metrics {join_conflict: n}: the status count (CORE-11) after the last step
+    if (ref $ex->{metrics} eq 'HASH' && defined $ex->{metrics}{join_conflict}) {
+        push @steps, { name => "$case->{sequence}: status counts join_conflict", argv => ['status', '--sid', '$SID'],
+                       expect => { exit => 0, stdout_has => ["^compactions: .* . join_conflict $ex->{metrics}{join_conflict}:\$"] } };
+    }
+    $c{steps} = \@steps;
+    return \%c;
+}
+
 sub run_case {
     my ($case, $cdir) = @_;
+    $case = sequence_case($case) if defined $case->{sequence};
     my $tmp = (($case->{tmp_base} // '') eq 'repo' ? repo_tmp() : $RUN_TMP) . "/c$N";
     util::mkdir_p("$tmp/home");
     util::mkdir_p("$tmp/tmpdir");
@@ -569,7 +626,7 @@ sub make_repo {
 sub is_setup_action {
     my ($s) = @_;
     return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
-                                               tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha);
+                                               tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha append);
 }
 
 # ---------------------------------------------------------------- fixture recipes (tests/fixtures/README.md)
@@ -744,6 +801,19 @@ sub setup {
         # {"touch": path, "at": ISO}: the file's mtime on the case clock (age and mtime_ago_s are real-clock relative)
         my $t = util::parse_iso($s->{at} // '') // die "touch $s->{touch}: bad time " . ($s->{at} // 'none') . "\n";
         utime($t, $t, $s->{touch}) or die "touch $s->{touch}: $!\n";
+        return;
+    }
+    if (exists $s->{append}) {
+        # {"append": src, "to": path}: the source file (placeholders filled) appended to path
+        # (a sequence step's transcript_append)
+        my $t = util::read_file(src_file($s->{append}, $cdir)) // die "append $s->{append}: unreadable\n";
+        utf8::decode($t);
+        $t = subst($t, $V);
+        utf8::encode($t);
+        util::mkdir_p(util::dirname($s->{to}));
+        open(my $fh, '>>:raw', $s->{to}) or die "append $s->{to}: $!\n";
+        print $fh $t;
+        close $fh;
         return;
     }
     if (exists $s->{normalized_sha}) {
@@ -1749,6 +1819,13 @@ sub check {
         if (exists $f->{exists} && !$f->{exists}) { push @e, "$f->{path}: exists" if @m; next }
         if (!@m) { push @e, "$f->{path}: missing"; next }
         for my $p (@m) {
+            # snapshot <label> keeps the file's bytes for a later step's same_bytes_as <label>
+            if (defined $f->{snapshot}) { $V->{"__snapshot_$f->{snapshot}"} = util::read_file($p) }
+            if (defined $f->{same_bytes_as}) {
+                my $was = $V->{"__snapshot_$f->{same_bytes_as}"};
+                push @e, "$p: no snapshot $f->{same_bytes_as}" unless defined $was;
+                push @e, "$p: bytes differ from snapshot $f->{same_bytes_as}" if defined $was && (util::read_file($p) // '') ne $was;
+            }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
             next if -d $p;
             my $raw = util::read_file($p) // '';
@@ -1786,8 +1863,25 @@ sub check {
     for my $rw (@{ $x->{rows} || [] }) {
         my @rows = grep { ($_->{ev} // '') eq $rw->{ev} } read_rows($rw->{file});
         @rows = grep { !subset($rw->{fields}, $_) } @rows if $rw->{fields};
+        # fields_ge {field: min}: every matched row has a number >= min there
+        for my $k (sort keys %{ $rw->{fields_ge} || {} }) {
+            for my $r (@rows) { push @e, "rows $rw->{ev}: $k = " . ($r->{$k} // 'null') . " < $rw->{fields_ge}{$k}" unless defined $r->{$k} && !ref $r->{$k} && $r->{$k} =~ /^-?\d+(?:\.\d+)?$/ && $r->{$k} >= $rw->{fields_ge}{$k} }
+        }
         if (defined $rw->{count}) { push @e, "rows $rw->{ev} in $rw->{file}: " . scalar(@rows) . ", want $rw->{count}" if @rows != $rw->{count} }
         elsif (!@rows) { push @e, "no $rw->{ev} row" . ($rw->{fields} ? ' with ' . jsonc::encode($rw->{fields}) : '') . " in $rw->{file}" }
+    }
+    # joined [{nonce, field: value}]: the rollup row as the staged rollup::rows returns it after
+    # the nonce join with compaction_boundary (PKG-RUNTIME E.2)
+    if ($x->{joined}) {
+        _libs();
+        require "rollup.pm";
+        my $rows = rollup::rows("$V->{WATCH}/$V->{SID}");
+        for my $j (@{ $x->{joined} }) {
+            my @m = grep { ($_->{nonce} // '') eq ($j->{nonce} // '') } @$rows;
+            if (@m != 1) { push @e, "joined: " . scalar(@m) . " rollup rows for nonce " . ($j->{nonce} // '-') . ", want 1"; next }
+            my $msg = subset($j, $m[0], "joined");
+            push @e, $msg if $msg;
+        }
     }
     for my $rw (@{ $x->{rows_absent} || [] }) {
         my @rows = grep { ($_->{ev} // '') eq $rw->{ev} } read_rows($rw->{file});

@@ -1,0 +1,33 @@
+{
+ "id": "AT-AC-02 (rollup acuity and acuity_floor)",
+ "note": "T-TEXT E6 / MOD-SPEC §5.4 'Acuity in the rollup' (CORE-11): the rollup row of a shaped summary with '· Acuity: watch ·' logs acuity watch; a summary without the field logs -; acuity_floor comes from the dispatch's checkpoint facts (a running job in the inventory: watch; an operation in progress: unstable), - when the dispatch ran no checkpoint",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "acuity watch; the checkpoint lists a running job",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"dispatch": {"nonce": "aaaa0001", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20}},
+    {"write": "$WATCH/$SID/checkpoint/aaaa0001.json", "json": {"inventory": [{"id": "b1", "kind": "shell", "status": "running"}], "git": {"branch": "main"}}}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=aaaa0001 s=main⟫\n# LAB-42 retry window\n## Resume here\nStatus: active · Acuity: watch · State: fix in review\n⟪/{{plugin}} n=aaaa0001⟫\n</summary>"},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"nonce": "aaaa0001", "acuity": "watch", "acuity_floor": "watch", "proof": "P1"}}]}},
+  {"name": "acuity unstable; the checkpoint reports an operation in progress",
+   "setup": [
+    {"dispatch": {"nonce": "aaaa0002", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 10}},
+    {"write": "$WATCH/$SID/checkpoint/aaaa0002.json", "json": {"inventory": [], "git": {"branch": "main", "in_progress": ["rebase"]}}}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=aaaa0002 s=main⟫\n# LAB-43 rebase\n## Resume here\nStatus: blocked · Acuity: unstable\n⟪/{{plugin}} n=aaaa0002⟫\n</summary>"},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"nonce": "aaaa0002", "acuity": "unstable", "acuity_floor": "unstable"}}]}},
+  {"name": "no Acuity field and no checkpoint: - and -",
+   "setup": [{"dispatch": {"nonce": "aaaa0003", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 5}}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=aaaa0003 s=main⟫\n# LAB-44 plain\n## Resume here\nStatus: active\n⟪/{{plugin}} n=aaaa0003⟫\n</summary>"},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"nonce": "aaaa0003", "acuity": "-", "acuity_floor": "-"}}]}}
+ ]
+}

@@ -1,0 +1,7 @@
+{
+ "id": "AT-WD-11 (compaction_boundary join conflict, S-21-mod-conflict)",
+ "needs": ["fixture:sequences/S-21-mod-conflict/input.json"],
+ "note": "PKG-RUNTIME E.2 (CORE-11) on the WP-fix sequence S-21-mod-conflict: PostCompact's own-boundary read filled the rollup sizes from a stand-in row (preTokens 198000); the Stop writes compaction_boundary from the real row (223438); rollup::rows keeps the non-null 198000 and sets join_conflict 1; status counts it once. Skipped until the WP-fix fixtures are merged.",
+ "tz": "Etc/GMT-3",
+ "sequence": "S-21-mod-conflict"
+}

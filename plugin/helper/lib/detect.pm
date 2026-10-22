@@ -146,6 +146,15 @@ sub scan {
     return \%r;
 }
 
+# acuity(scan) -> the Acuity word of a shaped summary (spec acuity_re, T-TEXT E6), or -
+our $ACUITY_RE = '(?:^|· )Acuity: (stable|watch|unstable)\b';
+sub acuity {
+    my ($s) = @_;
+    my $re = spec::has('acuity_re') ? spec::re('acuity_re') : do { my $x = $ACUITY_RE; qr/$x/ };
+    for my $l (@{ $s->{lines} || [] }) { return $1 if $l =~ $re }
+    return '-';
+}
+
 # verdict(scan, %ctx) -> verdict string (first match of the MOD-SPEC §5.1 table)
 #   ctx: precomputed (bool), scope (main|sub|unknown), dispatch_nonce (expected),
 #        marker_has_record (0 = our marker without any dispatch record),

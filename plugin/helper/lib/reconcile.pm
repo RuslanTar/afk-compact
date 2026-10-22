@@ -41,6 +41,7 @@ our $SETTLE_S = 10;                 # an unproven PostCompact younger than this 
 our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long after its PostCompact
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
 our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
+our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main (BD-3)
 # A main boundary row's PostCompact is one at or before the row, never after it (RR-S21-01):
 # the row is written after PostCompact and the mod after-step (S-21), and the stash time
 # has milliseconds, so a later PostCompact (an unproven subagent one) cannot take its place.
@@ -52,7 +53,7 @@ sub _load {
     my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
     $j = {} unless ref $j eq 'HASH' && ($j->{v} // 0) == 1;
     $j->{v} = 1;
-    for my $k (qw(classic rolls main subs copied logged done mism fill)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
+    for my $k (qw(classic rolls main subs copied logged done mism fill cbn)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
     for my $k (qw(pre rolls_l bounds sbounds)) { $j->{$k} = [] unless ref $j->{$k} eq 'ARRAY' }
     return $j;
 }
@@ -129,6 +130,9 @@ sub _ingest_rolls {
     for my $l (@$lines) {
         my $r = eval { jsonc::decode($l) };
         next unless ref $r eq 'HASH';
+        # the boundary sizes appended for a nonce (PKG-RUNTIME E.2) are no rollup row of their own
+        if (($r->{ev} // 'compaction') eq 'compaction_boundary') { $st->{cbn}{ $r->{nonce} } = 1 if defined $r->{nonce}; next }
+        next unless ($r->{ev} // 'compaction') eq 'compaction';
         push @{ $st->{rolls_l} }, { id6 => $r->{id6}, nonce => $r->{nonce}, e => util::parse_iso($r->{ts} // '') // 0,
                                     actor => $r->{actor}, pc => ($r->{precomputed} ? 1 : 0), join => $r->{join} };
     }
@@ -151,7 +155,7 @@ sub _ingest_bounds {
         my $bd = transcript::boundary($l) or next;
         next if defined $bd->{uuid} && $seen{ $bd->{uuid} }++;
         push @$list, { u => $bd->{uuid}, e => $bd->{epoch}, pc => $bd->{precomputed}, pre => $bd->{pre}, post => $bd->{post},
-                       ms => $bd->{duration_ms}, (defined $agent ? (a => $agent) : ()), by => undef };
+                       ms => $bd->{duration_ms}, v => $bd->{version}, (defined $agent ? (a => $agent) : ()), by => undef };
     }
     return $to_end;
 }
@@ -269,7 +273,7 @@ sub _match {
         if ($it->{sb}) { $it->{p3} = 'sub'; next }
         next unless $it->{mb};
         # main = P3-main with no subagent signal (MOD-SPEC §2.4): a subagent row beside it -> both
-        my $beside = grep { !defined $_->{by} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} <= $it->{e} + $TOL_S + 5 } @sb;
+        my $beside = grep { !defined $_->{by} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} <= $it->{e} + $TOL_S + $BESIDE_S } @sb;
         $it->{p3} = $beside ? undef : 'main';
     }
 }
@@ -494,9 +498,31 @@ sub _run {
                           copy => 'late', copy_path => $save->{rel},
                           resume => rollup::resume_state($sid_dir, $mn, $scope, ($drec ? $drec->{channel} : "none")),
                           evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
-                                                redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef));
+                                                redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
+                          _bd3(proof => (($p1 && dispatch::is_mod($p1)) || ($m{scope} // 'unknown') ne 'unknown') ? 'P1'
+                                        : ($p3{$id6} && $scope ne 'unknown') ? 'P3' : 'none',
+                               item => $p3{$id6}, e => (defined $m{ts} ? util::parse_iso($m{ts}) : undef), now => $now),
+                          acuity => detect::acuity($s), acuity_floor => rollup::acuity_floor($sid_dir, $drec ? $drec->{nonce} : $mn));
             push @{ $st->{rolls_l} }, { id6 => $save->{id6}, nonce => $mn, e => $now, actor => $actor, pc => 0, join => 'reconcile' };
         }
+    }
+
+    # compaction sizes on the mod path (PKG-RUNTIME E.2, MOD-SPEC §5.4): a main boundary row
+    # matched to a nonce that already has a rollup row gets one compaction_boundary row, once
+    # per nonce, append-only (readers join it by nonce; nothing is rewritten)
+    my %pool_by = map { ($_->{id6} => $_) } @$pool;
+    for my $bd (grep { defined $_->{by} && $_->{by} ne '-' && !$_->{cb} } @{ $st->{bounds} }) {
+        my $it = $pool_by{ $bd->{by} } or do { $bd->{cb} = 1; next };
+        my $nn = $it->{nonce} // $it->{dispatch} // $it->{deferred};
+        my ($roll) = defined $nn ? grep { ($_->{nonce} // '') eq $nn && ($_->{join} // '') ne 'reconcile' } @{ $st->{rolls_l} } : ();
+        next unless $roll || $now - $it->{e} > $MAIN_WINDOW_S;    # the row may come at the next Stop
+        $bd->{cb} = 1;
+        next unless $roll && !$st->{cbn}{$nn};
+        rc::emit('compaction_boundary', [nonce => $nn, id6 => $roll->{id6} // $it->{id6}, boundary_uuid => $bd->{u},
+                                         pre_tokens => $bd->{pre}, post_tokens => $bd->{post}, duration_ms => $bd->{ms},
+                                         precomputed => jsonc::bool($bd->{pc})],
+                 stream => 'compactions', actor => 'main', writer => 'helper', cc_version => $bd->{v});
+        $st->{cbn}{$nn} = 1;
     }
 
     # fill: sub-unknown copies get their agent (MOD-SPEC §5.9)
@@ -582,6 +608,19 @@ sub _run {
     return $n;
 }
 
+# BD-3 window logging (T-TEXT E5): proof, proof_lag_ms (the matched boundary row's time minus the
+# PostCompact stash time; null when unproven), settle_waited_ms (how long the stash waited for
+# this decision; null when PostCompact itself decided or the stash has no PostCompact time)
+sub _bd3 {
+    my (%a) = @_;
+    my $it = $a{item};
+    my $bd = $it ? ($it->{mb} || $it->{sb}) : undef;
+    my $lag = ($a{proof} ne 'none' && $bd && defined $a{e}) ? int(($bd->{e} - $a{e}) * 1000 + ($bd->{e} >= $a{e} ? 0.5 : -0.5)) : undef;
+    my $wait = defined $a{e} ? int(($a{now} - $a{e}) * 1000 + 0.5) : undef;
+    $wait = 0 if defined $wait && $wait < 0;
+    return (proof => $a{proof}, proof_lag_ms => $lag, settle_waited_ms => $wait);
+}
+
 # Save a stash PostCompact deferred for want of scope proof, as P3 decided (F2-1).
 sub _save_deferred {
     my ($it, $text, $scope, $agent, $proof, $args, $left, $copied, $f, $n) = @_;
@@ -641,7 +680,9 @@ sub _save_deferred {
         checkpoint_ms => undef,
         evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                               redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
-        nudged => undef, continued => undef, halt => undef);
+        nudged => undef, continued => undef, halt => undef,
+        _bd3(proof => ($proof =~ /^p3-/ ? 'P3' : 'none'), item => $it, e => $it->{e}, now => util::now()),
+        acuity => detect::acuity($s), acuity_floor => rollup::acuity_floor($sid_dir, $nonce));
     rc::emit('scope_leak', [nonce => $s->{nonce}, scope => $scope, marker_scope => $s->{scope}]) if $verdict eq 'scope-leak';
 }
 
