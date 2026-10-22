@@ -88,6 +88,7 @@ sub load_session {
 # A repeated boundary row for a nonce is ignored (the first one counts).
 our %JOIN_FIELDS = (pre_tokens => 'pre_tokens', post_tokens => 'post_tokens', duration_ms => 'duration_ms',
                     precomputed => 'precomputed');
+our @JOIN_IDLE = qw(idle idle_source idle_gap_s);
 
 sub join_rollup {
     my ($rows) = @_;
@@ -120,6 +121,14 @@ sub join_row {
         if (!defined $r->{$k}) { $r->{$k} = $bv; next }
         my ($x, $y) = map { ref $_ eq 'SCALAR' ? ($$_ ? 1 : 0) : $_ } ($r->{$k}, $bv);
         push @c, $k if "$x" ne "$y";
+    }
+    # IC-1 D1 (needs/core-to-watch.md §6, as core's rollup::rows): reconcile decides the idle
+    # facts once the boundary row exists and writes them on the compaction_boundary row; the
+    # PostCompact rollup row says `unknown` (or null) until then. Such a rollup value takes the
+    # boundary's; a settled one is kept. No join_conflict: the rollup never settles idle itself.
+    for my $k (@JOIN_IDLE) {
+        next unless exists $b->{$k};
+        $r->{$k} = $b->{$k} if !defined $r->{$k} || (!ref $r->{$k} && $r->{$k} eq 'unknown');
     }
     $r->{boundary_uuid} //= $b->{boundary_uuid};
     $r->{_join_conflict} = \@c if @c;

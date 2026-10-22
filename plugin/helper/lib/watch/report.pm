@@ -60,6 +60,14 @@ sub load {
 
 sub _ev { return $_[0]{ev} // 'compaction' }
 sub _b { my $v = shift; return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : ($v ? 1 : 0) }
+# An idle value as the word M-01 uses: core writes a JSON bool (decoded 1 or 0) once
+# reconcile settled it, `unknown` before; older rows hold the words.
+sub _idle_word {
+    my ($v) = @_;
+    $v = $$v if ref $v eq 'SCALAR';
+    return undef if !defined $v || ref $v;
+    return $v eq '1' ? 'true' : $v eq '0' ? 'false' : $v;
+}
 
 # The compactions of one session: the sweep's boundary records (deduped by uuid; they carry
 # the realtime fields M-01..M-20), else the rollup rows, each joined by nonce to core's
@@ -85,7 +93,7 @@ sub compactions {
                        precomputed => _b($b->{precomputed}), verdict => $b->{verdict}, channel => $b->{channel},
                        copy => $b->{copy}, band => $b->{band_position}, nonce => $b->{nonce}, ts => $b->{ts},
                        warm_gap_s => $b->{warm_gap_s}, nudge_driven => _b($b->{nudge_driven}),
-                       rapid => $b->{rapid_refill_run}, line => $b->{line}, idle => $b->{idle} };
+                       rapid => $b->{rapid_refill_run}, line => $b->{line}, idle => _idle_word($b->{idle}) };
         }
     }
     return wantarray ? (\@c, $jc) : \@c if @c;
@@ -94,7 +102,7 @@ sub compactions {
                    pre => $r->{pre_tokens}, post => $r->{post_tokens}, duration_ms => $r->{duration_ms},
                    precomputed => _b($r->{precomputed}), verdict => $r->{verdict}, channel => $r->{channel},
                    copy => $r->{copy}, band => undef, nonce => $r->{nonce}, ts => $r->{ts}, nudge_driven => _b($r->{nudged}),
-                   idle => (ref $r->{idle} ? (_b($r->{idle}) ? 'true' : 'false') : $r->{idle}) };
+                   idle => _idle_word($r->{idle}) };
     }
     return wantarray ? (\@c, $jc) : \@c;
 }
