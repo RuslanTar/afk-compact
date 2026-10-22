@@ -94,7 +94,7 @@ describe('BT-05 recorded helper replies', () => {
     const block = await measure(depsFor(reply('measure')), REPLY_SID)
     expect(typeof block === 'string' && block.length > 0 && block.length <= 3000).toBe(true)
     expect([reply('log').exitCode, join(reply('log').stdout), reply('log-paths').exitCode]).toEqual([0, '', 0])
-    // D-18 B8 / Dev-1 D1: the handoff-turn calls, handoff-state in its five forms, the jobs log.
+    // D-18 B8 / Dev-1 D1: the handoff-turn calls, handoff-state in its six forms, the jobs log.
     const sidOf = (n: string): string => argvOf(reply(n))[2] ?? ''
     const htOf = (n: string): string => argvOf(reply(n))[argvOf(reply(n)).indexOf('--ht') + 1] ?? ''
     expect(await handoffTurnOpen(depsFor(reply('handoff-turn-open')), sidOf('handoff-turn-open'), htOf('handoff-turn-open'), 'cap', 34, 64000)).toBe('ok')
@@ -123,6 +123,10 @@ describe('BT-05 recorded helper replies', () => {
     })
     expect(await hs('handoff-state-published')).toEqual({ state: 'published', path: '~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md' })
     expect(await hs('handoff-state-superseded')).toEqual({ state: 'superseded', nonce: REPLY_NONCE })
+    // DP-28: a claimed handoff file the publish could not write answers `publish-failed <path>`;
+    // the mod reads it as failed, so the cycle falls back to the full summary text.
+    expect(join(reply('handoff-state-publish-failed').stdout)).toMatch(/^publish-failed ~\/\S+_retry-2\.md\n$/)
+    expect(await hs('handoff-state-publish-failed')).toEqual({ state: 'failed' })
     expect(parseHandoffState(join(reply('handoff-state-none').stdout))).toEqual({ state: 'none' })
     const jobs = reply('log-jobs-caller')
     expect([jobs.exitCode, join(jobs.stdout), jobs.stdin !== undefined]).toEqual([3, 'REFUSED: jobs-caller\n', true])
