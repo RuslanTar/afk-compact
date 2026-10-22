@@ -47,8 +47,8 @@
   },
   {
    "name": "(c) prose",
+   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
    "env": {
-    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
     "QUEUE_STUB_DIR": "$FIX/queue/prose",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
    },
@@ -102,8 +102,8 @@
   },
   {
    "name": "(b) queue-stub/v1",
+   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
    "env": {
-    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
     "QUEUE_STUB_DIR": "$CASE/queue-v1",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
    },
@@ -156,8 +156,8 @@
   },
   {
    "name": "(b) the copy takes the lane from that checkpoint",
+   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
    "env": {
-    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
     "QUEUE_STUB_DIR": "$CASE/queue-v1",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
    },
@@ -205,8 +205,8 @@
   },
   {
    "name": "(d) another schema",
+   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
    "env": {
-    "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub",
     "QUEUE_STUB_DIR": "$CASE/queue-v2",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
    },

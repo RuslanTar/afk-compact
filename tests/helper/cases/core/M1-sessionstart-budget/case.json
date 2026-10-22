@@ -6,9 +6,7 @@
  "path_prepend": [
   "$TMP/bin"
  ],
- "env": {
-  "CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$TMP/slowq"
- },
+ "options": {"queue_cmd": "$TMP/slowq"},
  "steps": [
   {
    "name": "slow git and slow queue_cmd",

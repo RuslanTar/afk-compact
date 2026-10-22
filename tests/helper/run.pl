@@ -24,6 +24,8 @@
 #                            under /tmp, /private/tmp and /var/folders as ephemeral)
 #   step "cwd"               the helper's working directory (default: the case's $TMP)
 #   step "capture"           {VAR: "json:<dotted path>" | "re:<regex, one group>"} from stdout
+#   case / step "options"  {key: value}: plugin options in $HOME/.claude/settings.json
+#                            (pluginConfigs["<brand>@m"].options, merged), for file-only keys
 #   a step without argv, lib or setup that holds a setup action runs as a setup step
 #   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
@@ -387,6 +389,14 @@ sub run_case {
         my $label = $st->{name} // "step $i";
         my $now = $st->{now} // $case->{now};
         $V{TODAY} = defined $now ? substr($now, 0, 10) : POSIX::strftime('%Y-%m-%d', localtime);
+        # "options": {key: value} (case level before step 1, and per step): plugin options in
+        # the case's settings file, pluginConfigs["<brand>@m"].options, merged into the file.
+        # The way to give a file-only key (DP-3: consent keys, queue_cmd, prod_patterns).
+        for my $o (($i == 1 ? $case->{options} : undef), $st->{options}) {
+            next unless ref $o eq 'HASH';
+            my $e = eval { write_options(subst_deep($o, \%V), \%V); 1 };
+            if (!$e) { push @errs, "$label options: $@"; return @errs }
+        }
         for my $s (@{ $st->{setup} || [] }) {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; return @errs }
@@ -411,6 +421,20 @@ sub run_case {
         }
     }
     return @errs;
+}
+
+sub write_options {
+    my ($o, $V) = @_;
+    my $f = "$V->{HOME}/.claude/settings.json";
+    my $raw = -f $f ? util::read_file($f) : undef;
+    my $s = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    $s = {} unless ref $s eq 'HASH';
+    $s->{pluginConfigs} = {} unless ref $s->{pluginConfigs} eq 'HASH';
+    my $k = "$BRAND\@m";
+    $s->{pluginConfigs}{$k} = {} unless ref $s->{pluginConfigs}{$k} eq 'HASH';
+    $s->{pluginConfigs}{$k}{options} = {} unless ref $s->{pluginConfigs}{$k}{options} eq 'HASH';
+    $s->{pluginConfigs}{$k}{options}{$_} = $o->{$_} for keys %$o;
+    util::write_atomic($f, jsonc::encode_bytes($s) . "\n", 0600);
 }
 
 # chars(bytes) -> the text as characters (UTF-8 decoded when it is valid UTF-8), for
@@ -1304,6 +1328,38 @@ sub builtin {
             my $after = handoff_turn::open_for_begin($d);
             push @e, 'published ht still open' if $after && $after->{ht} eq $ht;
         }
+        return @e;
+    }
+    if ($name eq 'settings_prod') {
+        # S-SETTINGS B (CORE-02): settings::prod over resolved values {values}: reads, the
+        # class id each text matches (null = none), the user pattern count, the invalid entries.
+        my $p = settings::prod({ values => $a->{values} || {} });
+        push @e, "reads $p->{reads}, want $a->{reads}" if defined $a->{reads} && $p->{reads} ne $a->{reads};
+        push @e, "user patterns $p->{user}, want $a->{user}" if defined $a->{user} && $p->{user} != $a->{user};
+        for my $t (sort keys %{ $a->{matches} || {} }) {
+            my ($got, $want) = (settings::prod_class($t, $p), $a->{matches}{$t});
+            push @e, "'$t' matches " . ($got // 'none') . ', want ' . ($want // 'none') unless ($got // '') eq ($want // '');
+        }
+        if ($a->{invalid}) {
+            my $got = join(',', map { $_->{key} . (defined $_->{index} ? ":$_->{index}" : '') } @{ $p->{invalid} });
+            my $want = join(',', @{ $a->{invalid} });
+            push @e, "invalid [$got], want [$want]" unless $got eq $want;
+        }
+        return @e;
+    }
+    if ($name eq 'settings_export') {
+        # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).
+        my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };
+        push @e, 'keys without an export class: ' . join(', ', map { $_->[0] } @none) if @none;
+        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        my $view = settings::export_view({ values => $a->{values} || {} });
+        my %got = @$view;
+        for my $k (sort keys %{ $a->{want} || {} }) {
+            my ($g, $w) = ($got{$k}, $a->{want}{$k});
+            $g = "$g" if jsonc::is_bool($g);
+            push @e, "$k exports " . ($g // 'null') . ', want ' . ($w // 'null') unless ($g // "\0") eq ($w // "\0");
+        }
+        for my $k (@{ $a->{absent} || [] }) { push @e, "$k is exported" if exists $got{$k} }
         return @e;
     }
     if ($name eq 'jobs_output_path') {
