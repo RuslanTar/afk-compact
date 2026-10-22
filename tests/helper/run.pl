@@ -1325,6 +1325,23 @@ sub builtin {
         push @e, 'no corpus entries' unless $n;
         return @e;
     }
+    if ($name eq 'bd2_pins') {
+        # AT-ST-12 (BD-2, C-STORE D6): the corpus pins `redacted` (the exact text after redaction
+        # with every rule) and `markers` (the marker count) hold, and across every entry's output
+        # no two markers touch or sit apart by whitespace only (one marker per merged span).
+        my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) };
+        return ('no secret corpus') unless ref $c eq 'HASH';
+        my $pins = 0;
+        for my $en (@{ $c->{entries} || [] }) {
+            my $v = join('', @{ $en->{fragments} || [] });
+            my ($out) = secrets::redact($v);
+            if (defined $en->{redacted}) { $pins++; push @e, "entry $en->{id}: redacted " . jsonc::encode($out) . ", want " . jsonc::encode($en->{redacted}) if $out ne $en->{redacted} }
+            if (defined $en->{markers}) { $pins++; my $k = () = $out =~ /\[redacted:/g; push @e, "entry $en->{id}: $k markers, want $en->{markers}" if $k != $en->{markers} }
+            push @e, "entry $en->{id}: two markers touch" if $out =~ /\]\[redacted:|\][ \t]+\[redacted:/;
+        }
+        push @e, 'no BD-2 pins in the corpus' unless $pins;
+        return @e;
+    }
     if ($name eq 'runner_cleanup') {
         # BH-6: run this runner on a passing and on a failing tmp_base "repo" case (case-local
         # _pass and _fail, which discovery skips). After the passing run no store-h-* work dir

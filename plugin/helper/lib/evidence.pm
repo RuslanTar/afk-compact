@@ -3,7 +3,8 @@ package evidence;
 # Owner: WP-core. Caps 10 MB per file and 50 MB per compaction (bigger -> ref-only
 # with bytes, sha256, mtime and <= 40 head/tail lines of text, redacted); dedupe by
 # sha256 across buckets through <watch>/evidence-index.tsv (O_APPEND rows); the
-# secret gate decides copy / redacted copy / withheld; tasks/*.output -> a redacted
+# secret gate decides copy / redacted copy / withheld; agent output in tasks/*.output is
+# always withheld (BD-4); a shell or monitor job's tasks/*.output -> a redacted
 # head/tail excerpt of <= 80 lines. Directories 0700, files 0600.
 use strict;
 use warnings;
@@ -77,6 +78,12 @@ sub copy {
     if (!-e $src || !-f _) { return { %row, status => 'missing' } }
     my @st = stat $src;
     @row{qw(bytes mtime)} = ($st[7], util::iso($st[9]));
+    # BD-4 (C-STORE D6, MOD-SPEC §10): agent output is always withheld, whatever form the
+    # tasks/<id>.output takes; only a shell or monitor job's own output gets the excerpt
+    if ($src =~ m{/tasks/[^/]+\.output\z} && (my $det = agent_output($src))) {
+        _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'agent output') if $mf;
+        return { %row, status => 'withheld', rules => ['agent-output'], detector => $det };
+    }
     if (secrets::denied_name($src) || secrets::never_copy($src)) {
         _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'withheld by name') if $mf;
         return { %row, status => 'withheld', rules => ['deny-name'] };
@@ -132,6 +139,36 @@ sub copy {
     util::append($index, join("\t", $sha // '-', $dst, $src, $row{bytes}, util::iso(util::now())) . "\n") if defined $index && defined $sha;
     _manifest($dest_dir, %row, copy => $dst, scan => 'full', mode => '0600', meaning => 'automatic evidence copy') if $mf;
     return { %row, status => 'copied', copy => $dst };
+}
+
+# agent_output(path of a tasks/<id>.output) -> the BD-4 detector that fires (a, b, c) or undef:
+# (a) its real path is a transcript or session JSONL (the never-copy gate, PRIV-02); (b) this
+# session's sidecar or job record lists task <id> with a type other than shell or monitor;
+# (c) its first non-empty line parses as a transcript row (a JSON object with type and
+# sessionId or parentUuid). Read in memory only.
+our %SHELL_TYPES = map { $_ => 1 } qw(shell monitor);
+sub agent_output {
+    my ($src) = @_;
+    my $real = eval { util::real_path($src) };
+    return 'a' if defined $real && $real ne $src && ($real =~ /\.jsonl\z/i || secrets::never_copy($real));
+    my ($id) = util::basename($src) =~ /\A(.+)\.output\z/;
+    my $sd = rc::sid_dir();
+    if (defined $id && defined $sd) {
+        my $slot = eval { sidecar::newest($sd) };
+        my ($t) = grep { ref $_ eq 'HASH' && ($_->{id} // '') eq $id } @{ ref $slot eq 'HASH' && ref $slot->{tasks} eq 'ARRAY' ? $slot->{tasks} : [] };
+        my $type = $t ? $t->{type} : undef;
+        if (!defined $type) { my $j = eval { jobrec::record_of($sd, $id) }; $type = $j->{type} if ref $j eq 'HASH' }
+        return 'b' if defined $type && !$SHELL_TYPES{$type};
+    }
+    my $head = util::read_file($src, 64 * 1024) // '';
+    for my $l (split /\n/, $head) {
+        next if $l =~ /^\s*$/;
+        last unless $l =~ /^\s*\{/;
+        my $j = eval { jsonc::decode($l) };
+        return 'c' if ref $j eq 'HASH' && defined $j->{type} && (exists $j->{sessionId} || exists $j->{parentUuid});
+        last;
+    }
+    return undef;
 }
 
 # du(dir) -> bytes, own tree walk (File::Find is off the floor)

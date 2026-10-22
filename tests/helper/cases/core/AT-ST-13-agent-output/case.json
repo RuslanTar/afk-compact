@@ -1,0 +1,31 @@
+{
+ "id": "AT-ST-13 (BD-4 agent output always withheld, sweep)",
+ "needs": ["fixture:setups/st-13-agent-output.json"],
+ "note": "C-STORE D6 BD-4 / MOD-SPEC §10 (CORE-10) on the WP-fix setup st-13-agent-output, the sweep path: (a) a tasks/a1.output symlink to an agent JSONL, (c) a regular file whose first line is a transcript row, (b) outputs the sidecar types subagent and workflow: all four withheld (rules agent-output); a monitor output and the AT-E-05 5,000-line shell output are not (the shell one is an excerpt of at most 80 lines). The evidence --keep path runs the same evidence::copy (WP-skills case). Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "setup",
+   "setup": [
+    {"fixture_setup": "st-13-agent-output.json"},
+    {"tempfiles": "at-e-05-task-output.json", "tmp": "$TMP/tmpdir", "record": true},
+    {"paths": ["$TMP/claude-501/-tmp-example-repo/$SID/tasks/a1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/t1.output",
+               "$TMP/claude-501/-tmp-example-repo/$SID/tasks/b1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/w1.output",
+               "$TMP/claude-501/-tmp-example-repo/$SID/tasks/m1.output"], "sid": "$SID"}
+   ]},
+  {"name": "sweep",
+   "argv": ["sweep", "--sid", "$SID", "--nonce", "1a2b3c4d", "--cwd", "$TMP/example-repo"],
+   "expect": {"exit": 0,
+    "stdout_has": [
+     "^withheld\\t\\S+/tasks/a1\\.output\\t-\\t",
+     "^withheld\\t\\S+/tasks/t1\\.output\\t-\\t",
+     "^withheld\\t\\S+/tasks/b1\\.output\\t-\\t",
+     "^withheld\\t\\S+/tasks/w1\\.output\\t-\\t",
+     "^redacted\\t\\S+/tasks/m1\\.output\\t\\S+\\t",
+     "^redacted\\t\\S+/tasks/x\\.output\\t\\S+/x\\.output\\t"
+    ],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "sweep_evidence", "count": 1, "fields": {"withheld": 4, "rules": ["agent-output"]}}],
+    "grep_absent": [{"dir": "$DISP", "text": "Seven callers"}, {"dir": "$DISP", "text": "workflow fixture"}, {"dir": "$DISP", "text": "RetryWorker.enqueue"}]}}
+ ]
+}
