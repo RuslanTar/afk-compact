@@ -13,7 +13,7 @@ When a Claude Code session compacts, {{plugin}} asks Claude Code's own summarize
 - **Checks the result.** A one-time marker at the top of the summary and a sentinel at the end show whether the summary is complete and in handoff form. The result is one verdict per compaction.
 - **Delivers the resume block once.** After a compaction, the next turn gets one short block: the saved copy's path, a fresh git and project-state measurement, and a fallback note when the summary is not in handoff form.
 - **Copies evidence.** Temp files that the session cited are copied to a dated disposable folder, with caps and secret checks, so nothing the next window needs lives only in a temp folder.
-- **Writes a handoff before a last compaction.** When a run will not resume by itself (the hourly limit is reached, or auto-continue is off or halted), the plugin asks for one more turn that writes a handoff while the full context is still there. See [The handoff turn of a last cycle](#the-handoff-turn-of-a-last-cycle).
+- **Writes a handoff before a last compaction.** When a run will not resume by itself (the hourly limit is reached, or auto-continue is off or halted), the plugin asks for one more turn that writes a handoff while the full context is still there. See [The handoff turn of a last cycle](#the-handoff-turn-of-a-last-cycle). By default it does the same before each planned compaction; see [The handoff turn before a planned compaction](#the-handoff-turn-before-a-planned-compaction).
 - **Handles idle compactions.** When Claude Code compacts a long session while it sits idle, the summary is shaped the same way, and the resume block is measured again when you come back. See [Idle compaction](#idle-compaction).
 - **Re-checks lost background jobs.** A background shell that is gone after the session ended is re-checked from facts the plugin recorded. A read-only job, or one you allowlisted, may start again by itself; everything else asks. See [Lost background jobs](#lost-background-jobs).
 - **Exports to a repository, only if both sides agree.** The private store stays the default. A repository can also receive a portable copy of each published handoff. See [Handoffs in git](#handoffs-in-git-repo-mode).
@@ -132,6 +132,7 @@ Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.j
 | `max_auto_continues_per_hour` | `6` (0 to 10) | Cap on automatic continues in a rolling hour. `0` turns auto-continue off, so every nudged cycle is a last cycle. |
 | `handoff_turn` | `halt` | `halt`: before the last compaction of a run that will not auto-continue, one more turn writes a handoff. `off`: no handoff turn. |
 | `handoff_turn_max_tokens` | `64000` (20000 to 150000) | Tokens the handoff turn may use. The plugin reserves them below the native trigger, so a larger value lowers the soft maximum on small windows. |
+| `precompact_turn` | `model` | `model`: before each planned compaction (the turn-end compaction at `compact_target_tokens`) the model gets one extra turn to write a handoff. `code`: code records the checkpoint alone, which saves usage. Case and spaces are ignored; any other value counts as `code`. See [The handoff turn before a planned compaction](#the-handoff-turn-before-a-planned-compaction). |
 | `idle_handoff_turn` | `off` | `on`: when the session has been idle for about 49 minutes, the model gets one turn to write a handoff before the prompt cache expires. `off`: none. Case and spaces are ignored; any other value counts as `off`. See [Idle compaction](#idle-compaction). |
 | `idle_handoff_min_tokens` | `200000` (100000 to 1000000) | No pre-idle handoff turn below this context size. |
 | `measured_block` | `false` | Also send the measured facts block to the summarizer (mod path only). The resume block always carries a fresh measurement. |
@@ -189,11 +190,21 @@ Edge cases:
 - A message you type during the delay cancels the handoff turn. A message you type during the turn lifts the plugin's limits, and you lead from there.
 - If native compaction fires during the turn, the summary is complete anyway. The resume block says a draft exists and gives the exact command that publishes it.
 - A handoff the session wrote in the last 15 minutes is reused only when nothing has changed since: the same commit, the same working-tree state, and no new decision or background change. Then nothing new is published, and the compaction uses the full summary text. Otherwise the turn writes and publishes a new handoff.
-- There are at most two handoff turns per session in a rolling hour. The optional pre-idle turn (see [Idle compaction](#idle-compaction)) only runs when no handoff turn ran in the last hour, so the second one stays free for a last cycle.
-- There is no handoff turn on the turn-end compaction at `compact_target_tokens`, for subagents, or in a cycle that will auto-continue.
+- There are at most two handoff turns per session in a rolling hour. The turn before a planned compaction (below) and the optional pre-idle turn (see [Idle compaction](#idle-compaction)) only run when no handoff turn ran in the last hour, so the second one stays free for a last cycle.
+- There is no last-cycle handoff turn on the turn-end compaction at `compact_target_tokens` (that compaction has its own turn, below), for subagents, or in a cycle that will auto-continue.
 - Windows too small for plugin compactions get no nudge, so no handoff turn.
 
 Set `handoff_turn` to `off` to turn this off. `handoff_turn_max_tokens` sets how much the turn may use.
+
+## The handoff turn before a planned compaction
+
+Before each planned compaction the model gets one extra turn to write a handoff (up to `handoff_turn_max_tokens`, 64K by default, and 34 tool calls). Set `precompact_turn` to `code` to save usage: code then records the checkpoint alone.
+
+A planned compaction is the one at a clean turn end once the context passes `compact_target_tokens`, in a turn that had no nudge (a nudged turn follows the rules of the last cycle above). With `precompact_turn` set to `model`, the plugin submits one turn of its own before it compacts. It uses the same machinery and limits as the last-cycle handoff turn, and asks for a handoff while the context is still there; the turn ends with the skill's report and does not continue the task.
+
+- If the handoff is published, the plugin runs one compaction that points to the handoff, and submits no continue: your next message leads.
+- If nothing is published, the plugin runs the usual compaction with the full summary.
+- The turn is skipped, and the usual compaction runs as with `code`, when the turn ended on a question to you, when the turn would get less than 20,000 tokens, when any handoff turn ran in the last hour, or when this turn already ran since the session's last compaction. A message you type during the delay cancels both the turn and the compaction.
 
 ## Idle compaction
 
