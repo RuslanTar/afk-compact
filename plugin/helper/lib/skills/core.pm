@@ -26,6 +26,8 @@ package skills::core;
 #                                        (Q-ADAPTER QA-1; CORE-18 makes the queue-stub/v1 tag
 #                                        required: why untagged|schema)
 #   queue::caps_get($cmd)              -> {commands => [..]|undef, listed, add}
+#   queue::mode($cmd)                  -> {mode => off|on|degraded, why} with no queue call (CORE-18)
+#   queue::must_exist($cmd)            -> 1 when the cached commands hold adopt:must-exist (CORE-18)
 #   bucket::resolve($sid, $cwd, $topic, $settings) -> {path, source}; path absolute
 #                                        (<root>/<repo>/<bucket>); settings passed as a 4th
 #                                        argument because a skill flag can move the root
@@ -266,7 +268,7 @@ sub queue_call {
 }
 
 # ---- queue adapter (Q-ADAPTER QA-1, QA-B2): one parser (queue::lane) for begin; locate
-# reads the mode from the setting alone (queue_mode_setting below).
+# reads the mode without a queue call (queue_mode_now below).
 # Mode: off (queue_cmd empty: no exec, no trace) · degraded (<why>) when the setting is not
 # an executable file or the list reply broke the contract (untagged · schema · not-json ·
 # exit · timeout) · else on (a reply that keeps the contract but names no usable lane is on).
@@ -292,11 +294,25 @@ sub queue_mode {
     return { mode => 'degraded', why => $why };
 }
 
-# {mode => off|on|degraded, why => …} without running the queue tool (locate, QA-1): off when
-# queue_cmd is empty, degraded (not-executable) when it is not an executable file, else on.
-# QA-1's other degraded case, "the last list reply this session broke the contract", needs
-# the session record CORE-18 brings (queue::mode); until then a broken reply shows in begin
-# and /status, never by a list call from locate (no exec, no caps-cache write here).
+# {mode => off|on|degraded, why => …} without running the queue tool (locate, QA-1): WP-core's
+# queue::mode($cmd) (CORE-18: the setting, the file, and this session's last list outcome, so
+# a broken reply that begin saw shows as degraded (<why>) here too). No exec, no queue_cmd
+# trace, no caps-cache write. Without that seam (or when it fails or answers another shape):
+# the setting alone (queue_mode_setting).
+my %QUEUE_MODES = map { $_ => 1 } qw(off on degraded);
+sub queue_mode_now {
+    my ($cmd) = @_;
+    return { mode => 'off' } if skills::util::unset_value($cmd);
+    my $m = defined &queue::mode ? eval { queue::mode(skills::util::bytes($cmd)) } : undef;
+    if (ref $m eq 'HASH' && defined $m->{mode} && $QUEUE_MODES{ $m->{mode} }
+        && ($m->{mode} ne 'degraded' || (defined $m->{why} && !ref $m->{why} && $m->{why} =~ /\A[a-z-]{1,32}\z/))) {
+        return skills::util::text_deep({ mode => $m->{mode}, ($m->{mode} eq 'degraded' ? (why => $m->{why}) : ()) });
+    }
+    return queue_mode_setting($cmd);
+}
+
+# The setting alone: off when queue_cmd is empty, degraded (not-executable) when it is not an
+# executable file, else on (the fallback of queue_mode_now).
 sub queue_mode_setting {
     my ($cmd) = @_;
     return { mode => 'off' } if skills::util::unset_value($cmd);
@@ -316,6 +332,17 @@ sub queue_commands {
     my ($cmd) = @_;
     my $c = eval { queue::caps_get(skills::util::bytes($cmd)) };
     return (ref $c eq 'HASH' && ref $c->{commands} eq 'ARRAY') ? skills::util::text_deep($c->{commands}) : [];
+}
+
+# 1 when `lane adopt` passes --must-exist (QA-2): WP-core's queue::must_exist($cmd) (CORE-18),
+# else the same test over the cached commands (queue_commands).
+sub queue_must_exist {
+    my ($cmd) = @_;
+    if (defined &queue::must_exist) {
+        my $r = eval { queue::must_exist(skills::util::bytes($cmd)) };
+        return $r ? 1 : 0 if defined $r;
+    }
+    return (grep { $_ eq 'adopt:must-exist' } @{ queue_commands($cmd) }) ? 1 : 0;
 }
 
 sub bucket_resolve {

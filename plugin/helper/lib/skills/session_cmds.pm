@@ -35,7 +35,7 @@ sub lane {
     skills::ctx::resolve_sid($ctx, undef);
     my @argv = ($cmd, 'adopt', '--lane', $o->{lane});
     push @argv, '--if-free' if $o->{'if-free'};
-    push @argv, '--must-exist' if grep { $_ eq 'adopt:must-exist' } @{ skills::core::queue_commands($cmd) };
+    push @argv, '--must-exist' if skills::core::queue_must_exist($cmd);
     my $r = skills::core::queue_call(\@argv, 5000);
     die skills::cli::refuse('queue-timeout') if $r->{timed_out};
     my ($first) = grep { /\S/ } split /\n/, ($r->{out} // '');
