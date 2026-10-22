@@ -8,7 +8,9 @@ argument-hint: "[ticket-or-topic] [note for the next session]"
 
 Write one new handoff file that a cold session resumes with `/{{plugin}}:resume <path>`. Format and lint rules: `${CLAUDE_PLUGIN_ROOT}/skills/handoff/references/handoff-template.md` (the template; read in Step 2).
 
-**Code measures, you judge.** The helper `{{plugin}}-store` (on the Bash PATH while the plugin is enabled) produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
+
+**Code measures, you judge.** The helper produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
 
 In the arguments, a leading ticket id or kebab slug is the topic; the rest is a note for the next session, recorded as the user's latest ask when they gave no other.
 
@@ -42,7 +44,7 @@ Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edi
 ## Step 1 — Measure (one batch)
 
 Run together:
-- `{{plugin}}-store begin --sid '${CLAUDE_SESSION_ID}' --topic '<slug>' --root '${user_config.handoff_root}' --disposable-root '${user_config.disposable_root}' --keep-days '${user_config.disposable_keep_days}' --quota-mb '${user_config.evidence_quota_mb}' --queue-cmd '${user_config.queue_cmd}'`
+- `<store> begin --sid '${CLAUDE_SESSION_ID}' --topic '<slug>' --root '${user_config.handoff_root}' --disposable-root '${user_config.disposable_root}' --keep-days '${user_config.disposable_keep_days}' --quota-mb '${user_config.evidence_quota_mb}' --queue-cmd '${user_config.queue_cmd}'`
 - each runtime listing tool you have for background agents, workflows, scheduled tasks and background tasks.
 
 `<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. A topic from the arguments also takes `--topic-explicit`: the helper then re-pins the bucket to it unless another live session holds that bucket (`ownership.repin`). Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note. <!-- review-fix -->
@@ -56,7 +58,7 @@ Run together:
 ## Step 2 — Read and probe (one batch)
 
 Run together:
-- `{{plugin}}-store stamp --stage <stage>`: its time is the as-of for this batch.
+- `<store> stamp --stage <stage>`: its time is the as-of for this batch.
 - Read the template (once per invocation).
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry. If `previous_kind` is `foreign`, also read `own_previous_handoff` up to its `## In flight` line, carry its ledger lines the base lacks, and follow template rule 8 for the foreign lines. One extra read.
 - Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
@@ -77,7 +79,7 @@ For each path you will cite and each `tmp_candidates` item: `--keep` (a later re
 
 ## Step 4 — Copy evidence
 
-`{{plugin}}-store evidence --stage <stage> --keep <path> <path> --dispose <path> --clone <dir>` (omit empty flags)
+`<store> evidence --stage <stage> --keep <path> <path> --dispose <path> --clone <dir>` (omit empty flags)
 
 It prints `<status> <durable path | -> <bytes> <sha8> <origin>` per path (`copied`, `dup`, `ref-only`, `redacted`, `withheld`, `missing`), then the Evidence lines (`Evidence:`, `Disposable:`, `Ref-only:`, `Volatile:`) and any `WARN quota`. `withheld` → D. `missing` that a resume needs → one corrected call if you know the path; else it stays on `Volatile:` as `missing at <stamp>`.
 
@@ -95,7 +97,7 @@ Write the body to `<stage>/body.md`, from the `#` title to Next steps in templat
 
 ## Step 7 — Publish
 
-`{{plugin}}-store publish --stage <stage> --slug <kebab-slug> --status <in-progress|blocked|completed>`
+`<store> publish --stage <stage> --slug <kebab-slug> --status <in-progress|blocked|completed>`
 
 It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`. In repo mode one export line follows the written receipt: `Exported to repository: <path> (…)`, `Export refused: <reason>` (the handoff is still saved) or `Not exported: <how to accept>`.
 - `LINT` → one round = one Write of `body.md` (or of the recipe) that fixes every LINT line, then publish again. Never one Edit per LINT line. After 2 failed rounds → C. `LINT private-path` (repo mode) is fixed the same way: the path would reach git, so write a durable path or a pointer instead.
