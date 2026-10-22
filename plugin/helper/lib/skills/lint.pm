@@ -311,7 +311,7 @@ sub lint {
     # write the symbolic `<store>` (the path changes with each plugin update and names the
     # home folder). On with a spec that lists the id (T-TEXT E2).
     if ($b ne '' && skills::spec::lint_ids()->{advisory}{'store-path'}) {
-        my $sp = "/scripts/$b-store";
+        my $sp = '/scripts/' . $b . '-store';
         for my $i (0 .. $#lines) {
             push @adv, [ 'store-path', 'line ' . ($i + 1) ] if index($lines[$i], $sp) >= 0;
         }
