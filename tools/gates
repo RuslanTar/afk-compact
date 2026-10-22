@@ -76,7 +76,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   prod-reads   AT-PR-06: no "unless a `U-` item allows"; R7, R9 stop 2 and the lease line name
                `unattended_prod_reads`
   call-form    AT-PK-02, AT-PK-04 (text): each calling skill defines `<store>` as the quoted
-               scripts/ launcher; no bare `<brand>-store <cmd>` in skills, spec or template; no
+               scripts/ launcher; no bare `<brand>-store <cmd>` in skills, spec, template or the
+               mod texts (resume-context, handoff-turn, nudge; AT-PK-03); resume-context line 1
+               says `<store> = @store@` when it uses `<store>`, the other two never write it; no
                `allowed-tools`/`disable-model-invocation` frontmatter (P-156)
   ic-desc      AT-IC-11: resume description without `/clear`/`break`; handoff one unchanged
   nudge-folder AT-TX-13: nudge step 3 current-folder fallback and `Dirty in <folder git ran in>:`
@@ -866,10 +868,25 @@ def call_form_hits(target, brand):
                 if FRONTMATTER_BANNED.match(ln):
                     out.append((path, no, "AT-PK-02 frontmatter", "AT-PK-02 frontmatter: {} (P-156: not before PR-2)".format(
                         ln.split(":")[0]), ln))
-    # The mod-assembled assets (resume-context, handoff-turn, nudge) get `<store>` with TXT-06
-    # (XR-03); tools/assemble checks them (AT-PK-03). Here: the skills, the spec and the template.
+    # The mod-assembled assets (resume-context, handoff-turn, nudge) call the launcher through
+    # @store@ or `<store>` (TXT-06, XR-03): a bare call there is a hit too (the launcher left the
+    # Bash PATH with BLD-01), and resume-context, which defines `<store>` once for the resume
+    # block, must say `<store> = @store@` in its line 1. tools/assemble checks the renders (AT-PK-03).
+    mod_assets = tuple(os.path.join(*r.split("/")) for r in (RESUME_CTX_REL, NUDGE_REL, TURN_REL))
     scope = [p for p in text_docs(target) if os.path.basename(p) != "README.md" and
-             (os.sep + "skills" + os.sep in p or p.endswith(os.path.join("assets", "handoff-spec.md")))]
+             (os.sep + "skills" + os.sep in p or p.endswith(os.path.join("assets", "handoff-spec.md"))
+              or p.endswith(mod_assets))]
+    for rel in (RESUME_CTX_REL, NUDGE_REL, TURN_REL):
+        path, lines = _shipped(target, rel, brand)
+        if lines is None:
+            continue
+        if rel == RESUME_CTX_REL and any("<store>" in ln for ln in lines) and "<store> = @store@" not in lines[0]:
+            out.append((path, 1, "AT-PK-03 define", "AT-PK-03 define: resume-context uses `<store>`; "
+                        "line 1 does not say `<store> = @store@`", lines[0]))
+        elif rel != RESUME_CTX_REL and any("<store>" in ln for ln in lines):
+            no = next(i for i, ln in enumerate(lines, 1) if "<store>" in ln)
+            out.append((path, no, "AT-PK-03 define", "AT-PK-03 define: `<store>` has no definition in this "
+                        "text (write @store@)", lines[no - 1]))
     for path in scope:
         for no, ln in enumerate(shipped_lines(path, brand), 1):
             m = bare.search(ln)

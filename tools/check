@@ -412,9 +412,12 @@ def probes(name):
         write_text(p, t + "[submit-idle] /{{plugin}}:handoff now, then wait for the user.\n")
 
     def store_bare(d):
-        """AT-PK-03 (BLD-04): a mod text that uses @store@ while other lines keep the bare launcher
-        name followed by a subcommand."""
-        append(d, "src/assets/resume-context.txt", "[handoff] Finish with @store@ receipt once.\n")
+        """AT-PK-03 (BLD-04; never skipped since the fix loop of build round 9): a bare launcher
+        call in the resume context and in the handoff turn, and a `<store>` that the handoff turn
+        never defines."""
+        append(d, "src/assets/resume-context.txt", "[midturn] Then call `{{plugin}}-store status` once.\n")
+        append(d, "src/assets/handoff-turn.txt", "[spent] Then call `{{plugin}}-store status` once.\n")
+        append(d, "src/assets/handoff-turn.txt", "[near] Then call `<store> status` once.\n")
 
     def halt_promise(d):
         """CR-F30/F35: the 28ef06d nudge wording back in the halted path."""
@@ -484,6 +487,13 @@ def probes(name):
     def call_form(d):
         append(d, "plugin/skills/status/SKILL.md", "\nThen run {}-store status --sid <sid>.\n".format(name))
         edit(d, "plugin/skills/report/SKILL.md", "\nargument-hint:", "\nallowed-tools: Bash\nargument-hint:")
+        # AT-PK-03 (fix loop of build round 9): the mod texts are in scope too.
+        append(d, "plugin/assets/checkpoint-nudge.txt", "[queue] Then run `{}-store status` once.\n".format(name))
+        append(d, "plugin/assets/handoff-turn.txt", "[near] Then run `<store> status` once.\n")
+        p = os.path.join(d, "plugin", "assets", "resume-context.txt")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        write_text(p, "The plugin adds this after compaction.\n" + t.split("\n", 1)[1] + "Then run `<store> status` once.\n")
 
     def ic_desc(d):
         edit(d, "plugin/skills/resume/SKILL.md", "\ndescription: ", "\ndescription: After /clear or a break: ")
@@ -731,7 +741,10 @@ def probes(name):
          [r"^GATE prod-reads plugin/skills/resume/SKILL\.md:\d+: AT-PR-06 u-item"], None),
         ("call-form", "AT-PK-02", gates_only("call-form"), call_form,
          [r"^GATE call-form plugin/skills/status/SKILL\.md:\d+: AT-PK-02 bare: '" + re.escape(name) + r"-store s'",
-          r"^GATE call-form plugin/skills/report/SKILL\.md:\d+: AT-PK-02 frontmatter: allowed-tools \(P-156"], None),
+          r"^GATE call-form plugin/skills/report/SKILL\.md:\d+: AT-PK-02 frontmatter: allowed-tools \(P-156",
+          r"^GATE call-form plugin/assets/checkpoint-nudge\.txt:\d+: AT-PK-02 bare: '" + re.escape(name) + r"-store s'",
+          r"^GATE call-form plugin/assets/handoff-turn\.txt:\d+: AT-PK-03 define: `<store>` has no definition",
+          r"^GATE call-form plugin/assets/resume-context\.txt:1: AT-PK-03 define: resume-context uses `<store>`"], None),
         ("ic-desc", "AT-IC-11", gates_only("ic-desc"), ic_desc,
          [r"^GATE ic-desc plugin/skills/resume/SKILL\.md: AT-IC-11 resume: description names \['/clear', 'break'\]$"], None),
         ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,
@@ -767,7 +780,9 @@ def probes(name):
           r"^submit check turn \S*submit-idle +FAIL \[submit-idle\] lacks 'launch no agents or workflows'",
           r"^AT-LT-18 / AT-IC-12 .* FAIL$", r"^RESULT: FAIL$"], None),
         ("store-bare", "AT-PK-03", ["tools/assemble"], store_bare,
-         [r"^store check res \S+ +FAIL bare launcher: .*-store wait", r"^store check turn \S*spent\S* +FAIL bare launcher",
+         [r"^store check res \S*midturn\S* +FAIL bare launcher: .*-store status",
+          r"^store check turn \S*spent\S* +FAIL bare launcher: .*-store status",
+          r"^store check turn \S*near\S* +FAIL uses <store> without the line",
           r"^AT-PK-03 .* FAIL$", r"^RESULT: FAIL$"], None),
         ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
