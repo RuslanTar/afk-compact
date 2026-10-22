@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "prod_patterns": "--context=acme-eu1"
+      }
+    }
+  }
+}

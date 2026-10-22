@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "unattended_prod_reads": "yes"
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "prod_patterns": "--context=team-01;--context=team-02;--context=team-03;--context=team-04;--context=team-05;--context=team-06;--context=team-07;--context=team-08;--context=team-09;--context=team-10;--context=team-11;--context=team-12;--context=team-13;--context=team-14;--context=team-15;--context=team-16;--context=team-17;--context=team-18;--context=team-19;--context=team-20;--context=team-21;--context=team-22;--context=team-23;--context=team-24;--context=team-25;--context=team-26;--context=team-27;--context=team-28;--context=team-29;--context=team-30;--context=team-31;--context=team-32;--context=team-33"
+      }
+    }
+  }
+}

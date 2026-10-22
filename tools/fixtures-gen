@@ -48,6 +48,9 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
   manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
             idle-cases.json) agree with the payloads, dispatch records and corpus files they name
+  prod      settings/prod-cases.json: each recorded command's effects class, each placement's
+            unattended_prod_reads value and each prod_patterns file's kept/dropped list follow a
+            reference of S-SETTINGS B and C (effects order, limits, no chaining after end_suffix)
   stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
             fixture text, except the files listed in LEGACY_TIME_OK, which test the legacy
             reading and must still hold one (a stale list entry fails too)
@@ -1304,6 +1307,112 @@ def check_stubs(b):
     return problems, 1
 
 
+# Production and relaunch settings (settings/prod-cases.json; S-SETTINGS B, C; BUILD-PLAN §3.7):
+# a reference of the effects order, the prod_patterns validation and the no-chaining rule.
+PROD_TOKEN = [("prod-token", r"(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)")]
+PATTERN_MAX, PATTERN_CHARS = 32, 200
+
+
+def options_of(rel):
+    d = json.loads(read(os.path.join(FIX, rel)))
+    for plug, cfg in (d.get("pluginConfigs") or {}).items():
+        if plug.startswith("{{plugin}}@"):
+            return cfg.get("options") or {}
+    return {}
+
+
+def split_patterns(value, need_caret=False):
+    """(kept regexes, dropped indexes) by the S-SETTINGS limits: at most 32, each <= 200 chars,
+    no Dev-7 forbidden construct, compiles (relaunch_allow also needs a leading ^)."""
+    forbidden = (literals().get("wait") or {}).get("marker_regex_forbidden") or ["(?{", "(??{", "(*"]
+    kept, dropped = [], []
+    for i, p in enumerate(x for x in (value or "").split(";") if x != ""):
+        ok = i < PATTERN_MAX and len(p) <= PATTERN_CHARS and not any(f in p for f in forbidden) and (p.startswith("^") or not need_caret)
+        if ok:
+            try:
+                kept.append((p, re.compile(p)))
+            except re.error:
+                ok = False
+        if not ok:
+            dropped.append(i)
+    return kept, dropped
+
+
+def chained(cmd):
+    """An unquoted ; && || | & or newline, or a $( or backquote outside single quotes."""
+    q = None
+    i = 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if q == "'":
+            q = None if ch == "'" else q
+        elif ch == "\\":
+            i += 1
+        elif ch == "`" or cmd.startswith("$(", i):
+            return True
+        elif q == '"':
+            q = None if ch == '"' else q
+        elif ch in "'\"":
+            q = ch
+        elif ch in ";&|\n":
+            return True
+        i += 1
+    return False
+
+
+def effects_ref(case, options):
+    cmd = case["command"]
+    outward = [re.compile(c["re"]) for c in literals().get("outward_classes") or []]
+    shipped = literals().get("prod_classes") or [{"id": i, "re": r} for i, r in PROD_TOKEN]
+    prod = [re.compile(c["re"]) for c in shipped] + [rx for _, rx in split_patterns(options.get("prod_patterns"))[0]]
+    if any(rx.search(cmd) for rx in outward):
+        return "outward"
+    is_prod = any(rx.search(cmd) for rx in prod)
+    if is_prod:
+        return "prod-read" if case["is_read_only"] else "prod-write"
+    if case["is_read_only"]:
+        return "none"
+    suffix = (literals().get("wait") or {}).get("end_suffix") or ""
+    core = cmd[:-len(suffix)] if suffix and cmd.endswith(suffix) else cmd
+    allow = [rx for _, rx in split_patterns(options.get("relaunch_allow"), need_caret=True)[0]]
+    if case.get("recipe_expected_outputs") and any(rx.search(core) for rx in allow) and not chained(core):
+        return "local"
+    return "unknown"
+
+
+def reads_value(raw):
+    v = (raw or "").strip().lower() if isinstance(raw, str) else ""
+    return v if v in ("forbid", "allow") else "forbid"
+
+
+def check_prod():
+    path = os.path.join(FIX, "settings", "prod-cases.json")
+    if not os.path.exists(path):
+        return ["prod: settings/prod-cases.json missing"], 0
+    m = json.loads(read(path))
+    p = []
+    for c in m["commands"]:
+        options = options_of(c["settings"]) if c.get("settings") else {}
+        got = effects_ref(c, options)
+        if got != c["effects"]:
+            p.append("prod {}: the §3.7 order gives {}, the case says {}".format(c["id"], got, c["effects"]))
+    for name, pl in sorted(m["placements"].items()):
+        if pl.get("settings_path") is None or name == "foreign":
+            got = "forbid"
+        else:
+            got = reads_value(options_of(pl.get("file") or m["placement_file"]).get("unattended_prod_reads"))
+        if got != pl["reads"]:
+            p.append("prod placement {}: reads {}, the case says {}".format(name, got, pl["reads"]))
+    for rel, want in sorted(m["patterns"].items()):
+        if not rel.startswith("settings/"):
+            continue
+        kept, dropped = split_patterns(options_of(rel).get("prod_patterns"))
+        if dropped != want["dropped"] or ("kept" in want and [k for k, _ in kept] != want["kept"]) or \
+                ("kept_count" in want and len(kept) != want["kept_count"]):
+            p.append("prod patterns {}: kept {} dropped {}, the case says {}".format(rel, len(kept), dropped, want))
+    return p, len(m["commands"])
+
+
 def check_settings():
     """settings/*.json: pluginConfigs options name keys the plugin declares (src/plugin.json userConfig)."""
     problems, n = [], 0
@@ -1752,6 +1861,9 @@ def check(b):
     problems += stub_problems
     print("stubs: {} PATH stub proven on a temp repo (bin/git-noexclude keeps a path the real git excludes)".format(nstub))
     settings_problems, nsettings = check_settings()
+    prod_problems, nprod = check_prod()
+    problems += prod_problems
+    print("prod: {} recorded commands classed by the BUILD-PLAN §3.7 effects order (S-SETTINGS B, C)".format(nprod))
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))
     # manifests
