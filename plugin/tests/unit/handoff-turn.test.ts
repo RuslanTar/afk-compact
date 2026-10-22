@@ -11,10 +11,10 @@ import { assetText } from '../../hooks/lib/assets.gen'
 import { DEFAULTS } from '../../hooks/lib/config'
 import { continueLine, lastCycleOf } from '../../hooks/lib/cont'
 import type { Deps } from '../../hooks/lib/deps'
-import { claimTurn, isOurText, newState, promptEntering, promptNotEntered, submitPending } from '../../hooks/lib/deps'
+import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, submitPending } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { BRAND } from './_gen/brand.gen'
-import { HOME, SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
+import { HOME, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 const TURN = hasAsset('handoff-turn')
 const C = maxCalls() ?? 0
@@ -706,7 +706,266 @@ test('CR-F19: a native compaction that starts while the post-handoff checkpoint 
   expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
 })
 
-test('CR-F17: a user prompt that enters beside our submit and starts its turn first is no handoff turn: halt clears, the ht is closed, our queued prompt runs after it with no nudge', async ($, on) => {
+test('CR-F17, CR-F25: a user prompt that entered but has not started its turn at the last check: our prompt is never submitted; its turn cancels the handoff turn', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  const USER = 'the user typed this'
+  let held: Promise<unknown> | undefined
+  let reached!: () => void
+  const atBottom = new Promise<void>(r => { reached = r })
+  let open!: () => void
+  const gate = new Promise<void>(r => { open = r })
+  w.atSubmit = async text => {
+    if (text !== USER) return
+    reached()
+    await gate
+  }
+  // The user presses Enter while `handoff-turn open` runs: prompt.submit counts it; its turn starts later.
+  w.atHelper = async (sub, args) => {
+    if (held !== undefined || sub !== 'handoff-turn' || args[0] !== 'open') return
+    held = $.prompt.submit({ text: USER, origin: { kind: 'composer' } } as never)
+    await atBottom
+  }
+  await w.advance(2000)
+  expect(held).toBeDefined()
+  expect(w.submits).toEqual([USER])
+  const ht = w.lastHt() ?? ''
+  expect(w.callsOf('handoff-turn').map(c => [c.args[0], w.flag(c, '--ht'), w.flag(c, '--why') ?? null])).toEqual([['open', ht, null], ['close', ht, 'cancelled']])
+  open()
+  await held
+  await w.turnStart($, USER)
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.ht])).toEqual([['user-turn', ht]])
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
+  w.tokens = 100000
+  await w.turnEnd($, 'Here you go.')
+  await w.advance(60000)
+  expect(w.submits).toEqual([USER])
+  expect(w.rowsOf('handoff_turn_end').length).toBe(0)
+  expect(w.compacts.length).toBe(0)
+})
+
+test('CR-F17: a user prompt that entered at the last check but is dropped on its way in: the delay runs again and the handoff turn follows', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  const ours = submitText(w, 'cap') ?? ''
+  const USER = 'the user typed this'
+  let held: Promise<unknown> | undefined
+  let reached!: () => void
+  const atBottom = new Promise<void>(r => { reached = r })
+  let open!: () => void
+  const gate = new Promise<void>(r => { open = r })
+  w.atSubmit = async text => {
+    if (text !== USER) return
+    reached()
+    await gate
+  }
+  w.dropIf = text => (text === USER ? 'refused by a guard' : undefined)
+  w.atHelper = async (sub, args) => {
+    if (held !== undefined || sub !== 'handoff-turn' || args[0] !== 'open') return
+    held = $.prompt.submit({ text: USER, origin: { kind: 'composer' } } as never)
+    await atBottom
+  }
+  await w.advance(2000)
+  const first = w.lastHt() ?? ''
+  expect(w.submits).toEqual([USER])
+  open()
+  await held
+  await w.settle()
+  await w.advance(2000)
+  expect(w.submits).toEqual([USER, ours])
+  const ht = w.lastHt() ?? ''
+  expect(ht).not.toBe(first)
+  await handoffTurnStarts($, w)
+  expect(w.rowsOf('handoff_turn_start').map(r => r.ht)).toEqual([ht])
+  expect(w.rowsOf('handoff_skipped').length).toBe(0)
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(0)
+})
+
+test('CR-F17, CR-F25: our handoff-turn submit refused because a user prompt entered as it went in: it never runs, no submit-failed, no compaction; the user turn cancels the handoff turn', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  const ours = submitText(w, 'cap') ?? ''
+  const USER = 'the user typed this'
+  let held: Promise<unknown> | undefined
+  let reached!: () => void
+  const atBottom = new Promise<void>(r => { reached = r })
+  let open!: () => void
+  const gate = new Promise<void>(r => { open = r })
+  w.atSubmit = async text => {
+    if (text === USER) {
+      reached()
+      await gate
+      return
+    }
+    if (text !== ours || held !== undefined) return
+    held = $.prompt.submit({ text: USER, origin: { kind: 'composer' } } as never)
+    await atBottom
+  }
+  // Our own prompt.submit hook drops ours in this state (refuseOwnSubmit); a hook beneath stands in for it here.
+  w.dropIf = text => (text === ours ? 'a user prompt came first' : undefined)
+  await w.advance(2000)
+  expect(w.submits).toEqual([ours, USER])
+  const ht = w.lastHt() ?? ''
+  expect(w.rowsOf('handoff_skipped').length).toBe(0)
+  expect(w.callsOf('handoff-turn').map(c => [c.args[0], w.flag(c, '--ht')])).toEqual([['open', ht], ['close', ht]])
+  expect(w.compacts.length).toBe(0)
+  open()
+  await held
+  await w.turnStart($, USER)
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.ht])).toEqual([['user-turn', ht]])
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
+  w.tokens = 100000
+  await w.turnEnd($, 'Here you go.')
+  await w.advance(60000)
+  expect(w.submits).toEqual([ours, USER])
+  // The next turn is the user's, not an orphaned prompt of ours: it gets its checkpoint nudge.
+  await w.turnStart($, 'more please')
+  w.tokens = 640000
+  expect((await w.tool($)).context).toBeDefined()
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+})
+
+test('CR-F17, CR-F25: our own submit is told by origin; a handoff-turn one is refused in our hook once a user prompt came first', () => {
+  expect(isOwnOrigin({ kind: 'plugin', name: 'x' }, 'x')).toBe(true)
+  expect(isOwnOrigin({ kind: 'plugin', name: 'y' }, 'x')).toBe(false)
+  expect(isOwnOrigin({ kind: 'composer' }, 'x')).toBe(false)
+  const s = newState('l')
+  expect(refuseOwnSubmit(s)).toBe(false)
+  promptEntering(s)
+  expect(refuseOwnSubmit(s)).toBe(false)
+  s.handoffSubmitting = true
+  expect(refuseOwnSubmit(s)).toBe(true)
+  promptNotEntered(s)
+  expect(refuseOwnSubmit(s)).toBe(false)
+  s.mainTurnRunning = true
+  expect(refuseOwnSubmit(s)).toBe(true)
+  // A dropped prompt runs a deferred handoff turn's delay again only once none is entering and no turn runs.
+  let again = 0
+  s.mainTurnRunning = false
+  s.afterForeign = () => { again++ }
+  promptEntering(s)
+  promptEntering(s)
+  promptNotEntered(s)
+  expect(again).toBe(0)
+  promptNotEntered(s)
+  expect([again, s.afterForeign]).toEqual([1, undefined])
+})
+
+test('CR-F17 (REG-register-42): a peer hook beneath rewrites our handoff-turn prompt: its turn is still the handoff turn (origin, not text); the next user turn clears halt', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  const ours = submitText(w, 'cap') ?? ''
+  const REWORDED = 'A peer plugin reworded this prompt.'
+  w.rewrite = text => (text === ours ? REWORDED : undefined)
+  // The engine runs our submit through every hook but the calling one, so our prompt.submit hook
+  // sees it (d.ts); the kit skips the whole plugin, so the test raises that pass itself.
+  let echoed = false
+  w.atSubmit = async text => {
+    if (echoed || text !== ours) return
+    echoed = true
+    await $.prompt.submit({ text: ours, origin: { kind: 'plugin', name: w.name } } as never)
+  }
+  await w.advance(2000)
+  expect(echoed).toBe(true)
+  expect(w.submits).toEqual([ours, ours])
+  expect(w.submitOrigins).toEqual([{ kind: 'plugin', name: w.name }, { kind: 'plugin', name: w.name }])
+  const ht = w.lastHt() ?? ''
+  await w.turnStart($, REWORDED)
+  expect(w.rowsOf('handoff_turn_start').map(r => r.ht)).toEqual([ht])
+  expect(w.rowsOf('handoff_skipped').length).toBe(0)
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(0)
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  await w.advance(500)
+  expect(w.compacts.length).toBe(1)
+  // Our submit is settled: the user's next turn is theirs (halt clears), not taken as ours.
+  await w.turnStart($, 'what now?')
+  expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
+})
+
+test('REG-boundary-205 (CR-F19): a native compaction that starts during the post-handoff checkpoint and ends skipped: no dispatch before it, the rerun uses the nudge\'s nonce, one record', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  const r = await lastCycleTurn($, w)
+  if (!TURN) return
+  const named = /--nonce ([0-9a-f]{8})/.exec(r.context?.[0] ?? '')?.[1] ?? ''
+  expect(named).not.toBe('')
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (sub !== 'checkpoint' || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    w.compactMode = { skip: 'nothing to compact' }
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  expect(p).toBeDefined()
+  const selfDispatch = () => w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self')
+  expect(selfDispatch().length).toBe(0)
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  w.compactMode = 'ok'
+  await w.advance(60000)
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto', undefined])
+  expect(selfDispatch().map(c => w.flag(c, '--nonce'))).toEqual([named])
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(named)
+})
+
+test('REG-boundary-205 (CR-F19): a native compaction that starts while the dispatch record is written and ends skipped: the rerun reuses that record (one dispatch, same nonce and text)', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub !== 'dispatch' || !args.includes('mod-self') || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    w.compactMode = { skip: 'nothing to compact' }
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  expect(p).toBeDefined()
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto'])
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  w.compactMode = 'ok'
+  await w.advance(60000)
+  const self = w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self')
+  expect(self.length).toBe(1)
+  const nonce = w.flag(self[0], '--nonce') ?? ''
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto', undefined])
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(nonce)
+  expect(w.rowsOf('compacted').filter(r => r.nonce === nonce && r.skip === null && r.handoff_ht === ht).length).toBe(1)
+  expect(w.rowsOf('skip').length).toBe(0)
+})
+
+test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt runs after it with no nudge', async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -716,7 +975,7 @@ test('CR-F17: a user prompt that enters beside our submit and starts its turn fi
   w.atSubmit = async text => {
     if (fired || text !== ours) return
     fired = true
-    // The user pressed Enter as our prompt went in: their prompt passes prompt.submit, then its turn starts.
+    // The user pressed Enter as our prompt went in, past our hook: their prompt passes prompt.submit, then its turn starts.
     await $.prompt.submit({ text: 'the user typed this', origin: { kind: 'composer' } } as never)
     await w.turnStart($, 'the user typed this')
   }

@@ -81,6 +81,10 @@ export type LoadState = {
   foreignPrompts: number
   /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn gets no nudge. */
   orphanSubmit: boolean
+  /** Our handoff-turn `$.prompt.submit` call is in flight: our own `prompt.submit` hook drops it when a user prompt came first. */
+  handoffSubmitting: boolean
+  /** The handoff turn deferred for a prompt that entered but has not started its turn: run again if it never does (CR-F17). */
+  afterForeign: (() => void) | undefined
   /** Boundary scheduler. */
   timer: { cancel: () => void } | undefined
   busy: boolean
@@ -174,6 +178,8 @@ export function newState(loadId: string): LoadState {
     ourSubmitText: undefined,
     foreignPrompts: 0,
     orphanSubmit: false,
+    handoffSubmitting: false,
+    afterForeign: undefined,
     timer: undefined,
     busy: false,
     lastPluginCompactAt: undefined,
@@ -364,7 +370,32 @@ export function promptEntering(s: LoadState): void {
   s.foreignPrompts++
 }
 
-/** That prompt did not enter (`{ drop }` or a failed chain): no turn of its own will start. */
+/**
+ * That prompt did not enter (`{ drop }` or a failed chain): no turn of its own will start. A
+ * handoff turn it deferred (CR-F17) runs its delay again once no other prompt is entering.
+ */
 export function promptNotEntered(s: LoadState): void {
   if (s.foreignPrompts > 0) s.foreignPrompts--
+  const again = s.afterForeign
+  if (s.foreignPrompts > 0 || again === undefined || s.mainTurnRunning) return
+  s.afterForeign = undefined
+  again()
+}
+
+/**
+ * A `prompt.submit` of ours: its origin is this plugin's own (`{ kind: 'plugin', name }`, which
+ * no hook can change), so it is told from a user's prompt by origin, never by its text, which a
+ * peer hook may rewrite (CR-F17). The engine skips only the calling hook, so this hook sees it.
+ */
+export function isOwnOrigin(origin: { kind: string; name?: string }, name: string): boolean {
+  return origin.kind === 'plugin' && origin.name === name
+}
+
+/**
+ * Our own handoff-turn submit reaching our `prompt.submit` hook after a user prompt came first
+ * (a main turn started, or a prompt entered whose turn has not started): it is dropped there,
+ * so it never runs after that turn as a plain one (CR-F17, CR-F25).
+ */
+export function refuseOwnSubmit(s: LoadState): boolean {
+  return s.handoffSubmitting && (s.mainTurnRunning || s.foreignPrompts > 0)
 }
