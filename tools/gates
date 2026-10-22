@@ -172,7 +172,10 @@ HEAL_ROWS = ["1", "2a", "2b", "2c", "3", "4", "5", "6", "7"]
 RELAUNCH_LINE = re.compile(r"never relaunch\b.{0,40}\bfrom the handoff['’]s text", re.I)
 # AT-J-13 "SKILL.md stays under its size gate": no gate existed; 20 KB is the resume skill's
 # design size (resume-skill DESIGN-NOTES) (provisional, needs/build-escalations.md E-B-3).
-RESUME_SKILL_MAX = 20480
+# XR-17 / DP-31 (2): the merged resume SKILL measured 20,988 B after the wp/text merge (round 9),
+# over the 20,480 B soft budget, so the gate is raised once to 21,504 (never further without a
+# root ruling).
+RESUME_SKILL_MAX = 21504
 # CR-F36 / CR-F27 (text-to-build §6, Dev-5): self-heal.md never runs a row's `probe` cell and
 # routes a heal-check refusal on its `verdict:` status; resume-context step 3 says the same.
 HEAL_FORBIDDEN = ("with its `probe` if read-only", "the row's own probe only if read-only")
@@ -187,13 +190,9 @@ BASH_PATH = re.compile(r"\bon the Bash PATH\b", re.I)
 # Hits that wait for text not written yet: (gate, rule, path in the target, fragment of the
 # offending line or None for a file-level hit). Remove a row once it prints PENDING-DONE.
 PENDING = [
-    # The launcher move (BLD-01) lands before the skill and README text (BUILD-ROUND-9 §4
-    # steps 3, 4, 10): TXT-05 drops "on the Bash PATH" and the bin/ fallback; DOC-01 the README.
-    ("launcher", "AT-PK-01 bash-path", "skills/handoff/SKILL.md", "on the Bash PATH"),
-    ("launcher", "AT-PK-01 bash-path", "skills/resume/SKILL.md", "on the Bash PATH"),
-    ("launcher", "AT-PK-01 launcher-dir", "skills/resume/SKILL.md", '/bin/'),
-    ("launcher", "AT-PK-01 bash-path", "skills/status/SKILL.md", "on the Bash PATH"),
-    ("launcher", "AT-PK-01 launcher-dir", "skills/status/SKILL.md", '/bin/'),
+    # The launcher move (BLD-01) lands before the README text (BUILD-ROUND-9 §4 steps 3, 10):
+    # DOC-01 drops the README's bin/ path. (TXT-05's skill rows printed PENDING-DONE at the
+    # wp/text merge and were removed.)
     ("launcher", "AT-PK-01 launcher-dir", "README.md", "/bin/"),
 ]
 
