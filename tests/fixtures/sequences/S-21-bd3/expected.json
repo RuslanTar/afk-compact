@@ -1,0 +1,46 @@
+{
+  "id": "S-21-bd3",
+  "spec": "T-TEXT E5 (BD-3 rollup fields), MOD-SPEC §5.4; AT-BD-01",
+  "step_asserts": [
+    {
+      "after_step": 5,
+      "why": "P3 proves compaction 1 main at reconcile; the lag is the boundary row time minus the PostCompact stash time",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 1,
+          "fields": {
+            "nonce": "$N1",
+            "proof": "P3",
+            "proof_lag_ms": 27
+          }
+        }
+      ]
+    },
+    {
+      "after_step": 10,
+      "why": "no boundary row for $N2: unproven, decided after the settle wait",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 2
+        },
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 1,
+          "fields": {
+            "nonce": "$N2",
+            "proof": "none",
+            "proof_lag_ms": null
+          }
+        }
+      ],
+      "fields_ge": {
+        "settle_waited_ms": 0
+      }
+    }
+  ]
+}

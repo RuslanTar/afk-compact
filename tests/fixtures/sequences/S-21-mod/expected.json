@@ -41,6 +41,36 @@
           "count": 0
         }
       ]
+    },
+    {
+      "after_step": 5,
+      "why": "PKG-RUNTIME E.2: reconcile matched the main boundary row to the nonce that has a rollup row: one compaction_boundary row with the boundary's sizes, duration and version",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction_boundary",
+          "count": 1,
+          "fields": {
+            "nonce": "1a2b3c4d",
+            "pre_tokens": 223438,
+            "post_tokens": 14943,
+            "duration_ms": 55960,
+            "precomputed": false,
+            "cc_version": "2.1.306"
+          }
+        }
+      ]
+    },
+    {
+      "after_step": 6,
+      "why": "one row per nonce: the second reconcile adds none",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction_boundary",
+          "count": 1
+        }
+      ]
     }
   ]
 }

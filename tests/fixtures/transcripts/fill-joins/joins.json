@@ -1,0 +1,41 @@
+{
+  "id": "fill-joins",
+  "tests": [
+    "AT-ST-09"
+  ],
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "note": "Unmarked subagent summaries (no nonce): fill joins by body sha (b), else by time only when exactly one agent file has an unjoined boundary row in the copy's window (c). The two boundary rows are 35 s apart, so a 120 s window holds both. The summary rows carry the engine trailers: a reader computing the row's normalized-body sha must cut them first, or join (b) never matches (see README).",
+  "agents": {
+    "A2": "a5c0ffee0a1b2c3d4",
+    "A3": "a7d00d1e5e6f7a8b9"
+  },
+  "boundaries": {
+    "A2": "2026-10-21T11:04:30.250Z",
+    "A3": "2026-10-21T11:05:05.250Z"
+  },
+  "cases": [
+    {
+      "id": "sha-join",
+      "payload": "payloads/PostCompact/fill-unmarked-sub-a.json",
+      "postcompact_now": "2026-10-21T14:04:30.650+03:00",
+      "expect": {
+        "filled": true,
+        "agent": "a5c0ffee0a1b2c3d4",
+        "attributed_by": "reconcile-b"
+      }
+    },
+    {
+      "id": "ambiguous",
+      "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
+      "postcompact_now": "2026-10-21T14:04:50.650+03:00",
+      "expect": {
+        "filled": false,
+        "row": "copy_attribution_ambiguous",
+        "candidates": [
+          "a5c0ffee0a1b2c3d4",
+          "a7d00d1e5e6f7a8b9"
+        ]
+      }
+    }
+  ]
+}

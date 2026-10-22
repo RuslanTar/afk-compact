@@ -40,6 +40,8 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             frontmatter_keys_export) and the Dev-1 scenarios (job sha, process records, the
             transcript stub as V1 reads it, sidecar seq against mtime, the case clock)
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
+  manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
+            idle-cases.json) agree with the payloads, dispatch records and corpus files they name
   stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
             fixture text, except the files listed in LEGACY_TIME_OK, which test the legacy
             reading and must still hold one (a stale list entry fails too)
@@ -1189,6 +1191,166 @@ def check_queue():
     return problems, njson
 
 
+# Transcript manifests (README "Transcripts"): FIX-03 inputs that tie transcripts to payloads, records
+# and corpus files. P5-replay (C-STORE D5 fill, AT-ST-08), fill-joins (AT-ST-09), idle-cases (IC-1 D1,
+# AT-IC-02). Each check proves the pieces agree, so a core case can rely on them.
+TRANSCRIPTS = os.path.join(FIX, "transcripts")
+
+
+def jsonl_rows(rel):
+    return [json.loads(l) for l in read(os.path.join(FIX, rel)).split("\n") if l.strip()]
+
+
+def row_text(r):
+    c = (r.get("message") or {}).get("content")
+    if isinstance(c, list):
+        c = "".join(x.get("text", "") for x in c if isinstance(x, dict))
+    return c if isinstance(c, str) else ""
+
+
+def body_lines_in(post_text, row, b):
+    """Every non-blank normalized-body line of a PostCompact text is a line of the summary row text."""
+    body, _ = normalize(fill(post_text, b), b["name"])
+    have = set(fill(row_text(row), b).split("\n"))
+    return [ln for ln in body.split("\n") if ln.strip() and ln not in have]
+
+
+def payload_of(rel, sid):
+    d = json.loads(read(os.path.join(FIX, rel)))
+    if d.get("hook_event_name") != "PostCompact" or d.get("session_id") != sid:
+        raise ValueError("{} is not a PostCompact payload of {}".format(rel, sid))
+    return d
+
+
+def check_replay(b):
+    p = []
+    m = json.loads(read(os.path.join(TRANSCRIPTS, "P5-replay", "replay.json")))
+    rows = jsonl_rows(m["agent_transcript"])
+    jsonl_rows(m["main_transcript"])
+    seen = set()
+    for c in m["compactions"]:
+        w = "P5-replay c{}".format(c["seq"])
+        try:
+            pay = payload_of(c["payload"], m["sid"])
+        except (OSError, ValueError) as e:
+            p.append("{}: {}".format(w, e))
+            continue
+        if pay["compact_summary"] != read(os.path.join(FIX, c["corpus"])):
+            p.append("{}: the payload compact_summary is not the corpus file {}".format(w, c["corpus"]))
+        d = json.loads(read(os.path.join(FIX, c["dispatch"])))
+        if (d.get("nonce"), d.get("agent_id"), d.get("channel")) != (c["nonce"], None, "classic"):
+            p.append("{}: {} must be a classic dispatch, agent_id null, nonce {}".format(w, c["dispatch"], c["nonce"]))
+        bl, sl = rows[c["boundary_line"] - 1], rows[c["summary_line"] - 1]
+        meta = bl.get("compactMetadata") or {}
+        if (bl.get("subtype") != "compact_boundary" or bl.get("agentId") != m["agent"] or not bl.get("isSidechain")
+                or (meta.get("preTokens"), meta.get("postTokens"), meta.get("durationMs")) != (c["pre_tokens"], c["post_tokens"], c["duration_ms"])):
+            p.append("{}: agent line {} is not its boundary row with the listed sizes".format(w, c["boundary_line"]))
+        if sl.get("isCompactSummary") is not True or detect(fill(row_text(sl), b), b["name"])[3] != c["nonce"]:
+            p.append("{}: agent line {} is not a summary row with marker nonce {}".format(w, c["summary_line"], c["nonce"]))
+        missing = body_lines_in(pay["compact_summary"], sl, b)
+        if missing:
+            p.append("{}: the summary row lacks {} body lines of the PostCompact text, first {!r}".format(w, len(missing), missing[0][:60]))
+        t_pre, t_b, t_post = parse_iso(c["precompact_now"]), parse_iso(bl.get("timestamp")), parse_iso(c["postcompact_now"])
+        if not (t_pre is not None and t_b is not None and t_post is not None and t_pre < t_b <= t_post):
+            p.append("{}: want PreCompact < boundary row <= PostCompact (lab order)".format(w))
+        seen.add(c["nonce"])
+    if len(seen) != len(m["compactions"]) or len(m["compactions"]) != 6:
+        p.append("P5-replay: six compactions with distinct nonces")
+    nb = sum(1 for r in rows if r.get("subtype") == "compact_boundary")
+    ns = sum(1 for r in rows if r.get("isCompactSummary") is True)
+    if (nb, ns) != (6, 6):
+        p.append("P5-replay: the agent file holds {} boundary and {} summary rows, want 6 and 6".format(nb, ns))
+    return p
+
+
+def check_joins(b):
+    p = []
+    m = json.loads(read(os.path.join(TRANSCRIPTS, "fill-joins", "joins.json")))
+    summ = {}
+    for k, agent in m["agents"].items():
+        rows = jsonl_rows("transcripts/fill-joins/subagents/agent-{}.jsonl".format(agent))
+        bs = [r for r in rows if r.get("subtype") == "compact_boundary"]
+        ss = [r for r in rows if r.get("isCompactSummary") is True]
+        if len(bs) != 1 or len(ss) != 1 or bs[0]["timestamp"] != m["boundaries"][k]:
+            p.append("fill-joins {}: one boundary row at {} and one summary row".format(k, m["boundaries"][k]))
+            continue
+        if detect(fill(row_text(ss[0]), b), b["name"])[3] is not None:
+            p.append("fill-joins {}: the summary row must be unmarked".format(k))
+        summ[agent] = ss[0]
+    times = [parse_iso(t) for t in m["boundaries"].values()]
+    if None in times or max(times) - min(times) >= 120:
+        p.append("fill-joins: both boundary rows must sit inside one 120 s window")
+    for c in m["cases"]:
+        w = "fill-joins {}".format(c["id"])
+        try:
+            pay = payload_of(c["payload"], m["sid"])
+        except (OSError, ValueError) as e:
+            p.append("{}: {}".format(w, e))
+            continue
+        if detect(fill(pay["compact_summary"], b), b["name"])[3] is not None:
+            p.append("{}: the payload summary must be unmarked".format(w))
+        holders = sorted(a for a, r in summ.items() if not body_lines_in(pay["compact_summary"], r, b))
+        want = [c["expect"]["agent"]] if c["expect"].get("filled") else []
+        if holders != want:
+            p.append("{}: the body is in the summary rows of {}, the case expects {}".format(w, holders, want))
+        t = parse_iso(c["postcompact_now"])
+        if t is None or any(abs(t - x) >= 120 for x in times if x is not None):
+            p.append("{}: postcompact_now must lie within 120 s of both boundary rows".format(w))
+    return p
+
+
+def check_idle(b):
+    p = []
+    m = json.loads(read(os.path.join(TRANSCRIPTS, "idle-cases.json")))
+    for c in m["cases"]:
+        w = "idle-cases {}".format(c["id"])
+        rows = jsonl_rows(c["transcript"] + "/main.jsonl")
+        main_b = [i for i, r in enumerate(rows) if r.get("subtype") == "compact_boundary" and not r.get("isSidechain")]
+        if len(main_b) != 1 or (rows[main_b[0]].get("compactMetadata") or {}).get("trigger") != "auto":
+            p.append("{}: one main boundary row with trigger auto".format(w))
+            continue
+        native = None
+        for r in rows[main_b[0] + 1:]:
+            if r.get("type") == "system":
+                for k, pre in sorted(m["prefixes"].items()):
+                    if str(r.get("content", "")).startswith(pre):
+                        native = k
+                if native:
+                    break
+        summ = [r for r in rows if r.get("isCompactSummary") is True]
+        if len(summ) != 1 or detect(fill(row_text(summ[0]), b), b["name"])[3] != m["nonce"]:
+            p.append("{}: one summary row with marker nonce {}".format(w, m["nonce"]))
+        d = json.loads(read(os.path.join(FIX, c["dispatch"])))
+        if d.get("nonce") != m["nonce"] or not isinstance(d.get("idle"), bool) or d.get("channel") != "mod-hook":
+            p.append("{}: {} must be a mod-hook dispatch for {} with a boolean idle".format(w, c["dispatch"], m["nonce"]))
+            continue
+        mod = d["idle"]
+        source = "both" if mod and native else "mod" if mod else native or "none"
+        want = {"idle": bool(mod or native), "idle_source": source, "idle_mismatch": int(bool(mod) != bool(native))}
+        got = {k: c["expect"].get(k) for k in want}
+        if got != want:
+            p.append("{}: expect {} but the IC-1 D1 rule gives {}".format(w, got, want))
+        ends = [r for r in rows if r.get("type") == "assistant" and not r.get("isSidechain")]
+        if not ends or ends[-1]["timestamp"] != m["last_turn_end"]:
+            p.append("{}: the last main assistant row must end at last_turn_end".format(w))
+        gap = parse_iso(m["dispatch_ts"]) - parse_iso(m["last_turn_end"])
+        if int(gap) != m["idle_gap_s"] or gap < 1500:
+            p.append("{}: idle_gap_s {} must be the dispatch ts minus the last turn end and at least 1,500 s".format(w, m["idle_gap_s"]))
+    return p
+
+
+def check_manifests(b):
+    problems, n = [], 0
+    for name, fn in (("P5-replay/replay.json", check_replay), ("fill-joins/joins.json", check_joins), ("idle-cases.json", check_idle)):
+        if not os.path.exists(os.path.join(TRANSCRIPTS, name)):
+            problems.append("manifests: transcripts/{} missing".format(name))
+            continue
+        n += 1
+        try:
+            problems += fn(b)
+        except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
+            problems.append("manifests transcripts/{}: {}: {}".format(name, type(e).__name__, e))
+    return problems, n
 # The scope-proof table (transcripts/scope-cases.json; MOD-SPEC §2.4 as amended by ROOT-RULINGS F2-1).
 SCOPE_CASES = os.path.join(FIX, "transcripts", "scope-cases.json")
 SCOPE_KEYS = {"expect_scope": True, "expect_scope_postcompact": False}   # key -> P3 counted
@@ -1375,6 +1537,10 @@ def check(b):
     settings_problems, nsettings = check_settings()
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))
+    # manifests
+    man_problems, nman = check_manifests(b)
+    problems += man_problems
+    print("manifests: {} transcript manifests agree with their payloads, records and corpus files".format(nman))
     # stamps
     stamp_problems, nstamp, nlegacy = check_stamps()
     problems += stamp_problems

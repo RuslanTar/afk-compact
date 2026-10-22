@@ -1,0 +1,106 @@
+{
+  "id": "S-21-pd-noboundary",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "order": "S-21",
+  "source": "lab E1/probes/S-21-S-26.md §3b, §3c (2.1.306; runs e1-8f29fa manual and e1-689914 auto showed the same order); ROOT-RULINGS F2-1; RR-S21-03 (PKG-RUNTIME E.1)",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/S-21-pd-noboundary",
+  "transcript_mode": "append each step's transcript_append to the payload transcript_path before the step runs",
+  "seed": [],
+  "note": "AT-WD-10 (noboundary): a PermissionDenied in the first turn after a deferred PostCompact (S-21-classic order)",
+  "steps": [
+    {
+      "now": "2026-10-21T14:05:00+03:00",
+      "argv": [
+        "hook",
+        "PreCompact"
+      ],
+      "stdin": "sequences/S-21-pd-noboundary/payloads/01-PreCompact.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "classic PreCompact (dispatch $NONCE)",
+      "transcript_append": "transcripts/S-21-pd-noboundary/main.part-01.jsonl",
+      "capture": {
+        "NONCE": "re:v1 n=([0-9a-f]{8}) s=main"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:55+03:00",
+      "argv": [
+        "hook",
+        "SubagentStop"
+      ],
+      "stdin": "sequences/S-21-pd-noboundary/payloads/02-SubagentStop.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "the summarizer fork",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:56+03:00",
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin": "sequences/S-21-pd-noboundary/payloads/03-SessionStart.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "SessionStart(compact)",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:56.100+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "sequences/S-21-pd-noboundary/payloads/04-PostCompact.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "PostCompact stashes and defers: pending/<id6>.post.json with ts .100, no rollup row yet",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:02.400+03:00",
+      "argv": [
+        "hook",
+        "PermissionDenied"
+      ],
+      "stdin": "sequences/S-21-pd-noboundary/payloads/06-PermissionDenied.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "the pending record exists but no main boundary row landed -> other",
+      "transcript_append": "transcripts/S-21-pd-noboundary/main.part-02.jsonl",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    }
+  ]
+}

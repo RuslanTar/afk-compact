@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "nonce": "f5d2ccf6",
+  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "actor": "unknown",
+  "agent_id": null,
+  "trigger": "auto",
+  "channel": "classic",
+  "resume_pref": "sessionstart",
+  "midturn": false,
+  "tags": [
+    "auto"
+  ],
+  "instructions_sha8": "12d8bd1f",
+  "instructions_bytes": 4860,
+  "cc_version": "2.1.307",
+  "load_id": null,
+  "pid": 43210,
+  "pid_lstart": "Wed Oct 21 09:00:00 2026",
+  "ts": "2026-10-21T14:01:03+03:00"
+}

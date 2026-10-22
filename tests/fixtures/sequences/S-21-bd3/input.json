@@ -1,0 +1,195 @@
+{
+  "id": "S-21-bd3",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "order": "S-21",
+  "source": "lab E1/probes/S-21-S-26.md §3b, §3c (2.1.306; runs e1-8f29fa manual and e1-689914 auto showed the same order); ROOT-RULINGS F2-1; BD-3 (T-TEXT E5) timing: PostCompact and the boundary row stamped to the millisecond",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/S-21-bd3",
+  "transcript_mode": "append each step's transcript_append to the payload transcript_path before the step runs",
+  "seed": [],
+  "note": "AT-BD-01: compaction 1 is proven by P3 with proof_lag_ms 27 (boundary row .177 minus the PostCompact stash .150); compaction 2 never gets a boundary row, so it stays unproven: proof none and settle_waited_ms >= 0",
+  "steps": [
+    {
+      "now": "2026-10-21T14:05:00+03:00",
+      "argv": [
+        "hook",
+        "PreCompact"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/01-PreCompact.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "compaction 1: classic PreCompact (fallback, dispatch $N1)",
+      "transcript_append": "transcripts/S-21-bd3/main.part-01.jsonl",
+      "capture": {
+        "N1": "re:v1 n=([0-9a-f]{8}) s=main"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:55+03:00",
+      "argv": [
+        "hook",
+        "SubagentStop"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/1-02-SubagentStop.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "the summarizer fork",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:56.050+03:00",
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/03-SessionStart.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "SessionStart(compact)",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:56.150+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/1-04-PostCompact.json",
+      "transcript_state": {
+        "boundaries": 0,
+        "summaries": 0
+      },
+      "note": "PostCompact at .150 stashes (no proof inside the hook, F2-1); the boundary row is stamped .177, 27 ms later (lab S-21: 12-42 ms after the after-step)",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:22+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/05-Stop.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "reconcile: P3 proves main; proof_lag_ms = 177 - 150 = 27",
+      "transcript_append": "transcripts/S-21-bd3/main.part-02.jsonl",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:08:00+03:00",
+      "argv": [
+        "hook",
+        "PreCompact"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/01-PreCompact.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "compaction 2: classic PreCompact (dispatch $N2)",
+      "capture": {
+        "N2": "re:v1 n=([0-9a-f]{8}) s=main"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:08:50+03:00",
+      "argv": [
+        "hook",
+        "SubagentStop"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/2-02-SubagentStop.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "the summarizer fork",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:08:51.300+03:00",
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/03-SessionStart.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "SessionStart(compact)",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:08:51.420+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/2-04-PostCompact.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "PostCompact stashes $N2",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:09:16+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "sequences/S-21-bd3/payloads/05-Stop.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "no boundary row landed for $N2 (part-03 holds only the reply): unproven; reconcile decides after SETTLE_S, proof none",
+      "transcript_append": "transcripts/S-21-bd3/main.part-03.jsonl",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    }
+  ]
+}

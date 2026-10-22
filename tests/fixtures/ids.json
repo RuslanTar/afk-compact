@@ -17,12 +17,14 @@
   "agent": {
     "A1": "a9a00b3f363327444",
     "A2": "a5c0ffee0a1b2c3d4",
-    "A3": "a7d00d1e5e6f7a8b9"
+    "A3": "a7d00d1e5e6f7a8b9",
+    "P5": "a494e1b0fa1a73786"
   },
   "agent8": {
     "A1": "a9a00b3f",
     "A2": "a5c0ffee",
-    "A3": "a7d00d1e"
+    "A3": "a7d00d1e",
+    "P5": "a494e1b0"
   },
   "pid": {
     "P": 43210,
@@ -54,7 +56,14 @@
     "unres": "9a0b1c2d",
     "preold": "ab0c1d2e",
     "classic2": "bc1d2e3f",
-    "manual": "cd2e3f40"
+    "manual": "cd2e3f40",
+    "idle": "1d1e0c0a",
+    "p5_c1": "da24cc4a",
+    "p5_c2": "f5d2ccf6",
+    "p5_c3": "d2158267",
+    "p5_c4": "4dae03c4",
+    "p5_c5": "228e0cc9",
+    "p5_c6": "084ad868"
   },
   "repo_dir": "example-repo",
   "cwd": "$TMP/example-repo",
