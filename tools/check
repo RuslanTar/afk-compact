@@ -278,6 +278,16 @@ def probes(name):
         append(d, "plugin/skills/status/SKILL.md",
                "\nIf the job has not finished yet, do a bounded wait and read the output.\n"
                "When no notification arrived, wait in the foreground until the job ends.\n")
+        # CR-F43: a negation in another comma-joined main clause does not hide the wait either.
+        append(d, "plugin/assets/handoff-turn.txt", "No output yet, so wait in the foreground until it ends.\n")
+        append(d, "plugin/assets/checkpoint-nudge.txt",
+               "Do not stop the job, wait in the foreground until it ends.\n")
+
+    def wait_text_negated(d):
+        # CR-F43: these stay negated, so the unplanted copy must still pass the gate.
+        append(d, "plugin/skills/resume/SKILL.md",
+               "\nDo not, under any circumstances, wait in the foreground for the job.\n"
+               "No recap, no status line, no foreground wait.\n")
 
     def asset_grow(d):
         append(d, "plugin/assets/resume-context.txt", "x" * 600 + "\n")
@@ -480,8 +490,11 @@ def probes(name):
           ("blocking-read", "bare-sleep", "notification-wait")]
          + [r"^GATE wait-text plugin/skills/handoff/SKILL\.md:\d+: AT-W-01 foreground-wait",
             r"^GATE wait-text plugin/skills/status/SKILL\.md:\d+: AT-W-01 foreground-wait: 'bounded wait'",
-            r"^GATE wait-text plugin/skills/status/SKILL\.md:\d+: AT-W-01 foreground-wait: 'wait in the foreground'"],
-         None),
+            r"^GATE wait-text plugin/skills/status/SKILL\.md:\d+: AT-W-01 foreground-wait: 'wait in the foreground'",
+            r"^GATE wait-text plugin/assets/handoff-turn\.txt:\d+: AT-W-01 foreground-wait: 'wait in the foreground'",
+            r"^GATE wait-text plugin/assets/checkpoint-nudge\.txt:\d+: AT-W-01 foreground-wait: "
+            r"'wait in the foreground'"],
+         wait_text_negated),
         ("asset-bytes", "AT-W-02", gates_only("asset-bytes"), asset_grow,
          [r"^GATE asset-bytes plugin/assets/resume-context\.txt: AT-W-02 \d+ B > 2500$",
           r"^GATE asset-bytes plugin/assets/subagent-instructions\.txt: AT-W-02 \d+ B > 1100$"], None),

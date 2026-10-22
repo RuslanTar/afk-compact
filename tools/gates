@@ -136,6 +136,14 @@ NEGATION = re.compile(r"\b(?:never|not|no)\b", re.I)
 # has not finished yet,", "When no notification arrived,") is dropped up to its comma.
 CLAUSE_START = re.compile(r"[.;:]|\b(?:then|but|otherwise|else)\b", re.I)
 SUBCLAUSE = re.compile(r"\b(?:if|when|whenever|until|unless|once|after|before|while|because|since)\b[^,]*,", re.I)
+# A comma also starts a new main clause when `so`/`and` follows it ("No output yet, so wait ..."),
+# or an imperative verb follows it ("Do not stop the job, wait ...") and the negation before it is
+# not left dangling ("Do not, under any circumstances, wait" stays negated). A comma before a
+# noun ("No recap, ..., foreground wait") does not end the negation.
+COMMA_JOINER = re.compile(r"\s*(?:so|and)\b", re.I)
+COMMA_IMPERATIVE = re.compile(r"\s*(?:wait|block|keep|run|use|poll|check|stop|start|let|leave|stay|"
+                              r"watch|read|call|sleep|hold|tail|go|do)\b", re.I)
+DANGLING_NEGATION = re.compile(r"\b(?:never|not|no)\s*$", re.I)
 STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
 MAIN_RULE = re.compile(r"notification wakes you", re.I)
 # AT-W-02: bytes of the full render (every tag line kept); resume = DP-8 protocol hard cap,
@@ -187,6 +195,13 @@ def text_docs(target):
 def not_negated(line, m):
     """True unless a never/not/no in the match's own clause, within 40 characters, negates it."""
     pre = SUBCLAUSE.sub(" ", CLAUSE_START.split(line[:m.start()])[-1])
+    parts, start = pre.split(","), 0
+    for j in range(1, len(parts)):
+        follow = parts[j] + (line[m.start():] if j == len(parts) - 1 else "")
+        if COMMA_JOINER.match(follow) or (COMMA_IMPERATIVE.match(follow) and
+                                          not any(DANGLING_NEGATION.search(p) for p in parts[start:j])):
+            start = j
+    pre = ",".join(parts[start:])
     return not NEGATION.search(pre[-40:])
 
 
