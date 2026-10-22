@@ -30,7 +30,7 @@
    "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr"},
    "expect": {"exit": 0,
      "stdout_has": ["^handoff mode: repo \\(accepted\\)$", "^automatic relaunch: off · relaunch_auto off$",
-                    "^  relaunch_allow: 1 patterns, no effect in this version \\(read-only jobs only\\)$",
+                    "^  relaunch_allow: 1 patterns, not used while relaunch_auto is off$",
                     "^  config: relaunch_auto invalid, off used$", "^  config: relaunch_allow invalid, pattern dropped$",
                     "^  config: relaunch_quiet_s 5 clamped to 30$"],
      "stdout_lacks": ["^note: "]}},

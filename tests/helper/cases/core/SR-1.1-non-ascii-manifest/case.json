@@ -18,14 +18,14 @@
   ]},
   {"argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0,
-     "stdout_has": ["^thresholds: target 400000 · soft_max 600000 · window 800000 · native_trigger 767000$",
+     "stdout_has": ["^thresholds: target 400000 · soft_max 600000 · window 800000 · native_trigger 767000 · min_window 329000$",
                     "^  2026-10-21T14:01:00\\.000\\+03:00 · main · mod-hook · auto · ok · copy $TMP/räume/handoffs/wörk/general/compact/2026-10-21_14-01-00_11111111-1a2b3c\\.md$",
                     "^halt: off · continues this hour: 0 of 6$"],
      "stdout_lacks": ["Â", "Ã", "â€"]}},
   {"setup": [{"write": "$TMP/räume/handoffs/.watch/$SID.jsonl", "text": ""}]},
   {"argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0,
-     "stdout_has": ["^thresholds: no mod row yet \\(settings: target 400000 · soft max 600000\\)$"],
+     "stdout_has": ["^thresholds: no mod row yet \\(settings: target 400000 · soft max 600000 · min_window 329000\\)$"],
      "stdout_lacks": ["Â", "Ã", "â€"]}}
  ]
 }
