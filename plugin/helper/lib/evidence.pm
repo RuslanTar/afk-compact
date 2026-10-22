@@ -114,7 +114,7 @@ sub copy {
         _manifest($dest_dir, %row, copy => $ref, scan => 'ref-only', mode => '0600', meaning => 'over the size cap') if $mf;
         return { %row, status => 'ref-only', copy => $ref };
     }
-    my ($class, $hits) = $is_task ? ('excerpt', []) : secrets::classify_file($src);
+    my ($class, $hits, $scanned) = $is_task ? ('excerpt', []) : secrets::classify_file($src);
     my @rules = map { $_->{rule} } @$hits;
     if ($class eq 'withhold') {
         _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'secret gate') if $mf;
@@ -122,7 +122,8 @@ sub copy {
     }
     my $dst = _unique($dest_dir, $base);
     if ($class eq 'excerpt' || $class eq 'redact') {
-        my $raw = util::read_file($src, 12 * 1024 * 1024) // '';
+        # a redact copy writes the bytes the gate scanned (classify_file reads the file once)
+        my $raw = $class eq 'redact' && defined $scanned ? $scanned : util::read_file($src, 12 * 1024 * 1024) // '';
         my $scan = 'redacted';
         if ($class eq 'excerpt') { ($raw) = _excerpt($raw, 40); $scan = 'excerpt' }
         my ($red, $rh) = secrets::redact($raw);

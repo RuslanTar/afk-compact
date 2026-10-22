@@ -54,8 +54,8 @@ sub has_hard { return scalar grep { $_->{class} eq 'HARD' } @{ $_[0] || [] } }
 # agree (RRP-02): a rule applied to another rule's output can miss, e.g. key-value
 # rewrites `csrftoken=…` first and the cookie rule then no longer sees the header's
 # later pairs. Overlapping or touching spans merge, then each merged span is replaced
-# once, right to left, labelled by the rule that comes first in the spec's list (the most
-# specific: `Bearer <JWT>` reads [redacted:jwt]).
+# once, labelled by the rule that comes first in the spec's list (the most specific:
+# `Bearer <JWT>` reads [redacted:jwt]).
 sub redact {
     my ($text, $only) = @_;
     my %only = map { $_ => 1 } @{ $only || [] };
@@ -79,10 +79,19 @@ sub redact {
         }
         push @merged, [@$sp];
     }
-    for my $sp (reverse @merged) {
-        substr($text, $sp->[0], $sp->[1] - $sp->[0]) = "[redacted:$sp->[2]]";
+    return ($text, \@hits) unless @merged;
+    # One left-to-right pass: the text between spans and each label are joined once, so the
+    # cost is linear in the text (replacing in place copied the tail per span: quadratic).
+    my ($at, @out) = (0);
+    for my $sp (@merged) {
+        push @out, substr($text, $at, $sp->[0] - $at), "[redacted:$sp->[2]]";
+        $at = $sp->[1];
     }
-    return ($text, \@hits);
+    push @out, substr($text, $at);
+    my $red = join('', @out);
+    # a character string stays one (substr of its ASCII part can come back as bytes)
+    utf8::upgrade($red) if utf8::is_utf8($text);
+    return ($red, \@hits);
 }
 
 # The path as given and, when a symlink anywhere on the way makes it differ, its real

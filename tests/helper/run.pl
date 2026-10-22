@@ -1718,6 +1718,34 @@ sub builtin {
         push @e, 'log::append wrote other bytes than encode_bytes' unless $line eq $out;
         return @e;
     }
+    if ($name eq 'redact_bound') {
+        # redact_bound {unit_parts, bytes, expected, max_s}: the joined unit (UTF-8 bytes, as a
+        # file reads) repeated to at least `bytes` goes through secrets::redact (all rules) within
+        # max_s seconds, and the output equals the `expected` file (the redacted unit) repeated.
+        my $unit = join('', @{ $a->{unit_parts} || [] });
+        utf8::upgrade($unit);
+        utf8::encode($unit);
+        return ('empty unit') if $unit eq '';
+        my $reps = int(($a->{bytes} + length($unit) - 1) / length $unit);
+        my $text = $unit x $reps;
+        my $want = util::read_file(src_file($a->{expected}, $cdir));
+        return ("no expected file $a->{expected}") unless defined $want;
+        $want x= $reps;
+        my $t0 = util::now();
+        my ($got, $hits) = secrets::redact($text);
+        my $dt = util::now() - $t0;
+        my $n = 0;
+        $n += $_->{count} for @{ $hits || [] };
+        push @e, sprintf('redact took %.2f s on %d bytes (%d hits), want under %s s', $dt, length $text, $n, $a->{max_s}) if $dt >= $a->{max_s};
+        push @e, 'redacted output is a character string' if utf8::is_utf8($got);
+        if ($got ne $want) {
+            my $i = 0;
+            $i++ while $i < length($got) && $i < length($want) && substr($got, $i, 1) eq substr($want, $i, 1);
+            push @e, sprintf('redacted output differs from %s x %d at byte %d (got %d bytes, want %d)', $a->{expected}, $reps, $i, length $got, length $want);
+        }
+        print "#   redact: ${\ length $text} bytes, $n hits, " . sprintf('%.2f s', $dt) . "\n" if $VERBOSE;
+        return @e;
+    }
     return ("unknown builtin $name");
 }
 

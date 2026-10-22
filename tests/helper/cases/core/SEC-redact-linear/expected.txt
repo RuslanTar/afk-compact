@@ -1,0 +1,6 @@
+2026-10-22T10:00:00Z GET /api café — élève Authorization: [redacted:jwt]
+retry [redacted:github-token],[redacted:aws-key-id] 日本語 [redacted:slack-token]
+Authorization: [redacted:jwt]
+keys [redacted:aws-key-id] [redacted:aws-key-id],[redacted:aws-key-id];[redacted:github-token] [redacted:aws-key-id]
+[redacted:key-value] [redacted:cookie]
+fetch [redacted:url-userinfo]/x ok [redacted:stripe-key] [redacted:gitlab-token] Grüße
