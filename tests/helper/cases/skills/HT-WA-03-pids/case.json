@@ -38,7 +38,7 @@
     "/bin/sh",
     "-c",
     "sleep 2 & p=$!; s=$(date +%s); exec \"$0\" wait --for pid-exit:$p@$s --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,
@@ -54,7 +54,7 @@
     "/bin/sh",
     "-c",
     "(exit 0) & p=$!; wait $p; exec \"$0\" wait --for file:\"$TMP_N\" --while pid:$p --max 5",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 12,
@@ -98,7 +98,7 @@
     "/bin/sh",
     "-c",
     "(sleep 1; mv \"$TMP_G\" \"$TMP_G.moved\") & exec \"$0\" wait --for file:\"$TMP_N\" --while file:\"$TMP_G\" --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 12,

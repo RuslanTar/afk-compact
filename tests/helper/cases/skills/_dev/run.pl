@@ -26,7 +26,7 @@
 #   capture (+): {VAR: "json:<path>" | "re:<regex with one group>"} → $VAR
 #   then: [steps of the same shape, same HOME; a step without argv is a
 #          setup step (+)]
-# Variables: $TMP $HOME $ROOT $WATCH $DISP $SID $SID8 $PLUGIN $LSTART1 $CASE
+# Variables: $TMP $HOME $ROOT $WATCH $DISP $SID $SID8 $PLUGIN $STORE $LSTART1 $CASE
 use strict;
 use warnings;
 use File::Basename ();
@@ -47,6 +47,7 @@ File::Path::make_path("$REPO/tmp");
 my $tmpbase = File::Temp::tempdir('skills-ht-XXXXXX', DIR => "$REPO/tmp", CLEANUP => ($ENV{KEEP} ? 0 : 1));
 my $PLUGIN = build_plugin("$tmpbase/plugin");
 my $BRAND = skills::util::json_decode(skills::util::read_file("$PLUGIN/.claude-plugin/plugin.json"))->{name};
+my $STORE = "$PLUGIN/scripts/$BRAND-store";
 my $LSTART1 = do { my $r = skills::util::run(['ps', '-o', 'lstart=', '-p', '1'], 2000); (my $v = $r->{out}) =~ s/\s+/ /g; $v =~ s/\A | \z//g; $v };
 
 my @cases = @ARGV ? @ARGV : map { File::Basename::dirname($_) } sort glob("$REPO/tests/helper/cases/skills/*/case.json");
@@ -66,8 +67,8 @@ sub build_plugin {
     my ($dst) = @_;
     copy_tree("$REPO/plugin/helper", "$dst/helper");
     copy_tree("$REPO/plugin/.claude-plugin", "$dst/.claude-plugin");
-    copy_tree("$REPO/plugin/bin", "$dst/bin");
-    chmod 0755, glob("$dst/bin/*");
+    copy_tree("$REPO/plugin/scripts", "$dst/scripts");
+    chmod 0755, glob("$dst/scripts/*");
     my $brand = skills::util::json_decode(skills::util::read_file("$dst/.claude-plugin/plugin.json"))->{name};
     File::Path::make_path("$dst/assets");
     (my $spec = skills::util::read_file("$HERE/handoff-spec.json")) =~ s/\@BRAND\@/$brand/g;
@@ -125,7 +126,7 @@ sub run_case {
     File::Path::make_path($home);
     my $sid = $c->{sid} // $DEF_SID;
     my %vars = (TMP => $tmp, HOME => $home, SID => $sid, SID8 => lc(substr($sid =~ s/[^0-9a-zA-Z]//gr, 0, 8)),
-                PLUGIN => $PLUGIN, LSTART1 => $LSTART1, CASE => $dir, BRAND => $BRAND);
+                PLUGIN => $PLUGIN, STORE => $STORE, LSTART1 => $LSTART1, CASE => $dir, BRAND => $BRAND);
     $vars{ROOT} = "$home/.claude/handoffs";
     $vars{DISP} = "$home/.claude/trash-staging";
     my $cenv = subst($c->{env} || {}, \%vars);
@@ -182,7 +183,7 @@ sub helper {
         open(STDIN, '<', $in->filename);
         open(STDOUT, '>', $out->filename);
         open(STDERR, '>>', "$tmpbase/stderr.log");
-        exec("$PLUGIN/bin/$BRAND-store", @$argv) or POSIX::_exit(127);
+        exec($STORE, @$argv) or POSIX::_exit(127);
     }
     waitpid($pid, 0);
     return { rc => $? >> 8, out => skills::util::read_file($out->filename) // '' };

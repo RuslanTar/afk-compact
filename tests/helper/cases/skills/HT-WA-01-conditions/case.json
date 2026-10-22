@@ -106,7 +106,7 @@
     "/bin/sh",
     "-c",
     "(exit 0) & p=$!; wait $p; exec \"$0\" wait --for pid-exit:$p --max 0",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,
@@ -121,7 +121,7 @@
     "/bin/sh",
     "-c",
     "(sleep 1 & echo $! > \"$TMP_P\") ; exec \"$0\" wait --for pid-exit:$(cat \"$TMP_P\") --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,
@@ -156,7 +156,7 @@
     "/bin/sh",
     "-c",
     "(sleep 1; printf \"__exit 0\\n\" >> \"$TMP_F\") & exec \"$0\" wait --for exit:\"$TMP_F\" --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,
