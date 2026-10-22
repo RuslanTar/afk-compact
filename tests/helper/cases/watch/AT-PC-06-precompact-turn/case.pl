@@ -4,7 +4,7 @@
 # is no A-19 input (even at cap 0) and no A-27 input. A-18 does not apply to it: a
 # published precompact turn never stands in for the missing last-cycle handoff of a
 # `halt:` continue row, and a `handoff_skipped why: again` (the precompact skip) does not
-# settle a halt row early.
+# settle a halt row early, nor does any skip of the optional turn (`reason: precompact`, needs/mod-to-watch.md 2).
 my ($hp, $hq) = ('abcd0101', 'abcd0102');
 my $rec = sub { my ($h, $t) = @_; return { v => 1, ht => $h, session_id => $T::SID, reason => 'precompact', max_calls => 34,
                                            max_tokens => 64000, opened_at => T::loc($t) } };
@@ -19,7 +19,9 @@ my $after_first;
           jsonl => [ T::row('handoff_turn_start', 99, ht => $hp, reason => 'precompact', gap_s => undef),
                      T::row('continue', 300, result => 'halt:cap', continues_last_hour => 0),
                      T::row('continue', 600, result => 'halt:cap', continues_last_hour => 0),
-                     T::row('handoff_skipped', 610, why => 'again', reason => undef, ht => undef) ] },
+                     T::row('handoff_skipped', 610, why => 'again', reason => undef, ht => undef),
+                     T::row('handoff_skipped', 612, why => 'asks-user', reason => 'precompact', ht => undef),
+                     T::row('handoff_skipped', 614, why => 'headroom', reason => 'precompact', ht => undef) ] },
     ],
     transcript => [
         T::prompt(0), T::assistant_text(5),
