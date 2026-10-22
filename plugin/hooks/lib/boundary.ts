@@ -8,6 +8,7 @@ import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
 import type { HandoffTurn } from './handoff-turn'
 import { compactsAfter, endHandoffTurn, haltWins, openAndSubmit, planHandoff } from './handoff-turn'
+import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { log, skipClass } from './log'
 import { drawNonce } from './nonce'
@@ -40,6 +41,13 @@ export type BoundaryOpts = {
    * record (REG-boundary-205, MOD-SPEC §3.1 step 0).
    */
   prepared?: { nonce: string; text: string; pref: ResumePref }
+  /**
+   * The checkpoint already taken for this compaction, when a native compaction that was running
+   * stopped it before its dispatch record was written: the rerun after that one's end reuses it
+   * (same nonce, the first sweep's evidence), never a second checkpoint with the same id6, whose
+   * sweep would answer `skipped: swept` with no rows (DP-30 (1)).
+   */
+  checked?: { nonce: string; named: string | undefined; prev: string | undefined; cp: Checkpoint | undefined }
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -208,12 +216,21 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       ({ nonce, text, pref } = opts.prepared)
       t0 = await d.now()
     } else {
-      // The nonce the nudge named in `@queue_add@` belongs to this cycle's compaction.
-      const named = s.nudgeNonce
-      s.nudgeNonce = undefined
-      nonce = named !== undefined && !(await dispatchExists(d, sid, named)) ? named : await drawNonce(n => dispatchExists(d, sid, n))
-      const prev = await prevCopy(d, sid)
-      const cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
+      let named: string | undefined
+      let prev: string | undefined
+      let cp: Checkpoint | undefined
+      if (opts.checked) {
+        // The rerun after a wait stop: the first checkpoint's nonce and evidence (DP-30 (1)).
+        ({ nonce, named, prev, cp } = opts.checked)
+        if (s.nudgeNonce === nonce) s.nudgeNonce = undefined
+      } else {
+        // The nonce the nudge named in `@queue_add@` belongs to this cycle's compaction.
+        named = s.nudgeNonce
+        s.nudgeNonce = undefined
+        nonce = named !== undefined && !(await dispatchExists(d, sid, named)) ? named : await drawNonce(n => dispatchExists(d, sid, n))
+        prev = await prevCopy(d, sid)
+        cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
+      }
       const measured = d.cfg.measured_block && cp ? cp.measured_block : null
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
@@ -221,8 +238,9 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       t0 = await d.now()
       // The checkpoint above can take seconds: a native compaction may have started or run since.
       // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
-      // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205).
-      if (await stopForNative(d, sid, opts)) {
+      // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
+      // reuses this checkpoint.
+      if (await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })) {
         s.nudgeNonce = named
         return
       }

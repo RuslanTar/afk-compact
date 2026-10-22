@@ -1103,3 +1103,37 @@ test('DP-30 (2): our submit dropped for an entering user prompt, that prompt dro
   w.tokens = 610000
   expect((await w.tool($)).context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['halt', 'halt-handoff'], { tokens: '610,000', halt_reason: HALT_REASON_TEXT['continue-off'] }))
 })
+
+// DP-30 (1): a rerun after a wait stop reuses the first checkpoint (its sweep's evidence): no
+// second checkpoint with the same id6, whose sweep would answer `skipped: swept` with no rows.
+test('DP-30 (1): a native compaction that stops the post-handoff compaction after its checkpoint and ends skipped: the rerun reuses that checkpoint (one checkpoint call for the nonce)', { options: { ...CAP3, queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  const r = await lastCycleTurn($, w)
+  if (!TURN) return
+  const named = /--nonce ([0-9a-f]{8})/.exec(r.context?.[0] ?? '')?.[1] ?? ''
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  w.publish(w.lastHt() ?? '', PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (sub !== 'checkpoint' || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    w.compactMode = { skip: 'nothing to compact' }
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  w.compactMode = 'ok'
+  await w.advance(60000)
+  const cps = w.callsOf('checkpoint').map(c => w.flag(c, '--nonce'))
+  expect(cps.filter(n => n === named).length).toBe(1)
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(named)
+  expect(w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').map(c => w.flag(c, '--nonce'))).toEqual([named])
+})
