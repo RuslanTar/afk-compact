@@ -136,18 +136,26 @@ export async function planHandoff(d: Deps, sid: string, reason: HaltReason, eff:
  * row, when the record cannot be opened or the submit fails. True, with nothing submitted, when
  * a user turn started while it awaited the helper (§9.1 step 3: that turn cancels the handoff
  * turn and logs `why=user-turn`; the normal rules apply at its end); an ht opened by then is
- * closed (`handoff-turn close`), as after a failed submit.
+ * closed (`handoff-turn close`), as after a failed submit. A user prompt that entered and whose
+ * turn has not started yet counts the same (CR-F17), and so does our own submit dropped by our
+ * `prompt.submit` hook because one came first; the phase is then `delay` again, so a prompt
+ * that never starts its turn lets the delay run again (boundary.ts).
  */
 export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispatchTaken: (n: string) => Promise<boolean>): Promise<boolean> {
   const s = d.state
-  // Checked again after every await: onTurnStart marks a main turn before its own awaits.
-  const cancelled = () => s.handoffTurn !== h || h.phase !== 'delay' || s.mainTurnRunning
+  // A user prompt came first: its turn started (onTurnStart marks it before its own awaits), or
+  // it entered (`prompt.submit` counted it) and its turn is about to start (CR-F17, CR-F25).
+  const userFirst = () => s.handoffTurn !== h || s.mainTurnRunning || s.foreignPrompts > 0
+  // Checked again after every await.
+  const cancelled = () => h.phase !== 'delay' || userFirst()
   const runtime: Runtime = { halt_reason: HALT_REASON_TEXT[h.reason], max_calls: String(h.maxCalls) }
   const text = assembleIf(d.name, 'handoff-turn', ['submit'], runtime)
   if (text === undefined) {
     await skipped(d, sid, 'no-asset')
     return false
   }
+  // A rerun after a deferral (boundary.ts) starts with no ht: the earlier one is closed.
+  h.ht = null
   const p = await d.paths()
   const taken = async (n: string) => (await dispatchTaken(n)) || (p !== undefined && (await d.exists(`${p.watch}/${sid}/handoff-turn/${n}.json`)))
   let opened: string | undefined
@@ -159,8 +167,12 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
     if (r === 'ok') opened = ht
   }
   if (cancelled()) {
-    // A user turn started while the open ran: its record is closed, so `begin` cannot bind it.
-    if (opened !== undefined) await handoffTurnClose(d, sid, opened, 'cancelled')
+    // A user turn started (or a user prompt entered) while the open ran: its record is closed,
+    // so `begin` cannot bind it; a cancel row written from here on names it.
+    if (opened !== undefined) {
+      h.ht = opened
+      await handoffTurnClose(d, sid, opened, 'cancelled')
+    }
     return true
   }
   if (opened === undefined) {
@@ -178,14 +190,27 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   // No await between the check above and the submit call: a user turn that started meanwhile wins.
   h.phase = 'submitted'
   submitPending(s, text)
+  s.handoffSubmitting = true
   try {
     await d.submit(text)
   } catch {
+    s.handoffSubmitting = false
     submitSettled(s)
+    if (userFirst()) {
+      // Our prompt.submit hook dropped it: a user prompt came first, and its turn cancels the
+      // handoff turn (`why=user-turn`, at its turn.start). Our prompt never runs (CR-F17).
+      s.orphanSubmit = false
+      if (s.handoffTurn === h) {
+        h.phase = 'delay'
+        await handoffTurnClose(d, sid, opened, 'cancelled')
+      }
+      return true
+    }
     await skipped(d, sid, 'submit-failed', opened)
     await handoffTurnClose(d, sid, opened, 'cancelled')
     return false
   }
+  s.handoffSubmitting = false
   return true
 }
 

@@ -70,6 +70,12 @@ export class World {
   submitDrop: string | undefined
   /** Awaited at the bottom of every `$.prompt.submit`, before it answers (a race beside a submit). */
   atSubmit: ((text: string) => Promise<void>) | undefined
+  /** After `atSubmit`: `{ drop }` with the reason this returns for the text (a hook beneath that refuses one prompt). */
+  dropIf: ((text: string) => string | undefined) | undefined
+  /** A peer hook beneath the plugin that rewrites the text (`next({ ...e, text })`). */
+  rewrite: ((text: string) => string | undefined) | undefined
+  /** The origin of every `prompt.submit` that reached the bottom. */
+  submitOrigins: unknown[] = []
   /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
   compactGate: Promise<void> | undefined
 
@@ -108,10 +114,13 @@ export class World {
       return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     on('prompt.submit', async (_$, e) => {
+      this.submitOrigins.push(e.origin)
       if (this.submitDrop !== undefined) return { drop: this.submitDrop }
       this.submits.push(e.text)
       if (this.atSubmit) await this.atSubmit(e.text)
-      return { text: e.text }
+      const why = this.dropIf?.(e.text)
+      if (why !== undefined) return { drop: why }
+      return { text: this.rewrite?.(e.text) ?? e.text }
     })
     on('session.compact', async (_$, e) => {
       this.compacts.push({ instructions: e.instructions, trigger: e.trigger, agentId: e.agentId })

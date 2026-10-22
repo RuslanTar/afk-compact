@@ -5,7 +5,7 @@ import type { Register } from 'claude-code'
 import { onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
-import { newState, promptEntering, promptNotEntered, realDeps } from './lib/deps'
+import { isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
 import { countCall, limitText, onInterjection } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
@@ -39,9 +39,12 @@ export const register: Register = (on, options) => {
   // One the user asked to wait its turn (`wait`, ctrl+x enter) is not delivered into it.
   // A prompt entering an idle session (no `turnId`) is counted before `next`, which resolves only
   // once its turn started: that turn.start then knows a prompt other than ours entered (CR-F17).
-  // Our own submits never reach this hook (the engine skips the calling plugin's hook).
+  // Our own submits reach this hook too (the engine skips only the calling hook): they are told
+  // by origin, are never counted, and a handoff-turn one is dropped if a user prompt came first.
   on('prompt.submit', async ($, e, next) => {
-    const entering = e.turnId === undefined
+    const own = isOwnOrigin(e.origin, $.plugin.name)
+    if (own && refuseOwnSubmit(state)) return { drop: 'a user prompt came first' }
+    const entering = e.turnId === undefined && !own
     if (entering) promptEntering(state)
     let r
     try {

@@ -119,7 +119,16 @@ function startHandoffTimer(d: Deps, sid: string, h: HandoffTurn): void {
     s.timer = undefined
     s.inflight = (async () => {
       if (s.handoffTurn !== h || h.phase !== 'delay' || s.mainTurnRunning) return
-      if (await openAndSubmit(d, sid, h, n => dispatchExists(d, sid, n))) return
+      if (await openAndSubmit(d, sid, h, n => dispatchExists(d, sid, n))) {
+        // CR-F17: deferred for a prompt that entered and has not started its turn. That turn
+        // cancels the handoff turn; a prompt dropped on its way in (now, or already while the
+        // close above ran) lets the delay run again.
+        if (s.handoffTurn === h && h.phase === 'delay' && !s.mainTurnRunning) {
+          if (s.foreignPrompts > 0) s.afterForeign = () => startHandoffTimer(d, sid, h)
+          else startHandoffTimer(d, sid, h)
+        }
+        return
+      }
       s.handoffTurn = undefined
       if (compactsAfter(haltWins(d, h.reason))) await boundary(d, { exemptHalt: true })
     })().catch(() => undefined)
@@ -131,6 +140,7 @@ export function cancelBoundary(d: Deps): void {
   d.state.timer?.cancel()
   d.state.timer = undefined
   d.state.afterNative = undefined
+  d.state.afterForeign = undefined
 }
 
 async function resumePref(d: Deps, sid: string): Promise<ResumePref> {
