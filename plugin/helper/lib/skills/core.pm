@@ -265,7 +265,8 @@ sub queue_call {
     };
 }
 
-# ---- queue adapter (Q-ADAPTER QA-1, QA-B2): one parser (queue::lane) for begin and locate.
+# ---- queue adapter (Q-ADAPTER QA-1, QA-B2): one parser (queue::lane) for begin; locate
+# reads the mode from the setting alone (queue_mode_setting below).
 # Mode: off (queue_cmd empty: no exec, no trace) · degraded (<why>) when the setting is not
 # an executable file or the list reply broke the contract (untagged · schema · not-json ·
 # exit · timeout) · else on (a reply that keeps the contract but names no usable lane is on).
@@ -289,6 +290,19 @@ sub queue_mode {
     my $why = $l->{why} // 'exit';
     return { mode => 'on' } if $QUEUE_ON_WHY{$why};
     return { mode => 'degraded', why => $why };
+}
+
+# {mode => off|on|degraded, why => …} without running the queue tool (locate, QA-1): off when
+# queue_cmd is empty, degraded (not-executable) when it is not an executable file, else on.
+# QA-1's other degraded case, "the last list reply this session broke the contract", needs
+# the session record CORE-18 brings (queue::mode); until then a broken reply shows in begin
+# and /status, never by a list call from locate (no exec, no caps-cache write here).
+sub queue_mode_setting {
+    my ($cmd) = @_;
+    return { mode => 'off' } if skills::util::unset_value($cmd);
+    my $b = skills::util::bytes($cmd);
+    return { mode => 'degraded', why => 'not-executable' } unless -f $b && -x _;
+    return { mode => 'on' };
 }
 
 # `off`, `on` or `degraded (<why>)`: the form begin's queue line, locate and /status print.

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Q-ADAPTER QA-1, QA-2, QA-B2 (AT-QA-02, AT-QA-04, skills half): begin and locate read the queue mode through queue::lane, the one list parser: queue_cmd empty -> \"queue\": {\"mode\": \"off\"} and `queue: off` with no exec and no queue_cmd trace; not executable -> degraded (not-executable), no exec; a tagged v1 reply -> on with the Queued: line and the lane in the stage meta; another schema -> degraded (schema), no Queued: line, no lane. lane adopt maps the adopt exit codes of tests/fixtures/queue/adopt-*: 0 -> `lane: <id>`, 3 -> `held holder=<sid> kind=<kind>`, 4 -> no-lane, 6 -> error, 2 -> unsupported, and passes --must-exist exactly when the cached list reply's commands hold adopt:must-exist.",
+ "note": "Q-ADAPTER QA-1, QA-2, QA-B2 (AT-QA-02, AT-QA-04, skills half): begin reads the queue mode through queue::lane, the one list parser; locate reads it from the setting alone and never runs the queue tool (no list call, no caps-cache write): queue_cmd empty -> \"queue\": {\"mode\": \"off\"} and `queue: off` with no exec and no queue_cmd trace; not executable -> degraded (not-executable), no exec; a tagged v1 reply -> on with the Queued: line and the lane in the stage meta; another schema -> degraded (schema), no Queued: line, no lane. lane adopt maps the adopt exit codes of tests/fixtures/queue/adopt-*: 0 -> `lane: <id>`, 3 -> `held holder=<sid> kind=<kind>`, 4 -> no-lane, 6 -> error, 2 -> unsupported, and passes --must-exist exactly when the cached list reply's commands hold adopt:must-exist.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -259,7 +259,7 @@
    }
   },
   {
-   "name": "AT-QA-02 locate: queue: on",
+   "name": "AT-QA-02 locate: queue: on from the setting, no list call",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -276,7 +276,7 @@
     "stdout_lacks": [
      "^queue: (?!on$)"
     ],
-    "trace_has": [
+    "trace_absent": [
      "queue_cmd"
     ]
    },
@@ -336,30 +336,7 @@
    }
   },
   {
-   "name": "QA-1 locate: degraded (schema)",
-   "cwd": "$TMP/repo",
-   "argv": [
-    "locate",
-    "--sid",
-    "$SID",
-    "--cwd",
-    "$TMP/repo"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^queue: degraded \\(schema\\)$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!degraded \\(schema\\)$)"
-    ]
-   },
-   "env": {
-    "QUEUE_STUB_DIR": "$FIX/queue/v2"
-   }
-  },
-  {
-   "name": "AT-QA-04 adopt-ok: the list reply fills the caps cache",
+   "name": "QA-1 locate after a begin whose reply had another schema: queue: on from the setting, no list call (locate never runs the queue tool; the broken reply shows in begin until CORE-18's session record)",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -375,6 +352,35 @@
     ],
     "stdout_lacks": [
      "^queue: (?!on$)"
+    ],
+    "trace_absent": [
+     "queue_cmd"
+    ]
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v2"
+   }
+  },
+  {
+   "name": "AT-QA-04 adopt-ok: begin's list reply fills the caps cache",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -410,22 +416,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-ok-nocaps: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-ok-nocaps: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -463,22 +472,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-held-heartbeat: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-held-heartbeat: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -514,22 +526,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-held-process: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-held-process: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -565,22 +580,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-nolane: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-nolane: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -616,22 +634,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-untrusted: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-untrusted: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -667,22 +688,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-damaged: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-damaged: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {
@@ -718,22 +742,25 @@
    }
   },
   {
-   "name": "AT-QA-04 adopt-usage: the list reply fills the caps cache",
+   "name": "AT-QA-04 adopt-usage: begin's list reply fills the caps cache",
    "cwd": "$TMP/repo",
    "argv": [
-    "locate",
+    "begin",
     "--sid",
     "$SID",
-    "--cwd",
-    "$TMP/repo"
+    "--topic",
+    "retry"
    ],
    "expect": {
     "exit": 0,
-    "stdout_has": [
-     "^queue: on$"
-    ],
-    "stdout_lacks": [
-     "^queue: (?!on$)"
+    "json": {
+     "queue.mode": "on",
+     "queue.why": {
+      "null": 1
+     }
+    },
+    "trace_has": [
+     "queue_cmd"
     ]
    },
    "env": {

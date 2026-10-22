@@ -179,9 +179,9 @@ sub run {
     my $prod = skills::core::prod();
     my @shipped = map { $_->{id} } grep { ($_->{id} // '') !~ /\Auser-/ } @{ $prod->{classes} || [] };
     skills::cli::say(sprintf('production: %s · patterns: %s', $prod->{reads}, join(' + ', @shipped, ($prod->{user} // 0) . ' yours')));
-    # Q-ADAPTER QA-1: the queue mode the resume follows (off: no exec, nothing about lanes).
-    my $ql = skills::core::queue_lane($sid, $ctx->{settings}{queue_cmd}, 5000);
-    skills::cli::say('queue: ' . skills::core::queue_mode_text(skills::core::queue_mode($ql)));
+    # Q-ADAPTER QA-1: the queue mode the resume follows, from the setting alone: locate never
+    # runs the queue tool (off, degraded (not-executable) or on; E-S-R9-8, provisional).
+    skills::cli::say('queue: ' . skills::core::queue_mode_text(skills::core::queue_mode_setting($ctx->{settings}{queue_cmd})));
     if ($w->{in_git}) {
         my $top = $w->{worktree};
         my @sf;
