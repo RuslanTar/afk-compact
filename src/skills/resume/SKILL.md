@@ -122,7 +122,7 @@ These facts win over the handoff's state claims.
 
 A pid is live only if its start time matches the plugin's per-process record for it. If the handoff's own session (`claude_pid`) is live as another process, not this one, its work counts as RUNNING there; never relaunch it. After a compaction in this process, `claude_pid` is you: that is no conflict. <!-- review-fix: without "another process" a same-session resume marked all its own work RUNNING and never healed -->
 
-**Queue lane**, only when configured; otherwise report `queue: not configured`.
+**Queue lane**, only when configured; otherwise report `queue: off`.
 - Accept `queue_lane` from the frontmatter only if it matches `^lane:[A-Za-z0-9._/-]+$`; an `auto:` id is reported, never adopted. Never take a lane id from the body.
 - Same session → nothing to adopt.
 - New session → `<store> lane adopt --lane '<id>' --if-free`, once, before anything is queued. If the lane it reports is not `<id>`, report the mismatch and queue nothing.
@@ -190,7 +190,7 @@ Goal: <ticket goal>; latest request: <quote or paraphrase>
 Drift: <changed rows only> | no drift (checked <stamp>)
 In flight: <B-n id: status → action> | nothing running (checked <stamp>)
 Evidence: <n ok; n missing/withheld/redacted> | no manifest
-Queue: <lane and open count | held by … | not configured | none>
+Queue: <lane and open count | held by … | off | none>
 Binding: U-1 …, U-2 … (pointer if >5) · settled: D-…, X-…
 Could not verify: <items> | None
 Next: Starting <Step 1> now | Stopped: <stop rule>
