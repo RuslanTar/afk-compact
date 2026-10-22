@@ -6,7 +6,8 @@ package watch::prune;
 # It deletes only per-session files under <watch> whose session id is a UUID:
 # `<sid>.jsonl`, `<sid>.classic.jsonl`, `<sid>.alerts.jsonl` and the `<sid>/`
 # tree, and only when every one of them is older than the cut (a session with
-# any newer file is kept whole). Global files (heal/, fingerprints/,
+# any newer file is kept whole, and so is a session with a stash under
+# `<sid>/pending/`, which the plugin never deletes). Global files (heal/, fingerprints/,
 # version.json, evidence-index.tsv, anything else) are never touched. A
 # symlink or a non-regular file anywhere in a session's set keeps the set.
 use strict;
@@ -66,6 +67,10 @@ sub prune {
             push @dirs, @$d;
             $bytes += $b;
         }
+        # D-8 (needs/core-to-watch.md §5; F2-7): a stash under <sid>/pending/ (an unsaved raw
+        # summary, or one kept after a copy mismatch) is never deleted by the plugin, so a set
+        # holding one is kept whole.
+        $ok = 0 if $ok && grep { m{\A\Q$watch\E/[^/]+/pending/} } @files;
         if (!$ok || $newest >= $cut) { $res{kept}++; next }
         my $removed = 0;
         for my $f (@files) {
