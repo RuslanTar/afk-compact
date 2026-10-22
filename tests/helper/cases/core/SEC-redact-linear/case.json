@@ -1,6 +1,6 @@
 {
  "id": "SEC-redact-linear",
- "note": "secrets::redact stays linear in the text: a dense 4 MiB log (an 874-byte unit of corpus secrets with 22 hits: adjacent, comma- and space-joined, nested Bearer <JWT>, non-ASCII UTF-8 around them; repeated, about 110,000 hits) is redacted within max_s (replacing spans in place copied the tail per span: a 12 MiB file with about 32,000 hits took 18.5 s, over the mod’s 10 s sweep; this input took 12.5 s before the fix, 0.9 s after), and the output is byte-identical to expected.txt (the redacted unit) repeated, as a byte string",
+ "note": "secrets::redact stays linear in the text: a dense 4 MiB log (an 874-byte unit of corpus secrets with 23 hits: adjacent, comma- and space-joined, nested Bearer <JWT>, non-ASCII UTF-8 around them; repeated, about 110,000 hits) is redacted within max_s (replacing spans in place copied the tail per span: a 12 MiB file with about 32,000 hits took 18.5 s, over the mod’s 10 s sweep; this input took 12.5 s before the fix, 0.9 s after), and the output is byte-identical to expected.txt (the redacted unit) repeated, as a byte string",
  "steps": [
   {
    "name": "4 MiB dense input, redacted in time and byte-identical",

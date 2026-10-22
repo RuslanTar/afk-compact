@@ -1721,7 +1721,8 @@ sub builtin {
     if ($name eq 'redact_bound') {
         # redact_bound {unit_parts, bytes, expected, max_s}: the joined unit (UTF-8 bytes, as a
         # file reads) repeated to at least `bytes` goes through secrets::redact (all rules) within
-        # max_s seconds, and the output equals the `expected` file (the redacted unit) repeated.
+        # max_s seconds of this process's CPU time (user + system; wall time fails on a loaded
+        # machine), and the output equals the `expected` file (the redacted unit) repeated.
         my $unit = join('', @{ $a->{unit_parts} || [] });
         utf8::upgrade($unit);
         utf8::encode($unit);
@@ -1731,12 +1732,13 @@ sub builtin {
         my $want = util::read_file(src_file($a->{expected}, $cdir));
         return ("no expected file $a->{expected}") unless defined $want;
         $want x= $reps;
-        my $t0 = util::now();
+        my ($u0, $s0) = times;
         my ($got, $hits) = secrets::redact($text);
-        my $dt = util::now() - $t0;
+        my ($u1, $s1) = times;
+        my $dt = ($u1 - $u0) + ($s1 - $s0);
         my $n = 0;
         $n += $_->{count} for @{ $hits || [] };
-        push @e, sprintf('redact took %.2f s on %d bytes (%d hits), want under %s s', $dt, length $text, $n, $a->{max_s}) if $dt >= $a->{max_s};
+        push @e, sprintf('redact used %.2f s of CPU on %d bytes (%d hits), want under %s s', $dt, length $text, $n, $a->{max_s}) if $dt >= $a->{max_s};
         push @e, 'redacted output is a character string' if utf8::is_utf8($got);
         if ($got ne $want) {
             my $i = 0;
