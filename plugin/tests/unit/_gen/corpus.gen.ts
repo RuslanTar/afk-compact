@@ -3,7 +3,8 @@ export type CorpusEntry = {
   file: string; text: string; verdict: string;
   marker_line: number | null; sentinel_from_end: number | null; nonce: string | null;
   scope: string | null; normalized_sha256: string;
-  dispatch: null | 'none' | Readonly<Record<string, unknown>>
+  dispatch: null | 'none' | Readonly<Record<string, unknown>>;
+  sentinel_place: null | 'inside' | 'after-close'
 }
 export const CORPUS: readonly CorpusEntry[] = [
  {
@@ -15,7 +16,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "02-mod-wrapper-main-ok.txt",
@@ -26,7 +28,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "03-mod-wrapper-no-summary-tags.txt",
@@ -37,7 +40,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "04-bare-marker-byte0.txt",
@@ -48,7 +52,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "05-post-main-crlf.txt",
@@ -59,7 +64,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "06-marker-body-line6.txt",
@@ -70,7 +76,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "40770a8717bd26eb9d2829a56c3beb8fc76910e262b1c35bd335fbc0896bf798",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "07-marker-body-line5.txt",
@@ -81,7 +88,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe0ae698f7fc37751dc62d6b593d763861103ae76899cb774680f43016289d47",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "08-foreign-header-only.txt",
@@ -92,7 +100,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "206279c7cfb2f766bfabac4f96a8c25e40168d1ce074ab0c70834403743f9a57",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "09-foreign-bracket-header-only.txt",
@@ -103,7 +112,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "7e24584299aa2a4718a23669a7f008737db021f9479a131e49049a8edb7e4c46",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "10-foreign-header-then-ours.txt",
@@ -114,7 +124,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "d5afc3d136c0b9bef2a0583193c2eedb8999170227ef5528b4c82d6e8a4e77b4",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "11-sentinel-closing-tag-blank-lines.txt",
@@ -125,7 +136,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "12-text-after-sentinel.txt",
@@ -136,7 +148,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "32c704cb7f4971dd9e5c161c5743e172bc4ce6497bd22d001f726a8a052dd70c",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "13-sentinel-missing.txt",
@@ -147,7 +160,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "3a286a7bc92589593f840ba867301cd3297412133d9fce40a9245c7110748385",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "14-sentinel-nonce-differs.txt",
@@ -158,7 +172,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "dde325c9c95c40b5fd638159a55abaf70939164acb727cc9c7bded5370316eb7",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "15-sentinel-fourth-from-end.txt",
@@ -169,7 +184,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "813b29f70098667f8bf0a234c7063a92c2e31038ed9c1deb89dbb39917c33233",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "16-sentinel-third-from-end.txt",
@@ -180,7 +196,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "08b642e56a88c4daada715753e1c464896da72b334c21d565977522874844505",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "17-post-sub-ok.txt",
@@ -191,7 +208,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "5e6f7081",
   "scope": "sub",
   "normalized_sha256": "8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "18-mod-wrapper-sub-ok.txt",
@@ -202,7 +220,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "5e6f7081",
   "scope": "sub",
   "normalized_sha256": "8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "19-manual-marker-handoff.txt",
@@ -213,7 +232,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "cd2e3f40",
   "scope": "manual",
   "normalized_sha256": "377147e6d8cda830acf63c9c80470c66fa5d2427dc7585846afcb93e0c59c85b",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "20-native-numbered.txt",
@@ -224,7 +244,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "6787af9ae1ca5d3b1d4b5fcc9dcbd47f1e1663495cd84d985f03ec83210abbe3",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "21-native-prose.txt",
@@ -235,7 +256,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "be1b826c2c86816f5263a4c24212b901c4efd2473ad913e94dc51bf0ba3fae44",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "22-native-headings.txt",
@@ -246,7 +268,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "598173d8d3e447f28fac9bdd080d6e024668b32ce00f5f52992567468550f600",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "23-pasted-old-marker-deep.txt",
@@ -257,7 +280,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "a906456af8d2db032e7128b1b8667b5b42a73386f50a4b32073842960f63ae32",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "24-marker-mid-line.txt",
@@ -268,7 +292,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "2ded3608bf204cec7f975fa0b280fe62ab7eccdec9a530aff9b4326e283ec2a5",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "25-marker-uppercase-nonce.txt",
@@ -279,7 +304,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "b219145c09172920e402ea486dd422dcd4a556c39089bc1a9de07b5d1bebba1f",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "26-marker-short-nonce.txt",
@@ -290,7 +316,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "3ab39959d53873e0d7261ca59ccbd651a412036b5be9ff27620512aa54437f33",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "27-marker-leading-blank-lines.txt",
@@ -301,7 +328,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "28-stale-earlier-nonce.txt",
@@ -332,7 +360,8 @@ export const CORPUS: readonly CorpusEntry[] = [
    "pid": 43210,
    "pid_lstart": "Wed Oct 21 09:00:00 2026",
    "ts": "2026-10-21T14:05:00+03:00"
-  }
+  },
+  "sentinel_place": "inside"
  },
  {
   "file": "29-stale-no-dispatch.txt",
@@ -343,7 +372,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": "none"
+  "dispatch": "none",
+  "sentinel_place": "inside"
  },
  {
   "file": "30-scope-leak-main-under-sub.txt",
@@ -372,7 +402,8 @@ export const CORPUS: readonly CorpusEntry[] = [
    "pid": 43210,
    "pid_lstart": "Wed Oct 21 09:00:00 2026",
    "ts": "2026-10-21T14:05:00+03:00"
-  }
+  },
+  "sentinel_place": "inside"
  },
  {
   "file": "31-scope-leak-sub-under-main.txt",
@@ -403,7 +434,8 @@ export const CORPUS: readonly CorpusEntry[] = [
    "pid": 43210,
    "pid_lstart": "Wed Oct 21 09:00:00 2026",
    "ts": "2026-10-21T14:05:00+03:00"
-  }
+  },
+  "sentinel_place": "inside"
  },
  {
   "file": "32-scope-leak-resume-heading-unmarked.txt",
@@ -432,7 +464,8 @@ export const CORPUS: readonly CorpusEntry[] = [
    "pid": 43210,
    "pid_lstart": "Wed Oct 21 09:00:00 2026",
    "ts": "2026-10-21T14:05:00+03:00"
-  }
+  },
+  "sentinel_place": null
  },
  {
   "file": "33-unmarked-main-a.txt",
@@ -443,7 +476,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "434bd9e52ebbfdfcfc357a16e64f065a58a02eb4c0842fed701bc0a054d26bf9",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "34-unmarked-main-b.txt",
@@ -454,7 +488,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "87f59d07463e2d50343bba3ad3cc6cac4f2fc261210e2ea8fac184813422a735",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "35-frontmatter-spoof-lines.txt",
@@ -465,7 +500,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "e13f3209123e34bb9c54eaa19572629a1c57c09b8e5a544a0e0107df939c1f52",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "36-canary-in-summary.txt",
@@ -476,7 +512,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "e0bdf11fd9074a443e9fbc61448c6bbc889187109adaeecb26e6f80c304f2b61",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "37-mod-unlisted-trailer.txt",
@@ -487,7 +524,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "9ebdac9c926fc294721ce4f8e38e77c9e7f0bb68930cfb7b865e12c112024475",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "38-mod-text-after-summary-close.txt",
@@ -498,7 +536,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": "1a2b3c4d",
   "scope": "main",
   "normalized_sha256": "fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": "inside"
  },
  {
   "file": "39-sub-native-numbered.txt",
@@ -509,7 +548,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "e770844275df35871a098a0c03c051cecac26e6c3dcf175bde8a589acf3e25d9",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "40-empty-summary.txt",
@@ -520,7 +560,8 @@ export const CORPUS: readonly CorpusEntry[] = [
   "nonce": null,
   "scope": null,
   "normalized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "dispatch": null
+  "dispatch": null,
+  "sentinel_place": null
  },
  {
   "file": "41-sub-marker-main-heading.txt",
@@ -549,6 +590,185 @@ export const CORPUS: readonly CorpusEntry[] = [
    "pid": 43210,
    "pid_lstart": "Wed Oct 21 09:00:00 2026",
    "ts": "2026-10-21T14:05:00+03:00"
-  }
+  },
+  "sentinel_place": "inside"
+ }
+]
+// summaries/p5/expected.tsv (tests/fixtures/README.md "Corpus")
+export const CORPUS_P5: readonly CorpusEntry[] = [
+ {
+  "file": "01-p5-c1-after-close.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=da24cc4a s=sub\u27eb\n\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: read in two Read calls. Call 1 (lines 1-465) was truncated at a 25000-token cap and named offset=466. Call 2 (offset 466, limit 485) returned lines 466-950. The file has 951 total lines per the truncation notice. Line 951 has not been displayed. [unverified]\n- Last displayed line of app-1.log (line 950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log through app-6.log: not started.\n- No errors seen in the Read results. The log content is routine DEBUG/INFO/WARN lines, with one WARN (\"billing slow upstream ms=1018 host=billing-3\", line 8). Nothing security-relevant.\n\n## Findings\n- app-1.log line count: 951 total (per truncation notice). Confirmed through line 950 only.\n\n## Produced but not yet delivered\nNone. No final lines have been sent yet.\n\n## Own background tasks\nNone (not checked)\n\n## Next action\nRead `/tmp/example-repo/logs/app-1.log` with offset 950, limit 1 to confirm line 951 and the true last line of app-1. Then Read app-2.log in full (with continuation as needed), then app-3.log through app-6.log, one Read per message. Then call SubagentHandback with the six last lines.\n</summary>\n\u27ea/compactinue n=da24cc4a\u27eb",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "da24cc4a",
+  "scope": "sub",
+  "normalized_sha256": "47b8763fa9467857276b341d88257a6beacbf9e0f7c364dd487edec4ad3eaa20",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "02-p5-c2-after-close.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=f5d2ccf6 s=sub\u27eb\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read (lines 1-950 with content; Read at offset 951 limit 10 returned only line 951 with empty content, so line 950 is the last non-empty line). Last line: `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: read in two calls (full read truncated at line 464, then offset 465 limit 464). Reads returned lines 1-928 of a file the truncation notice says has 951 lines. Lines 929-951 not yet read. Last displayed line (928): `2026-10-02T00:22:38.134 INFO auth token refreshed client=9272 req=6d0f69c606b6`\n- app-3.log through app-6.log: not started.\n- Log content is routine DEBUG/INFO/WARN lines. No errors seen. Nothing security-relevant.\n\n## Findings\n- app-1.log: 950 content lines.\n- app-2.log: 951 total lines per truncation notice; read through line 928.\n\n## Produced but not yet delivered\nNone. No final lines sent yet.\n\n## Own background tasks\nNone (not checked).\n\n## Next action\nRead app-2.log with offset 928, limit 30 (or until EOF) to get lines 929-951 and its true last line. Then read app-3.log, app-4.log, app-5.log, app-6.log in full (with continuation as needed), one Read per message. Then call SubagentHandback with the six last lines.\n</summary>\n\u27ea/compactinue n=f5d2ccf6\u27eb",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "f5d2ccf6",
+  "scope": "sub",
+  "normalized_sha256": "5bdfd1c22a99d6f5081c226da493b2d1a06ebd0a9d9904ddf531db7e86b9f66c",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "03-p5-c3-inside.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=d2158267 s=sub\u27eb\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read. Last content line (950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: fully read (lines 1-950; line 951 is empty). Last content line (950): `2026-10-02T00:23:15.379 INFO billing request served path=/v1/x84336 status=200 ms=8048 req=5bd241710e65`\n- app-3.log: partially read. Reads cover lines 1-934 of a file the truncation notice says has 951 lines. Lines 935-951 not yet read. Last displayed line (934): `2026-10-03T00:21:30.934 DEBUG ledger queue depth=5662 topic=x97405 req=1053d5a8966b`. Notable: line 501 is an ERROR line: `2026-10-03T00:11:17.231 ERROR scheduler ReconcileMismatch account=ACC-7731 delta=-218.58 batch=b8890`.\n- app-4.log, app-5.log, app-6.log: not started.\n\n## Findings\n- app-1.log: 950 content lines.\n- app-2.log: 950 content lines.\n- app-3.log: 951 total lines per truncation notice; read through line 934.\n- Log content is routine DEBUG/INFO/WARN lines. One ERROR seen in app-3.log (line 501). Nothing security-relevant noted.\n\n## Produced but not yet delivered\nNone. No final lines sent yet.\n\n## Own background tasks\nNone (not checked).\n\n## Next action\nRead app-3.log with offset 934 and limit 30 (or until EOF) to get lines 935-951 and its true last line. Then read app-4.log, app-5.log, app-6.log in full (with continuation as needed), one Read per message. Then call SubagentHandback with the six last lines.\n\u27ea/compactinue n=d2158267\u27eb\n</summary>",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "d2158267",
+  "scope": "sub",
+  "normalized_sha256": "c6ed5208113e468074e3333fe3f54a872ebebe0d98c248ef64f2e88a7c876dea",
+  "dispatch": null,
+  "sentinel_place": "inside"
+ },
+ {
+  "file": "04-p5-c4-inside.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=4dae03c4 s=sub\u27eb\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read. Last content line (950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: fully read (lines 1-950; line 951 is empty). Last content line (950): `2026-10-02T00:23:15.379 INFO billing request served path=/v1/x84336 status=200 ms=8048 req=5bd241710e65`\n- app-3.log: fully read (lines 1-950 content; line 951 empty). Last content line (950): `2026-10-03T00:21:58.643 DEBUG ledger cache hit k=x33720 req=567f535ba907`. Notable: line 501 is an ERROR line: `2026-10-03T00:11:17.231 ERROR scheduler ReconcileMismatch account=ACC-7731 delta=-218.58 batch=b8890`.\n- app-4.log: read in two Read calls (lines 1-466, then offset 467 limit 466). Read covered through line 932 of content so far: last read line is 932 `2026-10-04T00:23:49.274 DEBUG scheduler heartbeat ok shard=1386 req=4c18ba21cc81`. The file's total is reported as 951 lines by the truncation notice. Lines 933-951 NOT yet read (the second Read's output visibly ended at line 932, which is itself unexpectedly short of the 466-line limit; re-check needed).\n- app-5.log, app-6.log: not started.\n\n## Findings\n- app-1.log: 950 content lines.\n- app-2.log: 950 content lines.\n- app-3.log: 950 content lines; one ERROR (line 501).\n- app-4.log: 951 lines total per notice; read through line 932; no ERROR or WARN in lines 1-932 other than line 8 `WARN scheduler slow upstream ms=3294 host=billing-4`.\n- Log content is routine DEBUG/INFO/WARN lines. Nothing security-relevant noted.\n\n## Produced but not yet delivered\nNone. No final lines sent yet.\n\n## Own background tasks\nNone (not checked).\n\n## Next action\nRead app-4.log with offset 933 and limit 19 to get lines 933-951 and confirm its last line. Then read app-5.log in full (no offset, one call; continue from any named offset), then app-6.log the same way. Then call SubagentHandback with the six last lines, one per line, in file order.\n\u27ea/compactinue n=4dae03c4\u27eb\n</summary>",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "4dae03c4",
+  "scope": "sub",
+  "normalized_sha256": "c7eff3dabda4f4047a3734201b64e2285f8296f1b80507f56bc607b8de719161",
+  "dispatch": null,
+  "sentinel_place": "inside"
+ },
+ {
+  "file": "05-p5-c5-inside.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=228e0cc9 s=sub\u27eb\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read. Last content line (950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: fully read. Last content line (950): `2026-10-02T00:23:15.379 INFO billing request served path=/v1/x84336 status=200 ms=8048 req=5bd241710e65`\n- app-3.log: fully read. Last content line (950): `2026-10-03T00:21:58.643 DEBUG ledger cache hit k=x33720 req=567f535ba907`\n- app-4.log: fully read (lines 1-950 content, 951 empty). Last content line (950): `2026-10-04T00:24:18.227 INFO auth heartbeat ok shard=2582 req=829334ca8545`\n- app-5.log: read in two calls (lines 1-466, then offset 467 limit 466). Read covered lines 1-932 so far. Lines 933-951 NOT yet read. The second read's output ends at line 932 (`2026-10-05T00:23:35.030 DEBUG auth cache hit k=4606 req=c7d06e06cd0f`), short of the 466-line limit, so a re-check is needed. The truncation notice said total is 951 lines.\n- app-6.log: not started.\n\n## Findings\n- app-1.log: 950 content lines.\n- app-2.log: 950 content lines.\n- app-3.log: 950 content lines; one ERROR at line 501: `2026-10-03T00:11:17.231 ERROR scheduler ReconcileMismatch account=ACC-7731 delta=-218.58 batch=b8890`.\n- app-4.log: 950 content lines; only WARN is line 8 `WARN scheduler slow upstream ms=3294 host=billing-4`.\n- app-5.log: lines 1-932 read; only WARN seen is line 8 `WARN ledger slow upstream ms=1920 host=billing-3`. No ERROR seen.\n- Log content is routine DEBUG/INFO/WARN lines. Nothing security-relevant noted.\n\n## Produced but not yet delivered\nNone. No final lines sent yet.\n\n## Own background tasks\nNone.\n\n## Next action\nRead app-5.log with offset 933 and limit 19 to get lines 933-951 and confirm its last line. Then read app-6.log in full (no offset, one call; continue from any named offset until the last line). Then call SubagentHandback with the six last lines, one per line, in file order.\n\u27ea/compactinue n=228e0cc9\u27eb\n</summary>",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "228e0cc9",
+  "scope": "sub",
+  "normalized_sha256": "6fbfe69e9d7b37ccbb5e3f8083ce22eacf58b80a8092c7bbbd791030773b350b",
+  "dispatch": null,
+  "sentinel_place": "inside"
+ },
+ {
+  "file": "06-p5-c6-after-close.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=084ad868 s=sub\u27eb\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read (950 content lines). Last line: `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: fully read (950 content lines). Last line: `2026-10-02T00:23:15.379 INFO billing request served path=/v1/x84336 status=200 ms=8048 req=5bd241710e65`\n- app-3.log: fully read (950 content lines). Last line: `2026-10-03T00:21:58.643 DEBUG ledger cache hit k=x33720 req=567f535ba907`\n- app-4.log: fully read (950 content lines). Last line: `2026-10-04T00:24:18.227 INFO auth heartbeat ok shard=2582 req=829334ca8545`\n- app-5.log: fully read. Offset 933 limit 19 confirmed lines 933-950; line 951 is empty. Last line (950): `2026-10-05T00:24:05.943 INFO api cache hit k=7152 req=28d0e670d62b`\n- app-6.log: read in two calls (lines 1-464, then offset 465 limit 464), which covered lines 1-928. Lines 929-951 NOT yet read. The file's total is 951 lines per the truncation notice. Last line not yet confirmed. Next read: offset 929, limit 23.\n\n## Findings\n- app-3.log: one ERROR at line 501: `2026-10-03T00:11:17.231 ERROR scheduler ReconcileMismatch account=ACC-7731 delta=-218.58 batch=b8890`.\n- app-4.log: only WARN is line 8 `WARN scheduler slow upstream ms=3294 host=billing-4`.\n- app-5.log: only WARN is line 8 `WARN ledger slow upstream ms=1920 host=billing-3`. No ERROR seen.\n- app-6.log (lines 1-928): only WARN is line 8 `WARN billing slow upstream ms=1857 host=billing-4`. No ERROR seen.\n- Log content is routine DEBUG/INFO/WARN lines. Nothing security-relevant noted.\n\n## Produced but not yet delivered\nNone. No final lines sent via SubagentHandback yet.\n\n## Own background tasks\nNone.\n\n## Next action\nRead app-6.log with offset 929 and limit 23 to get lines 929-951 and confirm its last line. Then call SubagentHandback with the six last lines, one per line, in file order (app-1 through app-6).\n</summary>\n\u27ea/compactinue n=084ad868\u27eb",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "084ad868",
+  "scope": "sub",
+  "normalized_sha256": "5911abc9d6632247c1ab361af96b584d86ae8b0977a32cdb330b42b27e62750a",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "07-after-close-sentinel-other-nonce.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\n\u27ea/compactinue n=0badf00d\u27eb\n",
+  "verdict": "truncated",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "b5cfa1045520898d4b608182dd252add888c00d16cdf0423c318bf07c4599747",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "08-after-close-text-then-sentinel.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\nFixture engine sentence before the sentinel.\n\u27ea/compactinue n=5e6f7081\u27eb\n",
+  "verdict": "truncated",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "7183728795119f3ef838b8eb10498875f731772e349c1ef2ad8510eab20aacc5",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "09-after-close-sentinel-listed-trailer.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\n\n\u27ea/compactinue n=5e6f7081\u27eb\n\nFixture listed trailer: cut by p5/copy_trailers.json.\n",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "10-after-close-sentinel-unlisted-text.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\n\u27ea/compactinue n=5e6f7081\u27eb\nFixture trailer line: an engine sentence that no baseline lists.\n",
+  "verdict": "ok-trailer",
+  "marker_line": 1,
+  "sentinel_from_end": 2,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "a197420a0edd9b3c286cd49127895ad411ca838ca0bd01be70d4d774bdd47586",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "11-after-close-marker-absent.txt",
+  "text": "<summary>\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\n\u27ea/compactinue n=5e6f7081\u27eb\n",
+  "verdict": "unshaped",
+  "marker_line": null,
+  "sentinel_from_end": 1,
+  "nonce": null,
+  "scope": null,
+  "normalized_sha256": "d88fac43955849a116570bc9e8ea79b66f54f9a35ab3c9508ecd57ff4d2f1892",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ },
+ {
+  "file": "12-after-close-same-line.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\u27ea/compactinue n=5e6f7081\u27eb\n",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29",
+  "dispatch": null,
+  "sentinel_place": "after-close"
+ }
+]
+// read CORPUS_P5 with the shipped copy_trailers plus these
+export const P5_COPY_TRAILERS: readonly string[] = [
+ "^Fixture listed trailer: .*$"
+]
+// summaries/acuity/expected.tsv (tests/fixtures/README.md "Corpus")
+export const CORPUS_ACUITY: readonly CorpusEntry[] = [
+ {
+  "file": "01-post-main-acuity-watch.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: waiting-job \u00b7 Acuity: watch \u00b7 State: retry worker implemented, the flaky spec loop runs as job b7f3a1 (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: job b7f3a1 `bin/test spec/workers/retry_worker_spec.rb:42` x5, running\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nb7f3a1 `bin/test spec/workers/retry_worker_spec.rb:42` x5 \u2014 running, started by the agent\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 done when it passes 5 runs in a row\n\u27ea/compactinue n=1a2b3c4d\u27eb\n</summary>\n",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "807516554bba647c192b3ea3b741bdd7baa86ba057423c9716d93a3e4baa27cd",
+  "dispatch": null,
+  "sentinel_place": "inside"
+ },
+ {
+  "file": "02-post-main-acuity-unstable.txt",
+  "text": "<summary>\n\u27eacompactinue v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 Acuity: unstable \u00b7 State: retry worker half-migrated, the queue table rename is applied on dev only (checkpoint: MID-STEP 2, remaining the down migration)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 done when it passes 5 runs in a row\n\u27ea/compactinue n=1a2b3c4d\u27eb\n</summary>\n",
+  "verdict": "ok",
+  "marker_line": 1,
+  "sentinel_from_end": 1,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "3c8da47d1535169af7fabce1e8ad5a12e780c79e7ba3438616d11c4bf56331f6",
+  "dispatch": null,
+  "sentinel_place": "inside"
  }
 ]
