@@ -46,6 +46,9 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
             ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
+  beta      beta/*.zip (AT-WB-13): each zip's intake (refuse: .. or absolute name, symlink, name
+            outside B.5, entry over 50 MB, total over 200 MB, ratio over 100) and verify (manifest
+            sha256, pattern classes) verdict equals beta/cases.json; zip members are secret-scanned
   manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
             idle-cases.json) agree with the payloads, dispatch records and corpus files they name
   prod      settings/prod-cases.json: each recorded command's effects class, each placement's
@@ -67,7 +70,7 @@ src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the pr
 built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
 deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
-import datetime, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
+import datetime, hashlib, json, math, os, re, shutil, stat, subprocess, sys, tempfile, zipfile
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -1254,6 +1257,8 @@ def check_setups(b):
                     sem = rm_semantics(doc, sc)
                 elif doc["id"].startswith("st-"):
                     sem = st_semantics(doc, sc)
+                elif doc["id"].startswith("wb-"):
+                    sem = wb_semantics(doc, sc)
                 else:
                     sem = []
                 problems += ["{}: {}".format(where, x) for x in sem]
@@ -1411,6 +1416,119 @@ def check_prod():
                 ("kept_count" in want and len(kept) != want["kept_count"]):
             p.append("prod patterns {}: kept {} dropped {}, the case says {}".format(rel, len(kept), dropped, want))
     return p, len(m["commands"])
+
+
+# W-BETA fixtures (README "Beta"): the canary install (setups/wb-canary-install.json, AT-WB-02) and
+# the analyzer zips (beta/, AT-WB-13). The zip checks are a reference of W-BETA F.1 intake and F.2
+# verify, read-only (zipfile infolist and member reads; nothing is extracted).
+BETA = os.path.join(FIX, "beta")
+B5_NAME = re.compile(r"^(README\.txt|manifest\.json|config\.json|probes\.json|sizes\.json|rows/[0-9a-f]{12}\.jsonl)$")
+PATTERN_CLASSES = [re.compile(r"(^|[\s\"'=(])/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]*"), re.compile(r"/Users/|/home/"),
+                   re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s\"']+")]
+
+
+def zip_texts(path):
+    """[(entry name, text)] of a zip, members decoded as UTF-8 (replacement for bad bytes)."""
+    with zipfile.ZipFile(path) as z:
+        return [(i.filename, z.read(i).decode("utf-8", "replace")) for i in z.infolist()
+                if not stat.S_ISLNK(i.external_attr >> 16) and i.file_size <= 4 * 1024 * 1024]
+
+
+def intake_ref(path):
+    """W-BETA F.1: `accept`, or `refuse` with the first reason."""
+    with zipfile.ZipFile(path) as z:
+        infos = z.infolist()
+    total = 0
+    for i in infos:
+        n = i.filename
+        if n.startswith("/") or ".." in n.split("/"):
+            return "refuse", "absolute or .. name"
+        if stat.S_ISLNK(i.external_attr >> 16):
+            return "refuse", "symlink"
+        if not B5_NAME.match(n):
+            return "refuse", "name outside B.5"
+        if i.file_size > 50 * 1024 * 1024:
+            return "refuse", "entry over 50 MB"
+        if i.compress_size and i.file_size / i.compress_size > 100:
+            return "refuse", "ratio over 100"
+        total += i.file_size
+    if total > 200 * 1024 * 1024:
+        return "refuse", "total over 200 MB"
+    return "accept", None
+
+
+def verify_ref(path):
+    """W-BETA F.2: `valid`, or `quarantined` with the reason (manifest hashes, pattern classes)."""
+    texts = dict(zip_texts(path))
+    man = json.loads(texts.get("manifest.json", "{}"))
+    with zipfile.ZipFile(path) as z:
+        for f in man.get("files", []):
+            if hashlib.sha256(z.read(f["name"])).hexdigest() != f["sha256"]:
+                return "quarantined", "sha256 " + f["name"]
+    for n, t in sorted(texts.items()):
+        if n.startswith("rows/") or n in ("config.json", "probes.json", "sizes.json"):
+            for rx in PATTERN_CLASSES:
+                if rx.search(t):
+                    return "quarantined", "pattern " + n
+    return "valid", None
+
+
+def check_beta():
+    p = []
+    cases_path = os.path.join(BETA, "cases.json")
+    if not os.path.exists(cases_path):
+        return ["beta: beta/cases.json missing"], 0
+    cases = json.loads(read(cases_path))
+    present = sorted(f for f in os.listdir(BETA) if f.endswith(".zip"))
+    if present != sorted(cases["zips"]):
+        p.append("beta: zips {} and cases.json {} differ".format(present, sorted(cases["zips"])))
+    for name, want in sorted(cases["zips"].items()):
+        path = os.path.join(BETA, name)
+        if not os.path.exists(path):
+            continue
+        got, why = intake_ref(path)
+        if got != want["intake"]:
+            p.append("beta {}: intake {} ({}), cases.json says {}".format(name, got, why, want["intake"]))
+            continue
+        if got == "accept":
+            v, why = verify_ref(path)
+            if v != want["verify"]:
+                p.append("beta {}: verify {} ({}), cases.json says {}".format(name, v, why, want["verify"]))
+        if want.get("dedupe_with"):
+            with open(path, "rb") as a, open(os.path.join(BETA, want["dedupe_with"]), "rb") as b2:
+                if a.read() != b2.read():
+                    p.append("beta {}: not byte-identical to {}".format(name, want["dedupe_with"]))
+    return p, len(cases["zips"])
+
+
+def wb_semantics(doc, sc):
+    """The canary install: every canary is planted somewhere it can leak from, and grep-safe."""
+    p = []
+    canaries = doc["expect"]["canaries"]
+    vals = sorted(canaries.values())
+    for a in vals:
+        if len(a) < 4:
+            p.append("canary {!r} is shorter than 4 characters (the identity scan skips it)".format(a))
+        for b2 in vals:
+            if a != b2 and a in b2:
+                p.append("canary {!r} is inside canary {!r}; a grep could not tell them apart".format(a, b2))
+    blob = []
+    for f in walk(sc.tmp):
+        if os.path.islink(f):
+            continue
+        try:
+            blob.append(read(f))
+        except (UnicodeDecodeError, OSError):
+            pass
+    blob = "\n".join(blob) + "\n" + json.dumps(doc["invoke"].get("env", {}))
+    for cid, v in sorted(canaries.items()):
+        if v not in blob:
+            p.append("canary {} ({}) is planted nowhere".format(cid, v))
+    if SECRET_MARK not in blob:
+        p.append("no $SECRET{} token: the shared secret corpus is not planted")
+    if sc.v["HOME"] not in blob:
+        p.append("no $HOME path is planted")
+    return p
 
 
 def check_settings():
@@ -1806,7 +1924,16 @@ def check(b):
     rules, source = load_rules()
     targets = list(walk(FIX)) + [os.path.join(REPO, "tools", "fixtures-gen")]
     rendered = render(b)
-    texts = [(os.path.relpath(p, REPO), read(p)) for p in targets]
+    texts = []
+    for p in targets:
+        rel = os.path.relpath(p, REPO)
+        if p.endswith(".zip"):
+            texts += [(rel + "!" + n, t) for n, t in zip_texts(p)]
+            continue
+        try:
+            texts.append((rel, read(p)))
+        except UnicodeDecodeError:
+            problems.append("secrets {}: not UTF-8 text and not a zip, so it cannot be scanned".format(rel))
     texts += [(os.path.join(GEN_REL, n), t) for n, t in rendered.items()]
     for rel, text in texts:
         for rid, cls in scan(fill(text, b), rules):
@@ -1866,6 +1993,10 @@ def check(b):
     print("prod: {} recorded commands classed by the BUILD-PLAN §3.7 effects order (S-SETTINGS B, C)".format(nprod))
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))
+    # beta
+    beta_problems, nbeta = check_beta()
+    problems += beta_problems
+    print("beta: {} analyzer zips against the W-BETA F.1 intake and F.2 verify reference".format(nbeta))
     # manifests
     man_problems, nman = check_manifests(b)
     problems += man_problems

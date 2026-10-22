@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "id": "beta-zips",
+  "tests": [
+    "AT-WB-13",
+    "AT-WB-07",
+    "AT-WB-14"
+  ],
+  "note": "Inputs for tools/beta-analyze run (W-BETA F). Refusal reasons follow F.1 intake (names outside B.5, absolute or .. names, a symlink external_attr, an entry over 50 MB, a total over 200 MB, a compression ratio over 100); quarantine follows F.2 verify (a manifest sha256 mismatch, or a pattern-class hit: absolute paths, /Users/, /home/, e-mail, URL with a host). good-1-copy.zip is byte-identical to good-1.zip under another name (dedupe). `{{plugin}}` in the bundles stays a placeholder: a case renders the brand (or the old name, AT-WB-14) before it runs the analyzer. The oversize entry declares 60 MiB in both headers but holds 3 bytes, so only a size check that reads the headers refuses it.",
+  "zips": {
+    "good-1.zip": {
+      "intake": "accept",
+      "verify": "valid"
+    },
+    "good-1-copy.zip": {
+      "intake": "accept",
+      "verify": "valid",
+      "dedupe_with": "good-1.zip"
+    },
+    "bad-hash.zip": {
+      "intake": "accept",
+      "verify": "quarantined",
+      "why": "probes.json sha256 differs from the manifest"
+    },
+    "pattern-hit.zip": {
+      "intake": "accept",
+      "verify": "quarantined",
+      "why": "a /Users/ path in rows/"
+    },
+    "zip-slip.zip": {
+      "intake": "refuse",
+      "why": "../escape.txt"
+    },
+    "symlink.zip": {
+      "intake": "refuse",
+      "why": "rows/cccccccccccc.jsonl is a symlink"
+    },
+    "oversize.zip": {
+      "intake": "refuse",
+      "why": "an entry declares 60 MiB"
+    },
+    "ratio-bomb.zip": {
+      "intake": "refuse",
+      "why": "compression ratio over 100"
+    }
+  }
+}

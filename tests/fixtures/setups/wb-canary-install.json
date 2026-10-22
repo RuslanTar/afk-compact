@@ -1,0 +1,421 @@
+{
+  "v": 1,
+  "id": "wb-canary-install",
+  "ruling": "W-BETA B (report: allowlist inputs, export transform, identity and secret scans)",
+  "tests": [
+    "AT-WB-02",
+    "AT-WB-03",
+    "AT-WB-04"
+  ],
+  "note": "A watcher install with a unique canary in every place W-BETA B.3 names. The report is built from it, unpacked, and every canary (and the expanded $HOME, and each $SECRET{} value of the shared corpus) must have 0 hits in the zip. Canaries sit in the allowlisted streams (in fields the export must drop or hash), in the never-opened files (jobs.jsonl, evidence-index.tsv, queue-adds.jsonl, paths.jsonl), in the summary copy and the handoff, in the settings file and in the git remote. The account and host canaries need the process to see them: the case sets USER and LOGNAME, and the host canary needs a test-mode host override (needs/fix-to-watch.md).",
+  "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
+  "invoke": {
+    "argv": [
+      "report",
+      "--out",
+      "$TMP/out"
+    ],
+    "cwd": "$TMP/wb-canary-repo01",
+    "env": {
+      "USER": "wb-canary-acct01",
+      "LOGNAME": "wb-canary-acct01",
+      "STORE_TEST_HOSTNAME": "wb-canary-host01"
+    }
+  },
+  "setup": [
+    {
+      "repo": {
+        "branch": "feature/WBCANARY-4242-wb-canary-branch01",
+        "commits": [
+          {
+            "files": {
+              "README.md": "seed\n"
+            },
+            "msg": "seed"
+          }
+        ]
+      },
+      "at": "$TMP/wb-canary-repo01"
+    },
+    {
+      "git": [
+        "remote",
+        "add",
+        "origin",
+        "git@git.example.invalid:wb-canary-acct01/wb-canary-repo01.git"
+      ],
+      "cwd": "$TMP/wb-canary-repo01"
+    },
+    {
+      "write": "$HOME/.claude/settings.json",
+      "json": {
+        "pluginConfigs": {
+          "{{plugin}}@{{marketplace}}": {
+            "options": {
+              "repo_roots": "$TMP/wb-canary-repo01",
+              "relaunch_allow": "^wb-canary-pattern01",
+              "prod_patterns": "wb-canary-pattern01-prod",
+              "queue_cmd": "$TMP/wb-canary-root01/bin/queue",
+              "log_dir": "$TMP/wb-canary-root01-logs"
+            }
+          }
+        }
+      }
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001.classic.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:00:00.000+03:00",
+          "ev": "session",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 0,
+          "phase": "start",
+          "source": "startup",
+          "reason": null,
+          "mod_loaded": false,
+          "previous_session_id": null,
+          "lineage_reason": null,
+          "pid_lstart": "Wed Oct 21 09:00:00 2026",
+          "cwd": "$TMP/wb-canary-repo01",
+          "worktree": "$TMP/wb-canary-repo01"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:01:00.000+03:00",
+          "ev": "dispatch",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 1,
+          "nonce": "1a2b3c4d",
+          "trigger": "auto",
+          "agent_id": null,
+          "channel": "classic",
+          "tags": [
+            "auto"
+          ],
+          "instructions_bytes": 4860
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:02:00.000+03:00",
+          "ev": "copy",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "postcompact-fallback",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 2,
+          "nonce": "1a2b3c4d",
+          "id6": "1a2b3c",
+          "result": "saved",
+          "slot": "main",
+          "rel_path": "wb-canary-repo01/WBCANARY-4242/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
+          "seq": 1,
+          "redacted": false
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:03:00.000+03:00",
+          "ev": "sweep",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 3,
+          "file": "5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+          "cwd": "$TMP/wb-canary-repo01",
+          "transcript": "$HOME/.claude/projects/-tmp-wb-canary-repo01/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:04:00.000+03:00",
+          "ev": "sweep_evidence",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 4,
+          "nonce": "1a2b3c4d",
+          "files": 1,
+          "evidence_dir": "$TMP/wb-canary-evidence01/2026-10-21"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:05:00.000+03:00",
+          "ev": "heal",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 5,
+          "task_id": "b5",
+          "effects": "none",
+          "result": "REFUSED",
+          "command_preview": "CANARY-TEXT-wb-jobcmd"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:06:00.000+03:00",
+          "ev": "permission_denied",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 6,
+          "tool_name": "Bash",
+          "reason_class": "classifier",
+          "guard_class": "other",
+          "turn_kind": "other",
+          "caused_by": "session",
+          "note": "CANARY-TEXT-wb-summary"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:07:00.000+03:00",
+          "ev": "config_note",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 7,
+          "option": "relaunch_allow",
+          "note": "settings-file-only",
+          "value": "^wb-canary-pattern01"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:08:00.000+03:00",
+          "ev": "queue_add",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 8,
+          "status": "queued",
+          "lane": "lane:wb-canary-repo01/WBCANARY-4242",
+          "question": "CANARY-TEXT-wb-queue-question",
+          "secret_probe": "$SECRET{jwt-hs256}"
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:00:00.000+03:00",
+          "ev": "config_effective",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "mod",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 0,
+          "window": 1000000,
+          "soft_max": 600000,
+          "target": 500000,
+          "handoff_root": "$HOME/.claude/handoffs/wb-canary-root01",
+          "log_dir": "$TMP/wb-canary-root01-logs"
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:02:00.000+03:00",
+          "ev": "compacted",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "mod",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 2,
+          "nonce": "1a2b3c4d",
+          "channel": "mod-hook",
+          "ms": 4012,
+          "branch": "feature/WBCANARY-4242-wb-canary-branch01",
+          "bucket": "wb-canary-repo01/WBCANARY-4242"
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001.alerts.jsonl",
+      "jsonl": [
+        {
+          "actor": "main",
+          "alert_id": "a15-50c246a6",
+          "cc_version": "2.1.307",
+          "ev": "alert",
+          "evidence": {
+            "canary": "keyset_change",
+            "path": "$TMP/wb-canary-repo01"
+          },
+          "key": {
+            "actor": null,
+            "compaction_seq": null,
+            "nonce": null,
+            "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001"
+          },
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "rule": "A-15",
+          "severity": "warn",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "ts": "2026-10-21T14:09:00.000+03:00",
+          "turn_seq": 9,
+          "v": 1,
+          "writer": "watch",
+          "text": "repo wb-canary-repo01 branch feature/WBCANARY-4242-wb-canary-branch01"
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/compactions.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:02:00.000+03:00",
+          "ev": "compaction",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "classic",
+          "pid": 43210,
+          "plugin_version": "0.1.0",
+          "cc_version": "2.1.307",
+          "turn_seq": 2,
+          "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "compaction_seq": 1,
+          "nonce": "1a2b3c4d",
+          "id6": "1a2b3c",
+          "trigger": "auto",
+          "channel": "mod-hook",
+          "verdict": "ok",
+          "repository": "wb-canary-repo01",
+          "bucket": "wb-canary-repo01/WBCANARY-4242",
+          "branch": "feature/WBCANARY-4242-wb-canary-branch01",
+          "tokens_before": 640000,
+          "tokens_after": 31000
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/mod-alive.json",
+      "json": {
+        "v": 1,
+        "pid": 43210,
+        "turn_seq": 9,
+        "ts": "2026-10-21T14:09:00.000+03:00"
+      }
+    },
+    {
+      "write": "$WATCH/version.json",
+      "json": {
+        "v": 1,
+        "cc_version": "2.1.307",
+        "plugin_version": "0.1.0",
+        "smoke": "SMOKE PASS",
+        "smokeDue": false
+      }
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/jobs.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:05:00.000+03:00",
+          "ev": "job",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "kind": "job",
+          "task_id": "b5",
+          "command": "echo CANARY-TEXT-wb-jobcmd; echo \"__exit $?\"",
+          "cwd": "$TMP/wb-canary-repo01"
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/evidence-index.tsv",
+      "content": "1a2b3c4d\t$TMP/wb-canary-evidence01/2026-10-21/app.log\tcopied\n"
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/queue-adds.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:08:00.000+03:00",
+          "lane": "lane:wb-canary-repo01/WBCANARY-4242",
+          "question": "CANARY-TEXT-wb-queue-question"
+        }
+      ]
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/paths.jsonl",
+      "content": "{\"path\": \"$TMP/wb-canary-evidence01/2026-10-21/app.log\"}\n"
+    },
+    {
+      "write": "$HOME/.claude/handoffs/wb-canary-repo01/WBCANARY-4242/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
+      "content": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 1a2b3c4d\ndate: 2026-10-21T14:02:00+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/WBCANARY-4242\nbranch: feature/WBCANARY-4242-wb-canary-branch01\nworktree: $TMP/wb-canary-repo01\n---\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# WBCANARY-4242 — CANARY-TEXT-wb-summary\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-summary (checkpoint: clean)\n⟪/{{plugin}} n=1a2b3c4d⟫\n",
+      "mode": "0400"
+    },
+    {
+      "write": "$HOME/.claude/handoffs/wb-canary-repo01/WBCANARY-4242/2026-10-21_14-03-00_5e55a001_handoff.md",
+      "content": "---\nkind: handoff\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/WBCANARY-4242\nbranch: feature/WBCANARY-4242-wb-canary-branch01\n---\n# WBCANARY-4242 — CANARY-TEXT-wb-handoff\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-handoff (checkpoint: clean)\n"
+    },
+    {
+      "mkdir": "$TMP/wb-canary-evidence01/2026-10-21"
+    },
+    {
+      "write": "$TMP/wb-canary-evidence01/2026-10-21/app.log",
+      "content": "fixture evidence line\n"
+    },
+    {
+      "mkdir": "$TMP/out"
+    }
+  ],
+  "expect": {
+    "canaries": {
+      "account": "wb-canary-acct01",
+      "host": "wb-canary-host01",
+      "repo": "wb-canary-repo01",
+      "branch": "wb-canary-branch01",
+      "ticket": "WBCANARY-4242",
+      "summary": "CANARY-TEXT-wb-summary",
+      "handoff": "CANARY-TEXT-wb-handoff",
+      "jobs_command": "CANARY-TEXT-wb-jobcmd",
+      "evidence_path": "wb-canary-evidence01",
+      "queue_question": "CANARY-TEXT-wb-queue-question",
+      "config_path": "wb-canary-root01",
+      "config_pattern": "wb-canary-pattern01"
+    },
+    "also_absent": [
+      "$HOME",
+      "$SECRET{jwt-hs256}"
+    ],
+    "planted_in": {
+      "account": "env USER/LOGNAME, git remote owner",
+      "host": "env STORE_TEST_HOSTNAME"
+    }
+  }
+}
