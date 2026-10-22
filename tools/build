@@ -37,9 +37,17 @@ SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 EXEC = 0o755
 PLAIN = 0o644
+# The launcher's folder (PKG-RUNTIME A.1, Q-R1): the one spelling here, in deps.ts and in
+# ctx.pm; the AT-PK-01 gate finds any other. No top-level bin/ ships (claude.ai and Cowork
+# refuse a plugin with one).
+LAUNCHER_DIR = "scripts"
+# The launcher's old folder (before the move). It stays a GEN place for one round (A.7): a
+# file left there is reported stale by --check, and tools/build removes the old launcher
+# (listed in tools/build.state) and then the folder once it is empty.
+OLD_LAUNCHER_DIRS = ("plugin/bin",)
 # Places only GEN tools write (BUILD-PLAN §1, OWNERS.tsv). Every file found there must be a
 # tools/build output or one of OTHER_GEN, else --check reports it stale: it would ship.
-GEN_TREES = ("plugin/skills", "plugin/bin", "plugin/assets", "plugin/tests/unit/_gen")
+GEN_TREES = ("plugin/skills", "plugin/" + LAUNCHER_DIR, "plugin/assets", "plugin/tests/unit/_gen") + OLD_LAUNCHER_DIRS
 GEN_FLAT = (("plugin", ""), ("plugin/.claude-plugin", ""), ("plugin/hooks/lib", ".gen.ts"))
 OTHER_GEN = {
     "plugin/assets/canary-baseline.json": "tools/canary-baseline",
@@ -173,7 +181,7 @@ def plan(brand):
     for rel in files_under("src/skills"):
         out["plugin/skills/" + os.path.relpath(rel, "src/skills")] = (render(read(rel), name), PLAIN)
 
-    out["plugin/bin/{}-store".format(name)] = (render(read("src/launcher.tmpl"), name), EXEC)
+    out["plugin/{}/{}-store".format(LAUNCHER_DIR, name)] = (render(read("src/launcher.tmpl"), name), EXEC)
 
     if os.path.exists(os.path.join(REPO, "src/README.md")):
         readme = render(read("src/README.md"), name)
@@ -277,7 +285,8 @@ def out_root(out_dir):
 
 def ships(rel, old_gen, variant):
     """A plugin/ file the --out copy takes from the work tree (GEN files are rendered instead)."""
-    if rel in old_gen or rel.startswith(("plugin/.claude-plugin/types/", "plugin/bin/", "plugin/skills/")):
+    if rel in old_gen or rel.startswith(("plugin/.claude-plugin/types/", "plugin/{}/".format(LAUNCHER_DIR),
+                                         "plugin/skills/") + tuple(d + "/" for d in OLD_LAUNCHER_DIRS)):
         return False
     if os.path.basename(rel).startswith(".") and os.path.basename(rel) != ".gitkeep":
         return False
@@ -430,6 +439,13 @@ def main(argv):
             if os.path.exists(p):
                 os.unlink(p)
                 print("removed stale " + rel)
+    for rel in OLD_LAUNCHER_DIRS:
+        # Only an empty folder goes (rmdir); a file someone left there stays, and --check
+        # reports it stale (D-8: tools/build deletes only what an earlier build wrote).
+        p = os.path.join(REPO, rel)
+        if os.path.isdir(p) and not os.path.islink(p) and not os.listdir(p):
+            os.rmdir(p)
+            print("removed empty " + rel + "/")
     for rel, (text, mode) in gen.items():
         write_file(REPO, rel, text, mode)
     write_file(REPO, STATE, state_text(brand, gen), PLAIN)

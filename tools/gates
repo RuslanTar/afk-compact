@@ -8,7 +8,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
   --no-git-log  skip the attribution gate over `git log --format=%B`
   --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
                 skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal,
-                config-defaults)
+                config-defaults, launcher)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -53,7 +53,11 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   config-defaults AT-WD-02 (D-9, D-8): .claude-plugin/plugin.json userConfig `watcher` defaults
                to `shadow`, `disposable_keep_days` to 0, and no other key is named like
                `*keep_days*` (no automatic pruning of `.watch` by default)
-  PENDING lists hits that wait for text not written yet (WP-text part 2); they print as
+  launcher     AT-PK-01 (PKG-RUNTIME A.1, Q-R1) over a built plugin folder: no top-level `bin/`;
+               the launcher is `scripts/<brand>-store`, mode 0755; the 8 hooks.json commands
+               are `"${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <Event>`; no file names
+               the launcher in another folder (`/<dir>/<brand>-store`) or says "on the Bash PATH"
+  PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
 Exit 0 when every gate has 0 hits, else 1.
@@ -173,10 +177,23 @@ HEAL_FORBIDDEN = ("with its `probe` if read-only", "the row's own probe only if 
 HEAL_REQUIRED = ("Never run a row's `probe` cell", "route on the `verdict:` status")
 RESUME_STEP3 = re.compile(r"^(?:\[[a-z-]+\] )?3\. ")
 RESUME_STEP3_NEEDS = "(never run row text)"
-# Hits that wait for WP-text part 2 (REVIEW (D) step 6): (gate, rule, path in the target,
-# fragment of the offending line or None for a file-level hit). Remove a row once it prints
-# PENDING-DONE.
-PENDING = []
+# AT-PK-01 (PKG-RUNTIME A.1, Q-R1): the launcher's folder, as in tools/build LAUNCHER_DIR.
+LAUNCHER_DIR = "scripts"
+HOOK_CMD = re.compile(r'^"\$\{CLAUDE_PLUGIN_ROOT\}/([^/"]+)/([^/"]+)-store" hook ([A-Za-z]+)$')
+HOOK_COUNT = 8   # MOD §1.3 classic events (tools/check EVENTS)
+BASH_PATH = re.compile(r"\bon the Bash PATH\b", re.I)
+# Hits that wait for text not written yet: (gate, rule, path in the target, fragment of the
+# offending line or None for a file-level hit). Remove a row once it prints PENDING-DONE.
+PENDING = [
+    # The launcher move (BLD-01) lands before the skill and README text (BUILD-ROUND-9 §4
+    # steps 3, 4, 10): TXT-05 drops "on the Bash PATH" and the bin/ fallback; DOC-01 the README.
+    ("launcher", "AT-PK-01 bash-path", "skills/handoff/SKILL.md", "on the Bash PATH"),
+    ("launcher", "AT-PK-01 bash-path", "skills/resume/SKILL.md", "on the Bash PATH"),
+    ("launcher", "AT-PK-01 launcher-dir", "skills/resume/SKILL.md", '/bin/'),
+    ("launcher", "AT-PK-01 bash-path", "skills/status/SKILL.md", "on the Bash PATH"),
+    ("launcher", "AT-PK-01 launcher-dir", "skills/status/SKILL.md", '/bin/'),
+    ("launcher", "AT-PK-01 launcher-dir", "README.md", "/bin/"),
+]
 
 
 def shipped_lines(path, brand):
@@ -390,9 +407,63 @@ def config_defaults_hits(target, brand):
     return out
 
 
+def launcher_hits(target, brand):
+    """AT-PK-01 over a built plugin folder (one with .claude-plugin/plugin.json): no top-level
+    bin/; the launcher is scripts/<brand>-store, mode 0755; every hooks.json command is
+    "${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <its Event> (8 of them); no text file
+    names the launcher in another folder (`/<dir>/<brand>-store`, dir not scripts) or says
+    "on the Bash PATH"."""
+    if not os.path.isfile(os.path.join(target, ".claude-plugin", "plugin.json")):
+        return []
+    out = []
+    if os.path.lexists(os.path.join(target, "bin")):
+        out.append((os.path.join(target, "bin"), None, "AT-PK-01 bin-folder",
+                    "AT-PK-01 bin-folder: a top-level bin/ ships (claude.ai and Cowork refuse it)", ""))
+    launcher = os.path.join(target, LAUNCHER_DIR, brand + "-store")
+    if not os.path.isfile(launcher) or os.path.islink(launcher):
+        out.append((launcher, None, "AT-PK-01 launcher", "AT-PK-01 launcher: no {}/{}-store".format(LAUNCHER_DIR, brand), ""))
+    elif os.stat(launcher).st_mode & 0o777 != 0o755:
+        out.append((launcher, None, "AT-PK-01 launcher", "AT-PK-01 launcher: mode {:o}, want 755".format(
+            os.stat(launcher).st_mode & 0o777), ""))
+    hj = os.path.join(target, "hooks", "hooks.json")
+    if os.path.isfile(hj):   # the skills-only variant ships no hooks/
+        try:
+            with open(hj, encoding="utf-8") as f:
+                groups = json.load(f).get("hooks") or {}
+        except ValueError:
+            groups = None
+            out.append((hj, None, "AT-PK-01 hooks", "AT-PK-01 hooks: hooks.json is not valid JSON", ""))
+        n = 0
+        for ev, lst in sorted((groups or {}).items()):
+            for h in (x for g in lst for x in (g.get("hooks") or [])):
+                if h.get("type") != "command":
+                    continue
+                n += 1
+                m = HOOK_CMD.match(h.get("command") or "")
+                if not m or m.group(1) != LAUNCHER_DIR or m.group(2) != brand or m.group(3) != ev:
+                    out.append((hj, None, "AT-PK-01 hooks", "AT-PK-01 hooks: {} command {!r}, want '\"${{CLAUDE_PLUGIN_ROOT}}/"
+                                "{}/{}-store\" hook {}'".format(ev, h.get("command"), LAUNCHER_DIR, brand, ev), ""))
+        if groups is not None and n != HOOK_COUNT:
+            out.append((hj, None, "AT-PK-01 hooks", "AT-PK-01 hooks: {} commands, want {}".format(n, HOOK_COUNT), ""))
+    other_dir = re.compile(r"/([^/\s\"'`()<>]+)/" + re.escape(brand) + r"-store" + E)
+    for path in files_of(target):
+        text = text_of(path)
+        if text is None:
+            continue
+        for no, line in enumerate(text.splitlines(), 1):
+            for m in other_dir.finditer(line):
+                if m.group(1) != LAUNCHER_DIR:
+                    out.append((path, no, "AT-PK-01 launcher-dir",
+                                "AT-PK-01 launcher-dir: {!r} (the launcher is {}/{}-store)".format(m.group(0), LAUNCHER_DIR, brand), line))
+            if BASH_PATH.search(line):
+                out.append((path, no, "AT-PK-01 bash-path",
+                            "AT-PK-01 bash-path: nothing is on the Bash PATH (the launcher is called by its full path)", line))
+    return out
+
+
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
               ("write-first", write_first_hits), ("self-heal", self_heal_hits),
-              ("config-defaults", config_defaults_hits)]
+              ("config-defaults", config_defaults_hits), ("launcher", launcher_hits)]
 
 
 def pending_row(gate, rule, rel, line):

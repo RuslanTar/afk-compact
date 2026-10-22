@@ -4,14 +4,14 @@
     "PreCompact": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook PreCompact", "timeout": 5 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook PreCompact", "timeout": 5 }
         ]
       }
     ],
     "PostCompact": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook PostCompact", "timeout": 15 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook PostCompact", "timeout": 15 }
         ]
       }
     ],
@@ -19,42 +19,42 @@
       {
         "matcher": "startup|resume|clear|compact|fork",
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook SessionStart", "timeout": 5 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook SessionStart", "timeout": 5 }
         ]
       }
     ],
     "SessionEnd": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook SessionEnd", "timeout": 5 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook SessionEnd", "timeout": 5 }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook Stop", "timeout": 8 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook Stop", "timeout": 8 }
         ]
       }
     ],
     "SubagentStop": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook SubagentStop", "timeout": 3 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook SubagentStop", "timeout": 3 }
         ]
       }
     ],
     "StopFailure": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook StopFailure", "timeout": 2 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook StopFailure", "timeout": 2 }
         ]
       }
     ],
     "PermissionDenied": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/{{plugin}}-store\" hook PermissionDenied", "timeout": 2 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store\" hook PermissionDenied", "timeout": 2 }
         ]
       }
     ]

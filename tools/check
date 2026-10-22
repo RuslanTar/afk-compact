@@ -27,7 +27,9 @@ node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), 
 description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
 AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
 self-heal table and resume SKILL size), a resume protocol over its hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults,
-a cross-WP `git mv` (owners-check), a checkout with core.autocrlf=true without the repo's
+the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
+launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
+(owners-check), a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
 repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), and an X-H runner
 that dies after a KNOWN_RED case (CR-F42).
@@ -36,15 +38,33 @@ BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set b
 to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
 tools/fixtures-gen) in the copy, then the copy's own `tools/check PHASE --no-drill`, so every
 check of the phase (X-test and X-H included) runs under the new name. Then the old name must
-be gone from the copy's plugin/, README.md and marketplace file, the old launcher removed, and
-the repo's own tree unchanged.
+be gone from the copy's plugin/, README.md and marketplace file, the old launcher removed
+from scripts/ and from the old bin/ (which must be gone), the new one in scripts/, and the
+repo's own tree unchanged.
 
 Environment: CC_TYPES_DIR (tools/typecheck), NODE or node on PATH, `claude` on PATH.
 """
-import json, os, re, shutil, subprocess, sys
+import importlib.machinery, importlib.util, json, os, re, shutil, subprocess, sys
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+
+def _build_consts():
+    """LAUNCHER_DIR and OLD_LAUNCHER_DIRS from this tree's tools/build: one spelling of the
+    launcher folder (PKG-RUNTIME A.1)."""
+    loader = importlib.machinery.SourceFileLoader("tools_build", os.path.join(REPO, "tools", "build"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("tools_build", loader))
+    loader.exec_module(mod)
+    return mod.LAUNCHER_DIR, tuple(os.path.relpath(d, "plugin") for d in mod.OLD_LAUNCHER_DIRS)
+
+
+LAUNCHER_DIR, OLD_LAUNCHER_DIRS = _build_consts()   # "scripts", ("bin",)
+
+
+def launcher_rel(name, folder=LAUNCHER_DIR):
+    return "plugin/{}/{}-store".format(folder, name)
+
 EVENTS = {"PreCompact": 5, "PostCompact": 15, "SessionStart": 5, "SessionEnd": 5,
           "Stop": 8, "SubagentStop": 3, "StopFailure": 2, "PermissionDenied": 2}   # MOD §1.3, D-4
 SESSION_START_MATCHER = "startup|resume|clear|compact|fork"
@@ -96,7 +116,7 @@ def x_validate(plugin_dir, root_dir, name, skills_required):
     for ev, timeout in EVENTS.items():
         groups = hj["hooks"][ev]
         cmds = [h for g in groups for h in g.get("hooks", [])]
-        want = '"${{CLAUDE_PLUGIN_ROOT}}/bin/{}-store" hook {}'.format(name, ev)
+        want = '"${{CLAUDE_PLUGIN_ROOT}}/{}/{}-store" hook {}'.format(LAUNCHER_DIR, name, ev)
         if len(cmds) != 1 or cmds[0].get("type") != "command" or cmds[0].get("command") != want:
             raise Fail("X-validate: {} command is not the quoted shell form {}".format(ev, want))
         if cmds[0].get("timeout") != timeout:
@@ -226,7 +246,7 @@ def probes(name):
                             "--no-git-log", "--only", g]
 
     def crlf(d):
-        to_crlf(os.path.join(d, "plugin", "bin", name + "-store"))
+        to_crlf(os.path.join(d, *launcher_rel(name).split("/")))
         to_crlf(os.path.join(d, "plugin", "hooks", "hooks.json"))
 
     def stray(d):
@@ -344,6 +364,20 @@ def probes(name):
         uc["watch_keep_days"] = {"type": "number", "title": "x", "description": "x", "default": 30}
         write_text(p, json.dumps(doc, indent=2) + "\n")
 
+    def launcher_move(d):
+        """AT-PK-01 (BLD-01): an old bin/ launcher left behind, the scripts/ launcher not
+        executable, one hook command back in bin/, and a text line with the bin/ path and the
+        Bash PATH promise."""
+        write_text(os.path.join(d, "plugin", "bin", name + "-store"), "#!/bin/sh\n")
+        os.chmod(os.path.join(d, *launcher_rel(name).split("/")), 0o644)
+        p = os.path.join(d, "plugin", "hooks", "hooks.json")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        write_text(p, t.replace("/{}/{}-store\\\" hook Stop\"".format(LAUNCHER_DIR, name),
+                                "/bin/{}-store\\\" hook Stop\"".format(name), 1))
+        append(d, "plugin/assets/subagent-instructions.txt",
+               "Call ${{CLAUDE_PLUGIN_ROOT}}/bin/{}-store, which is on the Bash PATH.\n".format(name))
+
     def resume_hard(d):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
 
@@ -395,19 +429,19 @@ def probes(name):
         if r.returncode != 0:
             return 2, "clone failed: " + r.stderr[-300:]
         out, bad = [], 0
-        for rel in ("plugin/bin/{}-store".format(name), "plugin/hooks/hooks.json", "plugin/helper/main.pl"):
+        for rel in (launcher_rel(name), "plugin/hooks/hooks.json", "plugin/helper/main.pl"):
             with open(os.path.join(dst, rel), "rb") as f:
                 data = f.read()
             if b"\r\n" in data:
                 out.append("eol {}: CRLF".format(rel))
                 bad = 1
-        launcher = os.path.join(dst, "plugin", "bin", name + "-store")
+        launcher = os.path.join(dst, *launcher_rel(name).split("/"))
         try:
             code = subprocess.run([launcher], capture_output=True, text=True).returncode
         except OSError as e:    # `#!/bin/sh\r`: exec finds no such interpreter
             code = "exec: " + (e.strerror or str(e))
         if code in (126, 127) or not isinstance(code, int):
-            out.append("eol {}: does not run ({})".format("plugin/bin/{}-store".format(name), code))
+            out.append("eol {}: does not run ({})".format(launcher_rel(name), code))
             bad = 1
         out.append("EOL CLONE: " + ("FAIL" if bad else "PASS"))
         return bad, "\n".join(out) + "\n"
@@ -489,7 +523,7 @@ def probes(name):
     canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
     out = [
         ("crlf", "RN-4", ["tools/build", "--check"], crlf,
-         [r"^differs plugin/bin/" + re.escape(name) + r"-store$", r"^differs plugin/hooks/hooks\.json$"], None),
+         [r"^differs " + re.escape(launcher_rel(name)) + r"$", r"^differs plugin/hooks/hooks\.json$"], None),
         ("stray", "RN-5", ["tools/build", "--check"], stray,
          [r"^stale plugin/assets/old-asset\.txt$", r"^stale plugin/hooks/lib/old\.gen\.ts$",
           r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
@@ -541,6 +575,12 @@ def probes(name):
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days"], None),
+        ("launcher", "AT-PK-01", gates_only("launcher"), launcher_move,
+         [r"^GATE launcher plugin/bin: AT-PK-01 bin-folder",
+          r"^GATE launcher " + re.escape(launcher_rel(name)) + r": AT-PK-01 launcher: mode 644, want 755$",
+          r"^GATE launcher plugin/hooks/hooks\.json: AT-PK-01 hooks: Stop command",
+          r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 launcher-dir: '/bin/",
+          r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 bash-path"], None),
         ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
@@ -558,7 +598,7 @@ def probes(name):
         ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
         ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,
-         [r"^eol plugin/bin/" + re.escape(name) + r"-store: CRLF$", r"^EOL CLONE: FAIL$"], git_repo),
+         [r"^eol " + re.escape(launcher_rel(name)) + r": CRLF$", r"^EOL CLONE: FAIL$"], git_repo),
         ("build-out", "CR-F40/F41/F44/F45", build_out, stray_helper_file,
          [r"^VARIANT REFUSED: build: --variant: 1 paths differ from HEAD: plugin/helper/lib/foo\.pm\.orig"], git_repo),
         ("xh-truncated", "CR-F42", xh_truncated, xh_die,
@@ -708,8 +748,16 @@ def bt02(phase, names):
     if left:
         raise Fail("BT-02: the old name {} is left in {} lines of the renamed copy: {}".format(
             old, len(left), ", ".join(left[:12])))
-    if os.path.exists(os.path.join(DRILL_DIR, "plugin", "bin", old + "-store")):
-        raise Fail("BT-02: the old launcher survived in the renamed copy")
+    # BLD-01 (PKG-RUNTIME A.7): the old name's launcher must be gone from the launcher folder
+    # and from the folder it used to live in; the new name's launcher is in scripts/ only.
+    for folder in (LAUNCHER_DIR,) + OLD_LAUNCHER_DIRS:
+        if os.path.lexists(os.path.join(DRILL_DIR, *launcher_rel(old, folder).split("/"))):
+            raise Fail("BT-02: the old launcher survived in the renamed copy: " + launcher_rel(old, folder))
+    if not os.path.isfile(os.path.join(DRILL_DIR, *launcher_rel(DRILL_NAME).split("/"))):
+        raise Fail("BT-02: the renamed copy has no " + launcher_rel(DRILL_NAME))
+    left_dirs = [d for d in OLD_LAUNCHER_DIRS if os.path.lexists(os.path.join(DRILL_DIR, "plugin", d))]
+    if left_dirs:
+        raise Fail("BT-02: the renamed copy still has plugin/{}/".format(left_dirs[0]))
     run([os.path.join(REPO, "tools", "build"), "--check"], "BT-02 committed tree")
     if tree_state() != before:
         raise Fail("BT-02: the drill changed the working tree")
@@ -742,8 +790,11 @@ def x_variants(name):
             raise Fail("X-variants: {} manifest name {}".format(v, doc.get("name")))
         trig = doc["userConfig"]["triggers"]["default"]
         has = [x for x in ("hooks", "tests") if os.path.exists(os.path.join(plugin_dir, x))]
-        if v == "skills-only" and (has or not os.path.isfile(os.path.join(plugin_dir, "bin", name + "-store"))):
-            raise Fail("X-variants: skills-only has {} or no launcher".format(has))
+        if v == "skills-only" and (has or not os.path.isfile(os.path.join(out, *launcher_rel(name).split("/")))):
+            raise Fail("X-variants: skills-only has {} or no {}".format(has, launcher_rel(name)))
+        old_dirs = [d for d in OLD_LAUNCHER_DIRS if os.path.lexists(os.path.join(plugin_dir, d))]
+        if old_dirs:
+            raise Fail("X-variants: {} ships plugin/{}/ (the launcher is in {}/)".format(v, old_dirs[0], LAUNCHER_DIR))
         if v == "skills-only" and trig is not True:
             raise Fail("X-variants: skills-only changed triggers")
         if v == "triggers-off" and (trig is not False or "hooks" not in has):
