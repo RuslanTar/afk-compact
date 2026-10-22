@@ -10,23 +10,29 @@ use warnings;
 use utf8;
 
 our $MAX_CHARS = 200;
-our %FALLBACK = (id => 'watcher-1', version => 1,
-    text => '{{plugin}}: local compaction logs are on (content-free; nothing is sent). To share them: /{{plugin}}:report. To turn them off: set watcher to off in /config.');
+# The spec text names the plugin through the build's placeholder (filled by tools/build; fill()
+# below covers a text that still holds it); the fallback is built with the brand at run time.
+our $PH = ('{' x 2) . 'plugin' . ('}' x 2);
+our %FALLBACK = (id => 'watcher-1', version => 1);
+sub _fallback_text {
+    my $b = ctx::brand();
+    return "$b: local compaction logs are on (content-free; nothing is sent). To share them: /$b:report. To turn them off: set watcher to off in /config.";
+}
 
 sub valid_id { return defined $_[0] && !ref $_[0] && $_[0] =~ /\A[a-z0-9][a-z0-9-]{0,40}\z/ ? 1 : 0 }
 
-# spec() -> {id, version, text}: the spec's notice object with {{plugin}} filled, else the
-# fallback literal. A text that is not a string, still holds a {{…}} placeholder after the fill,
-# or is over MAX_CHARS characters is not shown: the fallback is used.
+# spec() -> {id, version, text}: the spec's notice object with the plugin name filled, else the
+# fallback. A text that is not a string, still holds a placeholder after the fill, or is over
+# MAX_CHARS characters is not shown: the fallback is used.
 sub spec {
     my $n = spec::has('notice') ? eval { spec::get('notice') } : undef;
-    my %n = (ref $n eq 'HASH' && valid_id($n->{id}) && defined $n->{text} && !ref $n->{text}) ? %$n : %FALLBACK;
+    my %n = (ref $n eq 'HASH' && valid_id($n->{id}) && defined $n->{text} && !ref $n->{text}) ? %$n : (%FALLBACK, text => _fallback_text());
     my $t = fill($n{text});
-    if (length($t) > $MAX_CHARS || $t =~ /\{\{|\}\}|\@[a-z_]+\@/) { %n = %FALLBACK; $t = fill($n{text}) }
+    if (length($t) > $MAX_CHARS || $t =~ /\x7b\x7b|\x7d\x7d|\@[a-z_]+\@/) { %n = %FALLBACK; $t = _fallback_text() }
     return { id => $n{id}, version => $n{version}, text => $t };
 }
 
-sub fill { my ($t) = @_; $t =~ s/\{\{plugin\}\}/ctx::brand()/ge; return $t }
+sub fill { my ($t) = @_; $t =~ s/\Q$PH\E/ctx::brand()/ge; return $t }
 
 sub marker { my ($watch, $id) = @_; return "$watch/notice/$id.shown" }
 

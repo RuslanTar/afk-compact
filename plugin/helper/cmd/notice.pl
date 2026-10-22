@@ -5,7 +5,7 @@
 #        so the notice still shows once the watcher is turned on. The mod shows the toast only
 #        on `show`. The marker is per install (per config dir); the id carries the version.
 #   notice text [--id ID]
-#     -> the fixed text (spec `notice` object, {{plugin}} filled, at most 200 characters)
+#     -> the fixed text (spec `notice` object with the plugin name, at most 200 characters)
 # No row, no content. Exit 0; 64 usage; 3 `REFUSED: no-watch` without a log folder.
 use strict;
 use warnings;

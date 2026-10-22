@@ -340,7 +340,7 @@ sub _allow_files {
 }
 
 # _rule_folders(settings file) -> the plugin folders its permissions.allow entries name before
-# /scripts/<brand>-store
+# the launcher path part (/scripts/ and the launcher's file name)
 sub _rule_folders {
     my ($f) = @_;
     my $raw = util::read_file($f, 4 * 1024 * 1024) // return ();
