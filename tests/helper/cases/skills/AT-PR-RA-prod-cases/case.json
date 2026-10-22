@@ -1,0 +1,759 @@
+{
+ "id": "AT-PR-RA-prod-cases (fix-to-skills 2: settings/prod-cases.json)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "needs": [
+  "fixture:settings/prod-cases.json",
+  "fixture:settings/relaunch-allow-make-test.json",
+  "fixture:settings/relaunch-allow-reindex-prod.json"
+ ],
+ "note": "S-SETTINGS B, C (AT-PR-01..04, AT-RA-01, -02; SKL-02): the 17 recorded commands of tests/fixtures/settings/prod-cases.json, each as a job of this session (k1..k17, in the file's order), with a published auto recipe holding expected outputs exactly when the file says so; heal-check prints the file's effects class under its settings file (copied from tests/fixtures, none = no options), which the BUILD-PLAN §3.7 order gives: unknown > outward > prod-write > prod-read > none > local > unknown. unknown and prod-write never print run:. Generated from the fixture; regenerate when it changes.",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {}
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_00\", \"name\": \"Bash\", \"input\": {\"command\": \"kubectl get pods --context prod-eu; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_00\", \"content\": \"Command running in background with ID: k1.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k1\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"kubectl get pods --context prod-eu; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: k2.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k2\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"sh scripts/reindex.sh --env production; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: k3.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k3\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"kubectl get pods --context=acme-eu1; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: k4.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k4\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_04\", \"name\": \"Bash\", \"input\": {\"command\": \"kubectl get pods --context=acme-eu1; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_04\", \"content\": \"Command running in background with ID: k5.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k5\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_05\", \"name\": \"Bash\", \"input\": {\"command\": \"kubectl get pods --context=acme-eu1; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_05\", \"content\": \"Command running in background with ID: k6.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k6\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_06\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la product-build; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_06\", \"content\": \"Command running in background with ID: k7.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k7\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_07\", \"name\": \"Bash\", \"input\": {\"command\": \"make test; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_07\", \"content\": \"Command running in background with ID: k8.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k8\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_08\", \"name\": \"Bash\", \"input\": {\"command\": \"make test ARGS='a;b'; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_08\", \"content\": \"Command running in background with ID: k9.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k9\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_09\", \"name\": \"Bash\", \"input\": {\"command\": \"make test && ./x.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_09\", \"content\": \"Command running in background with ID: k10.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k10\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_10\", \"name\": \"Bash\", \"input\": {\"command\": \"make test; rm a; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_10\", \"content\": \"Command running in background with ID: k11.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k11\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_11\", \"name\": \"Bash\", \"input\": {\"command\": \"make test | tee out.log; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_11\", \"content\": \"Command running in background with ID: k12.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k12\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_12\", \"name\": \"Bash\", \"input\": {\"command\": \"make test $(cat args.txt); echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_12\", \"content\": \"Command running in background with ID: k13.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k13\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_13\", \"name\": \"Bash\", \"input\": {\"command\": \"make test `cat args.txt`; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_13\", \"content\": \"Command running in background with ID: k14.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k14\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_14\", \"name\": \"Bash\", \"input\": {\"command\": \"make test || true; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_14\", \"content\": \"Command running in background with ID: k15.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k15\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_15\", \"name\": \"Bash\", \"input\": {\"command\": \"make test & sleep 1; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_15\", \"content\": \"Command running in background with ID: k16.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k16\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_16\", \"name\": \"Bash\", \"input\": {\"command\": \"make test; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_16\", \"content\": \"Command running in background with ID: k17.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"k17\"}}\n"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-0.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"k1\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k2\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k3\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k4\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k5\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k6\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k7\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k8\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k9\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k10\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k11\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k12\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k13\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k14\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k15\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k16\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"k17\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/out/k1.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k1.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k2.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k2.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k3.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k3.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k4.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k4.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k5.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k5.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k6.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k6.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k7.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k7.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k8.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k8.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k9.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k9.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k10.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k10.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k11.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k11.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k12.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k12.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k13.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k13.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k14.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k14.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k15.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k15.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k16.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k16.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/k17.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/k17.output",
+     "minutes": 60
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "now": "2026-10-21T14:05:12+03:00",
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$STAGE/restart/B-1.md",
+     "content": "item: B-1 · runtime id k1 · class auto\nscript: none\ncommand: kubectl get pods --context prod-eu; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-read.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-read.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-2.md",
+     "content": "item: B-2 · runtime id k2 · class auto\nscript: none\ncommand: kubectl get pods --context prod-eu; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-read-allow.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-read-allow.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-3.md",
+     "content": "item: B-3 · runtime id k3 · class auto\nscript: none\ncommand: sh scripts/reindex.sh --env production; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-write-allowlisted.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-write-allowlisted.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-4.md",
+     "content": "item: B-4 · runtime id k4 · class auto\nscript: none\ncommand: kubectl get pods --context=acme-eu1; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-pattern-hit.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-pattern-hit.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-5.md",
+     "content": "item: B-5 · runtime id k5 · class auto\nscript: none\ncommand: kubectl get pods --context=acme-eu1; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-pattern-none.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-pattern-none.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-6.md",
+     "content": "item: B-6 · runtime id k6 · class auto\nscript: none\ncommand: kubectl get pods --context=acme-eu1; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-pattern-dropped.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-pattern-dropped.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-7.md",
+     "content": "item: B-7 · runtime id k7 · class auto\nscript: none\ncommand: ls -la product-build; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/pr-product.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/pr-product.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-8.md",
+     "content": "item: B-8 · runtime id k8 · class auto\nscript: none\ncommand: make test; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-local.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-local.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-9.md",
+     "content": "item: B-9 · runtime id k9 · class auto\nscript: none\ncommand: make test ARGS='a;b'; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-quoted-semicolon.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-quoted-semicolon.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-10.md",
+     "content": "item: B-10 · runtime id k10 · class auto\nscript: none\ncommand: make test && ./x.sh; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-and.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-and.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-11.md",
+     "content": "item: B-11 · runtime id k11 · class auto\nscript: none\ncommand: make test; rm a; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-semicolon.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-semicolon.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-12.md",
+     "content": "item: B-12 · runtime id k12 · class auto\nscript: none\ncommand: make test | tee out.log; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-pipe.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-pipe.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-13.md",
+     "content": "item: B-13 · runtime id k13 · class auto\nscript: none\ncommand: make test $(cat args.txt); echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-subst.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-subst.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-14.md",
+     "content": "item: B-14 · runtime id k14 · class auto\nscript: none\ncommand: make test `cat args.txt`; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-backquote.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-backquote.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-15.md",
+     "content": "item: B-15 · runtime id k15 · class auto\nscript: none\ncommand: make test || true; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-or.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-or.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-16.md",
+     "content": "item: B-16 · runtime id k16 · class auto\nscript: none\ncommand: make test & sleep 1; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ra-background.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ra-background.bin\n"
+    },
+    {
+     "write": "$STAGE/body.md",
+     "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: 16 running: B-1 k1 to B-16 k16; see In flight\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-1 · k1 | shell · job k1 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k1.output` | report | /clear, exit | auto · restart/B-1.md |\n| B-2 · k2 | shell · job k2 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k2.output` | report | /clear, exit | auto · restart/B-2.md |\n| B-3 · k3 | shell · job k3 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k3.output` | report | /clear, exit | auto · restart/B-3.md |\n| B-4 · k4 | shell · job k4 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k4.output` | report | /clear, exit | auto · restart/B-4.md |\n| B-5 · k5 | shell · job k5 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k5.output` | report | /clear, exit | auto · restart/B-5.md |\n| B-6 · k6 | shell · job k6 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k6.output` | report | /clear, exit | auto · restart/B-6.md |\n| B-7 · k7 | shell · job k7 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k7.output` | report | /clear, exit | auto · restart/B-7.md |\n| B-8 · k8 | shell · job k8 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k8.output` | report | /clear, exit | auto · restart/B-8.md |\n| B-9 · k9 | shell · job k9 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k9.output` | report | /clear, exit | auto · restart/B-9.md |\n| B-10 · k10 | shell · job k10 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k10.output` | report | /clear, exit | auto · restart/B-10.md |\n| B-11 · k11 | shell · job k11 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k11.output` | report | /clear, exit | auto · restart/B-11.md |\n| B-12 · k12 | shell · job k12 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k12.output` | report | /clear, exit | auto · restart/B-12.md |\n| B-13 · k13 | shell · job k13 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k13.output` | report | /clear, exit | auto · restart/B-13.md |\n| B-14 · k14 | shell · job k14 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k14.output` | report | /clear, exit | auto · restart/B-14.md |\n| B-15 · k15 | shell · job k15 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k15.output` | report | /clear, exit | auto · restart/B-15.md |\n| B-16 · k16 | shell · job k16 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/k16.output` | report | /clear, exit | auto · restart/B-16.md |\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    }
+   ]
+  },
+  {
+   "name": "publish the recipes (no job rows yet)",
+   "cwd": "$TMP/repo",
+   "now": "2026-10-21T14:05:12+03:00",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k1\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"kubectl get pods --context prod-eu; echo \\\"__exit $?\\\"\", \"command_sha256\": \"288eba46d6d29d3563b1cde093361eb277812bfb8ba5899aa0e94c6866f3a85c\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k1.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k2\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"kubectl get pods --context prod-eu; echo \\\"__exit $?\\\"\", \"command_sha256\": \"288eba46d6d29d3563b1cde093361eb277812bfb8ba5899aa0e94c6866f3a85c\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k2.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh scripts/reindex.sh --env production; echo \\\"__exit $?\\\"\", \"command_sha256\": \"2db7dedb57f6b79a93dc53c5cbec6ebfa1f9782fd89ad55664d625b8b5ff7978\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k4\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"kubectl get pods --context=acme-eu1; echo \\\"__exit $?\\\"\", \"command_sha256\": \"c0fa9e78340d3361f5387867cb9d0538b29e87108632a66e4bb4f07e60a054ad\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k4.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k5\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"kubectl get pods --context=acme-eu1; echo \\\"__exit $?\\\"\", \"command_sha256\": \"c0fa9e78340d3361f5387867cb9d0538b29e87108632a66e4bb4f07e60a054ad\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k5.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k6\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"kubectl get pods --context=acme-eu1; echo \\\"__exit $?\\\"\", \"command_sha256\": \"c0fa9e78340d3361f5387867cb9d0538b29e87108632a66e4bb4f07e60a054ad\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k6.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k7\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la product-build; echo \\\"__exit $?\\\"\", \"command_sha256\": \"309dc3bedbff754b406cae36101cde5446369904010f711b76ae47b6790c2d1f\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k7.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k8\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test; echo \\\"__exit $?\\\"\", \"command_sha256\": \"bc7f48c0794d7d32ce54da45f20a19d42e3ebf7fc8827c9dfcbb1d4d6d3b9d4b\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k8.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k9\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test ARGS='a;b'; echo \\\"__exit $?\\\"\", \"command_sha256\": \"a04c21922578745b13182f99aeb05616748b394859495a27d2852844d941c12b\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k9.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k10\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test && ./x.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"61a00e8cd8527d685fbc37bfdc22923904436e7263e3c6575c8c60858e7b2837\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k10.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k11\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test; rm a; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9b0dc0d0e8233a5fd54908000903a9fd1961d67660bfe498d35cd2cc436c25b8\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k11.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k12\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test | tee out.log; echo \\\"__exit $?\\\"\", \"command_sha256\": \"0ec6b18241774a1c0b58be2816f023521d496fa4b09b16542d312240f7bd95c2\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k12.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k13\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test $(cat args.txt); echo \\\"__exit $?\\\"\", \"command_sha256\": \"0fc930485c6978adc4094b39990cac84727adfff3c10c63bdccd6b885d65a43f\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k13.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k14\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test `cat args.txt`; echo \\\"__exit $?\\\"\", \"command_sha256\": \"78dde903988fb1be948f88d31b9941bbbfae6d9ee5daf56d159dcf88d8ca6ee0\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k14.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k15\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test || true; echo \\\"__exit $?\\\"\", \"command_sha256\": \"6cb9ffcae173bccfdbbbd6a9b53d88f19cb30b0881c977249c3ace3cac07d377\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k15.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k16\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test & sleep 1; echo \\\"__exit $?\\\"\", \"command_sha256\": \"532d664de52966b79ea0b9c18c12149176c1c7a983b989416ebc05a74aab151c\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k16.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"k17\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"make test; echo \\\"__exit $?\\\"\", \"command_sha256\": \"bc7f48c0794d7d32ce54da45f20a19d42e3ebf7fc8827c9dfcbb1d4d6d3b9d4b\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/k17.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
+    }
+   ]
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {}
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-read (k1): AT-PR-01, AT-PR-02 under no settings file: effects prod-read (forbid: REFUSED: effects-prod-read plus ask-command:; allow (file placement): ok plus run:)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects prod-read$"
+    ],
+    "stdout_lacks": [
+     "effects (?!prod-read$)"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "settings/prod-reads-allow.json",
+     "to": "$HOME/.claude/settings.json",
+     "subst": true
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-read-allow (k2): AT-PR-02 under settings/prod-reads-allow.json: effects prod-read",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k2"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects prod-read$"
+    ],
+    "stdout_lacks": [
+     "effects (?!prod-read$)"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "settings/relaunch-allow-reindex-prod.json",
+     "to": "$HOME/.claude/settings.json",
+     "subst": true
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-write-allowlisted (k3): AT-PR-03 under settings/relaunch-allow-reindex-prod.json: effects prod-write (a production match outranks the relaunch_allow match; refused under allow; never local)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k3"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects prod-write$"
+    ],
+    "stdout_lacks": [
+     "effects (?!prod-write$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "settings/prod-patterns.json",
+     "to": "$HOME/.claude/settings.json",
+     "subst": true
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-pattern-hit (k4): AT-PR-04 under settings/prod-patterns.json: effects prod-read",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k4"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects prod-read$"
+    ],
+    "stdout_lacks": [
+     "effects (?!prod-read$)"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {}
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-pattern-none (k5): AT-PR-04 under no settings file: effects none (without the pattern the same command is plain read-only)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k5"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects none$"
+    ],
+    "stdout_lacks": [
+     "effects (?!none$)"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "settings/prod-patterns-invalid.json",
+     "to": "$HOME/.claude/settings.json",
+     "subst": true
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-pattern-dropped (k6): AT-PR-04 under settings/prod-patterns-invalid.json: effects prod-read (the valid 4th pattern survives the three bad ones)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k6"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects prod-read$"
+    ],
+    "stdout_lacks": [
+     "effects (?!prod-read$)"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {}
+    }
+   ]
+  },
+  {
+   "name": "prod-cases pr-product (k7): AT-PR-04 under no settings file: effects none (product-build does not match prod-token)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k7"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects none$"
+    ],
+    "stdout_lacks": [
+     "effects (?!none$)"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "settings/relaunch-allow-make-test.json",
+     "to": "$HOME/.claude/settings.json",
+     "subst": true
+    }
+   ]
+  },
+  {
+   "name": "prod-cases ra-local (k8): AT-RA-01, AT-RA-02 under settings/relaunch-allow-make-test.json: effects local",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k8"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects local$"
+    ],
+    "stdout_lacks": [
+     "effects (?!local$)"
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-quoted-semicolon (k9): AT-RA-02 under settings/relaunch-allow-make-test.json: effects local (a quoted ; is no chaining)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k9"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects local$"
+    ],
+    "stdout_lacks": [
+     "effects (?!local$)"
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-and (k10): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k10"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-semicolon (k11): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k11"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-pipe (k12): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k12"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-subst (k13): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k13"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-backquote (k14): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k14"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-or (k15): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k15"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-background (k16): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k16"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "prod-cases ra-no-recipe (k17): AT-RA-02 under settings/relaunch-allow-make-test.json: effects unknown (no recipe with expected outputs)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "k17"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "stdout_has": [
+     "^verdict: [A-Z-]+ · confidence (high|low) · effects unknown$"
+    ],
+    "stdout_lacks": [
+     "effects (?!unknown$)",
+     "^run: "
+    ]
+   }
+  }
+ ]
+}

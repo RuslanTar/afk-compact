@@ -13,11 +13,16 @@ package skills::lint;
 #        carried-stamp exemption (CR-F29);
 #      repo_mode and export_text (the body after the D-12 §1.5.5 rewrite) for
 #        private-path (repo mode only);
-#      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2).
+#      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2);
+#      2026-10-22 (T-TEXT E6): acuity_floor (the stage meta's) for the acuity advisory;
+#      (Q-ADAPTER QA-4) queue_mode (the stage meta's: off|on|degraded) for queue-off.
+# The result also carries `acuity`: the rating found in Resume here, or undef.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
 # private-path classes come from the spec too (fail closed: spec-missing <key>).
 use strict;
 use warnings;
+use utf8;
+use skills::util;
 use skills::spec;
 use skills::core;
 
@@ -109,7 +114,7 @@ sub lint {
         my $l = $lines[$i];
         my $hit = ($i == 0 && $l =~ /\A---\s*\z/)
             || ($mre && $l =~ $mre) || ($sre && $l =~ $sre)
-            || ($b ne '' && (index($l, "\x{e2}\x{9f}\x{aa}$b v1 ") >= 0 || index($l, "\x{e2}\x{9f}\x{aa}/$b n=") >= 0));
+            || ($b ne '' && (index($l, "\x{27ea}$b v1 ") >= 0 || index($l, "\x{27ea}/$b n=") >= 0));
         push @block, [ 'meta-in-draft', 'line ' . ($i + 1) ] if $hit;
     }
 
@@ -124,12 +129,12 @@ sub lint {
         my ($s1) = map { $_->[1] =~ /\A\s*Step 1:\s*(.*)\z/ ? $1 : () } @{ $rh->{body} };
         my ($n1) = map { $_->[1] =~ /\A\s*1\.\s+(.*)\z/ ? $1 : () } @{ $ns->{body} };
         if (defined $s1) {
-            $s1 =~ s/\s+\x{e2}\x{80}\x{94}\s+for\b.*\z//;
+            $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
             $s1 =~ s/\s*\|?\s*proposed\s*\z//;
             $s1 =~ s/\A\s+|\s+\z//g;
         }
         if (defined $n1) {
-            $n1 =~ s/\s+\x{e2}\x{80}\x{94}\s+done when\b.*\z//;
+            $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
             $n1 =~ s/\A\s+|\s+\z//g;
         }
         push @block, [ 'step1-mismatch', "line $rh->{line}" ] if !defined $s1 || !defined $n1 || $s1 ne $n1;
@@ -282,6 +287,21 @@ sub lint {
         }
     }
 
+    # ---- queue-off (Q-ADAPTER QA-4): with no queue configured (begin measured mode off),
+    # nothing was queued: a typed `Queued:` line anywhere, or a `· queued` mark on an Open
+    # questions row, blocks. On with a spec that lists the id (T-TEXT E2).
+    if (($in->{queue_mode} // '') eq 'off' && skills::spec::lint_ids()->{blocking}{'queue-off'}) {
+        for my $i (0 .. $#lines) {
+            push @block, [ 'queue-off', 'line ' . ($i + 1) ] if $lines[$i] =~ /\A[\s>|*-]*Queued:/;
+        }
+        my ($oq) = grep { /\AOpen questions/ } map { $_->{name} } @$mains;
+        my $qs = $oq ? $by_name{$oq} : undef;
+        for my $r (@{ $qs ? $qs->{body} : [] }) {
+            next if $r->[1] =~ /\A[\s>|*-]*Queued:/;
+            push @block, [ 'queue-off', "line $r->[0]" ] if $r->[1] =~ /·\s*queued\b/;
+        }
+    }
+
     # ---- secrets: HARD blocks; WARN is advisory with rule ids (D-13)
     my (%warn);
     my @texts = ([ 'body.md', $body ], (map { [ "restart/$_", $in->{recipes}{$_} ] } sort keys %{ $in->{recipes} || {} }),
@@ -294,13 +314,37 @@ sub lint {
     }
 
     # ---- advisories
-    push @adv, [ 'size', length($body) . ' B' ] if length($body) > 20480;
+    my $size = skills::util::blen($body);
+    push @adv, [ 'size', "$size B" ] if $size > 20480;
     my $caps = skills::spec::section_caps();
     for my $name (sort keys %$caps) {
         my $s = $by_name{$name} or next;
         my $chars = 0;
         $chars += _chars($_->[1]) + 1 for @{ $s->{body} };
-        push @adv, [ 'section-cap', "$name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
+        push @adv, [ 'section-cap', "## $name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
+    }
+    # store-path (PKG-RUNTIME A.4): a body line naming the launcher by its path; handoffs
+    # write the symbolic `<store>` (the path changes with each plugin update and names the
+    # home folder). On with a spec that lists the id (T-TEXT E2).
+    if ($b ne '' && skills::spec::lint_ids()->{advisory}{'store-path'}) {
+        my $sp = '/scripts/' . $b . '-store';
+        for my $i (0 .. $#lines) {
+            push @adv, [ 'store-path', 'line ' . ($i + 1) ] if index($lines[$i], $sp) >= 0;
+        }
+    }
+    # Acuity (T-TEXT E6): the writer's rating in Resume here (the spec's acuity_re) against the
+    # floor `begin` measured (acuity_floor in the stage meta): missing, or below the floor. A
+    # spec without acuity_re (older than T-TEXT E2) has no such check.
+    my $acuity;
+    if (my $are = skills::spec::acuity_re()) {
+        for my $r (@{ $rh ? $rh->{body} : [] }) { if ($r->[1] =~ $are) { $acuity = $1; last } }
+        my @w = @{ skills::spec::acuity_words() };
+        my %rank = map { $w[$_] => $_ } 0 .. $#w;
+        my $floor = $in->{acuity_floor};
+        if (!defined $acuity) { push @adv, [ 'acuity', 'missing' ] }
+        elsif (defined $floor && defined $rank{$floor} && defined $rank{$acuity} && $rank{$acuity} < $rank{$floor}) {
+            push @adv, [ 'acuity', "below $floor" ];
+        }
     }
     # Clutter classes from the spec block (WATCHER M-13): code-block (max_lines),
     # log-line and stack-line, hash-run (min_run).
@@ -356,7 +400,7 @@ sub lint {
     my $ids = skills::spec::lint_ids();
     for my $r (@block) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{blocking}{ $r->[0] } }
     for my $r (@adv) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{advisory}{ $r->[0] } }
-    return { blocking => \@block, advisory => \@adv };
+    return { blocking => \@block, advisory => \@adv, acuity => $acuity };
 }
 
 # A U-, D- or X- ledger line's content with its bullet, id and carry tags removed and
@@ -400,7 +444,8 @@ sub _covered {
     return 0;
 }
 
-sub _chars { my ($s) = @_; my $n = () = $s =~ /[\x00-\x7f\xc0-\xff]/g; return $n }
+# Characters of a line (text is characters, P5-FOLD A4).
+sub _chars { my ($s) = @_; return length skills::util::text($s) }
 
 sub _norm { my ($l) = @_; $l =~ s/\s+/ /g; $l =~ s/\A | \z//g; return $l }
 

@@ -9,6 +9,7 @@ package skills::begin;
 # the D-12 mode and, in repo mode, the export target are printed.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use File::Basename ();
 use skills::util;
@@ -23,7 +24,7 @@ use skills::store;
 our @KEYS = qw(checked_at session repo worktree branch head porcelain ahead behind in_progress
                bucket stem stage nonce previous_handoff previous_kind previous_sid8 previous_stamp
                own_previous_handoff carry_notice next_ids own_latest newer_foreign ownership gsd
-               queued_line inflight_measured tmp_candidates config reuse_window_min mode export_target);
+               queued_line queue inflight_measured tmp_candidates config reuse_window_min mode export_target);
 our $REUSE_WINDOW_MIN = 15;
 our $MAX_BYTES = 3072;
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
@@ -58,7 +59,7 @@ sub run {
     die skills::cli::refuse($refused) if $refused;
 
     my $now = skills::util::now();
-    my $cwd = skills::util::abs_path($o->{cwd} // Cwd::getcwd());
+    my $cwd = skills::util::abs_path($o->{cwd} // skills::util::cwd());
     my $id = skills::ctx::resolve_sid($ctx, $o->{sid});
     my $sid = $id->{sid};
     my $lin = skills::ctx::lineage_of($ctx, $sid) || {};
@@ -194,7 +195,7 @@ sub run {
     my $gsd = $g->{in_git} ? skills::core::gsd($g->{worktree}) : undef;
     $gsd = [ @$gsd[0 .. ($#$gsd < 7 ? $#$gsd : 7)] ] if $gsd;
 
-    my ($queued_line, $queue_lane) = _queue($ctx, $sid);
+    my ($queued_line, $queue_lane, $queue) = _queue($ctx, $sid);
     my $inflight = _inflight($ctx, $sid, $g);
     my $tmp = _tmp_candidates($ctx, $sid);
 
@@ -239,6 +240,7 @@ sub run {
         ownership         => \%ownership,
         gsd               => $gsd,
         queued_line       => $queued_line,
+        queue             => $queue,
         inflight_measured => $inflight,
         tmp_candidates    => $tmp,
         config            => \%config,
@@ -260,11 +262,15 @@ sub run {
         previous_session_id => $lin->{previous_session_id}, lineage_reason => $lin->{lineage_reason} // 'none',
         previous_handoff => $out{previous_handoff}, previous_kind => $carry{previous_kind},
         previous_sid8 => $carry{previous_sid8}, previous_stamp => $carry{previous_stamp},
-        own_previous_handoff => $carry{own_previous_handoff}, queue_lane => $queue_lane,
+        own_previous_handoff => $carry{own_previous_handoff}, queue_lane => $queue_lane, queue_mode => $queue->{mode},
         handoff_ht => ($ht ? $ht->{ht} : undef), slug => $topic,
         mode => $m->{mode}, mode_reason => $m->{reason},
         gsd_state => ($gsd && $g->{worktree} && -f "$g->{worktree}/.planning/STATE.md" ? "$g->{worktree}/.planning/STATE.md" : undef),
         identity_degraded => $id->{degraded},
+        # T-TEXT E6: the Acuity floor code measured (publish's acuity advisory reads it): a
+        # merge, rebase, cherry-pick or revert in progress -> unstable; a measured in-flight
+        # row -> watch; else stable.
+        acuity_floor => (@{ $g->{in_progress} || [] } ? 'unstable' : @{ $inflight->{tasks} || [] } ? 'watch' : 'stable'),
         settings => { map { $_ => $ctx->{settings}{$_} } grep { !/\A_/ } keys %{ $ctx->{settings} } },
     );
     if (!$resumed) {
@@ -371,37 +377,16 @@ sub _foreign_commits {
              hashes => [ map { $_->{short} } @foreign[0 .. ($#foreign < 4 ? $#foreign : 4)] ] };
 }
 
-# Queue lane listing (OD-21, TPL §4.6): only with queue_cmd set.
+# Queue lane (OD-21, TPL §4.6; Q-ADAPTER QA-1, QA-B2): queue::lane is the one list parser.
+# Returns (queued_line, lane, {mode, why}): with queue_cmd empty, mode off and no exec; a
+# reply that breaks the contract gives degraded (<why>) and neither a Queued: line nor a lane.
 sub _queue {
     my ($ctx, $sid) = @_;
-    my $cmd = $ctx->{settings}{queue_cmd};
-    return (undef, undef) if skills::util::unset_value($cmd);
-    my $r = skills::core::queue_call([ $cmd, 'list', '--json', '--session', $sid ], 5000);
-    return ('Queued: not measured (timeout)', undef) if $r->{timed_out};
-    return (undef, undef) if $r->{rc} != 0;
-    my $d = eval { skills::util::json_decode($r->{out}) };
-    my $q = queue_listing($d) or return (undef, undef);
-    my $lane = $q->{lane};
-    return (undef, undef) unless defined $lane && $lane =~ $LANE_RE;
-    my @ids = @{ $q->{open} };
-    return (undef, undef) if $lane =~ /\Aauto:/ && !@ids;
-    my $line = sprintf('Queued: %d open in %s (%s); answered only via the queue; never re-ask.',
-        scalar @ids, $q->{label} // $lane, join(', ', @ids) || 'none');
-    return ($line, $lane);
-}
-
-# Normalise a `list --json` answer → {lane, label, open => [ids]} (shape assumed).
-sub queue_listing {
-    my ($d) = @_;
-    $d = $d->[0] if ref $d eq 'ARRAY' && ref $d->[0] eq 'HASH' && exists $d->[0]{lane};
-    return undef unless ref $d eq 'HASH';
-    my $lane = $d->{lane} // $d->{lane_id} // $d->{id};
-    $lane = $lane->{id} if ref $lane eq 'HASH';
-    my $items = $d->{open} // $d->{pending} // $d->{items} // $d->{questions} // [];
-    $items = [] unless ref $items eq 'ARRAY';
-    my @ids = map { ref $_ eq 'HASH' ? ($_->{id} // ()) : $_ } @$items;
-    @ids = grep { defined && !ref && /\A[A-Za-z0-9._:\/-]{1,64}\z/ } @ids;
-    return { lane => $lane, label => (defined $d->{label} && !ref $d->{label} ? $d->{label} : undef), open => \@ids };
+    my $l = skills::core::queue_lane($sid, $ctx->{settings}{queue_cmd}, 5000);
+    my $m = skills::core::queue_mode($l);
+    return (undef, undef, $m) unless ($l->{status} // '') eq 'ok';
+    my $lane = defined $l->{lane} && $l->{lane} =~ $LANE_RE ? $l->{lane} : undef;
+    return ($l->{queued_line}, $lane, $m);
 }
 
 # Last background sidecar slot of this session (MOD §7 ring): the highest seq, never the
@@ -478,8 +463,8 @@ sub _fit {
         sub { my $c = $out->{config}; my $did = 0; for (values %$c) { $did = 1 if delete $_->{source} } $did },
     );
     for my $t (@trim) {
-        while (length($j) > $MAX_BYTES && $t->()) { $j = skills::util::json_encode($out) }
-        last if length($j) <= $MAX_BYTES;
+        while (skills::util::blen($j) > $MAX_BYTES && $t->()) { $j = skills::util::json_encode($out) }
+        last if skills::util::blen($j) <= $MAX_BYTES;
     }
     return $j;
 }

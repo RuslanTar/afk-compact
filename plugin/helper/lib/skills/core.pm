@@ -21,6 +21,13 @@ package skills::core;
 #   evidence::copy($src,$dir,\%caps,$index) -> {status, copy, bytes, sha256, mtime, scan, rules}
 #   gsd::read($worktree)               -> arrayref of lines | {lines=>[...]} | undef
 #   queue::call(\@argv, $budget_ms)    -> {rc|exit, out|stdout, timed_out|timeout}
+#   queue::lane($sid, $cmd, $budget_ms) -> {status => ok|off|unknown|timeout, why, lane, open,
+#                                        ids, label, queued_line}: the one `list --json` parser
+#                                        (Q-ADAPTER QA-1; CORE-18 makes the queue-stub/v1 tag
+#                                        required: why untagged|schema)
+#   queue::caps_get($cmd)              -> {commands => [..]|undef, listed, add}
+#   queue::mode($cmd)                  -> {mode => off|on|degraded, why} with no queue call (CORE-18)
+#   queue::must_exist($cmd)            -> 1 when the cached commands hold adopt:must-exist (CORE-18)
 #   bucket::resolve($sid, $cwd, $topic, $settings) -> {path, source}; path absolute
 #                                        (<root>/<repo>/<bucket>); settings passed as a 4th
 #                                        argument because a skill flag can move the root
@@ -33,6 +40,7 @@ package skills::core;
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
 use strict;
 use warnings;
+use utf8;
 use POSIX ();
 use skills::util;
 use settings;
@@ -62,7 +70,7 @@ sub settings {
     my $s = ref $r eq 'HASH' ? $r->{settings} : undef;
     $s = $s->{values} if ref $s eq 'HASH' && ref $s->{values} eq 'HASH';
     die "settings: no result\n" unless ref $s eq 'HASH';
-    return $s;
+    return skills::util::text_deep($s);
 }
 
 # The session id the core context logs and locks under (rc), once a skill knows it.
@@ -76,13 +84,13 @@ sub paths {
     my ($s, $sid) = @_;
     my $p = paths::for($s, $sid);
     die "paths: no result\n" unless ref $p eq 'HASH' && $p->{root};
-    return $p;
+    return skills::util::text_deep($p);
 }
 
 # undef when the roots are safe, else the refusal reason.
 sub roots_check {
     my ($s) = @_;
-    my $r = roots::check($s);
+    my $r = skills::util::text_deep(roots::check($s));
     return undef if !defined $r;
     if (ref $r eq 'HASH') {
         return undef if $r->{ok};
@@ -234,7 +242,7 @@ sub evidence_copy {
     $r->{sha256} //= '';
     $r->{bytes}  //= 0;
     $r->{scan}   //= $r->{status} eq 'copied' ? 'full' : $r->{status};
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 sub gsd {
@@ -244,7 +252,7 @@ sub gsd {
     $r = $r->{lines} if ref $r eq 'HASH';
     $r = [ split /\n/, $r ] unless ref $r;
     return undef unless ref $r eq 'ARRAY' && @$r;
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 sub queue_call {
@@ -254,9 +262,87 @@ sub queue_call {
     return { rc => -1, out => '', timed_out => 0, error => 1 } unless ref $r eq 'HASH';
     return {
         rc        => $r->{rc} // $r->{exit} // -1,
-        out       => $r->{out} // $r->{stdout} // '',
+        out       => skills::util::text($r->{out} // $r->{stdout} // ''),
         timed_out => $r->{timed_out} // $r->{timeout} // 0,
     };
+}
+
+# ---- queue adapter (Q-ADAPTER QA-1, QA-B2): one parser (queue::lane) for begin; locate
+# reads the mode without a queue call (queue_mode_now below).
+# Mode: off (queue_cmd empty: no exec, no trace) · degraded (<why>) when the setting is not
+# an executable file or the list reply broke the contract (untagged · schema · not-json ·
+# exit · timeout) · else on (a reply that keeps the contract but names no usable lane is on).
+my %QUEUE_ON_WHY = map { $_ => 1 } qw(no-lane preview auto-empty);
+
+sub queue_lane {
+    my ($sid, $cmd, $budget) = @_;
+    return { status => 'off' } if skills::util::unset_value($cmd);
+    my $r = eval { queue::lane(skills::util::bytes($sid // 'unknown'), skills::util::bytes($cmd), $budget // 5000) };
+    return { status => 'unknown', why => 'exit' } unless ref $r eq 'HASH';
+    return skills::util::text_deep($r);
+}
+
+# {mode => off|on|degraded, why => …} from a queue_lane result.
+sub queue_mode {
+    my ($l) = @_;
+    my $st = (ref $l eq 'HASH' ? $l->{status} : undef) // 'unknown';
+    return { mode => 'off' } if $st eq 'off';
+    return { mode => 'on' } if $st eq 'ok';
+    return { mode => 'degraded', why => 'timeout' } if $st eq 'timeout';
+    my $why = $l->{why} // 'exit';
+    return { mode => 'on' } if $QUEUE_ON_WHY{$why};
+    return { mode => 'degraded', why => $why };
+}
+
+# {mode => off|on|degraded, why => …} without running the queue tool (locate, QA-1): WP-core's
+# queue::mode($cmd) (CORE-18: the setting, the file, and this session's last list outcome, so
+# a broken reply that begin saw shows as degraded (<why>) here too). No exec, no queue_cmd
+# trace, no caps-cache write. Without that seam (or when it fails or answers another shape):
+# the setting alone (queue_mode_setting).
+my %QUEUE_MODES = map { $_ => 1 } qw(off on degraded);
+sub queue_mode_now {
+    my ($cmd) = @_;
+    return { mode => 'off' } if skills::util::unset_value($cmd);
+    my $m = defined &queue::mode ? eval { queue::mode(skills::util::bytes($cmd)) } : undef;
+    if (ref $m eq 'HASH' && defined $m->{mode} && $QUEUE_MODES{ $m->{mode} }
+        && ($m->{mode} ne 'degraded' || (defined $m->{why} && !ref $m->{why} && $m->{why} =~ /\A[a-z-]{1,32}\z/))) {
+        return skills::util::text_deep({ mode => $m->{mode}, ($m->{mode} eq 'degraded' ? (why => $m->{why}) : ()) });
+    }
+    return queue_mode_setting($cmd);
+}
+
+# The setting alone: off when queue_cmd is empty, degraded (not-executable) when it is not an
+# executable file, else on (the fallback of queue_mode_now).
+sub queue_mode_setting {
+    my ($cmd) = @_;
+    return { mode => 'off' } if skills::util::unset_value($cmd);
+    my $b = skills::util::bytes($cmd);
+    return { mode => 'degraded', why => 'not-executable' } unless -f $b && -x _;
+    return { mode => 'on' };
+}
+
+# `off`, `on` or `degraded (<why>)`: the form begin's queue line, locate and /status print.
+sub queue_mode_text {
+    my ($m) = @_;
+    return $m->{mode} eq 'degraded' ? "degraded ($m->{why})" : $m->{mode};
+}
+
+# The cached `commands` of the last list reply for this queue_cmd file ([] when none).
+sub queue_commands {
+    my ($cmd) = @_;
+    my $c = eval { queue::caps_get(skills::util::bytes($cmd)) };
+    return (ref $c eq 'HASH' && ref $c->{commands} eq 'ARRAY') ? skills::util::text_deep($c->{commands}) : [];
+}
+
+# 1 when `lane adopt` passes --must-exist (QA-2): WP-core's queue::must_exist($cmd) (CORE-18),
+# else the same test over the cached commands (queue_commands).
+sub queue_must_exist {
+    my ($cmd) = @_;
+    if (defined &queue::must_exist) {
+        my $r = eval { queue::must_exist(skills::util::bytes($cmd)) };
+        return $r ? 1 : 0 if defined $r;
+    }
+    return (grep { $_ eq 'adopt:must-exist' } @{ queue_commands($cmd) }) ? 1 : 0;
 }
 
 sub bucket_resolve {
@@ -265,16 +351,16 @@ sub bucket_resolve {
     # which settings() built from the same flags; the 4th argument is git facts, not settings.
     my $r = bucket::resolve($sid, $cwd, $topic);
     die "bucket: no result\n" unless ref $r eq 'HASH' && $r->{path};
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 # ---------------------------------------------------------------- 2026-10-21 seams
 
 # The effective watch dir (log_dir, or its safe default), or undef when neither is safe.
-sub watch_dir { my $w = eval { rc::watch() }; return $w }
+sub watch_dir { my $w = eval { rc::watch() }; return skills::util::text($w) }
 
 # <watch>/<sid> of the bound session (the effective watch dir: log_dir, or its safe default).
-sub sid_dir { my $d = eval { rc::sid_dir() }; return $d }
+sub sid_dir { my $d = eval { rc::sid_dir() }; return skills::util::text($d) }
 
 # The D-12 mode of cwd's worktree: {mode, reason, toplevel, main_checkout, root_rel, root_path,
 # ignored, exports, ...}; rc::mode logs handoff_mode once per (mode, reason).
@@ -282,23 +368,24 @@ sub mode {
     my ($cwd) = @_;
     my $m = eval { rc::mode($cwd) };
     return { mode => 'private', reason => 'repo-root-unchecked' } unless ref $m eq 'HASH' && $m->{mode};
-    return $m;
+    return skills::util::text_deep($m);
 }
 
 # A worktree's declaration and repository-root check (D-12 §1.5.2, §1.5.3), read-only.
-sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? $d : { present => 0 } }
-sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? $c : { ok => 0, reason => 'repo-root-unchecked' } }
+sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? skills::util::text_deep($d) : { present => 0 } }
+sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? skills::util::text_deep($c) : { ok => 0, reason => 'repo-root-unchecked' } }
 sub gitignore_text { return repomode::gitignore_text() }
 sub default_root { return $repomode::DEFAULT_ROOT }
 sub decl_name { return $repomode::DECL }
 sub valid_root { return repomode::valid_root($_[0]) }
 
 # The handoff-turn store (D-18), all read through lib/handoff_turn.pm.
-sub ht_open_for_begin { my ($d) = @_; return defined $d ? handoff_turn::open_for_begin($d) : undef }
-sub ht_stage_of       { my ($d, $ht) = @_; return defined $d ? handoff_turn::stage_of($d, $ht) : undef }
-sub ht_bind_stage     { my ($d, $ht, $stage) = @_; return handoff_turn::bind_stage($d, $ht, $stage) }
-sub ht_mark_published { my ($d, $ht, $path) = @_; return handoff_turn::mark_published($d, $ht, $path) }
-sub ht_record         { my ($d, $ht) = @_; return defined $d ? handoff_turn::record($d, $ht) : undef }
+sub ht_open_for_begin { my ($d) = @_; return defined $d ? skills::util::text_deep(handoff_turn::open_for_begin($d)) : undef }
+sub ht_stage_of       { my ($d, $ht) = @_; return defined $d ? skills::util::text(handoff_turn::stage_of($d, $ht)) : undef }
+sub ht_bind_stage     { my ($d, $ht, $stage) = @_; return map { skills::util::text_deep($_) } handoff_turn::bind_stage($d, $ht, $stage) }
+sub ht_mark_published { my ($d, $ht, $path) = @_; return map { skills::util::text_deep($_) } handoff_turn::mark_published($d, $ht, $path) }
+sub ht_record         { my ($d, $ht) = @_; return defined $d ? skills::util::text_deep(handoff_turn::record($d, $ht)) : undef }
+sub ht_published_of   { my ($d, $ht) = @_; return defined $d ? skills::util::text(handoff_turn::published_of($d, $ht)) : undef }
 sub ht_valid          { return handoff_turn::valid_ht($_[0]) }
 
 # (slot object, slot path) of the highest seq in <sid_dir>/bg, or (): the rule of
@@ -317,8 +404,8 @@ sub sidecar_newest {
 }
 
 # Dev-1 job records of a session dir.
-sub job_record { my ($sid_dir, $task) = @_; return eval { jobrec::record_of($sid_dir, $task) } }
-sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jobs_path($sid_dir)) }; return ref $r eq 'ARRAY' ? $r : [] }
+sub job_record { my ($sid_dir, $task) = @_; return skills::util::text_deep(eval { jobrec::record_of($sid_dir, $task) }) }
+sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jobs_path($sid_dir)) }; return ref $r eq 'ARRAY' ? skills::util::text_deep($r) : [] }
 sub job_add_pending { my ($sid_dir, $p) = @_; return jobrec::add_pending($sid_dir, $p) }
 sub job_output_source { return $jobrec::OUTPUT_PATH_SOURCE // 'none' }
 
@@ -338,14 +425,52 @@ sub recipe_command {
 # settings::relaunch over the run context's resolved settings (consent keys: file only).
 sub relaunch {
     my $r = eval { settings::relaunch(rc::settings()) };
-    return ref $r eq 'HASH' ? $r : { auto => 'off', allow => [], quiet_s => 120, allow_active => 0, invalid => [], clamped => [] };
+    return ref $r eq 'HASH' ? skills::util::text_deep($r) : { auto => 'off', allow => [], quiet_s => 120, allow_active => 0, invalid => [], clamped => [] };
+}
+
+# The run context's settings notes for the given keys (`<key>: settings file only`, the
+# CR-F34 safe-value notes), so a command can say why a flag or env value did not count.
+sub settings_notes {
+    my (@keys) = @_;
+    my %want = map { $_ => 1 } @keys;
+    my $r = eval { rc::settings() };
+    my @n = ref $r eq 'HASH' && ref $r->{notes} eq 'ARRAY' ? @{ $r->{notes} } : ();
+    return map { skills::util::text($_) } grep { /\A([a-z_]+):/ && $want{$1} } @n;
+}
+
+# Production (S-SETTINGS B): settings::prod over the run context's resolved settings (WP-core,
+# CORE-02): {reads => forbid|allow, classes => [{id, re}], user => n, invalid => [..]}, the
+# consent key `unattended_prod_reads` read from the settings file only (DP-3) and the classes
+# the shipped prod_classes plus the user's prod_patterns. Without that seam (or when it fails):
+# forbid, and the shipped classes (the spec's prod_classes, else the same prod-token literal
+# core falls back to), so a missing seam never makes the plugin ask less.
+our @PROD_FALLBACK = ({ id => 'prod-token', re => '(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)' });
+sub prod {
+    my $r = defined &settings::prod ? eval { settings::prod(rc::settings()) } : undef;
+    if (ref $r eq 'HASH' && ref $r->{classes} eq 'ARRAY' && @{ $r->{classes} }) {
+        my %p = %$r;
+        $p{reads} = ($p{reads} // '') eq 'allow' ? 'allow' : 'forbid';
+        $p{user} //= scalar grep { ref $_ eq 'HASH' && ($_->{id} // '') =~ /\Auser-/ } @{ $p{classes} };
+        return \%p;
+    }
+    require skills::spec;
+    my $spec = eval { skills::spec::get('prod_classes') };
+    my @src = ref $spec eq 'ARRAY' && @$spec ? @$spec : @PROD_FALLBACK;
+    my @classes;
+    for my $c (@src) {
+        next unless ref $c eq 'HASH' && defined $c->{id} && defined $c->{re} && !ref $c->{re};
+        my $re = eval { qr/$c->{re}/ } or next;
+        push @classes, { id => $c->{id}, re => $re };
+    }
+    @classes = map { { id => $_->{id}, re => qr/$_->{re}/ } } @PROD_FALLBACK unless @classes;
+    return { reads => 'forbid', classes => \@classes, user => 0, invalid => [], seam => 'missing' };
 }
 
 sub detect_summary {
     my ($text) = @_;
     my $r = eval { detect::summary($text) };
     return undef unless ref $r eq 'HASH';
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 1;

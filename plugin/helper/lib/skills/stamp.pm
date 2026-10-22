@@ -4,6 +4,7 @@ package skills::stamp;
 # times the publish lint accepts as printed by the helper.
 use strict;
 use warnings;
+use utf8;
 use skills::util;
 use skills::cli;
 use skills::stage;

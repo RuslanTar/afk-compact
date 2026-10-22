@@ -3,6 +3,7 @@
 # 12 ended · 13 overdue · 3 REFUSED · 64 usage · 70 internal (an overrun past --max).
 use strict;
 use warnings;
+use utf8;
 use skills::cli;
 use skills::wait;
 

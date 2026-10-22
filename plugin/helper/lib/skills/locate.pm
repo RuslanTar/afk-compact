@@ -11,6 +11,7 @@ package skills::locate;
 # one note line says how many exports it holds.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use File::Basename ();
 use skills::util;
@@ -26,7 +27,7 @@ sub run {
     my $ctx = skills::ctx::new({});
     my $id = skills::ctx::resolve_sid($ctx, $o->{sid});
     my $sid = $id->{sid};
-    my $cwd = skills::util::abs_path((defined $o->{cwd} && !skills::util::unset_value($o->{cwd})) ? $o->{cwd} : Cwd::getcwd());
+    my $cwd = skills::util::abs_path((defined $o->{cwd} && !skills::util::unset_value($o->{cwd})) ? $o->{cwd} : skills::util::cwd());
     my $w = skills::gitfacts::where($cwd);
     my $now = skills::util::now();
     my $arg = skills::util::unset_value($o->{arg}) ? undef : $o->{arg};
@@ -173,6 +174,14 @@ sub run {
         skills::cli::say(join ' · ', "candidate: $c->{path}", $c->{fm}{date} // '?', skills::store::title_of($c), skills::ctx::sid8($sid_of->($c)),
             ($c->{source} ? ($c->{source}) : ()), ($c->{export_path} ? ("export $c->{export_path}") : ()));
     }
+    # S-SETTINGS B: the production policy the resume follows (R7, R9 stop 2): the consent value
+    # and the class counts, never the user's patterns.
+    my $prod = skills::core::prod();
+    my @shipped = map { $_->{id} } grep { ($_->{id} // '') !~ /\Auser-/ } @{ $prod->{classes} || [] };
+    skills::cli::say(sprintf('production: %s · patterns: %s', $prod->{reads}, join(' + ', @shipped, ($prod->{user} // 0) . ' yours')));
+    # Q-ADAPTER QA-1: the queue mode the resume follows (queue::mode: the setting, the file and
+    # this session's last list outcome); locate never runs the queue tool (E-S-R9-8, provisional).
+    skills::cli::say('queue: ' . skills::core::queue_mode_text(skills::core::queue_mode_now($ctx->{settings}{queue_cmd})));
     if ($w->{in_git}) {
         my $top = $w->{worktree};
         my @sf;

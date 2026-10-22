@@ -6,6 +6,7 @@ package skills::evidence_cmd;
 # cross-bucket dedupe are the core evidence.copy seam's.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 use skills::cli;
@@ -45,7 +46,14 @@ sub run {
         my $src = defined $path ? (skills::util::abs_path($path) // $path) : undef;
         my $dest = $where eq 'keep' ? $keep_dir : $disp_dir;
         my $r;
-        if ($patch && defined $patch->{bytes}) {
+        if ($patch && $patch->{withhold}) {
+            # a path left out of a rebuilt patch, or a patch the numstat check refused:
+            # nothing is written (C-STORE D7)
+            my $b = $patch->{bytes};
+            $r = { status => 'withheld', copy => undef, scan => 'withheld', rules => $patch->{withhold},
+                   bytes => (defined $b ? length $b : undef), sha256 => (defined $b ? skills::util::sha256_hex($b) : undef),
+                   mtime => skills::util::iso_local($now) };
+        } elsif ($patch && defined $patch->{bytes}) {
             $r = _gate_patch($patch, $dest, $used);
         } elsif (!defined $src || !-e $src || -d _) {
             $r = { status => 'missing', copy => undef, bytes => 0, sha256 => '' };
@@ -58,13 +66,17 @@ sub run {
         my %row = (status => $r->{status}, copy => $r->{copy}, origin => $origin_label // $src // $path, src => $src,
                    bytes => $r->{bytes}, sha256 => $r->{sha256}, mtime => $r->{mtime}, scan => $r->{scan},
                    rules => $r->{rules}, where => $where, ts => skills::util::iso_local($now));
+        if ($patch && $patch->{partial} && $r->{copy}) {
+            $row{label} = "partial ($patch->{partial} withheld)";
+            $row{meaning} = "partial patch: $patch->{partial} path(s) left out";
+        }
         push @rows, \%row;
         skills::util::append_line("$dir/evidence.jsonl", skills::util::json_encode(\%row) . "\n");
     }
 
     for my $r (@rows) {
-        skills::cli::say(join ' ', $r->{status}, ($r->{copy} // '-'), ($r->{bytes} // 0),
-            (substr($r->{sha256} // '', 0, 8) || '-'), $r->{origin});
+        skills::cli::say(join ' ', $r->{status}, ($r->{copy} // '-'), ($r->{bytes} // '-'),
+            (substr($r->{sha256} // '', 0, 8) || '-'), _line($r->{origin}), (defined $r->{label} ? $r->{label} : ()));
     }
     my $all = skills::stage::evidence_rows($dir);
     if (grep { $_->{where} eq 'keep' && $_->{copy} } @$all) {
@@ -84,7 +96,7 @@ sub run {
             skills::cli::say("Volatile: $r->{origin} — missing at $stamp");
         } elsif ($r->{status} eq 'withheld') {
             my $rules = ref $r->{rules} eq 'ARRAY' && @{ $r->{rules} } ? ' (' . join(',', @{ $r->{rules} }) . ')' : '';
-            skills::cli::say("Volatile: $r->{origin} — withheld by the secret gate$rules");
+            skills::cli::say('Volatile: ' . _line($r->{origin}) . " — withheld by the secret gate$rules");
         }
     }
     my $quota = $ctx->{settings}{evidence_quota_mb};
@@ -98,23 +110,131 @@ sub run {
 }
 
 # git for a patch: up to one byte over the file cap is kept, so an over-cap patch is seen
-# as such (never cut short and copied as if whole).
+# as such (never cut short and copied as if whole). Arguments go as UTF-8 bytes; stdin =>
+# bytes feeds a patch to `git apply --numstat`.
 sub _git_bytes {
     my ($top, @args) = @_;
+    my %o = (ref $args[-1] eq 'HASH') ? %{ pop @args } : ();
     return { rc => -1, out => '' } unless skills::gitfacts::usable();
-    return skills::util::run(['git', '-C', $top, @args], 10000, trace => 'git', max_bytes => $FILE_MAX + 1);
+    return skills::util::run([ map { skills::util::bytes($_) } 'git', '-C', $top, @args ], 10000, trace => 'git',
+                             max_bytes => $FILE_MAX + 1, %o);
 }
 
-sub _paths_z {
+# A printed origin stays one line (a path may hold a newline or a tab).
+sub _line { my ($s) = @_; $s //= ''; $s =~ s/[\x00-\x1f\x7f]/?/g; return $s }
+
+# `--name-status -M -C -z` output -> [[status, path_bytes...]] (two paths for R and C).
+sub _name_status {
+    my ($r) = @_;
+    return undef unless $r->{rc} == 0;
+    my @f = split /\0/, $r->{out}, -1;
+    pop @f if @f && $f[-1] eq '';
+    my @e;
+    while (@f) {
+        my $st = shift @f;
+        return undef unless $st =~ /\A([A-Z])\d*\z/;
+        my $k = $1;
+        my @p = $k =~ /\A[RC]\z/ ? (shift @f, shift @f) : (shift @f);
+        return undef if grep { !defined || $_ eq '' } @p;
+        push @e, [ $k, @p ];
+    }
+    return \@e;
+}
+
+# `git apply --numstat -z` output -> the path bytes it lists (both sides of a rename).
+sub _numstat_paths {
+    my ($r) = @_;
+    return undef unless $r->{rc} == 0;
+    my @f = split /\0/, $r->{out}, -1;
+    pop @f if @f && $f[-1] eq '';
+    my @p;
+    while (@f) {
+        my $rec = shift @f;
+        my ($ad, $de, $path) = split /\t/, $rec, 3;
+        return undef unless defined $path && $ad =~ /\A(\d+|-)\z/ && $de =~ /\A(\d+|-)\z/;
+        if ($path eq '') {
+            my ($from, $to) = (shift @f, shift @f);
+            return undef unless defined $to;
+            push @p, $from, $to;
+        } else {
+            push @p, $path;
+        }
+    }
+    return \@p;
+}
+
+# BD-1 (C-STORE D7, handoff-spec §10 "Clone patches"): which touched paths are blocked.
+# Returns (\@all, \%blocked) with path bytes as keys: \@all is every path the --no-renames
+# patch holds, %blocked maps a blocked path to its rule (deny-name, or rename-from-denied
+# for the other side of a rename or copy whose one side the name gate refuses). undef when
+# git could not list the paths.
+sub _blocked {
+    my ($top, $plain, $pairs) = @_;
+    my $all = _paths_raw($plain);
+    my $ent = _name_status($pairs);
+    return undef unless $all && $ent;
+    my $denied = sub { skills::core::denied_path("$top/" . skills::util::text($_[0])) };
+    my %blocked;
+    for my $p (@$all) { $blocked{$p} = 'deny-name' if $denied->($p) }
+    for my $e (@$ent) {
+        my ($k, @p) = @$e;
+        my @d = grep { $denied->($_) } @p;
+        for my $p (@p) { $blocked{$p} //= 'deny-name' if $denied->($p) }
+        next unless @d && @p == 2;
+        for my $p (@p) { $blocked{$p} //= 'rename-from-denied' }
+    }
+    return ($all, \%blocked);
+}
+
+sub _paths_raw {
     my ($r) = @_;
     return undef unless $r->{rc} == 0;
     return [ grep { $_ ne '' } split /\0/, $r->{out} ];
 }
 
+sub _paths_z {
+    my ($r) = @_;
+    my $p = _paths_raw($r);
+    return $p ? [ map { skills::util::text($_) } @$p ] : undef;
+}
+
+# A patch with blocked paths, rebuilt without them (BD-1). Gives the items for the run
+# loop: the partial patch (<name>.partial.patch), or the whole patch withheld
+# `exclude-failed` when git fails or `git apply --numstat`
+# over the rebuilt bytes does not list exactly the touched paths minus the blocked ones;
+# then one withheld row per path left out (origin <label>:<path>, no bytes, no hash). A
+# patch whose every path is blocked gives the rows only.
+sub _rebuild {
+    my ($top, $label, $name, $all, $blocked, @build) = @_;
+    my @out = grep { exists $blocked->{$_} } @$all;
+    # a blocked path the --no-renames listing lacks (the source of a copy) is excluded too,
+    # but it is not in the patch, so it gets no row
+    my @excl = map { ":(top,literal,exclude)$_" } sort keys %$blocked;
+    my @rows = map { { label => "$label:" . skills::util::text($_), withhold => [ $blocked->{$_} ] } } @out;
+    my @want = grep { !exists $blocked->{$_} } @$all;
+    return @rows unless @want;
+    my $fail = { label => $label, withhold => ['exclude-failed'] };
+    my $re = _git_bytes($top, @build, '--', '.', @excl);
+    return ($fail, @rows) if $re->{rc} != 0 || $re->{out} eq '';
+    my $part = { name => "$name.partial.patch", label => $label, top => $top, bytes => $re->{out},
+                 paths => [ map { skills::util::text($_) } @want ], partial => scalar @out };
+    # over the file cap: the gate makes it ref-only (nothing written), so no check is needed
+    return ($part, @rows) if length($re->{out}) > $FILE_MAX;
+    $fail->{bytes} = $re->{out};
+    my $got = _numstat_paths(_git_bytes($top, 'apply', '--numstat', '-z', { stdin => $re->{out} }));
+    return ($fail, @rows) unless $got;
+    my %got = map { $_ => 1 } @$got;
+    my %want = map { $_ => 1 } @want;
+    return ($fail, @rows) if grep { exists $blocked->{$_} } keys %got;
+    return ($fail, @rows) if keys(%got) != keys(%want) || grep { !$want{$_} } keys %got;
+    return ($part, @rows);
+}
+
 # Scratch git clone with local commits -> one patch per commit plus the uncommitted diff
 # (TPL §5 "scratch-clone patch series"), built in memory: nothing is written until the
-# gate has run (RRP-01). Returns {name, label, top, bytes, paths}; a clone outside git
-# gives one row with no bytes (missing).
+# gate has run (RRP-01). A patch touching a blocked path is rebuilt without it (BD-1,
+# _rebuild). Returns items {name, label, top, bytes, paths, partial?} or {label,
+# withhold, bytes?}; a clone outside git gives one row with no bytes (missing).
 sub _clone_patches {
     my ($clone) = @_;
     my $src = skills::util::abs_path($clone) // $clone;
@@ -127,17 +247,29 @@ sub _clone_patches {
     my $i = 0;
     for my $sha (@shas) {
         $i++;
+        my ($name, $label) = (sprintf('%04d-%s', $i, substr($sha, 0, 8)), "$top#" . substr($sha, 0, 8));
+        my ($all, $blocked) = _blocked($top,
+            _git_bytes($top, 'diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '--no-renames', '-z', $sha),
+            _git_bytes($top, 'diff-tree', '-r', '--root', '--no-commit-id', '-z', '--name-status', '-M', '-C', $sha));
+        if ($all && %$blocked) {
+            push @res, _rebuild($top, $label, $name, $all, $blocked, 'format-patch', '--stdout', '--no-renames', '-1', $sha);
+            next;
+        }
         my $fp = _git_bytes($top, 'format-patch', '--stdout', '-1', $sha);
         next if $fp->{rc} != 0 || $fp->{out} eq '';
-        # every path the commit touches, both sides of a rename
-        my $paths = _paths_z(_git_bytes($top, 'diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '--no-renames', '-z', $sha));
-        push @res, { name => sprintf('%04d-%s.patch', $i, substr($sha, 0, 8)), label => "$top#" . substr($sha, 0, 8),
-                     top => $top, bytes => $fp->{out}, paths => $paths };
+        push @res, { name => "$name.patch", label => $label, top => $top, bytes => $fp->{out},
+                     paths => ($all ? [ map { skills::util::text($_) } @$all ] : undef) };
     }
     my $d = _git_bytes($top, 'diff', 'HEAD', '--binary');
     if ($d->{rc} == 0 && $d->{out} ne '') {
-        my $paths = _paths_z(_git_bytes($top, 'diff', 'HEAD', '--name-only', '--no-renames', '-z'));
-        push @res, { name => 'uncommitted.patch', label => "$top#uncommitted", top => $top, bytes => $d->{out}, paths => $paths };
+        my ($all, $blocked) = _blocked($top, _git_bytes($top, 'diff', 'HEAD', '--name-only', '--no-renames', '-z'),
+            _git_bytes($top, 'diff', 'HEAD', '-z', '--name-status', '-M', '-C'));
+        if ($all && %$blocked) {
+            push @res, _rebuild($top, "$top#uncommitted", 'uncommitted', $all, $blocked, 'diff', 'HEAD', '--binary', '--no-renames');
+        } else {
+            push @res, { name => 'uncommitted.patch', label => "$top#uncommitted", top => $top, bytes => $d->{out},
+                         paths => ($all ? [ map { skills::util::text($_) } @$all ] : undef) };
+        }
     }
     return @res;
 }

@@ -4,6 +4,7 @@ package skills::ctx;
 # lineage and pins (TPL §6, MOD §7).
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use Cwd ();
 use skills::util;

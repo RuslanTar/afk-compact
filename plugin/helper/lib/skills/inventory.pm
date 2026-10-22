@@ -11,6 +11,7 @@ package skills::inventory;
 # local process.
 use strict;
 use warnings;
+use utf8;
 use Socket ();
 use skills::util;
 use skills::cli;
@@ -60,7 +61,7 @@ sub run {
     for my $l (split /\n/, $d->{body}) {
         if ($l =~ /\A##\s+(.*)/ && $l !~ /\A###/) { $in = $1 =~ /\AIn flight/ ? 1 : 0; next }
         next unless $in;
-        if ($l =~ /\A\|\s*(B-\d+)\s*(?:\x{c2}\x{b7}\s*([^|]*?))?\s*\|([^|]*)\|/) {
+        if ($l =~ /\A\|\s*(B-\d+)\s*(?:\x{b7}\s*([^|]*?))?\s*\|([^|]*)\|/) {
             my ($bn, $rid, $kindcell) = ($1, $2 // '', $3);
             my ($kind) = $kindcell =~ /\A\s*([a-z]+)/;
             my @cells = split /\|/, $l;
@@ -68,7 +69,7 @@ sub run {
             my ($class) = $restart =~ /\b(auto|ask|never)\b/;
             skills::cli::say(join ' · ', "row: $bn", ($rid eq '' ? '?' : $rid), ($kind // '?'), 'class ' . ($class // 'ask'));
         }
-        if ($l =~ /\ALeftover:\s*(\d+)\s*\x{c2}\x{b7}\s*(\d*)/) {
+        if ($l =~ /\ALeftover:\s*(\d+)\s*\x{b7}\s*(\d*)/) {
             my ($pid, $port) = ($1, $2);
             skills::cli::say("leftover pid: $pid alive=" . (kill(0, $pid) || $!{EPERM} ? 'yes' : 'no') . ' (start time not recorded)');
             skills::cli::say("port: $port listening=" . _listening($port)) if $port ne '';
@@ -104,7 +105,7 @@ sub run {
         for my $r (reverse @{ skills::core::job_rows("$watch/$hs") }) {
             next unless ($r->{ev} // '') eq 'job' && defined $r->{task_id} && !$seen{ $r->{task_id} }++;
             my $v = skills::jobs::verify($ctx, origin => $hs, task => $r->{task_id}, recipe => $recipe{ $r->{task_id} },
-                                         relaunch => $rl, cwd => Cwd::getcwd(),
+                                         relaunch => $rl, cwd => skills::util::cwd(),
                                          current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} });
             my $st = skills::jobs::states($v);
             skills::cli::say(join ' · ', "job: $r->{task_id}", 'recorded', 'read-only ' . ($r->{is_read_only} ? 'yes' : 'no'),

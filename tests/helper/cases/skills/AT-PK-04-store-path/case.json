@@ -1,0 +1,157 @@
+{
+ "id": "AT-PK-04 (PKG-RUNTIME A.4, store-path)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "publish lint `store-path` (advisory): a body line holding /scripts/<plugin>-store (the launcher by its path) gets `ADVISORY store-path line <n>` and its why/fix line; handoffs write the symbolic <store>. The repo export of such a body is scanned and written as before (home rewritten to ~/), carrying the advisory on the publish row. Needs the T-TEXT E2 spec (store-path in lint_ids.advisory, its lint_texts entry).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "repo_roots": "$TMP/repo"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "repo mode",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "mode.mode": "repo"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- probe: `$HOME/.claude/plugins/cache/m/$BRAND/0.1.0/scripts/$BRAND-store status --sid 11111111` printed the store state\n- retry fix: implemented — `app/retry.rb#retry_window`\n- moved `$TMP/repo/src/a.rb` and the notes in `$HOME/x`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "AT-PK-04: a body line with the launcher path: ADVISORY store-path with its why/fix; the private handoff and the scanned export are written as before",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY store-path line 22\\n  why: [^\\n]+ · fix: [^\\n]+$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$",
+     "^Exported to repository: \\.claude/handoffs/LAB-7/$STEM\\.md "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "/scripts/$BRAND-store status"
+      ]
+     },
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md",
+      "has": [
+       "`~/\\.claude/plugins/cache/m/$BRAND/0\\.1\\.0/scripts/$BRAND-store status"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "lint_rules": [
+        "store-path"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same without the path: no store-path",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "S2": "json:stage"
+   }
+  },
+  {
+   "write": "$S2/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- moved `$TMP/repo/src/a.rb` and the notes in `$HOME/x`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$S2",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "store-path"
+    ]
+   }
+  }
+ ]
+}

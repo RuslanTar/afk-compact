@@ -15,7 +15,9 @@ package skills::publish;
 # skills/export.pm) and one receipt line says what happened to the export.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
+use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 use skills::util;
 use skills::cli;
 use skills::core;
@@ -40,13 +42,18 @@ sub run {
     die skills::cli::usage('--slug must be kebab-case') unless defined $o->{slug} && $o->{slug} =~ /\A[a-z0-9]+(?:-[a-z0-9]+)*\z/;
     my ($dir, $s, $ctx) = skills::stage::open_stage($o->{stage});
     my $row = { kind => 'handoff', writer => 'handoff', bytes => 0, lint_rules => [], size_band => undef };
+    # T-TEXT E7 (E-1 counters): every publish call on this stage counts, a refused one too, and
+    # each row names the built template the skill read.
+    $row->{attempt} = _attempt($dir);
+    $row->{template_rev} = _template_rev();
+    $row->{acuity_floor} = (defined $s->{acuity_floor} && $s->{acuity_floor} =~ /\A[a-z]+\z/) ? $s->{acuity_floor} : '-';
 
     if (-e "$dir/published") {
         _refuse($ctx, $row, 'already-published');
     }
     my $rr = skills::core::roots_check($ctx->{settings});
     _refuse($ctx, $row, $rr) if $rr;
-    my $body = skills::util::read_file("$dir/body.md");
+    my $body = skills::util::read_text("$dir/body.md");
     _refuse($ctx, $row, 'no-draft') unless defined $body && $body =~ /\S/;
     _refuse($ctx, $row, 'spec-missing') unless skills::spec::available();
     my $need = eval { skills::spec::need(qw(frontmatter_keys_handoff frontmatter_keys_export time_re lint_ids carry.tag_re private_path_classes)); 1 };
@@ -61,7 +68,7 @@ sub run {
     # see _claimed_free. Any other claim refuses.
     my $claimed;
     if ($ht && defined $sid_dir) {
-        my $done = skills::core::ht_record($sid_dir, $ht) && handoff_turn::published_of($sid_dir, $ht);
+        my $done = skills::core::ht_record($sid_dir, $ht) && skills::core::ht_published_of($sid_dir, $ht);
         if ($done) {
             _refuse($ctx, $row, "handoff-exists $done") unless _claimed_free($done, $s);
             $claimed = $done;
@@ -71,11 +78,11 @@ sub run {
     my %recipes;
     for my $f (skills::util::list_dir("$dir/restart")) {
         next unless $f =~ /\.md\z/ && -f "$dir/restart/$f";
-        $recipes{$f} = skills::util::read_file("$dir/restart/$f") // '';
+        $recipes{$f} = skills::util::read_text("$dir/restart/$f") // '';
     }
     my %extra;
     for my $f ('ledger.md', 'inflight.md') {
-        $extra{$f} = skills::util::read_file("$dir/$f") if -f "$dir/$f";
+        $extra{$f} = skills::util::read_text("$dir/$f") if -f "$dir/$f";
     }
     my ($prev_text, $own_text);
     if ($s->{previous_handoff} && -f $s->{previous_handoff}) {
@@ -98,18 +105,31 @@ sub run {
         previous_kind => $s->{previous_kind}, own_previous => $own_text,
         repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
         jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
-        brand => $ctx->{brand},
+        brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
+        queue_mode => $s->{queue_mode},
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
-    $row->{bytes} = length $body;
-    $row->{size_band} = _band(length $body);
+    $row->{bytes} = skills::util::blen($body);
+    $row->{size_band} = _band($row->{bytes});
     my @b = @{ $res->{blocking} };
     my @a = @{ $res->{advisory} };
     my %rules;
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
-    skills::cli::say("LINT $_->[0] $_->[1]") for @b;
-    skills::cli::say("ADVISORY $_->[0] $_->[1]") for @a;
+    $row->{acuity} = $res->{acuity} // '-';
+    # T-TEXT E7: under the first line of each id in this run, its `  why: … · fix: …` line from
+    # the spec's lint_texts (an id without one is a build failure, AT-TX-03; a spec without
+    # lint_texts at all, older than T-TEXT E2, prints the first lines only).
+    my $texts = skills::spec::lint_texts();
+    my %told;
+    my $why = sub {
+        my ($id) = @_;
+        return if !%$texts || $told{$id}++;
+        my $t = $texts->{$id} or die "lint id $id has no lint_texts entry in the spec\n";
+        skills::cli::say("  why: $t->{why} · fix: $t->{fix}");
+    };
+    for (@b) { skills::cli::say("LINT $_->[0] $_->[1]"); $why->($_->[0]) }
+    for (@a) { skills::cli::say("ADVISORY $_->[0] $_->[1]"); $why->($_->[0]) }
     if (@b) {
         $row->{result} = 'REFUSED:lint';
         $row->{blocking} = scalar @b;
@@ -127,7 +147,8 @@ sub run {
         push @manifest, {
             copy_path => $r->{copy}, origin => $r->{origin}, bytes => $r->{bytes}, sha256 => $r->{sha256},
             mtime => $r->{mtime}, copied_at => $r->{ts}, mode => ($r->{copy} ? '0600' : ''),
-            scan => _scan($r), regen_cmd => '', meaning => ($r->{where} eq 'dispose' ? 'disposable' : ''),
+            scan => _scan($r), regen_cmd => '',
+            meaning => ($r->{meaning} // ($r->{where} eq 'dispose' ? 'disposable' : '')),
         };
     }
     my %by_copy = map { ($_->{copy} // '') => $_ } grep { $_->{copy} } @$ev;
@@ -158,7 +179,7 @@ sub run {
         skills::util::mkdir_p(File::Basename::dirname($dest));
         skills::util::write_excl($dest, $content, 0600) or die "exists: $dest\n";
         my $sha = skills::util::sha256_file($dest);
-        push @manifest, { copy_path => $dest, origin => $origin, bytes => length($content), sha256 => $sha,
+        push @manifest, { copy_path => $dest, origin => $origin, bytes => skills::util::blen($content), sha256 => $sha,
                           mtime => skills::util::iso_local((stat $dest)[9]), copied_at => skills::util::iso_local($now),
                           mode => '0600', scan => 'full', regen_cmd => '', meaning => $meaning };
     }
@@ -188,8 +209,8 @@ sub run {
     my $fm = "---\n" . join('', map { "$_: $fm{$_}\n" } grep { defined $fm{$_} && $fm{$_} ne '' }
                                @{ skills::spec::frontmatter_keys('handoff') }) . "---\n";
     my $brand = $ctx->{brand};
-    my $marker = "\x{e2}\x{9f}\x{aa}$brand v1 n=$s->{nonce} s=manual\x{e2}\x{9f}\x{ab}";
-    my $sentinel = "\x{e2}\x{9f}\x{aa}/$brand n=$s->{nonce}\x{e2}\x{9f}\x{ab}";
+    my $marker = "\x{27ea}$brand v1 n=$s->{nonce} s=manual\x{27eb}";
+    my $sentinel = "\x{27ea}/$brand n=$s->{nonce}\x{27eb}";
     my ($mre, $sre) = (skills::spec::marker_re(), skills::spec::sentinel_re());
     die "marker does not match the spec grammar\n" if ($mre && $marker !~ $mre) || ($sre && $sentinel !~ $sre);
     (my $btxt = $body) =~ s/\s+\z//;
@@ -205,7 +226,7 @@ sub run {
         my $placed = eval {
             skills::util::write_excl($tmp, $content, 0600) or die "publish tmp exists: $tmp\n";
             my $back = skills::util::read_file($tmp);
-            my @tail = grep { /\S/ } split /\n/, ($back // '');
+            my @tail = grep { /\S/ } split /\n/, skills::util::text($back // '');
             die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
                 && @tail && $tail[-1] eq $sentinel;
             if ($ht && defined $sid_dir && !defined $claimed) {
@@ -303,20 +324,55 @@ sub _job_lines {
 # 0 the name is taken (try the next one; after a handoff-turn claim it dies instead).
 # A file system without hard links falls back to an exclusive create of the same bytes
 # (CR-F9: never a rename, which would replace a file made in the gap), read back.
+# DP-28 (CR-F9 residual): when the fallback's write or read-back fails after its own exclusive
+# open made the file, that file (the publish's own partial, checked by device and inode, never
+# anything else) is removed and the publish dies, so a retry of the stage finds the claim with
+# no file and fills it (_claimed_free). A partial left by a killed process stays (D-8):
+# handoff-state then answers publish-failed and nothing replaces it.
+# Test seams (STORE_TEST_MODE=1 only): STORE_TEST_PUBLISH_NOLINK=1 takes the fallback as on a
+# file system without hard links; STORE_TEST_PUBLISH_FAIL=after-create fails right after the
+# exclusive open, as a full disk would.
 sub _place {
     my ($tmp, $path, $content, $ht) = @_;
-    return 1 if link($tmp, $path);
-    my $eexist = $!{EEXIST};
+    my $tm = skills::util::test_mode();
+    my $nolink = $tm && ($ENV{STORE_TEST_PUBLISH_NOLINK} // '') eq '1';
+    return 1 if !$nolink && link($tmp, $path);
+    my $eexist = $nolink ? 0 : $!{EEXIST};
     if ($eexist || -e $path || -l $path) {
         die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
         return 0;
     }
-    if (!skills::util::write_excl($path, $content, 0600)) {
+    my $fh;
+    if (!sysopen($fh, $path, O_WRONLY | O_CREAT | O_EXCL, 0600)) {
+        die "create $path: $!\n" unless $!{EEXIST};
         die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
         return 0;
     }
-    my $back = skills::util::read_file($path);
-    die "read-back failed: $path\n" unless defined $back && $back eq $content;
+    my @mine = (stat $fh)[0, 1];
+    my $ok = eval {
+        binmode $fh;
+        die "write $path: no space left on device (test)\n" if $tm && ($ENV{STORE_TEST_PUBLISH_FAIL} // '') eq 'after-create';
+        my $bytes = skills::util::bytes($content);
+        my $off = 0;
+        while ($off < length $bytes) {
+            my $n = syswrite($fh, $bytes, length($bytes) - $off, $off);
+            die "write $path: $!\n" unless defined $n;
+            $off += $n;
+        }
+        close($fh) or die "close $path: $!\n";
+        undef $fh;
+        chmod 0600, $path;
+        my $back = skills::util::read_file($path);
+        die "read-back failed: $path\n" unless defined $back && $back eq $bytes;
+        1;
+    };
+    if (!$ok) {
+        my $err = $@ || "place failed: $path\n";
+        close $fh if $fh;
+        my @now = lstat $path;
+        unlink $path if @now && -f _ && $now[0] == $mine[0] && $now[1] == $mine[1];
+        die $err;
+    }
     return 1;
 }
 
@@ -329,6 +385,23 @@ sub _claimed_free {
     return 0 unless defined $s->{bucket} && defined $s->{stem};
     return 0 unless File::Basename::dirname($p) eq $s->{bucket};
     return File::Basename::basename($p) =~ /\A\Q$s->{stem}\E(?:-[0-9]+)?\.md\z/ ? 1 : 0;
+}
+
+# The 1-based number of this publish call on the stage (T-TEXT E7): one line appended to the
+# stage's attempts.log (O_APPEND under flock), then the lines counted.
+sub _attempt {
+    my ($dir) = @_;
+    my $f = "$dir/attempts.log";
+    eval { skills::util::append_line($f, skills::util::iso_local() . "\n") } or return undef;
+    my $t = skills::util::read_file($f) // '';
+    my $n = () = $t =~ /\n/g;
+    return $n || undef;
+}
+
+# sha256/8 of the built handoff template the skill reads (T-TEXT E7), or undef without one.
+sub _template_rev {
+    my $h = skills::util::sha256_file(skills::ctx::plugin_root() . '/skills/handoff/references/handoff-template.md');
+    return defined $h ? substr($h, 0, 8) : undef;
 }
 
 sub _refuse {

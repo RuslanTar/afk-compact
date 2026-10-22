@@ -3,6 +3,7 @@ package skills::session_cmds;
 # R9; TPL §6; D-21 `lane:` ids only; OD-21 queue only when configured).
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use skills::util;
 use skills::cli;
@@ -14,29 +15,42 @@ use skills::gitfacts;
 my $ADOPT_RE = qr/\Alane:[A-Za-z0-9._\/-]+\z/;
 my $LANE_RE  = qr/(?:lane|auto):[A-Za-z0-9._\/-]+/;
 
-# lane adopt --lane ID --if-free → the bound lane, a refusal, or
-# `queue: not configured`. Never adds or answers anything.
+# Q-ADAPTER QA-2: adopt refusals by exit code (the reason line is read from stdout).
+my %ADOPT_EXIT = (3 => 'held', 4 => 'no-lane', 6 => 'error', 2 => 'unsupported');
+
+# lane adopt --lane ID [--if-free] → `lane: <id>`, a refusal, or `queue: off`. Passes
+# --must-exist when the cached list reply's commands hold adopt:must-exist. Exit 3 is
+# `held holder=<sid> kind=<process|heartbeat>` (the pair as the tool printed it), 4 no-lane,
+# 6 error, 2 unsupported, any other code `queue exit N`. Never adds or answers anything.
 sub lane {
     my ($argv) = @_;
     my $o = skills::cli::opts($argv, 'lane=s', 'if-free');
     die skills::cli::usage('lane adopt --lane ID [--if-free]') unless @$argv == 1 && $argv->[0] eq 'adopt';
     my $ctx = skills::ctx::new({});
     my $cmd = $ctx->{settings}{queue_cmd};
-    if (skills::util::unset_value($cmd)) { skills::cli::say('queue: not configured'); return 0 }
+    if (skills::util::unset_value($cmd)) { skills::cli::say('queue: off'); return 0 }
     die skills::cli::usage('--lane ID') unless defined $o->{lane} && $o->{lane} ne '';
     die skills::cli::refuse('lane-id (only lane: ids are adopted)') unless $o->{lane} =~ $ADOPT_RE;
+    die skills::cli::refuse('queue degraded (not-executable)') unless -f skills::util::bytes($cmd) && -x _;
     skills::ctx::resolve_sid($ctx, undef);
     my @argv = ($cmd, 'adopt', '--lane', $o->{lane});
     push @argv, '--if-free' if $o->{'if-free'};
+    push @argv, '--must-exist' if skills::core::queue_must_exist($cmd);
     my $r = skills::core::queue_call(\@argv, 5000);
     die skills::cli::refuse('queue-timeout') if $r->{timed_out};
     my ($first) = grep { /\S/ } split /\n/, ($r->{out} // '');
     $first //= '';
-    $first =~ s/[^\x20-\x7e\x80-\xff]//g;
+    $first =~ s/[\x00-\x1f\x7f-\x9f]//g;
     $first = substr($first, 0, 200);
     if ($r->{rc} != 0) {
-        $first =~ s/\AREFUSED:\s*//;
-        die skills::cli::refuse($first eq '' ? "queue exit $r->{rc}" : $first);
+        my $kind = $ADOPT_EXIT{ $r->{rc} } // "queue exit $r->{rc}";
+        if ($kind eq 'held') {
+            my ($h) = $first =~ /\bholder=([A-Za-z0-9._:-]{1,64})(?=\s|\z)/;
+            my ($k) = $first =~ /\bkind=(process|heartbeat)(?=\s|\z)/;
+            $kind .= " holder=$h" if defined $h;
+            $kind .= " kind=$k" if defined $k;
+        }
+        die skills::cli::refuse($kind);
     }
     my ($bound) = $first =~ /($LANE_RE)/;
     if (!defined $bound) {
@@ -71,7 +85,7 @@ sub pin {
     }
     my $bucket = skills::store::bucket_of($p);
     (my $rel = $bucket) =~ s/\A\Q$root\E\///;
-    my $w = skills::gitfacts::where(Cwd::getcwd());
+    my $w = skills::gitfacts::where(skills::util::cwd());
     my ($ok, $res) = skills::ctx::pin_update($ctx, $id->{sid}, sub {
         my ($cur) = @_;
         my %n = %$cur;
@@ -91,13 +105,15 @@ my %RELATION = map { $_ => 1 } qw(same-session successor other unselected);
 sub receipt {
     my ($argv) = @_;
     my $o = skills::cli::opts($argv, 'handoff=s', 'relation=s', 'tier=s', 'calls=s', 'drift=s', 'bg=s',
-        'questions=s', 'adopt=s');
+        'questions=s', 'adopt=s', 'cmds-asked=s');
     die skills::cli::usage('unexpected argument ' . $argv->[0]) if @$argv;
     die skills::cli::usage('--relation same-session|successor|other|unselected') unless defined $o->{relation} && $RELATION{ $o->{relation} };
     die skills::cli::usage('--tier T1|T2|T3') unless defined $o->{tier} && $o->{tier} =~ /\AT[123]\z/;
     for my $k (qw(calls questions)) {
         die skills::cli::usage("--$k N") unless defined $o->{$k} && $o->{$k} =~ /\A\d{1,4}\z/;
     }
+    # T-TEXT E7: handoff commands shown and asked under Rule 2 (optional; absent = not counted)
+    die skills::cli::usage('--cmds-asked N') if defined $o->{'cmds-asked'} && $o->{'cmds-asked'} !~ /\A\d{1,4}\z/;
     my @drift = _tokens($o->{drift});
     my %bg;
     for my $kv (split /,/, ($o->{bg} // '')) {
@@ -118,6 +134,7 @@ sub receipt {
     $ctx->log('resume_receipt', {
         handoff => $hrel, relation => $o->{relation}, tier => $o->{tier}, calls => 0 + $o->{calls},
         drift => \@drift, bg => \%bg, questions => 0 + $o->{questions}, adopt => $adopt // 'none',
+        cmds_asked => (defined $o->{'cmds-asked'} ? 0 + $o->{'cmds-asked'} : undef),
     });
     return 0;
 }

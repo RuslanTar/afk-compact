@@ -1,0 +1,280 @@
+{
+ "id": "HT-LT-06 (DP-28, CR-F9 residual)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "DP-28: on a file system without hard links publish places the handoff by an exclusive create plus read-back; when that write fails after its own exclusive open made the file, publish removes that file (its own partial, matched by device and inode) and fails, so handoff-state answers publish-failed and a retry of the stage fills the claim at the claimed path. A partial left by a killed process is never removed or replaced (D-8): the publish is refused handoff-exists and handoff-state answers publish-failed. Test seams: STORE_TEST_PUBLISH_NOLINK, STORE_TEST_PUBLISH_FAIL (test mode only).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "the mod opens handoff turn a1b2c3d4",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "name": "begin binds the open ht",
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "no hard links, and the write fails after the exclusive create: the publish removes its own partial and fails",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "env": {
+    "STORE_TEST_PUBLISH_NOLINK": "1",
+    "STORE_TEST_PUBLISH_FAIL": "after-create"
+   },
+   "expect": {
+    "exit": 70,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/.*.publish-*",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+      "has": [
+       "\\A$ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+      ]
+     }
+    ],
+    "absent": [
+     "$STAGE/published"
+    ]
+   }
+  },
+  {
+   "name": "the claim names a missing file: publish-failed",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "publish-failed $ROOT/repo/LAB-7/$STEM.md\n"
+   }
+  },
+  {
+   "name": "the retry (still no hard links) fills the claim at the claimed path",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "env": {
+    "STORE_TEST_PUBLISH_NOLINK": "1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "mode": "0600",
+      "has": [
+       "^# LAB-7 — retry fix drafted",
+       "^⟪/$BRAND n=[0-9a-f]{8}⟫\\n\\z"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/.*.publish-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "published",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "published $ROOT/repo/LAB-7/$STEM.md\n"
+   }
+  },
+  {
+   "name": "the mod opens handoff turn b2c3d4e5",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "b2c3d4e5",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin binds the second ht",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "S2": "json:stage",
+    "STEM2": "json:stem"
+   }
+  },
+  {
+   "write": "$S2/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/handoff-turn/b2c3d4e5.published",
+     "content": "$ROOT/repo/LAB-7/$STEM2.md\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/$STEM2.md",
+     "content": "---\nkind: handoff\n---\n# LAB-7 — retry fix dra"
+    }
+   ]
+  },
+  {
+   "name": "D-8: a killed publish left a partial at the claimed path: refused, the partial stays as it is",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$S2",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "env": {
+    "STORE_TEST_PUBLISH_NOLINK": "1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: handoff-exists $ROOT/repo/LAB-7/$STEM2\\.md$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM2.md",
+      "has": [
+       "\\A---\\nkind: handoff\\n---\\n# LAB-7 — retry fix dra\\z"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "publish-failed for the partial",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "b2c3d4e5"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "publish-failed $ROOT/repo/LAB-7/$STEM2.md\n"
+   }
+  }
+ ]
+}

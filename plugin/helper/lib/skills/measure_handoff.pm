@@ -11,6 +11,7 @@ package skills::measure_handoff;
 # `needs-ask <class> line <n>`.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use skills::util;
 use skills::ctx;
@@ -36,7 +37,7 @@ sub run {
     my $ctx = skills::ctx::new({});
     my $id = skills::ctx::resolve_sid($ctx, $o{sid});
     my $fm = $d->{fm};
-    my $cwd = skills::util::abs_path($o{cwd} // Cwd::getcwd());
+    my $cwd = skills::util::abs_path($o{cwd} // skills::util::cwd());
     push @out, "cwd: $cwd";
     my $g = skills::gitfacts::facts($cwd);
     my $gc = $fm->{git_commit};

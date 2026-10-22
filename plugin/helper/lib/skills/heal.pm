@@ -14,8 +14,9 @@ package skills::heal;
 # for a question, by `ask-command:` and `ask-source: recorded|handoff`. A shell may
 # relaunch by itself only with relaunch_auto on, relation same-session or successor
 # (recomputed from the lineage; no relation flag exists), status LOST with confidence
-# high (or FAILED with its record and command verified), effects none (local only once
-# relaunch_allow is active: Q-J1-1 read-only only, DP-10), recipe class auto or no recipe,
+# high (or FAILED with its record and command verified), effects none, local (an allowlisted
+# single command, Q-J1-1, S-SETTINGS C) or prod-read with unattended_prod_reads `allow`
+# (S-SETTINGS B; prod-write always asks), recipe class auto or no recipe,
 # the recipe sha matching MANIFEST, and the counters. The helper never runs the command:
 # the model runs `run:` through the Bash tool, so the permission system judges it.
 # --bump also stores the run line's sha as pending, so the next recorded job with that
@@ -26,6 +27,7 @@ package skills::heal;
 # the repository.
 use strict;
 use warnings;
+use utf8;
 use skills::util;
 use skills::cli;
 use skills::ctx;
@@ -45,12 +47,12 @@ sub recipes_in {
     for my $f (skills::util::list_dir("$edir/restart")) {
         next unless $f =~ /\.md\z/;
         my $p = "$edir/restart/$f";
-        my $t = skills::util::read_file($p, 65536) // next;
+        my $t = skills::util::read_text($p, 65536) // next;
         my %r = (path => $p, text => $t);
         if ($t =~ /^\s*item:\s*(B-\d+)(.*)$/m) {
             my ($bn, $rest) = ($1, $2);
             $r{bn} = $bn;
-            ($r{rid}) = $rest =~ /runtime id\s+([^\s\x{c2}]+)/;
+            ($r{rid}) = $rest =~ /runtime id\s+([^\s\x{b7}]+)/;
             ($r{class}) = $rest =~ /class\s+(auto|ask|never)\b/;
         }
         ($r{script}) = $t =~ /^\s*script:\s*(\S+)/m;
@@ -114,15 +116,20 @@ sub run {
 sub shell {
     my ($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse) = @_;
     my $rl = skills::core::relaunch();
-    my $cwd = Cwd::getcwd();
+    my $cwd = skills::util::cwd();
     my $rel = relation($ctx, $id, $origin);
     my $v = skills::jobs::verify($ctx, origin => $origin, task => $task, recipe => $recipe, relaunch => $rl, cwd => $cwd,
                                  current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} });
     my $rec = $v->{record};
+    # A consent or protective value given as a flag or env, or under a foreign config dir, did
+    # not count (DP-3, CR-F34): say so, so the question can name the settings file.
+    skills::cli::say("note: $_") for skills::core::settings_notes(qw(relaunch_auto relaunch_allow unattended_prod_reads prod_patterns));
     skills::cli::say(skills::jobs::signal_line($_, $v->{signals}{$_})) for @skills::jobs::SIGNALS;
     @$row{qw(verdict confidence effects mode relation new_task_id)} = ($v->{status}, $v->{confidence}, $v->{effects}, $rl->{auto}, $rel, undef);
     $row->{signals} = skills::jobs::states($v);
     $row->{item} = $task;
+    # The production class id only (prod-token, user-prod-<n>), never the command (S-SETTINGS B).
+    $row->{prod_class} = $v->{prod_class} if defined $v->{prod_class};
 
     # Questions name the command and where it came from; a withheld one is never printed.
     my $rcmd = $recipe && $recipe->{text} =~ /^\s*command:[ \t]*(.*?)[ \t]*$/m ? $1 : undef;
@@ -185,7 +192,10 @@ sub _gate {
         return 'not-lost';
     }
     return 'command-withheld' unless $rec && defined $rec->{command};
+    # S-SETTINGS B: a production read relaunches by itself only with unattended_prod_reads
+    # `allow` (a consent key, read from the settings file only); a production write never does.
     if ($v->{effects} eq 'local') { return 'effects-local' unless $rl->{allow_active} }
+    elsif ($v->{effects} eq 'prod-read') { return 'effects-prod-read' unless (($v->{prod} || {})->{reads} // 'forbid') eq 'allow' }
     elsif ($v->{effects} ne 'none') { return "effects-$v->{effects}" }
     if ($recipe) {
         return 'class' unless ($recipe->{class} // 'ask') eq 'auto';
@@ -211,7 +221,7 @@ sub relation {
 sub not_local {
     my ($ctx, $origin, $docs) = @_;
     if (@{ $docs || [] }) { return (grep { !skills::store::imported($_) } @$docs) ? 0 : 1 }
-    my $w = skills::gitfacts::where(Cwd::getcwd());
+    my $w = skills::gitfacts::where(skills::util::cwd());
     return 0 unless $w->{in_git} && $w->{worktree};
     my $dd = skills::core::declaration($w->{worktree});
     return 0 unless $dd->{present} && $dd->{valid};
@@ -252,7 +262,7 @@ sub find_recipe {
     my %b;
     my $pin = skills::ctx::pin_read($ctx, $origin);
     $b{ $pin->{bucket_path} } = 1 if $pin && $pin->{bucket_path};
-    my $w = skills::gitfacts::where(Cwd::getcwd());
+    my $w = skills::gitfacts::where(skills::util::cwd());
     $b{$_} = 1 for @{ skills::store::buckets($ctx->{root}, $w->{repo}) };
     my @docs = sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) }
                grep { ($_->{fm}{session_id} // '') eq $origin } map { @{ skills::store::docs_in($_) } } sort keys %b;

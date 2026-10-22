@@ -4,7 +4,9 @@ package skills::cli;
 # internal error (one stderr line). Exit 2 is never used.
 use strict;
 use warnings;
+use utf8;
 use Getopt::Long ();
+use skills::util;
 
 our $OUT = '';
 
@@ -26,31 +28,31 @@ sub opts {
     return \%o;
 }
 
-# Run one subcommand body; prints buffered stdout, returns the exit code.
+# Run one subcommand body; prints buffered stdout, returns the exit code. The arguments
+# are decoded and the output encoded here, once each (P5-FOLD A4).
 sub main {
     my ($name, $fn, @argv) = @_;
     umask 077;
     $OUT = '';
+    @argv = map { skills::util::text($_) } @argv;
     my $rc = eval { $fn->(\@argv) // 0 };
     if (!defined $rc) {
         my $e = $@;
         if (ref $e eq 'skills::cli::Refused') {
-            print $OUT;
-            print "REFUSED: $e->{why}\n";
-            print "$_\n" for @{ $e->{after} || [] };
+            print skills::util::bytes($OUT . "REFUSED: $e->{why}\n" . join('', map { "$_\n" } @{ $e->{after} || [] }));
             return 3;
         }
         if (ref $e eq 'skills::cli::Usage') {
-            print STDERR "$name: usage: $e->{why}\n";
+            print STDERR skills::util::bytes("$name: usage: $e->{why}\n");
             return 64;
         }
         $e = "$e";
         $e =~ s/\s+\z//;
         $e =~ s/\n/ /g;
-        print STDERR "$name: $e\n";
+        print STDERR skills::util::bytes("$name: " . skills::util::text($e) . "\n");
         return 70;
     }
-    print $OUT;
+    print skills::util::bytes($OUT);
     return $rc;
 }
 

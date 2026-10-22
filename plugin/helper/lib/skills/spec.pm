@@ -4,6 +4,7 @@ package skills::spec;
 # Shapes are normalised defensively; the §3.4 key list fixes names only.
 use strict;
 use warnings;
+use utf8;
 use skills::util;
 use skills::ctx;
 
@@ -206,7 +207,31 @@ sub outward_classes {
     return \@out;
 }
 
-# Optional section caps {name => chars}; not in the §3.4 key list yet.
+# lint_texts (T-TEXT E2, E7): {id => {why, fix}} for the publish lint's `  why: … · fix: …`
+# lines; {} when the spec has no such key (an asset older than T-TEXT E2: no why lines).
+sub lint_texts {
+    my $v = get('lint_texts');
+    return {} unless ref $v eq 'HASH';
+    my %out;
+    for my $id (keys %$v) {
+        my $e = $v->{$id};
+        next unless ref $e eq 'HASH' && defined $e->{why} && !ref $e->{why} && defined $e->{fix} && !ref $e->{fix};
+        $out{$id} = { why => $e->{why}, fix => $e->{fix} };
+    }
+    return \%out;
+}
+
+# acuity_re (T-TEXT E2, E6): the Acuity field of Resume here, group 1 the word; undef when absent.
+sub acuity_re { return regex('acuity_re') }
+
+# The Acuity words in rising order (stable < watch < unstable): the spec's acuity_words.
+sub acuity_words {
+    my $v = get('acuity_words');
+    my @w = grep { defined && !ref } @{ _list($v) };
+    return @w ? \@w : [qw(stable watch unstable)];
+}
+
+# Section caps {name => chars} (T-TEXT E2 `section_caps`, keys are the heading literals).
 sub section_caps {
     my $v = load()->{section_caps};
     my %out;

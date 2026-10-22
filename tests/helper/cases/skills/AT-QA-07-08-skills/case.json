@@ -1,0 +1,176 @@
+{
+ "id": "AT-QA-07-08-skills",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Q-ADAPTER QA-4 (AT-QA-07): with queue mode off (begin measured no queue_cmd) a typed Queued: line and a \"· queued\" question row each give LINT queue-off with its why/fix line, and the publish is refused; with the mode on, the same body has no queue-off. AT-QA-08, repo-mode part: in repo mode with the queue on, the published handoff and the repository export keep the question in full plus · queued <id> (no id-only row).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "begin, queue_cmd empty",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "off"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s, so 30 s fires twice. Options 45 s or configurable; recommend 45 s · queued q-0007 | Step 2 | user | agent | unasked |\nQueued: 2 open in repo x (q-0007, q-0009); answered only via the queue; never re-ask.\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- moved `$TMP/repo/src/a.rb` and the notes in `$HOME/x`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "AT-QA-07 mode off: LINT queue-off for the Queued: line and the · queued row",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT queue-off line \\d+$\\n  why: no queue is configured, so nothing was queued · fix: ",
+     "(?s)^LINT queue-off line \\d+$.*^LINT queue-off line \\d+$",
+     "^REFUSED: lint \\(\\d+ blocking\\); draft kept at "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "copy": "bin/queue-stub",
+     "to": "$TMP/bin/queue",
+     "mode": "0755"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "queue_cmd": "$TMP/bin/queue",
+         "repo_roots": "$TMP/repo"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "begin, queue on (tagged v1 reply), repo mode",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "now": "2026-10-21T14:05:20+03:00",
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v1-tagged"
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "queue.mode": "on",
+     "mode.mode": "repo"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s, so 30 s fires twice. Options 45 s or configurable; recommend 45 s · queued q-0007 | Step 2 | user | agent | unasked |\nQueued: 2 open in repo x (q-0007, q-0009); answered only via the queue; never re-ask.\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- moved `$TMP/repo/src/a.rb` and the notes in `$HOME/x`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "AT-QA-07 mode on: no queue-off; AT-QA-08: the export keeps the question in full plus the id",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "now": "2026-10-21T14:05:20+03:00",
+   "env": {
+    "QUEUE_STUB_DIR": "$FIX/queue/v1-tagged"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$",
+     "^Exported to repository: "
+    ],
+    "stdout_lacks": [
+     "queue-off"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^\\| Q-1 \\| Keep the 45 s retry window\\? Upstream retries at 40 s, so 30 s fires twice\\. Options 45 s or configurable; recommend 45 s · queued q-0007 \\|"
+      ]
+     },
+     {
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md",
+      "has": [
+       "^\\| Q-1 \\| Keep the 45 s retry window\\? Upstream retries at 40 s, so 30 s fires twice\\. Options 45 s or configurable; recommend 45 s · queued q-0007 \\|",
+       "^Queued: 2 open in repo x "
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

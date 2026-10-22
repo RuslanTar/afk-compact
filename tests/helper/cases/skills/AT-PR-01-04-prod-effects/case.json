@@ -1,0 +1,471 @@
+{
+ "id": "AT-PR-01..04 (S-SETTINGS B: unattended_prod_reads, prod_patterns)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "OD-20 / S-SETTINGS B, heal-check and locate: a recorded command that matches a production class (the shipped prod-token, then the user's prod_patterns as user-prod-<n>) is prod-read when read-only and prod-write otherwise, ahead of none and local. prod-read relaunches by itself only with unattended_prod_reads allow, a consent key read from the settings file only (DP-3; env is ignored with a note; a foreign CLAUDE_CONFIG_DIR gets the safe value, CR-F34); prod_patterns is protective: settings file only. Heal rows carry the class id, never the command. locate prints `production: <forbid|allow> · patterns: <shipped ids> + <n> yours`. The successor session (66666666) checks the origin's lost jobs, as in HT-JV-01.",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2001-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-66666666.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"66666666-6666-4666-8666-666666666666\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2099-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.ended-11111111.json",
+     "content": "{\"session_id\": \"$SID\", \"reason\": \"prompt_input_exit\", \"ts\": \"2099-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/66666666-6666-4666-8666-666666666666.lineage.json",
+     "json": {
+      "previous_session_id": "$SID",
+      "lineage_reason": "handoff-resume"
+     }
+    },
+    {
+     "write": "$WATCH/$SID/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"p1\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la /srv/prod-eu; echo \\\"__exit $?\\\"\", \"command_sha256\": \"5caf6d4029a638e49fbd9e682f32b80d6de4f6bff72ed36ecd4d4b597ddafbd1\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/p1.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"p2\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la product-build; echo \\\"__exit $?\\\"\", \"command_sha256\": \"309dc3bedbff754b406cae36101cde5446369904010f711b76ae47b6790c2d1f\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/p2.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"p3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"$LSTART1\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la /srv/acme-eu1; echo \\\"__exit $?\\\"\", \"command_sha256\": \"7e858fdba8c910ba033eae464fc307e1a7477bff94ff410d5e13f473c1335b25\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/p3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_00\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la /srv/prod-eu; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_00\", \"content\": \"Command running in background with ID: p1.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"p1\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la product-build; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: p2.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"p2\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la /srv/acme-eu1; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: p3.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"p3\"}}\n"
+    },
+    {
+     "write": "$WATCH/$SID/bg/slot-6.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 7, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"p1\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"p2\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"p3\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on"
+        }
+       }
+      }
+     }
+    },
+    {
+     "write": "$TMP/out/p1.output",
+     "content": "listing\n"
+    },
+    {
+     "age": "$TMP/out/p1.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/p2.output",
+     "content": "listing\n"
+    },
+    {
+     "age": "$TMP/out/p2.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/p3.output",
+     "content": "listing\n"
+    },
+    {
+     "age": "$TMP/out/p3.output",
+     "minutes": 60
+    }
+   ]
+  },
+  {
+   "name": "AT-PR-01: a recorded read-only production command, every signal passes, unattended_prod_reads forbid (default): prod-read, refused, the recorded command is asked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V1 ",
+     "^signal: V2 ",
+     "^signal: V3 ",
+     "^signal: V4 ",
+     "^signal: V5 ",
+     "^signal: V6 ",
+     "^signal: V7 ",
+     "^verdict: LOST · confidence high · effects prod-read$",
+     "^REFUSED: effects-prod-read$",
+     "^ask-command: ls -la /srv/prod-eu; echo \"__exit \\$\\?\"$",
+     "^ask-source: recorded$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok "
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/66666666-6666-4666-8666-666666666666.classic.jsonl",
+      "ev": "heal",
+      "fields": {
+       "result": "REFUSED:effects-prod-read",
+       "effects": "prod-read",
+       "prod_class": "prod-token",
+       "item": "p1"
+      }
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/66666666-6666-4666-8666-666666666666.classic.jsonl",
+      "lacks": [
+       "/srv/prod-eu",
+       "ls -la"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "prod-token: `product-build` is not a production token: effects none, relaunch",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p2"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects none$",
+     "\\nok job:p2\\nrun: ls -la product-build; echo \"__exit \\$\\?\"\\n\\z"
+    ]
+   }
+  },
+  {
+   "name": "locate prints the production line (forbid, the shipped class only)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^production: forbid · patterns: prod-token \\+ 0 yours$"
+    ]
+   }
+  },
+  {
+   "name": "AT-PR-02: allow given only in the environment: forbid, with the settings-file-only note",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1",
+    "CLAUDE_PLUGIN_OPTION_UNATTENDED_PROD_READS": "allow"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V1 ",
+     "^signal: V2 ",
+     "^signal: V3 ",
+     "^signal: V4 ",
+     "^signal: V5 ",
+     "^signal: V6 ",
+     "^signal: V7 ",
+     "^verdict: LOST · confidence high · effects prod-read$",
+     "^REFUSED: effects-prod-read$",
+     "^ask-command: ls -la /srv/prod-eu; echo \"__exit \\$\\?\"$",
+     "^ask-source: recorded$",
+     "^note: unattended_prod_reads: settings file only$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok "
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on",
+         "unattended_prod_reads": "allow"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-PR-02: allow in the settings file: the production read relaunches; run: is the recorded command",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^signal: V1 ",
+     "^signal: V2 ",
+     "^signal: V3 ",
+     "^signal: V4 ",
+     "^signal: V5 ",
+     "^signal: V6 ",
+     "^signal: V7 ",
+     "^verdict: LOST · confidence high · effects prod-read$",
+     "\\nok job:p1\\nrun: ls -la /srv/prod-eu; echo \"__exit \\$\\?\"\\n\\z"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/66666666-6666-4666-8666-666666666666.classic.jsonl",
+      "ev": "heal",
+      "fields": {
+       "result": "ok",
+       "effects": "prod-read",
+       "prod_class": "prod-token",
+       "item": "p1"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "locate prints allow",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^production: allow · patterns: prod-token \\+ 0 yours$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/cfg/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on",
+         "unattended_prod_reads": "allow"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-PR-02 / CR-F34: allow under a foreign CLAUDE_CONFIG_DIR: the safe value (forbid), with its note; never ok",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1",
+    "CLAUDE_CONFIG_DIR": "$TMP/cfg"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^note: unattended_prod_reads: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok "
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on",
+         "prod_patterns": "acme-eu1"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-PR-04: the user's prod_patterns entry makes a command prod-read (class user-prod-1); forbid refuses it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p3"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V1 ",
+     "^signal: V2 ",
+     "^signal: V3 ",
+     "^signal: V4 ",
+     "^signal: V5 ",
+     "^signal: V6 ",
+     "^signal: V7 ",
+     "^verdict: LOST · confidence high · effects prod-read$",
+     "^REFUSED: effects-prod-read$",
+     "^ask-command: ls -la /srv/acme-eu1; echo \"__exit \\$\\?\"$",
+     "^ask-source: recorded$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok "
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/66666666-6666-4666-8666-666666666666.classic.jsonl",
+      "ev": "heal",
+      "fields": {
+       "result": "REFUSED:effects-prod-read",
+       "effects": "prod-read",
+       "prod_class": "user-prod-1",
+       "item": "p3"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "locate counts the user's pattern, never prints it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^production: forbid · patterns: prod-token \\+ 1 yours$"
+    ],
+    "stdout_lacks": [
+     "acme-eu1"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "AT-PR-04: prod_patterns given only in the environment is ignored (protective key, settings file only): effects none, with the note",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "p3"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1",
+    "CLAUDE_PLUGIN_OPTION_PROD_PATTERNS": "acme-eu1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^note: prod_patterns: settings file only$",
+     "^verdict: LOST · confidence high · effects none$",
+     "\\nok job:p3\\n"
+    ]
+   }
+  }
+ ]
+}

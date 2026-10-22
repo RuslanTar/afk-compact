@@ -3,6 +3,7 @@ package skills::store;
 # "Locations"): buckets, handoffs and copies, frontmatter, integrity.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 use skills::core;
@@ -39,7 +40,7 @@ sub parse {
 
 sub read_doc {
     my ($path) = @_;
-    my $t = skills::util::read_file($path, 1024 * 1024);
+    my $t = skills::util::read_text($path, 1024 * 1024);
     return undef unless defined $t;
     my $d = parse($t);
     $d->{path} = $path;
@@ -220,7 +221,7 @@ sub manifest_cols { return @MANIFEST_COLS }
 
 sub read_manifest {
     my ($mpath) = @_;
-    my $t = skills::util::read_file($mpath);
+    my $t = skills::util::read_text($mpath);
     return undef unless defined $t;
     my @rows;
     for my $l (split /\n/, $t) {
