@@ -17,6 +17,7 @@ use watch::ctx;
 use watch::io;
 use watch::json;
 use watch::export;
+use watch::rules;
 
 my %OKV = map { $_ => 1 } qw(ok ok-trailer);
 my %SHAPED = map { $_ => 1 } qw(mod-hook mod-self classic);
@@ -61,10 +62,19 @@ sub _ev { return $_[0]{ev} // 'compaction' }
 sub _b { my $v = shift; return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : ($v ? 1 : 0) }
 
 # The compactions of one session: the sweep's boundary records (deduped by uuid; they carry
-# the realtime fields M-01..M-20), else the rollup rows.
+# the realtime fields M-01..M-20), else the rollup rows, each joined by nonce to core's
+# `compaction_boundary` row (PKG-RUNTIME E.2; the first one per nonce counts): a null rollup
+# size takes the boundary value, a non-null one is kept. In list context also the number of
+# rollup rows whose non-null value disagrees with the boundary row (`join_conflict`).
 sub compactions {
     my ($rows) = @_;
-    my (%seen, @c);
+    my (%seen, @c, %bound);
+    for my $r (grep { _ev($_) eq 'compaction_boundary' } @$rows) {
+        $bound{ $r->{nonce} } //= $r if defined $r->{nonce} && !ref $r->{nonce};
+    }
+    my @roll = map { (defined $_->{nonce} && !ref $_->{nonce} && $bound{ $_->{nonce} })
+                     ? watch::rules::join_row($_, $bound{ $_->{nonce} }) : $_ } grep { _ev($_) eq 'compaction' } @$rows;
+    my $jc = grep { $_->{_join_conflict} } @roll;
     for my $r (grep { _ev($_) eq 'sweep' } @$rows) {
         for my $b (@{ ref $r->{boundaries} eq 'ARRAY' ? $r->{boundaries} : [] }) {
             next unless ref $b eq 'HASH';
@@ -78,15 +88,15 @@ sub compactions {
                        rapid => $b->{rapid_refill_run}, line => $b->{line}, idle => $b->{idle} };
         }
     }
-    return \@c if @c;
-    for my $r (grep { _ev($_) eq 'compaction' } @$rows) {
+    return wantarray ? (\@c, $jc) : \@c if @c;
+    for my $r (@roll) {
         push @c, { src => 'rollup', main => (($r->{actor} // '') eq 'main' ? 1 : 0), trigger => $r->{trigger},
                    pre => $r->{pre_tokens}, post => $r->{post_tokens}, duration_ms => $r->{duration_ms},
                    precomputed => _b($r->{precomputed}), verdict => $r->{verdict}, channel => $r->{channel},
                    copy => $r->{copy}, band => undef, nonce => $r->{nonce}, ts => $r->{ts}, nudge_driven => _b($r->{nudged}),
                    idle => (ref $r->{idle} ? (_b($r->{idle}) ? 'true' : 'false') : $r->{idle}) };
     }
-    return \@c;
+    return wantarray ? (\@c, $jc) : \@c;
 }
 
 # --- numbers ----------------------------------------------------------------
@@ -104,15 +114,17 @@ sub stats {
              durations => {}, bands => [], chains => 0, nudge_driven => 0, receipts => 0, receipts_unselected => 0,
              lost_U => 0, lost_DX => 0, chain_steps => 0, fabricated => 0, summary => [], over12k => 0,
              resume_once => 0, resume_bad => 0, main => 0, save_gap => 0, shaped => 0, shaped_ok => 0, scope_leak => 0,
-             cont_submitted => 0, cont_halt => 0, denials => {}, tool_calls => 0, publishes => 0, lint => {},
+             cont_submitted => 0, cont_halt => 0, deny => undef, tool_calls => 0, publishes => 0, lint => {},
              heal_sha => 0, watch_errors => {}, sweep_partial => 0, cold_large => 0, warm_large => 0, cc => {},
-             plugin_versions => {}, config => undef, rows => 0);
+             plugin_versions => {}, config => undef, rows => 0, join_conflict => 0);
+    my @denied;
     for my $sid (sort keys %{ $L->{sessions} }) {
         my $rows = $L->{sessions}{$sid};
         next unless @$rows;
         $s{sessions}++;
         $s{rows} += @$rows;
-        my $C = compactions($rows);
+        my ($C, $jc) = compactions($rows);
+        $s{join_conflict} += $jc;
         my @main = grep { $_->{main} && !$_->{precomputed} } @$C;
         $s{main} += @main;
         $s{chains}++ if @main >= 3;
@@ -145,7 +157,7 @@ sub stats {
                 $s{cont_submitted}++ if $res eq 'submitted';
                 $s{cont_halt}++ if $res =~ /\Ahalt:/;
             } elsif ($ev eq 'permission_denied') {
-                $s{denials}{ $r->{guard_class} // 'unknown' }++;
+                push @denied, $r;
             } elsif ($ev eq 'sweep') {
                 $s{tool_calls} += $r->{turns}{tool_calls} // 0 if ref $r->{turns} eq 'HASH';
             } elsif ($ev eq 'handoff_publish') {
@@ -182,6 +194,7 @@ sub stats {
         $s{scope_leak} += 0;
     }
     $s{alerts_n} = scalar @{ $s{alert_rows} };
+    $s{deny} = watch::rules::deny_counts(\@denied);
     return \%s;
 }
 
@@ -228,7 +241,9 @@ sub bars {
     my $rn = $s->{resume_once} + $s->{resume_bad};
     $add->('Resume block delivered once per main compaction', '100%', $rn ? "$s->{resume_once} of $rn" : 'none',
            !$rn ? 'n/a (no main compaction with a nonce)' : $s->{resume_bad} ? 'FAIL' : 'PASS');
-    $add->('Deny rate, classifier-unavailable (control)', 'within +-50% of baseline', '-',
+    my $ctl = $s->{deny}{control};
+    $add->('Deny rate, classifier-unavailable (control)', 'within +-50% of baseline',
+           $s->{tool_calls} ? sprintf('%.1f/1000 calls', 1000 * $ctl / $s->{tool_calls}) : "$ctl denials",
            $source eq 'remote' ? 'n/a (remote)' : 'n/a (no baseline: watch backfill is deferred)');
     $add->('Watcher overhead', 'Stop p95 <=2 s', '-', 'n/a (no timing rows in v1)');
     return \@b;
@@ -244,10 +259,11 @@ sub friction {
     if (@{ $s->{summary} } && $s->{over12k} / @{ $s->{summary} } > 0.10) {
         push @f, sprintf('FR-03 Summary bloat: over-12K %.0f%%', 100 * $s->{over12k} / @{ $s->{summary} });
     }
-    if (%{ $s->{denials} }) {
+    my $g = $s->{deny}{guard_class};
+    if (%$g) {
         my $calls = $s->{tool_calls} || 0;
-        push @f, 'FR-14 Guard friction: ' . join(', ', map { sprintf('%s %s', $_, $calls ? sprintf('%.1f/1000 calls', 1000 * $s->{denials}{$_} / $calls) : "$s->{denials}{$_} denials") }
-                                               sort keys %{ $s->{denials} });
+        push @f, 'FR-14 Guard friction: ' . join(', ', map { sprintf('%s %s', $_, $calls ? sprintf('%.1f/1000 calls', 1000 * $g->{$_} / $calls) : "$g->{$_} denials") }
+                                               sort keys %$g);
     }
     if ($s->{receipts} && $s->{receipts_unselected} / $s->{receipts} > 0.20) {
         push @f, sprintf('FR-16 Locate failures on manual resume: %d of %d unselected', $s->{receipts_unselected}, $s->{receipts});
@@ -357,6 +373,14 @@ sub render {
     push @o, '', '## Verdict mix (main)', '';
     push @o, (%{ $s->{verdicts} } ? join(', ', map { "$_ $s->{verdicts}{$_}" } sort keys %{ $s->{verdicts} }) : 'none');
     push @o, '', 'Idle compactions (the rollup `idle` field, IC-1): ' . ($s->{idle} // 0) . " of $s->{main}";
+    push @o, '', "Size join conflicts (rollup vs compaction_boundary, the rollup value kept): $s->{join_conflict}";
+    my $d = $s->{deny};
+    my $cnt = sub { my $h = shift; return join(', ', map { "$_ $h->{$_}" } sort keys %$h) || 'none' };
+    push @o, '', '## Denials (permission_denied rows, D-13)', '';
+    push @o, "- Total: $d->{total}; control (reason classifier-unavailable, kept apart): $d->{control}",
+             '- By turn kind: ' . $cnt->($d->{turn_kind}), '- By cause: ' . $cnt->($d->{caused_by}),
+             "- In a post-compaction turn caused by the plugin: $d->{post_compaction_plugin}",
+             '- By guard class (control excluded): ' . $cnt->($d->{guard_class});
     push @o, '', '## Background survival', '', ($source eq 'remote' ? 'n/a (remote)' : 'deferred (derived tier)');
     push @o, '', '## Friction (WATCHER-SPEC §5)', '', map { "- $_" } @{ friction($s, $source) };
     push @o, '', '## Alerts by rule', '';

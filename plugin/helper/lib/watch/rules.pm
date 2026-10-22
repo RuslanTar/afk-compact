@@ -101,20 +101,29 @@ sub join_rollup {
     my $conflicts = 0;
     for my $n (sort keys %roll) {
         my $b = $bound{$n} or next;
-        my $r = { %{ $roll{$n} } };
-        my @c;
-        for my $k (sort keys %JOIN_FIELDS) {
-            my $bv = $b->{ $JOIN_FIELDS{$k} };
-            next unless defined $bv;
-            if (!defined $r->{$k}) { $r->{$k} = $bv; next }
-            my ($x, $y) = map { ref $_ eq 'SCALAR' ? ($$_ ? 1 : 0) : $_ } ($r->{$k}, $bv);
-            push @c, $k if "$x" ne "$y";
-        }
-        $r->{boundary_uuid} //= $b->{boundary_uuid};
-        if (@c) { $r->{_join_conflict} = \@c; $conflicts++ }
-        $roll{$n} = $r;
+        $roll{$n} = join_row($roll{$n}, $b);
+        $conflicts++ if $roll{$n}{_join_conflict};
     }
     return (\%roll, \%bound, $conflicts);
+}
+
+# join_row(rollup row, boundary row) -> a joined copy (neither row is changed): a null rollup
+# field takes the boundary value, a non-null one is kept, and a disagreement is named in
+# `_join_conflict`. `watch report` (lib/watch/report.pm) joins its rollup rows with it too.
+sub join_row {
+    my ($roll, $b) = @_;
+    my $r = { %$roll };
+    my @c;
+    for my $k (sort keys %JOIN_FIELDS) {
+        my $bv = $b->{ $JOIN_FIELDS{$k} };
+        next unless defined $bv;
+        if (!defined $r->{$k}) { $r->{$k} = $bv; next }
+        my ($x, $y) = map { ref $_ eq 'SCALAR' ? ($$_ ? 1 : 0) : $_ } ($r->{$k}, $bv);
+        push @c, $k if "$x" ne "$y";
+    }
+    $r->{boundary_uuid} //= $b->{boundary_uuid};
+    $r->{_join_conflict} = \@c if @c;
+    return $r;
 }
 
 # C-STORE D5/D10 (MOD-SPEC §5.9 step 4): the newest `copy_attributed` row per id6. The
@@ -131,15 +140,25 @@ sub attributed_by_id6 {
 
 # `permission_denied` rows (core's hook, WATCHER-SPEC §6.3; D-13 deny_rate): counts by
 # `turn_kind` (`post-compaction` includes the pending-record case of PKG-RUNTIME E.1),
-# `caused_by` and `guard_class`. Content-free: classes and counts only.
+# `caused_by` and `guard_class`. D-13 keeps `reason_class` `classifier-unavailable` apart as
+# the control (CR-17): such a row counts in `control`, not in `guard_class`. Content-free:
+# classes and counts only. `watch report` (lib/watch/report.pm) counts with deny_counts.
 sub deny_summary {
     my ($S) = @_;
-    my %o = (total => 0, turn_kind => {}, caused_by => {}, guard_class => {}, post_compaction_plugin => 0);
-    for my $r (rows_of($S, 'permission_denied')) {
+    return deny_counts([ rows_of($S, 'permission_denied') ]);
+}
+
+sub deny_counts {
+    my ($rows) = @_;
+    my %o = (total => 0, control => 0, turn_kind => {}, caused_by => {}, guard_class => {}, post_compaction_plugin => 0);
+    for my $r (@{ $rows || [] }) {
+        next unless ref $r eq 'HASH';
         $o{total}++;
         my %v = map { my $x = $r->{$_}; ($_ => (defined $x && !ref $x && length $x) ? $x : 'unknown') }
                 qw(turn_kind caused_by guard_class);
-        $o{$_}{ $v{$_} }++ for qw(turn_kind caused_by guard_class);
+        $o{$_}{ $v{$_} }++ for qw(turn_kind caused_by);
+        if (($r->{reason_class} // '') eq 'classifier-unavailable') { $o{control}++ }
+        else { $o{guard_class}{ $v{guard_class} }++ }
         $o{post_compaction_plugin}++ if $v{turn_kind} eq 'post-compaction' && $v{caused_by} eq 'plugin';
     }
     return \%o;

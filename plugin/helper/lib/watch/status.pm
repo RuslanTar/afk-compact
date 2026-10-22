@@ -41,6 +41,7 @@ sub lines {
                                watch::alerts::text_for($ctx, $r->{rule} // ''));
         }
         push @out, sprintf('  (+%d more)', @rows - $SHOW) if @rows > $SHOW;
+        push @out, join_conflict_lines($ctx);
     }
     my ($counts, $sessions) = week_counts($ctx);
     push @out, @$counts
@@ -88,6 +89,18 @@ sub stash_lines {
                          (@unreached > @show ? sprintf(', +%d more', @unreached - @show) : ''));
     }
     return @o;
+}
+
+# PKG-RUNTIME E.2 (WATCHER-SPEC §6.3 `compaction_boundary`): this session's rollup rows whose
+# non-null size disagrees with core's boundary row for the same nonce (`join_conflict`; the
+# rollup value is kept). One line, shown only when the count is not zero. Read-only.
+sub join_conflict_lines {
+    my ($ctx) = @_;
+    require watch::rules;
+    my $p = watch::ctx::sid_dir($ctx) . '/compactions.jsonl';
+    return () unless -f $p && !-l $p;
+    my (undef, undef, $n) = watch::rules::join_rollup(watch::io::read_jsonl($p));
+    return $n ? (sprintf('Compaction size join conflicts this session: %d (the rollup value is kept)', $n)) : ();
 }
 
 sub week_counts {

@@ -36,5 +36,7 @@ my %got;
         $E->is($d->{post_compaction_plugin}, 1, 'one post-compaction denial caused by the plugin');
         $E->is($d->{caused_by}{session}, 2, 'caused_by session');
         $E->is($d->{guard_class}{'sleep-poll'}, 1, 'guard_class counted');
+        $E->is($d->{control}, 1, 'the classifier-unavailable reason is the control (D-13)');
+        $E->ok((!exists $d->{guard_class}{other} ? 1 : 0), 'the control row is kept out of the guard classes');
     },
 };
