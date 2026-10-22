@@ -63,9 +63,11 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             sha256, pattern classes) verdict equals beta/cases.json; zip members are secret-scanned
   manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
             idle-cases.json) agree with the payloads, dispatch records and corpus files they name;
-            each fill-joins outcome follows the C-STORE D5 join order (sha with the engine trailers
-            cut, else the P3 sub window [t - TOL_S, t + SUB_WINDOW_S]), and verify-fail is a fill
-            that only its fault blocks
+            each fill-joins outcome follows the C-STORE D5 join order over the rows no earlier copy
+            joined (sha with the engine trailers cut, else by time: candidates within SUB_WINDOW_S
+            on either side, E-C9-10, and a fill only for exactly one whose row is in the P3 sub
+            window [t - TOL_S, t + SUB_WINDOW_S]), and verify-fail is a fill that only its fault
+            blocks
   prod     settings/prod-cases.json: each recorded command's effects class, each placement's
             unattended_prod_reads value and each prod_patterns file's kept/dropped list follow a
             reference of S-SETTINGS B and C (effects order, limits, no chaining after end_suffix)
@@ -2161,27 +2163,36 @@ def check_replay(b):
     return p
 
 
-# The engine's trailer lines after a transcript summary row's body (fix-escalations item 1,
-# option (a): prefixes for copy_trailers). Not shipped yet; the joins reference reads a summary
-# row with them so that join (b) is proven under that option.
+# The engine's trailer lines after a transcript summary row's body (fix-escalations item 1). Core
+# built option (b): the transcript-row reader cuts them itself (transcript.pm @ENGINE_TRAILERS,
+# core-escalations E-C9-12) and the shipped copy_trailers stay empty. The joins reference cuts the
+# same three prefixes, so join (b) is proven the way core reads a row (and under option (a) alike).
 ENGINE_TRAILERS = [re.compile(r"^If you need specific details from before compaction \("),
                    re.compile(r"^Continue the conversation from where it left off without asking"),
                    re.compile(r"^The messages after this summary are the most recent messages from before compaction")]
 
 
-def join_ref(c, summ, bounds, pay, b):
-    """C-STORE D5 join order for an unmarked copy (no nonce, so no join a): (b) one agent whose
-    summary row's normalized body (engine trailers cut) has the copy's sha; else (c) exactly one
-    agent with an unjoined boundary row in the P3 sub window [t - TOL_S, t + SUB_WINDOW_S];
-    several -> copy_attribution_ambiguous with the candidates; none -> no fill, no row."""
+def join_ref(c, summ, bounds, pay, b, taken=()):
+    """C-STORE D5 join order for an unmarked copy (no nonce, so no join a), over the boundary rows
+    no earlier copy has joined (`taken`: the case's joined_before agents): (b) one agent whose
+    summary row's normalized body (engine trailers cut) has the copy's sha; else (c) by time, with
+    the candidate count of core-escalations E-C9-10 (core-to-fix 3; provisional until the root
+    rules on it): every agent with a free boundary row within SUB_WINDOW_S on either side of the
+    PostCompact time t counts; exactly one, with its row in the P3 sub window
+    [t - TOL_S, t + SUB_WINDOW_S] -> fill; several -> copy_attribution_ambiguous with them;
+    else no fill, no row. Returns (outcome, all sha holders, the candidates)."""
     sha = detect(fill(pay["compact_summary"], b), b["name"])[5]
     holders = sorted(a for a, r in summ.items() if detect(fill(row_text(r), b), b["name"], trailers=ENGINE_TRAILERS)[5] == sha)
+    free = [a for a in holders if a not in taken]
+    if len(free) == 1:
+        return {"filled": True, "agent": free[0], "attributed_by": "reconcile-b"}, holders, []
     t = parse_iso(c["postcompact_now"])
-    cands = sorted(a for a, e in bounds.items() if t is not None and e is not None and t - TOL_S <= e <= t + SUB_WINDOW_S)
-    if len(holders) == 1:
-        return {"filled": True, "agent": holders[0], "attributed_by": "reconcile-b"}, holders, cands
+    cands = sorted(a for a, e in bounds.items()
+                   if a not in taken and t is not None and e is not None and abs(e - t) <= SUB_WINDOW_S)
     if len(cands) == 1:
-        return {"filled": True, "agent": cands[0], "attributed_by": "reconcile-c"}, holders, cands
+        if t - TOL_S <= bounds[cands[0]] <= t + SUB_WINDOW_S:
+            return {"filled": True, "agent": cands[0], "attributed_by": "reconcile-c"}, holders, cands
+        return {"filled": False}, holders, cands
     if cands:
         return {"filled": False, "row": "copy_attribution_ambiguous", "candidates": cands}, holders, cands
     return {"filled": False}, holders, cands
@@ -2217,7 +2228,18 @@ def check_joins(b):
             continue
         if detect(fill(pay["compact_summary"], b), b["name"])[3] is not None:
             p.append("{}: the payload summary must be unmarked".format(w))
-        ref, holders, cands = join_ref(c, summ, bounds, pay, b)
+        before = c.get("joined_before", [])
+        if not set(before) <= set(m["agents"]):
+            p.append("{}: joined_before names no agent of the manifest: {}".format(w, sorted(set(before) - set(m["agents"]))))
+        taken = {m["agents"][k] for k in before if k in m["agents"]}
+        ref, holders, cands = join_ref(c, summ, bounds, pay, b, taken)
+        if c["id"] == "two-sided":   # the E-C9-10 pin must separate the readings
+            t = parse_iso(c["postcompact_now"])
+            one = [a for a, e in bounds.items() if a not in taken and t is not None and e is not None
+                   and t - TOL_S <= e <= t + SUB_WINDOW_S]
+            if len(one) != 1 or len(cands) < 2:
+                p.append("{}: the one-sided P3 window must hold exactly one candidate ({}) and the two-sided "
+                         "count several ({}), or the case does not pin E-C9-10".format(w, one, cands))
         lines = sorted(a for a, r in summ.items() if not body_lines_in(pay["compact_summary"], r, b))
         if lines != holders:
             p.append("{}: every body line is in the rows of {}, but the sha (engine trailers cut) matches {}".format(w, lines, holders))
@@ -2235,7 +2257,7 @@ def check_joins(b):
         if got != ref or set(e) - set(ref) - {"note"}:
             p.append("{}: expect {} but the D5 join order gives {} (sha holders {}, window candidates {})".format(
                 w, e, ref, holders, cands))
-    for need in ("sha-join", "ambiguous", "time-join", "verify-fail"):
+    for need in ("sha-join", "ambiguous", "time-join", "verify-fail", "two-sided"):
         if need not in seen:
             p.append("fill-joins: no {} case (AT-ST-09)".format(need))
     return p

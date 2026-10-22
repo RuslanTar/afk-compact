@@ -4,7 +4,7 @@
     "AT-ST-09"
   ],
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
-  "note": "Unmarked subagent summaries (no nonce): fill joins by body sha (b), else by time only when exactly one agent file has an unjoined boundary row in the copy's window (c), the reconcile.pm P3 sub window: the boundary row at most TOL_S (2 s) before and at most SUB_WINDOW_S (120 s) after the PostCompact time. The two boundary rows are 35 s apart. The summary rows carry the engine trailers: a reader computing the row's normalized-body sha must cut them first, or join (b) never matches (fix-escalations item 1; `--check` reads them with the option (a) prefixes in ENGINE_TRAILERS). verify-fail is time-join with the test-mode fault that flips one byte of the new file before the re-read (needs/fix-to-core.md).",
+  "note": "Unmarked subagent summaries (no nonce), over the boundary rows no earlier copy has joined (joined_before: agents whose row a copy earlier in the session already took): fill joins by body sha (b), else by time (c). The (c) candidate count is core's built reading (core-escalations E-C9-10, provisional until the root rules): every agent with an unjoined boundary row within SUB_WINDOW_S (120 s) on either side of the PostCompact time counts; a fill only when there is exactly one and its row lies in the reconcile.pm P3 sub window (at most TOL_S, 2 s, before and at most SUB_WINDOW_S after the PostCompact time); several give copy_attribution_ambiguous. The two boundary rows are 35 s apart. The summary rows carry the engine trailers: a reader computing the row's normalized-body sha must cut them first, or join (b) never matches (fix-escalations item 1; core built option (b), its own cut in transcript.pm; `--check` cuts the same three prefixes, ENGINE_TRAILERS). verify-fail is time-join with the test-mode fault that flips one byte of the new file before the re-read (needs/fix-to-core.md).",
   "agents": {
     "A2": "a5c0ffee0a1b2c3d4",
     "A3": "a7d00d1e5e6f7a8b9"
@@ -43,7 +43,10 @@
       "id": "time-join",
       "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
       "postcompact_now": "2026-10-21T14:05:05.650+03:00",
-      "note": "the body is in no agent file; A3's row is 0.4 s before (in the window), A2's 35.4 s before (outside TOL_S): exactly one candidate",
+      "joined_before": [
+        "A2"
+      ],
+      "note": "the body is in no agent file; A2's row was already joined by the sha-join copy earlier in the session, so A3 (row 0.4 s before, in the window) is the only candidate. Holds under either window reading: A2's row is also outside the one-sided P3 window (35.4 s before)",
       "expect": {
         "filled": true,
         "agent": "a7d00d1e5e6f7a8b9",
@@ -51,9 +54,26 @@
       }
     },
     {
+      "id": "two-sided",
+      "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
+      "postcompact_now": "2026-10-21T14:05:05.650+03:00",
+      "note": "E-C9-10 pin (core's reading, provisional until the root rules): time-join's time with both rows free. A3's row is 0.4 s before (in the P3 window), A2's 35.4 s before (outside TOL_S, inside SUB_WINDOW_S): both count as candidates, so no fill. Under the one-sided reading (candidates only in the P3 window) this would be a join (c) to A3",
+      "expect": {
+        "filled": false,
+        "row": "copy_attribution_ambiguous",
+        "candidates": [
+          "a5c0ffee0a1b2c3d4",
+          "a7d00d1e5e6f7a8b9"
+        ]
+      }
+    },
+    {
       "id": "verify-fail",
       "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
       "postcompact_now": "2026-10-21T14:05:05.650+03:00",
+      "joined_before": [
+        "A2"
+      ],
       "note": "time-join with the fault: the re-read finds the body sha changed, so the new file is unlinked and the old one stays",
       "fault": {
         "env": {
