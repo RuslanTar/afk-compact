@@ -86,7 +86,18 @@ sub lane {
 # ---------------------------------------------------------------- mode (QA-1)
 our %CONTRACT_WHY = map { $_ => 1 } qw(untagged schema not-json exit timeout);
 
-sub _state_path { my $d = rc::sid_dir(); return defined $d ? "$d/queue-state.json" : undef }
+# _state_path([sid]) -> <watch>/<sid>/queue-state.json, this session's when no sid is given;
+# undef for a sid that is not one path component of the session-id alphabet
+sub _state_path {
+    my ($sid) = @_;
+    if (defined $sid) {
+        my $w = rc::watch();
+        return undef unless defined $w && !ref $sid && $sid =~ /\A[0-9A-Za-z][0-9A-Za-z_-]{0,127}\z/;
+        return "$w/$sid/queue-state.json";
+    }
+    my $d = rc::sid_dir();
+    return defined $d ? "$d/queue-state.json" : undef;
+}
 
 # _contract(cmd, why|undef): this session's last list outcome for this tool (path, mtime, size);
 # a break logs queue_contract {why} once per session and why
@@ -100,13 +111,17 @@ sub _contract {
     rc::emit('queue_contract', [why => $why]) if defined $why && $CONTRACT_WHY{$why} && rc::once("queue_contract-$why");
 }
 
-# mode([cmd]) -> {mode => off|on|degraded, why => …}: no queue call (the setting, the file and
-# this session's last list outcome). cmd defaults to the queue_cmd setting.
+# mode([cmd]) or mode(sid, cmd) -> {mode => off|on|degraded, why => …}: no queue call (the
+# setting, the file and the session's last list outcome: this session's, or sid's record when
+# given, skills-to-core §5). cmd defaults to the queue_cmd setting (also for an undef cmd in the
+# two-argument form).
 sub mode {
-    my $cmd = @_ ? $_[0] : rc::val('queue_cmd');
+    my ($sid, $cmd);
+    if (@_ >= 2) { ($sid, $cmd) = @_; $cmd //= rc::val('queue_cmd') }
+    else { $cmd = @_ ? $_[0] : rc::val('queue_cmd') }
     return { mode => 'off' } unless defined $cmd && $cmd ne '';
     return { mode => 'degraded', why => 'not-executable' } unless -f $cmd && -x _;
-    my $p = _state_path();
+    my $p = _state_path($sid);
     my $raw = defined $p ? util::read_file($p) : undef;
     my $s = defined $raw ? eval { jsonc::decode($raw) } : undef;
     if (ref $s eq 'HASH' && defined $s->{why} && $CONTRACT_WHY{ $s->{why} } && ($s->{key} // '') eq (_caps_key($cmd) // '')) {
@@ -115,7 +130,8 @@ sub mode {
     return { mode => 'on' };
 }
 
-# mode_text([cmd]) -> `off` | `on` | `degraded (<why>)`: the words /status, begin and locate print
+# mode_text([cmd]) or mode_text(sid, cmd) -> `off` | `on` | `degraded (<why>)`: the words
+# /status, begin and locate print
 sub mode_text { my $m = mode(@_); return $m->{mode} eq 'degraded' ? "degraded ($m->{why})" : $m->{mode} }
 
 # must_exist(cmd) -> 1 when the cached `commands` of the last list reply hold adopt:must-exist

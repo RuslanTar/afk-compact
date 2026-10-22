@@ -1529,6 +1529,19 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'queue_mode') {
+        # CORE-18, skills-to-core §5: queue::mode(sid, cmd) and mode_text(sid, cmd) read only
+        # that session's record under {watch} (no queue call): {mode, why, text} as expected
+        require "queue.pm";
+        no warnings "once";
+        local %rc::R = (watch => $a->{watch}, settings => { values => {} });
+        my $m = queue::mode($a->{sid}, $a->{cmd});
+        my $t = queue::mode_text($a->{sid}, $a->{cmd});
+        push @e, "mode $m->{mode}, want $a->{mode}" if defined $a->{mode} && $m->{mode} ne $a->{mode};
+        push @e, 'why ' . ($m->{why} // 'none') . ', want ' . ($a->{why} // 'none') if exists $a->{why} && ($m->{why} // '') ne ($a->{why} // '');
+        push @e, "text '$t', want '$a->{text}'" if defined $a->{text} && $t ne $a->{text};
+        return @e;
+    }
     if ($name eq 'settings_prod') {
         # S-SETTINGS B (CORE-02): settings::prod over resolved values {values}: reads, the
         # class id each text matches (null = none), the user pattern count, the invalid entries.
