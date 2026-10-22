@@ -143,7 +143,7 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 | A-13 | session-id canary |
 | A-14 | slow resume |
 | A-15 | version, arm or hook-surface change |
-| A-16 | sec-default bypass suspected |
+| A-16 | {{plugin}}: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it. | <!-- P5-FOLD A5, WATCHER-SPEC M-06/A-16 (needs watch-to-text W2T-2) -->
 | A-17 | failed or blocked compaction |
 | A-18 | auto-continue stopped |
 | A-19 | auto-continue cap breached |
@@ -503,7 +503,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "A-13": "session-id canary",
     "A-14": "slow resume",
     "A-15": "version, arm or hook-surface change",
-    "A-16": "sec-default bypass suspected",
+    "A-16": "{{plugin}}: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
     "A-17": "failed or blocked compaction",
     "A-18": "auto-continue stopped",
     "A-19": "auto-continue cap breached",
