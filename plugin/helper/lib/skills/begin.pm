@@ -9,6 +9,7 @@ package skills::begin;
 # the D-12 mode and, in repo mode, the export target are printed.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use File::Basename ();
 use skills::util;
@@ -58,7 +59,7 @@ sub run {
     die skills::cli::refuse($refused) if $refused;
 
     my $now = skills::util::now();
-    my $cwd = skills::util::abs_path($o->{cwd} // Cwd::getcwd());
+    my $cwd = skills::util::abs_path($o->{cwd} // skills::util::cwd());
     my $id = skills::ctx::resolve_sid($ctx, $o->{sid});
     my $sid = $id->{sid};
     my $lin = skills::ctx::lineage_of($ctx, $sid) || {};
@@ -478,8 +479,8 @@ sub _fit {
         sub { my $c = $out->{config}; my $did = 0; for (values %$c) { $did = 1 if delete $_->{source} } $did },
     );
     for my $t (@trim) {
-        while (length($j) > $MAX_BYTES && $t->()) { $j = skills::util::json_encode($out) }
-        last if length($j) <= $MAX_BYTES;
+        while (skills::util::blen($j) > $MAX_BYTES && $t->()) { $j = skills::util::json_encode($out) }
+        last if skills::util::blen($j) <= $MAX_BYTES;
     }
     return $j;
 }

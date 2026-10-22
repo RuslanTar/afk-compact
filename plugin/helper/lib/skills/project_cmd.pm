@@ -24,6 +24,7 @@ package skills::project_cmd;
 # Paths printed are relative to the worktree's toplevel for repository files.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use Cwd ();
 use skills::util;
@@ -61,7 +62,7 @@ sub run {
 
 sub _cwd {
     my ($o) = @_;
-    my $c = (defined $o->{cwd} && $o->{cwd} ne '') ? $o->{cwd} : Cwd::getcwd();
+    my $c = (defined $o->{cwd} && $o->{cwd} ne '') ? $o->{cwd} : skills::util::cwd();
     die skills::cli::usage("--cwd $c is not a directory") unless -d $c;
     return skills::util::abs_path($c);
 }

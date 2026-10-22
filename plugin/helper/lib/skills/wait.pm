@@ -120,7 +120,8 @@ sub _end { my ($line, $rc) = @_; skills::cli::say($line); alarm 0; return $rc }
 sub _cut {
     my ($t, $n) = @_;
     my $c = $t;
-    if (utf8::decode($c)) { $c = substr($c, 0, $n) if length $c > $n; $c =~ s/[\x00-\x1f\x7f]/?/g; utf8::encode($c); return $c }
+    # characters out (P5-FOLD A4); bytes that are not UTF-8 are shown as ASCII only
+    if (utf8::is_utf8($c) || utf8::decode($c)) { $c = substr($c, 0, $n) if length $c > $n; $c =~ s/[\x00-\x1f\x7f]/?/g; return $c }
     $t = substr($t, 0, $n) if length $t > $n;
     $t =~ s/[^\x20-\x7e]/?/g;
     return $t;
@@ -298,6 +299,7 @@ sub _scan {
             if ($c->{skip_partial}) { $c->{skip_partial} = 0; next }
             $c->{line}++;
             $l =~ s/\r\z//;
+            $l = skills::util::text($l);
             if ($c->{kind} eq 'marker') {
                 return { line => $c->{line}, match => $&, notes => \@notes } if $l =~ $c->{re};
             } else {
@@ -309,6 +311,7 @@ sub _scan {
     close $fh;
     if ($c->{kind} eq 'exit' && !$c->{skip_partial} && $c->{partial} ne '') {
         (my $l = $c->{partial}) =~ s/\r\z//;
+        $l = skills::util::text($l);
         my $hit = _exit_hit($ctx, $l, $c->{line} + 1, \@notes);
         return $hit if $hit;
     }

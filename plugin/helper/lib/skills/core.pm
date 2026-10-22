@@ -33,6 +33,7 @@ package skills::core;
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
 use strict;
 use warnings;
+use utf8;
 use POSIX ();
 use skills::util;
 use settings;
@@ -62,7 +63,7 @@ sub settings {
     my $s = ref $r eq 'HASH' ? $r->{settings} : undef;
     $s = $s->{values} if ref $s eq 'HASH' && ref $s->{values} eq 'HASH';
     die "settings: no result\n" unless ref $s eq 'HASH';
-    return $s;
+    return skills::util::text_deep($s);
 }
 
 # The session id the core context logs and locks under (rc), once a skill knows it.
@@ -76,13 +77,13 @@ sub paths {
     my ($s, $sid) = @_;
     my $p = paths::for($s, $sid);
     die "paths: no result\n" unless ref $p eq 'HASH' && $p->{root};
-    return $p;
+    return skills::util::text_deep($p);
 }
 
 # undef when the roots are safe, else the refusal reason.
 sub roots_check {
     my ($s) = @_;
-    my $r = roots::check($s);
+    my $r = skills::util::text_deep(roots::check($s));
     return undef if !defined $r;
     if (ref $r eq 'HASH') {
         return undef if $r->{ok};
@@ -234,7 +235,7 @@ sub evidence_copy {
     $r->{sha256} //= '';
     $r->{bytes}  //= 0;
     $r->{scan}   //= $r->{status} eq 'copied' ? 'full' : $r->{status};
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 sub gsd {
@@ -244,7 +245,7 @@ sub gsd {
     $r = $r->{lines} if ref $r eq 'HASH';
     $r = [ split /\n/, $r ] unless ref $r;
     return undef unless ref $r eq 'ARRAY' && @$r;
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 sub queue_call {
@@ -254,7 +255,7 @@ sub queue_call {
     return { rc => -1, out => '', timed_out => 0, error => 1 } unless ref $r eq 'HASH';
     return {
         rc        => $r->{rc} // $r->{exit} // -1,
-        out       => $r->{out} // $r->{stdout} // '',
+        out       => skills::util::text($r->{out} // $r->{stdout} // ''),
         timed_out => $r->{timed_out} // $r->{timeout} // 0,
     };
 }
@@ -265,16 +266,16 @@ sub bucket_resolve {
     # which settings() built from the same flags; the 4th argument is git facts, not settings.
     my $r = bucket::resolve($sid, $cwd, $topic);
     die "bucket: no result\n" unless ref $r eq 'HASH' && $r->{path};
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 # ---------------------------------------------------------------- 2026-10-21 seams
 
 # The effective watch dir (log_dir, or its safe default), or undef when neither is safe.
-sub watch_dir { my $w = eval { rc::watch() }; return $w }
+sub watch_dir { my $w = eval { rc::watch() }; return skills::util::text($w) }
 
 # <watch>/<sid> of the bound session (the effective watch dir: log_dir, or its safe default).
-sub sid_dir { my $d = eval { rc::sid_dir() }; return $d }
+sub sid_dir { my $d = eval { rc::sid_dir() }; return skills::util::text($d) }
 
 # The D-12 mode of cwd's worktree: {mode, reason, toplevel, main_checkout, root_rel, root_path,
 # ignored, exports, ...}; rc::mode logs handoff_mode once per (mode, reason).
@@ -282,23 +283,24 @@ sub mode {
     my ($cwd) = @_;
     my $m = eval { rc::mode($cwd) };
     return { mode => 'private', reason => 'repo-root-unchecked' } unless ref $m eq 'HASH' && $m->{mode};
-    return $m;
+    return skills::util::text_deep($m);
 }
 
 # A worktree's declaration and repository-root check (D-12 §1.5.2, §1.5.3), read-only.
-sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? $d : { present => 0 } }
-sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? $c : { ok => 0, reason => 'repo-root-unchecked' } }
+sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? skills::util::text_deep($d) : { present => 0 } }
+sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? skills::util::text_deep($c) : { ok => 0, reason => 'repo-root-unchecked' } }
 sub gitignore_text { return repomode::gitignore_text() }
 sub default_root { return $repomode::DEFAULT_ROOT }
 sub decl_name { return $repomode::DECL }
 sub valid_root { return repomode::valid_root($_[0]) }
 
 # The handoff-turn store (D-18), all read through lib/handoff_turn.pm.
-sub ht_open_for_begin { my ($d) = @_; return defined $d ? handoff_turn::open_for_begin($d) : undef }
-sub ht_stage_of       { my ($d, $ht) = @_; return defined $d ? handoff_turn::stage_of($d, $ht) : undef }
-sub ht_bind_stage     { my ($d, $ht, $stage) = @_; return handoff_turn::bind_stage($d, $ht, $stage) }
-sub ht_mark_published { my ($d, $ht, $path) = @_; return handoff_turn::mark_published($d, $ht, $path) }
-sub ht_record         { my ($d, $ht) = @_; return defined $d ? handoff_turn::record($d, $ht) : undef }
+sub ht_open_for_begin { my ($d) = @_; return defined $d ? skills::util::text_deep(handoff_turn::open_for_begin($d)) : undef }
+sub ht_stage_of       { my ($d, $ht) = @_; return defined $d ? skills::util::text(handoff_turn::stage_of($d, $ht)) : undef }
+sub ht_bind_stage     { my ($d, $ht, $stage) = @_; return map { skills::util::text_deep($_) } handoff_turn::bind_stage($d, $ht, $stage) }
+sub ht_mark_published { my ($d, $ht, $path) = @_; return map { skills::util::text_deep($_) } handoff_turn::mark_published($d, $ht, $path) }
+sub ht_record         { my ($d, $ht) = @_; return defined $d ? skills::util::text_deep(handoff_turn::record($d, $ht)) : undef }
+sub ht_published_of   { my ($d, $ht) = @_; return defined $d ? skills::util::text(handoff_turn::published_of($d, $ht)) : undef }
 sub ht_valid          { return handoff_turn::valid_ht($_[0]) }
 
 # (slot object, slot path) of the highest seq in <sid_dir>/bg, or (): the rule of
@@ -317,8 +319,8 @@ sub sidecar_newest {
 }
 
 # Dev-1 job records of a session dir.
-sub job_record { my ($sid_dir, $task) = @_; return eval { jobrec::record_of($sid_dir, $task) } }
-sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jobs_path($sid_dir)) }; return ref $r eq 'ARRAY' ? $r : [] }
+sub job_record { my ($sid_dir, $task) = @_; return skills::util::text_deep(eval { jobrec::record_of($sid_dir, $task) }) }
+sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jobs_path($sid_dir)) }; return ref $r eq 'ARRAY' ? skills::util::text_deep($r) : [] }
 sub job_add_pending { my ($sid_dir, $p) = @_; return jobrec::add_pending($sid_dir, $p) }
 sub job_output_source { return $jobrec::OUTPUT_PATH_SOURCE // 'none' }
 
@@ -338,14 +340,14 @@ sub recipe_command {
 # settings::relaunch over the run context's resolved settings (consent keys: file only).
 sub relaunch {
     my $r = eval { settings::relaunch(rc::settings()) };
-    return ref $r eq 'HASH' ? $r : { auto => 'off', allow => [], quiet_s => 120, allow_active => 0, invalid => [], clamped => [] };
+    return ref $r eq 'HASH' ? skills::util::text_deep($r) : { auto => 'off', allow => [], quiet_s => 120, allow_active => 0, invalid => [], clamped => [] };
 }
 
 sub detect_summary {
     my ($text) = @_;
     my $r = eval { detect::summary($text) };
     return undef unless ref $r eq 'HASH';
-    return $r;
+    return skills::util::text_deep($r);
 }
 
 1;

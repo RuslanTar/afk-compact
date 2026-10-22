@@ -35,7 +35,7 @@ sub printed_times {
     my ($dir, $s) = @_;
     my %t;
     $t{ $s->{checked_at} } = 1 if $s->{checked_at};
-    my $log = skills::util::read_file("$dir/stamps.log") // '';
+    my $log = skills::util::read_text("$dir/stamps.log") // '';
     for my $l (split /\n/, $log) {
         my (undef, $shown) = split /\t/, $l, 2;
         next unless defined $shown;

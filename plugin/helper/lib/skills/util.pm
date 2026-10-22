@@ -1,14 +1,60 @@
 package skills::util;
 # lib/skills/util.pm: small shared tools for the skill subcommands (WP-skills).
-# Floor modules only (RUNTIME §2.4). Text is handled as bytes throughout:
-# files, JSON strings and spec regexes are all UTF-8 byte strings.
+# Floor modules only (RUNTIME §2.4).
+# Text encoding (P5-FOLD A4, MOD-SPEC §2.6): inside the skills, text is characters and
+# bytes are only at the edges. Every input that becomes text is decoded once where it is
+# read (text(): arguments, file text, JSON, git and queue output, directory names, the
+# environment, the core seams' strings); bytes that are not UTF-8 are taken as Latin-1
+# (the CR-F2 rule) and stay as read. Every output is encoded once (bytes(): stdout, stderr,
+# the files written here). A string without the UTF-8 flag that holds non-ASCII is the
+# bytes it was read with (a file copy, a patch, an undecodable name), so bytes() leaves it
+# as it is. Paths are character strings: a file system call gets their UTF-8 bytes.
 use strict;
 use warnings;
+use utf8;
 use Fcntl qw(O_WRONLY O_CREAT O_EXCL O_APPEND O_RDONLY LOCK_EX LOCK_UN);
 use POSIX ();
 use Errno ();
 use File::Basename ();
 use Cwd ();
+
+# ---------------------------------------------------------------- text encoding
+
+# text(s): bytes -> characters, once. A character string, an ASCII string, undef and a
+# reference come back as they are; bytes that are not UTF-8 stay as read (Latin-1).
+sub text {
+    my ($s) = @_;
+    return $s if !defined $s || ref $s || utf8::is_utf8($s) || $s !~ /[^\x00-\x7f]/;
+    my $c = $s;
+    return utf8::decode($c) ? $c : $s;
+}
+
+# bytes(s): characters -> UTF-8 bytes for output, once; bytes come back as they are.
+sub bytes {
+    my ($s) = @_;
+    return $s if !defined $s || ref $s || !utf8::is_utf8($s);
+    my $c = $s;
+    utf8::encode($c);
+    return $c;
+}
+
+# The length in bytes of what bytes() writes (byte caps and byte counts).
+sub blen { my ($s) = @_; return length bytes($s // '') }
+
+# text_deep(v): text() over every string of a nested hash/array, as a copy; blessed and
+# other references (compiled patterns, code) are kept as they are.
+sub text_deep {
+    my ($v) = @_;
+    my $r = ref $v;
+    return text($v) unless $r;
+    return { map { text($_) => text_deep($v->{$_}) } keys %$v } if $r eq 'HASH';
+    return [ map { text_deep($_) } @$v ] if $r eq 'ARRAY';
+    return $v;
+}
+
+# The current directory and an environment value, decoded (text()).
+sub cwd { return text(Cwd::getcwd()) }
+sub env { my ($k) = @_; return text($ENV{$k}) }
 
 # ---------------------------------------------------------------- JSON codec
 
@@ -46,11 +92,13 @@ sub _jstr {
 sub json_true  { return \1 }
 sub json_false { return \0 }
 
-# Decode one JSON text. Returns the value; dies "json: ..." on bad input.
-# true/false decode to 1/0, null to undef; \u escapes become UTF-8 bytes.
+# Decode one JSON text (bytes are decoded first, text()). Returns the value; dies
+# "json: ..." on bad input. true/false decode to 1/0, null to undef; strings are
+# characters, \u escapes included.
 sub json_decode {
     my ($text) = @_;
     die "json: empty\n" unless defined $text;
+    $text = text($text);
     my $pos = 0;
     my $v = _jval(\$text, \$pos);
     _jws(\$text, \$pos);
@@ -119,12 +167,19 @@ sub _jstring {
     my ($t, $p) = @_;
     $$p++;
     my $out = '';
+    my $wide = 0;
     while (1) {
         pos($$t) = $$p;
         if ($$t =~ /\G([^"\\]+)/gc) { $out .= $1; $$p = pos($$t); next }
         my $c = substr($$t, $$p, 1);
         die "json: unterminated string\n" if $c eq '';
-        if ($c eq '"') { $$p++; return $out }
+        if ($c eq '"') {
+            $$p++;
+            # An escaped non-ASCII character is a character: keep the string flagged, so
+            # bytes() and a file system call see its UTF-8 form.
+            utf8::upgrade($out) if $wide;
+            return $out;
+        }
         my $e = substr($$t, $$p + 1, 1);
         if (exists $ESC{$e}) { $out .= $ESC{$e}; $$p += 2; next }
         if ($e eq 'u') {
@@ -139,20 +194,12 @@ sub _jstring {
                     $$p += 6;
                 }
             }
-            $out .= _utf8($cp);
+            $wide = 1 if $cp > 0x7f;
+            { no warnings 'utf8'; $out .= chr($cp) }
             next;
         }
         die "json: bad escape\n";
     }
-}
-
-sub _utf8 {
-    my ($cp) = @_;
-    return chr($cp) if $cp < 0x80;
-    return chr(0xC0 | ($cp >> 6)) . chr(0x80 | ($cp & 0x3F)) if $cp < 0x800;
-    return chr(0xE0 | ($cp >> 12)) . chr(0x80 | (($cp >> 6) & 0x3F)) . chr(0x80 | ($cp & 0x3F)) if $cp < 0x10000;
-    return chr(0xF0 | ($cp >> 18)) . chr(0x80 | (($cp >> 12) & 0x3F))
-         . chr(0x80 | (($cp >> 6) & 0x3F)) . chr(0x80 | ($cp & 0x3F));
 }
 
 # ---------------------------------------------------------------- sha256
@@ -306,6 +353,24 @@ sub read_file {
     return $data;
 }
 
+# read_text(path[, max]): the file's text, decoded once (text()). A read cut at max in the
+# middle of a UTF-8 sequence drops that last partial character instead of reading the
+# whole text as Latin-1.
+sub read_text {
+    my ($path, $max) = @_;
+    my $data = read_file($path, $max);
+    return undef unless defined $data;
+    my $t = text($data);
+    return $t if utf8::is_utf8($t) || $data !~ /[^\x00-\x7f]/;
+    if (defined $max && length($data) >= $max) {
+        for my $cut (1 .. 3) {
+            my $c = substr($data, 0, length($data) - $cut);
+            return $c if utf8::decode($c);
+        }
+    }
+    return $t;
+}
+
 sub mkdir_p {
     my ($dir) = @_;
     return 1 if -d $dir;
@@ -358,8 +423,10 @@ sub append_line {
     return 1;
 }
 
+# Every file the skills write gets its content encoded once (bytes()).
 sub _write_all {
     my ($fh, $content, $path) = @_;
+    $content = bytes($content);
     my $off = 0;
     my $len = length $content;
     while ($off < $len) {
@@ -410,7 +477,7 @@ sub unique_path {
 sub list_dir {
     my ($dir) = @_;
     opendir(my $dh, $dir) or return ();
-    my @e = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+    my @e = map { text($_) } grep { $_ ne '.' && $_ ne '..' } readdir $dh;
     closedir $dh;
     return sort @e;
 }
@@ -418,14 +485,14 @@ sub list_dir {
 sub expand_tilde {
     my ($p) = @_;
     return $p unless defined $p;
-    my $home = $ENV{HOME} // '';
+    my $home = env('HOME') // '';
     $p =~ s/\A~(?=\/|\z)/$home/;
     return $p;
 }
 
 sub abbrev_home {
     my ($p) = @_;
-    my $home = $ENV{HOME} // '';
+    my $home = env('HOME') // '';
     return $p if $home eq '' || !defined $p;
     $p =~ s/\A\Q$home\E(?=\/|\z)/~/;
     return $p;
@@ -435,9 +502,9 @@ sub abs_path {
     my ($p) = @_;
     return undef unless defined $p && $p ne '';
     $p = expand_tilde($p);
-    $p = Cwd::getcwd() . '/' . $p unless $p =~ m{\A/};
+    $p = cwd() . '/' . $p unless $p =~ m{\A/};
     my $r = Cwd::abs_path($p);
-    return defined $r ? $r : $p;
+    return defined $r ? text($r) : $p;
 }
 
 # A setting or flag value that counts as unset (MOD §2.6, HDN §6).
@@ -501,7 +568,7 @@ sub trace {
 
 sub which {
     my ($name) = @_;
-    for my $d (split /:/, ($ENV{PATH} // '')) {
+    for my $d (split /:/, (env('PATH') // '')) {
         next if $d eq '';
         return "$d/$name" if -x "$d/$name" && !-d "$d/$name";
     }

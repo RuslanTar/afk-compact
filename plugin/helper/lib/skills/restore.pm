@@ -4,6 +4,7 @@ package skills::restore;
 # private modes; nothing is moved or deleted.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 use skills::cli;

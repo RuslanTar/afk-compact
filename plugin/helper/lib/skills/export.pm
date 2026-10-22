@@ -20,6 +20,7 @@ package skills::export;
 # The plugin never runs git add, commit or push: the export stays untracked.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 use skills::core;
@@ -47,7 +48,7 @@ sub rewrite {
         $t =~ s/(?<![\w.\/~-])\Q$top\E\///g;
         $t =~ s/(?<![\w.\/~-])\Q$top\E(?![\w.\/-])/./g;
     }
-    my $home = $ENV{HOME} // '';
+    my $home = skills::util::env('HOME') // '';
     $t =~ s/(?<![\w.\/~-])\Q$home\E\//~\//g if $home ne '';
     return $t;
 }
@@ -131,7 +132,7 @@ sub export_one {
     my $plan = plan($m, $a{private});
     my %r = (rel => $plan->{rel}, path => $plan->{path}, rules => [], bytes => 0);
     my $text = front($a{fm}, $m, $plan) . $a{marker} . "\n" . body($a{body}, $m, $plan) . "\n" . $a{sentinel} . "\n";
-    $r{bytes} = length $text;
+    $r{bytes} = skills::util::blen($text);
     my ($why, $rules) = scan($text);
     if ($why) { @r{qw(result reason rules)} = ('refused', $why, $rules); return \%r }
     if ($a{dry}) {

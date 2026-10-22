@@ -26,6 +26,7 @@ package skills::heal;
 # the repository.
 use strict;
 use warnings;
+use utf8;
 use skills::util;
 use skills::cli;
 use skills::ctx;
@@ -45,12 +46,12 @@ sub recipes_in {
     for my $f (skills::util::list_dir("$edir/restart")) {
         next unless $f =~ /\.md\z/;
         my $p = "$edir/restart/$f";
-        my $t = skills::util::read_file($p, 65536) // next;
+        my $t = skills::util::read_text($p, 65536) // next;
         my %r = (path => $p, text => $t);
         if ($t =~ /^\s*item:\s*(B-\d+)(.*)$/m) {
             my ($bn, $rest) = ($1, $2);
             $r{bn} = $bn;
-            ($r{rid}) = $rest =~ /runtime id\s+([^\s\x{c2}]+)/;
+            ($r{rid}) = $rest =~ /runtime id\s+([^\s\x{b7}]+)/;
             ($r{class}) = $rest =~ /class\s+(auto|ask|never)\b/;
         }
         ($r{script}) = $t =~ /^\s*script:\s*(\S+)/m;
@@ -114,7 +115,7 @@ sub run {
 sub shell {
     my ($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse) = @_;
     my $rl = skills::core::relaunch();
-    my $cwd = Cwd::getcwd();
+    my $cwd = skills::util::cwd();
     my $rel = relation($ctx, $id, $origin);
     my $v = skills::jobs::verify($ctx, origin => $origin, task => $task, recipe => $recipe, relaunch => $rl, cwd => $cwd,
                                  current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} });
@@ -211,7 +212,7 @@ sub relation {
 sub not_local {
     my ($ctx, $origin, $docs) = @_;
     if (@{ $docs || [] }) { return (grep { !skills::store::imported($_) } @$docs) ? 0 : 1 }
-    my $w = skills::gitfacts::where(Cwd::getcwd());
+    my $w = skills::gitfacts::where(skills::util::cwd());
     return 0 unless $w->{in_git} && $w->{worktree};
     my $dd = skills::core::declaration($w->{worktree});
     return 0 unless $dd->{present} && $dd->{valid};
@@ -252,7 +253,7 @@ sub find_recipe {
     my %b;
     my $pin = skills::ctx::pin_read($ctx, $origin);
     $b{ $pin->{bucket_path} } = 1 if $pin && $pin->{bucket_path};
-    my $w = skills::gitfacts::where(Cwd::getcwd());
+    my $w = skills::gitfacts::where(skills::util::cwd());
     $b{$_} = 1 for @{ skills::store::buckets($ctx->{root}, $w->{repo}) };
     my @docs = sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) }
                grep { ($_->{fm}{session_id} // '') eq $origin } map { @{ skills::store::docs_in($_) } } sort keys %b;

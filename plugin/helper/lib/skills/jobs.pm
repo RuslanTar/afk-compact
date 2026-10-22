@@ -35,6 +35,7 @@ package skills::jobs;
 # with no end marker is RUNNING: probe it, never relaunch it.
 use strict;
 use warnings;
+use utf8;
 use skills::util;
 use skills::core;
 use skills::ctx;
@@ -316,7 +317,7 @@ sub _sidecar_task {
 # the cwd of its process records and of the job, then a summary copy's transcript_path.
 sub transcript_of {
     my ($ctx, $origin, $rec) = @_;
-    my $cfg = $ENV{CLAUDE_CONFIG_DIR} // (($ENV{HOME} // '') . '/.claude');
+    my $cfg = skills::util::env('CLAUDE_CONFIG_DIR') // ((skills::util::env('HOME') // '') . '/.claude');
     my %cwd;
     $cwd{ $rec->{cwd} } = 1 if $rec && defined $rec->{cwd};
     for my $r (@{ skills::ctx::records($ctx) }) {

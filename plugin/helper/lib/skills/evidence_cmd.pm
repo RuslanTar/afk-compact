@@ -6,6 +6,7 @@ package skills::evidence_cmd;
 # cross-bucket dedupe are the core evidence.copy seam's.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 use skills::cli;
@@ -108,7 +109,7 @@ sub _git_bytes {
 sub _paths_z {
     my ($r) = @_;
     return undef unless $r->{rc} == 0;
-    return [ grep { $_ ne '' } split /\0/, $r->{out} ];
+    return [ map { skills::util::text($_) } grep { $_ ne '' } split /\0/, $r->{out} ];
 }
 
 # Scratch git clone with local commits -> one patch per commit plus the uncommitted diff

@@ -4,6 +4,7 @@ package skills::spec;
 # Shapes are normalised defensively; the §3.4 key list fixes names only.
 use strict;
 use warnings;
+use utf8;
 use skills::util;
 use skills::ctx;
 

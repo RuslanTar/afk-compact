@@ -3,6 +3,7 @@ package skills::session_cmds;
 # R9; TPL §6; D-21 `lane:` ids only; OD-21 queue only when configured).
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use skills::util;
 use skills::cli;
@@ -32,7 +33,7 @@ sub lane {
     die skills::cli::refuse('queue-timeout') if $r->{timed_out};
     my ($first) = grep { /\S/ } split /\n/, ($r->{out} // '');
     $first //= '';
-    $first =~ s/[^\x20-\x7e\x80-\xff]//g;
+    $first =~ s/[\x00-\x1f\x7f-\x9f]//g;
     $first = substr($first, 0, 200);
     if ($r->{rc} != 0) {
         $first =~ s/\AREFUSED:\s*//;
@@ -71,7 +72,7 @@ sub pin {
     }
     my $bucket = skills::store::bucket_of($p);
     (my $rel = $bucket) =~ s/\A\Q$root\E\///;
-    my $w = skills::gitfacts::where(Cwd::getcwd());
+    my $w = skills::gitfacts::where(skills::util::cwd());
     my ($ok, $res) = skills::ctx::pin_update($ctx, $id->{sid}, sub {
         my ($cur) = @_;
         my %n = %$cur;

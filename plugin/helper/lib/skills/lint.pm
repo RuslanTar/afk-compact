@@ -18,6 +18,8 @@ package skills::lint;
 # private-path classes come from the spec too (fail closed: spec-missing <key>).
 use strict;
 use warnings;
+use utf8;
+use skills::util;
 use skills::spec;
 use skills::core;
 
@@ -109,7 +111,7 @@ sub lint {
         my $l = $lines[$i];
         my $hit = ($i == 0 && $l =~ /\A---\s*\z/)
             || ($mre && $l =~ $mre) || ($sre && $l =~ $sre)
-            || ($b ne '' && (index($l, "\x{e2}\x{9f}\x{aa}$b v1 ") >= 0 || index($l, "\x{e2}\x{9f}\x{aa}/$b n=") >= 0));
+            || ($b ne '' && (index($l, "\x{27ea}$b v1 ") >= 0 || index($l, "\x{27ea}/$b n=") >= 0));
         push @block, [ 'meta-in-draft', 'line ' . ($i + 1) ] if $hit;
     }
 
@@ -124,12 +126,12 @@ sub lint {
         my ($s1) = map { $_->[1] =~ /\A\s*Step 1:\s*(.*)\z/ ? $1 : () } @{ $rh->{body} };
         my ($n1) = map { $_->[1] =~ /\A\s*1\.\s+(.*)\z/ ? $1 : () } @{ $ns->{body} };
         if (defined $s1) {
-            $s1 =~ s/\s+\x{e2}\x{80}\x{94}\s+for\b.*\z//;
+            $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
             $s1 =~ s/\s*\|?\s*proposed\s*\z//;
             $s1 =~ s/\A\s+|\s+\z//g;
         }
         if (defined $n1) {
-            $n1 =~ s/\s+\x{e2}\x{80}\x{94}\s+done when\b.*\z//;
+            $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
             $n1 =~ s/\A\s+|\s+\z//g;
         }
         push @block, [ 'step1-mismatch', "line $rh->{line}" ] if !defined $s1 || !defined $n1 || $s1 ne $n1;
@@ -294,7 +296,8 @@ sub lint {
     }
 
     # ---- advisories
-    push @adv, [ 'size', length($body) . ' B' ] if length($body) > 20480;
+    my $size = skills::util::blen($body);
+    push @adv, [ 'size', "$size B" ] if $size > 20480;
     my $caps = skills::spec::section_caps();
     for my $name (sort keys %$caps) {
         my $s = $by_name{$name} or next;
@@ -400,7 +403,8 @@ sub _covered {
     return 0;
 }
 
-sub _chars { my ($s) = @_; my $n = () = $s =~ /[\x00-\x7f\xc0-\xff]/g; return $n }
+# Characters of a line (text is characters, P5-FOLD A4).
+sub _chars { my ($s) = @_; return length skills::util::text($s) }
 
 sub _norm { my ($l) = @_; $l =~ s/\s+/ /g; $l =~ s/\A | \z//g; return $l }
 

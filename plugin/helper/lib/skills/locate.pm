@@ -11,6 +11,7 @@ package skills::locate;
 # one note line says how many exports it holds.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use File::Basename ();
 use skills::util;
@@ -26,7 +27,7 @@ sub run {
     my $ctx = skills::ctx::new({});
     my $id = skills::ctx::resolve_sid($ctx, $o->{sid});
     my $sid = $id->{sid};
-    my $cwd = skills::util::abs_path((defined $o->{cwd} && !skills::util::unset_value($o->{cwd})) ? $o->{cwd} : Cwd::getcwd());
+    my $cwd = skills::util::abs_path((defined $o->{cwd} && !skills::util::unset_value($o->{cwd})) ? $o->{cwd} : skills::util::cwd());
     my $w = skills::gitfacts::where($cwd);
     my $now = skills::util::now();
     my $arg = skills::util::unset_value($o->{arg}) ? undef : $o->{arg};

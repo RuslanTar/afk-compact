@@ -4,6 +4,7 @@ package skills::gitfacts;
 # Command Line Tools are present (R-4: /usr/bin/git is a stub without them).
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 
@@ -23,7 +24,9 @@ sub usable {
 sub git {
     my ($cwd, @args) = @_;
     return { rc => -1, out => '', timed_out => 0 } unless usable();
-    return skills::util::run(['git', '-C', $cwd, @args], 2000, trace => 'git');
+    my $r = skills::util::run(['git', '-C', $cwd, @args], 2000, trace => 'git');
+    $r->{out} = skills::util::text($r->{out});
+    return $r;
 }
 
 sub line { my ($r) = @_; return undef if $r->{rc} != 0; my $v = $r->{out}; $v =~ s/\s+\z//; return $v eq '' ? undef : $v }

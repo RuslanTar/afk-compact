@@ -15,6 +15,7 @@ package skills::publish;
 # skills/export.pm) and one receipt line says what happened to the export.
 use strict;
 use warnings;
+use utf8;
 use File::Basename ();
 use skills::util;
 use skills::cli;
@@ -46,7 +47,7 @@ sub run {
     }
     my $rr = skills::core::roots_check($ctx->{settings});
     _refuse($ctx, $row, $rr) if $rr;
-    my $body = skills::util::read_file("$dir/body.md");
+    my $body = skills::util::read_text("$dir/body.md");
     _refuse($ctx, $row, 'no-draft') unless defined $body && $body =~ /\S/;
     _refuse($ctx, $row, 'spec-missing') unless skills::spec::available();
     my $need = eval { skills::spec::need(qw(frontmatter_keys_handoff frontmatter_keys_export time_re lint_ids carry.tag_re private_path_classes)); 1 };
@@ -61,7 +62,7 @@ sub run {
     # see _claimed_free. Any other claim refuses.
     my $claimed;
     if ($ht && defined $sid_dir) {
-        my $done = skills::core::ht_record($sid_dir, $ht) && handoff_turn::published_of($sid_dir, $ht);
+        my $done = skills::core::ht_record($sid_dir, $ht) && skills::core::ht_published_of($sid_dir, $ht);
         if ($done) {
             _refuse($ctx, $row, "handoff-exists $done") unless _claimed_free($done, $s);
             $claimed = $done;
@@ -71,11 +72,11 @@ sub run {
     my %recipes;
     for my $f (skills::util::list_dir("$dir/restart")) {
         next unless $f =~ /\.md\z/ && -f "$dir/restart/$f";
-        $recipes{$f} = skills::util::read_file("$dir/restart/$f") // '';
+        $recipes{$f} = skills::util::read_text("$dir/restart/$f") // '';
     }
     my %extra;
     for my $f ('ledger.md', 'inflight.md') {
-        $extra{$f} = skills::util::read_file("$dir/$f") if -f "$dir/$f";
+        $extra{$f} = skills::util::read_text("$dir/$f") if -f "$dir/$f";
     }
     my ($prev_text, $own_text);
     if ($s->{previous_handoff} && -f $s->{previous_handoff}) {
@@ -101,8 +102,8 @@ sub run {
         brand => $ctx->{brand},
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
-    $row->{bytes} = length $body;
-    $row->{size_band} = _band(length $body);
+    $row->{bytes} = skills::util::blen($body);
+    $row->{size_band} = _band($row->{bytes});
     my @b = @{ $res->{blocking} };
     my @a = @{ $res->{advisory} };
     my %rules;
@@ -158,7 +159,7 @@ sub run {
         skills::util::mkdir_p(File::Basename::dirname($dest));
         skills::util::write_excl($dest, $content, 0600) or die "exists: $dest\n";
         my $sha = skills::util::sha256_file($dest);
-        push @manifest, { copy_path => $dest, origin => $origin, bytes => length($content), sha256 => $sha,
+        push @manifest, { copy_path => $dest, origin => $origin, bytes => skills::util::blen($content), sha256 => $sha,
                           mtime => skills::util::iso_local((stat $dest)[9]), copied_at => skills::util::iso_local($now),
                           mode => '0600', scan => 'full', regen_cmd => '', meaning => $meaning };
     }
@@ -188,8 +189,8 @@ sub run {
     my $fm = "---\n" . join('', map { "$_: $fm{$_}\n" } grep { defined $fm{$_} && $fm{$_} ne '' }
                                @{ skills::spec::frontmatter_keys('handoff') }) . "---\n";
     my $brand = $ctx->{brand};
-    my $marker = "\x{e2}\x{9f}\x{aa}$brand v1 n=$s->{nonce} s=manual\x{e2}\x{9f}\x{ab}";
-    my $sentinel = "\x{e2}\x{9f}\x{aa}/$brand n=$s->{nonce}\x{e2}\x{9f}\x{ab}";
+    my $marker = "\x{27ea}$brand v1 n=$s->{nonce} s=manual\x{27eb}";
+    my $sentinel = "\x{27ea}/$brand n=$s->{nonce}\x{27eb}";
     my ($mre, $sre) = (skills::spec::marker_re(), skills::spec::sentinel_re());
     die "marker does not match the spec grammar\n" if ($mre && $marker !~ $mre) || ($sre && $sentinel !~ $sre);
     (my $btxt = $body) =~ s/\s+\z//;
@@ -205,7 +206,7 @@ sub run {
         my $placed = eval {
             skills::util::write_excl($tmp, $content, 0600) or die "publish tmp exists: $tmp\n";
             my $back = skills::util::read_file($tmp);
-            my @tail = grep { /\S/ } split /\n/, ($back // '');
+            my @tail = grep { /\S/ } split /\n/, skills::util::text($back // '');
             die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
                 && @tail && $tail[-1] eq $sentinel;
             if ($ht && defined $sid_dir && !defined $claimed) {
@@ -316,7 +317,7 @@ sub _place {
         return 0;
     }
     my $back = skills::util::read_file($path);
-    die "read-back failed: $path\n" unless defined $back && $back eq $content;
+    die "read-back failed: $path\n" unless defined $back && $back eq skills::util::bytes($content);
     return 1;
 }
 
