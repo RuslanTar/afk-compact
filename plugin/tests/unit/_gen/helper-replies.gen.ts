@@ -819,7 +819,31 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "publish-failed ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
+   "published ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
+  ]
+ },
+ {
+  "name": "handoff-state-publish-failed",
+  "argv": [
+   [
+    "handoff-state"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--ht"
+   ],
+   [
+    "0a0b0c06"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "publish-failed ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry-2.md\n"
   ]
  },
  {
