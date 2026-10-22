@@ -7,7 +7,7 @@ import type { Engine } from 'claude-code/testing'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { storeWord } from '../../hooks/lib/deps'
 import { maxCalls, submitText } from '../../hooks/lib/handoff-turn'
-import { HOME, SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
+import { HOME, SID_A, SID_B, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
 const ON = { idle_handoff_turn: 'on', precompact_turn: 'code' }
@@ -67,6 +67,18 @@ test('AT-IC-01: a prompt entering, a running turn (midturn), and manual / plugin
   expect(n).toBe(5)
   for (let i = 0; i < n; i++) expect(hasIdleFlag(w, i)).toBe(false)
   expect(dispatchFlag(w, 4, '--midturn')).toBe('true')
+})
+
+test('AT-IC-01 (core-to-mod §17): helper down, the fs fallback record of an idle dispatch has idle true and idle_gap_s', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w, 150000)
+  await w.advance(1600 * 1000)
+  w.helperDown = true
+  await raiseCompact($, { trigger: 'auto' })
+  const nonce = markerNonce(w, w.compacts[0]?.instructions) ?? ''
+  const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/dispatch/${nonce}.json`) ?? '{}') as Record<string, unknown>
+  expect([rec.nonce, rec.idle, rec.idle_gap_s, rec.midturn]).toEqual([nonce, true, 1600, false])
 })
 
 // ---- IC-1 D3: [idle] and the delivery-time re-measure

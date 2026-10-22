@@ -91,13 +91,17 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
   if (res.ok) return
   const path = await dispatchPath(d, r.sid, r.nonce)
   if (path) {
+    // The helper's record keys in its order (CORE-14): `idle` and `idle_gap_s` always (a mod
+    // record without the idle flag is `idle: false`, `idle_gap_s: null`), and `cc_version_src`
+    // `mod` when the mod gave a version, else null.
     const rec = {
-      v: 1, nonce: r.nonce, session_id: r.sid, actor: r.agentId ?? 'main', agent_id: r.agentId, trigger: r.trigger,
-      channel: r.channel, resume_pref: r.resumePref, midturn: r.midturn, tags: r.tags, instructions_sha8: instrSha8,
-      instructions_bytes: instrBytes, cc_version: s.ccVersion, load_id: s.loadId, pid: s.ident?.pid ?? null,
-      pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
+      v: 1, nonce: r.nonce, session_id: r.sid, actor: r.agentId ?? 'main', agent_id: r.agentId ?? null, trigger: r.trigger,
+      channel: r.channel, resume_pref: r.resumePref, midturn: r.midturn,
+      idle: r.idle !== undefined, idle_gap_s: r.idle !== undefined ? r.idle.gapS : null,
+      tags: r.tags, instructions_sha8: instrSha8, instructions_bytes: instrBytes,
+      cc_version: s.ccVersion, cc_version_src: s.ccVersion !== null && s.ccVersion !== '' ? 'mod' : null,
+      load_id: s.loadId, pid: s.ident?.pid ?? null, pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
       ...(r.handoffHt !== undefined ? { handoff_ht: r.handoffHt } : {}),
-      idle: r.idle !== undefined, ...(r.idle !== undefined ? { idle_gap_s: r.idle.gapS } : {}),
     }
     await d.write(path, JSON.stringify(rec) + '\n')
   }
