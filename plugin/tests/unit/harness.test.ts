@@ -188,7 +188,7 @@ export class World {
   /** The fake helper: one answer per subcommand, the stdout forms of BUILD-PLAN §3.1. */
   helper(argv: string[], env: Record<string, string>, stdin?: string): Reply {
     const bin = argv[0] ?? ''
-    const m = /^(.*)\/bin\/(.+)-store$/.exec(bin)
+    const m = /^(.*)\/scripts\/(.+)-store$/.exec(bin)
     if (m && m[1] !== undefined && m[2]) {
       this.root = m[1]
       this.name = m[2]
@@ -354,7 +354,7 @@ export async function raiseCompact(
 
 test('harness: the fake helper answers ident and claim', () => {
   const w = new World()
-  const bin = '/p/bin/x' + '-store'
+  const bin = '/p/scripts/x' + '-store'
   const r = w.helper([bin, 'claim', '--sid', SID_A, '--nonce', '1a2b3c4d', '--channel', 'prompt.context'], {})
   expect(r).toEqual({ exitCode: 0, stdout: 'CLAIMED\n' })
   expect(w.helper([bin, 'claim', '--sid', SID_A, '--nonce', '1a2b3c4d', '--channel', 'prompt.submit'], {})).toEqual({ exitCode: 0, stdout: 'TAKEN prompt.context\n' })

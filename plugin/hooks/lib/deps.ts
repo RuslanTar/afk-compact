@@ -19,12 +19,33 @@ export type RunResult = {
 export type Usage = { tokens: number | undefined; window: number }
 export type Version = { version: string; base?: string; builtAt?: string }
 
+/** The launcher's folder under the plugin root (PKG-RUNTIME A.1): this spelling lives here only. */
+export const LAUNCHER_DIR = 'scripts'
+
+/** `<root>/scripts/<name>-store`: the launcher's absolute path (an argv element, no quoting). */
+export function launcherPath(root: string, name: string): string {
+  return root + '/' + LAUNCHER_DIR + '/' + name + '-store'
+}
+
+/**
+ * The launcher as one shell word for text the model or the user types (PKG-RUNTIME A.1, A.2):
+ * the absolute path in double quotes; in single quotes when it holds `"`, `$`, a backquote or
+ * `\`; `undefined` (refused: the caller raises `store_path_unquotable`) when it also holds `'`.
+ * `ctx::store_cmd()` builds the same word on the helper side (parity test).
+ */
+export function storeWord(root: string, name: string): string | undefined {
+  const p = launcherPath(root, name)
+  if (!/["$`\\]/.test(p)) return '"' + p + '"'
+  if (!p.includes("'")) return "'" + p + "'"
+  return undefined
+}
+
 export interface Deps {
   /** `$.plugin.name`: the brand at run time (never a literal in code). */
   readonly name: string
   /** `$.plugin.root`: the plugin's folder (shipped assets live under it). */
   readonly root: string
-  /** `$.plugin.root + "/bin/" + $.plugin.name + "-store"`. */
+  /** `launcherPath($.plugin.root, $.plugin.name)`: `<root>/scripts/<name>-store`. */
   readonly helper: string
   readonly cfg: Config
   readonly state: LoadState
@@ -218,7 +239,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
   return {
     name: $.plugin.name,
     root: $.plugin.root,
-    helper: $.plugin.root + '/bin/' + $.plugin.name + '-store',
+    helper: launcherPath($.plugin.root, $.plugin.name),
     cfg,
     state,
     sessionId: () => $.session.id(),
