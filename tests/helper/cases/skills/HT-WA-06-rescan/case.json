@@ -30,7 +30,7 @@
     "/bin/sh",
     "-c",
     "(sleep 1; : > \"$F\"; printf \"READY\\n\" >> \"$F\") & exec \"$0\" wait --for marker:\"$F\":READY --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,
@@ -49,7 +49,7 @@
     "/bin/sh",
     "-c",
     "(sleep 1; mv \"$F\" \"$F.1\"; printf \"READY\\n\" > \"$F\") & exec \"$0\" wait --for marker:\"$F\":READY --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,
@@ -81,7 +81,7 @@
     "/bin/sh",
     "-c",
     "(sleep 1; printf \"Y\\n\" >> \"$F\") & exec \"$0\" wait --for marker:\"$F\":^READY$ --max 10",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0,

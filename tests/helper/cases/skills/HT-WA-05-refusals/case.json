@@ -10,7 +10,7 @@
     "/bin/sh",
     "-c",
     "mkfifo \"$TMP_F\"",
-    "$PLUGIN/bin/$BRAND-store"
+    "$STORE"
    ],
    "expect": {
     "exit": 0
