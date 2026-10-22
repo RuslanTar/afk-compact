@@ -7,7 +7,7 @@
     "AT-WB-03",
     "AT-WB-04"
   ],
-  "note": "A watcher install with a unique canary in every place W-BETA B.3 names. The report is built from it, unpacked, and every canary (and the expanded $HOME, and each $SECRET{} value of the shared corpus) must have 0 hits in the zip. Canaries sit in the allowlisted streams (in fields the export must drop or hash), in the never-opened files (jobs.jsonl, evidence-index.tsv, queue-adds.jsonl, paths.jsonl), in the summary copy and the handoff, in the settings file and in the git remote. The account and host canaries need the process to see them: the case sets USER and LOGNAME, and the host canary needs a test-mode host override (needs/fix-to-watch.md).",
+  "note": "A watcher install with a unique canary in every place W-BETA B.3 names. The report is built from it, unpacked, and every canary (and the expanded $HOME, and each $SECRET{} value of the shared corpus) must have 0 hits in the zip. Canaries sit in the allowlisted streams (in fields the export must drop or hash), in the never-opened files (jobs.jsonl, evidence-index.tsv, queue-adds.jsonl, paths.jsonl), in the summary copy and the handoff, in the settings file and in the git remote. The account and host canaries need the process to see them: the case sets USER and LOGNAME, and the host canary comes from a `hostname` PATH stub (B.3 reads `hostname -s`), with STORE_TEST_HOSTNAME as the fallback for a helper that reads the host name another way (needs/fix-to-watch.md). The bucket is a topic bucket, so the ticket names no folder: `expect.identity_list` is the B.3 list for this install, and the `transform_only` canaries contain no identity string, so 0 hits for them proves the export transform, not the identity scan.",
   "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
   "invoke": {
     "argv": [
@@ -20,9 +20,17 @@
       "USER": "wb-canary-acct01",
       "LOGNAME": "wb-canary-acct01",
       "STORE_TEST_HOSTNAME": "wb-canary-host01"
-    }
+    },
+    "path_prepend": [
+      "$TMP/stubbin"
+    ]
   },
   "setup": [
+    {
+      "copy": "bin/hostname-canary",
+      "to": "$TMP/stubbin/hostname",
+      "mode": "0755"
+    },
     {
       "repo": {
         "branch": "feature/WBCANARY-4242-wb-canary-branch01",
@@ -121,7 +129,7 @@
           "id6": "1a2b3c",
           "result": "saved",
           "slot": "main",
-          "rel_path": "wb-canary-repo01/WBCANARY-4242/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
+          "rel_path": "wb-canary-repo01/wb-canary-topic01/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
           "seq": 1,
           "redacted": false
         },
@@ -216,7 +224,7 @@
           "cc_version": "2.1.307",
           "turn_seq": 8,
           "status": "queued",
-          "lane": "lane:wb-canary-repo01/WBCANARY-4242",
+          "lane": "lane:wb-canary-repo01/wb-canary-topic01",
           "question": "CANARY-TEXT-wb-queue-question",
           "secret_probe": "$SECRET{jwt-hs256}"
         }
@@ -257,7 +265,7 @@
           "channel": "mod-hook",
           "ms": 4012,
           "branch": "feature/WBCANARY-4242-wb-canary-branch01",
-          "bucket": "wb-canary-repo01/WBCANARY-4242"
+          "bucket": "wb-canary-repo01/wb-canary-topic01"
         }
       ]
     },
@@ -314,7 +322,7 @@
           "channel": "mod-hook",
           "verdict": "ok",
           "repository": "wb-canary-repo01",
-          "bucket": "wb-canary-repo01/WBCANARY-4242",
+          "bucket": "wb-canary-repo01/wb-canary-topic01",
           "branch": "feature/WBCANARY-4242-wb-canary-branch01",
           "tokens_before": 640000,
           "tokens_after": 31000
@@ -365,7 +373,7 @@
         {
           "v": 1,
           "ts": "2026-10-21T14:08:00.000+03:00",
-          "lane": "lane:wb-canary-repo01/WBCANARY-4242",
+          "lane": "lane:wb-canary-repo01/wb-canary-topic01",
           "question": "CANARY-TEXT-wb-queue-question"
         }
       ]
@@ -375,13 +383,13 @@
       "content": "{\"path\": \"$TMP/wb-canary-evidence01/2026-10-21/app.log\"}\n"
     },
     {
-      "write": "$HOME/.claude/handoffs/wb-canary-repo01/WBCANARY-4242/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
-      "content": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 1a2b3c4d\ndate: 2026-10-21T14:02:00+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/WBCANARY-4242\nbranch: feature/WBCANARY-4242-wb-canary-branch01\nworktree: $TMP/wb-canary-repo01\n---\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# WBCANARY-4242 — CANARY-TEXT-wb-summary\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-summary (checkpoint: clean)\n⟪/{{plugin}} n=1a2b3c4d⟫\n",
+      "write": "$HOME/.claude/handoffs/wb-canary-repo01/wb-canary-topic01/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
+      "content": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 1a2b3c4d\ndate: 2026-10-21T14:02:00+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/wb-canary-topic01\nbucket_source: topic\nbranch: feature/WBCANARY-4242-wb-canary-branch01\nworktree: $TMP/wb-canary-repo01\n---\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# WBCANARY-4242 — CANARY-TEXT-wb-summary\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-summary (checkpoint: clean)\n⟪/{{plugin}} n=1a2b3c4d⟫\n",
       "mode": "0400"
     },
     {
-      "write": "$HOME/.claude/handoffs/wb-canary-repo01/WBCANARY-4242/2026-10-21_14-03-00_5e55a001_handoff.md",
-      "content": "---\nkind: handoff\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/WBCANARY-4242\nbranch: feature/WBCANARY-4242-wb-canary-branch01\n---\n# WBCANARY-4242 — CANARY-TEXT-wb-handoff\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-handoff (checkpoint: clean)\n"
+      "write": "$HOME/.claude/handoffs/wb-canary-repo01/wb-canary-topic01/2026-10-21_14-03-00_5e55a001_handoff.md",
+      "content": "---\nkind: handoff\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/wb-canary-topic01\nticket: WBCANARY-4242\nbranch: feature/WBCANARY-4242-wb-canary-branch01\n---\n# WBCANARY-4242 — CANARY-TEXT-wb-handoff\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-handoff (checkpoint: clean)\n"
     },
     {
       "mkdir": "$TMP/wb-canary-evidence01/2026-10-21"
@@ -407,7 +415,8 @@
       "evidence_path": "wb-canary-evidence01",
       "queue_question": "CANARY-TEXT-wb-queue-question",
       "config_path": "wb-canary-root01",
-      "config_pattern": "wb-canary-pattern01"
+      "config_pattern": "wb-canary-pattern01",
+      "bucket": "wb-canary-topic01"
     },
     "also_absent": [
       "$HOME",
@@ -415,7 +424,30 @@
     ],
     "planted_in": {
       "account": "env USER/LOGNAME, git remote owner",
-      "host": "env STORE_TEST_HOSTNAME"
-    }
+      "host": "PATH stub `hostname` (bin/hostname-canary, for B.3's `hostname -s`), and env STORE_TEST_HOSTNAME for a helper that reads the host name another way",
+      "bucket": "the topic bucket folder wb-canary-repo01/wb-canary-topic01 (a B.3 identity string)",
+      "ticket": "the branch, the handoff `ticket:` and title, the summary title and the rows' `branch` fields; no folder is named after it, so it is not on the B.3 identity list and only the export transform can keep it out"
+    },
+    "identity_list": [
+      "$HOME",
+      "wb-canary-acct01",
+      "wb-canary-host01",
+      "$TMP/wb-canary-repo01",
+      "wb-canary-repo01",
+      "wb-canary-topic01",
+      "git.example.invalid",
+      "wb-canary-acct01/wb-canary-repo01"
+    ],
+    "transform_only": [
+      "ticket",
+      "branch",
+      "summary",
+      "handoff",
+      "jobs_command",
+      "evidence_path",
+      "queue_question",
+      "config_path",
+      "config_pattern"
+    ]
   }
 }

@@ -50,7 +50,9 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             C-STORE ones (st-05: each record's pid state, host and ended- twin against the §5.8
             finish reading; st-13: exactly the declared BD-4 detector fires for each task output;
             st-09: each copy is fillable by nonce, and only the sub-unknown one in compact/subagents/
-            may be filled, C-STORE D5 step 5)
+            may be filled, C-STORE D5 step 5) and the W-BETA one (wb-canary-install: every canary
+            planted; the B.3 identity list recomputed; transform_only canaries hold no identity
+            string; the bucket canary is a bucket folder; `hostname -s` prints the host canary)
   stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
             ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
@@ -1817,6 +1819,56 @@ def wb_semantics(doc, sc):
         p.append("no $SECRET{} token: the shared secret corpus is not planted")
     if sc.v["HOME"] not in blob:
         p.append("no $HOME path is planted")
+    p += wb_identity(doc, sc)
+    return p
+
+
+def wb_identity(doc, sc):
+    """W-BETA B.3 for the built install: the identity list a reference computes ($HOME, the account,
+    the host as `hostname -s` prints it with the recipe's PATH, every repo_roots entry and its
+    basename, the basenames of the repo and bucket folders under the handoff root, the git remote
+    hosts and owner paths; strings under 4 characters skipped) must equal expect.identity_list.
+    The bucket canary is a bucket folder; each transform_only canary neither contains nor sits
+    inside an identity string (case-insensitive), and every other canary is one."""
+    p, e = [], doc["expect"]
+    env = dict(sc.env(), **sc.sub(doc["invoke"].get("env", {})))
+    env.pop("STORE_TEST_HOSTNAME", None)
+    env["PATH"] = os.pathsep.join(sc.sub(doc["invoke"].get("path_prepend", [])) + [env["PATH"]])
+    host = subprocess.run(["hostname", "-s"], env=env, stdout=subprocess.PIPE, universal_newlines=True, timeout=10).stdout.strip()
+    ids = {sc.v["HOME"], env.get("USER", ""), host}
+    opts = json.loads(read(sc.v["HOME"] + "/.claude/settings.json"))["pluginConfigs"]
+    roots = [r for o in opts.values() for r in (o.get("options", {}).get("repo_roots") or "").split(";") if r]
+    for r in roots:
+        ids |= {r, os.path.basename(r.rstrip("/"))}
+        for line in sc.git(r, "remote", "-v").splitlines():
+            m = re.match(r"^\S+\s+(?:[^@\s]+@)?([^:/\s]+)[:/](\S+?)(?:\.git)?\s", line + " ")
+            if m:
+                ids |= {m.group(1), m.group(2)}
+    buckets = set()
+    root = sc.v["ROOT"]
+    for repo in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        if repo.startswith(".") or not os.path.isdir(os.path.join(root, repo)):
+            continue
+        ids.add(repo)
+        for bk in sorted(os.listdir(os.path.join(root, repo))):
+            if not bk.startswith(".") and os.path.isdir(os.path.join(root, repo, bk)):
+                ids.add(bk)
+                buckets.add(bk)
+    ids = sorted(x for x in ids if len(x) >= 4)
+    if ids != sorted(sc.sub(e.get("identity_list", []))):
+        p.append("identity_list {} but the B.3 reference gives {}".format(sorted(sc.sub(e.get("identity_list", []))), ids))
+    can = e["canaries"]
+    if host != can.get("host"):
+        p.append("`hostname -s` with the recipe's PATH prints {!r}, not the host canary".format(host))
+    if can.get("bucket") not in buckets:
+        p.append("the bucket canary {!r} is no bucket folder (built: {})".format(can.get("bucket"), sorted(buckets)))
+    low = [x.lower() for x in ids]
+    for cid, v in sorted(can.items()):
+        hit = [x for x in low if x in v.lower() or v.lower() in x]
+        if cid in e.get("transform_only", []) and hit:
+            p.append("canary {} ({}) overlaps the identity strings {}: the identity scan, not the transform, would stop it".format(cid, v, hit))
+        if cid not in e.get("transform_only", []) and v.lower() not in low:
+            p.append("canary {} ({}) is neither transform_only nor an identity string".format(cid, v))
     return p
 
 
