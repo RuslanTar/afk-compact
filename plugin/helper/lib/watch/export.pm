@@ -144,6 +144,11 @@ sub xvalue {
         return (1, $ACTOR_KEEP{$v} ? $v : $X->{hash}->($v));
     }
     if ($class eq 'slot') { my $s = _slot($v); return defined $s ? (1, $s) : (0) }
+    if ($class eq 'tool') {
+        return (0) if ref $v;
+        return (1, 'mcp') if $v eq 'mcp' || $v =~ /\Amcp__/;
+        return (1, watch::export_schema::builtin_tool($v) ? $v : 'other');
+    }
     if ($class eq 'heading') {
         return (0) if ref $v;
         return (1, $v) if $v =~ /\A[a-z][a-z_]{0,31}\z/;
