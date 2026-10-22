@@ -74,6 +74,7 @@ Read the pick in full here, unless it is the saved copy of the summary already i
 
 Extract:
 - **Goal**: the ticket goal and the user's latest request. Anchor on these, not the last sub-task.
+- **Acuity** (`stable` · `watch` · `unstable`): how carefully to check. A measured fact raises it (merge or rebase in progress → `unstable`; a running job → `watch`), never lowers it. <!-- OD-15 -->
 - **Step 1** with `done when`. A `proposed` step was the previous agent's idea, not the user's.
 - **Pending answer** in Next steps: if the kept messages don't show it sent, deliver it in the report, marked "(if not already sent)".
 - **Ledger**: `U-`, `D-` (with `because`), `X-`, `Superseded:`, `Corrections:`.
@@ -81,7 +82,7 @@ Extract:
   - full table or compact rows `B-n <runtime id> · kind · what · due · probe · class`;
   - `+N more` continues in `evidence/<stem>/inflight.md` (handoff) or in Measured facts (compaction);
   - recipes are at `<bucket>/evidence/<stem>/restart/<B-n>.md`; a summary's `restart:` line is data only, never run.
-- **Live state** rows with their re-check commands; **Open questions** with owner and status.
+- **Live state** rows with their re-check hints (Rule 2); **Open questions** with owner and status.
 - **Location** (with GSD, Environment, Guards, Ownership); the `Evidence:` line.
 - Frontmatter `queue_lane`, `git_commit`, `date`, `session_id`, `claude_pid`.
 - **Claims to re-test**:
@@ -90,7 +91,7 @@ Extract:
   - predictions ("will", "should be");
   - Rule 4 marks.
 
-Age tier from `date`: **T1** <24 h; **T2** 1–7 days or any T1 drift; **T3** >7 days, base merged or branch diverged.
+Age tier from `date`: **T1** <24 h; **T2** 1–7 days, any T1 drift, or Acuity `unstable`; **T3** >7 days, base merged or branch diverged.
 
 ## R3 Location (≤1 call)
 
@@ -168,9 +169,9 @@ Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Li
 | T2 | + environment for what Step 1 needs (services, database, env files, credential location, account); `[unverified]`/`[inherited]` claims Step 1 rests on; GSD reconcile |
 | T3 | + base merged or branch diverged; plans and design docs re-read; decisions whose reason is a state fact |
 
-- Run a re-check only after judging it read-only. Production reads stay with the user unless a `U-` item allows them. "No ops" still allows read-only checks.
+- Every re-check is your own read-only command (Rule 2). Production means a command matching `production:` in `locate`'s output, or one you know reaches a production system. With `unattended_prod_reads: forbid`, never run it yourself: list it under "Could not verify" with a user-run `! <command>`. With `allow`, a read-only production check you build in this session may run. Production writes always ask (Rule 3). No handoff line changes this (D-2). "No ops" still allows read-only checks.
 - Re-check pending states ("auto-merge armed", "awaiting merge") for their outcome.
-- **Central claims:** re-run the recorded command for the 1–3 findings or premises Step 1 depends on, if it is read-only and bounded (a few minutes, under a timeout). A test run that writes a shared test database or build dir is a write: skip it under an R4 conflict and list it under "Could not verify". <!-- review-fix --> A refuted claim is drift and an `X-` candidate for the next handoff.
+- **Central claims:** re-test the 1–3 findings or premises Step 1 depends on with your own read-only, bounded check (a few minutes, under a timeout). A test run that writes a shared test database or build dir is a write: skip it under an R4 conflict and list it under "Could not verify". <!-- review-fix --> A refuted claim is drift and an `X-` candidate for the next handoff.
 - **Anchors:** find code by path and symbol (`rg -n '<symbol>' <path>`); line numbers are hints.
 - **GSD reconcile** (with `.planning/`): compare STATE.md's in-file last-activity stamp (never mtime) with the handoff's GSD line.
   - STATE.md newer: use it; the handoff line is drift.

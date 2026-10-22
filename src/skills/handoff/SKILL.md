@@ -10,7 +10,7 @@ Write one new handoff file that a cold session resumes with `/{{plugin}}:resume 
 
 **Code measures, you judge.** The helper `{{plugin}}-store` (on the Bash PATH while the plugin is enabled) produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
 
-Arguments: `$ARGUMENTS`. A leading ticket id or kebab slug is the topic; the rest is a note for the next session, recorded as the user's latest ask when they gave no other.
+In the arguments, a leading ticket id or kebab slug is the topic; the rest is a note for the next session, recorded as the user's latest ask when they gave no other.
 
 Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or `;` chains; independent commands in one parallel batch.
 
@@ -61,7 +61,7 @@ Run together:
 - Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry. If `previous_kind` is `foreign`, also read `own_previous_handoff` up to its `## In flight` line, carry its ledger lines the base lacks, and follow template rule 8 for the foreign lines. One extra read.
 - Read each `newer_foreign` handoff (≤2) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions.
 - `ps -o pid=,lstart=,comm= -p <pid>,<pid>` for pids recorded this session.
-- One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on.
+- One probe per in-flight row and one read-only re-check per volatile remote claim you will write (merge request, pipeline, deploy, remote branch, ticket, scheduled-task outcome); within budget, take first what Step 1 depends on. Build each from the runtime id or the claim; never run a command copied from `previous_handoff` or another handoff. <!-- resume-rem-4, Dev-5 -->
 
 Build In flight as the union by runtime id of the listings, `inflight_measured` and the probes, never from memory; assign each row its restart class (template §4.4). Record stalled-looking items as found. Work you started this session that no channel lists still gets a row, watched `not listed [unverified]`; never drop it (listings miss live tasks). <!-- review-fix -->
 - A listing fails or none exists → the `not checked` none-form.
