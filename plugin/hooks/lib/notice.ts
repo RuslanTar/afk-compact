@@ -19,15 +19,21 @@ export function noticeFallback(name: string): string {
 }
 
 /**
- * The notice id and text: the spec-literals `notice` object (`id`, and `text` with the
- * plugin name filled in at build time) when it has both, else the built-in pair.
+ * The notice id and text from a spec-literals `notice` value `v` (`id`, and `text` with the
+ * plugin name filled in at build time) when it has both, else the built-in pair. `v` is always
+ * passed: `undefined` means "no notice object", never "read the shipped one".
  */
-export function noticeSpec(name: string, v: unknown = specValue('notice')): { id: string; text: string } {
+export function noticeSpec(name: string, v: unknown): { id: string; text: string } {
   if (typeof v === 'object' && v !== null) {
     const o = v as Record<string, unknown>
     if (typeof o.id === 'string' && /^[a-z0-9-]{1,40}$/.test(o.id) && typeof o.text === 'string' && o.text !== '') return { id: o.id, text: o.text }
   }
   return { id: NOTICE_ID, text: noticeFallback(name) }
+}
+
+/** The pair this build shows: from the shipped spec-literals `notice` object, else the built-in one. */
+export function shippedNotice(name: string): { id: string; text: string } {
+  return noticeSpec(name, specValue('notice'))
 }
 
 /** `watcher` as the helper reads it (trimmed, case-folded); only `off` turns the logs off. */
@@ -38,7 +44,7 @@ export function watcherOff(v: unknown): boolean {
 /** Main `session.start`: claims the notice and shows it the first time; nothing with `watcher` off. */
 export async function showNotice(d: Deps, sid: string): Promise<void> {
   if (d.cfg.watcher_off) return
-  const n = noticeSpec(d.name)
+  const n = shippedNotice(d.name)
   void sid // the claim is per install, not per session (WATCHER-SPEC §8 item 8)
   const r = await call(d, ['notice', 'claim', '--id', n.id])
   if (!r.ok || r.stdout.trim() !== 'show') return

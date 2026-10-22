@@ -1,17 +1,17 @@
 // U tests through the kit: the watcher's first-run notice (WATCHER-SPEC §8 item 8, W-BETA A).
 import { expect, test } from 'claude-code/testing'
 import { leftovers } from '../../hooks/lib/assemble'
-import { NOTICE_ID, NOTICE_MAX, noticeFallback, noticeSpec } from '../../hooks/lib/notice'
+import { NOTICE_ID, NOTICE_MAX, noticeFallback, noticeSpec, shippedNotice } from '../../hooks/lib/notice'
 import { WATCH, World } from './harness.test'
 
 test('AT-WB-12 (mod half): two session.start calls give one toast, shown with warn_ui false; the marker is the helper claim', { options: { warn_ui: false } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.start($)
-  const text = noticeSpec(w.name).text
-  expect(w.toasts).toEqual([text])
-  expect(w.callsOf('notice').map(c => c.args)).toEqual([['claim', '--id', NOTICE_ID], ['claim', '--id', NOTICE_ID]])
-  expect(w.files.has(`${WATCH}/notice/${NOTICE_ID}.shown`)).toBe(true)
+  const n = shippedNotice(w.name)
+  expect(w.toasts).toEqual([n.text])
+  expect(w.callsOf('notice').map(c => c.args)).toEqual([['claim', '--id', n.id], ['claim', '--id', n.id]])
+  expect(w.files.has(`${WATCH}/notice/${n.id}.shown`)).toBe(true)
 })
 
 test('AT-WB-12: the text is fixed, at most 200 characters, with no template leftovers; a version bump (a new id) shows it again', () => {
@@ -23,6 +23,16 @@ test('AT-WB-12: the text is fixed, at most 200 characters, with no template left
   expect(noticeSpec('x', { id: 'watcher-2', text: 'x: logs are on.' })).toEqual({ id: 'watcher-2', text: 'x: logs are on.' })
   expect(noticeSpec('x', { id: 'bad id', text: 't' }).id).toBe(NOTICE_ID)
   expect(noticeSpec('x', undefined)).toEqual({ id: NOTICE_ID, text: noticeFallback('x') })
+  expect(noticeSpec('x', { id: 'watcher-1', version: 1 })).toEqual({ id: NOTICE_ID, text: noticeFallback('x') })
+})
+
+test('AT-WB-12: the shipped pair is the spec-literals notice object when the build carries one, else the built-in pair', () => {
+  for (const name of ['x', 'compactinue']) {
+    const n = shippedNotice(name)
+    expect(n.text.length <= NOTICE_MAX).toBe(true)
+    expect(leftovers(n.text)).toEqual([])
+    expect(n.id).toMatch(/^[a-z0-9-]{1,40}$/)
+  }
 })
 
 test('AT-WB-12: a bumped id shows the notice again in an install that saw the old one', async ($, on) => {
