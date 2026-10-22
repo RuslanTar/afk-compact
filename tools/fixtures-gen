@@ -34,8 +34,11 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
-  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8; optional
-            `commands`); a queue/<case>/add.rc follows the D-10 exit table (small-rulings §1.2)
+  queue     a JSON queue/<case>/list.out follows the strict v1 contract (Q-ADAPTER QA-2: the
+            `queue-stub/v1` tag required, `lanes` optional in either shape) and gives the mode its
+            list.expect names (untagged and v2 replies are degraded on purpose); an adopt answer
+            follows the QA-2 exit table and its adopt.expect the plugin's mapping (AT-QA-04); an
+            add.rc follows the D-10 exit table (small-rulings §1.2)
   setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
             (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
             repos (worktrees, submodule, symlinked root, declarations, exports against
@@ -1560,27 +1563,69 @@ def check_settings():
 
 
 # Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
-# answer has the queue-stub/v1 shape that ROOT-RULINGS F2-8 adopts as the v1 contract.
+# answer follows the strict contract of Q-ADAPTER QA-2 (MOD-SPEC §10.3 as amended): `schema`
+# `queue-stub/v1` required, `lanes` optional in either shape, unknown keys ignored. `list.expect`
+# names the mode a reply gives (`on: …`, `degraded (untagged)`, `degraded (schema)`); a reply that
+# breaks the contract on purpose must say so there. `adopt.rc` / `adopt.out` / `adopt.expect` are
+# the QA-2 adopt refusals and the plugin's mapping of them (AT-QA-04).
 QUEUE = os.path.join(FIX, "queue")
-QUEUE_V1_KEYS = ["schema", "session", "lane", "open", "pending", "preview", "held_by", "lanes"]
+QUEUE_V1_REQUIRED = ["schema", "session", "lane", "open", "pending", "preview", "held_by"]
+QUEUE_V1_OPTIONAL = ["label", "commands", "lanes"]
 QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
 LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
+LANE_IN_RE = re.compile(r"(?:lane|auto):[A-Za-z0-9._/-]+")
 
 
-QUEUE_COMMANDS = {"list", "adopt", "add"}
+QUEUE_COMMANDS = {"list", "adopt", "adopt:must-exist", "add"}
 QUEUE_ADD_STATUS = {"queued", "exists"}
 CLIENT_ID_RE = re.compile(r"^ck-[0-9a-f]{12}$")
+ADOPT_REFUSAL = {3: r"^REFUSED: held: holder=([0-9a-f-]{36}) kind=(process|heartbeat) lane=\S+$",
+                 4: r"^REFUSED: no-lane: \S.*$", 6: r"^REFUSED: (untrusted|damaged|no-process): \S.*$"}
+
+
+def queue_list_mode(doc):
+    """The mode a parsed list reply gives under the strict contract, and the shape problems."""
+    if "schema" not in doc:
+        return "degraded (untagged)", []
+    if doc["schema"] != "queue-stub/v1":
+        return "degraded (schema)", []
+    bad = []
+    missing = [k for k in QUEUE_V1_REQUIRED if k not in doc]
+    if missing:
+        bad.append("missing {}".format(missing))
+    op = doc.get("open")
+    if not (isinstance(op, list) and all(isinstance(x, str) for x in op)) and not (isinstance(op, int) and not isinstance(op, bool)):
+        bad.append("open is neither an id list nor a count")
+    if not (isinstance(doc.get("pending"), int) and not isinstance(doc.get("pending"), bool)):
+        bad.append("pending is not a count")
+    if not isinstance(doc.get("preview"), bool):
+        bad.append("preview is not a bool")
+    if not (doc.get("lane") is None or (isinstance(doc.get("lane"), str) and LANE_RE.match(doc["lane"]))):
+        bad.append("lane is not lane:/auto: or null")
+    cmds = doc.get("commands")
+    if cmds is not None and (not isinstance(cmds, list) or not set(cmds) <= QUEUE_COMMANDS):
+        bad.append("commands must be a list within {}".format(sorted(QUEUE_COMMANDS)))
+    lanes = doc.get("lanes")
+    if lanes is not None and (not isinstance(lanes, list) or any(
+            not (isinstance(x, str) or (isinstance(x, dict) and sorted(x) == sorted(QUEUE_V1_LANE_KEYS))) for x in lanes)):
+        bad.append("lanes must be strings or {} objects".format(QUEUE_V1_LANE_KEYS))
+    n = len(op) if isinstance(op, list) else op
+    return "on: Queued: {} open".format(n), bad
 
 
 def check_queue():
-    """List answers in the queue-stub/v1 shape (optional `commands`); add answers per D-10
-    (small-rulings §1.2): rc 0 prints a queue-add/v1 object, rc 2 has no REFUSED line, rc 5 a
-    `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the other refusals."""
+    """List answers per the strict v1 contract (QA-2) and their list.expect; adopt answers per
+    the QA-2 exit table; add answers per D-10 (small-rulings §1.2): rc 0 prints a queue-add/v1
+    object, rc 2 has no REFUSED line, rc 5 a `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the
+    other refusals."""
     problems, njson = [], 0
     for case in sorted(os.listdir(QUEUE)) if os.path.isdir(QUEUE) else []:
         p = os.path.join(QUEUE, case, "list.out")
         text = read(p) if os.path.exists(p) else ""
         where = "queue/{}/list.out".format(case)
+        exp_file = os.path.join(QUEUE, case, "list.expect")
+        expect = read(exp_file).strip() if os.path.exists(exp_file) else None
+        commands = None
         if text.lstrip().startswith("{"):
             njson += 1
             try:
@@ -1588,16 +1633,16 @@ def check_queue():
             except ValueError as e:
                 problems.append("{}: {}".format(where, e))
                 continue
-            commands = doc.pop("commands", None)
-            int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
-            if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
-                    or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
-                    or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
-                    or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
-                problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
-                    where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
-            if commands is not None and (not isinstance(commands, list) or not set(commands) <= QUEUE_COMMANDS):
-                problems.append("{}: commands must be a list within {}".format(where, sorted(QUEUE_COMMANDS)))
+            commands = doc.get("commands")
+            mode, bad = queue_list_mode(doc)
+            problems += ["{}: {}".format(where, b) for b in bad]
+            if expect is not None and expect != mode:
+                problems.append("{}: the strict contract gives `{}`, list.expect says `{}`".format(where, mode, expect))
+            if expect is None and not mode.startswith("on"):
+                problems.append("{}: gives `{}`; a reply that breaks the contract on purpose needs a list.expect".format(where, mode))
+        elif expect is not None:
+            problems.append("{}: list.expect is only for JSON replies".format(where))
+        problems += check_adopt(case, commands)
         rc_file = os.path.join(QUEUE, case, "add.rc")
         if not os.path.exists(rc_file):
             continue
@@ -1627,6 +1672,46 @@ def check_queue():
         if os.path.exists(sleep_file) and not read(sleep_file).strip().isdigit():
             problems.append("{}.sleep must be whole seconds".format(where))
     return problems, njson
+
+
+def check_adopt(case, commands):
+    """QA-2 adopt: rc 0 with the bound lane id in the first stdout line; rc 3/4/6 with one stdout
+    `REFUSED: <kind>: <reason>` line (<= 200 B, no command text); rc 2 usage. adopt.expect is the
+    plugin's mapping (AT-QA-04): `lane: <id>`, `held holder=<sid> kind=<k>`, `no-lane`, `error`,
+    `unsupported`."""
+    p = []
+    d = os.path.join(QUEUE, case)
+    if not os.path.exists(os.path.join(d, "adopt.rc")):
+        return p
+    where = "queue/{}/adopt".format(case)
+    rc = read(os.path.join(d, "adopt.rc")).strip()
+    out = read(os.path.join(d, "adopt.out")) if os.path.exists(os.path.join(d, "adopt.out")) else ""
+    expect = read(os.path.join(d, "adopt.expect")).strip() if os.path.exists(os.path.join(d, "adopt.expect")) else None
+    if rc not in ("0", "2", "3", "4", "6"):
+        return ["{}.rc: {!r} is not a QA-2 adopt exit code (0, 2, 3, 4, 6)".format(where, rc)]
+    rc = int(rc)
+    first = out.split("\n", 1)[0]
+    if rc == 0:
+        m = LANE_IN_RE.search(first)
+        want = "lane: " + m.group(0) if m else None
+        if not m:
+            p.append("{}.out: rc 0 needs the bound lane id in the first line".format(where))
+    elif rc == 2:
+        want = "unsupported"
+        if "REFUSED:" in out:
+            p.append("{}: exit 2 is usage and carries no REFUSED line".format(where))
+    else:
+        m = re.match(ADOPT_REFUSAL[rc], first)
+        if not m or len(first.encode("utf-8")) > 200 or "`" in first or "queue-stub" in first:
+            p.append("{}.out: exit {} needs one line matching {} (<= 200 B, no command text)".format(where, rc, ADOPT_REFUSAL[rc]))
+        want = ("held holder={} kind={}".format(m.group(1), m.group(2)) if m else "held") if rc == 3 else ("no-lane" if rc == 4 else "error")
+    if expect is None:
+        p.append("{}: adopt.expect missing".format(where))
+    elif want is not None and expect.split(" (")[0] != want:
+        p.append("{}: the QA-2 mapping gives `{}`, adopt.expect says `{}`".format(where, want, expect))
+    if "(no --must-exist" in (expect or "") and commands is not None and "adopt:must-exist" in commands:
+        p.append("{}: adopt.expect says no --must-exist but the caps hold adopt:must-exist".format(where))
+    return p
 
 
 # Transcript manifests (README "Transcripts"): FIX-03 inputs that tie transcripts to payloads, records
@@ -1979,7 +2064,7 @@ def check(b):
     # queue
     queue_problems, nqueue = check_queue()
     problems += queue_problems
-    print("queue: {} JSON list answers in the queue-stub/v1 shape, add answers per the D-10 exit table".format(nqueue))
+    print("queue: {} JSON list answers against the strict v1 contract (QA-2), adopt answers per the QA-2 exit table, add answers per D-10".format(nqueue))
     # setups, settings
     setup_problems, nsetup = check_setups(b)
     problems += setup_problems

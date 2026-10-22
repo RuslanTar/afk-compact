@@ -6,6 +6,10 @@
 # with the arguments, so a case can assert that no adopt or add call happened.
 # QUEUE_STUB_STDIN, when set, receives what `add` reads on stdin (the queue-add/v1 draft);
 # without it `add` still drains stdin. A subcommand without a canned answer exits 64.
+# Q-ADAPTER QA-2 (AT-QA-03, -04): queue/v1-tagged, v1-count, untagged and v2 hold strict-contract
+# list replies; queue/adopt-* hold the adopt exit codes 0, 2, 3 (`REFUSED: held: holder=<sid>
+# kind=<process|heartbeat> lane=<id>` on stdout), 4 and 6. Each folder's list.expect /
+# adopt.expect names what the plugin must make of the reply; the stub never reads those.
 [ -n "$QUEUE_STUB_LOG" ] && printf '%s\n' "$*" >> "$QUEUE_STUB_LOG"
 sub=$1
 dir=${QUEUE_STUB_DIR:-$(dirname "$0")/../queue/prose}
