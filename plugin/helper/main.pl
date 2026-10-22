@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# helper/main.pl: entry of the plugin helper, started by the launcher in bin/.
+# helper/main.pl: entry of the plugin helper, started by the launcher in scripts/.
 # Owner: WP-core. Dispatches `<subcommand>` to cmd/<subcommand>.pl (BUILD-PLAN §3.1).
 #
 # The guard below must stay parsable by perl 5.8: it runs before any other

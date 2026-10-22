@@ -165,7 +165,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout": "staged $ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4 draft=0 finish=$BRAND-store publish --stage '$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4' --slug lab-123 --status in-progress\n"
+    "stdout": "staged $ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4 draft=0 finish=\"$STORE\" publish --stage '$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4' --slug lab-123 --status in-progress\n"
    }
   },
   {
@@ -199,7 +199,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout_re": "^staged \\S+ draft=1 finish=$BRAND-store publish --stage '\\S+' --slug lab-123 --status in-progress\\n\\z",
+    "stdout_re": "^staged \\S+ draft=1 finish=\"$STORE\" publish --stage '\\S+' --slug lab-123 --status in-progress\\n\\z",
     "stdout_lacks": [
      "$SID"
     ]

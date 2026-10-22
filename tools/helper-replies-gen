@@ -5,13 +5,14 @@ Usage:
   tools/helper-replies-gen            write plugin/tests/unit/_gen/helper-replies.gen.ts
   tools/helper-replies-gen --check    exit 1 when the committed module differs from a fresh run
 
-Runs the built launcher plugin/bin/<name>-store (run tools/build first) through the calls the
+Runs the built launcher plugin/scripts/<name>-store (run tools/build first) through the calls the
 mod makes (BUILD-PLAN §3.1, hooks/lib/helper.ts and log.ts), in one fresh temporary HOME with
 STORE_TEST_MODE=1, a fixed clock and a fixed Claude pid, and records each call's argv, exit
 code and stdout. The U test (plugin/tests/unit/replies.test.ts, WP-mod) replays the same argv
 against the mod's fake helper and compares exit codes and output shapes.
 
-Recorded text is made portable: the temp dir becomes $TMP, the temp HOME becomes ~ and the
+Recorded text is made portable: the plugin folder becomes $PLUGIN (the helper prints its own
+quoted launcher path in commands), the temp dir becomes $TMP, the temp HOME becomes ~ and the
 plugin name is split out (each string is kept as parts; join them with a name), so the module
 holds no user path and no name. ASCII escapes keep marker shapes out of plugin/'s plain text.
 """
@@ -20,6 +21,9 @@ import json, os, shutil, subprocess, sys, tempfile
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 OUT = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "helper-replies.gen.ts")
+PLUGIN = os.path.join(REPO, "plugin")
+# The launcher folder (PKG-RUNTIME A.1): one constant, as in tools/build, deps.ts and ctx.pm.
+LAUNCHER_DIR = "scripts"
 SID = "5e55a001-0c0f-4f1e-9a00-00000000a001"
 NONCE = "1a2b3c4d"
 NOW = "2026-10-21T14:05:12+03:00"
@@ -138,6 +142,10 @@ def calls(tmp):
 
 
 def portable(s, tmp, home, name):
+    # The plugin folder first: the helper writes its own launcher path into the commands it
+    # prints (ctx::store_cmd, PKG-RUNTIME A.1), and the repo path is a user path.
+    for p in (os.path.realpath(PLUGIN), PLUGIN):
+        s = s.replace(p, "$PLUGIN")
     s = s.replace(home, "~").replace(tmp, "$TMP")
     real = os.path.realpath(tmp)
     if real != tmp:
@@ -147,9 +155,9 @@ def portable(s, tmp, home, name):
 
 def record():
     name = brand()
-    launcher = os.path.join(REPO, "plugin", "bin", name + "-store")
+    launcher = os.path.join(PLUGIN, LAUNCHER_DIR, name + "-store")
     if not os.access(launcher, os.X_OK):
-        sys.exit("helper-replies-gen: no launcher at plugin/bin/{}-store (run tools/build)".format(name))
+        sys.exit("helper-replies-gen: no launcher at plugin/{}/{}-store (run tools/build)".format(LAUNCHER_DIR, name))
     tmp = tempfile.mkdtemp(prefix="replies-")
     try:
         home = os.path.join(tmp, "home")
@@ -196,7 +204,7 @@ def record():
 def render(rows, inputs):
     return ("// GEN by tools/helper-replies-gen from real helper runs (BT-05). Do not edit; run the tool.\n"
             "// Strings are kept in parts split at the plugin name: join the parts with a name.\n"
-            "// $TMP stands for the run's temp dir and ~ for its HOME.\n\n"
+            "// $PLUGIN stands for the plugin folder, $TMP for the run's temp dir and ~ for its HOME.\n\n"
             "export type RecordedReply = { name: string; argv: readonly (readonly string[])[]; exitCode: number;"
             " stdout: readonly string[]; stdin?: readonly string[] }\n\n"
             "export const REPLY_SID = " + json.dumps(SID) + "\n"
