@@ -688,6 +688,10 @@ sub _session_rules {
     for my $r (rows_of($S, 'compacted')) {
         $compacted{ $r->{nonce} } = 1 if defined $r->{nonce};
         next unless defined $r->{skip} && !ref $r->{skip};
+        # DP-29 (E-M-15): the mod dropped its dispatch because a native compaction ran; the
+        # row (with the nonce) closes that dispatch, so it is neither a skipped after-step (a)
+        # nor a dispatch without `compacted` (b, the nonce is in %compacted above).
+        next if $r->{skip} eq 'native-ran';
         my $rd = $disp->{ $r->{nonce} // q() };
         next if $rd && $excluded->($rd);
         $R->(rule => 'A-17', severity => 'critical', id_parts => ['skip', $r->{nonce} // $r->{ts}],
