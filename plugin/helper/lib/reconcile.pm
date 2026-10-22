@@ -352,8 +352,10 @@ sub _run {
                           channel => ($drec ? $drec->{channel} : 'none'), seat_state => ($drec ? (postcompact::seat_state($drec, $a{transcript}))[0] : 'none'),
                           verdict => $save->{verdict}, verdict_source => ($kind eq 'mod' ? 'after-step' : 'postcompact'),
                           marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end},
+                          sentinel_place => $s->{sentinel_place},
                           summary_chars => $s->{chars}, shape_class => detect::shape_class($s),
                           copy => 'late', copy_path => $save->{rel},
+                          resume => rollup::resume_state($sid_dir, $mn, $scope, ($drec ? $drec->{channel} : "none")),
                           evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                                                 redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef));
             push @{ $st->{rolls_l} }, { id6 => $save->{id6}, nonce => $mn, e => $now, actor => $actor, pc => 0, join => 'reconcile' };
@@ -470,7 +472,6 @@ sub _save_deferred {
                             budget_ms => $left->(), bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $mn);
     }
     my $nonce = $drec ? $drec->{nonce} : $mn;
-    my $claim = defined $nonce ? util::read_file("$sid_dir/resume-claimed/$nonce") : undef;
     my $tot = $sweep ? $sweep->{totals} : undef;
     my $measured = $drec && grep { $_ eq 'measured' } @{ $drec->{tags} || [] };
     my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
@@ -479,13 +480,13 @@ sub _save_deferred {
         nonce => $nonce, id6 => $it->{id6}, join => $it->{join}, trigger => $trigger,
         midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
-        sentinel_from_end => $s->{sentinel_from_end},
+        sentinel_from_end => $s->{sentinel_from_end}, sentinel_place => $s->{sentinel_place},
         fabricated_check_tokens => ($measured ? 0 : detect::fabricated_check_tokens($s->{normalized})),
         instructions_bytes => ($drec ? $drec->{instructions_bytes} : undef), summary_chars => $s->{chars},
         shape_class => detect::shape_class($s), pre_tokens => ($mb ? $mb->{pre} : undef),
         post_tokens => ($mb ? $mb->{post} : undef), duration_ms => ($mb ? $mb->{ms} : undef),
         precomputed => jsonc::bool($precomputed), copy => $save->{result}, copy_path => $save->{rel},
-        resume => ($scope eq 'sub' ? 'none-subagent' : defined $claim ? 'delivered:' . ($claim =~ /^(\S+)/)[0] : undef),
+        resume => rollup::resume_state($sid_dir, $nonce, $scope, $channel),
         checkpoint_ms => undef,
         evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                               redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),

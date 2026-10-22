@@ -1,0 +1,6 @@
+<summary>
+⟪{{plugin}} v1 n=5e6f7081 s=sub⟫
+## Next action
+return the report
+⟪/{{plugin}} n=5e6f7081⟫
+</summary>

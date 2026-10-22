@@ -1,0 +1,9 @@
+file	verdict	marker_line	sentinel_from_end	nonce	scope	sentinel_place
+# AT-P5-01/02 shapes (P5-FOLD A1), case-local: the sentinel after </summary> moves into the body
+a-next-line.txt	ok	1	1	5e6f7081	sub	after-close
+b-same-line.txt	ok	1	1	5e6f7081	sub	after-close
+c-other-nonce.txt	truncated	1	1	5e6f7081	sub	after-close
+d-text-first.txt	truncated	1	-	5e6f7081	sub	-
+e-unlisted-after.txt	ok-trailer	1	2	5e6f7081	sub	after-close
+f-marker-absent.txt	unshaped	-	1	-	-	after-close
+g-inside.txt	ok	1	1	5e6f7081	sub	inside

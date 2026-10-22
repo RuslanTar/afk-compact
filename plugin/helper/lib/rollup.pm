@@ -7,7 +7,7 @@ use warnings;
 use utf8;
 
 our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn idle channel seat_state
-                 verdict verdict_source marker_line sentinel_from_end fabricated_check_tokens
+                 verdict verdict_source marker_line sentinel_from_end sentinel_place fabricated_check_tokens
                  instructions_bytes summary_chars shape_class pre_tokens post_tokens duration_ms precomputed
                  copy copy_path resume checkpoint_ms evidence nudged continued halt);
 
@@ -16,6 +16,26 @@ sub write {
     my @pairs = map { ($_ => $f{$_}) } @FIELDS;
     # ts: the compaction's own time when the row is written later (reconcile, F2-1)
     return rc::emit('compaction', \@pairs, stream => 'compactions', actor => $f{actor}, ts => $f{ts});
+}
+
+# resume_state(sid_dir, nonce, scope, channel) -> the rollup `resume` value (MOD-SPEC §2.5,
+# P5-FOLD A2, XR-26). The claim file <watch>/<sid>/resume-claimed/<nonce> decides first,
+# whatever the actor: present -> `delivered:<channel>` (on the classic path SessionStart
+# claims before PostCompact), or the claim's own `dropped:session-end`. No claim: a subagent
+# on the classic path -> `undelivered` (its block would have come through SessionStart); a
+# subagent on the mod path -> `none-subagent` (no block is built, §6); main -> `pending` (the
+# mod's logOutcome row settles it); scope unknown -> undef.
+sub resume_state {
+    my ($sid_dir, $nonce, $scope, $channel) = @_;
+    my $claim = (defined $sid_dir && defined $nonce) ? util::read_file("$sid_dir/resume-claimed/$nonce") : undef;
+    if (defined $claim && $claim =~ /^(\S+)/) {
+        my $c = $1;
+        return $c eq 'dropped:session-end' ? $c : "delivered:$c";
+    }
+    $scope //= 'unknown';
+    return (($channel // '') eq 'classic' ? 'undelivered' : 'none-subagent') if $scope eq 'sub';
+    return 'pending' if $scope eq 'main';
+    return undef;
 }
 
 sub rows {

@@ -1,0 +1,6 @@
+<summary>
+⟪{{plugin}} v1 n=5e6f7081 s=sub⟫
+## Task as assigned: "count rows"
+## Next action
+return the report to the parent
+</summary>⟪/{{plugin}} n=5e6f7081⟫

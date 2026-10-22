@@ -39,7 +39,8 @@
 #     (+ subst: true fills the placeholders in the copied text)
 #   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
-#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "nocase-fs" skips
+#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
+#     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
@@ -234,7 +235,8 @@ for my $cf (@CASES) {
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
                       || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv")
-                      || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs()) } @{ $case->{needs} || [] };
+                      || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
+                      || (/^fixture:(.+)$/ && !-e "$REPO/tests/fixtures/$1") } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -963,6 +965,11 @@ sub builtin {
         my $tsv = src_file($a->{tsv}, $cdir);
         my $dir = $a->{dir} ? src_file($a->{dir}, $cdir) : util::dirname($tsv);
         open(my $fh, '<:raw', $tsv) or return ("cannot read $tsv");
+        # copy_trailers.json beside the TSV: extra installed-message trailers for this table only
+        # (AT-P5-02 'sentinel then a listed trailer'), added to the shipped lists.
+        my $xt = -f "$dir/copy_trailers.json" ? eval { jsonc::decode(util::read_file("$dir/copy_trailers.json")) } : undef;
+        no warnings "once";
+        local @detect::TRAILERS = (detect::_trailers(), map { qr/$_/ } @{ ref $xt eq 'HASH' ? $xt->{copy_trailers} || [] : [] });
         my $head = <$fh>;
         chomp $head;
         my @cols = split /\t/, $head;
@@ -1007,8 +1014,9 @@ sub builtin {
                 $sha = sha::hex256($n);
             }
             my %got = (verdict => $s->{verdict}, marker_line => $s->{marker_line} // '-', sentinel_from_end => $s->{sentinel_from_end} // '-',
-                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $sha);
-            for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256)) {
+                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $sha,
+                       sentinel_place => $s->{sentinel_place} // '-');
+            for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256 sentinel_place)) {
                 next unless exists $r{$k} && defined $r{$k} && $r{$k} ne '';
                 push @e, "$r{file}: $k $got{$k}, want $r{$k}" if $got{$k} ne $r{$k};
             }

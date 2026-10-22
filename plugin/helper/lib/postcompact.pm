@@ -229,8 +229,8 @@ sub run {
     # whose after-step saves it with the scope the mod knows; the rollup row carries that
     # dispatch's actor and nonce (no save or sweep happens here on it).
     if ($deferred) { $actor = $deferred->{agent_id} // 'main'; $drec = $deferred }
-    my $claim = $drec ? util::read_file("$sid_dir/resume-claimed/$drec->{nonce}") : undef;
-    my $resume = $actor ne 'main' && $actor ne 'unattributed' ? 'none-subagent' : defined $claim ? 'delivered:' . ($claim =~ /^(\S+)/)[0] : undef;
+    my $resume = rollup::resume_state($sid_dir, ($drec ? $drec->{nonce} : undef),
+                                      ($actor eq 'main' ? 'main' : $actor eq 'unattributed' ? 'unknown' : 'sub'), $channel);
     my $tot = $sweep ? $sweep->{totals} : undef;
     my $measured = $drec && grep { $_ eq 'measured' } @{ $drec->{tags} || [] };
     # A scope-deferred compaction gets its one rollup row from reconcile, with the proven actor.
@@ -239,7 +239,7 @@ sub run {
         nonce => ($drec ? $drec->{nonce} : $emn), id6 => $id6, join => $join, trigger => $trigger,
         midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
-        sentinel_from_end => $s->{sentinel_from_end},
+        sentinel_from_end => $s->{sentinel_from_end}, sentinel_place => $s->{sentinel_place},
         fabricated_check_tokens => ($measured ? 0 : detect::fabricated_check_tokens($s->{normalized})),
         instructions_bytes => ($drec ? $drec->{instructions_bytes} : undef), summary_chars => $s->{chars},
         shape_class => detect::shape_class($s), pre_tokens => ($boundary ? $boundary->{pre} : undef),

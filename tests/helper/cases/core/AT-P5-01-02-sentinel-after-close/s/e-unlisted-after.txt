@@ -1,0 +1,7 @@
+<summary>
+⟪{{plugin}} v1 n=5e6f7081 s=sub⟫
+## Next action
+return the report
+</summary>
+⟪/{{plugin}} n=5e6f7081⟫
+an unlisted line
