@@ -331,3 +331,26 @@ test('@remeasure@: the after-step measures for this compaction\'s nonce (its own
   expect(m.length).toBe(1)
   expect(w.flag(m[0], '--nonce')).toBe(nonce)
 })
+
+// C-STORE D4 (MOD-SPEC §5.8 item 4): the mod writes the orphan index marker before its stash.
+test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid> (empty) before pending/<nonce>.mod.md, main and subagent', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  const marker = `${WATCH}/.orphans/${SID_A}`
+  const stashes = w.writes.map((p, i) => [p, i] as const).filter(([p]) => p.startsWith(`${WATCH}/${SID_A}/pending/`) && p.endsWith('.mod.md'))
+  expect(stashes.length).toBe(2)
+  const marks = w.writes.map((p, i) => [p, i] as const).filter(([p]) => p === marker).map(([, i]) => i)
+  expect(marks.length).toBe(2)
+  expect(stashes.every(([, i], k) => (marks[k] ?? Infinity) < i)).toBe(true)
+  expect(w.files.get(marker)).toBe('')
+})
+
+test('MOD-06: no vetted watch folder (ident refused every log folder): no marker and no stash', async ($, on) => {
+  const w = new World().install(on)
+  w.identWatch = null
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  expect(w.writes.filter(p => p.includes('/.orphans/') || p.endsWith('.mod.md'))).toEqual([])
+})

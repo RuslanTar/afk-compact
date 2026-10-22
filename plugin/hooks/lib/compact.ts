@@ -269,6 +269,10 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     verdict = det.verdict
     chars = det.normalized.length
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
+    // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
+    // behind is found by another session's cross-session finish. Empty; an existing one is fine.
+    // The `pending/` folder stays the truth: a failed marker write does not stop the stash.
+    if (file && stash !== undefined) await d.write(`${stash}/.orphans/${a.sid}`, '')
     if (!file || !(await d.write(file, summary.text))) {
       notSaved = file ? 'pending-write-failed' : s.ident?.watch === null ? 'unsafe-root' : 'helper-missing'
       await log(d, a.sid, 'copy_failed', { nonce: a.nonce, reason: notSaved }, actor)
