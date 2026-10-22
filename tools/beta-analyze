@@ -216,14 +216,16 @@ def tsv(rows):
 
 
 def parse_created(s):
-    """ISO date and time with offset -> epoch seconds, else None."""
+    """Date and time with offset -> epoch seconds, else None. Reads the manifest's own `created`
+    stamp (RV-24: `YYYY-MM-DD HH:MM +hhmm`, what `report` writes) and the rows' ISO form
+    (`YYYY-MM-DDTHH:MM:SS[.fff]+hh:mm` or `Z`)."""
     if not isinstance(s, str):
         return None
-    m = re.match(r"\A(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d+)?(Z|[+-]\d\d:?\d\d)\Z", s)
+    m = re.match(r"\A(\d{4})-(\d\d)-(\d\d)(?:T| )(\d\d):(\d\d)(?::(\d\d)(?:\.\d+)?)? ?(Z|[+-]\d\d:?\d\d)\Z", s)
     if not m:
         return None
     y, mo, d, hh, mi, ss, off = m.groups()
-    t = calendar.timegm((int(y), int(mo), int(d), int(hh), int(mi), int(ss), 0, 0, 0))
+    t = calendar.timegm((int(y), int(mo), int(d), int(hh), int(mi), int(ss or 0), 0, 0, 0))
     if off != "Z":
         sign = 1 if off[0] == "+" else -1
         off = off[1:].replace(":", "")

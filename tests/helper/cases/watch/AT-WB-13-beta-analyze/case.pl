@@ -101,7 +101,12 @@ my $tsv = sub {
               };
               main::write_file("$in/good.zip", $z, 0600);
               main::write_file("$in/good-copy.zip", $z, 0600);
-              $remake->('good-again.zip', { created => '2026-10-22T09:00:00+03:00' });
+              # The re-sent bundle is newer (the manifest's own `YYYY-MM-DD HH:MM +hhmm` stamp, RV-24)
+              # and carries a config.json with the B.5 default marks: it is the install's latest.
+              $got{created0} = $m0->{created};
+              my $cfg = '{"available":true,"keys":{"disposable_keep_days":{"class":"num","clamped":false,"default":false,"value":3},'
+                      . '"triggers":{"class":"bool","clamped":false,"default":true,"value":true}}}' . "\n";
+              $remake->('good-again.zip', { created => '2030-01-02 01:30 +0300' }, { 'config.json' => $cfg }, 1);
               $remake->('old-name.zip', { install_id => 'feedfacefeedface', plugin => 'storewatch', schema => 'storewatch-report/1' });
               $remake->('bad-hash.zip', undef, { 'probes.json' => "{\"smoke\":null}\n" });
               (my $hit = $e->{$rowsf}{data}) =~ s/\n\z/\n{"v":1,"ev":"skip","why":"\/Users\/someone\/x"}\n/;
@@ -197,6 +202,16 @@ my $tsv = sub {
         $has->($md, qr/^\| Uptake \| >=3 installs each return >=1 valid bundle \| 2 \| FAIL \|$/m, 'uptake bar');
         $has->($md, qr/^\| Bundle validity \| .* \| 3 of 13 valid, 2 quarantined \| FAIL \|$/m, 'validity bar');
         $has->($md, qr/^\| Ease \| .* \| p95 \d+\.\d s \| PASS; friend answers: owner review \|$/m, 'ease bar from the manifests');
+        my $d0 = '?';
+        if (($got{created0} // '') =~ /\A(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d) ([+-])(\d\d)(\d\d)\z/) {
+            my $t = watch::io::timegm(0, $5, $4, $3, $2 - 1, $1) - ($6 eq '-' ? -1 : 1) * ($7 * 3600 + $8 * 60);
+            my @g = gmtime $t;
+            $d0 = sprintf('%04d-%02d-%02d', $g[5] + 1900, $g[4] + 1, $g[3]);
+        }
+        $has->($md, qr/^- Bundle dates \(created, UTC\): \Q$d0\E \.\. 2030-01-01$/m, "date range from the manifests' own stamps ($got{created0})");
+        $has->($md, qr/^\| disposable_keep_days \| 1 \| 1 \|$/m, "config changed from default, from the install's latest bundle");
+        $has->($md, qr/^\| triggers \| 0 \| 1 \|$/m, 'a key at its default counts as not changed');
+        $has->($md, qr/^- Installs without export classes in config\.json: 1$/m, 'the other install has no export classes');
         $has->($md, qr/^Quarantined bundles are P0 bugs/m, 'quarantine note');
         $has->($md, qr/^\| auto \| \d+ \|$/m, 'trigger mix row');
         $has->($md, qr/^- \Q$got{install}\E [a-z0-9_.:-]+ A-01 critical session [0-9a-f]{12} nonce f0f00001 line 3$/m, 'per-alert line to ask about');
