@@ -770,9 +770,12 @@ sub _session_rules {
                 $settled = $sess->{ht_seen}{ $ht->{ht} }
                     || grep { ($_->{ht} // '') eq $ht->{ht} } rows_of($S, 'handoff_user_interjected'), rows_of($S, 'handoff_skipped');
             } else {
+                # A skip of an optional turn (pre-compaction `again`, any pre-idle skip) says
+                # nothing about the last-cycle handoff turn.
                 $settled = !$handoff_on
                     || ($ctx->{now} - $rt) >= $watch::hturn::OPEN_AFTER_ROW_S
-                    || grep { defined _t($_) && _t($_) >= $rt - $watch::hturn::SKEW_S && _t($_) <= $rt + $watch::hturn::OPEN_AFTER_ROW_S }
+                    || grep { defined _t($_) && _t($_) >= $rt - $watch::hturn::SKEW_S && _t($_) <= $rt + $watch::hturn::OPEN_AFTER_ROW_S
+                              && ($_->{why} // '') ne 'again' && ($_->{reason} // '') ne 'idle' }
                       rows_of($S, q(handoff_skipped));
             }
             next unless $settled;
