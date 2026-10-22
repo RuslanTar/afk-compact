@@ -41,6 +41,11 @@ sub run {
     die skills::cli::usage('--slug must be kebab-case') unless defined $o->{slug} && $o->{slug} =~ /\A[a-z0-9]+(?:-[a-z0-9]+)*\z/;
     my ($dir, $s, $ctx) = skills::stage::open_stage($o->{stage});
     my $row = { kind => 'handoff', writer => 'handoff', bytes => 0, lint_rules => [], size_band => undef };
+    # T-TEXT E7 (E-1 counters): every publish call on this stage counts, a refused one too, and
+    # each row names the built template the skill read.
+    $row->{attempt} = _attempt($dir);
+    $row->{template_rev} = _template_rev();
+    $row->{acuity_floor} = (defined $s->{acuity_floor} && $s->{acuity_floor} =~ /\A[a-z]+\z/) ? $s->{acuity_floor} : '-';
 
     if (-e "$dir/published") {
         _refuse($ctx, $row, 'already-published');
@@ -99,7 +104,7 @@ sub run {
         previous_kind => $s->{previous_kind}, own_previous => $own_text,
         repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
         jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
-        brand => $ctx->{brand},
+        brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
     $row->{bytes} = skills::util::blen($body);
@@ -109,8 +114,20 @@ sub run {
     my %rules;
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
-    skills::cli::say("LINT $_->[0] $_->[1]") for @b;
-    skills::cli::say("ADVISORY $_->[0] $_->[1]") for @a;
+    $row->{acuity} = $res->{acuity} // '-';
+    # T-TEXT E7: under the first line of each id in this run, its `  why: … · fix: …` line from
+    # the spec's lint_texts (an id without one is a build failure, AT-TX-03; a spec without
+    # lint_texts at all, older than T-TEXT E2, prints the first lines only).
+    my $texts = skills::spec::lint_texts();
+    my %told;
+    my $why = sub {
+        my ($id) = @_;
+        return if !%$texts || $told{$id}++;
+        my $t = $texts->{$id} or die "lint id $id has no lint_texts entry in the spec\n";
+        skills::cli::say("  why: $t->{why} · fix: $t->{fix}");
+    };
+    for (@b) { skills::cli::say("LINT $_->[0] $_->[1]"); $why->($_->[0]) }
+    for (@a) { skills::cli::say("ADVISORY $_->[0] $_->[1]"); $why->($_->[0]) }
     if (@b) {
         $row->{result} = 'REFUSED:lint';
         $row->{blocking} = scalar @b;
@@ -330,6 +347,23 @@ sub _claimed_free {
     return 0 unless defined $s->{bucket} && defined $s->{stem};
     return 0 unless File::Basename::dirname($p) eq $s->{bucket};
     return File::Basename::basename($p) =~ /\A\Q$s->{stem}\E(?:-[0-9]+)?\.md\z/ ? 1 : 0;
+}
+
+# The 1-based number of this publish call on the stage (T-TEXT E7): one line appended to the
+# stage's attempts.log (O_APPEND under flock), then the lines counted.
+sub _attempt {
+    my ($dir) = @_;
+    my $f = "$dir/attempts.log";
+    eval { skills::util::append_line($f, skills::util::iso_local() . "\n") } or return undef;
+    my $t = skills::util::read_file($f) // '';
+    my $n = () = $t =~ /\n/g;
+    return $n || undef;
+}
+
+# sha256/8 of the built handoff template the skill reads (T-TEXT E7), or undef without one.
+sub _template_rev {
+    my $h = skills::util::sha256_file(skills::ctx::plugin_root() . '/skills/handoff/references/handoff-template.md');
+    return defined $h ? substr($h, 0, 8) : undef;
 }
 
 sub _refuse {

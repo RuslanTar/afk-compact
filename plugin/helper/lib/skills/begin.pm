@@ -266,6 +266,10 @@ sub run {
         mode => $m->{mode}, mode_reason => $m->{reason},
         gsd_state => ($gsd && $g->{worktree} && -f "$g->{worktree}/.planning/STATE.md" ? "$g->{worktree}/.planning/STATE.md" : undef),
         identity_degraded => $id->{degraded},
+        # T-TEXT E6: the Acuity floor code measured (publish's acuity advisory reads it): a
+        # merge, rebase, cherry-pick or revert in progress -> unstable; a measured in-flight
+        # row -> watch; else stable.
+        acuity_floor => (@{ $g->{in_progress} || [] } ? 'unstable' : @{ $inflight->{tasks} || [] } ? 'watch' : 'stable'),
         settings => { map { $_ => $ctx->{settings}{$_} } grep { !/\A_/ } keys %{ $ctx->{settings} } },
     );
     if (!$resumed) {

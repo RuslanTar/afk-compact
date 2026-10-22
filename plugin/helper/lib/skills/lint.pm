@@ -13,7 +13,9 @@ package skills::lint;
 #        carried-stamp exemption (CR-F29);
 #      repo_mode and export_text (the body after the D-12 §1.5.5 rewrite) for
 #        private-path (repo mode only);
-#      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2).
+#      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2);
+#      2026-10-22 (T-TEXT E6): acuity_floor (the stage meta's) for the acuity advisory.
+# The result also carries `acuity`: the rating found in Resume here, or undef.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
 # private-path classes come from the spec too (fail closed: spec-missing <key>).
 use strict;
@@ -303,7 +305,21 @@ sub lint {
         my $s = $by_name{$name} or next;
         my $chars = 0;
         $chars += _chars($_->[1]) + 1 for @{ $s->{body} };
-        push @adv, [ 'section-cap', "$name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
+        push @adv, [ 'section-cap', "## $name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
+    }
+    # Acuity (T-TEXT E6): the writer's rating in Resume here (the spec's acuity_re) against the
+    # floor `begin` measured (acuity_floor in the stage meta): missing, or below the floor. A
+    # spec without acuity_re (older than T-TEXT E2) has no such check.
+    my $acuity;
+    if (my $are = skills::spec::acuity_re()) {
+        for my $r (@{ $rh ? $rh->{body} : [] }) { if ($r->[1] =~ $are) { $acuity = $1; last } }
+        my @w = @{ skills::spec::acuity_words() };
+        my %rank = map { $w[$_] => $_ } 0 .. $#w;
+        my $floor = $in->{acuity_floor};
+        if (!defined $acuity) { push @adv, [ 'acuity', 'missing' ] }
+        elsif (defined $floor && defined $rank{$floor} && defined $rank{$acuity} && $rank{$acuity} < $rank{$floor}) {
+            push @adv, [ 'acuity', "below $floor" ];
+        }
     }
     # Clutter classes from the spec block (WATCHER M-13): code-block (max_lines),
     # log-line and stack-line, hash-run (min_run).
@@ -359,7 +375,7 @@ sub lint {
     my $ids = skills::spec::lint_ids();
     for my $r (@block) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{blocking}{ $r->[0] } }
     for my $r (@adv) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{advisory}{ $r->[0] } }
-    return { blocking => \@block, advisory => \@adv };
+    return { blocking => \@block, advisory => \@adv, acuity => $acuity };
 }
 
 # A U-, D- or X- ledger line's content with its bullet, id and carry tags removed and
