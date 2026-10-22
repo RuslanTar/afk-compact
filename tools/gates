@@ -141,9 +141,18 @@ SUBCLAUSE = re.compile(r"\b(?:if|when|whenever|until|unless|once|after|before|wh
 # not left dangling ("Do not, under any circumstances, wait" stays negated). A comma before a
 # noun ("No recap, ..., foreground wait") does not end the negation.
 COMMA_JOINER = re.compile(r"\s*(?:so|and)\b", re.I)
-COMMA_IMPERATIVE = re.compile(r"\s*(?:wait|block|keep|run|use|poll|check|stop|start|let|leave|stay|"
-                              r"watch|read|call|sleep|hold|tail|go|do)\b", re.I)
+VERBS = r"(?:wait|block|keep|run|use|poll|check|stop|start|let|leave|stay|watch|read|call|sleep|hold|tail|go|do)"
+COMMA_IMPERATIVE = re.compile(r"\s*" + VERBS + r"\b", re.I)
 DANGLING_NEGATION = re.compile(r"\b(?:never|not|no)\s*$", re.I)
+# DP-30 (3): a comma inside a negated verb list does not start a clause ("Never poll, block or
+# wait in the foreground", "Never poll, wait in the foreground or sleep"). A list = a negation
+# and one word before the first comma, single words between the commas, and an or/nor that
+# closes it: right before the match, or right after it in front of a verb. "Never poll, wait in
+# the foreground until it ends" closes no list, so its comma still starts a clause.
+NEG_LIST_HEAD = re.compile(r"\b(?:never|not|no)\s+[a-z-]+\s*$", re.I)
+LIST_WORD = re.compile(r"^\s*[a-z-]+\s*$", re.I)
+LIST_LAST = re.compile(r"\b(?:or|nor)\s*$", re.I)
+LIST_NEXT = re.compile(r"^\s*,?\s*(?:or|nor)\s+" + VERBS + r"\b", re.I)
 STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
 MAIN_RULE = re.compile(r"notification wakes you", re.I)
 # AT-W-02: bytes of the full render (every tag line kept); resume = the resume protocol hard cap
@@ -197,9 +206,12 @@ def not_negated(line, m):
     """True unless a never/not/no in the match's own clause, within 40 characters, negates it."""
     pre = SUBCLAUSE.sub(" ", CLAUSE_START.split(line[:m.start()])[-1])
     parts, start = pre.split(","), 0
+    tail = line[m.end():]
     for j in range(1, len(parts)):
         follow = parts[j] + (line[m.start():] if j == len(parts) - 1 else "")
-        if COMMA_JOINER.match(follow) or (COMMA_IMPERATIVE.match(follow) and
+        in_list = (NEG_LIST_HEAD.search(parts[start]) and all(LIST_WORD.match(p) for p in parts[start + 1:j])
+                   and (LIST_LAST.search(",".join(parts[j:])) or LIST_NEXT.match(tail)))
+        if COMMA_JOINER.match(follow) or (COMMA_IMPERATIVE.match(follow) and not in_list and
                                           not any(DANGLING_NEGATION.search(p) for p in parts[start:j])):
             start = j
     pre = ",".join(parts[start:])

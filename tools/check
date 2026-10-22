@@ -282,12 +282,18 @@ def probes(name):
         append(d, "plugin/assets/handoff-turn.txt", "No output yet, so wait in the foreground until it ends.\n")
         append(d, "plugin/assets/checkpoint-nudge.txt",
                "Do not stop the job, wait in the foreground until it ends.\n")
+        # DP-30 (3): a comma after a negation and one verb that closes no or/nor list still
+        # starts a clause.
+        append(d, "plugin/assets/resume-context.txt", "Never poll, block on it in the foreground until it ends.\n")
 
     def wait_text_negated(d):
         # CR-F43: these stay negated, so the unplanted copy must still pass the gate.
         append(d, "plugin/skills/resume/SKILL.md",
                "\nDo not, under any circumstances, wait in the foreground for the job.\n"
-               "No recap, no status line, no foreground wait.\n")
+               "No recap, no status line, no foreground wait.\n"
+               # DP-30 (3): a comma inside a negated verb list does not start a clause.
+               "Never poll, block or wait in the foreground.\n"
+               "Never poll, wait in the foreground or sleep.\n")
 
     def asset_grow(d):
         append(d, "plugin/assets/resume-context.txt", "x" * 1200 + "\n")
@@ -511,7 +517,9 @@ def probes(name):
             r"^GATE wait-text plugin/skills/status/SKILL\.md:\d+: AT-W-01 foreground-wait: 'wait in the foreground'",
             r"^GATE wait-text plugin/assets/handoff-turn\.txt:\d+: AT-W-01 foreground-wait: 'wait in the foreground'",
             r"^GATE wait-text plugin/assets/checkpoint-nudge\.txt:\d+: AT-W-01 foreground-wait: "
-            r"'wait in the foreground'"],
+            r"'wait in the foreground'",
+            r"^GATE wait-text plugin/assets/resume-context\.txt:\d+: AT-W-01 foreground-wait: "
+            r"'block on it in the foreground'"],
          wait_text_negated),
         ("asset-bytes", "AT-W-02", gates_only("asset-bytes"), asset_grow,
          [r"^GATE asset-bytes plugin/assets/resume-context\.txt: AT-W-02 \d+ B > 3000$",
