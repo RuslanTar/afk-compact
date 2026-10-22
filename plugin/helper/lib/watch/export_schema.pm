@@ -14,6 +14,9 @@ package watch::export_schema;
 #   [pre => [@values], [@prefixes]]   a listed value, or `<prefix>:<class word>` (word kept when
 #                       it is a short lowercase class word, else `<prefix>:other`), else `other`
 #   word                a short lowercase class word made by code ([a-z][a-z0-9_-]{0,31}), else other
+#   tool                a tool name: a Claude Code built-in name (@BUILTIN_TOOLS) as it is, any
+#                       `mcp__<server>__<tool>` name (and the sweep's own `mcp`) as `mcp`, else
+#                       `other`; an MCP server name is the user's own word and never exported
 #   rule                an alert rule id (A-NN), else dropped
 #   [list => CLASS]     an array; each item through CLASS (items that fail are dropped)
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
@@ -44,6 +47,15 @@ my @IDLE_SRC = qw(mod notice return both none);
 # `unknown` before (needs/core-to-watch.md §6)
 my $IDLE = [or => 'bool', 'unknown'];
 my @ACUITY = qw(stable watch unstable -);
+# Claude Code's own tool names (fixed by Claude Code, the same for every install): the only tool
+# names the `tool` class keeps. A name not listed here becomes `other`.
+our @BUILTIN_TOOLS = qw(Agent AskUserQuestion Bash BashOutput CronCreate CronDelete CronList Edit EnterPlanMode
+                        ExitPlanMode Glob Grep KillBash KillShell LS ListMcpResourcesTool LSP Monitor MultiEdit
+                        NotebookEdit NotebookRead Read ReadMcpResourceTool SendMessage Skill SlashCommand Task
+                        TaskCreate TaskGet TaskList TaskOutput TaskStop TaskUpdate TodoRead TodoWrite ToolSearch
+                        WebFetch WebSearch Workflow Write);
+my %BUILTIN_TOOL = map { $_ => 1 } @BUILTIN_TOOLS;
+sub builtin_tool { my ($v) = @_; return defined $v && !ref $v && $BUILTIN_TOOL{$v} ? 1 : 0 }
 my @SEVERITY = qw(critical warn info);
 
 my %ENVELOPE = (
@@ -133,13 +145,13 @@ our %SCHEMA = (
             rapid_refill_run => 'int', nudge_driven => 'bool', idle => $IDLE,
             idle_source => [enum => @IDLE_SRC] }]],
         part => 'int',
-        turns =>[obj => { tool_batches => 'int', tool_calls => 'int', classes => [counts => 'word'],
+        turns =>[obj => { tool_batches => 'int', tool_calls => 'int', classes => [counts => 'tool'],
             errors => [counts => 'word'], askq => [counts => 'word'], prompts => 'int', continues => 'int',
             plugin_origin_rows => 'int', handoff_turns => 'int' }],
         handoff_turn => [list => [obj => { ht => 'hash', line => 'int' }]],
     },
     stop_failure => { error_class => 'word' },
-    permission_denied => { tool_name => 'word', reason_class => 'word', guard_class => 'word',
+    permission_denied => { tool_name => 'tool', reason_class => 'word', guard_class => 'word',
                            turn_kind => [enum => qw(post-compaction resume nudge other)], caused_by => [enum => qw(plugin session)] },
     handoff_publish => { result => [pre => [qw(wrote)], [qw(REFUSED)]], bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
                          kind => 'word', writer => 'word', ht => 'hash',

@@ -9,6 +9,9 @@
 # `expect.also_absent` value ($HOME expanded, the corpus secret) has 0 hits in the unpacked
 # zip and in its bytes; the watcher's identity list for this install holds every
 # `expect.identity_list` entry; the zip verifies. Skipped until the fixture is on the branch.
+# $WATCH is the install's effective watch folder: the recipe's settings set `log_dir`, and a
+# safe `log_dir` is the watch folder (lib/rc.pm), so `$WATCH/...` files are planted under the
+# `log_dir` value, where `report` reads them (watch-to-fix.md W2F-1).
 my $RECIPE = 'setups/wb-canary-install.json';
 my $rc = T::fixture_json($RECIPE);
 return { skip => "needs tests/fixtures/$RECIPE (WP-fix FIX-06)" } unless $rc;
@@ -18,7 +21,11 @@ my %got;
     transcript => [ T::prompt(0) ],
     steps => [
         { call => 'code', code => sub {
-              my ($v) = @_;
+              my ($v0) = @_;
+              my ($sw0) = grep { ($_->{write} // q()) =~ m{/\.claude/settings\.json\z} } @{ $rc->{setup} };
+              my ($o0) = values %{ $sw0 ? $sw0->{json}{pluginConfigs} : {} };
+              my $ld = $o0 && $o0->{options}{log_dir};
+              my $v = { %$v0, (defined $ld && length $ld ? (WATCH => T::subst($ld, $v0)) : ()) };
               T::run_setup($rc->{setup}, $v);
               my $inv = T::subst_deep($rc->{invoke}, $v);
               my $l = main::cli_launcher();
