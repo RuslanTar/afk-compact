@@ -54,3 +54,14 @@ test('the helper refuses or is missing: no toast', async ($, on) => {
   await w.start($)
   expect(w.toasts.length).toBe(0)
 })
+
+test('core-to-mod §20: the claim prints off (the helper reads watcher off): no toast; once the claim says show, one toast', async ($, on) => {
+  const w = new World().install(on)
+  w.replies.notice = () => ({ exitCode: 0, stdout: 'off\n' })
+  await w.start($)
+  expect([w.callsOf('notice').length, w.toasts.length]).toEqual([1, 0])
+  delete w.replies.notice
+  await w.start($)
+  await w.start($)
+  expect(w.toasts).toEqual([shippedNotice(w.name).text])
+})
