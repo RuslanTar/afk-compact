@@ -23,7 +23,7 @@ my ($A, $B, $C) = ('aaaaaaaa-1111-4111-8111-111111111111', 'bbbbbbbb-2222-4222-8
         { call => 'code', code => sub { my $v = shift; mkdir "$v->{WATCH}/$C"; symlink($v->{TMP}, "$v->{WATCH}/$C/link") } },
         { call => 'cli', argv => ['watch', 'prune', '--days', '0'], exit => 64 },
         { call => 'cli', argv => ['watch', 'prune', '--bogus'], exit => 64 },
-        { call => 'cli', argv => ['watch', 'report'], exit => 64 },
+        { call => 'cli', argv => ['watch', 'backfill'], exit => 64 },
         { call => 'cli', argv => ['watch', 'prune', '--days', '30'], exit => 0, stdout_re => qr/\Apruned files=3 bytes=19\n\z/ },
         { call => 'cli', argv => ['watch', 'prune', '--days', '30', '--sid', $B], exit => 0, stdout_re => qr/\Apruned files=0 bytes=0\n\z/ },
     ],

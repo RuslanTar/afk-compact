@@ -14,6 +14,7 @@ package watch::export_schema;
 #   [pre => [@values], [@prefixes]]   a listed value, or `<prefix>:<class word>` (word kept when
 #                       it is a short lowercase class word, else `<prefix>:other`), else `other`
 #   word                a short lowercase class word made by code ([a-z][a-z0-9_-]{0,31}), else other
+#   rule                an alert rule id (A-NN), else dropped
 #   [list => CLASS]     an array; each item through CLASS (items that fail are dropped)
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
 #   [obj => {...}]      a nested object with its own field classes
@@ -117,8 +118,13 @@ our %SCHEMA = (
             pre => 'num', post => 'num', duration_ms => 'num', precomputed => 'bool', dropped => 'num',
             preserved_segment => 'bool', summary_line => 'int', summary_flags => [counts => 'word'], version => 'version',
             sid_canary => 'bool', attributed => 'actor', band_position => 'word', bypass_suspected => 'bool',
-            mod_off => 'bool', nonce => 'nonce', join => 'word', verdict => [enum => @VERDICT], seq => 'int' }]],
-        turns => [obj => { tool_batches => 'int', tool_calls => 'int', classes => [counts => 'word'],
+            mod_off => 'bool', nonce => 'nonce', join => 'word', verdict => [enum => @VERDICT], seq => 'int',
+            boundary_trigger => [enum => @TRIGGER], trigger_src => [enum => qw(dispatch boundary postcompact)],
+            trigger_detail => 'word', nonce_match => 'bool', channel => [enum => @CHANNEL], copy => 'word',
+            postcompact => 'bool', warm_gap_s => 'num', turns_since_prev => 'int', refill_per_turn => 'num',
+            rapid_refill_run => 'int', nudge_driven => 'bool' }]],
+        part => 'int',
+        turns =>[obj => { tool_batches => 'int', tool_calls => 'int', classes => [counts => 'word'],
             errors => [counts => 'word'], askq => [counts => 'word'], prompts => 'int', continues => 'int',
             plugin_origin_rows => 'int', handoff_turns => 'int' }],
         handoff_turn => [list => [obj => { ht => 'hash', line => 'int' }]],
@@ -126,7 +132,7 @@ our %SCHEMA = (
     stop_failure => { error_class => 'word' },
     permission_denied => { tool_name => 'word', reason_class => 'word', guard_class => 'word',
                            turn_kind => [enum => qw(post-compaction resume nudge other)], caused_by => [enum => qw(plugin session)] },
-    handoff_publish => { result => 'word', bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
+    handoff_publish => { result => [pre => [qw(wrote)], [qw(REFUSED)]], bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
                          kind => 'word', writer => 'word', ht => 'hash' },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
@@ -154,10 +160,10 @@ our %SCHEMA = (
     queue_add => { result => 'word', exit => 'int', ms => 'num' },
     resume_receipt => { relation => 'word', tier => 'word', calls => 'int', drift => [list => 'word'],
                         bg => [counts => 'word'], questions => 'int', adopt => 'word' },
-    heal => { origin_sid => 'hash', item => 'hash', result => 'word', bumped => 'bool', count => 'int',
+    heal => { origin_sid => 'hash', item => 'hash', result => [pre => [qw(ok)], [qw(ok REFUSED)]], bumped => 'bool', count => 'int',
               verdict => 'word', confidence => 'word', effects => 'word', signals => [counts => 'word'],
               mode => 'word', new_task_id => 'hash' },
-    alert => { alert_id => 'word', rule => 'word', severity => [enum => @SEVERITY],
+    alert => { alert_id => 'word', rule => 'rule', severity => [enum => @SEVERITY],
                key => [obj => { session_id => 'hash', actor => 'actor', compaction_seq => 'int', nonce => 'nonce' }],
                evidence => [obj => {
                    line => 'int', count => 'int', calls => 'int', class => 'word', call_no => 'int', after => 'word',

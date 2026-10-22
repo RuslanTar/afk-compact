@@ -55,6 +55,7 @@ my %RX = (
     ts      => qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:?[0-9]{2})\z/,
     version => qr/\A[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:-[0-9A-Za-z.]{1,20})?\z/,
     word    => qr/\A[a-z][a-z0-9_-]{0,31}\z/,
+    rule    => qr/\A[A-Z]-[0-9]{2}\z/,
 );
 
 sub _is_num {
@@ -93,7 +94,7 @@ sub xvalue {
             return (0) if ref $v;
             my ($vals, $pres) = @a;
             return (1, $v) if grep { $_ eq $v } @$vals;
-            if ($v =~ /\A([a-z-]+):(.*)\z/s && grep { $_ eq $1 } @$pres) {
+            if ($v =~ /\A([A-Za-z-]+):(.*)\z/s && grep { $_ eq $1 } @$pres) {
                 my ($p, $w) = ($1, $2);
                 return (1, "$p:" . ($w =~ $RX{word} ? $w : 'other'));
             }

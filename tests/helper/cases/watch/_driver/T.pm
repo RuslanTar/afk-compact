@@ -220,4 +220,49 @@ sub zip_entries {
     return { map { $_->{name} => $_ } @{ $u->{entries} || [] } };
 }
 
+
+# W13 fixture (WATCHER-SPEC §10.2/§10.3; WCH-10): one session's rows as the realtime tier
+# leaves them: sweep boundary records with the per-compaction fields, postcompact rows, the
+# rollup, resume_inject, continue, alerts and a config_effective row. %o: n (main
+# compactions, default 3), bad_copy (index of a compaction with copy missing), sid.
+sub w13_session {
+    my (%o) = @_;
+    my $n = $o{n} // 3;
+    my $sid = $o{sid} // $SID;
+    my (@classic, @mod, @roll, @alerts, @b);
+    push @mod, row('config_effective', 0, sid => $sid, window => 800000, native_trigger => 767000, soft_max => 600000,
+                   target => 400000, reserve => 116000, disabled => undef);
+    for my $i (1 .. $n) {
+        my $t = $i * 600;
+        my $nonce = sprintf('%08x', 0xc0de0000 + $i);
+        my $copy = (defined $o{bad_copy} && $o{bad_copy} == $i) ? 'missing' : 'saved';
+        push @b, { line => $i * 10, uuid => "u-b$i", ts => z($t), trigger => ($i == 1 ? 'auto' : 'plugin'), pre => 400000 + 50000 * $i,
+                   post => 40000, duration_ms => 20000 + 1000 * $i, precomputed => \0, attributed => 'main', verdict => 'ok',
+                   channel => 'mod-hook', copy => $copy, band_position => 'in-band', nonce => $nonce, warm_gap_s => ($i == 1 ? 900 : 10),
+                   nudge_driven => ($i > 1 ? \1 : \0), seq => $i };
+        push @classic, row('postcompact', $t + 1, sid => $sid, writer => 'classic', nonce_found => $nonce, scope_found => 'main',
+                           verdict => 'ok', form => 'main', summary_chars => 7000 + 100 * $i, fabricated_check_tokens => 0,
+                           ledger => { lost_U => 0, lost_D => 0, lost_X => 0, ledger_src => 'copy' });
+        push @roll, row('compaction', $t + 1, sid => $sid, writer => 'helper', actor => 'main', nonce => $nonce, trigger => 'auto',
+                        verdict => 'ok', channel => 'mod-hook', copy => $copy, pre_tokens => 400000 + 50000 * $i, precomputed => \0);
+        push @mod, row('dispatch', $t - 1, sid => $sid, nonce => $nonce, trigger => 'auto', channel => 'mod-hook'),
+                   row('compacted', $t, sid => $sid, nonce => $nonce, skip => undef),
+                   row('resume_inject', $t + 2, sid => $sid, nonce => $nonce, channel => 'prompt.context', bytes => 3000);
+        push @mod, row('continue', $t + 3, sid => $sid, result => 'submitted', continues_last_hour => $i - 1) if $i > 1;
+    }
+    push @classic, row('sweep', $n * 600 + 10, sid => $sid, writer => 'classic', file => "$sid.jsonl", from_off => 0, to_off => 9999,
+                       boundaries => \@b, turns => { tool_calls => 400, tool_batches => 300, prompts => 20 });
+    push @classic, row('permission_denied', 50, sid => $sid, writer => 'classic', guard_class => 'sleep-poll',
+                       turn_kind => 'post-compaction', caused_by => 'plugin');
+    push @alerts, row('alert', 700, sid => $sid, writer => 'classic', alert_id => 'a05-0000aaaa', rule => 'A-05', severity => 'warn',
+                      key => { session_id => $sid, actor => 'main', compaction_seq => 1, nonce => 'c0de0001' },
+                      evidence => { line => 10, band_position => 'above-softmax' });
+    return [
+        { path => "\$WATCH/$sid.classic.jsonl", jsonl => \@classic },
+        { path => "\$WATCH/$sid.jsonl", jsonl => \@mod },
+        { path => "\$WATCH/$sid.alerts.jsonl", jsonl => \@alerts },
+        { path => "\$WATCH/$sid/compactions.jsonl", jsonl => \@roll },
+    ];
+}
+
 1;
