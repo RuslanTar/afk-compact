@@ -8,8 +8,9 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
   --no-git-log  skip the attribution gate over `git log --format=%B`
   --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
                 skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal,
-                config-defaults, launcher,
-                template-shape, lint-texts, xref, no-args-inline, readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder)
+                config-defaults, launcher, template-shape, lint-texts, xref, no-args-inline,
+                readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder,
+                export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -79,6 +80,20 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                `allowed-tools`/`disable-model-invocation` frontmatter (P-156)
   ic-desc      AT-IC-11: resume description without `/clear`/`break`; handoff one unchanged
   nudge-folder AT-TX-13: nudge step 3 current-folder fallback and `Dirty in <folder git ran in>:`
+  BLD-05 end-of-round gates over a built plugin folder (build round 9, after the last merge):
+  config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS and
+               watch/ctx.pm %DEFAULTS equal the manifest defaults; manifest and @KEYS list the
+               same keys
+  export-classes AT-WB-08: every settings key exports as num/bool/enum/path/list/drop; dir and
+               file keys as path or drop; enum keys have %ENUM values
+  no-network   AT-WB-11 (static): report.pl and every helper module it loads name no
+               IO::Socket, LWP, HTTP::Tiny or Net::
+  export-schema AT-WB-01 (static): every `ev` the helper and mod code write has a
+               watch/export_schema.pm entry (the WATCHER §6.3 list half is a watch case)
+  report-skill AT-WB-15: description "Only when the user asks", one `<store> report` call, no
+               `$ARGUMENTS`, no bare launcher, no log reads, REVEAL/COPY lines not run
+  no-age-rule  AT-ST-06: no file-time test in reconcile.pm, copies.pm, postcompact.pm
+  perl-utf8    AT-P5-06: a helper .pm/.pl with non-ASCII on a code line needs `use utf8`
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
@@ -212,10 +227,8 @@ BASH_PATH = re.compile(r"\bon the Bash PATH\b", re.I)
 # Hits that wait for text not written yet: (gate, rule, path in the target, fragment of the
 # offending line or None for a file-level hit). Remove a row once it prints PENDING-DONE.
 PENDING = [
-    # The launcher move (BLD-01) lands before the README text (BUILD-ROUND-9 §4 steps 3, 10):
-    # DOC-01 drops the README's bin/ path. (TXT-05's skill rows printed PENDING-DONE at the
-    # wp/text merge and were removed.)
-    ("launcher", "AT-PK-01 launcher-dir", "README.md", "/bin/"),
+    # (Empty since build round 9: the launcher-move rows printed PENDING-DONE after the wp/text
+    # (TXT-05) and wp/docs (DOC-01) merges and were removed.)
 ]
 
 
@@ -931,6 +944,325 @@ def nudge_folder_hits(target, brand):
     return out
 
 
+# ---------------------------------------------------------------- BLD-05 end-of-round gates
+# Switched on after the last merge of build round 9 (BUILD-ROUND-9 §4 step 11): AT-CAP-02,
+# perl-utf8 (AT-P5-06), AT-WB-01/-08/-11/-15, AT-ST-06. They read helper and mod code of a
+# built plugin folder (one with .claude-plugin/plugin.json); a missing file is a hit.
+
+def _manifest_defaults(target):
+    path = os.path.join(target, ".claude-plugin", "plugin.json")
+    with open(path, encoding="utf-8") as f:
+        uc = json.load(f).get("userConfig") or {}
+    return path, {k: (v or {}).get("default") for k, v in uc.items()}
+
+
+def _is_plugin(target):
+    return os.path.isfile(os.path.join(target, ".claude-plugin", "plugin.json"))
+
+
+def _read(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+SETTINGS_REL = "helper/lib/settings.pm"
+CONFIG_TS_REL = "hooks/lib/config.ts"
+WATCH_CTX_REL = "helper/lib/watch/ctx.pm"
+SETTINGS_ROW = re.compile(r"^\s*\[(\w+)\s*=>\s*'(\w+)',\s*('(?:[^'\\]|\\.)*'|-?\d+(?:\.\d+)?),\s*'(\w+)'\]")
+EXPORT_CLASSES = ("num", "bool", "enum", "path", "list", "drop")
+
+
+def _settings_rows(target):
+    path = os.path.join(target, *SETTINGS_REL.split("/"))
+    if not os.path.isfile(path):
+        return path, None
+    src = _read(path)
+    m = re.search(r"^our @KEYS = \((.*?)^\);", src, re.S | re.M)
+    rows = []
+    for ln in (m.group(1).split("\n") if m else []):
+        r = SETTINGS_ROW.match(ln)
+        if r:
+            rows.append((r.group(1), r.group(2), r.group(3), r.group(4)))
+    return path, rows
+
+
+def _lit(v):
+    """A Perl or TypeScript literal as Python: 'x' -> x, numbers -> int/float, true/false."""
+    v = v.strip().rstrip(",").strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+        return v[1:-1]
+    if v in ("true", "false"):
+        return v == "true"
+    try:
+        return int(v)
+    except ValueError:
+        try:
+            return float(v)
+        except ValueError:
+            return v
+
+
+def _same(manifest, got, perl_bool=False):
+    if isinstance(manifest, bool):
+        if perl_bool and got in (0, 1, "0", "1", "true", "false"):
+            got = got in (1, "1", "true")
+        return got is manifest
+    if isinstance(manifest, (int, float)) and not isinstance(got, bool):
+        return isinstance(got, (int, float)) and got == manifest
+    return got == manifest
+
+
+def config_sources_hits(target, brand):
+    """AT-CAP-02 (S-SETTINGS A, one source for defaults): every key's fallback in settings.pm
+    @KEYS (column 3), config.ts DEFAULTS and watch/ctx.pm %DEFAULTS equals the manifest default;
+    every manifest key has a settings.pm row and every row a manifest key."""
+    if not _is_plugin(target):
+        return []
+    mpath, defaults = _manifest_defaults(target)
+    out = []
+    spath, rows = _settings_rows(target)
+    if rows is None:
+        return [_missing(spath, "AT-CAP-02 settings")]
+    seen = set()
+    for key, typ, fb, _exp in rows:
+        seen.add(key)
+        if key not in defaults:
+            out.append((spath, None, "AT-CAP-02 extra", "AT-CAP-02 extra: settings.pm key {} is not in the manifest".format(key), ""))
+        elif not _same(defaults[key], _lit(fb), perl_bool=(typ == "bool")):
+            out.append((spath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: settings.pm {} fallback {} != manifest {!r}".format(
+                key, fb, defaults[key]), ""))
+    for key in sorted(set(defaults) - seen):
+        out.append((spath, None, "AT-CAP-02 missing", "AT-CAP-02 missing: manifest key {} has no settings.pm row".format(key), ""))
+    cpath = os.path.join(target, *CONFIG_TS_REL.split("/"))
+    if not os.path.isfile(cpath):
+        out.append(_missing(cpath, "AT-CAP-02 config.ts"))
+    else:
+        m = re.search(r"^export const DEFAULTS: Config = \{(.*?)^\}", _read(cpath), re.S | re.M)
+        if not m:
+            out.append((cpath, None, "AT-CAP-02 config.ts", "AT-CAP-02 config.ts: no DEFAULTS block", ""))
+        for ln in (m.group(1).split("\n") if m else []):
+            r = re.match(r"^\s*(\w+):\s*(.+?),?\s*$", ln)
+            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _lit(r.group(2))):
+                out.append((cpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: config.ts DEFAULTS {} {} != manifest {!r}".format(
+                    r.group(1), r.group(2), defaults[r.group(1)]), ""))
+    wpath = os.path.join(target, *WATCH_CTX_REL.split("/"))
+    if not os.path.isfile(wpath):
+        out.append(_missing(wpath, "AT-CAP-02 ctx.pm"))
+    else:
+        m = re.search(r"^my %DEFAULTS = \((.*?)^\);", _read(wpath), re.S | re.M)
+        if not m:
+            out.append((wpath, None, "AT-CAP-02 ctx.pm", "AT-CAP-02 ctx.pm: no %DEFAULTS block", ""))
+        for ln in (m.group(1).split("\n") if m else []):
+            r = re.match(r"^\s*(\w+)\s*=>\s*(.+?),?\s*$", ln)
+            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _lit(r.group(2)), perl_bool=True):
+                out.append((wpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: watch/ctx.pm {} {} != manifest {!r}".format(
+                    r.group(1), r.group(2), defaults[r.group(1)]), ""))
+    return out
+
+
+def export_classes_hits(target, brand):
+    """AT-WB-08 (W-BETA D): every settings key has an export class (settings.pm @KEYS column 4)
+    in EXPORT_CLASSES; dir/file keys export path or drop; every enum key lists its values in
+    %ENUM; every manifest key has a row."""
+    if not _is_plugin(target):
+        return []
+    spath, rows = _settings_rows(target)
+    if rows is None:
+        return [_missing(spath, "AT-WB-08 settings")]
+    out = []
+    src = _read(spath)
+    m = re.search(r"^our %ENUM = \((.*?)\);", src, re.S | re.M)
+    enums = set(re.findall(r"(\w+)\s*=>\s*\[qw\(", m.group(1))) if m else set()
+    _mp, defaults = _manifest_defaults(target)
+    keys = set()
+    for key, typ, _fb, exp in rows:
+        keys.add(key)
+        if exp not in EXPORT_CLASSES:
+            out.append((spath, None, "AT-WB-08 class", "AT-WB-08 class: {} exports {!r} (want one of {})".format(
+                key, exp, "/".join(EXPORT_CLASSES)), ""))
+        elif typ in ("dir", "file") and exp not in ("path", "drop"):
+            out.append((spath, None, "AT-WB-08 path", "AT-WB-08 path: {} is a {} key exported as {}".format(key, typ, exp), ""))
+        elif exp == "enum" and key not in enums:
+            out.append((spath, None, "AT-WB-08 enum", "AT-WB-08 enum: {} has no %ENUM values".format(key), ""))
+    for key in sorted(set(defaults) - keys):
+        out.append((spath, None, "AT-WB-08 missing", "AT-WB-08 missing: manifest key {} has no export class".format(key), ""))
+    return out
+
+
+REPORT_CMD_REL = "helper/cmd/report.pl"
+NETWORK = re.compile(r"\b(?:IO::Socket|LWP|HTTP::Tiny|Net::)")
+USE_MOD = re.compile(r"^\s*(?:use|require)\s+([A-Za-z_][\w:]*)\s*[;(\s]", re.M)
+
+
+def no_network_hits(target, brand):
+    """AT-WB-11 (static half; the runtime half is the watch case AT-WB-11-no-network): the report
+    command and every helper module it loads (use/require, followed through helper/lib) name no
+    IO::Socket, LWP, HTTP::Tiny or Net::."""
+    if not _is_plugin(target):
+        return []
+    start = os.path.join(target, *REPORT_CMD_REL.split("/"))
+    if not os.path.isfile(start):
+        return [_missing(start, "AT-WB-11 report")]
+    lib = os.path.join(target, "helper", "lib")
+    todo, done, out = [start], set(), []
+    while todo:
+        p = todo.pop()
+        if p in done:
+            continue
+        done.add(p)
+        src = _read(p)
+        for no, ln in enumerate(src.split("\n"), 1):
+            if ln.lstrip().startswith("#"):
+                continue
+            m = NETWORK.search(ln)
+            if m:
+                out.append((p, no, "AT-WB-11 network", "AT-WB-11 network: {!r} on the report path".format(m.group(0)), ln))
+        for mod in USE_MOD.findall(src):
+            f = os.path.join(lib, *mod.split("::")) + ".pm"
+            if os.path.isfile(f):
+                todo.append(f)
+    return out
+
+
+SCHEMA_REL = "helper/lib/watch/export_schema.pm"
+EV_WRITERS = [re.compile(r"rc::emit\(\s*'([a-z][a-z0-9_]+)'"),
+              re.compile(r"log_row\(\s*\$[a-z]+,\s*'([a-z][a-z0-9_]+)'"),
+              re.compile(r"(?:ctx::log|log_event)\(\s*\$[a-z]+,\s*'([a-z][a-z0-9_]+)'"),
+              re.compile(r"\blog\(\s*[a-z]+,\s*[a-zA-Z.()]+,\s*'([a-z][a-z0-9_]+)'")]
+
+
+def export_schema_hits(target, brand):
+    """AT-WB-01 (static half; the WATCHER §6.3 list half is the watch case AT-WB-01-schema):
+    every `ev` the shipped helper and mod code write (rc::emit, log_row, ctx::log/log_event, the
+    mod's log()) has an entry in watch/export_schema.pm %SCHEMA."""
+    if not _is_plugin(target):
+        return []
+    spath = os.path.join(target, *SCHEMA_REL.split("/"))
+    if not os.path.isfile(spath):
+        return [_missing(spath, "AT-WB-01 schema")]
+    m = re.search(r"^our %SCHEMA = \((.*?)^\);", _read(spath), re.S | re.M)
+    known = set(re.findall(r"^    ([a-z][a-z0-9_]*) => \{", m.group(1), re.M)) if m else set()
+    if not known:
+        return [(spath, None, "AT-WB-01 schema", "AT-WB-01 schema: no %SCHEMA entries", "")]
+    out, found = [], {}
+    for top in ("helper", "hooks"):
+        for d, dirs, files in os.walk(os.path.join(target, top)):
+            dirs[:] = sorted(x for x in dirs if x not in ("node_modules", "tests"))
+            for f in sorted(files):
+                if not f.endswith((".pm", ".pl", ".ts")) or f.endswith(".gen.ts"):
+                    continue
+                p = os.path.join(d, f)
+                src = _read(p)
+                for rx in EV_WRITERS:
+                    for ev in rx.findall(src):
+                        found.setdefault(ev, p)
+    if len(found) < 20:
+        out.append((spath, None, "AT-WB-01 scan", "AT-WB-01 scan: only {} event names found in the code".format(len(found)), ""))
+    for ev in sorted(set(found) - known):
+        out.append((found[ev], None, "AT-WB-01 ev", "AT-WB-01 ev: {} has no export-schema entry".format(ev), ""))
+    return out
+
+
+REPORT_DESC_START = "Only when the user asks"
+LOG_READ = re.compile(r"\b(?:Read|Grep|cat|grep|tail|less|head)\b[^.]*\blogs?\b", re.I)
+NEGATED_LOG_READ = re.compile(r"\b(?:Do not|Never|never|don't)\b[^.]*\b(?:read|open|grep)\b[^.]*\blogs?\b", re.I)
+
+
+def report_skill_hits(target, brand):
+    """AT-WB-15 (W-BETA C, XR-04, XR-21): the report SKILL description starts "Only when the
+    user asks"; exactly one helper call, `<store> report`; no `$ARGUMENTS`, no bare
+    `<brand>-store`; no instruction to read or grep logs; the REVEAL and COPY lines are named as
+    not to be run. (`disable-model-invocation: true` waits for PR-2 P-156; the call-form gate
+    refuses it until then.)"""
+    path = os.path.join(target, *REPORT_REL.split("/"))
+    if not os.path.isfile(path):
+        return [_missing(path, "AT-WB-15 report")]
+    out = []
+    d = _description(path) or ""
+    if not d.startswith(REPORT_DESC_START):
+        out.append((path, None, "AT-WB-15 description", "AT-WB-15 description: does not start {!r}".format(REPORT_DESC_START), ""))
+    lines = shipped_lines(path, brand)
+    text = "\n".join(lines)
+    calls = re.findall(r"`<store> ([a-z][a-z-]*)", text)
+    if calls != ["report"]:
+        out.append((path, None, "AT-WB-15 calls", "AT-WB-15 calls: helper calls {} (want exactly one `<store> report`)".format(calls), ""))
+    for no, ln in enumerate(lines, 1):
+        if "$ARGUMENTS" in ln:
+            out.append((path, no, "AT-WB-15 arguments", "AT-WB-15 arguments: `$ARGUMENTS`", ln))
+        if re.search(r'(?<![/\w."-])' + re.escape(brand) + r"-store\b", ln):
+            out.append((path, no, "AT-WB-15 bare", "AT-WB-15 bare: the launcher named outside `<store>`", ln))
+        for sentence in re.split(r"(?<=\.)\s+", ln):
+            if LOG_READ.search(sentence) and not NEGATED_LOG_READ.search(sentence):
+                out.append((path, no, "AT-WB-15 log-read", "AT-WB-15 log-read: {!r}".format(sentence[:80]), ln))
+    if not re.search(r"\b(?:Do not|Never) run the REVEAL or COPY lines\b", text):
+        out.append((path, None, "AT-WB-15 reveal-copy", "AT-WB-15 reveal-copy: no 'Do not run the REVEAL or COPY lines'", ""))
+    return out
+
+
+NO_AGE_FILES = ("helper/lib/reconcile.pm", "helper/lib/copies.pm", "helper/lib/postcompact.pm")
+FILE_TIME = re.compile(r"(?:^|[\s(!])-[MAC]\s+[$\"'_]|\bstat\s*\(.*\)\s*\)?\s*\[\s*(?:8|9|10)\s*\]|\$s\[\s*(?:8|9|10)\s*\]|"
+                       r"->\s*mtime\b|\bmtime\b")
+
+
+def no_age_rule_hits(target, brand):
+    """AT-ST-06 (C-STORE, RRP-05 "no age limit"): reconcile.pm, copies.pm and postcompact.pm
+    make no file-time decision (file tests -M/-A/-C, stat() fields 8-10, ->mtime, the word
+    mtime outside comments); the pattern of the runner builtin no_age_rule."""
+    if not _is_plugin(target):
+        return []
+    out = []
+    for rel in NO_AGE_FILES:
+        p = os.path.join(target, *rel.split("/"))
+        if not os.path.isfile(p):
+            out.append(_missing(p, "AT-ST-06 no-age"))
+            continue
+        for no, ln in enumerate(_read(p).split("\n"), 1):
+            if re.match(r"^\s*#", ln):
+                continue
+            if FILE_TIME.search(ln):
+                out.append((p, no, "AT-ST-06 file-time", "AT-ST-06 file-time: a file-time test (no age rule)", ln))
+    return out
+
+
+def _perl_code_lines(src):
+    """(line no, line) of the code lines of a Perl file: no `#` comment line, no POD, nothing
+    after __END__/__DATA__. A trailing comment on a code line counts as code (stricter)."""
+    pod = False
+    for no, ln in enumerate(src.split("\n"), 1):
+        if ln.startswith("__END__") or ln.startswith("__DATA__"):
+            return
+        if re.match(r"^=[a-zA-Z]", ln):
+            pod = not ln.startswith("=cut")
+            continue
+        if pod or re.match(r"^\s*#", ln):
+            continue
+        yield no, ln
+
+
+USE_UTF8 = re.compile(r"^\s*use\s+utf8\s*;", re.M)
+
+
+def perl_utf8_hits(target, brand):
+    """AT-P5-06 (P5-FOLD A4): a helper .pm/.pl with a non-ASCII character on a code line and no
+    `use utf8` fails; comment-only non-ASCII passes."""
+    if not _is_plugin(target):
+        return []
+    out = []
+    for d, dirs, files in os.walk(os.path.join(target, "helper")):
+        dirs.sort()
+        for f in sorted(files):
+            if not f.endswith((".pm", ".pl")):
+                continue
+            p = os.path.join(d, f)
+            src = _read(p)
+            if USE_UTF8.search(src):
+                continue
+            hit = next(((no, ln) for no, ln in _perl_code_lines(src) if re.search(r"[^\x00-\x7f]", ln)), None)
+            if hit:
+                out.append((p, hit[0], "AT-P5-06 perl-utf8", "AT-P5-06 perl-utf8: non-ASCII on a code line and no `use utf8`", hit[1]))
+    return out
+
+
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
               ("write-first", write_first_hits), ("self-heal", self_heal_hits),
               ("config-defaults", config_defaults_hits), ("launcher", launcher_hits),
@@ -944,7 +1276,14 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("prod-reads", prod_reads_hits),
               ("call-form", call_form_hits),
               ("ic-desc", ic_desc_hits),
-              ("nudge-folder", nudge_folder_hits)]
+              ("nudge-folder", nudge_folder_hits),
+              ("config-defaults", config_sources_hits),
+              ("export-classes", export_classes_hits),
+              ("no-network", no_network_hits),
+              ("export-schema", export_schema_hits),
+              ("report-skill", report_skill_hits),
+              ("no-age-rule", no_age_rule_hits),
+              ("perl-utf8", perl_utf8_hits)]
 
 
 def pending_row(gate, rule, rel, line):

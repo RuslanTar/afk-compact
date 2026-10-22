@@ -31,6 +31,10 @@ the BLD-05 content gates (AT-TX-01/03/05/06/07/08/12/13, AT-PR-06, AT-PK-02, AT-
 template bullet, a lint id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`,
 a starred read-back line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a
 bare launcher call and `allowed-tools`, a situational resume trigger, the nudge folder fallback gone),
+the end-of-round gates (AT-CAP-02 a ctx.pm/settings.pm/config.ts default off the manifest,
+AT-WB-08 a bad export class, AT-WB-11 a network module on the report path, AT-WB-01 an unlisted
+`ev`, AT-WB-15 a second helper call, a log read and a REVEAL line to run, AT-ST-06 a file-time test,
+AT-P5-06 a code-line `·` without `use utf8`),
 the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
@@ -478,6 +482,45 @@ def probes(name):
     def nudge_folder(d):
         edit(d, "plugin/assets/checkpoint-nudge.txt", "(no worktree you can name: the current folder)", "")
 
+    def cap_sources(d):
+        """AT-CAP-02 fixture: max_auto_continues_per_hour 3 in watch/ctx.pm; a settings.pm
+        fallback and a config.ts default that differ from the manifest."""
+        edit(d, "plugin/helper/lib/watch/ctx.pm", "max_auto_continues_per_hour => 6,", "max_auto_continues_per_hour => 3,")
+        edit(d, "plugin/helper/lib/settings.pm", "[stall_min                   => 'num',  60,",
+             "[stall_min                   => 'num',  90,")
+        edit(d, "plugin/hooks/lib/config.ts", "  cooldown_ms: 30000,", "  cooldown_ms: 15000,")
+
+    def export_classes(d):
+        edit(d, "plugin/helper/lib/settings.pm", "[cache_ttl_s                 => 'num',  300,                       'num'],",
+             "[cache_ttl_s                 => 'num',  300,                       'raw'],")
+        edit(d, "plugin/helper/lib/settings.pm", "[otel_log_path               => 'file', '',                        'path'],",
+             "[otel_log_path               => 'file', '',                        'list'],")
+
+    def no_network(d):
+        edit(d, "plugin/helper/lib/watch/bundle.pm", "\nuse strict;", "\nuse strict;\nuse HTTP::Tiny;")
+
+    def export_schema(d):
+        append(d, "plugin/helper/lib/notice.pm", "\nsub _selftest_row { rc::emit('selftest_unlisted_event', {}) }\n")
+
+    def report_skill(d):
+        rel = "plugin/skills/report/SKILL.md"
+        edit(d, rel, "Do not run the REVEAL or COPY lines.", "Then run the REVEAL line. Read the logs it names.")
+        append(d, rel, "\nFinish with `<store> status`.\n")
+
+    def no_age(d):
+        append(d, "plugin/helper/lib/reconcile.pm", "\nsub _selftest_old { my ($p) = @_; return -M $p > 30 }\n")
+
+    def utf8_prep(d):
+        """AT-P5-06: comment-only non-ASCII and a `use utf8` file with a code-line `·` pass."""
+        write_text(os.path.join(d, "plugin", "helper", "lib", "selftest_comment.pm"),
+                   "package selftest_comment;\n# a comment with · and —\n1;\n")
+        write_text(os.path.join(d, "plugin", "helper", "lib", "selftest_ok.pm"),
+                   "package selftest_ok;\nuse utf8;\nmy $dot = '·';\n1;\n")
+
+    def utf8_moji(d):
+        write_text(os.path.join(d, "plugin", "helper", "lib", "selftest_moji.pm"),
+                   "package selftest_moji;\nmy $dot = '·';\n1;\n")
+
     def owners_prep(d):
         git_repo(d)
         git_in(d, "checkout", "-q", "-b", "wp/skills")
@@ -684,6 +727,25 @@ def probes(name):
          [r"^GATE ic-desc plugin/skills/resume/SKILL\.md: AT-IC-11 resume: description names \['/clear', 'break'\]$"], None),
         ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,
          [r"^GATE nudge-folder plugin/assets/checkpoint-nudge\.txt: AT-TX-13 folder"], None),
+        ("config-sources", "AT-CAP-02", gates_only("config-defaults"), cap_sources,
+         [r"^GATE config-defaults plugin/helper/lib/watch/ctx\.pm: AT-CAP-02 differs: watch/ctx\.pm max_auto_continues_per_hour 3 != manifest 6$",
+          r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-CAP-02 differs: settings\.pm stall_min fallback 90 != manifest 60$",
+          r"^GATE config-defaults plugin/hooks/lib/config\.ts: AT-CAP-02 differs: config\.ts DEFAULTS cooldown_ms 15000 != manifest 30000$"], None),
+        ("export-classes", "AT-WB-08", gates_only("export-classes"), export_classes,
+         [r"^GATE export-classes plugin/helper/lib/settings\.pm: AT-WB-08 class: cache_ttl_s exports 'raw'",
+          r"^GATE export-classes plugin/helper/lib/settings\.pm: AT-WB-08 path: otel_log_path is a file key exported as list$"], None),
+        ("no-network", "AT-WB-11", gates_only("no-network"), no_network,
+         [r"^GATE no-network plugin/helper/lib/watch/bundle\.pm:\d+: AT-WB-11 network: 'HTTP::Tiny'"], None),
+        ("export-schema", "AT-WB-01", gates_only("export-schema"), export_schema,
+         [r"^GATE export-schema plugin/helper/lib/notice\.pm: AT-WB-01 ev: selftest_unlisted_event has no export-schema entry$"], None),
+        ("report-skill", "AT-WB-15", gates_only("report-skill"), report_skill,
+         [r"^GATE report-skill plugin/skills/report/SKILL\.md: AT-WB-15 calls: helper calls \['report', 'status'\]",
+          r"^GATE report-skill plugin/skills/report/SKILL\.md:\d+: AT-WB-15 log-read",
+          r"^GATE report-skill plugin/skills/report/SKILL\.md: AT-WB-15 reveal-copy"], None),
+        ("no-age-rule", "AT-ST-06", gates_only("no-age-rule"), no_age,
+         [r"^GATE no-age-rule plugin/helper/lib/reconcile\.pm:\d+: AT-ST-06 file-time"], None),
+        ("perl-utf8", "AT-P5-06", gates_only("perl-utf8"), utf8_moji,
+         [r"^GATE perl-utf8 plugin/helper/lib/selftest_moji\.pm:2: AT-P5-06 perl-utf8"], utf8_prep),
         ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
