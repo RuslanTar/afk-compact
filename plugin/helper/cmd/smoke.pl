@@ -10,6 +10,7 @@
 # test and C8.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_smoke;
 

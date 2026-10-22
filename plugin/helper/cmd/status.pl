@@ -6,6 +6,7 @@
 # relaunch (Dev-1, DP-2), settings notes, then the watcher's open alerts. Never content.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_status;
 
@@ -15,13 +16,13 @@ our @ESCALATIONS = qw(copy_failed copy_mismatch copy_late verdict_mismatch root_
                       version_hint compaction_unresolved lock_stale watch_error lane_unknown config_ambiguous
                       relaunch_unmatched jobs_caller_refused);
 
-# Rows and state files are decoded JSON: a non-ASCII value (a path) is a character string,
-# while every status line is bytes (SR 1.1). Encode the decoded data once, here.
+# Status lines are text (MOD-SPEC §2.6 text encoding): rows and state files are decoded JSON
+# (characters), byte paths are decoded where they join a line, and args::out encodes once.
 sub _bytes_deep {
     my ($x) = @_;
     return [map { _bytes_deep($_) } @$x] if ref $x eq 'ARRAY';
-    return { map { (util::to_bytes($_) => _bytes_deep($x->{$_})) } keys %$x } if ref $x eq 'HASH';
-    return ref $x ? $x : util::to_bytes($x);
+    return { map { (util::text($_) => _bytes_deep($x->{$_})) } keys %$x } if ref $x eq 'HASH';
+    return ref $x ? $x : util::text($x);
 }
 
 sub _last {
@@ -72,7 +73,7 @@ sub run {
     for my $r (reverse @last) {
         push @out, sprintf('  %s · %s · %s · %s · %s · copy %s', $r->{ts} // '-', $r->{actor} // '-', $r->{seat_state} // '-',
                            $r->{trigger} // '-', $r->{verdict} // '-',
-                           defined $r->{copy_path} ? util::abbrev(rc::root() . '/' . $r->{copy_path}) : ($r->{copy} // 'none'));
+                           defined $r->{copy_path} ? util::abbrev(rc::root() . "/" . util::fsb($r->{copy_path})) : ($r->{copy} // 'none'));
     }
 
     # escalations
@@ -101,7 +102,7 @@ sub run {
     if (ref $v eq 'HASH' && defined $v->{smokeDue} && $v->{smokeDue} ne '') {
         my $store = ctx::store_cmd();
         push @out, "smokeDue: $v->{smokeDue} (Claude Code changed; "
-                   . (defined $store ? "run: ! $store smoke)"
+                   . (defined $store ? "run: ! " . util::text($store) . " smoke)"
                       : "run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)");
         push @out, '  the instruction text\'s "next window has / lacks" list was last reviewed for '
                    . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05';
@@ -117,12 +118,12 @@ sub run {
 
     # unsafe roots
     for my $key (qw(handoff_root log_dir disposable_root)) {
-        push @out, "root: $key refused (" . rc::root_reason($key) . '); copies and evidence under it are not written'
+        push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
             unless rc::root_ok($key);
     }
     push @out, mode_lines($opt->{cwd});
     push @out, relaunch_lines($d);
-    push @out, map { "note: $_" } @{ rc::settings()->{notes} || [] };
+    push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
 
     my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
     push @out, 'last hook row: ' . ($last_row // 'none');
@@ -143,16 +144,16 @@ sub mode_lines {
     my ($cwd) = @_;
     my $m = rc::mode($cwd);
     my @l = ("handoff mode: $m->{mode} ($m->{reason})");
-    my $root = $m->{root_rel} // ($m->{decl} && $m->{decl}{root}) // $repomode::DEFAULT_ROOT;
+    my $root = util::text($m->{root_rel} // ($m->{decl} && $m->{decl}{root}) // $repomode::DEFAULT_ROOT);
     if ($m->{declared} && !$m->{accepted}) {
-        push @l, '  this repository asks for repo mode; to accept it, add ' . ($m->{main_checkout} // $m->{toplevel})
+        push @l, '  this repository asks for repo mode; to accept it, add ' . util::text($m->{main_checkout} // $m->{toplevel})
                  . ' to repo_roots in /config (or in your settings file by hand)';
     }
     push @l, "  exports in $root are git-ignored; they will not be committed" if $m->{ignored};
     push @l, "  $root/.gitignore lacks the generated lines; the plugin never edits it" if $m->{gitignore_drift};
     push @l, "  exports in this worktree: $m->{exports} under $root" if $m->{declared} && defined $m->{root_rel};
     push @l, 'handoff_root must stay outside the repository; repo mode only exports into it' if $m->{declared} && $m->{store_inside};
-    push @l, "  repo_roots: stale entry " . util::to_bytes($_) . " (not a folder)" for @{ $m->{stale} || [] };
+    push @l, "  repo_roots: stale entry " . util::text($_) . " (not a folder)" for @{ $m->{stale} || [] };
     return @l;
 }
 

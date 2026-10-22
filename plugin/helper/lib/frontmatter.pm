@@ -7,6 +7,7 @@ package frontmatter;
 #     Values come back as strings, or as data for flow values.
 use strict;
 use warnings;
+use utf8;
 
 my $PLAIN = qr/^[A-Za-z0-9_~\/][A-Za-z0-9_.:\/@+~ ,()=-]*$/;
 

@@ -3,6 +3,7 @@ package transcript;
 # Only ids, counts, flags and timestamps leave this module; text is read in memory.
 use strict;
 use warnings;
+use utf8;
 
 # boundary(line) -> {uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed} or undef
 sub boundary {

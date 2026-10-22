@@ -6,6 +6,7 @@ package log;
 # fields: an array ref of key/value pairs (kept in order) or a hash ref (sorted).
 use strict;
 use warnings;
+use utf8;
 
 our $MAX = 4096;
 

@@ -3,6 +3,7 @@ package gsd;
 # Owner: WP-core. Reads <worktree>/.planning/STATE.md only; never writes it.
 use strict;
 use warnings;
+use utf8;
 
 # read(worktree) -> {status: ok|none, path, lines => [<= 8], mtime}
 sub read {

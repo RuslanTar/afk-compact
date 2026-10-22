@@ -4,6 +4,7 @@ package nonce;
 # Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 # draw(sid [, watch]) -> nonce
 sub draw {

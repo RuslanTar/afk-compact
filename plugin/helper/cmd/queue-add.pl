@@ -13,6 +13,7 @@
 # case, so the model's Bash call never fails and is never retried. Never adopt, never --lane.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_queue_add;
 

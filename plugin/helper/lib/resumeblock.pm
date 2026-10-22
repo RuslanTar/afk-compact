@@ -6,6 +6,7 @@ package resumeblock;
 # Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 our $MAX_CHARS = 6000;
 

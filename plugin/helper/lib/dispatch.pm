@@ -5,6 +5,7 @@ package dispatch;
 # when the dispatch follows or interrupts a handoff turn. Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref midturn tags
                instructions_sha8 instructions_bytes cc_version load_id pid pid_lstart ts);

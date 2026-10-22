@@ -3,6 +3,7 @@ package paths;
 # paths::for(settings, sid) -> {root, watch, disposable, watch_default}
 use strict;
 use warnings;
+use utf8;
 
 sub for {
     my ($settings, $sid) = @_;

@@ -8,6 +8,7 @@ package measure;
 # Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 our $MAX = 3000;
 
@@ -88,7 +89,7 @@ sub _sweep_rows {
     my $claim = util::read_file("$sid_dir/swept/" . substr($nonce, 0, 6)) // return undef;
     my ($n, $dest) = $claim =~ /^([0-9a-f]{8})?\t([^\n]+)/ or return undef;
     return undef unless defined $n && $n eq $nonce && -d $dest;
-    my $m = util::read_file("$dest/MANIFEST.tsv") // return [];
+    my $m = util::text(util::read_file("$dest/MANIFEST.tsv")) // return [];
     my @rows;
     for my $l (split /\n/, $m) {
         my ($copy, $origin, undef, undef, undef, undef, undef, $scan) = split /\t/, $l;

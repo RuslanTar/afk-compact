@@ -8,6 +8,7 @@ package lock;
 # owner = {sid, actor}; pid and start time are this helper process's, host from uname.
 use strict;
 use warnings;
+use utf8;
 use Fcntl qw(O_RDWR O_CREAT LOCK_EX LOCK_NB LOCK_UN SEEK_SET);
 
 sub _read_record {

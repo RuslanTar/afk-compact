@@ -8,8 +8,11 @@ package queue;
 # adopt only), and an `add` the tool rejected as unsupported is kept for 24 h.
 use strict;
 use warnings;
+use utf8;
 
 # call(argv, budget_ms) -> run result (the user's PERL5LIB/PERLLIB restored for the child)
+# `out` stays the bytes the tool printed (WP-skills callers decode their own); lane() and
+# add() decode it once where they read it (MOD-SPEC §2.6 text encoding).
 sub call {
     my ($argv, $budget_ms) = @_;
     util::trace('queue_cmd');
@@ -36,8 +39,8 @@ sub lane {
     my $r = call([$cmd, 'list', '--json', '--session', $sid], $budget_ms);
     return { status => 'timeout' } if $r->{timed_out};
     return { status => 'unknown', why => 'exit' } unless $r->{exit} == 0;
-    my $j = eval { jsonc::decode($r->{out}) };
-    return { status => 'unknown', why => 'not-json' } unless ref $j eq 'HASH';
+    my $j = eval { jsonc::decode(util::text($r->{out})) };
+    return { status => "unknown", why => "not-json" } unless ref $j eq 'HASH';
     return { status => 'unknown', why => 'schema' } if defined $j->{schema} && (ref $j->{schema} || $j->{schema} ne $SCHEMA);
     eval { caps_put($cmd, commands => (ref $j->{commands} eq 'ARRAY' ? [grep { defined && !ref } @{ $j->{commands} }] : undef)) };
     my $lane = $j->{lane};
@@ -139,7 +142,7 @@ sub add {
     my $r = util::run(\@argv, timeout_ms => $budget_ms // 5000, env => \%env, stdin => $json, max_out => 64 * 1024);
     my %res = (exit => $r->{exit}, ms => util::clock_ms() - $t0);
     return { %res, result => 'timeout' } if $r->{timed_out};
-    my $out = $r->{out} // '';
+    my $out = util::text($r->{out} // "");
     if ($r->{exit} == 0) {
         my ($line) = grep { /\S/ } split /\n/, $out;
         my $j = defined $line ? eval { jsonc::decode($line) } : undef;

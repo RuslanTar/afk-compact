@@ -5,6 +5,7 @@ package git;
 # no git process starts and git facts read `unavailable`.
 use strict;
 use warnings;
+use utf8;
 
 my $AVAIL;
 my $BIN;
@@ -30,8 +31,10 @@ sub cmd {
     my ($cwd, $args, $timeout_ms) = @_;
     return { exit => -2, out => '', unavailable => 1, ms => 0 } unless available();
     util::trace('git');
-    return util::run([$BIN, '-C', $cwd, @$args], timeout_ms => $timeout_ms // 2000,
-                     env => { GIT_OPTIONAL_LOCKS => '0', LC_ALL => 'C', GIT_TERMINAL_PROMPT => '0' });
+    # `out` is the bytes git printed: paths (toplevel, git dir) stay bytes (SR 1.1); the text
+    # parts (branch, status lines) are decoded once where they are read (MOD-SPEC §2.6)
+    return util::run([$BIN, "-C", util::fsb($cwd), @$args], timeout_ms => $timeout_ms // 2000,
+                     env => { GIT_OPTIONAL_LOCKS => "0", LC_ALL => "C", GIT_TERMINAL_PROMPT => "0" });
 }
 
 # 1 ignored, 0 not ignored, -1 timed out, undef unknown (no git / error)
@@ -69,7 +72,7 @@ sub where {
     $cd =~ s{/+$}{};
     $res->{repo} = util::basename(util::dirname($cd));
     my $b = cmd($cwd, ['symbolic-ref', '--short', '-q', 'HEAD'], $timeout_ms // 2000);
-    ($res->{branch} = $b->{out}) =~ s/\s+$// if $b->{exit} == 0;
+    ($res->{branch} = util::text($b->{out})) =~ s/\s+$// if $b->{exit} == 0;
     return $res;
 }
 
@@ -86,7 +89,7 @@ sub measure {
     my $ms = sub { util::clock_ms() - $t0 };
     return { status => 'timeout', ms => $ms->() } if $r->{timed_out} || util::clock_ms() >= $deadline;
     return { status => 'not-git', ms => $ms->() } if $r->{exit} != 0;
-    my @lines = split /\n/, $r->{out};
+    my @lines = split /\n/, util::text($r->{out});    # status lines and the branch are text
     my $head_line = (@lines && $lines[0] =~ /^## /) ? shift @lines : '';
     my ($branch, $ahead, $behind) = (undef, 0, 0);
     if ($head_line =~ /^## (.*)$/) {

@@ -3,6 +3,7 @@
 # BUILD-PLAN §3.1). Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_checkpoint;
 

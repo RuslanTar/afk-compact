@@ -5,6 +5,7 @@ package sha;
 # answer (embedded). hex256_file returns undef when no route works ("unavailable").
 use strict;
 use warnings;
+use utf8;
 
 my $HAVE_DIGEST;
 sub _digest {

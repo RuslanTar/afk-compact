@@ -18,6 +18,7 @@ package repomode;
 # reason, declared, accepted}, repo_root_ignored, repo_gitignore_drift, decl_unknown_keys.
 use strict;
 use warnings;
+use utf8;
 
 our $DECL = '.claude/handoffs.json';
 our $DECL_MAX = 4096;

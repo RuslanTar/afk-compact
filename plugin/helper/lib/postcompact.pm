@@ -9,6 +9,7 @@ package postcompact;
 # watch.on_hook.
 use strict;
 use warnings;
+use utf8;
 
 # _resolved(sid_dir, classic) -> (\%nonce_resolved, \%nonce_copy_rels): nonces this session
 # already compacted under, and the copies (paths under <root>) its copy rows name for each.

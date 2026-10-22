@@ -13,6 +13,7 @@
 # cap, continue-off); C and T are the mod's limits for the turn (D-18 B1 step 2).
 use strict;
 use warnings;
+use utf8;
 
 package cmd_handoff_turn;
 

@@ -9,6 +9,7 @@ package copies;
 # Mode 0400; frontmatter from the dispatch record and the boundary row only.
 use strict;
 use warnings;
+use utf8;
 
 our @SLOTS = ('compact', 'compact/subagents', 'compact/unattributed');
 

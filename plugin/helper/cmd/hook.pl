@@ -5,6 +5,7 @@
 # error writes one `watch_error {stage, error_class}` row and prints nothing.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_hook;
 

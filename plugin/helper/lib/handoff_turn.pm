@@ -15,6 +15,7 @@ package handoff_turn;
 # (`resumed`), mark_published refuses with the existing path.
 use strict;
 use warnings;
+use utf8;
 
 our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off);
 our $OPEN_MAX_AGE_S = 3600;

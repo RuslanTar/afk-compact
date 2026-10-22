@@ -7,6 +7,7 @@ package evidence;
 # head/tail excerpt of <= 80 lines. Directories 0700, files 0600.
 use strict;
 use warnings;
+use utf8;
 
 our $FILE_MAX = 10 * 1024 * 1024;
 our $TOTAL_MAX = 50 * 1024 * 1024;
@@ -32,7 +33,8 @@ sub _is_text {
 
 sub _excerpt {
     my ($raw, $n) = @_;
-    my @l = split /\n/, $raw, -1;
+    # text from here on (§2.6): each line decoded once, a line that is not UTF-8 reads as Latin-1
+    my @l = map { util::text($_) } split /\n/, $raw, -1;
     pop @l if @l && $l[-1] eq '';
     return ($raw, scalar @l) if @l <= 2 * $n;
     # n head lines + the marker line + n-1 tail lines: the excerpt is at most 2n lines (AT-E-05)
@@ -93,8 +95,8 @@ sub copy {
         my $txt = "origin: $src\nbytes: $row{bytes}\nsha256: " . ($sha // 'unavailable') . "\nmtime: $row{mtime}\n";
         if (_is_text($head)) {
             my $tail = util::read_tail($src, 64 * 1024) // '';
-            my @h = (split /\n/, $head)[0 .. 39];
-            my @t = (split /\n/, $tail);
+            my @h = map { util::text($_) } (split /\n/, $head)[0 .. 39];
+            my @t = map { util::text($_) } (split /\n/, $tail);
             @t = @t[($#t > 39 ? $#t - 39 : 0) .. $#t];
             my $ex = join("\n", (grep { defined } @h), '[…]', @t) . "\n";
             ($ex) = secrets::redact($ex);

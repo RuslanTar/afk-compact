@@ -4,6 +4,7 @@ package rollup;
 # Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn idle channel seat_state
                  verdict verdict_source marker_line sentinel_from_end fabricated_check_tokens

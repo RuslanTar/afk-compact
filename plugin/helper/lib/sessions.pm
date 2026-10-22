@@ -6,6 +6,7 @@ package sessions;
 #   <root>/.sessions/<sid>.lineage.json {previous_session_id, lineage_reason}
 use strict;
 use warnings;
+use utf8;
 
 sub dir { return rc::root() . '/.sessions' }
 sub by_pid { return dir() . '/by-pid' }

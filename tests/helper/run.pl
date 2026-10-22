@@ -848,8 +848,9 @@ sub spawn {
     my $pid = fork();
     die "fork: $!\n" unless defined $pid;
     if ($pid == 0) {
-        %ENV = %$env;
-        if (defined $cwd) { chdir($cwd) or POSIX::_exit(125) }
+        # The environment is bytes: a case value with a non-ASCII character goes in as UTF-8.
+        %ENV = map { ($_ => util::to_bytes($env->{$_})) } keys %$env;
+        if (defined $cwd) { chdir(util::to_bytes($cwd)) or POSIX::_exit(125) }
         open(STDOUT, '>', $outf) or POSIX::_exit(126);
         open(STDERR, '>', $errf) or POSIX::_exit(126);
         my $inf = "$outf.in";

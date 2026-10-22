@@ -6,6 +6,7 @@
 # `REFUSED: <reason>` (exit 3).
 use strict;
 use warnings;
+use utf8;
 
 package cmd_save_copy;
 

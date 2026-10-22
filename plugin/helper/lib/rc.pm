@@ -3,6 +3,7 @@ package rc;
 # checks, the row envelope and once-per-session markers. Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 our %R;
 

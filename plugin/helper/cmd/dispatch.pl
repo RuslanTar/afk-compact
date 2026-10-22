@@ -6,6 +6,7 @@
 # --handoff-ht (D-18 B3): the handoff turn this dispatch follows or interrupts.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_dispatch;
 

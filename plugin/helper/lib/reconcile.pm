@@ -26,6 +26,7 @@ package reconcile;
 # that was replaced or shortened is read again from its start (rows dedupe by key).
 use strict;
 use warnings;
+use utf8;
 
 our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered);
 our $STATE = 'reconcile.json';

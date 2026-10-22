@@ -12,6 +12,7 @@ package sidecar;
 # never enters a slot. Readers pick the newest slot by `seq` (newest()), never by mtime.
 use strict;
 use warnings;
+use utf8;
 use Fcntl qw(O_RDWR O_CREAT LOCK_EX LOCK_UN SEEK_SET);
 
 our $SLOTS = 20;

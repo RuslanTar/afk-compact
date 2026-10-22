@@ -14,6 +14,7 @@ package settings;
 # their source, as env, flag and file-system values are (SR 1.1).
 use strict;
 use warnings;
+use utf8;
 
 # The 27 keys of MOD-SPEC §1.2 with their types; defaults (and min/max) come from
 # plugin.json userConfig (one source), the third column only when the manifest lacks the key.
@@ -79,7 +80,7 @@ sub _coerce {
         return 0 + $v;
     }
     if ($t eq 'dir' || $t eq 'file') { return util::expand_tilde(util::to_bytes("$v")) }
-    return "$v";
+    return util::text("$v");    # a text value is characters (§2.6); paths above stay bytes (SR 1.1)
 }
 
 sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne '' ? util::expand_tilde($ENV{CLAUDE_CONFIG_DIR}) : util::home() . '/.claude' }

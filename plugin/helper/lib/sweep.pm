@@ -7,6 +7,7 @@ package sweep;
 # Claims <watch>/<sid>/swept/<id6> first, so one compaction is swept once.
 use strict;
 use warnings;
+use utf8;
 
 our @STATUSES = qw(copied dup ref-only redacted withheld missing referenced-budget);
 
@@ -37,7 +38,7 @@ sub _in_scope {
     my $clean = util::clean_path($p);
     return 0 unless defined $clean;
     return 1 if $clean =~ m{/tasks/[^/]+\.output\z};
-    my $real = -e $p ? do { require Cwd; Cwd::abs_path($p) } : util::real_path($p);
+    my $real = -e $p ? do { require Cwd; Cwd::abs_path(util::fsb($p)) } : util::real_path($p);
     return 0 unless defined $real;
     return (_temp_root($clean) && _temp_root($real)) ? 1 : 0;
 }

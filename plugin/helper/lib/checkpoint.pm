@@ -6,6 +6,7 @@ package checkpoint;
 # <watch>/<sid>/checkpoint/<nonce>.json by exclusive create.
 use strict;
 use warnings;
+use utf8;
 
 sub _shrink_json {
     my ($obj, $max) = @_;

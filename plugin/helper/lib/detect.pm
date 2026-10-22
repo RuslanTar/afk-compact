@@ -13,6 +13,7 @@ package detect;
 # Sentinel: the last 3 non-blank lines.
 use strict;
 use warnings;
+use utf8;
 
 my @TRAILERS;
 my $TRAILERS_LOADED;

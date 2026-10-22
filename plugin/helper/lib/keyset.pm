@@ -6,6 +6,7 @@ package keyset;
 # (exclusive-create marker <watch>/keyset/<version>-<event>).
 use strict;
 use warnings;
+use utf8;
 
 my $BASE;
 sub baseline {
