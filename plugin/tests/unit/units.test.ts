@@ -383,6 +383,10 @@ describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
     expect(strip(post(body(), '\n' + S + '\n'), []).body).toBe(body())
     // A listed trailer after the moved sentinel is cut (the shipped list is empty today).
     expect(strip(installed(body(), '\n' + S + '\n\nPlease go on.'), ['Please go on.'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+    // Trailers are line patterns (the helper's reading); one inside a closed summary is body.
+    expect(strip(installed(body(), '\n' + S + '\nFixture listed trailer: x'), ['^Fixture listed trailer: .*$'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+    expect(strip('<summary>\nbody\nPlease go on.\n</summary>', ['^Please go on\\.$']).body).toBe('body\nPlease go on.\n')
+    expect(strip('Summary:\nbody\nPlease go on.\n', ['^Please go on\\.$']).body).toBe('body\n')
   })
 })
 

@@ -101,9 +101,10 @@ export type Detection = {
 }
 
 /** Detector of MOD-SPEC §5.1 over one summary text. */
-export function detectSummary(raw: string, plugin: string, ctx: DetectContext = {}): Detection {
+/** `extraTrailers`: installed-message trailers to cut besides the shipped list (fixtures only). */
+export function detectSummary(raw: string, plugin: string, ctx: DetectContext = {}, extraTrailers: readonly string[] = []): Detection {
   const g = grammar(plugin)
-  const { lines, body, movedSentinel } = strip(raw, specStrings('copy_trailers'), g.sentinel)
+  const { lines, body, movedSentinel } = strip(raw, [...specStrings('copy_trailers'), ...extraTrailers], g.sentinel)
   let markerLine: number | null = null
   let nonce: string | null = null
   let scope: Scope | null = null

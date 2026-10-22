@@ -13,6 +13,7 @@ import type { Deps, RunResult } from '../../hooks/lib/deps'
 import { LAUNCHER_DIR, launcherPath, storeWord } from '../../hooks/lib/deps'
 import { checkpoint, claim, handoffState, handoffTurnOpen, handoffTurnSupersede, ident, logJobs, measure, parseHandoffState, parseSave, prevCopy } from '../../hooks/lib/helper'
 import { BRAND } from './_gen/brand.gen'
+import * as CORPUS_GEN from './_gen/corpus.gen'
 import { CORPUS } from './_gen/corpus.gen'
 import { GOLDENS, GOLDEN_RUNTIME } from './_gen/goldens.gen'
 import { HELPER_REPLIES, REPLY_INPUTS, REPLY_NONCE, REPLY_SID } from './_gen/helper-replies.gen'
@@ -34,6 +35,23 @@ describe('BT-04 TS assembler vs the goldens', () => {
       const got = assemble(NAME, g.asset as AssetName, g.tags as Tag[], runtime)
       expect({ golden: g.asset + '__' + (g.tags.join('+') || 'base'), text: got })
         .toEqual({ golden: g.asset + '__' + (g.tags.join('+') || 'base'), text: g.parts.join(NAME) })
+    }
+  })
+})
+
+// P5-FOLD A1 (fix-to-mod item 1): the 6 P5 summaries and the after-close cases, with the
+// fixture's listed trailer, once tools/fixtures-gen renders `CORPUS_P5` (until then: nothing to run).
+describe('AT-P5-01, AT-P5-02 TS detector vs the P5 corpus', () => {
+  test('every P5 entry gives its verdict, placement and sha', () => {
+    const g = CORPUS_GEN as unknown as Record<string, unknown>
+    const p5 = g['CORPUS_P5'] as { file: string; text: string; verdict: string; sentinel_place: string | null; normalized_sha256: string; dispatch: unknown }[] | undefined
+    if (p5 === undefined) return
+    const trailers = (g['P5_COPY_TRAILERS'] as string[] | undefined) ?? []
+    expect(p5.length).toBeGreaterThan(5)
+    for (const c of p5) {
+      const d = c.dispatch as { nonce?: unknown } | null
+      const r = detectSummary(c.text, BRAND.name, d && typeof d === 'object' ? { dispatchNonce: String(d.nonce), scope: 'main' } : {}, trailers)
+      expect({ file: c.file, verdict: r.verdict, place: r.sentinel_place, sha: r.sha256 }).toEqual({ file: c.file, verdict: c.verdict, place: c.sentinel_place, sha: c.normalized_sha256 })
     }
   })
 })

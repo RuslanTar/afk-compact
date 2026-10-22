@@ -23,7 +23,7 @@ const SUMMARY_CLOSE = '</summary>'
  * `<tools-used-before-summary>` block through its closing tag, a `Summary:` line, and the
  * `<summary>` tag (text after the tag on its line is body). The body ends before the first line
  * holding `</summary>` (text before the tag on that line is body); one listed installed-message
- * trailer (`copy_trailers`) is cut; trailing blank lines are trimmed. The normalized body is the
+ * trailer (`copy_trailers`, line patterns) is cut when no close tag ended the body; trailing blank lines are trimmed. The normalized body is the
  * lines joined by `\n` plus one final `\n`, or empty for an empty body (the same reading as the
  * fixture tool's reference detector and the helper, so the sha256 values agree).
  *
@@ -72,21 +72,48 @@ export function strip(raw: string, trailers: readonly string[] = [], sentinel?: 
   if (sentinel && after) {
     const k = after.findIndex(l => l.trim() !== '')
     const first = k >= 0 ? (after[k] ?? '') : undefined
-    // The line as is (no trim), as the scan reads lines inside the body.
-    if (first !== undefined && sentinel.test(first)) {
+    // Matched with trailing whitespace trimmed, as the helper's scan reads lines; kept as is.
+    if (first !== undefined && sentinel.test(first.replace(/\s+$/, ''))) {
       movedSentinel = lines.length
       lines = trimTrailingBlank([...lines, first, ...after.slice(k + 1)])
     }
   }
-  for (const t of trailers) {
-    const joined = lines.join('\n')
-    if (t !== '' && joined.endsWith(t)) {
-      lines = trimTrailingBlank(joined.slice(0, joined.length - t.length).split('\n'))
-      break
-    }
+  // Listed installed-message trailers (`copy_trailers`: line patterns, as the helper reads them)
+  // are cut from the end: when no `</summary>` closed the body, or after a moved sentinel (never
+  // the sentinel or the body before it).
+  const res = trailers.map(safeRe).filter((r): r is RegExp => r !== undefined)
+  if (res.length > 0) {
+    if (after === undefined) lines = cutTrailers(lines, res, 0)
+    else if (movedSentinel !== null) lines = cutTrailers(lines, res, movedSentinel + 1)
   }
   if (movedSentinel !== null && movedSentinel >= lines.length) movedSentinel = null
   return { lines, body: lines.length === 0 ? '' : lines.join('\n') + '\n', movedSentinel }
+}
+
+function safeRe(t: string): RegExp | undefined {
+  if (t === '') return undefined
+  try {
+    return new RegExp(t)
+  } catch {
+    return undefined
+  }
+}
+
+/** Drops trailing lines (blank ones skipped) while each matches a trailer pattern, down to `floor`. */
+function cutTrailers(lines: string[], res: readonly RegExp[], floor: number): string[] {
+  let out = [...lines]
+  let j = out.length - 1
+  while (j >= floor) {
+    const l = out[j] ?? ''
+    if (l.trim() === '') {
+      j--
+      continue
+    }
+    if (!res.some(r => r.test(l))) break
+    out = out.slice(0, j)
+    j--
+  }
+  return trimTrailingBlank(out)
 }
 
 function trimTrailingBlank(lines: string[]): string[] {
