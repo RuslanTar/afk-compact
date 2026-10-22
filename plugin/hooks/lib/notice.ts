@@ -8,7 +8,7 @@ import type { Deps } from './deps'
 import { specValue } from './detect'
 import { call } from './helper'
 
-/** Notice id (version 1) and text when the spec-literals block has no `watcher_notice` yet. */
+/** Notice id (version 1) and text when the spec-literals block has no `notice` object yet. */
 export const NOTICE_ID = 'watcher-1'
 export const NOTICE_MS = 20000
 export const NOTICE_MAX = 200
@@ -19,10 +19,10 @@ export function noticeFallback(name: string): string {
 }
 
 /**
- * The notice id and text: the spec-literals `watcher_notice` object (`id`, and `text` with the
+ * The notice id and text: the spec-literals `notice` object (`id`, and `text` with the
  * plugin name filled in at build time) when it has both, else the built-in pair.
  */
-export function noticeSpec(name: string, v: unknown = specValue('watcher_notice')): { id: string; text: string } {
+export function noticeSpec(name: string, v: unknown = specValue('notice')): { id: string; text: string } {
   if (typeof v === 'object' && v !== null) {
     const o = v as Record<string, unknown>
     if (typeof o.id === 'string' && /^[a-z0-9-]{1,40}$/.test(o.id) && typeof o.text === 'string' && o.text !== '') return { id: o.id, text: o.text }
