@@ -15,6 +15,8 @@ our %KEYSET_EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart);
 # permission_denied with their computed classes; the watcher reads those rows from the
 # stream and is not called for these events, so it cannot write a second row.
 our %CORE_ROWS_ONLY = map { $_ => 1 } qw(StopFailure PermissionDenied);
+# the classic stream tail _turn_kind read (copy rows for the pending-record check)
+our $LAST_CLASSIC;
 
 sub _error_class {
     my ($e) = @_;
@@ -282,8 +284,13 @@ sub on_SubagentStop {
 }
 
 # ------------------------------------------------------------------ StopFailure (WATCHER W10)
+# watcher = off also stops the stop_failure and permission_denied rows (WATCHER §8 item 6,
+# W-BETA A, CONFIG-REVIEW BG-29); the value is read as _watch_call reads it (trimmed, folded).
+sub _watcher_off { my $w = lc(rc::val('watcher') // 'shadow'); $w =~ s/^\s+|\s+$//g; return $w eq 'off' ? 1 : 0 }
+
 sub on_StopFailure {
     my ($p) = @_;
+    return ('', {}) if _watcher_off();
     my $e = $p->{error};
     my $cls = (defined $e && !ref $e && $e =~ /^[a-z_]{1,40}$/) ? $e : 'other';
     rc::emit('stop_failure', [error_class => $cls], actor => _payload_actor($p));
@@ -327,6 +334,7 @@ sub _guard_rules {
 # newest rows after the last Stop, the time of the plugin-injected block behind it, and
 # the time of a heal action after the last Stop (WATCHER-SPEC §6.3 caused_by).
 sub _turn_kind {
+    my ($tail) = @_;
     my $d = rc::sid_dir() // return ('other', undef, undef);
     my $ls = util::read_file("$d/last-stop");
     my $last = defined $ls ? util::parse_iso(($ls =~ /(\S+)/)[0] // '') : undef;
@@ -342,12 +350,15 @@ sub _turn_kind {
     };
     # Only the newest row of each kind matters, and PermissionDenied has 2 s: read the
     # stream tails (256 KB) and decode only the rows asked for.
-    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => ['resume_receipt', 'heal'], tail => 256 * 1024);
+    my $classic = rollup::stream_rows(rc::stream_path('classic'), evs => ['resume_receipt', 'heal', 'copy'], tail => 256 * 1024);
+    $LAST_CLASSIC = $classic;
     my $heal = $newest->($classic, qr/^heal$/);
     my $rolls = rollup::stream_rows("$d/compactions.jsonl", tail => 256 * 1024);
     my ($post) = sort { $b <=> $a } grep { $_ > $last }
                  map { util::parse_iso($_->{ts} // '') // 0 } grep { ($_->{actor} // '') eq 'main' } @$rolls;
     return ('post-compaction', $post, $heal) if defined $post;
+    my $pend = _pending_post($d, $last, $tail);
+    return ('post-compaction', $pend, $heal) if defined $pend;
     my $res = $newest->($classic, qr/^resume_receipt$/);
     return ('resume', $res, $heal) if defined $res;
     my $mod = rollup::stream_rows(rc::stream_path('mod'), evs => ['nudge'], tail => 256 * 1024);
@@ -356,12 +367,55 @@ sub _turn_kind {
     return ('other', undef, $heal);
 }
 
+# RR-S21-03 (PKG-RUNTIME E.1): a pending PostCompact record counts as a post-compaction turn when
+# no main rollup row exists after the last Stop: its ts is after the last Stop, no copy row names
+# it yet, and a main compact_boundary row in the transcript tail lies within [ts - 2 s, ts + 600 s]
+# (F2-1 constants). At most the 20 newest records; the inject time is the record's ts.
+sub _pending_post {
+    my ($d, $last, $tail) = @_;
+    return undef unless defined $tail;
+    my @rec;
+    for my $f (util::list_dir("$d/pending")) {
+        next unless $f =~ /\A(?:[0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.json\z/;
+        my $raw = util::read_file("$d/pending/$f") // next;
+        my $j = eval { jsonc::decode($raw) };
+        next unless ref $j eq 'HASH';
+        my $e = util::parse_iso($j->{ts} // '') // next;
+        push @rec, { %$j, e => $e } if $e > $last;
+    }
+    return undef unless @rec;
+    @rec = (sort { $b->{e} <=> $a->{e} } @rec)[0 .. ($#rec > 19 ? 19 : $#rec)];
+    my %copied;
+    for my $r (@{ $LAST_CLASSIC || [] }) {
+        next unless ($r->{ev} // '') eq 'copy' && ($r->{result} // '') !~ /^failed/;
+        $copied{"i:$r->{id6}"} = 1 if defined $r->{id6};
+        $copied{"n:$r->{nonce}"} = 1 if defined $r->{nonce};
+    }
+    my @bounds;
+    for my $line (split /\n/, $tail) {
+        next unless index($line, q{compact_boundary}) >= 0 && $line !~ m{"isSidechain"\s*:\s*true};
+        my $bd = transcript::boundary($line) or next;
+        push @bounds, $bd->{epoch};
+    }
+    for my $r (@rec) {
+        next if $copied{"i:$r->{id6}"} || (defined $r->{nonce} && $copied{"n:$r->{nonce}"});
+        return $r->{e} if grep { $_ >= $r->{e} - $reconcile::TOL_S && $_ <= $r->{e} + $reconcile::MAIN_WINDOW_S } @bounds;
+    }
+    return undef;
+}
+
+# The transcript's last 512 KB (one read for _turn_kind and _calls_since), or undef.
+sub _tail512 {
+    my ($path) = @_;
+    return undef unless defined $path && !ref $path && $path ne '' && -f $path;
+    return util::read_tail($path, 512 * 1024);
+}
+
 # Main-thread tool calls in the transcript's last 512 KB stamped after `since`, or undef
 # when the transcript cannot be read.
 sub _calls_since {
-    my ($path, $since) = @_;
-    return undef unless defined $path && !ref $path && $path ne '' && -f $path;
-    my $tail = util::read_tail($path, 512 * 1024) // return undef;
+    my ($tail, $since) = @_;
+    return undef unless defined $tail;
     my $n = 0;
     for my $line (split /\n/, $tail) {
         next unless index($line, '"tool_use"') >= 0;
@@ -380,17 +434,18 @@ sub _calls_since {
 # the injection alone decides (the earlier rule).
 our $CAUSED_BY_CALLS = 10;
 sub _caused_by {
-    my ($inject, $heal, $transcript) = @_;
+    my ($inject, $heal, $tail) = @_;
     my @at = grep { defined } ($inject, $heal);
     return 'session' unless @at;
     my ($since) = sort { $b <=> $a } @at;
-    my $n = _calls_since($transcript, $since);
+    my $n = _calls_since($tail, $since);
     return 'plugin' unless defined $n;
     return $n <= $CAUSED_BY_CALLS ? 'plugin' : 'session';
 }
 
 sub on_PermissionDenied {
     my ($p) = @_;
+    return ('', {}) if _watcher_off();
     my $tool = (defined $p->{tool_name} && !ref $p->{tool_name} && $p->{tool_name} =~ /^[A-Za-z0-9_.:-]{1,80}$/) ? $p->{tool_name} : 'other';
     my $reason = defined $p->{reason} && !ref $p->{reason} ? $p->{reason} : '';
     my $rc = 'other';
@@ -398,8 +453,9 @@ sub on_PermissionDenied {
     my $hay = $reason . "\n" . (ref $p->{tool_input} ? jsonc::encode($p->{tool_input}) : ($p->{tool_input} // ''));
     my $gc = 'other';
     for my $r (_guard_rules()) { if ($hay =~ $r->[1]) { $gc = $r->[0]; last } }
-    my ($tk, $inject, $heal) = _turn_kind();
-    my $by = defined $p->{agent_id} ? 'session' : _caused_by($inject, $heal, $p->{transcript_path});
+    my $tail = _tail512($p->{transcript_path});
+    my ($tk, $inject, $heal) = _turn_kind($tail);
+    my $by = defined $p->{agent_id} ? 'session' : _caused_by($inject, $heal, $tail);
     rc::emit('permission_denied', [tool_name => $tool, reason_class => $rc, guard_class => $gc, turn_kind => $tk,
                                    caused_by => $by], actor => _payload_actor($p));
     return ('', {});
