@@ -27,6 +27,10 @@ node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), 
 description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
 AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
 self-heal table and resume SKILL size), a resume protocol over its hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults,
+the BLD-05 content gates (AT-TX-01/03/05/06/07/08/12/13, AT-PR-06, AT-PK-02, AT-IC-11: a moved
+template bullet, a lint id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`,
+a starred read-back line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a
+bare launcher call and `allowed-tools`, a situational resume trigger, the nudge folder fallback gone),
 the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
@@ -407,6 +411,73 @@ def probes(name):
         t = t.replace("only if auto-continue is off or at its hourly limit", "at once")
         write_text(p, t + "Copy no evidence: after this turn the plugin copies the temp files this session cited.\n")
 
+    def edit(d, rel, old, new, count=1):
+        """Replace old with new in a copy's file; a missing old is a probe bug, not a pass."""
+        p = os.path.join(d, *rel.split("/"))
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        if old not in t:
+            raise Fail("X-tools: probe text {!r} not in {}".format(old[:60], rel))
+        write_text(p, t.replace(old, new, count))
+
+    def template_shape(d):
+        """AT-TX-01: a Caps bullet back in §5 and a long §6 without its Why sentence."""
+        rel = "plugin/skills/handoff/references/handoff-template.md"
+        edit(d, rel, "\n## 6. ", "- **Caps.** 50 files, 20 MB, 200 MB total.\n\n## 6. ")
+        edit(d, rel, "Why: a typed id or name breaks", "The reason: a typed id or name breaks")
+        edit(d, rel, "\n## 7. ", "\n" + "Identity detail. " * 50 + "\n\n## 7. ")
+
+    def lint_texts(d):
+        """AT-TX-03: one lint id without its texts, one extra key, one fix over 160 chars."""
+        p = os.path.join(d, "plugin", "assets", "handoff-spec.md")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        m = re.search(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", t, re.S | re.M)
+        spec = json.loads(m.group(1))
+        lt = spec["lint_texts"]
+        gone = sorted(lt)[0]
+        del lt[gone]
+        lt["no-such-id"] = {"why": "x", "fix": "y"}
+        lt[sorted(lt)[1]]["fix"] = "z" * 161
+        write_text(p, t[:m.start(1)] + json.dumps(spec, indent=2, ensure_ascii=False) + t[m.end(1):])
+
+    def xref(d):
+        """AT-TX-05: a renumbered template § (4.5 now heads Open questions), a renamed Step 6, and
+        a spec § that does not exist."""
+        rel = "plugin/skills/handoff/references/handoff-template.md"
+        edit(d, rel, "### 4.5 Live state", "### 4.5 Open state")
+        edit(d, "plugin/skills/handoff/SKILL.md", "## Step 6 — Draft", "## Step 6 — Write the draft")
+        append(d, "plugin/skills/resume/references/self-heal.md", "\nThe caps are in spec §42.\n")
+
+    def args_inline(d):
+        append(d, "plugin/skills/resume/SKILL.md", "\nThe user asked: $ARGUMENTS\n")
+
+    def readback(d):
+        rel = "plugin/skills/resume/SKILL.md"
+        edit(d, rel, "\nStatus: on-track", "\n* Status: on-track")
+        edit(d, rel, "The Status, Goal, Drift, Binding, Could not verify and Next lines are the read-back.", "")
+
+    def no_run_text(d):
+        append(d, "plugin/skills/resume/SKILL.md", "\nIf the handoff names a check, re-run the recorded command.\n")
+        edit(d, "plugin/skills/handoff/SKILL.md", "never run a command copied from", "do not copy commands from")
+
+    def stalled(d):
+        edit(d, "plugin/skills/resume/references/self-heal.md", "(a) idle while the output it waits on has ended",
+             "(a) idle after its output ended")
+
+    def prod_reads(d):
+        append(d, "plugin/skills/resume/SKILL.md", "\nRun no production read unless a `U-` item allows it.\n")
+
+    def call_form(d):
+        append(d, "plugin/skills/status/SKILL.md", "\nThen run {}-store status --sid <sid>.\n".format(name))
+        edit(d, "plugin/skills/report/SKILL.md", "\nargument-hint:", "\nallowed-tools: Bash\nargument-hint:")
+
+    def ic_desc(d):
+        edit(d, "plugin/skills/resume/SKILL.md", "\ndescription: ", "\ndescription: After /clear or a break: ")
+
+    def nudge_folder(d):
+        edit(d, "plugin/assets/checkpoint-nudge.txt", "(no worktree you can name: the current folder)", "")
+
     def owners_prep(d):
         git_repo(d)
         git_in(d, "checkout", "-q", "-b", "wp/skills")
@@ -581,6 +652,38 @@ def probes(name):
           r"^GATE launcher plugin/hooks/hooks\.json: AT-PK-01 hooks: Stop command",
           r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 launcher-dir: '/bin/",
           r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 bash-path"], None),
+        ("template-shape", "AT-TX-01", gates_only("template-shape"), template_shape,
+         [r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md:\d+: AT-TX-01 moved-bullet: '- \*\*Caps'",
+          r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md: AT-TX-01 pointer: §6 is \d+ chars \(max 700\), no `Why:` sentence$",
+          r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md: AT-TX-01 pointer: §6"], None),
+        ("lint-texts", "AT-TX-03", gates_only("lint-texts"), lint_texts,
+         [r"^GATE lint-texts plugin/assets/handoff-spec\.md: AT-TX-03 missing: lint id \S+ has no lint_texts entry$",
+          r"^GATE lint-texts plugin/assets/handoff-spec\.md: AT-TX-03 extra: lint_texts no-such-id is no lint id$",
+          r"^GATE lint-texts plugin/assets/handoff-spec\.md: AT-TX-03 text: lint_texts \S+\.fix"], None),
+        ("xref", "AT-TX-05", gates_only("xref"), xref,
+         [r"^GATE xref plugin/skills/handoff/SKILL\.md:\d+: AT-TX-05 meaning: template § 4\.5 now starts 'Open', recorded 'Live'$",
+          r"^GATE xref plugin/skills/handoff/SKILL\.md:\d+: AT-TX-05 meaning: Step 6 now starts 'Write', recorded 'Draft'$",
+          r"^GATE xref plugin/assets/handoff-turn\.txt:\d+: AT-TX-05 meaning: Step 6 now starts 'Write'",
+          r"^GATE xref plugin/skills/resume/references/self-heal\.md:\d+: AT-TX-05 unresolved: spec § 42 has no target$"], None),
+        ("no-args-inline", "AT-TX-06", gates_only("no-args-inline"), args_inline,
+         [r"^GATE no-args-inline plugin/skills/resume/SKILL\.md:\d+: AT-TX-06 arguments"], None),
+        ("readback", "AT-TX-07", gates_only("readback"), readback,
+         [r"^GATE readback plugin/skills/resume/SKILL\.md: AT-TX-07 starred: R8 report line '\* Status",
+          r"^GATE readback plugin/skills/resume/SKILL\.md: AT-TX-07 sentence"], None),
+        ("no-run-text", "AT-TX-08", gates_only("no-run-text"), no_run_text,
+         [r"^GATE no-run-text plugin/skills/resume/SKILL\.md:\d+: AT-TX-08 forbidden: 're-run the recorded command'$",
+          r"^GATE no-run-text plugin/skills/handoff/SKILL\.md: AT-TX-08 step2"], None),
+        ("stalled-def", "AT-TX-12", gates_only("stalled-def"), stalled,
+         [r"^GATE stalled-def plugin/skills/resume/references/self-heal\.md: AT-TX-12 self-heal: STALLED row lacks"], None),
+        ("prod-reads", "AT-PR-06", gates_only("prod-reads"), prod_reads,
+         [r"^GATE prod-reads plugin/skills/resume/SKILL\.md:\d+: AT-PR-06 u-item"], None),
+        ("call-form", "AT-PK-02", gates_only("call-form"), call_form,
+         [r"^GATE call-form plugin/skills/status/SKILL\.md:\d+: AT-PK-02 bare: '" + re.escape(name) + r"-store s'",
+          r"^GATE call-form plugin/skills/report/SKILL\.md:\d+: AT-PK-02 frontmatter: allowed-tools \(P-156"], None),
+        ("ic-desc", "AT-IC-11", gates_only("ic-desc"), ic_desc,
+         [r"^GATE ic-desc plugin/skills/resume/SKILL\.md: AT-IC-11 resume: description names \['/clear', 'break'\]$"], None),
+        ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,
+         [r"^GATE nudge-folder plugin/assets/checkpoint-nudge\.txt: AT-TX-13 folder"], None),
         ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
