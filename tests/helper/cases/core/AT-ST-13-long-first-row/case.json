@@ -1,0 +1,37 @@
+{
+ "id": "AT-ST-13 (BD-4 detector c on a first row longer than the 64 KB head block)",
+ "needs": ["fixture:setups/st-13-agent-output.json"],
+ "note": "C-STORE D6 BD-4 / MOD-SPEC §10 (CORE-10), regression: detector (c) reads the whole first non-empty line, not only the first 64 KB block. On setup st-13-agent-output, t1.output (typed shell, a regular file, so detectors a and b miss it) is rewritten with a transcript row whose prompt is 70,000 bytes; sorted keys put message before parentUuid, sessionId and type, so a 64 KB head cuts the row before any of them and its decode fails. It must still be withheld (agent-output), with no prompt text in the evidence. m1.output (monitor) gets a 70,000-byte first line that is a JSON object but no transcript row: read whole, it parses, it is no transcript row, so it is still copied (redacted), not withheld.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "setup",
+   "setup": [
+    {"fixture_setup": "st-13-agent-output.json"},
+    {"write": "$TMP/claude-501/-tmp-example-repo/$SID/tasks/t1.output",
+     "jsonl": [{"parentUuid": null, "isSidechain": true, "userType": "external", "cwd": "/tmp/example-repo",
+                "sessionId": "$SID", "version": "2.1.307", "gitBranch": "main", "agentId": "a5c0ffee0a1b2c3d4",
+                "type": "user", "uuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e01", "timestamp": "2026-10-21T10:50:00.000Z",
+                "message": {"role": "user", "content": ""}},
+               {"parentUuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e01", "isSidechain": true, "userType": "external",
+                "cwd": "/tmp/example-repo", "sessionId": "$SID", "version": "2.1.307", "gitBranch": "main",
+                "agentId": "a5c0ffee0a1b2c3d4", "type": "assistant", "uuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e02",
+                "timestamp": "2026-10-21T10:51:00.000Z",
+                "message": {"role": "assistant", "content": "Seven callers of the long prompt"}}],
+     "jsonl_pad": {"key": "message.content", "text": "Longprompt agent words for RetryWorker.enqueue. ", "bytes": 70000}},
+    {"write": "$TMP/claude-501/-tmp-example-repo/$SID/tasks/m1.output",
+     "jsonl": [{"level": "info", "msg": ""}, {"level": "info", "msg": "monitor fixture: queue depth 0"}],
+     "jsonl_pad": {"key": "msg", "text": "monitor fixture queue depth line ", "bytes": 70000}},
+    {"paths": ["$TMP/claude-501/-tmp-example-repo/$SID/tasks/t1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/m1.output"], "sid": "$SID"}
+   ]},
+  {"name": "sweep",
+   "argv": ["sweep", "--sid", "$SID", "--nonce", "1a2b3c4d", "--cwd", "$TMP/example-repo"],
+   "expect": {"exit": 0,
+    "stdout_has": [
+     "^withheld\\t\\S+/tasks/t1\\.output\\t-\\t",
+     "^redacted\\t\\S+/tasks/m1\\.output\\t\\S+\\t"
+    ],
+    "grep_absent": [{"dir": "$DISP", "text": "Longprompt agent words"}, {"dir": "$DISP", "text": "Seven callers"}]}}
+ ]
+}
