@@ -68,7 +68,7 @@ sub _bool {
     my ($v) = @_;
     return $$v ? \1 : \0 if ref $v eq 'SCALAR';
     return undef if ref $v || !defined $v;
-    return $v eq '1' ? \1 : $v eq '0' ? \0 : undef;
+    return ($v eq '1' || $v eq 'true') ? \1 : ($v eq '0' || $v eq 'false') ? \0 : undef;
 }
 
 sub _slot {
@@ -121,6 +121,11 @@ sub xvalue {
                 $o{$kk} += 0 + $n;
             }
             return (1, \%o);
+        }
+        if ($k eq 'or') {
+            my ($inner, @words) = @a;
+            return (1, $v) if !ref $v && grep { $_ eq $v } @words;
+            return xvalue($inner, $v, $X);
         }
         if ($k eq 'obj') {
             return (0) unless ref $v eq 'HASH';
@@ -356,6 +361,7 @@ sub vocabulary {
         if ($k eq 'enum') { $add->(@a) }
         elsif ($k eq 'pre') { $add->(@{ $a[0] }, @{ $a[1] }) }
         elsif ($k eq 'list' || $k eq 'counts') { $walk->($a[0]) }
+        elsif ($k eq 'or') { $add->(@a[1 .. $#a]); $walk->($a[0]) }
         elsif ($k eq 'obj') { for my $f (keys %{ $a[0] }) { $add->($f); $walk->($a[0]{$f}) } }
     };
     my $s = watch::export_schema::schema();
@@ -515,13 +521,25 @@ sub _probes {
     my (%seat, %trig, %idle, %idle_src, %werr, %ks, %canary);
     my ($alive_y, $alive_n) = (0, 0);
     my $smoke;
+    # the rollup rows joined with core's compaction_boundary rows by nonce (the idle facts are
+    # settled there, needs/core-to-watch.md §6); idle is a JSON bool (1 or 0) or `unknown`
+    my %bound;
+    for my $r (@$all) {
+        next unless ($r->{ev} // '') eq 'compaction_boundary' && defined $r->{nonce} && !ref $r->{nonce};
+        $bound{ $r->{nonce} } //= $r;
+    }
+    require watch::rules;
     for my $r (@$all) {
         my $ev = $r->{ev} // 'compaction';
         if ($ev eq 'compaction') {
+            my $b = (defined $r->{nonce} && !ref $r->{nonce}) ? $bound{ $r->{nonce} } : undef;
+            my $j = $b ? watch::rules::join_row($r, $b) : $r;
+            my $iv = ref $j->{idle} eq 'SCALAR' ? ${ $j->{idle} } : $j->{idle};
+            $iv = ($iv eq '1' ? 'true' : $iv eq '0' ? 'false' : $iv) if defined $iv && !ref $iv;
             $seat{ _w($r->{seat_state}) }++;
             $trig{ _w($r->{trigger}) }++;
-            $idle{ _w(ref $r->{idle} ? (${ $r->{idle} } ? 'true' : 'false') : $r->{idle}) }++;
-            $idle_src{ _w($r->{idle_source}) }++ if defined $r->{idle_source};
+            $idle{ _w($iv) }++;
+            $idle_src{ _w($j->{idle_source}) }++ if defined $j->{idle_source};
         } elsif ($ev eq 'watch_error') {
             $werr{ _w($r->{error_class}) }++;
         } elsif ($ev eq 'postcompact' || $ev eq 'precompact') {

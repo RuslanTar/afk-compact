@@ -38,6 +38,8 @@ my %got;
               my @rows = @{ watch::io::read_jsonl("$v->{WATCH}/$T::SID/compactions.jsonl") };
               my ($c) = watch::report::compactions(\@rows);
               $got{report} = { map { $_->{nonce} => $_ } @$c };
+              require watch::export;
+              $got{probes} = watch::export::_probes($ctx, \@rows);
           } },
     ],
     expect => sub {
@@ -59,5 +61,8 @@ my %got;
         $E->is($r->{$na}{idle}, 'true', 'watch report reads the joined idle');
         $E->is($r->{$nb}{idle}, 'false', 'watch report: joined false');
         $E->is($r->{$nc}{idle}, 'false', 'watch report: the settled rollup value');
+        my $p = $got{probes} || {};
+        $E->is(join(',', map { "$_=$p->{idle}{$_}" } sort keys %{ $p->{idle} || {} }), 'false=2,true=1', 'probes.json idle counts read the joined bool');
+        $E->is(join(',', map { "$_=$p->{idle_source}{$_}" } sort keys %{ $p->{idle_source} || {} }), 'mod=1,none=1,notice=1', 'probes.json idle_source counts');
     },
 };

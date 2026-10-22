@@ -19,6 +19,8 @@ package watch::export_schema;
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
 #   [obj => {...}]      a nested object with its own field classes
 #   heading             a spec section heading becomes its template id (`main:<n>`/`sub:<n>`)
+#   [or => CLASS, @words]  one of the listed words as it is, else the value through CLASS
+#                       (idle: a bool or `unknown`; min_window: a number or `never`)
 #   drop                never exported (listed so the gate knows it was looked at)
 use strict;
 use warnings;
@@ -38,6 +40,10 @@ my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-faile
                   triggers-off small-window session-changed busy aborted small ttl-5m near-limit episode published
                   cooldown disabled halted precompute in-flight);
 my @IDLE_SRC = qw(mod notice return both none);
+# core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
+# `unknown` before (needs/core-to-watch.md §6)
+my $IDLE = [or => 'bool', 'unknown'];
+my @ACUITY = qw(stable watch unstable -);
 my @SEVERITY = qw(critical warn info);
 
 my %ENVELOPE = (
@@ -51,7 +57,7 @@ our %SCHEMA = (
     # --- the rollup row (MOD-SPEC §2.5) and its boundary join (PKG-RUNTIME E.2) ---
     compaction => {
         session_id => 'hash', compaction_seq => 'int', nonce => 'nonce', id6 => 'id6', join => 'word',
-        trigger => [enum => @TRIGGER], midturn => 'bool', idle => [enum => qw(true false unknown)],
+        trigger => [enum => @TRIGGER], midturn => 'bool', idle => $IDLE,
         idle_source => [enum => @IDLE_SRC], idle_gap_s => 'num', channel => [enum => @CHANNEL],
         seat_state => [enum => @SEAT], verdict => [enum => @VERDICT], verdict_source => [enum => qw(postcompact after-step)],
         marker_line => 'int', sentinel_from_end => 'int', sentinel_place => [enum => qw(inside after-close)],
@@ -62,11 +68,12 @@ our %SCHEMA = (
         checkpoint_ms => [counts => 'word'], evidence => [counts => 'word'], nudged => 'bool', continued => 'bool',
         halt => 'word', handoff_turn => [pre => [qw(none published race aborted)], [qw(failed skipped)]],
         handoff_ht => 'hash', handoff_tokens => 'num', handoff_calls => 'int', handoff_result_chars => 'int',
-        handoff_ms => 'num', handoff_headroom => 'num', acuity => [enum => qw(stable watch unstable -)], acuity_floor => [enum => qw(stable watch unstable -)],
+        handoff_ms => 'num', handoff_headroom => 'num', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY],
+        proof => [enum => qw(P1 P3 none)], proof_lag_ms => 'num', settle_waited_ms => 'num',
     },
     compaction_boundary => {
         nonce => 'nonce', id6 => 'id6', boundary_uuid => 'hash', pre_tokens => 'num', post_tokens => 'num',
-        duration_ms => 'num', precomputed => 'bool',
+        duration_ms => 'num', precomputed => 'bool', idle => $IDLE, idle_source => [enum => @IDLE_SRC], idle_gap_s => 'num',
     },
     # --- WATCHER-SPEC §6.3 ---
     dispatch => {
@@ -74,7 +81,7 @@ our %SCHEMA = (
         channel => [enum => @CHANNEL], instructions_bytes => 'int', block_bytes => 'int', measured => 'bool',
         instr_version => 'word', tokens_before => 'num', checkpoint_ms => [counts => 'word'], full_checkpoint => 'bool',
         timeouts => [list => 'word'], evidence => [counts => 'word'], approvals_verified => [list => 'word'],
-        fallback => 'bool', error_class => 'word', idle => 'bool', midturn => 'bool',
+        fallback => 'bool', error_class => 'word', idle => 'bool', idle_gap_s => 'num', midturn => 'bool',
     },
     precompact => {
         trigger => [enum => qw(auto manual)], ci_bytes => 'int', ci_has_nonce => 'bool', ci_nonce => 'nonce',
@@ -98,7 +105,7 @@ our %SCHEMA = (
     copy => { nonce => 'nonce', id6 => 'id6', result => [pre => [qw(saved exists late unattributed mismatch)], [qw(failed)]],
               slot => [enum => qw(main subagents unattributed)], rel_path => 'slot' },
     copy_attributed => { id6 => 'id6', nonce => 'nonce', from_rel => 'slot', rel_path => 'slot', actor => 'actor',
-                         proof => [enum => qw(a b c)], seq => 'int', pre_tokens => 'num', post_tokens => 'num' },
+                         proof => [enum => qw(a b c slot)], seq => 'int', pre_tokens => 'num', post_tokens => 'num' },
     copy_attribution_ambiguous => { id6 => 'id6', candidates => 'int' },
     copy_attribution_failed => { id6 => 'id6', why => 'word' },
     stash_dropped => { id6 => 'id6', nonce => 'nonce', why => [enum => qw(redundant)], copy_rel => 'slot' },
@@ -110,7 +117,8 @@ our %SCHEMA = (
                   skipped => 'word' },
     compact_rejected => { nonce => 'nonce', attempt => 'int' },
     session => { phase => [enum => qw(start end)], source => [enum => qw(startup resume clear compact)], reason => 'word',
-                 mod_loaded => 'bool', previous_session_id => 'hash', lineage_reason => 'word', pid_lstart => 'drop' },
+                 mod_loaded => 'bool', previous_session_id => 'hash', lineage_reason => 'word', pid_lstart => 'drop',
+                 scratchpad => [enum => qw(present absent)], under_temp_root => 'bool' },
     sweep => {
         file => 'hash', from_off => 'int', to_off => 'int', partial => 'bool', bad_lines => 'int', oversize_lines => 'int',
         restarted => 'bool',
@@ -122,7 +130,7 @@ our %SCHEMA = (
             boundary_trigger => [enum => @TRIGGER], trigger_src => [enum => qw(dispatch boundary postcompact)],
             trigger_detail => 'word', nonce_match => 'bool', channel => [enum => @CHANNEL], copy => 'word',
             postcompact => 'bool', warm_gap_s => 'num', turns_since_prev => 'int', refill_per_turn => 'num',
-            rapid_refill_run => 'int', nudge_driven => 'bool', idle => [enum => qw(true false unknown)],
+            rapid_refill_run => 'int', nudge_driven => 'bool', idle => $IDLE,
             idle_source => [enum => @IDLE_SRC] }]],
         part => 'int',
         turns =>[obj => { tool_batches => 'int', tool_calls => 'int', classes => [counts => 'word'],
@@ -134,16 +142,17 @@ our %SCHEMA = (
     permission_denied => { tool_name => 'word', reason_class => 'word', guard_class => 'word',
                            turn_kind => [enum => qw(post-compaction resume nudge other)], caused_by => [enum => qw(plugin session)] },
     handoff_publish => { result => [pre => [qw(wrote)], [qw(REFUSED)]], bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
-                         kind => 'word', writer => 'word', ht => 'hash' },
+                         kind => 'word', writer => 'word', ht => 'hash',
+                         attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY] },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
-    handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle)], ht => 'hash' },
+    handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash' },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num' },
     handoff_turn_end => {
         handoff_turn => [pre => [@HT_END], [qw(failed)]], handoff_ht => 'hash', handoff_tokens => 'num',
         handoff_calls => 'int', handoff_result_chars => 'int', handoff_ms => 'num', handoff_headroom => 'num',
-        reason => [enum => @HT_REASON], turn_id => 'hash', interjected => 'bool', compaction => 'word',
+        reason => [enum => @HT_REASON], turn_id => 'hash', interjected => 'bool', compaction => 'bool',
         cache_read_share => 'num', result => 'word', calls => 'int', tokens => 'num', ms => 'num',
     },
     handoff_limit => { ht => 'hash', band => [enum => @BAND], calls => 'int', tokens => 'num' },
@@ -153,17 +162,17 @@ our %SCHEMA = (
     idle_mismatch => { nonce => 'nonce' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
     resume_remeasure_failed => { nonce => 'nonce', age_s => 'num' },
-    submit_dropped => { why => [enum => qw(session-changed)] },
-    queue_contract => { why => [enum => qw(untagged schema)] },
+    submit_dropped => { why => [enum => qw(session-changed)], site => [enum => qw(continue handoff-turn)] },
+    queue_contract => { why => [enum => qw(untagged schema not-json exit timeout)] },
     handoff_export => { result => 'word', reason => 'word', bytes => 'int', rules => [list => 'word'] },
     relaunch_unmatched => { task_id => 'hash', origin_sid => 'hash', sha8 => 'drop' },
     jobs_caller_refused => { reason => 'word' },
     queue_add => { result => 'word', exit => 'int', ms => 'num' },
     resume_receipt => { relation => 'word', tier => 'word', calls => 'int', drift => [list => 'word'],
-                        bg => [counts => 'word'], questions => 'int', adopt => 'word' },
+                        bg => [counts => 'word'], questions => 'int', adopt => 'word', cmds_asked => 'int' },
     heal => { origin_sid => 'hash', item => 'hash', result => [pre => [qw(ok)], [qw(ok REFUSED)]], bumped => 'bool', count => 'int',
               verdict => 'word', confidence => 'word', effects => 'word', signals => [counts => 'word'],
-              mode => 'word', new_task_id => 'hash' },
+              mode => 'word', new_task_id => 'hash', prod_class => 'word' },
     alert => { alert_id => 'word', rule => 'rule', severity => [enum => @SEVERITY],
                key => [obj => { session_id => 'hash', actor => 'actor', compaction_seq => 'int', nonce => 'nonce' }],
                evidence => [obj => {
@@ -192,7 +201,7 @@ our %SCHEMA = (
     checkpoint => { nonce => 'nonce', ms => 'num', bytes => 'int', measured => 'bool', consent => 'word' },
     config_effective => { window => 'num', native_offset => 'num', native_trigger => 'num', reserve => 'num',
                           soft_max => 'num', target => 'num', disabled => 'word', clamped => [list => 'word'],
-                          min_window => 'num', small_window => 'bool', soft_max_raw => 'num', target_raw => 'num' },
+                          min_window => [or => 'num', 'never'], small_window => 'bool', soft_max_raw => 'num', target_raw => 'num' },
     config_clamped => { key => 'word', configured => 'num', effective => 'num' },
     config_invalid => { key => 'word', index => 'int' },
     config_ambiguous => { candidates => 'int' },

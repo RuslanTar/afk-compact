@@ -169,7 +169,10 @@ sub beta_install {
                        evidence => { copy => 'missing', line => 3, path => '$HOME/CANARY-evidence-path' }) );
     my @roll = ( row('compaction', 31, writer => 'helper', session_id => $SID, nonce => 'f0f00001', id6 => 'f0f000',
                      trigger => 'auto', seat_state => 'mod-hook', verdict => 'ok', copy => 'saved', copy_path => $rel,
-                     idle => 'false', pre_tokens => 500000, copy_failed_detail => $jwt) );
+                     idle => 'unknown', pre_tokens => 500000, copy_failed_detail => $jwt),
+                 row('compaction_boundary', 32, writer => 'helper', nonce => 'f0f00001', id6 => 'f0f000',
+                     boundary_uuid => 'u-CANARY-TEXT-uuid', pre_tokens => 500000, post_tokens => 40000, duration_ms => 30000,
+                     precomputed => \0, idle => \0, idle_source => 'none', idle_gap_s => undef) );
     return [
         { path => '$WATCH/$SID.jsonl', jsonl => \@mod },
         { path => '$WATCH/$SID.classic.jsonl', jsonl => \@classic },
@@ -186,6 +189,17 @@ sub beta_install {
           json => { tasks => [ { id => 'b1', type => 'shell', output_path => '$HOME/CANARY-evidence-path/o' } ] } },
         { path => '$WATCH/version.json', json => { lastVersion => '2.1.306', smokeDue => '2.1.306' } },
         { path => '$WATCH/fingerprints/94c3672537e5.seen', text => '' },
+        # core's round-9 files (needs/core-to-watch.md §3, §5, §7): never report inputs, never a
+        # session folder. queue-state.json holds the queue tool's path, scratchpad.json the
+        # scratchpad path, a kept mismatch stash the raw summary.
+        { path => '$WATCH/$SID/queue-state.json',
+          json => { v => 1, key => '$HOME/CANARY-evidence-path/bin/queue', why => 'untagged', ts => loc(60) } },
+        { path => '$WATCH/$SID/scratchpad.json', json => { scratchpad_dir => '/private/tmp/CANARY-evidence-path/scratch' } },
+        { path => '$WATCH/$SID/pending/f0f000.post.mismatch.md', text => "CANARY-TEXT-mismatch\n" },
+        { path => '$WATCH/notice/watcher-1.shown', text => '' },
+        { path => '$WATCH/keyset/precompact-62a951d7', text => '' },
+        { path => "\$WATCH/.orphans/$SID", text => '' },
+        { path => '$WATCH/.orphans/.fullscan', text => "CANARY-TEXT-cursor\n" },
         { path => "\$ROOT/$rel", text => "---\nkind: compact-summary\n---\nCANARY-TEXT-summary\n", mode => 0400 },
         { path => '$ROOT/canaryrepoalpha/canary-4711-bucketbeta/handoff.md', text => "CANARY-TEXT-handoff\n" },
     ];

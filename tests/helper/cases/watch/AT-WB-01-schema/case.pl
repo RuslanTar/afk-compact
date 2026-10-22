@@ -14,13 +14,14 @@ my @SPEC = qw(dispatch precompact compacted postcompact copy copy_attributed cop
               queue_contract handoff_export relaunch_unmatched jobs_caller_refused queue_add resume_receipt heal alert
               watch_error compaction report_withheld);
 my %CLASS = map { $_ => 1 } qw(num int bool nonce id6 hex8 hex12 stamp ts version word rule hash actor slot heading drop);
-my %KIND = map { $_ => 1 } qw(enum pre list counts obj);
+my %KIND = map { $_ => 1 } qw(enum pre list counts obj or);
 sub _check {
     my ($c, $where, $bad) = @_;
     if (ref $c eq 'ARRAY') {
         my ($k, @a) = @$c;
         push @$bad, "$where: kind $k" unless $KIND{$k};
         if ($k eq 'list' || $k eq 'counts') { _check($a[0] // 'word', "$where\[]", $bad) }
+        if ($k eq 'or') { _check($a[0], "$where|", $bad); push @$bad, "$where: or without words" unless @a > 1 }
         if ($k eq 'obj') { _check($a[0]{$_}, "$where.$_", $bad) for sort keys %{ $a[0] || {} } }
         return;
     }
