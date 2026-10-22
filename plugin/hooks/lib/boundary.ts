@@ -211,10 +211,8 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     let nonce: string
     let text: string
     let pref: ResumePref
-    let t0: number
     if (opts.prepared) {
       ({ nonce, text, pref } = opts.prepared)
-      t0 = await d.now()
     } else {
       let named: string | undefined
       let prev: string | undefined
@@ -235,7 +233,6 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
       pref = await resumePref(d, sid)
-      t0 = await d.now()
       // The checkpoint above can take seconds: a native compaction may have started or run since.
       // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
       // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
@@ -250,6 +247,10 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
         ...(ah ? { handoffHt: ah.ht } : {}),
       })
     }
+    // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
+    // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
+    // await sits between that check and the call.
+    const t0 = await d.now()
     // Once more after the dispatch write, with no await between this check and the call. A
     // native compaction that started during the write: the rerun after its end reuses this
     // record (`prepared`), so a skipped native one leaves no orphan and no second record.

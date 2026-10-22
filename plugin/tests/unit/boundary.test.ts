@@ -486,3 +486,21 @@ test('AT-P5-07 (row): native_window_tokens 50000 counts as 100000, with one conf
   expect(w.rowsOf('config_effective')[0]?.window).toBe(100000)
   expect(w.rowsOf('config_clamped').filter(r => r.key === 'native_window_tokens').map(r => [r.configured, r.effective])).toEqual([[50000, 100000]])
 })
+
+// DP-30 (4): `compacted.ms` has one definition on every path: from the dispatch record written
+// (or reused) to the compaction's answer, as on the mod-hook path.
+test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', async ($, on) => {
+  const w = new World().install(on)
+  w.atHelper = async (sub) => {
+    if (sub === 'dispatch') await w.clock.set(w.clock.now() + 250)
+  }
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 410000
+  await w.turnEnd($)
+  await w.advance(2000)
+  await raiseCompact($, { trigger: 'manual' })
+  const rows = w.rowsOf('compacted')
+  expect(rows.length).toBe(2)
+  expect(rows.map(r => r.ms)).toEqual([0, 0])
+})
