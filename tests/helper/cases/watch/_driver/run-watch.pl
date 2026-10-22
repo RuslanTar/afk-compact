@@ -132,8 +132,8 @@ sub cli_launcher {
         write_file("$base/plugin/$settings::TEST_CONSENT_MARK", "watch driver test stage\n", 0644);
         $CLI_STAGE = "$base/plugin";
     }
-    my $l = "$CLI_STAGE/bin/$T::BRAND-store";
-    die "run-watch.pl: no launcher at plugin/bin/$T::BRAND-store (run tools/build)\n" unless -x $l;
+    my $l = "$CLI_STAGE/scripts/$T::BRAND-store";
+    die "run-watch.pl: no launcher at plugin/scripts/$T::BRAND-store (run tools/build)\n" unless -x $l;
     return $l;
 }
 
