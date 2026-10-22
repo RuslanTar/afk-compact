@@ -1070,14 +1070,37 @@ sub builtin {
         return @e;
     }
     if ($name eq 'floor_lint') {
-        # AT-P-11: every use/require in plugin/helper is a floor module (RUNTIME §2.4, plus
-        # overload, lib and utf8, probed present in debian:bookworm-slim perl-base), one of
-        # the helper's own libraries, or sits inside an eval with a fallback.
+        # AT-P-11 (PKG-RUNTIME B.2): every .pl/.pm under plugin/helper (or args.root), three rules.
+        # L1 modules: every use/require is a floor module (RUNTIME §2.4, plus overload, lib and
+        #   utf8, probed present in debian:bookworm-slim perl-base), one of the helper's own
+        #   libraries, or sits inside an eval with a fallback. `feature` is the core pragma (its
+        #   newer features are L3).
+        # L2 implicit loads: %+ %- $+{ $-{ (Tie::Hash::NamedCapture), \N{NAME} (charnames),
+        #   \p{..} \P{..} (Unicode tables), use open, Encode::.
+        # L3 version: use v5.N / use 5.0NN above the floor, use feature with a post-5.28
+        #   feature, any builtin:: call.
+        # Each hit is one line `<file>:<line>: <what> <reason>. Fix: <fix>.` (PR-4 convention).
+        # args.want: regexes each hit list must match; args.known: {relative file: reason}, hits
+        # in that file are accepted (an entry whose file is clean is harmless: drop it after the fix lands).
         my %floor = map { $_ => 1 } qw(strict warnings constant Fcntl POSIX Errno Cwd File::Spec File::Path File::Temp
             File::Basename IPC::Open3 Getopt::Long IO::Handle List::Util Scalar::Util Text::ParseWords IO::File IO::Select
-            Socket Exporter Carp parent integer bytes overload lib utf8);
+            Socket Exporter Carp parent integer bytes overload lib utf8 feature);
         my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes);
-        my $root = "$REPO/plugin/helper";
+        my $root = defined $a->{root} ? $a->{root} : "$REPO/plugin/helper";
+        # The floor value has one source in the helper: main.pl's guard (`$] < 5.028`).
+        my ($floor_v) = (util::read_file("$REPO/plugin/helper/main.pl") // '') =~ /\$\]\s*<\s*(5\.\d+)/;
+        $floor_v //= '5.028';
+        my $floor_txt = sprintf('%d.%d', int($floor_v), int((($floor_v - int $floor_v) * 1000) + 0.5));
+        my %newfeat = map { $_ => 1 } qw(isa try defer class module_true extra_paired_delimiters signatures);
+        my $pb = "perl-base $floor_txt (Debian 10)";
+        my @l2 = (
+            [qr/\$[+-]\{|(?:keys|values|each|exists|delete|scalar)\s*\(?\s*%[+-](?![\w])|\\%[+-](?![\w])|[=(,]\s*%[+-]\s*[;,)]/,
+             '%+ / %- load Tie::Hash::NamedCapture, which ' . $pb . ' lacks', 'numbered captures ($1, $2)'],
+            [qr/\\N\{(?!U\+)/, '\\N{NAME} loads charnames, which perl-base trims', '\\x{HEX} escapes'],
+            [qr/\\[pP](?:\{|[A-Z])/, '\\p{..} / \\P{..} load Unicode property tables, which perl-base trims', 'an explicit character class'],
+            [qr/\buse\s+open\b/, 'use open loads open.pm and the Encode layers, not on the floor', 'binmode :raw and encode once at the edge (util::to_bytes)'],
+            [qr/\bEncode::/, 'Encode is not in perl-base', 'utf8::encode / utf8::decode'],
+        );
         my %own;
         my @stack = ("$root/lib");
         while (@stack) {
@@ -1090,37 +1113,68 @@ sub builtin {
                 $own{$rel} = 1;
             }
         }
+        my %known = %{ $a->{known} || {} };
+        my (%known_hit, @hits);
         @stack = ($root);
         my $n = 0;
         while (@stack) {
             my $d = pop @stack;
-            for my $f (util::list_dir($d)) {
+            for my $f (sort(util::list_dir($d))) {
                 my $p = "$d/$f";
                 if (-d $p) { push @stack, $p; next }
                 next unless $f =~ /\.p[lm]$/;
+                my $rel = substr($p, length("$root/"));
                 my $src = util::read_file($p);
-                my $ln = 0;
+                my ($ln, $pod) = (0, 0);
+                my @fh;
                 for my $line (split /\n/, $src) {
                     $ln++;
-                    next if $line =~ /^\s*#/;
+                    if ($line =~ /^=(\w+)/) { $pod = $1 ne 'cut'; next }
+                    next if $pod || $line =~ /^\s*#/;
+                    last if $line =~ /^__(END|DATA)__\b/;
                     while ($line =~ /\b(use|require)\s+([A-Za-z_][A-Za-z0-9_:]*)/g) {
                         my ($kw, $m) = ($1, $2);
                         next if $m =~ /^v?\d/ || $m eq 'if';
                         $n++;
                         next if $floor{$m} || $own{$m};
                         next if $optional{$m} && $line =~ /eval\s*\{/;
-                        push @e, "$p:$ln: $kw $m is not on the floor";
+                        push @fh, "$rel:$ln: $kw $m is not on the $pb floor list. Fix: a floor module, or load it in an eval with a fallback.";
                     }
                     while ($line =~ /\brequire\s+"([^"\$]+)\.pm"/g) {
                         (my $m = $1) =~ s{/}{::}g;
                         $n++;
-                        push @e, "$p:$ln: require \"$1.pm\" is not a helper library" unless $own{$m};
+                        push @fh, "$rel:$ln: require \"$1.pm\" is not a helper library. Fix: require a file under helper/lib." unless $own{$m};
                     }
+                    for my $r (@l2) {
+                        push @fh, "$rel:$ln: $r->[1]. Fix: $r->[2]." if $line =~ $r->[0];
+                    }
+                    if ($line =~ /\buse\s+(v5\.(\d+)(?:\.\d+)?|5\.(\d{3})(?:_?\d+)?)\b/) {
+                        my $minor = defined $2 ? $2 : 0 + $3;
+                        my $fmin = int((($floor_v - int $floor_v) * 1000) + 0.5);
+                        push @fh, "$rel:$ln: use $1 needs perl 5.$minor, above the floor $floor_txt. Fix: drop it (use strict; use warnings)."
+                            if $minor > $fmin;
+                    }
+                    if ($line =~ /\buse\s+feature\b(.*)/) {
+                        my $rest = $1;
+                        for my $ft (grep { $newfeat{$_} } $rest =~ /([a-z_]+)/g) {
+                            push @fh, "$rel:$ln: feature '$ft' is newer than perl $floor_txt. Fix: plain subs and eval blocks.";
+                        }
+                    }
+                    push @fh, "$rel:$ln: builtin:: functions need perl 5.36, above the floor $floor_txt. Fix: Scalar::Util / List::Util or plain code."
+                        if $line =~ /\bbuiltin::/;
                 }
+                if (exists $known{$rel}) { $known_hit{$rel} = scalar @fh; next }
+                push @hits, @fh;
             }
         }
-        push @e, 'no use/require found' unless $n;
-        return @e;
+        push @hits, 'no use/require found' unless $n;
+        if ($a->{want}) {
+            for my $re (@{ $a->{want} }) { push @e, "no lint hit matches /$re/" unless grep { /$re/ } @hits }
+            my @un = grep { my $h = $_; !grep { $h =~ /$_/ } @{ $a->{want} } } @hits;
+            push @e, map { "unexpected lint hit: $_" } @un;
+            return @e;
+        }
+        return @hits;
     }
     if ($name eq 'secret_corpus') {
         # PRIV-05: every entry and name of tests/fixtures/secrets/corpus.json through the shipped
