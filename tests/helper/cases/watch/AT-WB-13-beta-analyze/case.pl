@@ -107,7 +107,10 @@ my $tsv = sub {
               my $cfg = '{"available":true,"keys":{"disposable_keep_days":{"class":"num","clamped":false,"default":false,"value":3},'
                       . '"triggers":{"class":"bool","clamped":false,"default":true,"value":true}}}' . "\n";
               $remake->('good-again.zip', { created => '2030-01-02 01:30 +0300' }, { 'config.json' => $cfg }, 1);
-              $remake->('old-name.zip', { install_id => 'feedfacefeedface', plugin => 'storewatch', schema => 'storewatch-report/1' });
+              # The other install sent a bundle from a helper without export classes (config.json as
+              # `report` writes it then), whatever this branch's core exports.
+              $remake->('old-name.zip', { install_id => 'feedfacefeedface', plugin => 'storewatch', schema => 'storewatch-report/1' },
+                        { 'config.json' => qq({"available":false,"why":"no-export-classes"}\n) }, 1);
               $remake->('bad-hash.zip', undef, { 'probes.json' => "{\"smoke\":null}\n" });
               (my $hit = $e->{$rowsf}{data}) =~ s/\n\z/\n{"v":1,"ev":"skip","why":"\/Users\/someone\/x"}\n/;
               $remake->('pattern-hit.zip', undef, { $rowsf => $hit }, 1);
@@ -155,6 +158,12 @@ my $tsv = sub {
                   $got{fx_cases} = $render_fixtures->("$REPO/tests/fixtures/beta", $fin, $T::BRAND);
                   $got{fx_run} = $analyze->('run', $fin, '--out', "$v->{TMP}/fx/ana", '--store', $l);
                   $got{fx} = { map { $_->{zip} => $_ } @{ $tsv->("$v->{TMP}/fx/ana/bundles.tsv") } };
+                  # AT-WB-14 on the fixture: good-1.zip rendered under an old plugin name is valid
+                  my $fo = "$v->{TMP}/fx-old/inbox";
+                  $render_fixtures->("$REPO/tests/fixtures/beta", $fo, 'storewatch');
+                  unlink(grep { !m{/good-1\.zip\z} } map { "$fo/$_" } watch::io::list_dir($fo));
+                  $got{fx_old_run} = $analyze->('run', $fo, '--out', "$v->{TMP}/fx-old/ana", '--store', $l);
+                  $got{fx_old} = { map { $_->{zip} => $_ } @{ $tsv->("$v->{TMP}/fx-old/ana/bundles.tsv") } };
               }
           } },
     ],
@@ -264,6 +273,8 @@ my $tsv = sub {
                 $E->ok(($st eq $want || ($want eq 'valid' && $st eq 'duplicate') ? 1 : 0), "fixture $zn: $st, want $want");
                 $E->ok((($st eq 'duplicate') ^ ($dup eq 'duplicate') ? 1 : 0), "fixture $zn dedupes with $c->{dedupe_with}") if $c->{dedupe_with};
             }
+            $E->is($got{fx_old_run}{exit}, 0, "old-name fixture run exit 0 ($got{fx_old_run}{err})");
+            $E->is($got{fx_old}{'good-1.zip'}{status}, 'valid', 'AT-WB-14: fixture good-1.zip under an old plugin name is valid');
         }
     },
 };
