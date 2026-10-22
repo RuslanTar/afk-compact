@@ -57,6 +57,7 @@ my $stub = sub {
                       compact_target_tokens => 400000, compact_soft_max_tokens => 900000, native_window_tokens => 800000,
                       handoff_turn => 'halt', handoff_turn_max_tokens => 10000, watcher => 'shadow', deny_class_patterns => 'a;b');
               $got{c1} = watch::export::_config($ctx);
+              $got{vocab} = watch::export::vocabulary('brandx');
               my $res = watch::export::build($ctx, salt => 'k' x 32, install_id => '0123456789abcdef', now => $T::BASE + 100,
                                              identity => watch::export::identity_list($ctx, no_git => 1));
               $got{withheld} = [ map { $_->{file} } @{ $res->{withheld} } ];
@@ -103,5 +104,11 @@ my $stub = sub {
         $E->is($b->($k2->{native_window_tokens}{clamped}), 'true', 'a window below the floor is clamped');
         $E->is($b->($got{c3}{available}), 'false', 'a failing export_view: not available');
         $E->is($got{c3}{why} // '', 'export-view-failed', 'and says why');
+        # E-W-1 (provisional): config.json's own words are bundle vocabulary, so an identity
+        # string that is exactly one of them (a repo folder named `default` or `clamped`) does
+        # not withhold the file.
+        my $vo = $got{vocab} || {};
+        $E->ok(($vo->{$_} ? 1 : 0), "vocabulary has config.json's word $_")
+            for qw(keys class value default clamped custom-in-home unset disposable_keep_days handoff_turn_max_tokens);
     },
 };

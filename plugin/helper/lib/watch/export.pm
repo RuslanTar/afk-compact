@@ -376,6 +376,14 @@ sub vocabulary {
               system-message watch_error_classes PASS FAIL total kinds classic_stream alerts mod_stream rollup events
               dispatch pending bg handoff-turn checkpoint watch-cache offsets heal resume-claimed jobs fingerprints
               keyset notice reports .orphans key));
+    # config.json's own words (W-BETA B.5, D): its fields, the export classes and path values,
+    # the settings key names and the enum values core exports as themselves.
+    $add->(qw(keys class value default clamped num bool enum path list unset custom custom-in-home unknown));
+    {
+        no warnings qw(once);
+        $add->(map { ref $_ eq 'ARRAY' ? $_->[0] : () } @settings::KEYS);
+        $add->(map { ref $_ eq 'ARRAY' ? @$_ : () } values %settings::ENUM);
+    }
     my @u = POSIX::uname();
     $add->($u[0], $u[4]);
     $add->(_readme($brand) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
