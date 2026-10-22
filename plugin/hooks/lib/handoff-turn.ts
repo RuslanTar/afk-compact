@@ -77,6 +77,8 @@ export type HandoffTurn = {
   interjected: boolean
   /** A native compaction ran during the turn (the race); the plugin compaction is dropped. */
   race: { nonce: string; trigger: string } | null
+  /** The hourly-cap stamp is written: a deferred-then-rerun turn counts once (DP-30 (2)). */
+  stamped?: boolean
 }
 
 /** A handoff published by a handoff turn, until the next main turn or compaction. */
@@ -181,8 +183,11 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   }
   // Set before the check below, so a cancel row written from here on names the ht.
   h.ht = opened
-  const now = await d.now()
-  await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
+  if (!h.stamped) {
+    h.stamped = true
+    const now = await d.now()
+    await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
+  }
   if (cancelled()) {
     await handoffTurnClose(d, sid, opened, 'cancelled')
     return true

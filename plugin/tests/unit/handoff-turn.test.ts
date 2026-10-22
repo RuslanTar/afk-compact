@@ -1058,3 +1058,48 @@ test('CR-F17: claimTurn: the first turn is ours with no other prompt entering; b
   expect(isOurText('anything', undefined)).toBe(false)
   expect(isOurText('anything', '  ')).toBe(false)
 })
+
+// DP-30 (2): the hourly stamp is written once per handoff turn, so a turn deferred for a prompt
+// that then never entered, and run again, still leaves the second hourly slot free.
+test('DP-30 (2): our submit dropped for an entering user prompt, that prompt dropped too, the delay runs again: one hourly stamp, so the next last cycle still promises its handoff turn', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  const ours = submitText(w, 'continue-off') ?? ''
+  const USER = 'the user typed this'
+  let held: Promise<unknown> | undefined
+  let reached!: () => void
+  const atBottom = new Promise<void>(r => { reached = r })
+  let open!: () => void
+  const gate = new Promise<void>(r => { open = r })
+  let dropOurs = true
+  w.atSubmit = async text => {
+    if (text === USER) {
+      reached()
+      await gate
+      return
+    }
+    if (text !== ours || held !== undefined) return
+    held = $.prompt.submit({ text: USER, origin: { kind: 'composer' } } as never)
+    await atBottom
+  }
+  w.dropIf = text => (text === USER ? 'refused by a guard' : text === ours && dropOurs ? 'a user prompt came first' : undefined)
+  await w.advance(2000)
+  expect(w.submits).toEqual([ours, USER])
+  dropOurs = false
+  open()
+  await held
+  await w.settle()
+  await w.advance(2000)
+  expect(w.submits).toEqual([ours, USER, ours])
+  await handoffTurnStarts($, w)
+  expect(w.rowsOf('handoff_turn_start').length).toBe(1)
+  w.tokens = 100000
+  await w.turnEnd($, 'Handoff written.')
+  await w.advance(60000)
+  // The next last cycle (continue-off): one stamp in the last hour, so [halt-handoff] is kept.
+  await w.turnStart($, 'more please')
+  w.tokens = 610000
+  expect((await w.tool($)).context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['halt', 'halt-handoff'], { tokens: '610,000', halt_reason: HALT_REASON_TEXT['continue-off'] }))
+})
