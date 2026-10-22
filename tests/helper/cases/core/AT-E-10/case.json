@@ -1,6 +1,6 @@
 {
  "id": "AT-E-10",
- "note": "MOD-SPEC §10 AT-E-10, HK-34, ROOT-RULINGS F2-8: (a) queue_cmd unset: no queue call, lane null; (b) a queue_cmd answering the v1 contract (queue-stub/v1, canned in queue-v1/) with lane:repo/x and 2 open: checkpoint lane lane:repo/x and `Queued: 2 open …` in the measured block, then the PostCompact copy of that dispatch carries queue_lane: lane:repo/x from the checkpoint; (c) a queue_cmd that answers prose (tests/fixtures/bin/queue-stub with queue/prose): lane omitted with a lane_unknown row; (d) an answer naming another schema is not read (lane_unknown why=schema); only `list --json --session <sid>` is ever called, never adopt or add",
+ "note": "MOD-SPEC §10 AT-E-10, HK-34, ROOT-RULINGS F2-8: (a) queue_cmd unset: no queue call, lane null; (b) a queue_cmd answering the v1 contract (queue-stub/v1, canned in queue-v1/) with lane:repo/x and 2 open: checkpoint lane lane:repo/x and `Queued: 2 open …` in the measured block, then the PostCompact copy of that dispatch carries queue_lane: lane:repo/x from the checkpoint; (c) a queue_cmd that answers prose (tests/fixtures/bin/queue-stub with queue/prose): lane omitted with a lane_unknown row; (d) an answer naming another schema is not read (lane_unknown why=schema); only `list --json --session <sid>` is ever called, never adopt or add; (e) an untagged reply (no schema; Q-ADAPTER QA-2, the amended AT-E-10 (d)) is not read either: lane omitted, lane_unknown why=untagged and one queue_contract {why: untagged}",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -47,7 +47,9 @@
   },
   {
    "name": "(c) prose",
-   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
+   "options": {
+    "queue_cmd": "$FIX/bin/queue-stub"
+   },
    "env": {
     "QUEUE_STUB_DIR": "$FIX/queue/prose",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
@@ -102,7 +104,9 @@
   },
   {
    "name": "(b) queue-stub/v1",
-   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
+   "options": {
+    "queue_cmd": "$FIX/bin/queue-stub"
+   },
    "env": {
     "QUEUE_STUB_DIR": "$CASE/queue-v1",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
@@ -156,7 +160,9 @@
   },
   {
    "name": "(b) the copy takes the lane from that checkpoint",
-   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
+   "options": {
+    "queue_cmd": "$FIX/bin/queue-stub"
+   },
    "env": {
     "QUEUE_STUB_DIR": "$CASE/queue-v1",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
@@ -205,7 +211,9 @@
   },
   {
    "name": "(d) another schema",
-   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
+   "options": {
+    "queue_cmd": "$FIX/bin/queue-stub"
+   },
    "env": {
     "QUEUE_STUB_DIR": "$CASE/queue-v2",
     "QUEUE_STUB_LOG": "$TMP/queue.log"
@@ -244,6 +252,62 @@
       "count": 1,
       "fields": {
        "why": "schema"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(e) untagged",
+   "options": {
+    "queue_cmd": "$FIX/bin/queue-stub"
+   },
+   "env": {
+    "QUEUE_STUB_DIR": "$CASE/../AT-QA-02-03-queue-mode/queue-untagged",
+    "QUEUE_STUB_LOG": "$TMP/queue.log"
+   },
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e6f7a8b",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "lane": null,
+     "queued_line": null
+    },
+    "files": [
+     {
+      "path": "$TMP/queue.log",
+      "lines": 4,
+      "lacks": [
+       "^(adopt|add)\\b"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lane_unknown",
+      "count": 1,
+      "fields": {
+       "why": "untagged"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "queue_contract",
+      "count": 1,
+      "fields": {
+       "why": "untagged"
       }
      }
     ]

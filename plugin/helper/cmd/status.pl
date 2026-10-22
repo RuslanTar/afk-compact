@@ -140,6 +140,9 @@ sub run {
     push @out, mode_lines($opt->{cwd});
     push @out, relaunch_lines($d);
     push @out, prod_lines();
+    # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
+    # session's last list outcome); /status is the only place that says `queue: off`
+    push @out, 'queue: ' . queue::mode_text();
     push @out, kept_lines($sid);
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
 

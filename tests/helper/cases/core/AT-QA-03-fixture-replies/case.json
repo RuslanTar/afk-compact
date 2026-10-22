@@ -1,0 +1,30 @@
+{
+ "id": "AT-QA-03 (WP-fix queue replies: tagged, count, untagged, v2)",
+ "needs": ["fixture:queue/untagged/list.out", "fixture:queue/v2/list.out", "fixture:queue/v1-tagged/list.out", "fixture:queue/v1-count/list.out"],
+ "note": "Q-ADAPTER QA-2 (CORE-18, fix-to-core 9) on the WP-fix replies (FIX-07): each reply through checkpoint, then /status names the mode its list.expect gives: v1-tagged and v1-count on (Queued: 2 open), untagged degraded (untagged), v2 degraded (schema). Skipped until the WP-fix fixtures are merged",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "options": {"queue_cmd": "$FIX/bin/queue-stub"},
+ "steps": [
+  {"setup": [{"repo_fixture": "main-branch.json", "at": "$TMP/example-repo"}]},
+  {"name": "v1-tagged", "env": {"QUEUE_STUB_DIR": "$FIX/queue/v1-tagged"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c01", "--budget-ms", "10000", "--cwd", "$TMP/example-repo"],
+   "expect": {"exit": 0, "json": {"lane": "lane:repo/x", "queued_line": {"re": "\\AQueued: 2 open"}}}},
+  {"argv": ["status", "--sid", "$SID"], "expect": {"exit": 0, "stdout_has": ["^queue: on$"]}},
+  {"name": "untagged", "env": {"QUEUE_STUB_DIR": "$FIX/queue/untagged"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c02", "--budget-ms", "10000", "--cwd", "$TMP/example-repo"],
+   "expect": {"exit": 0, "json": {"lane": null, "queued_line": null},
+              "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "queue_contract", "count": 1, "fields": {"why": "untagged"}}]}},
+  {"argv": ["status", "--sid", "$SID"], "expect": {"exit": 0, "stdout_has": ["^queue: degraded \\(untagged\\)$"]}},
+  {"name": "v2", "env": {"QUEUE_STUB_DIR": "$FIX/queue/v2"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c03", "--budget-ms", "10000", "--cwd", "$TMP/example-repo"],
+   "expect": {"exit": 0, "json": {"lane": null, "queued_line": null},
+              "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "queue_contract", "count": 1, "fields": {"why": "schema"}}]}},
+  {"argv": ["status", "--sid", "$SID"], "expect": {"exit": 0, "stdout_has": ["^queue: degraded \\(schema\\)$"]}},
+  {"name": "v1-count", "env": {"QUEUE_STUB_DIR": "$FIX/queue/v1-count"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c04", "--budget-ms", "10000", "--cwd", "$TMP/example-repo"],
+   "expect": {"exit": 0, "json": {"lane": "lane:repo/x", "queued_line": {"re": "\\AQueued: 2 open"}}}},
+  {"argv": ["status", "--sid", "$SID"], "expect": {"exit": 0, "stdout_has": ["^queue: on$"]}}
+ ]
+}
