@@ -539,6 +539,7 @@ sub _run {
     my $in_time = $left->() > 0;
     my $cutoff = $a{cutoff};
     # 2. unresolved and precompute dispatches (> 10 min old)
+    my $native_ran;
     if ($in_time) {
         my %post;
         for my $it (@$pool) { $post{$_} = 1 for grep { defined } @$it{qw(nonce dispatch deferred)} }
@@ -555,6 +556,10 @@ sub _run {
                 next;
             }
             next if $logged->{"compaction_unresolved:$nn"} || exists $copied->{"n:$nn"} || $post{$nn};
+            # DP-29 (E-M-15): the mod closed this dispatch because a native compaction ran first
+            # (compacted {skip: native-ran}): an outcome, not an unresolved compaction
+            $native_ran //= _native_ran();
+            next if $native_ran->{$nn};
             next if grep { ($_->{nonce} // '') eq $nn } @{ $st->{rolls_l} };
             next if -e "$sid_dir/pending/$nn.mod.md";
             rc::emit('compaction_unresolved', [nonce => $nn, trigger => $d->{trigger}, channel => $d->{channel}]);
@@ -619,6 +624,17 @@ sub _bd3 {
     my $wait = defined $a{e} ? int(($a{now} - $a{e}) * 1000 + 0.5) : undef;
     $wait = 0 if defined $wait && $wait < 0;
     return (proof => $a{proof}, proof_lag_ms => $lag, settle_waited_ms => $wait);
+}
+
+# Nonces the mod closed with compacted {skip: native-ran} (DP-29), read from the mod stream
+# (the same rows postcompact::_mod_closed reads; only this skip class closes an unresolved check).
+sub _native_ran {
+    my %c;
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => ['compacted']) }) {
+        next unless ($row->{ev} // '') eq 'compacted' && defined $row->{nonce} && !ref $row->{nonce};
+        $c{ $row->{nonce} } = 1 if ($row->{skip} // '') eq 'native-ran';
+    }
+    return \%c;
 }
 
 # Save a stash PostCompact deferred for want of scope proof, as P3 decided (F2-1).
