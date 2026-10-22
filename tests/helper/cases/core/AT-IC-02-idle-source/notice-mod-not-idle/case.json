@@ -1,0 +1,134 @@
+{
+ "id": "AT-IC-02 (notice-mod-not-idle)",
+ "needs": [
+  "fixture:transcripts/idle-cases.json"
+ ],
+ "note": "IC-1 D1 / MOD-SPEC §2.5 idle rule (CORE-14), WP-fix transcripts/idle-cases.json case notice-mod-not-idle: a mod-hook main auto dispatch (idle from the record), PostCompact writes the rollup row with idle unknown; the next Stop reads the first native idle row after the main boundary (prefix only) and appends idle, idle_source, idle_gap_s on the compaction_boundary row; rollup::rows joins them; a disagreement gives one idle_mismatch {nonce}; no notice text in <watch>. A second Stop adds nothing. Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "transcript and the mod dispatch record",
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "copy": "transcripts/idle-notice/main.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+    },
+    {
+     "copy": "watch/dispatch-1d1e0c0a-not-idle.json",
+     "subst": true,
+     "to": "$WATCH/$SID/dispatch/1d1e0c0a.json"
+    }
+   ]
+  },
+  {
+   "name": "PostCompact (idle unknown until reconcile)",
+   "now": "2026-10-21T14:05:30.200+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin": "payloads/PostCompact/idle-main.json",
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "nonce": "1d1e0c0a",
+       "idle": "unknown"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the next Stop decides idle",
+   "now": "2026-10-21T14:20:00+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction_boundary",
+      "count": 1,
+      "fields": {
+       "nonce": "1d1e0c0a",
+       "idle": true,
+       "idle_source": "notice"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "idle_mismatch",
+      "count": 1
+     }
+    ],
+    "joined": [
+     {
+      "nonce": "1d1e0c0a",
+      "idle": true,
+      "idle_source": "notice"
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "Compacted while idle"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "written while you were away"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a second Stop adds no row",
+   "now": "2026-10-21T14:25:00+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction_boundary",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "idle_mismatch",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

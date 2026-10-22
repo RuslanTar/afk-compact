@@ -1,0 +1,27 @@
+{
+ "id": "AT-IC-10 (SessionStart clear prints nothing)",
+ "note": "IC-1 D7 /clear guarantee, helper half (CORE-14 regression): hook SessionStart with source clear prints nothing and writes no resume-claimed/* file, also when this session has a fresh main dispatch record and the classic auto record whose block SessionStart(compact) would deliver; the compact source still delivers (control)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "a fresh main dispatch and a classic auto record",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"dispatch": {"nonce": "c1ea0001", "actor": "main", "channel": "mod-hook", "trigger": "auto", "ts": "2026-10-21T14:05:00+03:00"}},
+    {"dispatch": {"nonce": "c1ea0002", "actor": "unknown", "channel": "classic", "trigger": "auto", "resume_pref": "sessionstart", "ts": "2026-10-21T14:05:05+03:00"}}
+   ]},
+  {"name": "SessionStart clear",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "clear"},
+   "expect": {"exit": 0, "stdout": "", "files": [{"path": "$WATCH/$SID/resume-claimed/*", "count": 0}]}},
+  {"name": "SessionStart clear again, later",
+   "now": "2026-10-21T14:06:12+03:00",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "clear"},
+   "expect": {"exit": 0, "stdout": "", "files": [{"path": "$WATCH/$SID/resume-claimed/*", "count": 0}]}},
+  {"name": "control: SessionStart compact delivers a block",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "compact"},
+   "expect": {"exit": 0, "stdout_has": ["\\S"]}}
+ ]
+}

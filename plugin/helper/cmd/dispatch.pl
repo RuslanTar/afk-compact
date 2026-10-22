@@ -1,9 +1,11 @@
 # cmd/dispatch.pl: write a dispatch record (MOD-SPEC §2.3; BUILD-PLAN §3.1, §3.4). Owner: WP-core.
 # dispatch --sid S --nonce N --actor main|<agentId> --trigger T --channel mod-hook|mod-self|classic
 #   --resume-pref P --tags a,b --midturn true|false --instr-sha8 H --instr-bytes B
-#   --cc-version V --load-id L [--handoff-ht H]
+#   --cc-version V --load-id L [--handoff-ht H] [--idle[=true|false] --idle-gap-s N]
 # -> `ok`; an existing record -> exit 3 `REFUSED: nonce-exists`. Row `dispatch`.
 # --handoff-ht (D-18 B3): the handoff turn this dispatch follows or interrupts.
+# --idle / --idle-gap-s (IC-1 D1): the mod passes them (the `=` form) only on an idle main auto
+# dispatch; absent means `idle: false` on a mod record (null on a classic one).
 use strict;
 use warnings;
 use utf8;
@@ -11,8 +13,9 @@ use utf8;
 package cmd_dispatch;
 
 sub run {
-    my ($opt) = args::parse(\@_, known => [qw(sid nonce actor trigger channel resume-pref tags midturn instr-sha8
-                                              instr-bytes cc-version load-id handoff-ht root log-dir)]);
+    my ($opt) = args::parse(\@_, bools => ['idle'],
+                            known => [qw(sid nonce actor trigger channel resume-pref tags midturn instr-sha8
+                                         instr-bytes cc-version load-id handoff-ht idle-gap-s root log-dir)]);
     my $sid = args::init_sid($opt);
     args::need($opt, qw(nonce actor trigger channel));
     die "usage: --nonce is 8 lowercase hex\n" unless nonce::valid($opt->{nonce});
@@ -27,6 +30,11 @@ sub run {
     die "usage: --midturn true|false\n" unless $mid =~ /^(true|false)$/;
     die "usage: --instr-sha8 is 8 hex\n" if defined $opt->{'instr-sha8'} && $opt->{'instr-sha8'} !~ /^[0-9a-f]{8}$/;
     die "usage: --instr-bytes is a number\n" if defined $opt->{'instr-bytes'} && $opt->{'instr-bytes'} !~ /^\d+$/;
+    my $idle = $opt->{idle};
+    $idle = $idle eq '1' ? 'true' : $idle eq '0' ? 'false' : $idle if defined $idle;
+    die "usage: --idle true|false\n" if defined $idle && $idle !~ /^(true|false)$/;
+    die "usage: --idle-gap-s is a number\n" if defined $opt->{'idle-gap-s'} && $opt->{'idle-gap-s'} !~ /^\d+$/;
+    my $mod = $opt->{channel} =~ /^mod-/ ? 1 : 0;
     my $trigger = $opt->{trigger};
     my $unknown_trigger = !$dispatch::TRIGGERS{$trigger};
     my $w = rc::watch();
@@ -35,6 +43,7 @@ sub run {
     my $rec = dispatch::record(
         nonce => $opt->{nonce}, session_id => $sid, actor => $opt->{actor}, trigger => ($unknown_trigger ? 'unknown' : $trigger),
         channel => $opt->{channel}, resume_pref => $pref, midturn => ($mid eq 'true'), tags => \@tags,
+        idle => (defined $idle ? ($idle eq 'true' ? 1 : 0) : ($mod ? 0 : undef)), idle_gap_s => $opt->{'idle-gap-s'},
         instructions_sha8 => $opt->{'instr-sha8'}, instructions_bytes => $opt->{'instr-bytes'},
         cc_version => $opt->{'cc-version'}, cc_version_src => (defined $opt->{'cc-version'} && $opt->{'cc-version'} ne '' ? 'mod' : undef), load_id => $opt->{'load-id'}, pid => $c->{pid}, pid_lstart => $c->{lstart},
         handoff_ht => $opt->{'handoff-ht'},
@@ -43,7 +52,8 @@ sub run {
     if (!$ok) { args::out('REFUSED: nonce-exists'); return 3 }
     my %h = @$rec;
     rc::emit('dispatch', [nonce => $h{nonce}, trigger => $h{trigger}, agent_id => $h{agent_id}, compaction_seq => undef,
-                          channel => $h{channel}, resume_pref => $h{resume_pref}, midturn => $h{midturn}, tags => $h{tags},
+                          channel => $h{channel}, resume_pref => $h{resume_pref}, midturn => $h{midturn}, idle => $h{idle},
+                          idle_gap_s => $h{idle_gap_s}, tags => $h{tags},
                           instructions_bytes => $h{instructions_bytes},
                           (defined $h{handoff_ht} ? (handoff_ht => $h{handoff_ht}) : ())],
              actor => ($h{actor} eq 'main' ? 'main' : $h{actor}));

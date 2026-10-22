@@ -2,12 +2,15 @@ package dispatch;
 # lib/dispatch.pm: dispatch records <watch>/<sid>/dispatch/<nonce>.json (MOD-SPEC
 # §2.3, BUILD-PLAN §3.4): exclusive create, 0600 in a 0700 directory; every key
 # always present; compaction_seq never in it. Optional `handoff_ht` (8 hex, D-18 B3) only
-# when the dispatch follows or interrupts a handoff turn. Owner: WP-core.
+# when the dispatch follows or interrupts a handoff turn. `idle` (IC-1 D1): the mod's idle
+# predicate, true|false on a mod record (absent flag = false), null on a classic record;
+# `idle_gap_s`: the dispatch ts minus the last main turn end, from the mod, else null.
+# Owner: WP-core.
 use strict;
 use warnings;
 use utf8;
 
-our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref midturn tags
+our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref midturn idle idle_gap_s tags
                instructions_sha8 instructions_bytes cc_version cc_version_src load_id pid pid_lstart ts);
 our %TRIGGERS = map { $_ => 1 } qw(manual auto plugin precompute unknown);
 our %CHANNELS = map { $_ => 1 } qw(mod-hook mod-self classic);
@@ -31,6 +34,8 @@ sub record {
         channel            => $f{channel},
         resume_pref        => $f{resume_pref} // 'none',
         midturn            => jsonc::bool($f{midturn}),
+        idle               => defined $f{idle} ? jsonc::bool($f{idle}) : undef,
+        idle_gap_s         => defined $f{idle_gap_s} ? 0 + $f{idle_gap_s} : undef,
         tags               => [grep { $TAGS{$_} } @{ $f{tags} || [] }],
         instructions_sha8  => $f{instructions_sha8},
         instructions_bytes => defined $f{instructions_bytes} ? 0 + $f{instructions_bytes} : undef,

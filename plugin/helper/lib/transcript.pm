@@ -18,6 +18,39 @@ sub boundary {
              version => ((defined $j->{version} && !ref $j->{version}) ? $j->{version} : undef) };
 }
 
+# The native idle-compaction notices (IC-1 D1): a system row whose content starts with one of
+# these prefixes, after a main boundary row, marks that compaction as idle. The prefixes come
+# from canary-baseline.json c8.idle_prefixes (tools/canary-baseline, C8 counts them in the
+# binary); the literals are the fallback for a baseline without them. Only the prefix is
+# matched; no text leaves this module.
+our %IDLE_FALLBACK = (notice => 'Compacted while idle', return => 'Compacted using a summary written while you were away');
+our $IDLE_PREFIXES;
+sub idle_prefixes {
+    return $IDLE_PREFIXES if $IDLE_PREFIXES;
+    my %p = %IDLE_FALLBACK;
+    my $raw = util::read_file(ctx::asset_path('canary-baseline.json'));
+    my $b = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    my $ip = ref $b eq 'HASH' && ref $b->{c8} eq 'HASH' ? $b->{c8}{idle_prefixes} : undef;
+    if (ref $ip eq 'HASH') {
+        for my $k (keys %IDLE_FALLBACK) { $p{$k} = $ip->{$k} if defined $ip->{$k} && !ref $ip->{$k} && $ip->{$k} ne '' }
+    }
+    return $IDLE_PREFIXES = \%p;
+}
+
+# idle_notice(line) -> 'notice' | 'return' for a system row whose content starts with a native
+# idle prefix, else undef
+sub idle_notice {
+    my ($line) = @_;
+    return undef unless index($line, '"system"') >= 0;
+    my $p = idle_prefixes();
+    my @hit = grep { index($line, $p->{$_}) >= 0 } sort keys %$p;
+    return undef unless @hit;
+    my $j = eval { jsonc::decode($line) };
+    return undef unless ref $j eq 'HASH' && ($j->{type} // '') eq 'system' && defined $j->{content} && !ref $j->{content};
+    for my $k (@hit) { return $k if index($j->{content}, $p->{$k}) == 0 }
+    return undef;
+}
+
 # The engine's closing sentences of a transcript summary row (not in a PostCompact
 # compact_summary, so not in a copy): cut from the row's end before its body sha is taken
 # (fix-escalations 1, option (b): this reader's own cut; the shared copy_trailers lists stay).

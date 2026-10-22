@@ -6,14 +6,15 @@ use strict;
 use warnings;
 use utf8;
 
-our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn idle channel seat_state
+our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn idle idle_source idle_gap_s channel seat_state
                  verdict verdict_source marker_line sentinel_from_end sentinel_place fabricated_check_tokens
                  instructions_bytes summary_chars shape_class pre_tokens post_tokens duration_ms precomputed
                  copy copy_path resume checkpoint_ms evidence nudged continued halt
                  proof proof_lag_ms settle_waited_ms acuity acuity_floor);
 # proof P1 | P3 | none, proof_lag_ms, settle_waited_ms: BD-3 window logging (T-TEXT E5, MOD-SPEC
 # §5.4); acuity (the summary's Acuity word or -) and acuity_floor (from the dispatch's
-# checkpoint facts, else -): T-TEXT E6. Enum values and numbers only.
+# checkpoint facts, else -): T-TEXT E6. idle, idle_source, idle_gap_s: IC-1 D1 (idle_facts below).
+# Enum values and numbers only.
 
 sub write {
     my (%f) = @_;
@@ -46,6 +47,7 @@ sub resume_state {
 # row for it (PKG-RUNTIME E.2): a null rollup size takes the boundary value; a non-null one is
 # never replaced, and a disagreement sets join_conflict 1 on the row (0 when joined and equal).
 our @JOIN = qw(pre_tokens post_tokens duration_ms precomputed);
+our @JOIN_IDLE = qw(idle idle_source idle_gap_s);
 sub rows {
     my ($sid_dir) = @_;
     my (@out, %b);
@@ -68,8 +70,29 @@ sub rows {
             $conflict = 1 if $x ne $y;
         }
         $r->{join_conflict} = $conflict;
+        # IC-1 D1: the idle decision reconcile makes once the boundary row exists; the
+        # PostCompact row says `unknown` (null source) until then
+        for my $k (@JOIN_IDLE) {
+            next unless exists $bd->{$k};
+            $r->{$k} = $bd->{$k} if !defined $r->{$k} || (!ref $r->{$k} && $r->{$k} eq 'unknown');
+        }
     }
     return \@out;
+}
+
+# idle_facts(drec, native) -> (idle, idle_source, idle_gap_s, mismatch) for a main compaction
+# whose boundary row was read (IC-1 D1, MOD-SPEC §2.5 idle rule). mod = the mod record's `idle`
+# (a classic or missing record: unknown); native = 'notice' | 'return' | undef (the first native
+# idle row after the boundary). idle = mod OR native; idle_source both | mod | notice | return |
+# none; mismatch 1 when the mod said true or false and the native row disagrees.
+sub idle_facts {
+    my ($drec, $native) = @_;
+    my $mod = ($drec && dispatch::is_mod($drec) && exists $drec->{idle} && defined $drec->{idle}) ? ($drec->{idle} ? 1 : 0) : undef;
+    my $nat = defined $native ? 1 : 0;
+    my $src = ($mod && $nat) ? 'both' : $mod ? 'mod' : $nat ? $native : 'none';
+    my $gap = ($drec && defined $drec->{idle_gap_s} && !ref $drec->{idle_gap_s} && $drec->{idle_gap_s} =~ /\A\d+\z/) ? 0 + $drec->{idle_gap_s} : undef;
+    my $mism = (defined $mod && $mod != $nat) ? 1 : 0;
+    return (jsonc::bool($mod || $nat), $src, $gap, $mism);
 }
 
 # acuity_floor(sid_dir, nonce) -> the floor from the dispatch's checkpoint facts (T-TEXT E6):

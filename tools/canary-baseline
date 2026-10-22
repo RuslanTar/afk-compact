@@ -12,7 +12,9 @@ Contents (no timestamps, so a re-run gives the same bytes):
   keysets   C5: per classic event and for the session.compact input, the required and
             optional top-level keys from the type declarations, plus sha8 of the sorted set
             (classic events also take OBSERVED_OPTIONAL as optional: keys sent live but not typed)
-  c8        binary string counts (TECH-FACTS Q6 §3 C8 list) for the tested binary
+  c8        binary string counts (TECH-FACTS Q6 §3 C8 list) for the tested binary, plus
+            idle_prefixes: the two native idle-compaction notice prefixes (IC-1 D1) that
+            reconcile matches after a main boundary row (both are counted in `counts` too)
   c9        sha256/16 of the declarations C9 names; `specs` holds the start regexes so the
             helper's `smoke` extracts with the same rule (helper/cmd/smoke.pl decl_hash)
   copy_trailers  installed-message trailers the normalizer cuts (none known)
@@ -28,6 +30,10 @@ EVENTS = ["PreCompact", "PostCompact", "SessionStart", "SessionEnd", "Stop", "Su
 C8_STRINGS = ["Exit code 0 - stdout appended as custom compact instructions", "tengu_curried_trinket",
               "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH", "control", "no_scratchpad",
               "no_scratchpad_capped", "no_scratchpad_keep_asks", "lean", "short", "short_v2", "capped"]
+# IC-1 D1: the native informational rows after an idle compaction (2.1.306 has only the first)
+IDLE_PREFIXES = {"notice": "Compacted while idle",
+                 "return": "Compacted using a summary written while you were away"}
+C8_STRINGS += [IDLE_PREFIXES[k] for k in sorted(IDLE_PREFIXES)]
 # Keys Claude Code sends on every classic hook event that the type declarations lack, observed
 # live (P5-FOLD A7: `scratchpad_dir` on all 35 hook payloads of 2.1.307, lab P5 order.log):
 # optional in every C5 key set, so a payload carrying them is not a key-set change.
@@ -176,7 +182,7 @@ def main(argv):
         hashes[spec["name"]] = hashlib.sha256("\n".join(kept).encode()).hexdigest()[:16]
 
     doc = {"v": 1, "cc_version": cc_version, "types_version": types_version, "keysets": keysets,
-           "c8": {"binary_version": cc_version, "counts": counts},
+           "c8": {"binary_version": cc_version, "counts": counts, "idle_prefixes": IDLE_PREFIXES},
            "c9": {"types_version": types_version, "specs": C9_SPECS, "hashes": hashes},
            "copy_trailers": []}
     text_out = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

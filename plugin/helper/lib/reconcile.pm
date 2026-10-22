@@ -20,6 +20,9 @@ package reconcile;
 #     `stash_dropped` (redundant) or `stash_kept` (a redacted *.mismatch.md keep)
 #   - final mode (SessionEnd, the cross-session finish): no SETTLE_S wait (RRP-05)
 #   - the stash index marker <watch>/.orphans/<sid> goes once pending/ holds no stash
+#   - idle (IC-1 D1): the first native idle row after a main boundary row (prefix only) and the
+#     mod record's `idle` give the rollup idle, idle_source, idle_gap_s (on the compaction_boundary
+#     row, or on a rollup row written here); a disagreement -> one `idle_mismatch {nonce}`
 # No rule here looks at a stash's age or file time (RRP-05 "no age limit"); SETTLE_S is the
 # wait for a boundary row, measured from the PostCompact time in the stash meta.
 # Every row is written once (reconcile reads the rows it wrote before).
@@ -34,8 +37,9 @@ use strict;
 use warnings;
 use utf8;
 
-our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered);
+our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered idle_mismatch);
 our $STATE = 'reconcile.json';
+our $LOGGED;
 our $READ_MAX = 32 * 1024 * 1024;   # bytes read from one file per Stop; the rest at the next
 our $SETTLE_S = 10;                 # an unproven PostCompact younger than this waits
 our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long after its PostCompact
@@ -144,6 +148,12 @@ sub _ingest_bounds {
     my ($lines, $to_end) = _new_lines($path, $fst);
     my %seen = map { (($_->{u} // '') => 1) } @$list;
     for my $l (@$lines) {
+        # IC-1 D1: the first system row after a main boundary row that starts with a native idle
+        # prefix marks that compaction (ni = notice | return); later ones are not read
+        if (!defined $agent && @$list && !defined $list->[-1]{ni} && defined(my $k = transcript::idle_notice($l))) {
+            $list->[-1]{ni} = $k;
+            next;
+        }
         # An agent file's summary row after a boundary (MOD-SPEC §5.9 step 1): its marker nonce
         # and normalized-body sha only, on the newest boundary of that agent that has none yet
         # (a boundary read in an earlier chunk is carried in the saved state).
@@ -327,6 +337,7 @@ sub _run {
     my $left = sub { my $l = $deadline - util::clock_ms(); return $l > 0 ? $l : 0 };
     my $now = util::now();
     my $st = _load($sid_dir);
+    local $LOGGED = $st->{logged};    # the rows this session already has (_save_deferred reads it)
 
     # only what is new since the last Stop (F2-4)
     _ingest_classic($st, rc::stream_path('classic'));
@@ -489,7 +500,8 @@ sub _run {
             my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
             rollup::write(session_id => $sid, actor => $actor,
                           compaction_seq => $save->{seq}, nonce => $mn, id6 => $save->{id6}, join => 'reconcile',
-                          trigger => ($drec ? $drec->{trigger} : $m{trigger}), idle => 'unknown',
+                          trigger => ($drec ? $drec->{trigger} : $m{trigger}),
+                          ($scope eq 'main' && $p3{$id6} && $p3{$id6}{mb} ? _idle($logged, $drec, $p3{$id6}{mb}, $mn) : (idle => 'unknown')),
                           channel => ($drec ? $drec->{channel} : 'none'), seat_state => ($drec ? (postcompact::seat_state($drec, $a{transcript}))[0] : 'none'),
                           verdict => $save->{verdict}, verdict_source => ($kind eq 'mod' ? 'after-step' : 'postcompact'),
                           marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end},
@@ -516,11 +528,15 @@ sub _run {
         my $nn = $it->{nonce} // $it->{dispatch} // $it->{deferred};
         my ($roll) = defined $nn ? grep { ($_->{nonce} // '') eq $nn && ($_->{join} // '') ne 'reconcile' } @{ $st->{rolls_l} } : ();
         next unless $roll || $now - $it->{e} > $MAIN_WINDOW_S;    # the row may come at the next Stop
+        # the native idle row is written just after the boundary row: decided once it was read,
+        # or the transcript was read to its end SETTLE_S after the boundary, or a later one exists
+        next if $roll && !_idle_settled($st, $bd, $main_end, $now, $a{final});
         $bd->{cb} = 1;
         next unless $roll && !$st->{cbn}{$nn};
+        my @idle = _idle($logged, $disp{$nn}, $bd, $nn);
         rc::emit('compaction_boundary', [nonce => $nn, id6 => $roll->{id6} // $it->{id6}, boundary_uuid => $bd->{u},
                                          pre_tokens => $bd->{pre}, post_tokens => $bd->{post}, duration_ms => $bd->{ms},
-                                         precomputed => jsonc::bool($bd->{pc})],
+                                         precomputed => jsonc::bool($bd->{pc}), @idle],
                  stream => 'compactions', actor => 'main', writer => 'helper', cc_version => $bd->{v});
         $st->{cbn}{$nn} = 1;
     }
@@ -626,6 +642,23 @@ sub _bd3 {
     return (proof => $a{proof}, proof_lag_ms => $lag, settle_waited_ms => $wait);
 }
 
+# IC-1 D1: (idle, idle_source, idle_gap_s) pairs for a main compaction whose boundary row was
+# read, and one idle_mismatch {nonce} row when the mod record and the native row disagree.
+sub _idle {
+    my ($logged, $drec, $bd, $nonce) = @_;
+    my ($idle, $src, $gap, $mism) = rollup::idle_facts($drec, $bd->{ni});
+    my $key = 'idle_mismatch:' . ($nonce // $bd->{u} // '');
+    if ($mism && !$logged->{$key}++) { rc::emit('idle_mismatch', [nonce => $nonce]) }
+    return (idle => $idle, idle_source => $src, idle_gap_s => $gap);
+}
+
+sub _idle_settled {
+    my ($st, $bd, $main_end, $now, $final) = @_;
+    return 1 if defined $bd->{ni};
+    return 1 if $st->{bounds}[-1] && $st->{bounds}[-1] != $bd;
+    return ($main_end && ($final || $now - $bd->{e} >= $SETTLE_S)) ? 1 : 0;
+}
+
 # Nonces the mod closed with compacted {skip: native-ran} (DP-29), read from the mod stream
 # (the same rows postcompact::_mod_closed reads; only this skip class closes an unresolved check).
 sub _native_ran {
@@ -684,7 +717,9 @@ sub _save_deferred {
     rollup::write(
         ts => util::iso($it->{e}), session_id => $sid, actor => $actor, compaction_seq => $save->{seq},
         nonce => $nonce, id6 => $it->{id6}, join => $it->{join}, trigger => $trigger,
-        midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', channel => $channel, seat_state => $seat,
+        midturn => ($drec ? $drec->{midturn} : undef),
+        ($scope eq 'main' && $mb ? _idle($LOGGED // {}, ($rec && dispatch::is_mod($rec) ? $rec : $drec), $mb, $nonce) : (idle => 'unknown')),
+        channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
         sentinel_from_end => $s->{sentinel_from_end}, sentinel_place => $s->{sentinel_place},
         fabricated_check_tokens => ($measured ? 0 : detect::fabricated_check_tokens($s->{normalized})),

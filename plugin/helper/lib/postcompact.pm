@@ -246,7 +246,9 @@ sub run {
     rollup::write(
         session_id => $sid, actor => $actor, compaction_seq => ($save ? $save->{seq} : undef),
         nonce => ($drec ? $drec->{nonce} : $emn), id6 => $id6, join => $join, trigger => $trigger,
-        midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', channel => $channel, seat_state => $seat,
+        # idle: unknown until reconcile reads the native idle row after the boundary (IC-1 D1)
+        midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', idle_gap_s => ($drec ? $drec->{idle_gap_s} : undef),
+        channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
         sentinel_from_end => $s->{sentinel_from_end}, sentinel_place => $s->{sentinel_place},
         fabricated_check_tokens => ($measured ? 0 : detect::fabricated_check_tokens($s->{normalized})),

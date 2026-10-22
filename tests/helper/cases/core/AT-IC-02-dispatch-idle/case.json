@@ -1,0 +1,33 @@
+{
+ "id": "AT-IC-02 (dispatch --idle, --idle-gap-s)",
+ "note": "IC-1 D1 / MOD-SPEC §2.5 (CORE-14, mod-to-core §4): the mod passes --idle=true --idle-gap-s=<s> only on an idle main auto dispatch; the record and the dispatch row carry idle and idle_gap_s; absent -> idle false on a mod record (idle_gap_s null); a classic record has idle null; a bad value is a usage error",
+ "now": "2026-10-21T14:04:36+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "idle main auto dispatch",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0a", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook",
+            "--midturn", "false", "--idle=true", "--idle-gap-s=3235", "--cc-version", "2.1.307"],
+   "expect": {"exit": 0, "stdout": "ok\n", "stderr_empty": true,
+    "files": [{"path": "$WATCH/$SID/dispatch/1d1e0c0a.json", "keys": ["idle", "idle_gap_s"],
+               "json": {"nonce": "1d1e0c0a", "midturn": false, "idle": true, "idle_gap_s": 3235}}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "dispatch", "count": 1, "fields": {"nonce": "1d1e0c0a", "idle": true, "idle_gap_s": 3235}}]}},
+  {"name": "no flag: idle false",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0b", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook", "--midturn", "true"],
+   "expect": {"exit": 0, "stdout": "ok\n",
+    "files": [{"path": "$WATCH/$SID/dispatch/1d1e0c0b.json", "keys": ["idle", "idle_gap_s"], "json": {"idle": false, "idle_gap_s": null}}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "dispatch", "count": 1, "fields": {"nonce": "1d1e0c0b", "idle": false}}]}},
+  {"name": "--idle=false and the bare flag",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0c", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook", "--idle=false"],
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$SID/dispatch/1d1e0c0c.json", "json": {"idle": false}}]}},
+  {"argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0d", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook", "--idle"],
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$SID/dispatch/1d1e0c0d.json", "json": {"idle": true, "idle_gap_s": null}}]}},
+  {"name": "classic record: idle unknown (null)",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0e", "--actor", "unknown", "--trigger", "auto", "--channel", "classic"],
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$SID/dispatch/1d1e0c0e.json", "keys": ["idle"], "json": {"idle": null}}]}},
+  {"name": "bad values",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0f", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook", "--idle=maybe"],
+   "expect": {"exit": 64, "stdout": "", "files": [{"path": "$WATCH/$SID/dispatch/1d1e0c0f.json", "count": 0}]}},
+  {"argv": ["dispatch", "--sid", "$SID", "--nonce", "1d1e0c0f", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook", "--idle=true", "--idle-gap-s=-5"],
+   "expect": {"exit": 64, "stdout": ""}}
+ ]
+}
