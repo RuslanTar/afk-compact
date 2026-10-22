@@ -324,8 +324,8 @@ sub identity_list {
     push @c, grep { defined && length } @ENV{qw(USER LOGNAME)};
     my $host = (POSIX::uname())[1];
     if (defined $host) { push @c, $host; (my $short = $host) =~ s/\..*//s; push @c, $short }
-    # B.3 names `hostname -s`: run it through PATH as written (1 s), besides uname
-    my $hs = _run_capture([ 'hostname', '-s' ], 1);
+    # B.3 names `hostname -s`: run it through PATH as written (2 s, as the git budget), besides uname
+    my $hs = _run_capture([ 'hostname', '-s' ], $GIT_BUDGET_S);
     if (defined $hs) { $hs =~ s/\s+\z//; $hs =~ s/\A\s+//; push @c, $hs if length $hs && $hs !~ /\n/ }
     my @roots;
     my $rr = $ctx->{settings}{repo_roots_list} || [];
