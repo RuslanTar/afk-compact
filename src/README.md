@@ -158,9 +158,9 @@ The plugin keeps its own thresholds below the point where native auto-compaction
 - soft maximum = the smallest of `compact_soft_max_tokens`, that native point minus a reserve, and 80% of the window. The reserve is 52,000 plus `handoff_turn_max_tokens` (116,000 with the defaults) while `handoff_turn` is `halt`, and 100,000 when it is `off`;
 - target = the smaller of `compact_target_tokens` and two thirds of the soft maximum;
 - if the target ends up below 120,000 tokens (windows under about 329K with the defaults, 313K with `handoff_turn` off), plugin compactions and the nudge are off for that session. Native auto-compaction, shaping, copies and verdicts still run.
-- Claude Code treats windows below 100,000 as 100,000. On small windows `/{{plugin}}:status` names the smallest window that would turn plugin compactions on with your settings.
+- Claude Code treats windows below 100,000 as 100,000. `/{{plugin}}:status` ends its `thresholds:` line with `min_window <N>`, the smallest window that turns plugin compactions on with your settings (`min_window 329000` with the defaults), or `min_window never` when `compact_target_tokens` or `compact_soft_max_tokens` is set too low for any window. On a window below it, the next line reads `plugin compactions off: window <W> is below <N>, the smallest for these settings`.
 
-Every clamped value is logged, and `/{{plugin}}:status` marks it. It never shows a negative threshold: a window too small for plugin compactions is shown as off.
+Every clamped value is logged, and `/{{plugin}}:status` marks it with `(clamped from <configured>)`. It never shows a negative threshold: a window too small for plugin compactions is shown as off.
 
 </details>
 
@@ -256,7 +256,8 @@ It prints one line and exits with 0 (done), 10 (still pending, run it again), 11
 Limits and tips:
 
 - The command only reads. Auto mode: nothing to add; `wait` ran without a prompt (Claude Code 2.1.306).
-- Default mode: each helper call prompts until you add the rule below. The plugin's own notes outside a skill call the helper by its full path, for example a subagent's wait after a compaction. To stop the prompt for that read-only wait, add the rule that `/{{plugin}}:status` prints. Its form is `Bash("<plugin folder>/scripts/{{plugin}}-store" wait *)`. The plugin folder name contains the version, so after an update the old rule stops matching; `/{{plugin}}:status` says so and prints the new rule.
+- Default mode: each helper call prompts until you add the rule below. The plugin's own notes outside a skill call the helper by its full path, for example a subagent's wait after a compaction. To stop the prompt for that read-only wait, add the rule that `/{{plugin}}:status` prints, with the real folder, as `allow rule (default mode): Bash("<plugin folder>/scripts/{{plugin}}-store" wait *)`. The plugin folder name contains the version, so after an update the old rule stops matching. When your user or project settings still name an older folder, `/{{plugin}}:status` says so in a line `allow rule for an older plugin folder: <old folder>; current: <plugin folder>` and prints the new rule. It only reads your settings files; it never edits them.
+- Commands you type yourself are listed in `/{{plugin}}:status` under `user-run commands (type them yourself, with the leading !):`, one `! "<plugin folder>/scripts/{{plugin}}-store" <command>` line each, with the real folder: `smoke`, `project init`, `project copy`, `watch prune`, `reconcile --sid <session> --orphans --full` and `report`.
 - Monitor is not available on Amazon Bedrock, Google Cloud Agent Platform or Microsoft Foundry, nor when `DISABLE_TELEMETRY` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set. Each Monitor watch ends after 5 minutes by default and 30 at most.
 - With `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` there is no `run_in_background` and no notification. Every wait then follows the subagent rule above.
 - In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. `wait` prints its pending line only after `--max` has passed, so keep `--max` a little under the limit, for example `--max 1740`. With exactly 1800 the limit can end the wait before it prints exit code 10.
@@ -287,7 +288,15 @@ A **production** command is one that matches the shipped production class or one
 
 The same production rule holds for the checks resume runs itself: with `unattended_prod_reads: forbid` it runs no production command and lists it for you to run with `! <command>`; with `allow` a read-only production check it builds in this session may run. A command taken from a handoff is never run either way.
 
-**Status.** The plugin takes each job's output file from the Bash tool's result text and uses it only when it matches Claude Code's task-file layout; a job without a confirmed output file asks. `/{{plugin}}:status` prints the state of automatic relaunch (active, `shadow` or `off`, with `relaunch_auto`), how many `relaunch_allow` patterns are in use, the `unattended_prod_reads` value, and how many of this session's jobs have a confirmed output file. Set `relaunch_auto` to `shadow` to log the verdict and always ask, or to `off`. These keys are read from your settings file only (see [Settings](#settings)).
+**Status.** The plugin takes each job's output file from the Bash tool's result text and uses it only when it matches Claude Code's task-file layout; a job without a confirmed output file asks. `/{{plugin}}:status` prints, with the defaults and two allowlist patterns:
+
+```
+automatic relaunch: active (read-only jobs and allowlisted jobs) · relaunch_auto on
+  relaunch_allow: 2 patterns, active
+unattended_prod_reads: forbid (default) · production patterns: prod-token + 0 yours
+```
+
+With `relaunch_auto` set to `shadow` the first line says `shadow (reports would-relaunch, runs nothing)`, with `off` it says `off`, and the allowlist line says `not used while relaunch_auto is shadow` (or `off`). The `unattended_prod_reads` line names where the value came from (`settings file`, `default` or `safe value`) and how many `prod_patterns` of yours are in use. An indented `output path:` line says how many of this session's jobs have a confirmed output file. Set `relaunch_auto` to `shadow` to log the verdict and always ask, or to `off`. These keys are read from your settings file only (see [Settings](#settings)).
 
 ## Handoffs in git (repo mode)
 
@@ -326,7 +335,7 @@ With `queue_cmd` set, the checkpoint nudge asks the model to queue each question
 
 The client id comes from the question, so the same question is not queued twice; the helper keeps `queue-adds.jsonl` for that. If the add fails for any reason (unsupported, lane held, no lane, invalid draft, error, timeout), the helper prints `NOT QUEUED` and the question stays in the handoff as before. A queued question is a question, never an approval. Only `/{{plugin}}:resume` calls `adopt`.
 
-**Off, on and degraded.** With `queue_cmd` empty the queue is off: the plugin makes no queue call, and `/{{plugin}}:status` says `queue: off`. With it set, the queue is on only while your tool keeps the contract below. If the path is not an executable file, or a `list` reply is not one JSON object with `"schema": "queue-stub/v1"`, the queue counts as degraded: the plugin uses nothing from the reply, the handoff gets no `Queued:` line, and `/{{plugin}}:status` names the reason (for example `queue: degraded (untagged)`). `queue_cmd` is read from your settings file only (see [Settings](#settings)).
+**Off, on and degraded.** With `queue_cmd` empty the queue is off: the plugin makes no queue call, and `/{{plugin}}:status` says `queue: off`. With it set, the queue is on (`queue: on`) only while your tool keeps the contract below. If the path is not an executable file, or a `list` reply is not one JSON object with `"schema": "queue-stub/v1"`, the queue counts as degraded: the plugin uses nothing from the reply, the handoff gets no `Queued:` line, and `/{{plugin}}:status` names the reason (for example `queue: degraded (untagged)`). `queue_cmd` is read from your settings file only (see [Settings](#settings)).
 
 **The contract your tool keeps.**
 
@@ -360,7 +369,7 @@ The helper waits 5 seconds at most (`NOT QUEUED (timeout)`); every non-zero exit
 
 **Subagent copies may be renamed.** When the agent of a subagent copy is not known at save time, the copy is saved as `sub-unknown`. Once a later turn-end check finds the agent in its transcript, the copy gets a new name with `-a<agent id>` (its first 8 characters) in the same folder: the text stays byte for byte the same, the frontmatter gains the agent id and the old name (`renamed_from`), and the old name is removed only after the new file has been checked. A path you noted before the rename still resolves, because both names end in the same id.
 
-**Kept mismatches.** The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these; `/{{plugin}}:status` lists them. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be proven), or later by another session's hooks, which take that session's lock first.
+**Kept mismatches.** The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/{{plugin}}:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be proven), or later by another session's hooks, which take that session's lock first.
 
 It registers one mod module and eight classic command hooks: `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop`, `StopFailure` and `PermissionDenied`.
 
@@ -380,7 +389,9 @@ With `watcher: shadow` (the default) the plugin keeps a local record of how comp
 {{plugin}}: local compaction logs are on (content-free; nothing is sent). To share them: /{{plugin}}:report. To turn them off: set watcher to off in /config.
 ```
 
-It shows again only after an update that changes what is logged in a way you would care about. When the mod does not run (for example under a managed policy), the notice cannot show, and `/{{plugin}}:status` carries it instead.
+It shows again only after an update that changes what is logged in a way you would care about. When the mod does not run (for example under a managed policy), the notice cannot show, and `/{{plugin}}:status` carries it instead, as a line `notice: ` followed by the same text, until a session has shown it.
+
+The first line of `/{{plugin}}:status` is the watcher's own: `watcher: shadow · logs <size> in <n> sessions · share: /{{plugin}}:report · off: watcher = off in /config`.
 
 Under `log_dir` (default `<handoff_root>/.watch/`):
 
@@ -409,7 +420,7 @@ Alerts are listed in `/{{plugin}}:status` with their seven-day counts. In this v
 
 **Retention.** The folder grows with use and is never pruned automatically; no hook calls prune. Prune is built and off. Running `! "<plugin folder>/scripts/{{plugin}}-store" watch prune --days 30` in a session removes a session's watcher files, but only when every file of that session is older than 30 days. A session here means `<session>.jsonl`, `<session>.classic.jsonl`, `<session>.alerts.jsonl` and the whole `<session>/` folder, including `jobs.jsonl`, `jobs-pending.jsonl`, `queue-adds.jsonl`, `handoff-turn/`, `pending/` (kept mismatches too), `checkpoint/`, `dispatch/`, `bg/` and `offsets/`. One newer file, or a symlink anywhere in it, keeps the whole session. Prune never touches the shared files (`queue-caps.json`, `evidence-index.tsv`, `heal/`, `version.json`, `.orphans/`, `notice/`, `export-salt`, `install-id`, `reports/` and similar), the summary copies, the handoffs or the evidence.
 
-**Turning it off.** `watcher: off` stops new watcher rows, including the permission-denial and stop-failure rows. Logs already written are kept: nothing is deleted. The records that the copies, resume and status need are still written (copy checks, the background list, restart counters, rollups and liveness), and `/{{plugin}}:status` says so.
+**Turning it off.** `watcher: off` stops new watcher rows, including the permission-denial and stop-failure rows. Logs already written are kept: nothing is deleted. The records that the copies, resume and status need are still written (copy checks, the background list, restart counters, rollups and liveness), and the first line of `/{{plugin}}:status` says so: `watcher: off · existing logs kept (nothing deleted) · core files still written: …`.
 
 ## Sending a report
 
