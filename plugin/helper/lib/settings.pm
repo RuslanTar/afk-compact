@@ -326,12 +326,13 @@ sub prod_class {
 }
 
 # ---------------------------------------------------------------- export (W-BETA D)
-# export_view(resolved) -> ordered object {key => exported value} for every key whose class is
+# export_view([resolved]) -> ordered object {key => exported value} for every key whose class is
 # not `drop`: num/bool as is; enum the value when it is one of the key's values, else `other`;
 # path `unset` (empty), `default`, `custom-in-home` or `custom` (never the path); list the
 # entry count (never the entries).
 sub export_view {
     my ($r) = @_;
+    $r //= rc::settings();    # no argument: this call's resolved settings (the watcher's `report` calls it so)
     my $v = $r->{values} || {};
     my $uc = ctx::user_config();
     my $home = util::home();
