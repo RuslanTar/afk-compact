@@ -64,6 +64,14 @@ export class World {
   atCompact: (() => void) | undefined
   /** Overrides by subcommand. */
   replies: Record<string, (args: string[]) => Reply> = {}
+  /** Awaited before the fake helper answers a call (a race inside one helper spawn). */
+  atHelper: ((sub: string, args: string[]) => Promise<void>) | undefined
+  /** How the bottom answers `$.prompt.submit`: `{ drop }` with this reason when set. */
+  submitDrop: string | undefined
+  /** Awaited at the bottom of every `$.prompt.submit`, before it answers (a race beside a submit). */
+  atSubmit: ((text: string) => Promise<void>) | undefined
+  /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
+  compactGate: Promise<void> | undefined
 
   constructor(init: Partial<Pick<World, 'sid' | 'tokens' | 'window' | 'version'>> = {}) {
     Object.assign(this, init)
@@ -93,18 +101,22 @@ export class World {
       return t === undefined ? { deny: 'missing' } : { value: t }
     })
     on('fs.exists', (_$, e) => ({ value: this.files.has(e.path) }))
-    on('process.run', (_$, e) => {
+    on('process.run', async (_$, e) => {
+      if (this.atHelper) await this.atHelper(e.argv[1] ?? '', e.argv.slice(2))
       const r = this.helper([...e.argv], { ...(e.init?.env ?? {}) }, e.init?.stdin)
       if (r === 'reject') return { deny: 'cannot start' }
       return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
-    on('prompt.submit', (_$, e) => {
+    on('prompt.submit', async (_$, e) => {
+      if (this.submitDrop !== undefined) return { drop: this.submitDrop }
       this.submits.push(e.text)
+      if (this.atSubmit) await this.atSubmit(e.text)
       return { text: e.text }
     })
-    on('session.compact', (_$, e) => {
+    on('session.compact', async (_$, e) => {
       this.compacts.push({ instructions: e.instructions, trigger: e.trigger, agentId: e.agentId })
       this.atCompact?.()
+      if (this.compactGate) await this.compactGate
       if (this.compactMode === 'reject') throw new Error('a turn is running')
       if (typeof this.compactMode === 'object') return { skip: this.compactMode.skip }
       return { messages: this.summaryMessages(e.instructions), tokensBefore: this.tokens ?? 0, tokensAfter: 40000 }
@@ -207,6 +219,14 @@ export class World {
         if (args[0] === 'open') {
           if (this.files.has(rec)) return ok('EXISTS\n')
           this.files.set(rec, JSON.stringify({ v: 1, ht, session_id: sid, reason: flag('--reason'), max_calls: Number(flag('--max-calls')), max_tokens: Number(flag('--max-tokens')) }) + '\n')
+          return ok('ok\n')
+        }
+        if (args[0] === 'close') {
+          // BL-2 as asked of core (mod-to-core item 5): exclusive-creates <ht>.closed.
+          if (!this.files.has(rec)) return { exitCode: 3, stdout: 'REFUSED: no-ht\n' }
+          const closed = `${WATCH}/${sid}/handoff-turn/${ht}.closed`
+          if (this.files.has(closed)) return ok('EXISTS\n')
+          this.files.set(closed, flag('--why') + '\n')
           return ok('ok\n')
         }
         if (args[0] === 'supersede') {

@@ -112,6 +112,28 @@ export async function mainText(
 
 type Next = (e: SessionCompactInput) => Promise<SessionCompactResult>
 
+/**
+ * CR-F19: a main compaction other than ours (not `precompute`) counts as running from the moment
+ * its `session.compact` hook is entered, before any await, to the end of our handling of it.
+ * Meanwhile a post-handoff compaction waits (boundary.ts); the last one to end hands it back to
+ * the scheduler, where `nativeCompactSeq` decides whether it is a second one.
+ */
+export async function trackNative(d: Deps, e: SessionCompactInput, run: () => Promise<SessionCompactResult>): Promise<SessionCompactResult> {
+  const s = d.state
+  if (e.agentId !== undefined || e.trigger === 'precompute') return run()
+  s.nativeCompacting++
+  try {
+    return await run()
+  } finally {
+    s.nativeCompacting = Math.max(0, s.nativeCompacting - 1)
+    if (s.nativeCompacting === 0) {
+      const resume = s.afterNative
+      s.afterNative = undefined
+      resume?.()
+    }
+  }
+}
+
 /** MOD-SPEC §3.1: the `session.compact` handler. */
 export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, next: Next): Promise<SessionCompactResult> {
   const s = d.state
@@ -171,6 +193,8 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     await log(d, sid, 'precompute_dispatched', { nonce }, actor)
     return r
   }
+  // The post-handoff compaction scheduled before this one is now a second one (boundary.ts).
+  if (main) s.nativeCompactSeq++
   await log(d, sid, 'compacted', {
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
     usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...(handoffHt !== undefined ? { handoff_ht: handoffHt } : {}),

@@ -43,6 +43,8 @@ function id(v: unknown): string | undefined {
 export function jobLine(tool: string, input: Record<string, unknown>, r: Answered, start: JobStart): string | undefined {
   const res = obj(r.result)
   if (tool === 'TaskStop') {
+    // Recorded for an errored result too (E-S-1): a stop row only adds caution, since a job with
+    // one is never relaunched; without it a stop that did kill the job could read as LOST.
     const task = id(input['task_id']) ?? id(input['shell_id']) ?? id(res['task_id'])
     return task === undefined ? undefined : JSON.stringify({ kind: 'stop', task_id: task })
   }

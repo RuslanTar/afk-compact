@@ -75,6 +75,12 @@ export type LoadState = {
   lastTurnAsksUser: boolean
   /** The next main turn.start comes from our own `$.prompt.submit`. */
   ourSubmitPending: boolean
+  /** The text of that submit: it tells our turn from a prompt that entered beside it (CR-F17). */
+  ourSubmitText: string | undefined
+  /** Prompts of others (the user, another plugin) entering an idle session whose turn has not started yet. */
+  foreignPrompts: number
+  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn gets no nudge. */
+  orphanSubmit: boolean
   /** Boundary scheduler. */
   timer: { cancel: () => void } | undefined
   busy: boolean
@@ -116,6 +122,12 @@ export type LoadState = {
   compactedInTurn: number
   /** The handoff a handoff turn published, while no later main turn or compaction has run. */
   published: Published | undefined
+  /** Main compactions other than ours that completed in this load (the post-handoff check). */
+  nativeCompactSeq: number
+  /** Main compactions other than ours running now (not `precompute`). */
+  nativeCompacting: number
+  /** The post-handoff compaction waiting for a running native one to end (CR-F19). */
+  afterNative: (() => void) | undefined
 }
 
 export type PendingResume = {
@@ -159,6 +171,9 @@ export function newState(loadId: string): LoadState {
     resumeAfter: false,
     lastTurnAsksUser: false,
     ourSubmitPending: false,
+    ourSubmitText: undefined,
+    foreignPrompts: 0,
+    orphanSubmit: false,
     timer: undefined,
     busy: false,
     lastPluginCompactAt: undefined,
@@ -184,6 +199,9 @@ export function newState(loadId: string): LoadState {
     handoffTurn: undefined,
     compactedInTurn: -1,
     published: undefined,
+    nativeCompactSeq: 0,
+    nativeCompacting: 0,
+    afterNative: undefined,
   }
 }
 
@@ -222,7 +240,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     compact: instructions => $.session.compact({ instructions }),
     async submit(text) {
-      await $.prompt.submit({ text })
+      // A hook or the engine refuses a submit with a resolved `{ drop }`: that is a failed
+      // submit too, so the caller's `submit-failed` path runs and `ourSubmitPending` is reset.
+      const r = await $.prompt.submit({ text })
+      if (r.drop !== undefined) throw new Error('dropped: ' + String(r.drop))
     },
     async run(argv, timeoutMs, stdin) {
       try {
@@ -302,4 +323,48 @@ export function withHelperWatch(p: Paths | undefined, id: LoadState['ident']): P
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)
   return String(err).slice(0, 120)
+}
+
+/** Before our `$.prompt.submit`: the next main turn.start is ours (MOD-SPEC §9, §9.1 step 3). */
+export function submitPending(s: LoadState, text: string): void {
+  s.ourSubmitPending = true
+  s.ourSubmitText = text
+  s.orphanSubmit = false
+}
+
+/** Our submit failed, or its turn has started. */
+export function submitSettled(s: LoadState): void {
+  s.ourSubmitPending = false
+  s.ourSubmitText = undefined
+}
+
+/** The turn text is the one we submitted (framed or bare; whitespace at the ends aside). */
+export function isOurText(turnText: string, sent: string | undefined): boolean {
+  const b = sent?.trim() ?? ''
+  const a = turnText.trim()
+  return b !== '' && (a === b || a.includes(b))
+}
+
+/**
+ * At a main turn.start, before any await: whether it is the turn of our pending submit. With no
+ * other prompt entering, the first turn to start is ours, as before. When a prompt of the user
+ * (or of another plugin) entered beside ours, only a turn that carries our text is ours, and
+ * the other turn leaves our submit pending for the turn still to come (CR-F17).
+ */
+export function claimTurn(s: LoadState, turnText: string): boolean {
+  const foreign = s.foreignPrompts > 0
+  const ours = s.ourSubmitPending && (!foreign || isOurText(turnText, s.ourSubmitText))
+  if (ours) submitSettled(s)
+  else if (foreign) s.foreignPrompts--
+  return ours
+}
+
+/** `prompt.submit` of a prompt entering an idle session (no `turnId`): its turn starts next. */
+export function promptEntering(s: LoadState): void {
+  s.foreignPrompts++
+}
+
+/** That prompt did not enter (`{ drop }` or a failed chain): no turn of its own will start. */
+export function promptNotEntered(s: LoadState): void {
+  if (s.foreignPrompts > 0) s.foreignPrompts--
 }

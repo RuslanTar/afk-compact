@@ -7,12 +7,13 @@
 // The limits are context text only (DP-5, Q-R-2): no tool call is ever denied here, and the
 // texts say what the model should do, never that the plugin stops anything (DP-14 (7)).
 import type { Deps } from './deps'
+import { submitPending, submitSettled } from './deps'
 import type { Effective } from './config'
 import type { Runtime } from './assemble'
 import { assembleIf, hasAsset } from './assemble'
 import { specValue } from './detect'
 import type { HandoffState } from './helper'
-import { handoffState, handoffTurnOpen } from './helper'
+import { handoffState, handoffTurnClose, handoffTurnOpen } from './helper'
 import { log } from './log'
 import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
@@ -31,6 +32,17 @@ export const HALT_REASON_TEXT: Record<HaltReason, string> = {
 /** DP-4: only these reasons get the plugin compaction after the handoff turn. */
 export function compactsAfter(reason: HaltReason): boolean {
   return reason === 'cap' || reason === 'continue-off'
+}
+
+/**
+ * The last cycle's reason as it stands now: a `thrash` or `2-nonok` halt that started after the
+ * nudge (thrash is found at the nudged turn's end) wins over the `cap` or `continue-off` the
+ * nudge saw, so DP-4 gives that cycle no plugin compaction. A halt for `cap` changes nothing.
+ */
+export function haltWins(d: Deps, reason: HaltReason): HaltReason {
+  const h = d.state.halt
+  if (!compactsAfter(reason) || !h.active || h.reason === 'cap') return reason
+  return h.reason === 'thrash' ? 'thrash' : '2-nonok'
 }
 
 /** The pre-flight skip: below this allowance no handoff turn starts. */
@@ -121,10 +133,15 @@ export async function planHandoff(d: Deps, sid: string, reason: HaltReason, eff:
 /**
  * The delay is over: draws the ht (checked against dispatch records and handoff-turn records),
  * opens its record, then submits the `[submit]` text, framed. False, with a `handoff_skipped`
- * row, when the record cannot be opened or the submit fails.
+ * row, when the record cannot be opened or the submit fails. True, with nothing submitted, when
+ * a user turn started while it awaited the helper (§9.1 step 3: that turn cancels the handoff
+ * turn and logs `why=user-turn`; the normal rules apply at its end); an ht opened by then is
+ * closed (`handoff-turn close`), as after a failed submit.
  */
 export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispatchTaken: (n: string) => Promise<boolean>): Promise<boolean> {
   const s = d.state
+  // Checked again after every await: onTurnStart marks a main turn before its own awaits.
+  const cancelled = () => s.handoffTurn !== h || h.phase !== 'delay' || s.mainTurnRunning
   const runtime: Runtime = { halt_reason: HALT_REASON_TEXT[h.reason], max_calls: String(h.maxCalls) }
   const text = assembleIf(d.name, 'handoff-turn', ['submit'], runtime)
   if (text === undefined) {
@@ -136,24 +153,37 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   let opened: string | undefined
   for (let i = 0; i < 3 && opened === undefined; i++) {
     const ht = await drawNonce(taken)
+    if (cancelled()) return true
     const r = await handoffTurnOpen(d, sid, ht, h.reason, h.maxCalls, h.allowance)
     if (r === 'failed') break
     if (r === 'ok') opened = ht
+  }
+  if (cancelled()) {
+    // A user turn started while the open ran: its record is closed, so `begin` cannot bind it.
+    if (opened !== undefined) await handoffTurnClose(d, sid, opened, 'cancelled')
+    return true
   }
   if (opened === undefined) {
     await skipped(d, sid, 'open-failed')
     return false
   }
+  // Set before the check below, so a cancel row written from here on names the ht.
   h.ht = opened
-  h.phase = 'submitted'
   const now = await d.now()
   await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
-  s.ourSubmitPending = true
+  if (cancelled()) {
+    await handoffTurnClose(d, sid, opened, 'cancelled')
+    return true
+  }
+  // No await between the check above and the submit call: a user turn that started meanwhile wins.
+  h.phase = 'submitted'
+  submitPending(s, text)
   try {
     await d.submit(text)
   } catch {
-    s.ourSubmitPending = false
+    submitSettled(s)
     await skipped(d, sid, 'submit-failed', opened)
+    await handoffTurnClose(d, sid, opened, 'cancelled')
     return false
   }
   return true
@@ -166,6 +196,11 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
 export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string): Promise<void> {
   const s = d.state
   const h = s.handoffTurn
+  if (ours && s.orphanSubmit) {
+    // The handoff prompt a user turn cancelled (below) runs now: no checkpoint nudge in it.
+    s.orphanSubmit = false
+    s.nudgedThisTurn = true
+  }
   if (!h) return
   if (h.phase === 'submitted' && ours) {
     h.phase = 'running'
@@ -179,6 +214,13 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
   if (!ours) {
     s.handoffTurn = undefined
     await skipped(d, sid, 'user-turn', h.ht)
+    // CR-F17: a user prompt that entered beside our submit started first. Our prompt is still
+    // queued and runs after it as a plain turn (it is still ours: claimTurn kept it pending);
+    // its ht is closed so neither turn's `begin` binds it as a handoff turn's.
+    if (h.phase === 'submitted') {
+      s.orphanSubmit = s.ourSubmitPending
+      if (h.ht !== null) await handoffTurnClose(d, sid, h.ht, 'cancelled')
+    }
   }
 }
 
@@ -283,7 +325,9 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   const path = state.state === 'published' ? state.path : undefined
   const shown = path === undefined ? undefined : await tilde(d, path)
   if (path !== undefined) s.published = { ht: h.ht, path: shown ?? path }
-  const compact = reason === 'answer' && h.race === null && !h.interjected && compactsAfter(h.reason)
+  // DP-4: a thrash or 2-nonok halt that started since the plan still rules out the compaction.
+  const why = HALT_REASON_TEXT[haltWins(d, h.reason)]
+  const compact = reason === 'answer' && h.race === null && !h.interjected && compactsAfter(haltWins(d, h.reason))
   await log(d, sid, 'handoff_turn_end', { ...stats, reason: h.reason, turn_id: h.turnId, interjected: h.interjected, compaction: compact })
   // The user took the turn over: halt clears at its end as for any user turn (§9.1).
   if (h.interjected) {
@@ -291,7 +335,6 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
     return { kind: 'normal' }
   }
   if (reason !== 'answer' || h.race !== null) return { kind: 'done' }
-  const why = HALT_REASON_TEXT[h.reason]
   if (compact) {
     if (shown !== undefined) d.toast(`${d.name}: auto-continue paused (${why}); handoff saved: ${shown}`)
     return { kind: 'compact', ht: h.ht, path: shown, stats }

@@ -2,6 +2,7 @@
 // main `turn.start`, under the current session id, whatever the `watcher` setting. pid and its
 // start time come from one helper call (`ident`), cached for the load.
 import type { Deps } from './deps'
+import { claimTurn } from './deps'
 import { cancelBoundary } from './boundary'
 import { versionCanary } from './canary'
 import { effective } from './config'
@@ -56,12 +57,16 @@ export async function onSessionStart(d: Deps): Promise<void> {
  * Main `turn.start`: cancels the boundary timer, clears halt on a user turn, starts or cancels
  * the handoff turn (MOD-SPEC §9.1), writes liveness.
  */
-export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
-  await ensureIdent(d, await d.sessionId())
-  const sid = await prepare(d)
+export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<void> {
   const s = d.state
+  // Before any await: a handoff-turn timer that is awaiting the helper must see this turn, and
+  // our pending submit is claimed by its own turn (§9.1 step 3; CR-F17: a user prompt that
+  // entered beside it starts a turn of the user's, which leaves our submit pending).
   cancelBoundary(d)
   s.mainTurnRunning = true
+  const ours = claimTurn(s, text)
+  await ensureIdent(d, await d.sessionId())
+  const sid = await prepare(d)
   s.turnSeq++
   s.turnId = turnId
   s.nudgedThisTurn = false
@@ -70,9 +75,7 @@ export async function onTurnStart(d: Deps, turnId: string): Promise<void> {
   s.lastCycle = null
   // A published handoff names only a compaction before the next main turn (§3.1).
   s.published = undefined
-  const ours = s.ourSubmitPending
-  if (ours) s.ourSubmitPending = false
-  else {
+  if (!ours) {
     s.nudgeNonce = undefined
     await clearHalt(d, sid)
   }

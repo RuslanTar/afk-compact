@@ -95,6 +95,17 @@ export async function handoffTurnSupersede(d: Deps, sid: string, ht: string, non
   return r.ok && /^(ok|EXISTS)$/.test(r.stdout.trim())
 }
 
+/**
+ * `handoff-turn close --sid --ht --why cancelled` (BL-2, asked of core in mod-to-core item 5):
+ * marks an ht whose handoff turn will not run, so `begin` does not bind it to a manual
+ * `/handoff`. True for `ok`/`EXISTS`. A helper without `close` fails the call: the ht then stays
+ * open as before (60 minutes), nothing else changes.
+ */
+export async function handoffTurnClose(d: Deps, sid: string, ht: string, why: 'cancelled'): Promise<boolean> {
+  const r = await call(d, ['handoff-turn', 'close', '--sid', sid, '--ht', ht, '--why', why])
+  return r.ok && /^(ok|EXISTS)$/.test(r.stdout.trim())
+}
+
 export type HandoffState =
   | { state: 'none' }
   | { state: 'staged'; stage: string; draft: boolean; finish: string | null }

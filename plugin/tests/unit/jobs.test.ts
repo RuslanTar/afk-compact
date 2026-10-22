@@ -68,6 +68,15 @@ test('AT-J-01: subagent, denied, foreground and errored calls record nothing; a 
   expect(w.jobLines).toEqual([{ kind: 'stop', task_id: 'b6' }])
 })
 
+test('E-S-1 (CR-F22 not taken): a TaskStop with an error result still records the stop line, so the job is never relaunched', async ($, on) => {
+  const w = new World().install(on)
+  w.toolAnswer = () => ({ isError: true, result: 'No task found with ID: b8', text: 'No task found with ID: b8' })
+  await w.start($)
+  await w.turnStart($)
+  await $.tool.call({ tool: 'TaskStop', task_id: 'b8' } as never)
+  expect(w.jobLines).toEqual([{ kind: 'stop', task_id: 'b8' }])
+})
+
 test('Dev-1: REFUSED jobs-caller (exit 3) is the helper\'s answer, logged there; the call result is untouched', async ($, on) => {
   const w = new World().install(on)
   w.jobsReply = { exitCode: 3, stdout: 'REFUSED: jobs-caller\n' }
