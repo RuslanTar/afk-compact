@@ -16,7 +16,7 @@ import { checkpoint, dispatch, failClass, handoffState, handoffTurnSupersede, pr
 import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
-import { buildBlock, claimedElsewhere, logOutcome } from './resume'
+import { buildBlock, claimedElsewhere, logOutcome, prodAllowed } from './resume'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -166,6 +166,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   if (raced && raced.ht !== null && trigger === 'auto') raceState = await handoffState(d, sid, raced.ht)
   let text: string
   let tags: Tag[] = []
+  let prodConsent: string | undefined
   if (!main) text = assemble(d.name, 'subagent-instructions', [], { nonce })
   else {
     const prev = await prevCopy(d, sid)
@@ -174,6 +175,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
       const wantMeasured = d.cfg.measured_block
       const cp = await checkpoint(d, sid, nonce, wantMeasured)
       if (wantMeasured && cp) measured = cp.measured_block
+      prodConsent = cp?.consent['unattended_prod_reads']
     }
     const m = await mainText(d, nonce, midturn, prev, measured, after?.path)
     text = m.text
@@ -215,6 +217,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     sid, nonce, agentId, midturn, resumePref: 'prompt.context', messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
     ...(block !== undefined ? { handoff: block } : after !== undefined ? { handoff: { published: after.path } } : {}),
     ...(raced && raced.ht !== null && block !== undefined ? { stats: { handoff_turn: 'race', handoff_ht: raced.ht } } : {}),
+    ...(prodConsent !== undefined ? { prodConsent } : {}),
   }))
   return r
 }
@@ -242,6 +245,8 @@ export type AfterArgs = {
   handoff?: RaceBlock
   /** The handoff-turn rollup fields for this compaction's `mod_outcome` row (MOD-SPEC §2.5). */
   stats?: Record<string, string | number | null>
+  /** This nonce's checkpoint `consent.unattended_prod_reads`, when a checkpoint answered. */
+  prodConsent?: string
 }
 
 export const SUMMARY_PREFIX = 'This session is being continued'
@@ -314,6 +319,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   s.published = undefined
   const block = await buildBlock(d, a.sid, {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
+    prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
   })
   // A block still pending is replaced by this one: its outcome is settled now (no channel
   // will try it again).

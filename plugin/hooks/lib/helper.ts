@@ -152,7 +152,11 @@ export async function prevCopy(d: Deps, sid: string): Promise<string | undefined
   return r.ok && p !== '' && p !== 'none' ? p : undefined
 }
 
-export type Checkpoint = { measured_block: string | null; lane: string | null; ms: Record<string, number> }
+/**
+ * `consent`: the consent values the helper resolved for this checkpoint (CORE-15), read from the
+ * settings file only (DP-3); `{}` when the reply has none.
+ */
+export type Checkpoint = { measured_block: string | null; lane: string | null; ms: Record<string, number>; consent: Record<string, string> }
 
 export async function checkpoint(d: Deps, sid: string, nonce: string, measured: boolean): Promise<Checkpoint | undefined> {
   const args = ['checkpoint', '--sid', sid, '--nonce', nonce, '--budget-ms', '10000']
@@ -160,11 +164,16 @@ export async function checkpoint(d: Deps, sid: string, nonce: string, measured: 
   const r = await call(d, args, CHECKPOINT_MS)
   if (!r.ok) return undefined
   try {
-    const j = JSON.parse(r.stdout.trim()) as { measured_block?: unknown; lane?: unknown; checkpoint_ms?: unknown }
+    const j = JSON.parse(r.stdout.trim()) as { measured_block?: unknown; lane?: unknown; checkpoint_ms?: unknown; consent?: unknown }
+    const consent: Record<string, string> = {}
+    if (typeof j.consent === 'object' && j.consent !== null && !Array.isArray(j.consent)) {
+      for (const [k, v] of Object.entries(j.consent as Record<string, unknown>)) if (typeof v === 'string') consent[k] = v
+    }
     return {
       measured_block: typeof j.measured_block === 'string' ? j.measured_block : null,
       lane: typeof j.lane === 'string' ? j.lane : null,
       ms: typeof j.checkpoint_ms === 'object' && j.checkpoint_ms !== null ? (j.checkpoint_ms as Record<string, number>) : {},
+      consent,
     }
   } catch {
     return undefined

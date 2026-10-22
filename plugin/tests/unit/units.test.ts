@@ -4,13 +4,16 @@
 import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
-import { assembleText, leftovers } from '../../hooks/lib/assemble'
+import { assembleText, hasTag, leftovers } from '../../hooks/lib/assemble'
 import { CLAMP_DEFAULTS, DEFAULTS, clamp, clampConstants, minWindow, parseOptions } from '../../hooks/lib/config'
 import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
+import type { Deps } from '../../hooks/lib/deps'
+import { checkpoint } from '../../hooks/lib/helper'
+import { prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -365,3 +368,49 @@ function specStrings(key: string): string[] {
   const v = specValue(key)
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
 }
+
+// MOD-04 (MOD-SPEC §3.4, BUILD-PLAN §3.4; S-SETTINGS B, PKG-RUNTIME A.1/A.2).
+describe('MOD-04 resume-block tags and the store token', () => {
+  // The step-4 pair as T-TEXT/S-SETTINGS word it (two lines, one tag each), and a store line.
+  const TEXT = 'Head.\n[prod-forbid] 4. ask before production.\n[prod-allow] 4. a read-only production check may run.\n[chain] Run @store@ wait once.\nTail.\n'
+
+  test('AT-PR-05 (mod part): [prod-allow] only when the option and the checkpoint consent both say allow (four combinations); exactly one step-4 line', () => {
+    const combos: [string, string | undefined, boolean][] = [
+      ['allow', 'allow', true], ['allow', 'forbid', false], ['forbid', 'allow', false], ['forbid', 'forbid', false], ['allow', undefined, false],
+    ]
+    for (const [opt, consent, want] of combos) {
+      expect(prodAllowed(opt, consent)).toBe(want)
+      const out = assembleText(TEXT, [want ? 'prod-allow' : 'prod-forbid'], {})
+      expect(out.split('\n').filter(l => l.startsWith('4. ')).length).toBe(1)
+      expect(out.includes('read-only production check')).toBe(want)
+    }
+  })
+
+  test('AT-PK-03 (mod part): @store@ is the launcher word; a root no quoting can carry drops its lines and escalates store_path_unquotable', () => {
+    const toasts: string[] = []
+    const fake = (root: string) => ({ name: NAME, root, cfg: { warn_ui: true }, state: { toasted: new Set<string>() }, toast: (t: string) => toasts.push(t) }) as unknown as Deps
+    const ok = storeRuntime(fake('/p'))
+    expect(ok).toEqual({ runtime: { store: '"/p/scripts/' + NAME + '-store"' }, drop: [] })
+    expect(assembleText(TEXT, ['chain'], ok.runtime, ok.drop)).toContain('Run "/p/scripts/' + NAME + '-store" wait once.')
+    const bad = storeRuntime(fake('/p/a"b\'c'))
+    expect(bad).toEqual({ runtime: {}, drop: ['store'] })
+    expect(toasts.length).toBe(1)
+    expect(toasts[0]).toContain('store_path_unquotable')
+    const out = assembleText(TEXT, ['chain'], bad.runtime, bad.drop)
+    expect([out.includes('wait once'), leftovers(out)]).toEqual([false, []])
+  })
+
+  test('checkpoint JSON: the consent object is read (string values only), {} when absent', async () => {
+    const run = (stdout: string) => ({ name: NAME, root: '/p', helper: '/p/h', run: async () => ({ ok: true, exitCode: 0, stdout, error: '' }) }) as unknown as Deps
+    const a = await checkpoint(run(JSON.stringify({ measured_block: null, lane: null, checkpoint_ms: {}, consent: { unattended_prod_reads: 'allow', n: 3 } })), 's', '1a2b3c4d', false)
+    expect(a?.consent).toEqual({ unattended_prod_reads: 'allow' })
+    const b = await checkpoint(run(JSON.stringify({ measured_block: null })), 's', '1a2b3c4d', false)
+    expect(b?.consent).toEqual({})
+  })
+
+  test('hasTag: a tag line the build carries, or not', () => {
+    expect(hasTag('resume-context', 'midturn')).toBe(true)
+    expect(hasTag('resume-context', 'submit-idle')).toBe(false)
+    expect(hasTag('no-such-asset', 'midturn')).toBe(false)
+  })
+})

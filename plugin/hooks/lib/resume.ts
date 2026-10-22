@@ -2,6 +2,7 @@
 // channel whose claim wins. The mod's channels are `prompt.context` (order 2) and the continue
 // text (order 3, cont.ts); classic SessionStart (order 1) is the helper's.
 import type { Deps, Outcome, PendingResume } from './deps'
+import { storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
@@ -24,16 +25,42 @@ export type BlockArgs = {
   notSaved?: string
   /** `[handoff]` (a published handoff of this window) or `[handoff-partial]` (a raced handoff turn). */
   handoff?: RaceBlock
+  /** `[prod-allow]` instead of `[prod-forbid]` (see `prodAllowed`). */
+  prodAllow?: boolean
+}
+
+/**
+ * MOD-SPEC §3.4 step 4 (S-SETTINGS B): `[prod-allow]` only when the mod's own option and the
+ * checkpoint of this nonce (`consent.unattended_prod_reads`, the helper's settings-file value)
+ * both say `allow`; the stricter view wins, so a missing checkpoint keeps `[prod-forbid]`.
+ */
+export function prodAllowed(option: string, consent: string | undefined): boolean {
+  return option === 'allow' && consent === 'allow'
+}
+
+/**
+ * `@store@` for a text the mod assembles (PKG-RUNTIME A.1, A.2): the launcher word, or, for a
+ * root no quoting can carry, the `store_path_unquotable` escalation and a `drop` of the lines
+ * that hold it (no line names a command it cannot spell).
+ */
+export function storeRuntime(d: Deps): { runtime: Runtime; drop: string[] } {
+  const w = storeWord(d.root, d.name)
+  if (w !== undefined) return { runtime: { store: w }, drop: [] }
+  escalate(d, 'store_path_unquotable')
+  return { runtime: {}, drop: ['store'] }
 }
 
 export async function buildBlock(d: Deps, sid: string, a: BlockArgs): Promise<string> {
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
+  // Exactly one of the two step-4 lines (BLD-04 exclusive group).
+  tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
   const remeasure = await measure(d, sid, a.nonce)
   const measuredAt = isoLocal(await d.now(), false)
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
-  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: measuredAt }
+  const store = storeRuntime(d)
+  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: measuredAt, ...store.runtime }
   const h = a.handoff
   if (h && 'published' in h) {
     tags.push('handoff')
@@ -45,12 +72,12 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs): Promise<st
     runtime.draft_state = present ? 'present' : 'absent'
     runtime.handoff_finish = present ? '`' + (h.finish ?? '') + '`' : NO_FINISH
   }
-  if (remeasure === undefined) return assemble(d.name, 'resume-context', tags, runtime, ['remeasure'])
+  if (remeasure === undefined) return assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
   const lines = remeasure.split('\n')
-  let block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure })
+  let block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure }, store.drop)
   for (let keep = lines.length - 1; block.length > BLOCK_MAX && keep >= 0; keep--) {
     const cut = lines.slice(0, keep).concat(`(+${lines.length - keep} lines)`).join('\n')
-    block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: cut })
+    block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: cut }, store.drop)
   }
   return block
 }

@@ -9,14 +9,15 @@
 import type { Deps } from './deps'
 import { submitPending, submitSettled } from './deps'
 import type { Effective } from './config'
-import type { Runtime } from './assemble'
-import { assembleIf, hasAsset } from './assemble'
+import type { Runtime, Tag } from './assemble'
+import { assembleIf, hasAsset, hasTag } from './assemble'
 import { specValue } from './detect'
 import type { HandoffState } from './helper'
 import { handoffState, handoffTurnClose, handoffTurnOpen } from './helper'
 import { log } from './log'
 import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
+import { storeRuntime } from './resume'
 
 /** Why a cycle will not auto-continue (the `handoff-turn open --reason` values). */
 export type HaltReason = '2-nonok' | 'thrash' | 'cap' | 'continue-off'
@@ -27,6 +28,24 @@ export const HALT_REASON_TEXT: Record<HaltReason, string> = {
   thrash: 'compactions keep repeating without progress',
   cap: 'the hourly auto-continue limit is reached',
   'continue-off': 'auto-continue is turned off',
+}
+
+/**
+ * What starts a handoff turn: a last cycle (`halt`, §9.1), the pre-compaction turn
+ * (`precompact`, §9.3) or the pre-idle turn (`idle`, §9.4). Each has its own submit lines in
+ * `handoff-turn.txt` around the shared `[submit]` line (S-SETTINGS D, IC-1 D5).
+ */
+export type TurnKind = 'halt' | 'precompact' | 'idle'
+const KIND_TAG: Record<TurnKind, Tag> = { halt: 'submit-halt', precompact: 'submit-pre', idle: 'submit-idle' }
+
+/**
+ * The prompt of a handoff turn: the shared `[submit]` lines plus the kind's own, joined. Undefined
+ * when the asset is missing, or when a `precompact` or `idle` text has no lines of its own in this
+ * build (a last cycle's text works with or without its `[submit-halt]` split).
+ */
+export function submitText(name: string, kind: TurnKind, runtime: Runtime, drop: readonly string[] = []): string | undefined {
+  if (kind !== 'halt' && !hasTag('handoff-turn', KIND_TAG[kind])) return undefined
+  return assembleIf(name, 'handoff-turn', ['submit', KIND_TAG[kind]], runtime, drop)
 }
 
 /** DP-4: only these reasons get the plugin compaction after the handoff turn. */
@@ -150,8 +169,9 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   const userFirst = () => s.handoffTurn !== h || s.mainTurnRunning || s.foreignPrompts > 0
   // Checked again after every await.
   const cancelled = () => h.phase !== 'delay' || userFirst()
-  const runtime: Runtime = { halt_reason: HALT_REASON_TEXT[h.reason], max_calls: String(h.maxCalls) }
-  const text = assembleIf(d.name, 'handoff-turn', ['submit'], runtime)
+  const store = storeRuntime(d)
+  const runtime: Runtime = { halt_reason: HALT_REASON_TEXT[h.reason], max_calls: String(h.maxCalls), ...store.runtime }
+  const text = submitText(d.name, 'halt', runtime, store.drop)
   if (text === undefined) {
     await skipped(d, sid, 'no-asset')
     return false
@@ -295,7 +315,8 @@ export async function limitText(d: Deps, sid: string, resultText: string | undef
     await log(d, sid, 'handoff_limit', { ht: h.ht, band, calls: h.calls, tokens: tokens ?? null })
   }
   if (!h.bands.includes('near')) h.bands.push('near')
-  return assembleIf(d.name, 'handoff-turn', [band], {})
+  const store = storeRuntime(d)
+  return assembleIf(d.name, 'handoff-turn', [band], store.runtime, store.drop)
 }
 
 /**

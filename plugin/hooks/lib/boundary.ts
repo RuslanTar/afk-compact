@@ -40,7 +40,7 @@ export type BoundaryOpts = {
    * was written: the rerun after that one's end uses it (same nonce, same text), never a second
    * record (REG-boundary-205, MOD-SPEC §3.1 step 0).
    */
-  prepared?: { nonce: string; text: string; pref: ResumePref }
+  prepared?: { nonce: string; text: string; pref: ResumePref; prodConsent?: string }
   /**
    * The checkpoint already taken for this compaction, when a native compaction that was running
    * stopped it before its dispatch record was written: the rerun after that one's end reuses it
@@ -228,8 +228,9 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     let nonce: string
     let text: string
     let pref: ResumePref
+    let prodConsent: string | undefined
     if (opts.prepared) {
-      ({ nonce, text, pref } = opts.prepared)
+      ({ nonce, text, pref, prodConsent } = opts.prepared)
     } else {
       let named: string | undefined
       let prev: string | undefined
@@ -247,6 +248,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
         cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
       }
       const measured = d.cfg.measured_block && cp ? cp.measured_block : null
+      prodConsent = cp?.consent['unattended_prod_reads']
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
       pref = await resumePref(d, sid)
@@ -271,7 +273,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     // Once more after the dispatch write, with no await between this check and the call. A
     // native compaction that started during the write: the rerun after its end reuses this
     // record (`prepared`), so a skipped native one leaves no orphan and no second record.
-    const withRecord: BoundaryOpts = { ...opts, prepared: { nonce, text, pref } }
+    const withRecord: BoundaryOpts = { ...opts, prepared: { nonce, text, pref, ...(prodConsent !== undefined ? { prodConsent } : {}) } }
     const late = nativeCheck(d, withRecord)
     if (late !== undefined) {
       if (late === 'ran') await nativeRan(d, sid, withRecord)
@@ -302,6 +304,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       sid, nonce, agentId: null, midturn: false, resumePref: pref, messages: msgs, tokensBefore: before, tokensAfter: after,
       ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
       ...(ah ? { stats: ah.stats } : {}),
+      ...(prodConsent !== undefined ? { prodConsent } : {}),
     }))
     await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.

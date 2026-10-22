@@ -13,7 +13,7 @@ const TURN = hasAsset('handoff-turn')
 const halted = (w: World, reason: keyof typeof HALT_REASON_TEXT, tokens = '610,000') =>
   assemble(w.name, 'checkpoint-nudge', TURN ? ['halt', 'halt-handoff'] : ['halt'], { tokens, halt_reason: HALT_REASON_TEXT[reason] })
 const handoffSubmit = (w: World, reason: keyof typeof HALT_REASON_TEXT) =>
-  assembleIf(w.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(maxCalls()) })
+  assembleIf(w.name, 'handoff-turn', ['submit', 'submit-halt'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(maxCalls()), store: storeWord(w.root, w.name) ?? '' })
 
 const CONT = 'the session was compacted at the checkpoint you reached. Continue from Step 1 of the summary; questions the user owns stay open.'
 

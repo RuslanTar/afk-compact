@@ -6,13 +6,13 @@
 // normal compaction for `cap`/`continue-off`), and the integrator re-runs them after the text merge.
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
+import { assemble, assembleIf, hasAsset, hasTag, leftovers } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import { DEFAULTS } from '../../hooks/lib/config'
 import { continueLine, lastCycleOf } from '../../hooks/lib/cont'
 import type { Deps } from '../../hooks/lib/deps'
-import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, submitPending } from '../../hooks/lib/deps'
-import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
+import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, storeWord, submitPending } from '../../hooks/lib/deps'
+import { HALT_REASON_TEXT, maxCalls, submitText as kindText } from '../../hooks/lib/handoff-turn'
 import { BRAND } from './_gen/brand.gen'
 import { HOME, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -53,25 +53,47 @@ async function handoffTurnStarts($: Engine, w: World): Promise<void> {
 }
 
 function submitText(w: World, reason: keyof typeof HALT_REASON_TEXT): string | undefined {
-  return assembleIf(w.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C) })
+  return assembleIf(w.name, 'handoff-turn', ['submit', 'submit-halt'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C), store: storeWord(w.root, w.name) ?? '' })
 }
 
 function bandText(w: World, band: 'near' | 'spent' | 'imminent'): string | undefined {
-  return assembleIf(w.name, 'handoff-turn', [band], {})
+  return assembleIf(w.name, 'handoff-turn', [band], { store: storeWord(w.root, w.name) ?? '' })
 }
 
 test('c = 1 + call_cap + recipe_cap from the shared spec = 34 (RV-25, DP-6)', () => {
   expect(C).toBe(34)
 })
 
-test('DP-24 (g), P-LT-1: no text the plugin submits starts with "/" (the host refuses it as a user command)', () => {
+test('DP-24 (g), P-LT-1, AT-LT-18: no text the plugin submits starts with "/" (the host refuses it as a user command): continue, and every handoff-turn kind', () => {
   const texts = [continueLine(BRAND.name)]
-  for (const reason of Object.keys(HALT_REASON_TEXT) as (keyof typeof HALT_REASON_TEXT)[]) {
-    const t = assembleIf(BRAND.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C) })
-    expect(t === undefined).toBe(!TURN)
-    if (t !== undefined) texts.push(t)
+  for (const name of [BRAND.name, 'x', 'x'.repeat(16)]) {
+    for (const reason of Object.keys(HALT_REASON_TEXT) as (keyof typeof HALT_REASON_TEXT)[]) {
+      const t = kindText(name, 'halt', { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C), store: '"/p/scripts/' + name + '-store"' })
+      expect(t === undefined).toBe(!TURN)
+      if (t !== undefined) texts.push(t)
+    }
+    for (const kind of ['precompact', 'idle'] as const) {
+      const t = kindText(name, kind, { max_calls: String(C), idle_min: '49', store: '"/p/scripts/' + name + '-store"' })
+      // A build whose handoff-turn text has no lines of this kind yet gives no text (never the last-cycle one).
+      expect(t === undefined).toBe(!hasTag('handoff-turn', kind === 'idle' ? 'submit-idle' : 'submit-pre'))
+      if (t !== undefined) texts.push(t)
+    }
   }
   for (const t of texts) expect(t.trimStart().startsWith('/')).toBe(false)
+  for (const t of texts.slice(1)) expect(leftovers(t)).toEqual([])
+})
+
+test('AT-IC-12: the [submit-idle] text, when this build has it: never starts with "/", says to launch no agents or workflows, carries the shared [submit] line', () => {
+  if (!hasTag('handoff-turn', 'submit-idle')) return
+  const shared = assembleIf('x', 'handoff-turn', ['submit'], { max_calls: String(C), halt_reason: 'r', store: '"/p/scripts/x-' + 'store"' }) ?? ''
+  for (let n = 1; n <= 16; n++) {
+    const name = 'x'.repeat(n)
+    const t = kindText(name, 'idle', { max_calls: String(C), idle_min: '49', store: '"/p/scripts/' + name + '-store"' }) ?? ''
+    expect(t.trimStart().startsWith('/')).toBe(false)
+    expect(t.toLowerCase()).toContain('launch no agents or workflows')
+    expect(leftovers(t)).toEqual([])
+  }
+  expect(shared.length).toBeGreaterThan(0)
 })
 
 test('AT-LT-01: nudge at 610K: [halt] with @halt_reason@ for (a) halt, (b) cap reached, (c) max 0; [continue] for (d)', { options: CAP3 }, async ($, on) => {
