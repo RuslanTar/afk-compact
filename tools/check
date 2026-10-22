@@ -390,17 +390,26 @@ def probes(name):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
 
     def prod_exclusive(d):
-        """XR-19 (BLD-04): step 4 only as a [prod-forbid] line, so every [prod-allow] path lacks it;
-        the walk over combinations must reach the [prod-allow] paths (exactly one is active)."""
+        """XR-19 (BLD-04): step 4 only as a [prod-forbid] line (the [prod-allow] step-4 line
+        removed), so every [prod-allow] path lacks it; the walk over combinations must reach the
+        [prod-allow] paths (exactly one is active)."""
         p = os.path.join(d, "src", "assets", "resume-context.txt")
         with open(p, encoding="utf-8", newline="") as f:
             t = f.read()
-        write_text(p, re.sub(r"(?m)^4\. ", "[prod-forbid] 4. ", t, count=1))
+        t2 = re.sub(r"(?m)^4\. ", "[prod-forbid] 4. ", t, count=1)
+        t2 = re.sub(r"(?m)^\[prod-allow\] 4\. .*\n", "", t2, count=1)
+        if t2 == t:
+            raise Fail("X-tools: prod-exclusive found no step-4 line to plant on")
+        write_text(p, t2)
 
     def submit_slash(d):
-        """AT-LT-18 / AT-IC-12 (BLD-04): a [submit-idle] line that starts with "/" and lacks the
-        no-agents rule."""
-        append(d, "src/assets/handoff-turn.txt", "[submit-idle] /{{plugin}}:handoff now, then wait for the user.\n")
+        """AT-LT-18 / AT-IC-12 (BLD-04): a [submit-idle] line that starts with "/", and the
+        no-agents rule gone from the [submit-idle] lines."""
+        p = os.path.join(d, "src", "assets", "handoff-turn.txt")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t = re.sub(r"(?im)^(\[submit-idle\] .*?)launch no agents or workflows", r"\1Start nothing new", t)
+        write_text(p, t + "[submit-idle] /{{plugin}}:handoff now, then wait for the user.\n")
 
     def store_bare(d):
         """AT-PK-03 (BLD-04): a mod text that uses @store@ while other lines keep the bare launcher
