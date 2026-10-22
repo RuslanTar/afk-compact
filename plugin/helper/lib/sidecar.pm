@@ -76,6 +76,28 @@ sub write {
     return $k;
 }
 
+# Session sidecar (P5-FOLD A7, MOD-SPEC §7): the payload's scratchpad_dir, kept as a path in
+# the private store <watch>/<sid>/scratchpad.json (0600). No row ever carries the path: the
+# session row logs only `scratchpad: present|absent` and `under_temp_root`. Its uses (sweep
+# temp root, restore-evidence --to scratchpad) wait for probe P-SP-1 (OD-15).
+sub note_scratchpad {
+    my ($sid_dir, $p, $source) = @_;
+    return 0 unless defined $sid_dir && defined $p && !ref $p && $p =~ m{^/} && length($p) <= 4096 && $p !~ /[\n\r]/;
+    my $cur = scratchpad($sid_dir);
+    return 1 if defined $cur && $cur eq $p;
+    util::write_atomic("$sid_dir/scratchpad.json",
+        jsonc::encode_bytes(jsonc::obj(scratchpad_dir => $p, source => $source, ts => util::iso(util::now()))) . "\n", 0600);
+    return 1;
+}
+
+# scratchpad(sid_dir) -> the recorded scratchpad_dir, or undef
+sub scratchpad {
+    my ($sid_dir) = @_;
+    my $raw = defined $sid_dir ? util::read_file("$sid_dir/scratchpad.json") : undef;
+    my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    return ref $j eq 'HASH' && defined $j->{scratchpad_dir} && !ref $j->{scratchpad_dir} ? $j->{scratchpad_dir} : undef;
+}
+
 # newest(sid_dir) -> slot object of the highest seq, or undef
 sub newest {
     my ($sid_dir) = @_;

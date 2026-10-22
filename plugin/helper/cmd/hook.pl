@@ -31,7 +31,7 @@ sub _watch_ctx {
     my ($event, $extra) = @_;
     return { sid => rc::sid(), event => $event, settings => rc::settings(), paths => rc::paths(), watch => rc::watch(),
              sid_dir => rc::sid_dir(), plugin_root => ctx::root(), brand => ctx::brand(), version => ctx::version(),
-             now => util::now(), %{ $extra || {} } };
+             now => util::now(), cc_version => rc::cc_version(), cc_version_src => rc::cc_version_src(), %{ $extra || {} } };
 }
 
 # Run a watcher seam with stdout closed off (nothing it does may reach stdout).
@@ -74,6 +74,7 @@ sub run {
     # git call of its own and must print well inside its 5 s timeout
     local $roots::DEADLINE = $t0 + ($event eq 'PreCompact' ? 500 : 1500);
     rc::init(sid => $sid, writer => 'classic');
+    rc::note_transcript($p->{transcript_path});
     my $out = '';
     my $extra = {};
     my $ok = eval {
@@ -133,7 +134,7 @@ sub on_PreCompact {
             my $rec = dispatch::record(nonce => $nonce, session_id => $sid, actor => 'unknown', trigger => $trigger,
                                        channel => 'classic', resume_pref => 'sessionstart', midturn => 0, tags => \@tags,
                                        instructions_sha8 => substr(sha::hex256($text), 0, 8), instructions_bytes => $bytes,
-                                       cc_version => rc::cc_version(), load_id => undef, pid => $c->{pid}, pid_lstart => $c->{lstart});
+                                       cc_version => rc::cc_version(), cc_version_src => rc::cc_version_src(), load_id => undef, pid => $c->{pid}, pid_lstart => $c->{lstart});
             dispatch::write($w, $sid, $rec);
             rc::emit('dispatch', [nonce => $nonce, trigger => $trigger, agent_id => undef, compaction_seq => undef, channel => 'classic',
                                   resume_pref => 'sessionstart', midturn => jsonc::false(), tags => \@tags, instructions_bytes => $bytes]);
@@ -158,6 +159,10 @@ sub on_SessionStart {
     my ($p) = @_;
     my $sid = rc::sid();
     my $src = (defined $p->{source} && $p->{source} =~ /^(startup|resume|clear|compact|fork)$/) ? $p->{source} : 'other';
+    # P5-FOLD A7: the scratchpad path goes to the private sidecar only, never into a row
+    my $sp = (defined $p->{scratchpad_dir} && !ref $p->{scratchpad_dir} && $p->{scratchpad_dir} =~ m{^/}) ? $p->{scratchpad_dir} : undef;
+    my $spd = rc::sid_dir();
+    eval { sidecar::note_scratchpad($spd, $sp, $src) } if defined $spd && defined $sp;
     return session_compact($p) if $src eq 'compact';
     my $c = rc::claude();
     my ($lin, $where);
@@ -186,7 +191,9 @@ sub on_SessionStart {
                          mod_loaded => jsonc::bool(defined $d && -e "$d/mod-alive.json"),
                          previous_session_id => ($lin ? $lin->{previous_session_id} : undef),
                          lineage_reason => ($lin ? $lin->{lineage_reason} : undef),
-                         pid => $c->{pid}, pid_lstart => $c->{lstart}]);
+                         pid => $c->{pid}, pid_lstart => $c->{lstart},
+                         scratchpad => (defined $sp ? 'present' : 'absent'),
+                         under_temp_root => (defined $sp ? jsonc::bool(sweep::_temp_root(util::clean_path($sp))) : undef)]);
     return ('', {});
 }
 
@@ -207,6 +214,7 @@ sub session_compact {
             last;
         }
         return ('', {}) unless $pick;
+        rc::note_dispatch($pick);
         return ('', { dispatch => $pick->{nonce} }) unless ($pick->{resume_pref} // '') eq 'sessionstart';
         $nonce = $pick->{nonce};
         $midturn = $pick->{midturn} || (($pick->{channel} // '') eq 'classic' && ($pick->{trigger} // '') eq 'auto');

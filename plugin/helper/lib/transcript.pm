@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use utf8;
 
-# boundary(line) -> {uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed} or undef
+# boundary(line) -> {uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed, version} or undef
 sub boundary {
     my ($line) = @_;
     return undef unless index($line, 'compact_boundary') >= 0;
@@ -14,7 +14,23 @@ sub boundary {
     my $m = ref $j->{compactMetadata} eq 'HASH' ? $j->{compactMetadata} : {};
     return { uuid => $j->{uuid}, ts => $j->{timestamp}, epoch => util::parse_iso($j->{timestamp} // '') // 0,
              trigger => $m->{trigger}, pre => $m->{preTokens}, post => $m->{postTokens},
-             duration_ms => $m->{durationMs}, precomputed => ($m->{precomputed} ? 1 : 0) };
+             duration_ms => $m->{durationMs}, precomputed => ($m->{precomputed} ? 1 : 0),
+             version => ((defined $j->{version} && !ref $j->{version}) ? $j->{version} : undef) };
+}
+
+# version(path) -> the Claude Code version of the newest row that has one in the last 64 KB
+# (PKG-RUNTIME D.2 source 3), or undef
+sub version {
+    my ($path) = @_;
+    return undef unless defined $path && -f $path;
+    my $tail = util::read_tail($path, 64 * 1024) // return undef;
+    for my $line (reverse split /\n/, $tail) {
+        next unless index($line, '"version"') >= 0;
+        my $j = eval { jsonc::decode($line) };
+        next unless ref $j eq 'HASH' && defined $j->{version} && !ref $j->{version};
+        return $j->{version} if $j->{version} =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/;
+    }
+    return undef;
 }
 
 # boundaries(path [, tail => bytes]) -> [{uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed}]

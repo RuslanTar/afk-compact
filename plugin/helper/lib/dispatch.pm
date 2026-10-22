@@ -8,7 +8,7 @@ use warnings;
 use utf8;
 
 our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref midturn tags
-               instructions_sha8 instructions_bytes cc_version load_id pid pid_lstart ts);
+               instructions_sha8 instructions_bytes cc_version cc_version_src load_id pid pid_lstart ts);
 our %TRIGGERS = map { $_ => 1 } qw(manual auto plugin precompute unknown);
 our %CHANNELS = map { $_ => 1 } qw(mod-hook mod-self classic);
 our %PREFS = map { $_ => 1 } qw(prompt.context sessionstart prompt.submit none);
@@ -35,6 +35,7 @@ sub record {
         instructions_sha8  => $f{instructions_sha8},
         instructions_bytes => defined $f{instructions_bytes} ? 0 + $f{instructions_bytes} : undef,
         cc_version         => $f{cc_version},
+        cc_version_src     => $f{cc_version_src},
         load_id            => $f{load_id},
         pid                => defined $f{pid} ? 0 + $f{pid} : undef,
         pid_lstart         => $f{pid_lstart},

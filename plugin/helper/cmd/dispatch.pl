@@ -36,7 +36,7 @@ sub run {
         nonce => $opt->{nonce}, session_id => $sid, actor => $opt->{actor}, trigger => ($unknown_trigger ? 'unknown' : $trigger),
         channel => $opt->{channel}, resume_pref => $pref, midturn => ($mid eq 'true'), tags => \@tags,
         instructions_sha8 => $opt->{'instr-sha8'}, instructions_bytes => $opt->{'instr-bytes'},
-        cc_version => $opt->{'cc-version'}, load_id => $opt->{'load-id'}, pid => $c->{pid}, pid_lstart => $c->{lstart},
+        cc_version => $opt->{'cc-version'}, cc_version_src => (defined $opt->{'cc-version'} && $opt->{'cc-version'} ne '' ? 'mod' : undef), load_id => $opt->{'load-id'}, pid => $c->{pid}, pid_lstart => $c->{lstart},
         handoff_ht => $opt->{'handoff-ht'},
     );
     my $ok = dispatch::write($w, $sid, $rec);

@@ -44,17 +44,41 @@ sub claude {
     return $R{claude};
 }
 
-sub cc_version {
-    return $R{cc_version} if exists $R{cc_version};
-    my $v;
-    if (defined $R{watch}) {
+# cc_version() / cc_version_src() (PKG-RUNTIME D.2, MOD-SPEC §2.5): the first source present
+# wins: `mod` the matched dispatch record's cc_version (a mod-channel record: $.session.version(),
+# exact for the compaction; note_dispatch), `exec` the CLAUDE_CODE_EXECPATH basename (exact for
+# this process), `transcript` the version of the newest row in the last 64 KB of the payload's
+# transcript (exact for this session; note_transcript), `mirror` <watch>/version.json
+# lastVersion (machine-wide, the last version any session's mod saw); otherwise undef.
+sub cc_version { _cc(); return $R{cc_version} }
+sub cc_version_src { _cc(); return $R{cc_version_src} }
+
+sub _cc {
+    return if exists $R{cc_version};
+    my ($v, $src);
+    my $d = $R{cc_dispatch};
+    if (ref $d eq 'HASH' && ($d->{channel} // '') =~ /^mod-/ && _ver_ok($d->{cc_version})) { ($v, $src) = ($d->{cc_version}, 'mod') }
+    elsif (defined(my $e = exec_version())) { ($v, $src) = ($e, 'exec') }
+    elsif (defined $R{cc_transcript} && defined(my $t = transcript::version($R{cc_transcript}))) { ($v, $src) = ($t, 'transcript') }
+    elsif (defined $R{watch}) {
         my $raw = util::read_file("$R{watch}/version.json");
         my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
-        $v = $j->{lastVersion} if ref $j eq 'HASH' && defined $j->{lastVersion} && !ref $j->{lastVersion};
+        ($v, $src) = ($j->{lastVersion}, 'mirror') if ref $j eq 'HASH' && _ver_ok($j->{lastVersion});
     }
-    $v //= exec_version();
     $R{cc_version} = $v;
-    return $v;
+    $R{cc_version_src} = defined $v ? $src : undef;
+}
+
+sub _ver_ok { my ($v) = @_; return defined $v && !ref $v && $v =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/ ? 1 : 0 }
+
+# The dispatch record this call matched (a mod record is source 1) and the payload's
+# transcript path (source 3); each resets the cached value.
+sub note_dispatch { my ($rec) = @_; $R{cc_dispatch} = $rec; delete @R{qw(cc_version cc_version_src)} }
+sub note_transcript {
+    my ($p) = @_;
+    return unless defined $p && !ref $p && $p ne '';
+    $R{cc_transcript} = $p;
+    delete @R{qw(cc_version cc_version_src)};
 }
 
 # C1h hint: basename of CLAUDE_CODE_EXECPATH when it looks like a version.

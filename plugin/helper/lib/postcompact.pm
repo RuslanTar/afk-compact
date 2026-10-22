@@ -148,6 +148,7 @@ sub run {
     my ($tjoin) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && !$closed->{ $_->{nonce} }
                          && $_->{_epoch} >= $now - 120 && $_->{_epoch} <= $now + 5 } reverse @all;
     my $drec = $erec // $tjoin;
+    rc::note_dispatch($drec) if $drec;
     my $join = $erec ? 'nonce' : $tjoin ? 'time' : undef;
 
     # Scope from the proofs a hook can use: P1 (the dispatch record) and P2 (s=sub). P3

@@ -26,6 +26,7 @@
 #   step "capture"           {VAR: "json:<dotted path>" | "re:<regex, one group>"} from stdout
 #   case / step "options"  {key: value}: plugin options in $HOME/.claude/settings.json
 #                            (pluginConfigs["<brand>@m"].options, merged), for file-only keys
+#   case "stage_overlay"   {"<path under plugin/>": "<file>"}: a staged copy with those files replaced
 #   a step without argv, lib or setup that holds a setup action runs as a setup step
 #   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
@@ -371,6 +372,19 @@ sub run_case {
         copy_tree($V{PLUGIN}, "$V{TMP}/plugin-account");
         unlink "$V{TMP}/plugin-account/.test-consent-home";
         $V{PLUGIN} = "$V{TMP}/plugin-account";
+    }
+    # "stage_overlay": {"<path under plugin/>": "<file, placeholders filled>"}: this case runs
+    # against a staged copy with those files replaced (AT-WF-01: a ctx-recording watcher seam).
+    if (ref $case->{stage_overlay} eq 'HASH') {
+        my $dst = "$V{TMP}/plugin-overlay";
+        copy_tree($V{PLUGIN}, $dst);
+        for my $rel (sort keys %{ $case->{stage_overlay} }) {
+            my $src = subst($case->{stage_overlay}{$rel}, \%V);
+            my $data = util::read_file($src);
+            die "stage_overlay: $src missing\n" unless defined $data;
+            util::write_atomic("$dst/$rel", $data, 0644);
+        }
+        $V{PLUGIN} = $dst;
     }
     # The launcher by its real path: the one the helper itself prints in the commands it
     # writes (ctx::store_cmd, from the real path of main.pl; the temp folder may be a link).

@@ -1,0 +1,25 @@
+{
+ "id": "AT-WF-01",
+ "note": "PKG-RUNTIME D.1 (CORE-06): a ctx-recording watcher seam (stage_overlay over lib/watch.pm) on each of the 6 watcher-called events gets exactly the D.1 keys (sid, event, settings, paths, watch, sid_dir, plugin_root, brand, version, now, cc_version, cc_version_src) of the right types, plus only that event's own extra; cc_version and cc_version_src are present (here from CLAUDE_CODE_EXECPATH: 2.1.307 / exec)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "stage_overlay": {"helper/lib/watch.pm": "$CASE/watch-recorder.pm"},
+ "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+ "steps": [
+  {"argv": ["hook", "SessionStart"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "SessionStart", "source": "startup"}, "expect": {"exit": 0}},
+  {"argv": ["hook", "PreCompact"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": null}, "expect": {"exit": 0}},
+  {"argv": ["hook", "PostCompact"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "PostCompact", "trigger": "auto", "compact_summary": "<summary>\nsome summary\n</summary>\n"}, "expect": {"exit": 0}},
+  {"argv": ["hook", "SubagentStop"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "SubagentStop", "stop_hook_active": false}, "expect": {"exit": 0}},
+  {"argv": ["hook", "Stop"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "Stop", "stop_hook_active": false}, "expect": {"exit": 0}},
+  {"argv": ["hook", "SessionEnd"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "SessionEnd", "reason": "other"},
+   "expect": {"exit": 0,
+     "rows": [
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 6, "fields": {"missing": "", "extra": "", "bad_types": "", "cc_version": "2.1.307", "cc_version_src": "exec"}},
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 1, "fields": {"event": "PreCompact"}},
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 1, "fields": {"event": "PostCompact"}},
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 1, "fields": {"event": "SessionStart"}},
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 1, "fields": {"event": "SubagentStop"}},
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 1, "fields": {"event": "Stop", "seam": "on_stop"}},
+      {"file": "$WATCH/$SID/wf-ctx.jsonl", "ev": "wf_ctx", "count": 1, "fields": {"event": "SessionEnd"}}]}}
+ ]
+}
