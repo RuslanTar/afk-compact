@@ -4,4 +4,4 @@ Invoke the compactinue:handoff skill now, with no arguments, and follow it. Plug
 End with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.
 Launch no agents or workflows; a background result arriving now: note it in the handoff only. End with the skill's report, then repeat unchanged any question your previous reply asked the user.
 Note from the user's compactinue plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6–7).
-Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `compactinue-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
+Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `"/p/scripts/compactinue-store" publish` and edits inside the stage folder: publish the draft, or end the turn with the report.

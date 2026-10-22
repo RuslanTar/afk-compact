@@ -1,2 +1,2 @@
-Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `compactinue-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
+Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `"/p/scripts/compactinue-store" publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
 Note from the user's compactinue plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.
