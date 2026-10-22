@@ -17,6 +17,7 @@ use strict;
 use warnings;
 use utf8;
 use File::Basename ();
+use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 use skills::util;
 use skills::cli;
 use skills::core;
@@ -321,20 +322,55 @@ sub _job_lines {
 # 0 the name is taken (try the next one; after a handoff-turn claim it dies instead).
 # A file system without hard links falls back to an exclusive create of the same bytes
 # (CR-F9: never a rename, which would replace a file made in the gap), read back.
+# DP-28 (CR-F9 residual): when the fallback's write or read-back fails after its own exclusive
+# open made the file, that file (the publish's own partial, checked by device and inode, never
+# anything else) is removed and the publish dies, so a retry of the stage finds the claim with
+# no file and fills it (_claimed_free). A partial left by a killed process stays (D-8):
+# handoff-state then answers publish-failed and nothing replaces it.
+# Test seams (STORE_TEST_MODE=1 only): STORE_TEST_PUBLISH_NOLINK=1 takes the fallback as on a
+# file system without hard links; STORE_TEST_PUBLISH_FAIL=after-create fails right after the
+# exclusive open, as a full disk would.
 sub _place {
     my ($tmp, $path, $content, $ht) = @_;
-    return 1 if link($tmp, $path);
-    my $eexist = $!{EEXIST};
+    my $tm = skills::util::test_mode();
+    my $nolink = $tm && ($ENV{STORE_TEST_PUBLISH_NOLINK} // '') eq '1';
+    return 1 if !$nolink && link($tmp, $path);
+    my $eexist = $nolink ? 0 : $!{EEXIST};
     if ($eexist || -e $path || -l $path) {
         die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
         return 0;
     }
-    if (!skills::util::write_excl($path, $content, 0600)) {
+    my $fh;
+    if (!sysopen($fh, $path, O_WRONLY | O_CREAT | O_EXCL, 0600)) {
+        die "create $path: $!\n" unless $!{EEXIST};
         die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
         return 0;
     }
-    my $back = skills::util::read_file($path);
-    die "read-back failed: $path\n" unless defined $back && $back eq skills::util::bytes($content);
+    my @mine = (stat $fh)[0, 1];
+    my $ok = eval {
+        binmode $fh;
+        die "write $path: no space left on device (test)\n" if $tm && ($ENV{STORE_TEST_PUBLISH_FAIL} // '') eq 'after-create';
+        my $bytes = skills::util::bytes($content);
+        my $off = 0;
+        while ($off < length $bytes) {
+            my $n = syswrite($fh, $bytes, length($bytes) - $off, $off);
+            die "write $path: $!\n" unless defined $n;
+            $off += $n;
+        }
+        close($fh) or die "close $path: $!\n";
+        undef $fh;
+        chmod 0600, $path;
+        my $back = skills::util::read_file($path);
+        die "read-back failed: $path\n" unless defined $back && $back eq $bytes;
+        1;
+    };
+    if (!$ok) {
+        my $err = $@ || "place failed: $path\n";
+        close $fh if $fh;
+        my @now = lstat $path;
+        unlink $path if @now && -f _ && $now[0] == $mine[0] && $now[1] == $mine[1];
+        die $err;
+    }
     return 1;
 }
 
