@@ -1,1 +1,5 @@
+Note from the user's compactinue plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.
+Note from the user's compactinue plugin: the context reached the planned compaction point, so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.
+End with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.
+End with the skill's report. Do not continue the task after it; the user's next message leads.
 Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `compactinue-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.

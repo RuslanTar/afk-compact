@@ -67,6 +67,12 @@
     "waiting-job",
     "done"
   ],
+  "acuity_words": [
+    "stable",
+    "watch",
+    "unstable"
+  ],
+  "acuity_re": "(?:^|· )Acuity: (stable|watch|unstable)\\b",
   "ladder": [
     "proposed",
     "queued",
@@ -295,6 +301,144 @@
   },
   "call_cap": 25,
   "recipe_cap": 8,
+  "section_caps": {
+    "## Resume here": 1500,
+    "## User constraints": 1500,
+    "## Decisions and do-not-re-raise": 2200,
+    "## In flight": 2000,
+    "## Live state": 1200,
+    "## Open questions": 2000,
+    "## Location": 1000,
+    "## Work done and findings": 1800,
+    "## Evidence": 600,
+    "## Next steps": 1000
+  },
+  "lint_texts": {
+    "headings": {
+      "why": "readers find sections by their literal heading, in this order",
+      "fix": "use the template §4 headings unchanged and in order; omit only an empty section without a none-form"
+    },
+    "meta-in-draft": {
+      "why": "frontmatter, marker and sentinel come from code; typed ones break detection",
+      "fix": "delete them from body.md; start at the # title"
+    },
+    "update-heading": {
+      "why": "a handoff is rewritten, never appended",
+      "fix": "fold the update into the sections and drop the heading"
+    },
+    "resume-lines": {
+      "why": "the next session reads Resume here first; more lines bury Step 1",
+      "fix": "keep the four §4.1 lines; move detail to its section"
+    },
+    "step1-mismatch": {
+      "why": "two versions of the next action make the next session guess",
+      "fix": "make Next steps item 1 the same command or edit as Step 1, character for character"
+    },
+    "none-form": {
+      "why": "an empty section must say it was checked, not forgotten",
+      "fix": "write the section's none-form from template §4"
+    },
+    "ephemeral-path": {
+      "why": "temp paths vanish before a resume",
+      "fix": "evidence --keep <path> and cite the durable path, or put it on Volatile: with a reason"
+    },
+    "live-asof": {
+      "why": "a state claim without a time cannot be judged for age",
+      "fix": "give the row an as-of from checked_at or a stamp"
+    },
+    "unprinted-time": {
+      "why": "only a helper-printed time proves a check ran in this session",
+      "fix": "use checked_at or a stamp time, or tag the line [unverified]"
+    },
+    "time-format": {
+      "why": "readers compare stamps; a partial time is ambiguous",
+      "fix": "write the whole stamp YYYY-MM-DD HH:MM +hhmm as printed"
+    },
+    "id-range": {
+      "why": "a range hides which ids exist, so carried ids get lost",
+      "fix": "list each id"
+    },
+    "carry-provenance": {
+      "why": "another session's line is not this session's word",
+      "fix": "add [from <sid8> · <their id> · <their stamp>] with the values from begin"
+    },
+    "carry-approval": {
+      "why": "approvals never carry across sessions",
+      "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"
+    },
+    "private-path": {
+      "why": "in repo mode the path would reach git",
+      "fix": "use a durable bucket path or a pointer; Volatile: does not help here"
+    },
+    "recipe-placeholder": {
+      "why": "a recipe with <…> cannot run as written",
+      "fix": "write the literal value, or class the row ask"
+    },
+    "recipe-script": {
+      "why": "a restart runs only a script whose sha256 is in the manifest",
+      "fix": "evidence --keep <script> and cite the durable path"
+    },
+    "recipe-spawn": {
+      "why": "a spawn without model and effort runs on defaults nobody chose",
+      "fix": "add model <id>, effort <level>"
+    },
+    "secret-hard": {
+      "why": "the file would hold a live credential",
+      "fix": "remove the value and say where it lives; the rule ids name the pattern"
+    },
+    "queue-off": {
+      "why": "no queue is configured, so nothing was queued",
+      "fix": "keep the question in full and drop the Queued: line and the · queued mark"
+    },
+    "size": {
+      "why": "past 20 KB the next session reads less of what matters",
+      "fix": "cut in the template §2 order"
+    },
+    "section-cap": {
+      "why": "one section crowds out the others",
+      "fix": "cut that section toward its template §2 cap"
+    },
+    "code-block": {
+      "why": "code is recoverable from the repository",
+      "fix": "point to path#Symbol; keep ≤5 lines only mid-edit"
+    },
+    "log-lines": {
+      "why": "pasted logs push out decisions",
+      "fix": "write the conclusion and a reproducer command"
+    },
+    "hash-lines": {
+      "why": "hash lists are recoverable from git",
+      "fix": "write the commit range <base>..<head>"
+    },
+    "changes": {
+      "why": "past 15 the list stops ranking",
+      "fix": "keep the top 15 by importance; the commit range covers the rest"
+    },
+    "must-read": {
+      "why": "more than 3 must-reads means none is",
+      "fix": "keep the 3 that Step 1 needs"
+    },
+    "overlap": {
+      "why": "a copied previous file carries stale state",
+      "fix": "rewrite non-ledger lines with the latest values; carry only ledger lines unchanged"
+    },
+    "recipe-mismatch": {
+      "why": "a recorded job is relaunched only byte for byte",
+      "fix": "copy command: from the job record, or class the row ask"
+    },
+    "secret-warn": {
+      "why": "a value that looks secret may leak",
+      "fix": "take it out and say where it lives, or report the rule ids"
+    },
+    "acuity": {
+      "why": "the next session sets its check depth from Acuity; a rating below the measured facts under-checks",
+      "fix": "add Acuity: to the Status line, at least the floor shown (merge or rebase in progress: unstable; a running job: watch)"
+    },
+    "store-path": {
+      "why": "the helper path changes with each plugin update and names your home folder",
+      "fix": "write <store> instead of the path"
+    }
+  },
   "lint_ids": {
     "blocking": [
       "headings",
@@ -314,7 +458,8 @@
       "recipe-placeholder",
       "recipe-script",
       "recipe-spawn",
-      "secret-hard"
+      "secret-hard",
+      "queue-off"
     ],
     "advisory": [
       "size",
@@ -326,7 +471,9 @@
       "changes",
       "overlap",
       "recipe-mismatch",
-      "secret-warn"
+      "secret-warn",
+      "acuity",
+      "store-path"
     ],
     "repo_mode_only": [
       "private-path"
@@ -406,7 +553,7 @@
       }
     ],
     "end_suffix": "; echo \"__exit $?\"",
-    "inflight_probe_cmd": "compactinue-store wait --for <spec> --max 0"
+    "inflight_probe_cmd": "<store> wait --for <spec> --max 0"
   },
   "frontmatter_kinds": [
     "handoff",
@@ -656,6 +803,29 @@
       "re": "^mcp__.+__([A-Za-z]+_)?([Cc]reate|[Uu]pdate|[Dd]elete|[Rr]emove|[Pp]ost|[Ss]end|[Mm]erge|[Pp]ublish|[Ww]rite|[Aa]dd|[Ee]dit|[Cc]omment|[Tt]ransition|[Aa]pprove|[Cc]lose)"
     }
   ],
+  "prod_classes": [
+    {
+      "id": "prod-token",
+      "re": "(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)"
+    }
+  ],
+  "notice": {
+    "id": "watcher-1",
+    "version": 1,
+    "text": "compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config."
+  },
+  "clamp": {
+    "native_offset": 33000,
+    "min_target": 120000,
+    "reserve_base": 52000,
+    "reserve_no_handoff": 100000,
+    "window_floor": 100000,
+    "soft_ratio": 0.8,
+    "target_num": 2,
+    "target_den": 3,
+    "handoff_tokens_min": 20000,
+    "handoff_tokens_max": 150000
+  },
   "alert_texts": {
     "A-01": "summary copy missing",
     "A-02": "unshaped or truncated shaped compaction",
@@ -672,7 +842,7 @@
     "A-13": "session-id canary",
     "A-14": "slow resume",
     "A-15": "version, arm or hook-surface change",
-    "A-16": "sec-default bypass suspected",
+    "A-16": "compactinue: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
     "A-17": "failed or blocked compaction",
     "A-18": "auto-continue stopped",
     "A-19": "auto-continue cap breached",

@@ -58,13 +58,14 @@ The title comes from the state at publish time: `# PAY-12 — retry window fix i
 ### 4.1 Resume here (≤5 lines)
 
 ```
-Status: <active|blocked|waiting-owner|waiting-job|done> · State: <one sentence tied to the ticket goal> (checkpoint: clean | MID-STEP <step>, remaining <what>)
+Status: <active|blocked|waiting-owner|waiting-job|done> · Acuity: <stable|watch|unstable> · State: <one sentence tied to the ticket goal> (checkpoint: clean | MID-STEP <step>, remaining <what>)
 Step 1: `<one exact command or edit>` — for "<user's latest request, quoted when short>" | proposed
 Gate: <blocker | owner gate | stay in this session: <ids> die on /clear or exit | none> · Don't: <the likeliest mistake>
 Live: <N running: B-1 <runtime id>, B-2 <runtime id>; see In flight> | nothing running (checked <stamp>) | nothing running known (not checked)
 ```
 
 One step, never a menu, traced to the latest request or an accepted plan, else `proposed`. The state names the ticket goal, not only the current sub-task.
+Acuity tells the next session how carefully to check before acting (its reason shows in State): `unstable` broken build, half-applied migration or destructive step, red test mid-fix, MID-STEP · `watch` jobs running, a pending merge request, pipeline, review or answer, a time limit · `stable` none of these. Rate from facts; the lint flags a rating below what the helper measures.
 
 ### 4.2 User constraints
 
@@ -103,11 +104,11 @@ Every decision has a because-clause; user rulings carry date and source. Over 2,
 | B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |
 |---|---|---|---|---|---|---|
 | B-1 · wf_7a1 | workflow · 3-lens review · main | 2026-10-21 15:10 +0300 · review.json written (probe 2026-10-21 14:05 +0300: 2 of 3 lenses) | `ls <run dir>/review.json` | summarise to user | /clear, exit | ask · restart/B-1.md |
-| B-2 · task b8890 | shell · test suite · main | 2026-10-21 14:40 +0300 · exit code | `compactinue-store wait --for 'exit:<task output>' --max 0` | record pass/fail | exit | auto · restart/B-2.md |
+| B-2 · task b8890 | shell · test suite · main | 2026-10-21 14:40 +0300 · exit code | `<store> wait --for 'exit:<task output>' --max 0` | record pass/fail | exit | auto · restart/B-2.md |
 ```
 
 - One row per running or unreported agent, teammate, workflow, monitor, scheduled task, background shell, server, peer session or external job, from runtime channels and probes, rewritten every time. `kind` is one of `agent` · `teammate` · `workflow` · `monitor` · `cron` · `shell` · `server` · `peer` · `external`. Past 8 rows the rest go to `<stage>/inflight.md`; the table ends `+N more: B-9, B-10; see evidence/<stem>/inflight.md`.
-- `due`: an absolute estimate; past due alone is not a failure. `probe`: one read-only command. `dies on`: `/clear`, exit, 7-day expiry or nothing; a background shell or server survives `/clear`, so it dies on exit. A shell or server probe is `compactinue-store wait --for <spec> --max 0` (spec §14); a job you will wait on was started with `; echo "__exit $?"` at the end, so `exit:<output>` sees its end. A subagent waiting on its own job: `waiting on <task id> · until <wait spec> · due <stamp> · output <path>`.
+- `due`: an absolute estimate; past due alone is not a failure. `probe`: one read-only command. `dies on`: `/clear`, exit, 7-day expiry or nothing; a background shell or server survives `/clear`, so it dies on exit. A shell or server probe is `<store> wait --for <spec> --max 0` (spec §14; `<store>` is the plugin's helper: write `<store>`, never its path); a job you will wait on was started with `; echo "__exit $?"` at the end, so `exit:<output>` sees its end. A subagent waiting on its own job: `waiting on <task id> · until <wait spec> · due <stamp> · output <path>`.
 - Monitors and scheduled tasks are leases: the watched condition, the last fire's outcome, and `classifier: clear <stamp>` (that exact read-only command ran once attended) or `classifier: untested`.
 - Restart class. `auto`: read-only or idempotent, cheap, local, same session; no agent spawn, not a workflow; kills nothing not proven ours; starts no detached process or new CLI session; at most once per resume and twice per chain (the plugin keeps the count). `ask`: side-effecting, outward, costly or long, and every workflow and agent spawn; a new session treats every row as `ask`. `never`: one-shot, user- or peer-owned, leftovers.
 - A workflow's restart cell names a condition, not a timer: `ask · same session: stop + resume from run id only if the journal and agent transcripts are unchanged ≥ max(15 min, 3× last progress gap) and no agent call is in progress`.
@@ -210,27 +211,20 @@ Every ephemeral path cited anywhere in the body has a durable copy here or sits 
 
 Gated items read `ask user: <action> (needs fresh approval; user-run: ! <cmd>)`, never an order.
 
-## 5. Evidence preservation (owner defaults)
+## 5. Evidence choice
 
 - **Rule.** Never depend on a file that can vanish on its own; cite one only beside a durable copy or on `Volatile:`. Ephemeral: `/tmp`, `/private/tmp`, `/var/folders`, `$TMPDIR`, session scratch folders, background-task outputs. 30-day: Claude Code's projects, plans and tasks folders. Durable: the handoff tree, tracked files, archives.
 - **What.** Evidence and the tools that made it: scripts, briefs, workflow scripts with literal arguments, journals, small outputs, drafts, the background-work record, scratch-clone patch series. Cited only, never copied: transcripts, session logs, shell history, environment dumps, credentials.
-- **Caps.** Copy files ≤10 MB, ≤50 MB per handoff; the rest are `ref-only` (bytes, sha256, mtime, regeneration command, ≤40 head/tail lines of text). Dedupe by sha256 across buckets (`dup`); a bucket whose `evidence/` and `compact/` folders together exceed `evidence_quota_mb` gets a warning.
-- **Where.** Needed later → `<handoff root>/<repo>/<bucket>/evidence/<stem>/`. Disposable → `<disposable root>/<YYYY-MM-DD>/<stem>-evidence/`, today's folder only, with a retention note from `disposable_keep_days` ("kept until you remove it" when unset). Defaults `~/.claude/handoffs` (bucket `~/.claude/handoffs/<repo>/<ticket-or-topic>/`) and `~/.claude/trash-staging`. Never in a git repository, `.planning/` or a temp folder.
-- **Secret gate**, before each copy and over the draft and recipes at publish. Denied by name: `.env*` (except example, sample, template, dist), private keys, `.netrc`, `.npmrc`, `~/.claude.json`, shell history, `*.har`, `*.sqlite` and similar; regular, scannable files only. HARD patterns: provider key prefixes, PEM blocks, JWTs, `Bearer`/`Basic` headers, `user:password@` URLs. WARN patterns: `password=`, `secret=`, `token=`, `key=` pairs, prefix-less cloud keys, long high-entropy strings, cookies. A log or JSON file with any hit → a `redacted` copy keeping the original sha256; other files: a HARD hit or a deny-listed name → `withheld`, a WARN hit → a `redacted` copy. In the draft and recipes a HARD hit blocks and a WARN hit is advisory. Background-task outputs only as redacted head/tail excerpts. Rule ids are printed, never values. umask 077; folders 0700, files 0600.
-- **Manifest** `MANIFEST.tsv`: `copy_path origin bytes sha256 mtime copied_at mode scan regen_cmd meaning`, scan `full` · `excerpt` · `ref-only` · `withheld` · `redacted`; recipes, `ledger.md` and `inflight.md` included. Order: copy, re-hash, manifest, publish by exclusive create, receipt.
+- **Never paste a secret** into the draft or a recipe, even quoted or inside a command; say where it lives. Why: publish blocks key prefixes, PEM blocks, JWTs, auth headers and `user:pass@` URLs.
+- Caps, dedupe, folders, retention, the copy-time secret gate and the manifest are the helper's (spec §17). Why: code applies them the same way every time, so you only choose `--keep`, `--dispose` or `--clone`.
 
-## 6. Session id and lock
+## 6. Identity, file name and lock (helper)
 
-- **Identity** = full `session_id` + actor, from the plugin's per-process session record, cross-checked against the id the skill passes (mismatch → the line `identity: degraded (<reason>)` under Ownership; none → random token, never a shared name). Compaction and `--resume` keep it; `/clear`, fork and background copies get a new one, linked by `previous_session_id` and `lineage_reason`. `transcript_path` locates, never keys.
-- **Name** `YYYY-MM-DD_HH-MM-SS_<sid8>_<slug>.md`, local time; readers order by frontmatter `date`, never by name or mtime; `-2` on a clash; `-a<agent8>` only with an agent id known to code. Only the main session writes (§8).
-- **Lock.** Publishing is an exclusive create with no lock; a published file is never rewritten. The one lock guards the helper's read-modify-write of `.sessions/<sid>.json` (bucket, lane, worktree): owner = sid + actor + pid + process start time + host; stale only when that pid is gone or its start time differs (then taken over and logged); a live lock is never broken.
-- **Ownership** is checked before the first write to anything shared (foreign commits, a newer foreign handoff, a lane held elsewhere, another live session on the checkout): read-only there, recorded under Ownership. Never edit or delete another session's files.
+The helper sets session id, actor, file name, lineage and lock (spec §18); never type them. Why: a typed id or name breaks the chain the resume follows. If `begin` prints `identity: degraded (<reason>)`, copy that line under Ownership. Never edit or delete another session's files.
 
-## 7. Lint (helper, at publish; it flags and never edits)
+## 7. Lint (helper)
 
-- **Blocking** `LINT`, nothing published: headings missing, renamed or out of order; frontmatter, marker or sentinel in the draft; Resume here over 5 lines; Step 1 differs from Next steps item 1; a none-section empty without its none-form; an ephemeral path with no durable copy and not on `Volatile:`; a Live state row without an as-of; a `checked` or `verified` time the helper did not print in this run, or one that is not a whole stamp, outside lines carried from `previous_handoff` (byte-identical, or a tagged foreign line equal to a base line apart from the id and the tag, rule 8); a line from a foreign base without its `[from …]` tag, or a tagged approval without `context only, not valid here; re-ask` or with `used`/`not yet used`; in repo mode, a machine-private path left after the export rewrite (`~/.claude/projects/`, a `.jsonl` under `~/.claude/`, another user's home, a `claude-*` temp path); an id range; an `UPDATE` or addendum heading; a recipe with a placeholder, a script not in the manifest, or an agent spawn without model and effort; a HARD secret hit in the draft or recipes.
-- **Advisory** `ADVISORY`, published: over 20 KB; a section over its cap; a code block over 5 lines; log-, warning- or stack-shaped lines; 4 or more consecutive hash lines; over 15 changes or 3 must-read paths; a WARN secret hit; a recorded job's recipe whose `command:` differs from its record; 30% or more of non-ledger lines shared with `previous_handoff` (lines starting `U-`, `D-`, `X-`, `Q-` or `Superseded:`, headings, none-forms and helper-pasted Evidence lines excluded).
-- Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kept at <path>` · `REFUSED: <other reason>`. In repo mode one export line follows a written receipt: `Exported to repository: <path> (untracked; review and commit it yourself)` · `Export refused: <reason>` · `Not exported: <how to accept>`.
+`publish` lints the draft and recipes and never edits them. Each `LINT <id> <where>` (blocking: nothing published) or `ADVISORY <id> <where>` (published) is followed by `  why: <reason> · fix: <fix>`; the rule list is spec §15. Why here: the rules you need while drafting are in §1–§4; the lint names any you missed, with its fix.
 
 ## 8. Subagent form (returned as text, never written)
 

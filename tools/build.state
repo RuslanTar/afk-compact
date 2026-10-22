@@ -20,6 +20,7 @@
     "plugin/scripts/compactinue-store",
     "plugin/skills/handoff/SKILL.md",
     "plugin/skills/handoff/references/handoff-template.md",
+    "plugin/skills/report/SKILL.md",
     "plugin/skills/resume/SKILL.md",
     "plugin/skills/resume/references/self-heal.md",
     "plugin/skills/status/SKILL.md"

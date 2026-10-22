@@ -7,7 +7,7 @@ In order; omit empty sections lacking a None: form:
 First line inside <summary>: ⟪compactinue v1 n=1a2b3c4d s=main⟫
 # <ticket or topic> — <state in ≤8 words>
 ## Resume here (≤5 lines)
-Status: active|blocked|waiting-owner|waiting-job|done · State: <ticket goal's state> (checkpoint: clean | MID-STEP <step>, remaining <what>)
+Status: active|blocked|waiting-owner|waiting-job|done · Acuity: stable|watch|unstable (unstable: broken build, half-applied step, red test mid-fix, MID-STEP; watch: jobs running, pending MR/CI/answer, deadline) · State: <ticket goal's state> (checkpoint: clean | MID-STEP <step>, remaining <what>)
 Step 1: `<one exact command or edit>` — for "<user's latest request>" | proposed
 Gate: <blocker | none> · Don't: <likeliest mistake>
 Live: <N running: B-1 <runtime id>, …> | nothing running known (not checked)
