@@ -182,6 +182,19 @@ test('after-step: EXISTS sha-match → copy_exists; EXISTS sha-differs → copy_
   expect(w.toasts.some(t => t.includes('copy-failed'))).toBe(true)
 })
 
+test('RRP-04 (core-to-mod §13): after EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {
+  const w = new World().install(on)
+  w.saveLine = `EXISTS: ${ROOT}/r/x.md sha-differs`
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  const saves = w.callsOf('save-copy')
+  expect(saves.length).toBe(1)
+  const from = w.flag(saves[0], '--from') ?? ''
+  expect(from.endsWith('.mod.md')).toBe(true)
+  expect(w.writes.filter(p => p === from).length).toBe(1)
+  expect(w.rowsOf('copy_mismatch').length).toBe(1)
+})
+
 test('AT-E-11: measured_block off: no Measured facts in the instructions', async ($, on) => {
   const w = new World().install(on)
   w.measured = 'Git: main @ 3f9c2e1'
