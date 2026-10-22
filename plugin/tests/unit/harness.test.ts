@@ -307,6 +307,15 @@ export class World {
       }
       case 'measure':
         return ok(this.measureBlock + '\n')
+      case 'notice': {
+        // W-BETA A (core): `notice claim --id I` exclusive-creates <watch>/notice/<I>.shown.
+        const id = flag('--id')
+        if (args[0] !== 'claim' || !/^[a-z0-9-]{1,40}$/.test(id)) return { exitCode: 64, stdout: '' }
+        const marker = `${WATCH}/notice/${id}.shown`
+        if (this.files.has(marker)) return ok('seen\n')
+        this.files.set(marker, '')
+        return ok('show\n')
+      }
       default:
         return { exitCode: 64, stdout: '' }
     }

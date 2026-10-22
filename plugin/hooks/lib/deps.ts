@@ -71,6 +71,8 @@ export interface Deps {
   now(): Promise<number>
   after(ms: number, fn: () => void): { cancel: () => void }
   toast(text: string): void
+  /** `$.ui.toast` for the one-time notice: shown whatever `warn_ui` says (W-BETA A). */
+  notice(text: string, timeoutMs: number): void
   policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
@@ -336,6 +338,9 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     after: (ms, fn) => $.clock.after(ms, fn),
     toast(text) {
       if (cfg.warn_ui) $.ui.toast(text)
+    },
+    notice(text, timeoutMs) {
+      $.ui.toast(text, { timeoutMs })
     },
     async policy() {
       try {

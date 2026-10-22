@@ -12,6 +12,7 @@ import { handoffTurnClose } from './helper'
 import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
 import { ensureIdent, isoLocal, log } from './log'
 import { logOutcome } from './resume'
+import { showNotice } from './notice'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
   const p = await d.paths()
@@ -50,6 +51,8 @@ export async function onSessionStart(d: Deps): Promise<void> {
   await versionCanary(d, sid)
   const pol = await d.policy()
   await log(d, sid, 'policy', { mods_managed_only: pol.mods_managed_only, hooks_managed_only: pol.hooks_managed_only })
+  // WATCHER-SPEC §8 item 8: the first-run notice, once per install (the helper's O_EXCL marker).
+  await showNotice(d, sid)
   // WATCHER-SPEC §6.3 `session` fields; unknown values are null, never omitted (§6.2).
   await log(d, sid, 'session', {
     phase: 'start', source: null, reason: null, mod_loaded: true, previous_session_id: null, lineage_reason: null,

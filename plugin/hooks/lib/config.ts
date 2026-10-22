@@ -32,6 +32,8 @@ export type Config = {
   idle_handoff_turn: 'off' | 'on'
   /** No pre-idle handoff turn below this context size. */
   idle_handoff_min_tokens: number
+  /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
+  watcher_off: boolean
   /** Values replaced while parsing: `config_invalid` keys and `config_clamped` rows (logged once per load). */
   notes: { invalid: string[]; clamped: { key: string; configured: number; effective: number }[] }
 }
@@ -58,6 +60,7 @@ export const DEFAULTS: Config = {
   unattended_prod_reads: 'forbid',
   idle_handoff_turn: 'off',
   idle_handoff_min_tokens: 200000,
+  watcher_off: false,
   notes: { invalid: [], clamped: [] },
 }
 
@@ -169,6 +172,7 @@ export function parseOptions(o: PluginOptions): Config {
     unattended_prod_reads: choice(o, 'unattended_prod_reads', ['forbid', 'allow'] as const, 'forbid', 'forbid', notes),
     idle_handoff_turn: choice(o, 'idle_handoff_turn', ['off', 'on'] as const, 'off', 'off', notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
+    watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
   }
 }
