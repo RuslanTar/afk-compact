@@ -332,7 +332,9 @@ sub prod_class {
 # entry count (never the entries).
 sub export_view {
     my ($r) = @_;
-    $r //= rc::settings();    # no argument: this call's resolved settings (the watcher's `report` calls it so)
+    # No argument: this call's resolved settings (the watcher's `report` calls it so); with no
+    # run context (no rc::init, e.g. report.pl) resolve them here, never export empty values.
+    $r //= rc::settings() // resolve({});
     my $v = $r->{values} || {};
     my $uc = ctx::user_config();
     my $home = util::home();

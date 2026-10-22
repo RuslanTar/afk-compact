@@ -1551,7 +1551,17 @@ sub builtin {
         my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };
         push @e, 'keys without an export class: ' . join(', ', map { $_->[0] } @none) if @none;
         local $ENV{HOME} = $a->{home} if defined $a->{home};
-        my $view = settings::export_view({ values => $a->{values} || {} });
+        # "noarg": export_view() with no argument (the watcher's report call, W2C-2). With
+        # "values" the run context holds them; without, there is no run context (no rc::init)
+        # and the view must still be the resolved settings, not empty values.
+        my $view;
+        if ($a->{noarg}) {
+            local $ENV{CLAUDE_CONFIG_DIR};
+            delete local @ENV{ grep { /^CLAUDE_PLUGIN_OPTION_/ } keys %ENV };
+            local %rc::R = $a->{values} ? (settings => { values => $a->{values} }) : ();
+            $view = settings::export_view();
+        }
+        else { $view = settings::export_view({ values => $a->{values} || {} }) }
         my %got = @$view;
         for my $k (sort keys %{ $a->{want} || {} }) {
             my ($g, $w) = ($got{$k}, $a->{want}{$k});
