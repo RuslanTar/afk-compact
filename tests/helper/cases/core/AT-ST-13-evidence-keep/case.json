@@ -1,0 +1,37 @@
+{
+ "id": "AT-ST-13 (BD-4 agent output always withheld, evidence --keep)",
+ "needs": ["fixture:setups/st-13-agent-output.json"],
+ "note": "C-STORE D6 BD-4 / MOD-SPEC §10 (CORE-10), the evidence --keep half of AT-ST-13 (core-to-skills §4): `evidence --keep` runs the same evidence::copy as the sweep, so on the WP-fix setup st-13-agent-output the symlink to an agent JSONL (a1; evidence --keep resolves the link first, so its row names the JSONL and the deny-name rule withholds it before the agent-output detector runs), the file whose first line is a transcript row (t1) and the outputs the sidecar types subagent (b1) and workflow (w1) are withheld with no bytes kept, while the monitor output (m1) is kept; no agent text reaches the evidence folder. Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "tmp_base": "repo",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "setup",
+   "setup": [
+    {"fixture_setup": "st-13-agent-output.json"},
+    {"repo": {"branch": "feature/LAB-7-retry", "commits": [{"files": {"app/retry.rb": "x = 1\n"}, "msg": "seed"}]}, "at": "$TMP/repo"},
+    {"paths": ["$TMP/claude-501/-tmp-example-repo/$SID/tasks/a1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/t1.output",
+               "$TMP/claude-501/-tmp-example-repo/$SID/tasks/b1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/w1.output",
+               "$TMP/claude-501/-tmp-example-repo/$SID/tasks/m1.output"], "sid": "$SID"}
+   ]},
+  {"name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": ["begin", "--sid", "$SID", "--topic", "retry"],
+   "capture": {"STAGE": "json:stage", "STEM": "json:stem"},
+   "expect": {"exit": 0}},
+  {"name": "evidence --keep",
+   "cwd": "$TMP/repo",
+   "argv": ["evidence", "--stage", "$STAGE", "--keep",
+            "$TMP/claude-501/-tmp-example-repo/$SID/tasks/a1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/t1.output",
+            "$TMP/claude-501/-tmp-example-repo/$SID/tasks/b1.output", "$TMP/claude-501/-tmp-example-repo/$SID/tasks/w1.output",
+            "$TMP/claude-501/-tmp-example-repo/$SID/tasks/m1.output"],
+   "expect": {"exit": 0,
+    "stdout_has": ["^withheld - \\d+ \\S+ \\S+/(?:tasks/a1\\.output|subagents/agent-a5c0ffee0a1b2c3d4\\.jsonl)$",
+                   "^withheld - \\d+ \\S+ \\S+/tasks/t1\\.output$",
+                   "^withheld - \\d+ \\S+ \\S+/tasks/b1\\.output$",
+                   "^withheld - \\d+ \\S+ \\S+/tasks/w1\\.output$",
+                   "^(?:copied|redacted) \\S+/evidence/$STEM/m1\\.output \\d+ [0-9a-f]{8} \\S+/tasks/m1\\.output$"],
+    "grep_absent": [{"dir": "$ROOT", "text": "Seven callers"}, {"dir": "$ROOT", "text": "workflow fixture"}, {"dir": "$ROOT", "text": "RetryWorker.enqueue"}]}}
+ ]
+}
