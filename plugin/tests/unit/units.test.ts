@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, leftovers } from '../../hooks/lib/assemble'
-import { DEFAULTS, clamp, parseOptions } from '../../hooks/lib/config'
+import { CLAMP_DEFAULTS, DEFAULTS, clamp, clampConstants, minWindow, parseOptions } from '../../hooks/lib/config'
 import { CLOSE, OPEN, detectSummary, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
@@ -191,7 +191,7 @@ test('clamp arithmetic: AT-P-03 and AT-P-04', () => {
   const p4 = clamp(DEFAULTS, 200000)
   expect([p4.soft_max, p4.target, p4.disabled]).toEqual([51000, 34000, 'trigger-disabled-small-window'])
   const off = clamp({ ...DEFAULTS, triggers: false }, 1000000)
-  expect([off.disabled, off.clamped]).toEqual(['triggers-off', []])
+  expect([off.disabled, off.clamped, off.small_window]).toEqual(['triggers-off', [], false])
   const small = clamp(DEFAULTS, 350000)
   expect(small.disabled).toBeNull()
 })
@@ -262,4 +262,49 @@ test('detector: an s=sub marker with the main Resume here heading in a subagent-
   expect(detectSummary(text, name, { dispatchNonce: '5e6f7081', scope: 'main' }).verdict).toBe('scope-leak')
   const noHeading = text.replace('## Resume here\nStatus: active\n', '')
   expect(detectSummary(noHeading, name, { dispatchNonce: '5e6f7081', scope: 'sub' }).verdict).toBe('ok')
+})
+
+// P5-FOLD A3 (MOD-SPEC §1.2 effective thresholds): small-window diagnostics.
+test('AT-P5-07: clamp diagnostics: raw negative values, min_window, triggers off computes the clamp, the 100,000 window floor', () => {
+  const tiny = clamp(DEFAULTS, 100000)
+  expect([tiny.disabled, tiny.soft_max, tiny.target, tiny.small_window, tiny.min_window]).toEqual(['trigger-disabled-small-window', -49000, -32667, true, 329000])
+  const off = clamp({ ...DEFAULTS, triggers: false }, 100000)
+  expect([off.disabled, off.small_window, off.min_window]).toEqual(['triggers-off', true, 329000])
+  expect(off.clamped.map(c => c.key)).toEqual(['soft_max', 'target'])
+  const floor = parseOptions({ native_window_tokens: 50000 })
+  expect([floor.native_window_tokens, floor.notes.clamped]).toEqual([100000, [{ key: 'native_window_tokens', configured: 50000, effective: 100000 }]])
+  expect(parseOptions({ native_window_tokens: 0 }).native_window_tokens).toBe(0)
+  expect(parseOptions({ native_window_tokens: 100000 }).notes.clamped).toEqual([])
+  expect(minWindow({ ...DEFAULTS, handoff_turn: 'off' })).toBe(313000)
+  expect(minWindow({ ...DEFAULTS, compact_target_tokens: 100000 })).toBe('never')
+  expect(minWindow({ ...DEFAULTS, compact_soft_max_tokens: 170000 })).toBe('never')
+  // min_window is the edge: enabled there, disabled one token below.
+  expect([clamp(DEFAULTS, 329000).disabled, clamp(DEFAULTS, 328999).disabled]).toEqual([null, 'trigger-disabled-small-window'])
+  const ho = { ...DEFAULTS, handoff_turn: 'off' as const }
+  expect([clamp(ho, 313000).disabled, clamp(ho, 312999).disabled]).toEqual([null, 'trigger-disabled-small-window'])
+})
+
+test('clamp constants: one shared source (the spec-literals clamp object when complete), else the built-in values', () => {
+  expect(CLAMP_DEFAULTS).toEqual({ native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000 })
+  expect(clampConstants(undefined)).toEqual(CLAMP_DEFAULTS)
+  expect(clampConstants({ native_offset: 33000 })).toEqual(CLAMP_DEFAULTS)
+  const shipped = specValue('clamp')
+  if (shipped !== undefined) expect(clampConstants(shipped)).toEqual(CLAMP_DEFAULTS)
+})
+
+// S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.
+test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
+  expect(DEFAULTS.max_auto_continues_per_hour).toBe(6)
+  expect(parseOptions({}).max_auto_continues_per_hour).toBe(6)
+  const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
+  expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'on', 100000])
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }] })
+  // AT-PC-04: any other value is `code` (the no-extra-cost path), whatever the default.
+  const b = parseOptions({ precompact_turn: 'sometimes', unattended_prod_reads: 'yes', idle_handoff_turn: 'maybe', idle_handoff_min_tokens: '2000000' })
+  expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'off', 1000000])
+  expect(b.notes.invalid).toEqual(['precompact_turn', 'unattended_prod_reads', 'idle_handoff_turn'])
+  const c = parseOptions({ precompact_turn: '${user_config.precompact_turn}', unattended_prod_reads: '', idle_handoff_turn: '  ' })
+  expect([c.precompact_turn, c.unattended_prod_reads, c.idle_handoff_turn, c.idle_handoff_min_tokens, c.notes])
+    .toEqual([DEFAULTS.precompact_turn, 'forbid', 'off', 200000, { invalid: [], clamped: [] }])
+  expect(parseOptions({ precompact_turn: 'CODE' }).precompact_turn).toBe('code')
 })
