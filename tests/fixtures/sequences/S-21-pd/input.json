@@ -130,7 +130,7 @@
         "boundaries": 1,
         "summaries": 1
       },
-      "note": "the record is now older than the last Stop -> other",
+      "note": "the record is now older than the last Stop, and that Stop also saved the copy: both rules disqualify it -> other (S-21-pd-stale isolates the last-Stop rule)",
       "transcript_append": "transcripts/S-21-pd/main.part-03.jsonl",
       "expect": {
         "exit": 0,

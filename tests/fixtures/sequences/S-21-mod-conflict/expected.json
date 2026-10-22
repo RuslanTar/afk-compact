@@ -1,0 +1,89 @@
+{
+  "id": "S-21-mod-conflict",
+  "spec": "PKG-RUNTIME E.2 (a non-null rollup value is never replaced; a disagreement counts as join_conflict in status); AT-WD-11",
+  "metrics": {
+    "join_conflict": 1,
+    "where": "status (CORE-16 / CORE-11 count; the case maps it)"
+  },
+  "step_asserts": [
+    {
+      "after_step": 4,
+      "why": "PostCompact's own-boundary read filled the rollup sizes from the stand-in row",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 1,
+          "fields": {
+            "nonce": "1a2b3c4d",
+            "pre_tokens": 198000,
+            "post_tokens": 14943
+          }
+        }
+      ],
+      "files": [
+        {
+          "path": "$ROOT/example-repo/general/compact/*_c1-1a2b3c.md",
+          "count": 1,
+          "snapshot": "copy-c1"
+        }
+      ]
+    },
+    {
+      "after_step": 5,
+      "why": "one compaction_boundary row from the boundary reconcile matched, not from the stand-in",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction_boundary",
+          "count": 1,
+          "fields": {
+            "nonce": "1a2b3c4d",
+            "pre_tokens": 223438,
+            "post_tokens": 14943,
+            "duration_ms": 55960,
+            "precomputed": false,
+            "cc_version": "2.1.306"
+          }
+        }
+      ]
+    },
+    {
+      "after_step": 6,
+      "why": "the conflicting non-null rollup value is kept (no rollup row rewritten), counted once; the copy keeps mode 0400 and its bytes",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction",
+          "count": 1,
+          "fields": {
+            "nonce": "1a2b3c4d",
+            "pre_tokens": 198000
+          }
+        },
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction_boundary",
+          "count": 1
+        }
+      ],
+      "files": [
+        {
+          "path": "$ROOT/example-repo/general/compact/*_c1-1a2b3c.md",
+          "count": 1,
+          "mode": "0400",
+          "same_bytes_as": "copy-c1"
+        }
+      ],
+      "joined": [
+        {
+          "nonce": "1a2b3c4d",
+          "pre_tokens": 198000,
+          "post_tokens": 14943,
+          "duration_ms": 55960,
+          "join_conflict": 1
+        }
+      ]
+    }
+  ]
+}

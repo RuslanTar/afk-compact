@@ -1,0 +1,21 @@
+{
+  "id": "S-21-pd-512k",
+  "spec": "PKG-RUNTIME E.1 (the same 512 KB read as _calls_since, one read), AT-WD-10",
+  "step_asserts": [
+    {
+      "after_step": 5,
+      "why": "RR-S21-03 with a transcript over 512 KB: the boundary row is found in the one tail read, and the step's expect holds ms_max 2000 (the hook budget)",
+      "rows": [
+        {
+          "file": "$WATCH/$SID.classic.jsonl",
+          "ev": "permission_denied",
+          "count": 1,
+          "fields": {
+            "turn_kind": "post-compaction",
+            "caused_by": "plugin"
+          }
+        }
+      ]
+    }
+  ]
+}

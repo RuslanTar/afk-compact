@@ -30,7 +30,10 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   sequences every sequences/<id>/ replays: files exist, payloads match their step, the main
             transcript after each step's appends holds the declared transcript_state, and with
             "order": "S-21" SessionStart(compact) and PostCompact see no boundary row newer than
-            PreCompact (lab S-21: the row lands after PostCompact)
+            PreCompact (lab S-21: the row lands after PostCompact); then every pinned value is
+            recomputed from the replayed transcript and step times: BD-3 proof / proof_lag_ms /
+            settle wait (AT-BD-01), PKG-RUNTIME E.1 turn_kind (AT-WD-10) and the E.2
+            compaction_boundary sizes, rollup sizes and joined view (AT-WD-11)
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
@@ -643,6 +646,232 @@ def transcript_counts(text):
     return nb, ns
 
 
+def main_boundaries(text):
+    """Main-thread compact_boundary rows of transcript text: {e, off, meta, version} in file order
+    (off = the byte offset of the row's line, for the 512 KB tail rule of PKG-RUNTIME E.1)."""
+    out, off = [], 0
+    for line in text.split("\n"):
+        try:
+            r = json.loads(line) if line.strip() else None
+        except ValueError:
+            r = None
+        if (isinstance(r, dict) and r.get("type") == "system" and r.get("subtype") == "compact_boundary"
+                and not r.get("isSidechain")):
+            out.append({"e": parse_iso(r.get("timestamp")), "off": off, "meta": r.get("compactMetadata") or {},
+                        "version": r.get("version")})
+        off += len(line.encode("utf-8")) + 1
+    return out
+
+
+# The reconcile constants the sequence references read (reconcile.pm, MOD-SPEC §5.4; BD-3 keeps
+# them as built, T-TEXT E5), the lab S-21 lag range (AT-BD-01) and the E.1 tail read.
+SETTLE_S, MAIN_WINDOW_S, TOL_S, SUB_WINDOW_S = 10, 600, 2, 120
+S21_LAG_MS = (12, 42)
+TAIL_BYTES = 512 * 1024
+
+
+def seq_compactions(inp, info):
+    """One entry per PreCompact step: its capture var, the main boundary count at PreCompact,
+    the PostCompact step that follows, and whether a seeded mod dispatch proves it main (P1)."""
+    seeded = {}
+    for s in inp.get("seed", []):
+        m = re.match(r"^\$WATCH/\$SID/dispatch/([0-9a-f]{8})\.json$", s.get("to", ""))
+        if m and os.path.exists(os.path.join(FIX, s.get("copy", ""))):
+            seeded[m.group(1)] = json.loads(read(os.path.join(FIX, s["copy"])))
+    comps = []
+    for i, st in enumerate(info):
+        if st["ev"] != "PreCompact":
+            continue
+        post = next((j for j in range(i + 1, len(info)) if info[j]["ev"] == "PostCompact"), None)
+        var = next(iter(st["capture"]), None)
+        comps.append({"var": var, "pre": i, "at_pre": len(st["mains"]), "post": post,
+                      "post_e": info[post]["now"] if post is not None else None})
+    loose = [c for c in comps if c["var"] is None]
+    for n, d in seeded.items():
+        if len(loose) == 1:
+            loose[0].update(nonce=n, p1=d.get("agent_id") is None and d.get("channel") in ("mod-hook", "mod-self"),
+                            dispatch_e=parse_iso(d.get("ts")))
+    return comps
+
+
+def seq_comp_for(comps, nonce):
+    if isinstance(nonce, str) and nonce.startswith("$"):
+        return next((c for c in comps if c["var"] == nonce[1:]), None)
+    return next((c for c in comps if c.get("nonce") == nonce), None)
+
+
+def seq_boundary(c, comps, st):
+    """The main boundary row that reconcile matches to compaction c at step st (the first one
+    after c's PreCompact count, not yet a later compaction's, at most MAIN_WINDOW_S after its
+    PostCompact), or None."""
+    later = [x["at_pre"] for x in comps if x["pre"] > c["pre"]]
+    lim = min(later) if later else None
+    for k, bd in enumerate(st["mains"]):
+        if k < c["at_pre"] or (lim is not None and k >= lim) or bd["e"] is None or c["post_e"] is None:
+            continue
+        if c["post_e"] <= bd["e"] + 0.0005 and bd["e"] - c["post_e"] <= MAIN_WINDOW_S:
+            return bd
+    return None
+
+
+def seq_bd3(c, comps, st):
+    """BD-3 (T-TEXT E5) rollup fields of compaction c as reconcile decides them at step st."""
+    bd = seq_boundary(c, comps, st)
+    proof = "P1" if c.get("p1") else ("P3" if bd else "none")
+    lag = int(round((bd["e"] - c["post_e"]) * 1000)) if bd and proof != "none" else None
+    return {"proof": proof, "proof_lag_ms": lag, "settle_ms": int(round((st["now"] - c["post_e"]) * 1000))}
+
+
+def seq_copied(c, comps, info, upto):
+    """True when a Stop before step index upto has saved compaction c's copy: P1 already in
+    PostCompact, else a reconcile that proves it (P3) or decides it after SETTLE_S."""
+    if c.get("p1"):
+        return True
+    for j in range(c["post"] + 1, upto):
+        if info[j]["ev"] == "Stop" and (seq_boundary(c, comps, info[j]) or info[j]["now"] - c["post_e"] >= SETTLE_S):
+            return True
+    return False
+
+
+def seq_turn_kind(comps, info, k):
+    """PKG-RUNTIME E.1 for the step index k (no rollup row, receipt or nudge in these sequences):
+    a pending record qualifies when its ts is after the last Stop, it has no copy row yet, and a
+    main boundary row inside the last 512 KB lies in [ts - TOL_S, ts + MAIN_WINDOW_S]."""
+    stops = [info[j]["now"] for j in range(k) if info[j]["ev"] == "Stop"]
+    last_stop = max(stops) if stops else None
+    st = info[k]
+    tail_from = st["bytes"] - TAIL_BYTES
+    for c in comps:
+        if c["post"] is None or c["post"] >= k or c.get("p1"):
+            continue
+        ts = c["post_e"]
+        if last_stop is not None and ts <= last_stop:
+            continue
+        if seq_copied(c, comps, info, k):
+            continue
+        if any(bd["off"] >= tail_from and bd["e"] is not None and ts - TOL_S <= bd["e"] <= ts + MAIN_WINDOW_S
+               for bd in st["mains"]):
+            return "post-compaction"
+    return "other"
+
+
+def seq_reference(where, inp, exp, info):
+    """Recompute the values step_asserts pins from the replayed transcript and hook times:
+    BD-3 proof / proof_lag_ms / settle wait (AT-BD-01), E.1 turn_kind (AT-WD-10) and the E.2
+    compaction_boundary sizes and the rollup join (AT-WD-11)."""
+    p, comps, snaps = [], seq_compactions(inp, info), {}
+    for a in exp.get("step_asserts", []):
+        k = a.get("after_step", 0) - 1
+        if not 0 <= k < len(info):
+            continue
+        st = info[k]
+        for f in a.get("files", []):
+            if f.get("snapshot"):
+                snaps[f["snapshot"]] = (k, f["path"])
+            if f.get("same_bytes_as"):
+                s = snaps.get(f["same_bytes_as"])
+                if s is None or s[0] >= k or s[1] != f["path"]:
+                    p.append("{} after step {}: same_bytes_as {!r} needs an earlier snapshot of {}".format(
+                        where, k + 1, f["same_bytes_as"], f["path"]))
+        for rw in a.get("rows", []):
+            f = rw.get("fields") or {}
+            w = "{} after step {} {}".format(where, k + 1, rw.get("ev"))
+            if rw.get("ev") == "compaction" and ({"proof", "proof_lag_ms"} & set(f)):
+                c = seq_comp_for(comps, f.get("nonce"))
+                if c is None or c["post"] is None or c["post"] > k:
+                    p.append("{}: nonce {} names no compaction whose PostCompact ran by then".format(w, f.get("nonce")))
+                    continue
+                ref = seq_bd3(c, comps, st)
+                for key in ("proof", "proof_lag_ms"):
+                    if key in f and f[key] != ref[key]:
+                        p.append("{}: {} is {!r}, the BD-3 reference gives {!r} (boundary row time minus the "
+                                 "PostCompact time)".format(w, key, f[key], ref[key]))
+                if ref["proof"] == "P3" and inp.get("order") == "S-21" and not S21_LAG_MS[0] <= ref["proof_lag_ms"] <= S21_LAG_MS[1]:
+                    p.append("{}: proof_lag_ms {} is outside the lab S-21 range {}-{} ms".format(w, ref["proof_lag_ms"], *S21_LAG_MS))
+                if ref["proof"] == "none":
+                    if ref["settle_ms"] < SETTLE_S * 1000:
+                        p.append("{}: unproven, but the stash is only {} ms old: reconcile waits SETTLE_S".format(w, ref["settle_ms"]))
+                    ge = (a.get("fields_ge") or {}).get("settle_waited_ms")
+                    if ge is None or not 0 <= ge <= ref["settle_ms"]:
+                        p.append("{}: an unproven stash needs fields_ge settle_waited_ms between 0 and {}".format(w, ref["settle_ms"]))
+            if rw.get("ev") == "compaction" and ({"pre_tokens", "post_tokens", "duration_ms"} & set(f)):
+                c = seq_comp_for(comps, f.get("nonce"))
+                if c is None or c["post"] is None or c["post"] > k:
+                    p.append("{}: nonce {} names no compaction whose PostCompact ran by then".format(w, f.get("nonce")))
+                    continue
+                ref = seq_rollup_sizes(c, comps, info)
+                for key in ("pre_tokens", "post_tokens", "duration_ms"):
+                    if key in f and f[key] != ref[key]:
+                        p.append("{}: rollup {} is {!r}, the writer's reading gives {!r}".format(w, key, f[key], ref[key]))
+            if rw.get("ev") == "permission_denied" and "turn_kind" in f:
+                if st["ev"] != "PermissionDenied":
+                    p.append("{}: a turn_kind assert must follow a PermissionDenied step".format(w))
+                    continue
+                ref = seq_turn_kind(comps, info, k)
+                if f["turn_kind"] != ref:
+                    p.append("{}: turn_kind is {!r}, the E.1 reference gives {!r}".format(w, f["turn_kind"], ref))
+            if rw.get("ev") == "compaction_boundary" and "nonce" in f:
+                c = seq_comp_for(comps, f["nonce"])
+                bd = seq_boundary(c, comps, st) if c else None
+                if bd is None:
+                    p.append("{}: no main boundary row is matched to nonce {} by then".format(w, f["nonce"]))
+                    continue
+                ref = {"pre_tokens": bd["meta"].get("preTokens"), "post_tokens": bd["meta"].get("postTokens"),
+                       "duration_ms": bd["meta"].get("durationMs"), "precomputed": bool(bd["meta"].get("precomputed")),
+                       "cc_version": bd["version"]}
+                for key, v in sorted(ref.items()):
+                    if key in f and f[key] != v:
+                        p.append("{}: {} is {!r}, the matched boundary row gives {!r}".format(w, key, f[key], v))
+                if rw.get("count") != 1:
+                    p.append("{}: one compaction_boundary row per nonce (count 1)".format(w))
+        for j in a.get("joined", []):
+            p += seq_joined(where, k, j, comps, info)
+    return p
+
+
+SIZE_KEYS = (("pre_tokens", "preTokens"), ("post_tokens", "postTokens"), ("duration_ms", "durationMs"))
+
+
+def seq_rollup_sizes(c, comps, info):
+    """The rollup row's sizes as its writer fills them. P1 (mod path): PostCompact writes the row,
+    with the sizes of postcompact.pm own_boundary (the newest main row already in the transcript,
+    stamped no earlier than the dispatch time minus 1 s; S-21: usually none, so null). Otherwise
+    reconcile writes it with the matched boundary's sizes once that row is in."""
+    if c.get("p1"):
+        since = c.get("dispatch_e")
+        own = [x for x in info[c["post"]]["mains"] if since is not None and x["e"] is not None and x["e"] >= since - 1]
+        own = own[[x["e"] for x in own].index(max(x["e"] for x in own))] if own else None   # the newest row
+    else:
+        own = next((seq_boundary(c, comps, st) for st in info[c["post"] + 1:] if st["ev"] == "Stop"
+                    and seq_boundary(c, comps, st)), None)
+    return {k2: (own["meta"].get(m) if own else None) for k2, m in SIZE_KEYS}
+
+
+def seq_joined(where, k, j, comps, info):
+    """E.2 join: a null rollup field takes the matched boundary's value, a non-null one is kept;
+    join_conflict counts the nonces whose kept value disagrees with the boundary."""
+    w = "{} after step {} joined {}".format(where, k + 1, j.get("nonce"))
+    c = seq_comp_for(comps, j.get("nonce"))
+    if c is None or c["post"] is None:
+        return ["{}: names no compaction".format(w)]
+    bd = seq_boundary(c, comps, info[k])
+    keys = SIZE_KEYS
+    rollup = seq_rollup_sizes(c, comps, info)
+    joined, conflict = {}, 0
+    for k2, m in keys:
+        b = bd["meta"].get(m) if bd else None
+        joined[k2] = rollup[k2] if rollup[k2] is not None else b
+        conflict = 1 if rollup[k2] is not None and b is not None and rollup[k2] != b else conflict
+    p = []
+    for k2, v in sorted(joined.items()):
+        if k2 in j and j[k2] != v:
+            p.append("{}: {} is {!r}, the E.2 join gives {!r} (rollup {!r}, boundary {!r})".format(
+                w, k2, j[k2], v, rollup[k2], bd["meta"] if bd else None))
+    if "join_conflict" in j and j["join_conflict"] != conflict:
+        p.append("{}: join_conflict is {}, the E.2 join gives {}".format(w, j["join_conflict"], conflict))
+    return p
+
+
 def check_sequences():
     problems, count = [], 0
     if not os.path.isdir(SEQUENCES):
@@ -664,7 +893,7 @@ def check_sequences():
         for s in inp.get("seed", []):
             if not os.path.exists(os.path.join(FIX, s.get("copy", ""))):
                 problems.append("{}: seed file {} missing".format(where, s.get("copy")))
-        steps, text, at_pre = inp.get("steps", []), "", None
+        steps, text, at_pre, info, broken = inp.get("steps", []), "", None, [], False
         for i, st in enumerate(steps, 1):
             argv = st.get("argv", [])
             ev = argv[1] if len(argv) > 1 and argv[0] == "hook" else None
@@ -673,12 +902,14 @@ def check_sequences():
                 p = os.path.join(FIX, st["transcript_append"])
                 if not os.path.exists(p):
                     problems.append("{}: transcript_append {} missing".format(label, st["transcript_append"]))
+                    broken = True
                     continue
                 text += read(p)
             try:
                 payload = json.loads(read(os.path.join(FIX, st.get("stdin", ""))))
             except (OSError, ValueError) as e:
                 problems.append("{}: stdin {}: {}".format(label, st.get("stdin"), e))
+                broken = True
                 continue
             if payload.get("hook_event_name") != ev or payload.get("session_id") != inp.get("sid"):
                 problems.append("{}: stdin {} is a {} payload for {}".format(
@@ -689,15 +920,23 @@ def check_sequences():
                 problems.append("{}: the replayed transcript holds {} boundary and {} summary rows, "
                                 "transcript_state says {} and {}".format(label, nb, ns, want.get("boundaries"),
                                                                           want.get("summaries")))
+            nbytes = len(text.encode("utf-8"))
+            if st.get("transcript_bytes_min") is not None and nbytes < st["transcript_bytes_min"]:
+                problems.append("{}: the replayed transcript is {} bytes, transcript_bytes_min says {}".format(
+                    label, nbytes, st["transcript_bytes_min"]))
             if ev == "PreCompact":
                 at_pre = nb
             in_hook = ev == "PostCompact" or (ev == "SessionStart" and payload.get("source") == "compact")
             if inp.get("order") == "S-21" and in_hook and at_pre is not None and nb != at_pre:
                 problems.append("{}: S-21 order: the boundary row lands after PostCompact, but this step sees "
                                 "{} new since PreCompact".format(label, nb - at_pre))
+            info.append({"ev": ev, "now": parse_iso(st.get("now")), "capture": st.get("capture") or {},
+                         "mains": main_boundaries(text), "bytes": nbytes})
         for a in exp.get("step_asserts", []):
             if not 1 <= a.get("after_step", 0) <= len(steps):
                 problems.append("{}: step_asserts after_step {} is not a step".format(where, a.get("after_step")))
+        if not broken and len(info) == len(steps):
+            problems += seq_reference(where, inp, exp, info)
     return problems, count
 
 
