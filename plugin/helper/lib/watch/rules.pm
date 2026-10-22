@@ -37,7 +37,9 @@ our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_e
                 handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched
                 permission_denied
                 stash_dropped stash_kept copy_attributed copy_attribution_ambiguous copy_attribution_failed
-                orphan_finished);
+                orphan_finished
+                handoff_turn_start handoff_turn_end idle_mismatch resume_remeasured resume_remeasure_failed
+                submit_dropped queue_contract);
 my %KIND = map { $_ => 1 } @KINDS;
 our %MISSED;
 
@@ -390,6 +392,13 @@ sub _derive {
     my $pc = $roll ? $roll->{precomputed} : undef;
     $pc = $$pc if ref $pc eq q(SCALAR);
     $C->{precompute} = 1 if !$B && $pc;
+    if ($roll) {
+        my $iv = $roll->{idle};
+        $iv = ($$iv ? 'true' : 'false') if ref $iv eq 'SCALAR';
+        $C->{idle} = (defined $iv && !ref $iv && $iv =~ /\A(?:true|false|unknown)\z/) ? $iv
+                    : (defined $iv && !ref $iv && $iv eq '1') ? 'true' : (defined $iv && !ref $iv && $iv eq '0') ? 'false' : undef;
+        $C->{idle_source} = $roll->{idle_source} if defined $roll->{idle_source} && !ref $roll->{idle_source};
+    }
     if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
     unless (defined $copy) {
         my $ref_t = $P ? _t($P) : $B ? $B->{ts_epoch} : undef;
@@ -435,6 +444,10 @@ sub _derive {
         $B->{bypass_suspected} = watch::ctx::B($C->{bypass_suspected});
         $B->{mod_off} = watch::ctx::B($C->{mod_off});
         $B->{postcompact} = watch::ctx::B($P);
+        # M-01 idle (IC-1 D1): from the rollup row (mod OR the native notice, settled at
+        # reconcile); an idle compaction arrives as trigger `auto`.
+        $B->{idle} = $C->{idle};
+        $B->{idle_source} = $C->{idle_source};
     }
 }
 

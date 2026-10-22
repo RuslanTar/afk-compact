@@ -75,7 +75,7 @@ sub compactions {
                        precomputed => _b($b->{precomputed}), verdict => $b->{verdict}, channel => $b->{channel},
                        copy => $b->{copy}, band => $b->{band_position}, nonce => $b->{nonce}, ts => $b->{ts},
                        warm_gap_s => $b->{warm_gap_s}, nudge_driven => _b($b->{nudge_driven}),
-                       rapid => $b->{rapid_refill_run}, line => $b->{line} };
+                       rapid => $b->{rapid_refill_run}, line => $b->{line}, idle => $b->{idle} };
         }
     }
     return \@c if @c;
@@ -83,7 +83,8 @@ sub compactions {
         push @c, { src => 'rollup', main => (($r->{actor} // '') eq 'main' ? 1 : 0), trigger => $r->{trigger},
                    pre => $r->{pre_tokens}, post => $r->{post_tokens}, duration_ms => $r->{duration_ms},
                    precomputed => _b($r->{precomputed}), verdict => $r->{verdict}, channel => $r->{channel},
-                   copy => $r->{copy}, band => undef, nonce => $r->{nonce}, ts => $r->{ts}, nudge_driven => _b($r->{nudged}) };
+                   copy => $r->{copy}, band => undef, nonce => $r->{nonce}, ts => $r->{ts}, nudge_driven => _b($r->{nudged}),
+                   idle => (ref $r->{idle} ? (_b($r->{idle}) ? 'true' : 'false') : $r->{idle}) };
     }
     return \@c;
 }
@@ -166,6 +167,7 @@ sub stats {
             push @{ $s{durations}{ $c->{trigger} // 'unknown' } }, $c->{duration_ms} if defined $c->{duration_ms};
             push @{ $s{bands} }, $c->{pre} if defined $c->{pre};
             $s{nudge_driven}++ if $c->{nudge_driven};
+            $s{idle}++ if ($c->{idle} // '') eq 'true';
             $s{save_gap}++ if !defined $c->{copy} || $c->{copy} =~ /\A(?:missing|not-found|failed)/;
             if ($SHAPED{ $c->{channel} // '' }) { $s{shaped}++; $s{shaped_ok}++ if $OKV{ $c->{verdict} // '' } }
             $s{scope_leak}++ if ($c->{verdict} // '') eq 'scope-leak';
@@ -354,6 +356,7 @@ sub render {
     }
     push @o, '', '## Verdict mix (main)', '';
     push @o, (%{ $s->{verdicts} } ? join(', ', map { "$_ $s->{verdicts}{$_}" } sort keys %{ $s->{verdicts} }) : 'none');
+    push @o, '', 'Idle compactions (the rollup `idle` field, IC-1): ' . ($s->{idle} // 0) . " of $s->{main}";
     push @o, '', '## Background survival', '', ($source eq 'remote' ? 'n/a (remote)' : 'deferred (derived tier)');
     push @o, '', '## Friction (WATCHER-SPEC §5)', '', map { "- $_" } @{ friction($s, $source) };
     push @o, '', '## Alerts by rule', '';
