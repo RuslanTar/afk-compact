@@ -9,7 +9,7 @@ Subagent: skip step 3; never end a turn while your job runs: wait in the foregro
 Compacted mid-turn or precomputed: the last step is [unverified].
 Summary not in handoff format: take state from Measured facts and kept messages.
 A handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.
-Compaction cut off the plugin's handoff turn; draft present. If present, run `compactinue-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.
+Compaction cut off the plugin's handoff turn; draft present. If present, run `"/p/scripts/compactinue-store" publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.
 Measured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):
 Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1
 In flight: none listed
