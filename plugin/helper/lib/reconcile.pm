@@ -57,7 +57,7 @@ sub _load {
     my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
     $j = {} unless ref $j eq 'HASH' && ($j->{v} // 0) == 1;
     $j->{v} = 1;
-    for my $k (qw(classic rolls main subs copied logged done mism fill cbn)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
+    for my $k (qw(classic rolls main subs copied logged done mism fill cbn subc)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
     for my $k (qw(pre rolls_l bounds sbounds)) { $j->{$k} = [] unless ref $j->{$k} eq 'ARRAY' }
     return $j;
 }
@@ -114,6 +114,13 @@ sub _ingest_classic {
             my $rel = $mism ? '' : ($r->{rel_path} // '');
             $st->{copied}{ $r->{id6} } = $rel if defined $r->{id6};
             $st->{copied}{ 'n:' . $r->{nonce} } = $rel if defined $r->{nonce};
+            # a subagent copy not named by agent (MOD-SPEC §5.9): a fill candidate even when its
+            # PostCompact is no longer pending (id6, time and nonce only; _fill checks the file)
+            if (defined $r->{id6} && !ref $r->{id6} && ($r->{slot} // '') eq 'subagents' && $rel ne ''
+                && util::basename($rel) !~ /_[0-9a-z]{8}-a/ && !$st->{fill}{ $r->{id6} }) {
+                my $e = util::parse_iso($r->{ts} // '');
+                $st->{subc}{ $r->{id6} } = { e => $e, (defined $r->{nonce} && !ref $r->{nonce} ? (nonce => $r->{nonce}) : ()) } if defined $e;
+            }
             # the copy a mismatch row names (MOD-SPEC §5.8): a stash still beside it is settled once
             if ($mism && defined $r->{rel_path} && !ref $r->{rel_path}) {
                 $st->{mism}{ $r->{id6} } = $r->{rel_path} if defined $r->{id6};
@@ -203,13 +210,12 @@ sub _fill {
         if (!$bd && defined $csha) { ($bd) = grep { $free->($_) && defined $_->{h} && $_->{h} eq $csha } @sb; $proof = 'b' if $bd }
         if (!$bd) {
             next unless $subs_end;    # an agent file not read to its end may still hold the row
-            # candidates: every agent with a free boundary row within SUB_WINDOW_S on either side
-            # (the stricter count, core-escalations E-C9-10); a fill only when there is exactly
-            # one, and its row lies in the P3 window [e - TOL_S, e + SUB_WINDOW_S]
-            my @near = grep { $free->($_) && defined $_->{a} && abs($_->{e} - $it->{e}) <= $SUB_WINDOW_S } @sb;
-            my @in = grep { $_->{e} >= $it->{e} - $TOL_S } @near;
-            my %ag = map { ($_->{a} => 1) } @near;
-            if (keys %ag == 1 && @in) { ($bd) = sort { $a->{e} <=> $b->{e} } @in; $proof = 'c' }
+            # candidates: every agent with a free boundary row inside the copy's window, the P3
+            # window of _match [e - TOL_S, e + SUB_WINDOW_S] (C-STORE D5 (c)); a fill only when
+            # there is exactly one agent (its earliest row in the window)
+            my @in = grep { $free->($_) && defined $_->{a} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} - $it->{e} <= $SUB_WINDOW_S } @sb;
+            my %ag = map { ($_->{a} => 1) } @in;
+            if (keys %ag == 1) { ($bd) = sort { $a->{e} <=> $b->{e} } @in; $proof = 'c' }
             elsif (keys %ag > 1) {
                 $st->{fill}{$id6} = 'ambiguous';
                 next if $logged->{"copy_attribution_ambiguous:$id6"}++;
@@ -380,8 +386,18 @@ sub _run {
 
     # 0. P3 for the PostCompacts not yet done
     my $pool = _pool($sid_dir, $st);
+    # fill candidates from this session's subagents/ copy rows whose PostCompact is not in the
+    # pool (C-STORE D5: the fill goes by the agent rows, not by what is still pending); kept
+    # until decided or MAIN_WINDOW_S old
+    my %inpool = map { ($_->{id6} => 1) } @$pool;
+    my @subc;
+    for my $id6 (sort keys %{ $st->{subc} }) {
+        my $c = $st->{subc}{$id6};
+        if ($st->{fill}{$id6} || ref $c ne 'HASH' || !defined $c->{e} || $now - $c->{e} > $MAIN_WINDOW_S) { delete $st->{subc}{$id6}; next }
+        push @subc, { id6 => $id6, e => $c->{e}, scope => 'sub', nonce => $c->{nonce} } unless $inpool{$id6};
+    }
     my $subs_end = 1;
-    if (grep { (!$_->{sb} && $_->{scope} ne 'main') || (_fill_cand($_) && !$st->{fill}{ $_->{id6} }) } @$pool) {
+    if (@subc || grep { (!$_->{sb} && $_->{scope} ne 'main') || (_fill_cand($_) && !$st->{fill}{ $_->{id6} }) } @$pool) {
         for my $f (@{ transcript::subagent_files($tp, $sid) }) {
             my $fst = ($st->{subs}{ $f->{path} } ||= {});
             $subs_end = 0 unless _ingest_bounds($fst, $f->{path}, $st->{sbounds}, $f->{agent_id});
@@ -542,7 +558,7 @@ sub _run {
     }
 
     # fill: sub-unknown copies get their agent (MOD-SPEC §5.9)
-    _fill($st, $pool, $n, $subs_end, $left) if $root_ok && $left->();
+    _fill($st, [@$pool, @subc], $n, $subs_end, $left) if $root_ok && $left->();
 
     # done: a PostCompact whose summary is copied and whose rows are matched (or too old to be);
     # a sub-unknown copy also waits for its fill decision

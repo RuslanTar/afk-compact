@@ -1,0 +1,155 @@
+{
+ "id": "AT-ST-09 c (fill: a failed verification keeps the old copy, fill-joins)",
+ "needs": [
+  "fixture:transcripts/fill-joins/joins.json"
+ ],
+ "note": "C-STORE D5 / MOD-SPEC §5.9 step 5 (CORE-09) on the WP-fix fill-joins fixture, case verify-fail: the time-join with the test-mode fault STORE_TEST_FILL_CORRUPT=1 (honoured only under STORE_TEST_MODE), which flips the last body byte of the new -a<agent8> file after its exclusive create and before the re-read. The new file is unlinked, the old sub-unknown copy stays (0400, no renamed_from), one copy_attribution_failed {why: verify}, no copy_attributed; the next Stop (no fault) does not retry and leaves the old file byte-identical. Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "transcripts",
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "copy": "transcripts/fill-joins/main.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+    },
+    {
+     "copy": "transcripts/fill-joins/subagents/agent-a5c0ffee0a1b2c3d4.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a5c0ffee0a1b2c3d4.jsonl"
+    },
+    {
+     "copy": "transcripts/fill-joins/subagents/agent-a7d00d1e5e6f7a8b9.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a7d00d1e5e6f7a8b9.jsonl"
+    }
+   ]
+  },
+  {
+   "name": "PostCompact: unmarked, unproven",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "now": "2026-10-21T14:05:05.650+03:00",
+   "stdin": "payloads/PostCompact/fill-unmarked-sub-x.json",
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop: saved sub-unknown, the fill's read-back fails",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "now": "2026-10-21T14:06:30+03:00",
+   "stdin_json": {
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "session_id": "$SID",
+    "stop_hook_active": false,
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "count": 1,
+      "mode": "0400",
+      "path": "$ROOT/*/*/compact/subagents/*_5e55a001_c1-h*.md",
+      "snapshot": "old",
+      "frontmatter": {
+       "actor": "sub-unknown",
+       "renamed_from": null
+      }
+     },
+     {
+      "count": 0,
+      "path": "$ROOT/*/*/compact/subagents/*-a*.md"
+     },
+     {
+      "count": 1,
+      "path": "$ROOT/*/*/compact/subagents/*.md"
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attribution_failed",
+      "count": 1,
+      "fields": {
+       "why": "verify"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attributed"
+     }
+    ]
+   },
+   "env": {
+    "STORE_TEST_FILL_CORRUPT": "1"
+   }
+  },
+  {
+   "name": "the next Stop, no fault: no retry, the old file byte-identical",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "now": "2026-10-21T14:08:00+03:00",
+   "stdin_json": {
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "session_id": "$SID",
+    "stop_hook_active": false,
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "count": 1,
+      "path": "$ROOT/*/*/compact/subagents/*_5e55a001_c1-h*.md",
+      "same_bytes_as": "old"
+     },
+     {
+      "count": 0,
+      "path": "$ROOT/*/*/compact/subagents/*-a*.md"
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attribution_failed",
+      "count": 1
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attributed"
+     }
+    ]
+   }
+  }
+ ]
+}
