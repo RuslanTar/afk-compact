@@ -1,6 +1,7 @@
 # AT-ST-04, watcher status half (C-STORE D4/D10; BUILD-ROUND-9 WCH-06): `status` lists the
-# stashes kept after a real copy mismatch (count; this session's share) and the sessions
-# whose stash no cross-session finish can reach because they left no per-process record.
+# sessions whose stash no cross-session finish can reach because they left no per-process
+# record. The kept mismatch stashes are core's status line (`kept mismatch stashes: N` with
+# their paths, needs/core-to-watch.md §8): the watcher does not repeat their count.
 # A session with a `live-` or `ended-` record is reachable and not listed; a kept
 # `*.mismatch.md` is not an open stash. Counts and sid8s only. Nothing is shown at zero.
 my @other = ('0e0e0e0e-1111-4111-8111-111111111111', '0f0f0f0f-2222-4222-8222-222222222222',
@@ -21,8 +22,7 @@ my @other = ('0e0e0e0e-1111-4111-8111-111111111111', '0f0f0f0f-2222-4222-8222-22
         my ($E) = @_;
         my ($l) = $E->outputs;
         my $all = join("\n", @{ $l || [] });
-        $E->ok(($all =~ /^Stashes kept after a copy mismatch: 3 \(this session 1\); the plugin never deletes them$/m ? 1 : 0),
-               "kept count line ($all)");
+        $E->ok(($all !~ /mismatch/i ? 1 : 0), "no kept-mismatch line of the watcher's own (core prints it) ($all)");
         $E->ok(($all =~ /^Stashes no other session can finish \(their session left no process record\): 1 session \(0e0e0e0e\)$/m ? 1 : 0),
                'unreached line names only the session without a record');
     },

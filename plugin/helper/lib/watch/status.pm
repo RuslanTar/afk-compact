@@ -53,11 +53,12 @@ sub lines {
     return \@out;
 }
 
-# C-STORE D4/D10 (MOD-SPEC §5.8): the stashes kept after a real mismatch
-# (`pending/*.mismatch.md`, never deleted by the plugin), and the stashes the cross-session
-# finish cannot reach because their session left no per-process record
-# (<root>/.sessions/by-pid/*.{live,ended}-<sid8>.json). Counts and sid8s only; one line
-# each, shown only when the count is not zero. Read-only (F2-5: core writes these files).
+# C-STORE D4/D10 (MOD-SPEC §5.8): the stashes the cross-session finish cannot reach
+# because their session left no per-process record (<root>/.sessions/by-pid/*.{live,ended}-
+# <sid8>.json). Counts and sid8s only; one line, shown only when the count is not zero.
+# Read-only (F2-5: core writes these files). The stashes kept after a real mismatch
+# (`pending/*.mismatch.md`) are core's `status` line (`kept mismatch stashes: N`, with their
+# paths; needs/core-to-watch.md §8), so the watcher no longer repeats their count.
 our $STASH_SIDS = 5;
 sub stash_lines {
     my ($ctx) = @_;
@@ -67,21 +68,14 @@ sub stash_lines {
         $rec{$1} = 1 if $f =~ /\A[0-9]+-[0-9]+\.(?:live|ended)-([0-9A-Za-z-]{1,8})\.json\z/;
     }
     my $own = $ctx->{sid} // '';
-    my ($kept, $kept_own, @unreached) = (0, 0);
+    my @unreached;
     for my $sid (watch::io::list_dir($w)) {
         next unless $sid =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ && -d "$w/$sid/pending";
-        my ($k, $open) = (0, 0);
-        for my $p (watch::io::list_dir("$w/$sid/pending")) {
-            if ($p =~ /\.(?:post|mod)\.mismatch\.md\z/) { $k++ }
-            elsif ($p =~ /\.(?:post|mod)\.md\z/) { $open++ }
-        }
-        $kept += $k;
-        $kept_own += $k if $sid eq $own;
+        # a kept `*.mismatch.md` is not an open stash
+        my $open = grep { /\.(?:post|mod)\.md\z/ && !/\.mismatch\.md\z/ } watch::io::list_dir("$w/$sid/pending");
         push @unreached, substr($sid, 0, 8) if $open && $sid ne $own && !$rec{ substr($sid, 0, 8) };
     }
     my @o;
-    push @o, sprintf('Stashes kept after a copy mismatch: %d (this session %d); the plugin never deletes them',
-                     $kept, $kept_own) if $kept;
     if (@unreached) {
         my @show = @unreached[0 .. ($#unreached < $STASH_SIDS - 1 ? $#unreached : $STASH_SIDS - 1)];
         push @o, sprintf('Stashes no other session can finish (their session left no process record): %d session%s (%s%s)',
