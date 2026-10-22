@@ -7,8 +7,11 @@ import { afterStep, dispatchExists, guarded, mainText, writeDispatch } from './c
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
 import type { HandoffTurn } from './handoff-turn'
-import { compactsAfter, endHandoffTurn, haltWins, openAndSubmit, planHandoff } from './handoff-turn'
+import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHandoff, planPrecompact } from './handoff-turn'
+import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
+import { armIdle } from './idle'
+import { isHuman } from './deps'
 import { log, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
@@ -39,7 +42,14 @@ export type BoundaryOpts = {
    * was written: the rerun after that one's end uses it (same nonce, same text), never a second
    * record (REG-boundary-205, MOD-SPEC §3.1 step 0).
    */
-  prepared?: { nonce: string; text: string; pref: ResumePref }
+  prepared?: { nonce: string; text: string; pref: ResumePref; prodConsent?: string }
+  /**
+   * The checkpoint already taken for this compaction, when a native compaction that was running
+   * stopped it before its dispatch record was written: the rerun after that one's end reuses it
+   * (same nonce, the first sweep's evidence), never a second checkpoint with the same id6, whose
+   * sweep would answer `skipped: swept` with no rows (DP-30 (1)).
+   */
+  checked?: { nonce: string; named: string | undefined; prev: string | undefined; cp: Checkpoint | undefined }
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -52,11 +62,18 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   const seq = s.nativeCompactSeq
   s.lastTurnAsksUser = s.askedThisTurn || endsWithQuestion(t.answer)
   if (t.reason !== 'answer') s.resumeAfter = false
+  // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
+  // main turn end, whatever its origin.
+  const endAt = await d.now()
+  s.lastTurnEndAt = endAt
+  s.lastTurnAnswer = t.reason === 'answer'
+  if (isHuman(s.turnOrigin)) s.idleEpisode = { since: endAt, done: false }
+  await armIdle(d, sid, endAt)
   await undeliveredCheck(d, sid)
   const end = await endHandoffTurn(d, sid, t.reason)
   if (end.kind === 'done') return
   if (end.kind === 'compact') {
-    schedule(d, 500, { exemptHalt: true, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq } })
+    schedule(d, 500, { exemptHalt: end.exemptHalt, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq } })
     return
   }
   const nudged = s.lastCycle
@@ -100,6 +117,15 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
     return
   }
   if (s.busy) return
+  // §9.3: with `precompact_turn: model`, an eligible turn end that was not nudged gets its
+  // pre-compaction handoff turn first; a skip leaves the normal compaction, as with `code`.
+  if (!s.nudgedThisTurn && last === null && !s.halt.active) {
+    const p = await planPrecompact(d, sid, eff, tokens)
+    if (p) {
+      startHandoffTimer(d, sid, p)
+      return
+    }
+  }
   schedule(d, s.nudgedThisTurn || tokens >= eff.soft_max ? 500 : d.cfg.boundary_delay_ms, { exemptHalt })
 }
 
@@ -136,7 +162,11 @@ function startHandoffTimer(d: Deps, sid: string, h: HandoffTurn): void {
         return
       }
       s.handoffTurn = undefined
-      if (compactsAfter(haltWins(d, h.reason))) await boundary(d, { exemptHalt: true })
+      // The turn cannot start: a last cycle for `cap`/`continue-off` and a pre-compaction turn
+      // get their normal compaction now, with the full text.
+      if (isHalt(h.reason)) {
+        if (compactsAfter(haltWins(d, h.reason))) await boundary(d, { exemptHalt: true })
+      } else if (h.reason === 'precompact') await boundary(d, {})
     })().catch(() => undefined)
   })
 }
@@ -172,10 +202,27 @@ function nativeCheck(d: Deps, opts: BoundaryOpts): 'wait' | 'ran' | undefined {
   return d.state.nativeCompactSeq !== ah.seq ? 'ran' : undefined
 }
 
-/** `nativeCheck` with its `skip why=compacted` row; true when the compaction is not run now. */
+/**
+ * The rows for a post-handoff compaction a native one made a second one: `skip why=compacted`,
+ * and, when its dispatch record is already written (`prepared`), `compacted` with
+ * `skip: native-ran` and that nonce, which closes the record: reconcile and the watcher then do
+ * not report it unresolved (DP-29, E-M-15).
+ */
+async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void> {
+  const ht = opts.afterHandoff?.ht ?? null
+  await log(d, sid, 'skip', { why: 'compacted', ht })
+  const p = opts.prepared
+  if (p === undefined) return
+  await log(d, sid, 'compacted', {
+    nonce: p.nonce, skip: 'native-ran', tokens_before: null, tokens_after: null, usage_present: false, ms: null,
+    ...(ht !== null ? { handoff_ht: ht } : {}),
+  })
+}
+
+/** `nativeCheck` with its rows; true when the compaction is not run now. */
 async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<boolean> {
   const c = nativeCheck(d, opts)
-  if (c === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: opts.afterHandoff?.ht ?? null })
+  if (c === 'ran') await nativeRan(d, sid, opts)
   return c !== undefined
 }
 
@@ -203,26 +250,35 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     let nonce: string
     let text: string
     let pref: ResumePref
-    let t0: number
+    let prodConsent: string | undefined
     if (opts.prepared) {
-      ({ nonce, text, pref } = opts.prepared)
-      t0 = await d.now()
+      ({ nonce, text, pref, prodConsent } = opts.prepared)
     } else {
-      // The nonce the nudge named in `@queue_add@` belongs to this cycle's compaction.
-      const named = s.nudgeNonce
-      s.nudgeNonce = undefined
-      nonce = named !== undefined && !(await dispatchExists(d, sid, named)) ? named : await drawNonce(n => dispatchExists(d, sid, n))
-      const prev = await prevCopy(d, sid)
-      const cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
+      let named: string | undefined
+      let prev: string | undefined
+      let cp: Checkpoint | undefined
+      if (opts.checked) {
+        // The rerun after a wait stop: the first checkpoint's nonce and evidence (DP-30 (1)).
+        ({ nonce, named, prev, cp } = opts.checked)
+        if (s.nudgeNonce === nonce) s.nudgeNonce = undefined
+      } else {
+        // The nonce the nudge named in `@queue_add@` belongs to this cycle's compaction.
+        named = s.nudgeNonce
+        s.nudgeNonce = undefined
+        nonce = named !== undefined && !(await dispatchExists(d, sid, named)) ? named : await drawNonce(n => dispatchExists(d, sid, n))
+        prev = await prevCopy(d, sid)
+        cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
+      }
       const measured = d.cfg.measured_block && cp ? cp.measured_block : null
+      prodConsent = cp?.consent['unattended_prod_reads']
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
       pref = await resumePref(d, sid)
-      t0 = await d.now()
       // The checkpoint above can take seconds: a native compaction may have started or run since.
       // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
-      // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205).
-      if (await stopForNative(d, sid, opts)) {
+      // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
+      // reuses this checkpoint.
+      if (await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })) {
         s.nudgeNonce = named
         return
       }
@@ -232,12 +288,17 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
         ...(ah ? { handoffHt: ah.ht } : {}),
       })
     }
+    // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
+    // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
+    // await sits between that check and the call.
+    const t0 = await d.now()
     // Once more after the dispatch write, with no await between this check and the call. A
     // native compaction that started during the write: the rerun after its end reuses this
     // record (`prepared`), so a skipped native one leaves no orphan and no second record.
-    const late = nativeCheck(d, { ...opts, prepared: { nonce, text, pref } })
+    const withRecord: BoundaryOpts = { ...opts, prepared: { nonce, text, pref, ...(prodConsent !== undefined ? { prodConsent } : {}) } }
+    const late = nativeCheck(d, withRecord)
     if (late !== undefined) {
-      if (late === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: ah?.ht ?? null })
+      if (late === 'ran') await nativeRan(d, sid, withRecord)
       return
     }
     let r
@@ -265,6 +326,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       sid, nonce, agentId: null, midturn: false, resumePref: pref, messages: msgs, tokensBefore: before, tokensAfter: after,
       ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
       ...(ah ? { stats: ah.stats } : {}),
+      ...(prodConsent !== undefined ? { prodConsent } : {}),
     }))
     await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.

@@ -105,7 +105,7 @@ test('F2-3: the second consecutive non-ok verdict enters halt: its row has halt 
   expect(w.rowsOf('mod_outcome').map(r => r.halt)).toEqual([false, true])
 })
 
-test('F2-3: the capped 4th nudge-driven compaction: not continued, halt true, its block delivered later by prompt.context', async ($, on) => {
+test('F2-3: the capped 4th nudge-driven compaction: not continued, halt true, its block delivered later by prompt.context', { options: { max_auto_continues_per_hour: 3 } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   for (let i = 0; i < 4; i++) {

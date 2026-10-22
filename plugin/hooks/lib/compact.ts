@@ -16,7 +16,8 @@ import { checkpoint, dispatch, failClass, handoffState, handoffTurnSupersede, pr
 import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
-import { buildBlock, claimedElsewhere, logOutcome } from './resume'
+import type { BlockArgs } from './resume'
+import { buildBlock, claimedElsewhere, logOutcome, prodAllowed } from './resume'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -32,6 +33,22 @@ export type DispatchRecord = {
   text: string
   /** MOD-SPEC §2.3: the handoff turn this dispatch follows or interrupts. */
   handoffHt?: string
+  /** IC-1 D1: an idle dispatch (`idle: true`), with the gap since the last main turn end. */
+  idle?: { gapS: number }
+}
+
+/** IC-1 D1: an `auto` this long after the last main turn end, with nothing running, is idle. */
+export const IDLE_GAP_MS = 1500000
+
+/**
+ * IC-1 D1 (MOD-SPEC §2.5 idle rule): a main `auto` dispatch is idle when no main turn runs, no
+ * prompt is entering (CR-F17 counter), no plugin compaction is in flight, and the last main turn
+ * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`.
+ */
+export function idleGap(s: Deps['state'], trigger: string, now: number): number | undefined {
+  if (trigger !== 'auto' || s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.lastTurnEndAt === undefined) return undefined
+  const gap = now - s.lastTurnEndAt
+  return gap >= IDLE_GAP_MS ? Math.round(gap / 1000) : undefined
 }
 
 async function dispatchPath(d: Deps, sid: string, nonce: string): Promise<string | undefined> {
@@ -69,15 +86,21 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
     sid: r.sid, nonce: r.nonce, actor: r.agentId ?? 'main', trigger: r.trigger, channel: r.channel,
     resumePref: r.resumePref, tags: r.tags, midturn: r.midturn, instrSha8, instrBytes, ccVersion: s.ccVersion, loadId: s.loadId,
     ...(r.handoffHt !== undefined ? { handoffHt: r.handoffHt } : {}),
+    ...(r.idle !== undefined ? { idle: r.idle } : {}),
   })
   if (res.ok) return
   const path = await dispatchPath(d, r.sid, r.nonce)
   if (path) {
+    // The helper's record keys in its order (CORE-14): `idle` and `idle_gap_s` always (a mod
+    // record without the idle flag is `idle: false`, `idle_gap_s: null`), and `cc_version_src`
+    // `mod` when the mod gave a version, else null.
     const rec = {
-      v: 1, nonce: r.nonce, session_id: r.sid, actor: r.agentId ?? 'main', agent_id: r.agentId, trigger: r.trigger,
-      channel: r.channel, resume_pref: r.resumePref, midturn: r.midturn, tags: r.tags, instructions_sha8: instrSha8,
-      instructions_bytes: instrBytes, cc_version: s.ccVersion, load_id: s.loadId, pid: s.ident?.pid ?? null,
-      pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
+      v: 1, nonce: r.nonce, session_id: r.sid, actor: r.agentId ?? 'main', agent_id: r.agentId ?? null, trigger: r.trigger,
+      channel: r.channel, resume_pref: r.resumePref, midturn: r.midturn,
+      idle: r.idle !== undefined, idle_gap_s: r.idle !== undefined ? r.idle.gapS : null,
+      tags: r.tags, instructions_sha8: instrSha8, instructions_bytes: instrBytes,
+      cc_version: s.ccVersion, cc_version_src: s.ccVersion !== null && s.ccVersion !== '' ? 'mod' : null,
+      load_id: s.loadId, pid: s.ident?.pid ?? null, pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
       ...(r.handoffHt !== undefined ? { handoff_ht: r.handoffHt } : {}),
     }
     await d.write(path, JSON.stringify(rec) + '\n')
@@ -155,8 +178,11 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   const agentId = e.agentId ?? null
   const main = agentId === null
   const actor = agentId ?? 'main'
+  // Read before any await of this handler that a turn could start in.
+  const gapS = main ? idleGap(s, trigger, await d.now()) : undefined
   const nonce = await drawNonce(n => dispatchExists(d, sid, n))
   const midturn = main && (trigger === 'precompute' || (trigger === 'auto' && s.mainTurnRunning))
+  const idle = gapS !== undefined && !midturn
   // MOD-SPEC §9.1 race: a native compaction while the handoff turn runs keeps the full text and
   // names the turn; §3.1: a native idle auto right after a published handoff gets `[handoff]`.
   const raced = main ? racedTurn(d, trigger) : undefined
@@ -166,6 +192,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   if (raced && raced.ht !== null && trigger === 'auto') raceState = await handoffState(d, sid, raced.ht)
   let text: string
   let tags: Tag[] = []
+  let prodConsent: string | undefined
   if (!main) text = assemble(d.name, 'subagent-instructions', [], { nonce })
   else {
     const prev = await prevCopy(d, sid)
@@ -174,6 +201,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
       const wantMeasured = d.cfg.measured_block
       const cp = await checkpoint(d, sid, nonce, wantMeasured)
       if (wantMeasured && cp) measured = cp.measured_block
+      prodConsent = cp?.consent['unattended_prod_reads']
     }
     const m = await mainText(d, nonce, midturn, prev, measured, after?.path)
     text = m.text
@@ -182,6 +210,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   await writeDispatch(d, {
     sid, nonce, agentId, trigger, channel: 'mod-hook', resumePref: main ? 'prompt.context' : 'none', midturn, tags, text,
     ...(handoffHt !== undefined ? { handoffHt } : {}),
+    ...(idle && gapS !== undefined ? { idle: { gapS } } : {}),
   })
   const t0 = await d.now()
   const r = await next({ ...e, instructions: [e.instructions, text].filter(Boolean).join('\n\n') })
@@ -215,6 +244,8 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     sid, nonce, agentId, midturn, resumePref: 'prompt.context', messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
     ...(block !== undefined ? { handoff: block } : after !== undefined ? { handoff: { published: after.path } } : {}),
     ...(raced && raced.ht !== null && block !== undefined ? { stats: { handoff_turn: 'race', handoff_ht: raced.ht } } : {}),
+    ...(prodConsent !== undefined ? { prodConsent } : {}),
+    ...(idle ? { idle: true } : {}),
   }))
   return r
 }
@@ -242,6 +273,10 @@ export type AfterArgs = {
   handoff?: RaceBlock
   /** The handoff-turn rollup fields for this compaction's `mod_outcome` row (MOD-SPEC §2.5). */
   stats?: Record<string, string | number | null>
+  /** This nonce's checkpoint `consent.unattended_prod_reads`, when a checkpoint answered. */
+  prodConsent?: string
+  /** An idle dispatch: the resume block gets `[idle]` (IC-1 D3). */
+  idle?: boolean
 }
 
 export const SUMMARY_PREFIX = 'This session is being continued'
@@ -269,6 +304,10 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     verdict = det.verdict
     chars = det.normalized.length
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
+    // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
+    // behind is found by another session's cross-session finish. Empty; an existing one is fine.
+    // The `pending/` folder stays the truth: a failed marker write does not stop the stash.
+    if (file && stash !== undefined) await d.write(`${stash}/.orphans/${a.sid}`, '')
     if (!file || !(await d.write(file, summary.text))) {
       notSaved = file ? 'pending-write-failed' : s.ident?.watch === null ? 'unsafe-root' : 'helper-missing'
       await log(d, a.sid, 'copy_failed', { nonce: a.nonce, reason: notSaved }, actor)
@@ -308,9 +347,14 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   s.mainCompactions++
   // A published handoff names the next window's compaction once (MOD-SPEC §3.1).
   s.published = undefined
-  const block = await buildBlock(d, a.sid, {
+  // §9.3: the next eligible turn end may have its pre-compaction turn again.
+  s.precompactRan = false
+  const blockArgs: BlockArgs = {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
-  })
+    prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
+    ...(a.idle === true ? { idle: true } : {}),
+  }
+  const block = await buildBlock(d, a.sid, blockArgs)
   // A block still pending is replaced by this one: its outcome is settled now (no channel
   // will try it again).
   const old = s.pending
@@ -319,7 +363,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     await logOutcome(d, old.sid, old.nonce, old.outcome, await claimedElsewhere(d, old))
   }
   const pend: PendingResume = {
-    sid: a.sid, nonce: a.nonce, block, resumePref: a.resumePref, turnSeq: s.turnSeq,
+    sid: a.sid, nonce: a.nonce, block, builtAt: await d.now(), args: blockArgs, resumePref: a.resumePref, turnSeq: s.turnSeq,
     outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active, ...(a.stats !== undefined ? { handoff: a.stats } : {}) },
   }
   s.pending = pend

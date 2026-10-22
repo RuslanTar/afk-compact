@@ -1,5 +1,6 @@
 // U tests through the kit: session lifecycle, liveness, canaries, resume delivery, the seat
 // simulation and the fs trace (MOD-SPEC §3.3, §3.4, §5.6, §7, §10).
+import { shippedNotice } from '../../hooks/lib/notice'
 import type { On, Register } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, test } from 'claude-code/testing'
@@ -46,7 +47,8 @@ test('AT-M3-08 (reload): a load that finds lastVersion equal adds nothing', asyn
   w.install(on, { lastVersion: '2.1.305', smokeDue: '2.1.305' })
   await w.start($)
   expect(w.rowsOf('version_change').length).toBe(0)
-  expect(w.toasts.length).toBe(0)
+  // The first-run notice (W-BETA A) is not a version toast.
+  expect(w.toasts.filter(t => t !== shippedNotice(w.name).text).length).toBe(0)
 })
 
 test('AT-M3-09: version 2.1.306-dev sets smokeDue, once', async ($, on) => {

@@ -6,13 +6,13 @@
 // normal compaction for `cap`/`continue-off`), and the integrator re-runs them after the text merge.
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
+import { assemble, assembleIf, hasAsset, hasTag, leftovers } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import { DEFAULTS } from '../../hooks/lib/config'
 import { continueLine, lastCycleOf } from '../../hooks/lib/cont'
 import type { Deps } from '../../hooks/lib/deps'
-import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, submitPending } from '../../hooks/lib/deps'
-import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
+import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, storeWord, submitPending } from '../../hooks/lib/deps'
+import { HALT_REASON_TEXT, maxCalls, submitText as kindText } from '../../hooks/lib/handoff-turn'
 import { BRAND } from './_gen/brand.gen'
 import { HOME, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -24,6 +24,8 @@ const PUBLISHED = HOME + '/.claude/handoffs/r/LAB-42/2026-10-21_14-07-00_5e55a00
 const SHOWN = '~/.claude/handoffs/r/LAB-42/2026-10-21_14-07-00_5e55a001_handoff.md'
 /** Three continues in the last hour: the next nudged cycle is capped (max 3). */
 const CAPPED = { ['cont:' + SID_A]: [T0 - 50 * 60000, T0 - 30 * 60000, T0 - 10 * 60000] }
+/** These tests test cap semantics, not the default (6): they pin the cap at 3 (S-SETTINGS A). */
+const CAP3 = { max_auto_continues_per_hour: 3 }
 
 /** A main turn that crosses the soft max (nudge) and ends with `answer` at `end` tokens. */
 async function lastCycleTurn($: Engine, w: World, answer = 'Checkpoint: clean · Step 1: run the tests', end = 640000): Promise<{ context?: readonly string[] }> {
@@ -51,28 +53,50 @@ async function handoffTurnStarts($: Engine, w: World): Promise<void> {
 }
 
 function submitText(w: World, reason: keyof typeof HALT_REASON_TEXT): string | undefined {
-  return assembleIf(w.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C) })
+  return assembleIf(w.name, 'handoff-turn', ['submit', 'submit-halt'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C), store: storeWord(w.root, w.name) ?? '' })
 }
 
 function bandText(w: World, band: 'near' | 'spent' | 'imminent'): string | undefined {
-  return assembleIf(w.name, 'handoff-turn', [band], {})
+  return assembleIf(w.name, 'handoff-turn', [band], { store: storeWord(w.root, w.name) ?? '' })
 }
 
 test('c = 1 + call_cap + recipe_cap from the shared spec = 34 (RV-25, DP-6)', () => {
   expect(C).toBe(34)
 })
 
-test('DP-24 (g), P-LT-1: no text the plugin submits starts with "/" (the host refuses it as a user command)', () => {
+test('DP-24 (g), P-LT-1, AT-LT-18: no text the plugin submits starts with "/" (the host refuses it as a user command): continue, and every handoff-turn kind', () => {
   const texts = [continueLine(BRAND.name)]
-  for (const reason of Object.keys(HALT_REASON_TEXT) as (keyof typeof HALT_REASON_TEXT)[]) {
-    const t = assembleIf(BRAND.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C) })
-    expect(t === undefined).toBe(!TURN)
-    if (t !== undefined) texts.push(t)
+  for (const name of [BRAND.name, 'x', 'x'.repeat(16)]) {
+    for (const reason of Object.keys(HALT_REASON_TEXT) as (keyof typeof HALT_REASON_TEXT)[]) {
+      const t = kindText(name, 'halt', { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(C), store: '"/p/scripts/' + name + '-store"' })
+      expect(t === undefined).toBe(!TURN)
+      if (t !== undefined) texts.push(t)
+    }
+    for (const kind of ['precompact', 'idle'] as const) {
+      const t = kindText(name, kind, { max_calls: String(C), idle_min: '49', store: '"/p/scripts/' + name + '-store"' })
+      // A build whose handoff-turn text has no lines of this kind yet gives no text (never the last-cycle one).
+      expect(t === undefined).toBe(!hasTag('handoff-turn', kind === 'idle' ? 'submit-idle' : 'submit-pre'))
+      if (t !== undefined) texts.push(t)
+    }
   }
   for (const t of texts) expect(t.trimStart().startsWith('/')).toBe(false)
+  for (const t of texts.slice(1)) expect(leftovers(t)).toEqual([])
 })
 
-test('AT-LT-01: nudge at 610K: [halt] with @halt_reason@ for (a) halt, (b) cap reached, (c) max 0; [continue] for (d)', async ($, on) => {
+test('AT-IC-12: the [submit-idle] text, when this build has it: never starts with "/", says to launch no agents or workflows, carries the shared [submit] line', () => {
+  if (!hasTag('handoff-turn', 'submit-idle')) return
+  const shared = assembleIf('x', 'handoff-turn', ['submit'], { max_calls: String(C), halt_reason: 'r', store: '"/p/scripts/x-' + 'store"' }) ?? ''
+  for (let n = 1; n <= 16; n++) {
+    const name = 'x'.repeat(n)
+    const t = kindText(name, 'idle', { max_calls: String(C), idle_min: '49', store: '"/p/scripts/' + name + '-store"' }) ?? ''
+    expect(t.trimStart().startsWith('/')).toBe(false)
+    expect(t.toLowerCase()).toContain('launch no agents or workflows')
+    expect(leftovers(t)).toEqual([])
+  }
+  expect(shared.length).toBeGreaterThan(0)
+})
+
+test('AT-LT-01: nudge at 610K: [halt] with @halt_reason@ for (a) halt, (b) cap reached, (c) max 0; [continue] for (d)', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   const r = await lastCycleTurn($, w)
@@ -121,7 +145,7 @@ test('AT-LT-01 (c): max_auto_continues_per_hour 0: [halt] (continue-off), never 
   expect(w.rowsOf('halt').length).toBe(0)
 })
 
-test('handoff_turn off: [halt] without the handoff-turn sentence; the normal compaction, no continue', { options: { handoff_turn: 'off' } }, async ($, on) => {
+test('handoff_turn off: [halt] without the handoff-turn sentence; the normal compaction, no continue', { options: { ...CAP3, handoff_turn: 'off' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   const r = await lastCycleTurn($, w)
@@ -133,7 +157,7 @@ test('handoff_turn off: [halt] without the handoff-turn sentence; the normal com
   expect(w.callsOf('handoff-turn').length).toBe(0)
 })
 
-test('AT-LT-02: last-cycle turn ends answer at 640K, window 800000: one framed submit after the delay, no compaction before it', async ($, on) => {
+test('AT-LT-02: last-cycle turn ends answer at 640K, window 800000: one framed submit after the delay, no compaction before it', { options: CAP3 }, async ($, on) => {
   const w = new World({ window: 800000 }).install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -157,13 +181,13 @@ test('AT-LT-02: last-cycle turn ends answer at 640K, window 800000: one framed s
   expect(w.rowsOf('handoff_turn_start').map(r => [r.ht, r.reason, r.turn_id])).toEqual([[ht, 'cap', 't2']])
 })
 
-test('AT-LT-03: a user turn.start during the delay cancels the submit: handoff_skipped why=user-turn', async ($, on) => {
+test('AT-LT-03: a user turn.start during the delay cancels the submit: handoff_skipped why=user-turn', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
   if (!TURN) return
   await w.advance(1000)
-  await w.turnStart($, 'actually, stop here')
+  await w.userTurn($, 'actually, stop here')
   await w.advance(10000)
   expect(w.submits.length).toBe(0)
   expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.ht])).toEqual([['user-turn', null]])
@@ -219,7 +243,7 @@ test('AT-LT-05: turn ends at 745K with N 767K (H < 20K): why=headroom; one plugi
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-LT-06: bands are context text only: one [near], [spent] from t0+H, [imminent] at N-5K; nothing denied; no nudge', async ($, on) => {
+test('AT-LT-06: bands are context text only: one [near], [spent] from t0+H, [imminent] at N-5K; nothing denied; no nudge', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -243,7 +267,7 @@ test('AT-LT-06: bands are context text only: one [near], [spent] from t0+H, [imm
   expect(w.rowsOf('handoff_limit').map(r => r.band)).toEqual(['near', 'spent', 'imminent'])
 })
 
-test('AT-LT-07: 35 calls with tokens low (c = 34): [near] at call 27, [spent] on call 35, nothing denied', async ($, on) => {
+test('AT-LT-07: 35 calls with tokens low (c = 34): [near] at call 27, [spent] on call 35, nothing denied', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -262,7 +286,7 @@ test('AT-LT-07: 35 calls with tokens low (c = 34): [near] at call 27, [spent] on
   expect(got[34]).toBe(bandText(w, 'spent'))
 })
 
-test('AT-LT-08: a user prompt delivered into the handoff turn lifts the limits text; halt clears at that turn end', async ($, on) => {
+test('AT-LT-08: a user prompt delivered into the handoff turn lifts the limits text; halt clears at that turn end', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -279,9 +303,9 @@ test('AT-LT-08: a user prompt delivered into the handoff turn lifts the limits t
   expect(w.rowsOf('handoff_turn_end')[0]?.interjected).toBe(true)
 })
 
-const VARIANTS: { name: string; options: Record<string, number>; store: Record<string, unknown> }[] = [
-  { name: 'cap', options: {}, store: CAPPED },
-  { name: 'continue-off', options: { max_auto_continues_per_hour: 0 }, store: {} },
+const VARIANTS: { name: string; options: Record<string, number | string>; store: Record<string, unknown> }[] = [
+  { name: 'cap', options: { ...CAP3, precompact_turn: 'code' }, store: CAPPED },
+  { name: 'continue-off', options: { max_auto_continues_per_hour: 0, precompact_turn: 'code' }, store: {} },
 ]
 for (const opt of VARIANTS) {
   test(`AT-LT-09 (${opt.name}): published: one compaction despite halt and cooldown, [handoff] with the path, handoff_ht, no submit, one toast`, { options: opt.options }, async ($, on) => {
@@ -322,7 +346,7 @@ for (const opt of VARIANTS) {
   })
 }
 
-test('AT-LT-10: handoff turn ends answer, state staged (LINT stop), reason cap: full-text compaction, handoff_turn failed:lint', async ($, on) => {
+test('AT-LT-10: handoff turn ends answer, state staged (LINT stop), reason cap: full-text compaction, handoff_turn failed:lint', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -338,7 +362,7 @@ test('AT-LT-10: handoff turn ends answer, state staged (LINT stop), reason cap: 
   expect(w.rowsOf('handoff_turn_end').map(r => r.handoff_turn)).toEqual(['failed:lint'])
 })
 
-test('AT-LT-11: native auto during the handoff turn, draft present: [midturn] full text, handoff_race, [handoff-partial], superseded, no second compaction', async ($, on) => {
+test('AT-LT-11: native auto during the handoff turn, draft present: [midturn] full text, handoff_race, [handoff-partial], superseded, no second compaction', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -394,7 +418,7 @@ test('AT-LT-12, AT-LT-13: a second last cycle gets a new ht (first file unchange
   expect(w.callsOf('handoff-turn').filter(c => c.args[0] === 'open').length).toBe(2)
 })
 
-test('AT-LT-14: a precompute during the handoff turn: [midturn], no [handoff], handoff_ht set, no checkpoint or sweep', async ($, on) => {
+test('AT-LT-14: a precompute during the handoff turn: [midturn], no [handoff], handoff_ht set, no checkpoint or sweep', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -444,7 +468,7 @@ for (const reason of ['2-nonok'] as const) {
   })
 }
 
-test('the handoff turn is never started for a subagent turn, nor on the 400K turn-end path (OD-4)', async ($, on) => {
+test('the handoff turn is never started for a subagent turn, nor on the 400K turn-end path with precompact_turn code (OD-4)', { options: { ...CAP3, precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await w.turnStart($)
@@ -472,9 +496,9 @@ async function refillTwice($: Engine, w: World): Promise<void> {
   expect(w.rowsOf('halt').length).toBe(0)
 }
 
-const THRASH_VARIANTS: { name: 'cap' | 'continue-off'; options: Record<string, number>; store: Record<string, unknown> }[] = [
-  { name: 'cap', options: {}, store: CAPPED },
-  { name: 'continue-off', options: { max_auto_continues_per_hour: 0 }, store: {} },
+const THRASH_VARIANTS: { name: 'cap' | 'continue-off'; options: Record<string, number | string>; store: Record<string, unknown> }[] = [
+  { name: 'cap', options: { ...CAP3, precompact_turn: 'code' }, store: CAPPED },
+  { name: 'continue-off', options: { max_auto_continues_per_hour: 0, precompact_turn: 'code' }, store: {} },
 ]
 for (const opt of THRASH_VARIANTS) {
   test(`CR-F18, CR-F24, AT-LT-17 (thrash): thrash found at the end of a ${opt.name} nudged turn wins: handoff turn for thrash, then no plugin compaction (DP-4)`, { options: opt.options }, async ($, on) => {
@@ -507,7 +531,7 @@ for (const opt of THRASH_VARIANTS) {
   })
 }
 
-test('CR-F18, CR-F24: handoff_turn off: thrash found at a capped nudged turn\'s end: skip why=halt, no plugin compaction (DP-4, DP-22)', { options: { handoff_turn: 'off' } }, async ($, on) => {
+test('CR-F18, CR-F24: handoff_turn off: thrash found at a capped nudged turn\'s end: skip why=halt, no plugin compaction (DP-4, DP-22)', { options: { precompact_turn: 'code', ...CAP3, handoff_turn: 'off' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await refillTwice($, w)
@@ -534,7 +558,7 @@ test('CR-F26, AT-LT-05 (2-nonok): H < 20K: why=headroom, then no plugin compacti
   expect(w.submits.length).toBe(0)
 })
 
-test('CR-F26, AT-LT-05 (thrash): thrash at a continue-off nudged turn\'s end, H < 20K: why=headroom, then no plugin compaction', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+test('CR-F26, AT-LT-05 (thrash): thrash at a continue-off nudged turn\'s end, H < 20K: why=headroom, then no plugin compaction', { options: { precompact_turn: 'code', max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World({ window: 800000 }).install(on)
   await w.start($)
   await refillTwice($, w)
@@ -547,7 +571,7 @@ test('CR-F26, AT-LT-05 (thrash): thrash at a continue-off nudged turn\'s end, H 
   expect(w.submits.length).toBe(0)
 })
 
-test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submit, why=user-turn, that turn is not the handoff turn', async ($, on) => {
+test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submit, why=user-turn, that turn is not the handoff turn', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -556,7 +580,7 @@ test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submi
   w.atHelper = async (sub, args) => {
     if (raced || sub !== 'handoff-turn' || args[0] !== 'open') return
     raced = true
-    await w.turnStart($, 'actually, stop here')
+    await w.userTurn($, 'actually, stop here')
   }
   await w.advance(2000)
   expect(raced).toBe(true)
@@ -576,7 +600,7 @@ test('CR-F17, CR-F25: a user turn.start while `handoff-turn open` runs: no submi
   expect(w.rowsOf('handoff_turn_end').length).toBe(0)
 })
 
-test('CR-F20: a handoff-turn submit answered { drop }: why=submit-failed with the ht; the cap cycle compacts; the next user turn is not the handoff turn', async ($, on) => {
+test('CR-F20: a handoff-turn submit answered { drop }: why=submit-failed with the ht; the cap cycle compacts; the next user turn is not the handoff turn', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -588,12 +612,12 @@ test('CR-F20: a handoff-turn submit answered { drop }: why=submit-failed with th
   expect(w.callsOf('handoff-turn').map(c => c.args[0])).toEqual(['open', 'close'])
   expect(w.compacts.length).toBe(1)
   w.submitDrop = undefined
-  await w.turnStart($, 'what happened?')
+  await w.userTurn($, 'what happened?')
   expect(w.rowsOf('handoff_turn_start').length).toBe(0)
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
 })
 
-test('CR-F21: a prompt queued with wait=true during the handoff turn is no interjection: the limits text stays', async ($, on) => {
+test('CR-F21: a prompt queued with wait=true during the handoff turn is no interjection: the limits text stays', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -606,7 +630,7 @@ test('CR-F21: a prompt queued with wait=true during the handoff turn is no inter
   expect((await w.tool($)).context).toEqual([bandText(w, 'spent')])
 })
 
-test('CR-F19: a native compaction inside the 500 ms after the handoff turn ends: no second compaction, skip why=compacted', async ($, on) => {
+test('CR-F19: a native compaction inside the 500 ms after the handoff turn ends: no second compaction, skip why=compacted', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -624,7 +648,7 @@ test('CR-F19: a native compaction inside the 500 ms after the handoff turn ends:
   expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
 })
 
-test('CR-F19: a native compaction still running when the post-handoff timer fires: no second compaction; it decides at the native end', async ($, on) => {
+test('CR-F19: a native compaction still running when the post-handoff timer fires: no second compaction; it decides at the native end', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -648,7 +672,7 @@ test('CR-F19: a native compaction still running when the post-handoff timer fire
   expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
 })
 
-test('CR-F19: that native compaction ends skipped: the post-handoff compaction runs after it, once', async ($, on) => {
+test('CR-F19: that native compaction ends skipped: the post-handoff compaction runs after it, once', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -675,7 +699,7 @@ test('CR-F19: that native compaction ends skipped: the post-handoff compaction r
   expect(w.rowsOf('skip').length).toBe(0)
 })
 
-test('CR-F19: a native compaction that starts while the post-handoff checkpoint runs: no dispatch, no second compaction', async ($, on) => {
+test('CR-F19: a native compaction that starts while the post-handoff checkpoint runs: no dispatch, no second compaction', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -706,7 +730,7 @@ test('CR-F19: a native compaction that starts while the post-handoff checkpoint 
   expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
 })
 
-test('CR-F17, CR-F25: a user prompt that entered but has not started its turn at the last check: our prompt is never submitted; its turn cancels the handoff turn', async ($, on) => {
+test('CR-F17, CR-F25: a user prompt that entered but has not started its turn at the last check: our prompt is never submitted; its turn cancels the handoff turn', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -747,7 +771,7 @@ test('CR-F17, CR-F25: a user prompt that entered but has not started its turn at
   expect(w.compacts.length).toBe(0)
 })
 
-test('CR-F17: a user prompt that entered at the last check but is dropped on its way in: the delay runs again and the handoff turn follows', async ($, on) => {
+test('CR-F17: a user prompt that entered at the last check but is dropped on its way in: the delay runs again and the handoff turn follows', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -786,7 +810,7 @@ test('CR-F17: a user prompt that entered at the last check but is dropped on its
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(0)
 })
 
-test('CR-F17, CR-F25: our handoff-turn submit refused because a user prompt entered as it went in: it never runs, no submit-failed, no compaction; the user turn cancels the handoff turn', async ($, on) => {
+test('CR-F17, CR-F25: our handoff-turn submit refused because a user prompt entered as it went in: it never runs, no submit-failed, no compaction; the user turn cancels the handoff turn', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -858,7 +882,7 @@ test('CR-F17, CR-F25: our own submit is told by origin; a handoff-turn one is re
   expect([again, s.afterForeign]).toEqual([1, undefined])
 })
 
-test('CR-F17 (REG-register-42): a peer hook beneath rewrites our handoff-turn prompt: its turn is still the handoff turn (origin, not text); the next user turn clears halt', async ($, on) => {
+test('CR-F17 (REG-register-42): a peer hook beneath rewrites our handoff-turn prompt: its turn is still the handoff turn (origin, not text); the next user turn clears halt', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -888,11 +912,11 @@ test('CR-F17 (REG-register-42): a peer hook beneath rewrites our handoff-turn pr
   await w.advance(500)
   expect(w.compacts.length).toBe(1)
   // Our submit is settled: the user's next turn is theirs (halt clears), not taken as ours.
-  await w.turnStart($, 'what now?')
+  await w.userTurn($, 'what now?')
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
 })
 
-test('REG-boundary-205 (CR-F19): a native compaction that starts during the post-handoff checkpoint and ends skipped: no dispatch before it, the rerun uses the nudge\'s nonce, one record', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+test('REG-boundary-205 (CR-F19): a native compaction that starts during the post-handoff checkpoint and ends skipped: no dispatch before it, the rerun uses the nudge\'s nonce, one record', { options: { ...CAP3, queue_cmd: '/q/bin/queue' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   const r = await lastCycleTurn($, w)
@@ -928,7 +952,7 @@ test('REG-boundary-205 (CR-F19): a native compaction that starts during the post
   expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(named)
 })
 
-test('REG-boundary-205 (CR-F19): a native compaction that starts while the dispatch record is written and ends skipped: the rerun reuses that record (one dispatch, same nonce and text)', async ($, on) => {
+test('REG-boundary-205 (CR-F19): a native compaction that starts while the dispatch record is written and ends skipped: the rerun reuses that record (one dispatch, same nonce and text)', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -965,7 +989,7 @@ test('REG-boundary-205 (CR-F19): a native compaction that starts while the dispa
   expect(w.rowsOf('skip').length).toBe(0)
 })
 
-test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt runs after it with no nudge', async ($, on) => {
+test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt runs after it with no nudge', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -999,7 +1023,7 @@ test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went 
   expect((await w.tool($)).context).toBeUndefined()
 })
 
-test('CR-F17: a user prompt entering beside our submit while our own turn starts first: ours is the handoff turn, the user turn after it clears halt', async ($, on) => {
+test('CR-F17: a user prompt entering beside our submit while our own turn starts first: ours is the handoff turn, the user turn after it clears halt', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -1028,7 +1052,7 @@ test('CR-F17: a user prompt entering beside our submit while our own turn starts
   await w.turnEnd($, 'Handoff written.')
   open()
   await held
-  await w.turnStart($, 'run the tests next')
+  await w.userTurn($, 'run the tests next')
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
   expect(w.rowsOf('handoff_skipped').length).toBe(0)
 })
@@ -1055,4 +1079,139 @@ test('CR-F17: claimTurn: the first turn is ours with no other prompt entering; b
   expect(s.foreignPrompts).toBe(0)
   expect(isOurText('anything', undefined)).toBe(false)
   expect(isOurText('anything', '  ')).toBe(false)
+})
+
+// DP-30 (2): the hourly stamp is written once per handoff turn, so a turn deferred for a prompt
+// that then never entered, and run again, still leaves the second hourly slot free.
+test('DP-30 (2): our submit dropped for an entering user prompt, that prompt dropped too, the delay runs again: one hourly stamp, so the next last cycle still promises its handoff turn', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  const ours = submitText(w, 'continue-off') ?? ''
+  const USER = 'the user typed this'
+  let held: Promise<unknown> | undefined
+  let reached!: () => void
+  const atBottom = new Promise<void>(r => { reached = r })
+  let open!: () => void
+  const gate = new Promise<void>(r => { open = r })
+  let dropOurs = true
+  w.atSubmit = async text => {
+    if (text === USER) {
+      reached()
+      await gate
+      return
+    }
+    if (text !== ours || held !== undefined) return
+    held = $.prompt.submit({ text: USER, origin: { kind: 'composer' } } as never)
+    await atBottom
+  }
+  w.dropIf = text => (text === USER ? 'refused by a guard' : text === ours && dropOurs ? 'a user prompt came first' : undefined)
+  await w.advance(2000)
+  expect(w.submits).toEqual([ours, USER])
+  dropOurs = false
+  open()
+  await held
+  await w.settle()
+  await w.advance(2000)
+  expect(w.submits).toEqual([ours, USER, ours])
+  await handoffTurnStarts($, w)
+  expect(w.rowsOf('handoff_turn_start').length).toBe(1)
+  w.tokens = 100000
+  await w.turnEnd($, 'Handoff written.')
+  await w.advance(60000)
+  // The next last cycle (continue-off): one stamp in the last hour, so [halt-handoff] is kept.
+  await w.turnStart($, 'more please')
+  w.tokens = 610000
+  expect((await w.tool($)).context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['halt', 'halt-handoff'], { tokens: '610,000', halt_reason: HALT_REASON_TEXT['continue-off'] }))
+})
+
+// DP-30 (1): a rerun after a wait stop reuses the first checkpoint (its sweep's evidence): no
+// second checkpoint with the same id6, whose sweep would answer `skipped: swept` with no rows.
+test('DP-30 (1): a native compaction that stops the post-handoff compaction after its checkpoint and ends skipped: the rerun reuses that checkpoint (one checkpoint call for the nonce)', { options: { ...CAP3, queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  const r = await lastCycleTurn($, w)
+  if (!TURN) return
+  const named = /--nonce ([0-9a-f]{8})/.exec(r.context?.[0] ?? '')?.[1] ?? ''
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  w.publish(w.lastHt() ?? '', PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (sub !== 'checkpoint' || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    w.compactMode = { skip: 'nothing to compact' }
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  w.compactMode = 'ok'
+  await w.advance(60000)
+  const cps = w.callsOf('checkpoint').map(c => w.flag(c, '--nonce'))
+  expect(cps.filter(n => n === named).length).toBe(1)
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(named)
+  expect(w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').map(c => w.flag(c, '--nonce'))).toEqual([named])
+})
+
+// DP-29 (E-M-15 option): the post-handoff dispatch record a native compaction made a second one
+// is closed by a `compacted` row with `skip: native-ran` and its nonce.
+test('DP-29: a native compaction that starts while the post-handoff dispatch record is written and compacts: no second compaction; compacted skip native-ran with that nonce', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub !== 'dispatch' || !args.includes('mod-self') || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  expect(p).toBeDefined()
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  await w.advance(60000)
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto'])
+  const self = w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self')
+  expect(self.length).toBe(1)
+  const nonce = w.flag(self[0], '--nonce') ?? ''
+  expect(w.rowsOf('compacted').filter(r => r.nonce === nonce).map(r => [r.skip, r.handoff_ht])).toEqual([['native-ran', ht]])
+  expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
+})
+
+test('DP-29: a native compaction that compacts during the post-handoff checkpoint: no dispatch record, so no native-ran row', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  w.publish(w.lastHt() ?? '', PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let p: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (sub !== 'checkpoint' || p !== undefined) return
+    p = raiseCompact($, { trigger: 'auto' })
+    await p
+  }
+  await w.advance(500)
+  await w.advance(60000)
+  expect(w.rowsOf('compacted').filter(r => r.skip === 'native-ran').length).toBe(0)
+  expect(w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').length).toBe(0)
 })

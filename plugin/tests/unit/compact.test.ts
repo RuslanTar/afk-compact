@@ -182,6 +182,19 @@ test('after-step: EXISTS sha-match → copy_exists; EXISTS sha-differs → copy_
   expect(w.toasts.some(t => t.includes('copy-failed'))).toBe(true)
 })
 
+test('RRP-04 (core-to-mod §13): after EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {
+  const w = new World().install(on)
+  w.saveLine = `EXISTS: ${ROOT}/r/x.md sha-differs`
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  const saves = w.callsOf('save-copy')
+  expect(saves.length).toBe(1)
+  const from = w.flag(saves[0], '--from') ?? ''
+  expect(from.endsWith('.mod.md')).toBe(true)
+  expect(w.writes.filter(p => p === from).length).toBe(1)
+  expect(w.rowsOf('copy_mismatch').length).toBe(1)
+})
+
 test('AT-E-11: measured_block off: no Measured facts in the instructions', async ($, on) => {
   const w = new World().install(on)
   w.measured = 'Git: main @ 3f9c2e1'
@@ -221,9 +234,10 @@ test('helper down: dispatch record written with $.fs.write, helper_missing in a 
   await raiseCompact($, { trigger: 'manual' })
   const nonce = markerNonce(w, w.compacts[0]?.instructions) ?? ''
   const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/dispatch/${nonce}.json`) ?? '{}') as Record<string, unknown>
-  for (const k of ['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'load_id', 'pid', 'pid_lstart', 'ts']) {
-    expect(Object.keys(rec)).toContain(k)
-  }
+  // The helper's record keys in its order (core-to-mod §17, dispatch.pm record): idle and idle_gap_s always.
+  expect(Object.keys(rec)).toEqual(['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'idle', 'idle_gap_s', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'cc_version_src', 'load_id', 'pid', 'pid_lstart', 'ts'])
+  expect([rec.agent_id, rec.idle, rec.idle_gap_s]).toEqual([null, false, null])
+  expect(rec.cc_version_src).toBe(typeof rec.cc_version === 'string' && rec.cc_version !== '' ? 'mod' : null)
   expect(rec.channel).toBe('mod-hook')
   expect(rec.nonce).toBe(nonce)
   const events = [...w.files.entries()].filter(([p]) => p.startsWith(`${WATCH}/${SID_A}/events/`)).map(([, t]) => JSON.parse(t) as { ev: string })
@@ -330,4 +344,27 @@ test('@remeasure@: the after-step measures for this compaction\'s nonce (its own
   const m = w.callsOf('measure')
   expect(m.length).toBe(1)
   expect(w.flag(m[0], '--nonce')).toBe(nonce)
+})
+
+// C-STORE D4 (MOD-SPEC §5.8 item 4): the mod writes the orphan index marker before its stash.
+test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid> (empty) before pending/<nonce>.mod.md, main and subagent', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  const marker = `${WATCH}/.orphans/${SID_A}`
+  const stashes = w.writes.map((p, i) => [p, i] as const).filter(([p]) => p.startsWith(`${WATCH}/${SID_A}/pending/`) && p.endsWith('.mod.md'))
+  expect(stashes.length).toBe(2)
+  const marks = w.writes.map((p, i) => [p, i] as const).filter(([p]) => p === marker).map(([, i]) => i)
+  expect(marks.length).toBe(2)
+  expect(stashes.every(([, i], k) => (marks[k] ?? Infinity) < i)).toBe(true)
+  expect(w.files.get(marker)).toBe('')
+})
+
+test('MOD-06: no vetted watch folder (ident refused every log folder): no marker and no stash', async ($, on) => {
+  const w = new World().install(on)
+  w.identWatch = null
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  expect(w.writes.filter(p => p.includes('/.orphans/') || p.endsWith('.mod.md'))).toEqual([])
 })

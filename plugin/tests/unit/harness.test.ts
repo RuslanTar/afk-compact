@@ -78,6 +78,10 @@ export class World {
   submitOrigins: unknown[] = []
   /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
   compactGate: Promise<void> | undefined
+  /** `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). */
+  rateLimits: { percentUsed: number }[] = []
+  /** While set, a `prompt.submit` reaching the bottom is not recorded (the person's own prompts of `userTurn`). */
+  private quiet = false
 
   constructor(init: Partial<Pick<World, 'sid' | 'tokens' | 'window' | 'version'>> = {}) {
     Object.assign(this, init)
@@ -89,7 +93,7 @@ export class World {
     mock.store(on, store)
     mock.env(on, { HOME })
     on('session.id', () => ({ value: this.sid }))
-    on('session.usage', () => ({ value: { startedAt: T0, rateLimits: [], context: { tokens: this.tokens, window: this.window } } }))
+    on('session.usage', () => ({ value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window } } }))
     on('session.version', () => ({ value: this.version }))
     on('session.cwd', () => ({ value: this.cwd }))
     on('settings.read', () => ({ value: this.policy }))
@@ -114,6 +118,7 @@ export class World {
       return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     on('prompt.submit', async (_$, e) => {
+      if (this.quiet) return { text: e.text }
       this.submitOrigins.push(e.origin)
       if (this.submitDrop !== undefined) return { drop: this.submitDrop }
       this.submits.push(e.text)
@@ -131,6 +136,7 @@ export class World {
       return { messages: this.summaryMessages(e.instructions), tokensBefore: this.tokens ?? 0, tokensAfter: 40000 }
     })
     on('session.start', (_$, e) => ({ cwd: e.cwd }))
+    on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
     on('turn.start', (_$, e) => ({ turnId: e.turnId }))
     on('turn.complete', () => ({ text: '' }))
     on('prompt.context', (_$, e) => ({ blocks: e.blocks }))
@@ -153,6 +159,22 @@ export class World {
   async turnStart($: Engine, text = 'next step please'): Promise<void> {
     this.turnNo++
     await $.turn.start({ text, turnId: 't' + String(this.turnNo) })
+  }
+
+  /**
+   * A main turn a person's prompt opens: the prompt enters with this origin kind (IC-1 D6:
+   * `composer`, `bridge` and `sdk` are human, so the turn clears halt; `task-notification`,
+   * `scheduled-trigger` and the like are not), then its turn starts. The prompt is not recorded in
+   * `submits`.
+   */
+  async userTurn($: Engine, text = 'next step please', kind = 'composer'): Promise<void> {
+    this.quiet = true
+    try {
+      await $.prompt.submit({ text, origin: { kind } } as never)
+    } finally {
+      this.quiet = false
+    }
+    await this.turnStart($, text)
   }
 
   async turnEnd($: Engine, answer = 'Done with that step.', reason: 'answer' | 'aborted' = 'answer'): Promise<void> {
@@ -285,6 +307,15 @@ export class World {
       }
       case 'measure':
         return ok(this.measureBlock + '\n')
+      case 'notice': {
+        // W-BETA A (core): `notice claim --id I` exclusive-creates <watch>/notice/<I>.shown.
+        const id = flag('--id')
+        if (args[0] !== 'claim' || !/^[a-z0-9-]{1,40}$/.test(id)) return { exitCode: 64, stdout: '' }
+        const marker = `${WATCH}/notice/${id}.shown`
+        if (this.files.has(marker)) return ok('seen\n')
+        this.files.set(marker, '')
+        return ok('show\n')
+      }
       default:
         return { exitCode: 64, stdout: '' }
     }

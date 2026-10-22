@@ -4,13 +4,16 @@
 import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
-import { assembleText, leftovers } from '../../hooks/lib/assemble'
-import { DEFAULTS, clamp, parseOptions } from '../../hooks/lib/config'
-import { CLOSE, OPEN, detectSummary, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
+import { assembleText, hasTag, leftovers } from '../../hooks/lib/assemble'
+import { CLAMP_DEFAULTS, DEFAULTS, clamp, clampConstants, minWindow, parseOptions, softCap, targetOf } from '../../hooks/lib/config'
+import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
+import type { Deps } from '../../hooks/lib/deps'
+import { checkpoint } from '../../hooks/lib/helper'
+import { BLOCK_MAX, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -101,7 +104,10 @@ describe('AT-C-02 detector', () => {
 })
 
 const PREV = '~/.claude/handoffs/example-repo/LAB-123/' + 'p'.repeat(141 - '~/.claude/handoffs/example-repo/LAB-123/'.length)
+/** PKG-RUNTIME A.2: budgets render `@store@` with a 160-character root stand-in. */
+const STORE = '"' + '/' + 'r'.repeat(159) + '/scripts/' + NAME + '-store"'
 const WORST = {
+  store: STORE, idle_min: '49',
   nonce: 'a1b2c3d4', previous_copy: PREV, measured_at: '2026-10-21T04:40:00+03:00', session_id: '00000000-0000-4000-8000-000000000000',
   saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4',
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
@@ -111,14 +117,23 @@ const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'prod-forbid', 'prod-allow'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
-  'handoff-turn': ['submit', 'near', 'spent', 'imminent'],
+  'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
 }
 
+/**
+ * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
+ * exactly one of `prod-forbid`/`prod-allow` on the resume block, `idle` never with `midturn`,
+ * `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
+ */
 function combos(tags: Tag[]): Tag[][] {
-  const out: Tag[][] = [[]]
+  let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
+  const has = (c: Tag[], t: Tag) => c.includes(t)
+  if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
+  out = out.filter(c => !(has(c, 'idle') && has(c, 'midturn')) && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
 
@@ -148,12 +163,22 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('resume protocol ≤2,500 chars (DP-8 hard; ADVISORY above 2,000) for every tag combination the mod builds', () => {
-    // `[handoff]` and `[handoff-partial]` never come together (MOD-SPEC §3.4).
-    for (const tags of combos(['midturn', 'nonok', 'handoff', 'handoff-partial']).filter(t => !(t.includes('handoff') && t.includes('handoff-partial')))) {
+  test('resume protocol ≤3,000 chars (compaction-rem-6 hard; soft 2,500) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+    for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 2500).toBe(true)
+      expect(s.length <= 3000).toBe(true)
     }
+  })
+  test('AT-TX-11 (U half): a 3,000-char protocol and a 3,000-byte measured block go out untrimmed (≤6,500, BLOCK_MAX)', () => {
+    const protocol = 'p'.repeat(2999) + '\n'
+    const measured = Array.from({ length: 30 }, (_, i) => 'm'.repeat(98) + String(i % 10)).join('\n').slice(0, 3000)
+    const render = (m: string) => protocol + 'Measured facts (2026-10-22T05:00:00+03:00; saved copy of this summary: ' + PREV + '):\n' + m + '\n'
+    const block = fitBlock(render, measured)
+    expect(block).toBe(render(measured))
+    expect(block.length <= BLOCK_MAX && BLOCK_MAX === 6500).toBe(true)
+    // Over the total, whole re-measure lines go first, with a note.
+    const big = fitBlock(render, measured + '\n' + 'z'.repeat(600))
+    expect(big.length <= 6500 && big.includes('(+')).toBe(true)
   })
   test('the queue tag is applied when given (D-10: the mod gives it only with queue_cmd set)', () => {
     const t = text('checkpoint-nudge')
@@ -191,7 +216,7 @@ test('clamp arithmetic: AT-P-03 and AT-P-04', () => {
   const p4 = clamp(DEFAULTS, 200000)
   expect([p4.soft_max, p4.target, p4.disabled]).toEqual([51000, 34000, 'trigger-disabled-small-window'])
   const off = clamp({ ...DEFAULTS, triggers: false }, 1000000)
-  expect([off.disabled, off.clamped]).toEqual(['triggers-off', []])
+  expect([off.disabled, off.clamped, off.small_window]).toEqual(['triggers-off', [], false])
   const small = clamp(DEFAULTS, 350000)
   expect(small.disabled).toBeNull()
 })
@@ -262,4 +287,183 @@ test('detector: an s=sub marker with the main Resume here heading in a subagent-
   expect(detectSummary(text, name, { dispatchNonce: '5e6f7081', scope: 'main' }).verdict).toBe('scope-leak')
   const noHeading = text.replace('## Resume here\nStatus: active\n', '')
   expect(detectSummary(noHeading, name, { dispatchNonce: '5e6f7081', scope: 'sub' }).verdict).toBe('ok')
+})
+
+// P5-FOLD A3 (MOD-SPEC §1.2 effective thresholds): small-window diagnostics.
+test('AT-P5-07: clamp diagnostics: raw negative values, min_window, triggers off computes the clamp, the 100,000 window floor', () => {
+  const tiny = clamp(DEFAULTS, 100000)
+  expect([tiny.disabled, tiny.soft_max, tiny.target, tiny.small_window, tiny.min_window]).toEqual(['trigger-disabled-small-window', -49000, -32667, true, 329000])
+  const off = clamp({ ...DEFAULTS, triggers: false }, 100000)
+  expect([off.disabled, off.small_window, off.min_window]).toEqual(['triggers-off', true, 329000])
+  expect(off.clamped.map(c => c.key)).toEqual(['soft_max', 'target'])
+  const floor = parseOptions({ native_window_tokens: 50000 })
+  expect([floor.native_window_tokens, floor.notes.clamped]).toEqual([100000, [{ key: 'native_window_tokens', configured: 50000, effective: 100000 }]])
+  expect(parseOptions({ native_window_tokens: 0 }).native_window_tokens).toBe(0)
+  expect(parseOptions({ native_window_tokens: 100000 }).notes.clamped).toEqual([])
+  expect(minWindow({ ...DEFAULTS, handoff_turn: 'off' })).toBe(313000)
+  expect(minWindow({ ...DEFAULTS, compact_target_tokens: 100000 })).toBe('never')
+  expect(minWindow({ ...DEFAULTS, compact_soft_max_tokens: 170000 })).toBe('never')
+  // min_window is the edge: enabled there, disabled one token below.
+  expect([clamp(DEFAULTS, 329000).disabled, clamp(DEFAULTS, 328999).disabled]).toEqual([null, 'trigger-disabled-small-window'])
+  const ho = { ...DEFAULTS, handoff_turn: 'off' as const }
+  expect([clamp(ho, 313000).disabled, clamp(ho, 312999).disabled]).toEqual([null, 'trigger-disabled-small-window'])
+})
+
+// text-to-mod M-2 (spec §16 `clamp`, MOD-02 parity): the ten keys, each read from the shipped object.
+test('clamp constants: one shared source (the spec-literals clamp object, key by key), else the built-in values', () => {
+  expect(CLAMP_DEFAULTS).toEqual({
+    native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000,
+    soft_ratio: 0.8, target_num: 2, target_den: 3, handoff_tokens_min: 20000, handoff_tokens_max: 150000,
+  })
+  expect(clampConstants(undefined)).toEqual(CLAMP_DEFAULTS)
+  expect(clampConstants([1, 2])).toEqual(CLAMP_DEFAULTS)
+  expect(clampConstants({ native_offset: 40000 })).toEqual({ ...CLAMP_DEFAULTS, native_offset: 40000 })
+  // Not positive numbers, or a fractional num/den: that key keeps its built-in value.
+  expect(clampConstants({ target_num: 1.5, target_den: 0, soft_ratio: '0.5', min_target: -1, window_floor: Infinity })).toEqual(CLAMP_DEFAULTS)
+  // Parity: the shipped object holds exactly these keys and values (skipped until the build carries it).
+  const shipped = specValue('clamp')
+  if (shipped !== undefined) {
+    expect(shipped).toEqual(CLAMP_DEFAULTS)
+    expect(clampConstants(shipped)).toEqual(CLAMP_DEFAULTS)
+  }
+})
+
+test('clamp: target = floor(soft x target_num / target_den) in integers, never a float 2/3; the ratios and bounds come from the constants', () => {
+  expect([targetOf(180000), targetOf(179999), targetOf(3)]).toEqual([120000, 119999, 2])
+  expect(softCap(225000)).toBe(180000)
+  // The 180,000 soft max edge: enabled at min_target exactly.
+  const edge = clamp({ ...DEFAULTS, compact_soft_max_tokens: 180000 }, 1000000)
+  expect([edge.soft_max, edge.target, edge.disabled]).toEqual([180000, 120000, null])
+  // Other constants change the clamp and min_window the same way (the helper's and watcher's reading).
+  const k = { ...CLAMP_DEFAULTS, soft_ratio: 0.5, target_num: 1, target_den: 2 }
+  const e = clamp(DEFAULTS, 1000000, k)
+  expect([e.soft_max, e.target, e.min_window]).toEqual([500000, 250000, 480000])
+  expect(minWindow(DEFAULTS, { ...k, soft_ratio: 0.8 })).toBe(389000)
+  // handoff_turn_max_tokens bounds are the object's handoff_tokens_min / _max.
+  expect(parseOptions({ handoff_turn_max_tokens: 10 }).handoff_turn_max_tokens).toBe(CLAMP_DEFAULTS.handoff_tokens_min)
+  expect(parseOptions({ handoff_turn_max_tokens: 900000 }).handoff_turn_max_tokens).toBe(CLAMP_DEFAULTS.handoff_tokens_max)
+})
+
+// S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.
+test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
+  expect(DEFAULTS.max_auto_continues_per_hour).toBe(6)
+  // BLD-08 / OD-4 provisional: the same default as src/plugin.json (`model`).
+  expect(DEFAULTS.precompact_turn).toBe('model')
+  expect(parseOptions({}).max_auto_continues_per_hour).toBe(6)
+  const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
+  expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'on', 100000])
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }] })
+  // AT-PC-04: any other value is `code` (the no-extra-cost path), whatever the default.
+  const b = parseOptions({ precompact_turn: 'sometimes', unattended_prod_reads: 'yes', idle_handoff_turn: 'maybe', idle_handoff_min_tokens: '2000000' })
+  expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'off', 1000000])
+  expect(b.notes.invalid).toEqual(['precompact_turn', 'unattended_prod_reads', 'idle_handoff_turn'])
+  const c = parseOptions({ precompact_turn: '${user_config.precompact_turn}', unattended_prod_reads: '', idle_handoff_turn: '  ' })
+  expect([c.precompact_turn, c.unattended_prod_reads, c.idle_handoff_turn, c.idle_handoff_min_tokens, c.notes])
+    .toEqual([DEFAULTS.precompact_turn, 'forbid', 'off', 200000, { invalid: [], clamped: [] }])
+  expect(parseOptions({ precompact_turn: 'CODE' }).precompact_turn).toBe('code')
+})
+
+// P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.
+describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
+  const N = '1a2b3c4d'
+  const body = (n = N) => markerText(NAME, n, 'main') + '\n# LAB-42 retry\n## Resume here\nStatus: active\n'
+  const post = (inner: string, tail: string) => '<summary>\n' + inner + '</summary>' + tail
+  const installed = (inner: string, tail: string) => 'This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n<summary>\n' + inner + '</summary>' + tail
+  const S = sentinelText(NAME, N)
+
+  test('AT-P5-01: three summaries with the sentinel inside, three after the close tag: 6/6 ok, the place reported, the body ends with the sentinel, the same sha in both message forms', () => {
+    const cases = [
+      { text: post(body() + S + '\n', '\n'), place: 'inside' },
+      { text: post(body() + S + '\n\n', ''), place: 'inside' },
+      { text: installed(body() + S + '\n', '\n\n'), place: 'inside' },
+      { text: post(body(), '\n' + S + '\n'), place: 'after-close' },
+      { text: post(body(), '\n\n' + S), place: 'after-close' },
+      { text: installed(body(), S + '\n'), place: 'after-close' },
+    ]
+    const shas = new Set<string>()
+    for (const c of cases) {
+      const r = detectSummary(c.text, NAME, { dispatchNonce: N, scope: 'main' })
+      expect([r.verdict, r.sentinel_place, r.sentinel_from_end]).toEqual(['ok', c.place, 1])
+      expect(r.normalized.endsWith(S + '\n')).toBe(true)
+      shas.add(r.sha256)
+    }
+    expect(shas.size).toBe(1)
+  })
+
+  test('AT-P5-02: another nonce after the close tag is truncated; a non-sentinel line first stays outside; a listed trailer is cut; unlisted text after it is ok-trailer; no marker is unshaped', () => {
+    const other = sentinelText(NAME, '9f9f9f9f')
+    expect(detectSummary(post(body(), '\n' + other + '\n'), NAME, { dispatchNonce: N, scope: 'main' }).verdict).toBe('truncated')
+    const notFirst = detectSummary(post(body(), '\nan engine line\n' + S + '\n'), NAME, { dispatchNonce: N, scope: 'main' })
+    expect([notFirst.verdict, notFirst.sentinel_place]).toEqual(['truncated', null])
+    expect(notFirst.normalized.includes(S)).toBe(false)
+    const listed = specStrings('copy_trailers')[0]
+    if (listed !== undefined) {
+      const r = detectSummary(installed(body(), '\n' + S + '\n\n' + listed), NAME, { dispatchNonce: N, scope: 'main' })
+      expect([r.verdict, r.sentinel_place]).toEqual(['ok', 'after-close'])
+    }
+    const unlisted = detectSummary(post(body(), '\n' + S + '\nFixture trailer line: an engine sentence that no baseline lists.\n'), NAME, { dispatchNonce: N, scope: 'main' })
+    expect([unlisted.verdict, unlisted.sentinel_place, unlisted.sentinel_from_end]).toEqual(['ok-trailer', 'after-close', 2])
+    const bare = '<summary>\n# LAB-42 retry\nNo marker here.\n</summary>\n' + S + '\n'
+    expect(detectSummary(bare, NAME, { dispatchNonce: N, scope: 'main' }).verdict).toBe('unshaped')
+    // Text after the close tag never joins the body when it is not the sentinel (unchanged).
+    expect(strip(post(body() + S + '\n', '\nan engine line\n'), [], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+    expect(strip(post(body(), '\n' + S + '\n'), []).body).toBe(body())
+    // A listed trailer after the moved sentinel is cut (the shipped list is empty today).
+    expect(strip(installed(body(), '\n' + S + '\n\nPlease go on.'), ['Please go on.'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+    // Trailers are line patterns (the helper's reading); one inside a closed summary is body.
+    expect(strip(installed(body(), '\n' + S + '\nFixture listed trailer: x'), ['^Fixture listed trailer: .*$'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+    expect(strip('<summary>\nbody\nPlease go on.\n</summary>', ['^Please go on\\.$']).body).toBe('body\nPlease go on.\n')
+    expect(strip('Summary:\nbody\nPlease go on.\n', ['^Please go on\\.$']).body).toBe('body\n')
+  })
+})
+
+function specStrings(key: string): string[] {
+  const v = specValue(key)
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+}
+
+// MOD-04 (MOD-SPEC §3.4, BUILD-PLAN §3.4; S-SETTINGS B, PKG-RUNTIME A.1/A.2).
+describe('MOD-04 resume-block tags and the store token', () => {
+  // The step-4 pair as T-TEXT/S-SETTINGS word it (two lines, one tag each), and a store line.
+  const TEXT = 'Head.\n[prod-forbid] 4. ask before production.\n[prod-allow] 4. a read-only production check may run.\n[chain] Run @store@ wait once.\nTail.\n'
+
+  test('AT-PR-05 (mod part): [prod-allow] only when the option and the checkpoint consent both say allow (four combinations); exactly one step-4 line', () => {
+    const combos: [string, string | undefined, boolean][] = [
+      ['allow', 'allow', true], ['allow', 'forbid', false], ['forbid', 'allow', false], ['forbid', 'forbid', false], ['allow', undefined, false],
+    ]
+    for (const [opt, consent, want] of combos) {
+      expect(prodAllowed(opt, consent)).toBe(want)
+      const out = assembleText(TEXT, [want ? 'prod-allow' : 'prod-forbid'], {})
+      expect(out.split('\n').filter(l => l.startsWith('4. ')).length).toBe(1)
+      expect(out.includes('read-only production check')).toBe(want)
+    }
+  })
+
+  test('AT-PK-03 (mod part): @store@ is the launcher word; a root no quoting can carry drops its lines and escalates store_path_unquotable', () => {
+    const toasts: string[] = []
+    const fake = (root: string) => ({ name: NAME, root, cfg: { warn_ui: true }, state: { toasted: new Set<string>() }, toast: (t: string) => toasts.push(t) }) as unknown as Deps
+    const ok = storeRuntime(fake('/p'))
+    expect(ok).toEqual({ runtime: { store: '"/p/scripts/' + NAME + '-store"' }, drop: [] })
+    expect(assembleText(TEXT, ['chain'], ok.runtime, ok.drop)).toContain('Run "/p/scripts/' + NAME + '-store" wait once.')
+    const bad = storeRuntime(fake('/p/a"b\'c'))
+    expect(bad).toEqual({ runtime: {}, drop: ['store'] })
+    expect(toasts.length).toBe(1)
+    expect(toasts[0]).toContain('store_path_unquotable')
+    const out = assembleText(TEXT, ['chain'], bad.runtime, bad.drop)
+    expect([out.includes('wait once'), leftovers(out)]).toEqual([false, []])
+  })
+
+  test('checkpoint JSON: the consent object is read (string values only), {} when absent', async () => {
+    const run = (stdout: string) => ({ name: NAME, root: '/p', helper: '/p/h', run: async () => ({ ok: true, exitCode: 0, stdout, error: '' }) }) as unknown as Deps
+    const a = await checkpoint(run(JSON.stringify({ measured_block: null, lane: null, checkpoint_ms: {}, consent: { unattended_prod_reads: 'allow', n: 3 } })), 's', '1a2b3c4d', false)
+    expect(a?.consent).toEqual({ unattended_prod_reads: 'allow' })
+    const b = await checkpoint(run(JSON.stringify({ measured_block: null })), 's', '1a2b3c4d', false)
+    expect(b?.consent).toEqual({})
+  })
+
+  test('hasTag: a tag line the build carries, or not', () => {
+    expect(hasTag('resume-context', 'midturn')).toBe(true)
+    expect(hasTag('resume-context', 'submit-idle')).toBe(false)
+    expect(hasTag('no-such-asset', 'midturn')).toBe(false)
+  })
 })

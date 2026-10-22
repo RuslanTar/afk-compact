@@ -2,7 +2,7 @@
 // A hook that throws is answered by its `.catch`: `next(e)` runs the chain on (or replays what
 // the hook's own `next` settled to), so a failure here never blocks the session.
 import type { Register } from 'claude-code'
-import { onSessionStart, onTurnStart, prepare } from './lib/alive'
+import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
 import { isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
@@ -10,6 +10,7 @@ import { countCall, limitText, onInterjection } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
+import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { blockName, contextBlock } from './lib/resume'
 
 export const register: Register = (on, options) => {
@@ -19,6 +20,14 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     await onSessionStart(realDeps($, options, state))
     return r
+  }).catch(($, e, next) => next(e))
+
+  // IC-1 D7: a `/clear` (or any end) cancels every timer that would submit into the next
+  // conversation, drops the pending block and closes an open handoff turn.
+  on('session.end', async ($, e, next) => {
+    cancelIdleTimer(realDeps($, options, state))
+    await onSessionEnd(realDeps($, options, state), e.sessionId)
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('turn.start', async ($, e, next) => {
@@ -45,15 +54,25 @@ export const register: Register = (on, options) => {
     const own = isOwnOrigin(e.origin, $.plugin.name)
     if (own && refuseOwnSubmit(state)) return { drop: 'a user prompt came first' }
     const entering = e.turnId === undefined && !own
-    if (entering) promptEntering(state)
+    // IC-1 D6: the entering prompt's origin kind decides at its turn.start whether halt clears.
+    const kind = e.origin.kind
+    if (entering) {
+      promptEntering(state, kind)
+      // §9.4: a prompt entering cancels the pre-idle timer.
+      cancelIdleTimer(realDeps($, options, state))
+    }
     let r
     try {
       r = await next(e)
     } catch (err) {
-      if (entering) promptNotEntered(state)
+      if (entering) promptNotEntered(state, kind)
       throw err
     }
-    if (entering && r.drop !== undefined) promptNotEntered(state)
+    if (entering && r.drop !== undefined) promptNotEntered(state, kind)
+    if (entering && r.drop === undefined) {
+      const d = realDeps($, options, state)
+      await cancelIdle(d, await d.sessionId())
+    }
     if (e.turnId !== undefined && e.wait !== true && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')) {
       const d = realDeps($, options, state)
       await onInterjection(d, await prepare(d), e.turnId)

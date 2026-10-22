@@ -13,6 +13,7 @@ import type { Deps, RunResult } from '../../hooks/lib/deps'
 import { LAUNCHER_DIR, launcherPath, storeWord } from '../../hooks/lib/deps'
 import { checkpoint, claim, handoffState, handoffTurnOpen, handoffTurnSupersede, ident, logJobs, measure, parseHandoffState, parseSave, prevCopy } from '../../hooks/lib/helper'
 import { BRAND } from './_gen/brand.gen'
+import * as CORPUS_GEN from './_gen/corpus.gen'
 import { CORPUS } from './_gen/corpus.gen'
 import { GOLDENS, GOLDEN_RUNTIME } from './_gen/goldens.gen'
 import { HELPER_REPLIES, REPLY_INPUTS, REPLY_NONCE, REPLY_SID } from './_gen/helper-replies.gen'
@@ -34,6 +35,23 @@ describe('BT-04 TS assembler vs the goldens', () => {
       const got = assemble(NAME, g.asset as AssetName, g.tags as Tag[], runtime)
       expect({ golden: g.asset + '__' + (g.tags.join('+') || 'base'), text: got })
         .toEqual({ golden: g.asset + '__' + (g.tags.join('+') || 'base'), text: g.parts.join(NAME) })
+    }
+  })
+})
+
+// P5-FOLD A1 (fix-to-mod item 1): the 6 P5 summaries and the after-close cases, with the
+// fixture's listed trailer, once tools/fixtures-gen renders `CORPUS_P5` (until then: nothing to run).
+describe('AT-P5-01, AT-P5-02 TS detector vs the P5 corpus', () => {
+  test('every P5 entry gives its verdict, placement and sha', () => {
+    const g = CORPUS_GEN as unknown as Record<string, unknown>
+    const p5 = g['CORPUS_P5'] as { file: string; text: string; verdict: string; sentinel_place: string | null; normalized_sha256: string; dispatch: unknown }[] | undefined
+    if (p5 === undefined) return
+    const trailers = (g['P5_COPY_TRAILERS'] as string[] | undefined) ?? []
+    expect(p5.length).toBeGreaterThan(5)
+    for (const c of p5) {
+      const d = c.dispatch as { nonce?: unknown } | null
+      const r = detectSummary(c.text, BRAND.name, d && typeof d === 'object' ? { dispatchNonce: String(d.nonce), scope: 'main' } : {}, trailers)
+      expect({ file: c.file, verdict: r.verdict, place: r.sentinel_place, sha: r.sha256 }).toEqual({ file: c.file, verdict: c.verdict, place: c.sentinel_place, sha: c.normalized_sha256 })
     }
   })
 })
@@ -94,7 +112,7 @@ describe('BT-05 recorded helper replies', () => {
     const block = await measure(depsFor(reply('measure')), REPLY_SID)
     expect(typeof block === 'string' && block.length > 0 && block.length <= 3000).toBe(true)
     expect([reply('log').exitCode, join(reply('log').stdout), reply('log-paths').exitCode]).toEqual([0, '', 0])
-    // D-18 B8 / Dev-1 D1: the handoff-turn calls, handoff-state in its five forms, the jobs log.
+    // D-18 B8 / Dev-1 D1: the handoff-turn calls, handoff-state in its six forms, the jobs log.
     const sidOf = (n: string): string => argvOf(reply(n))[2] ?? ''
     const htOf = (n: string): string => argvOf(reply(n))[argvOf(reply(n)).indexOf('--ht') + 1] ?? ''
     expect(await handoffTurnOpen(depsFor(reply('handoff-turn-open')), sidOf('handoff-turn-open'), htOf('handoff-turn-open'), 'cap', 34, 64000)).toBe('ok')
@@ -112,14 +130,21 @@ describe('BT-05 recorded helper replies', () => {
     const staged = await hs('handoff-state-staged')
     // The finish command starts with the helper's `ctx::store_cmd()` word, which is the word
     // `storeWord()` makes for the same root (PKG-RUNTIME A.1, A.2).
-    const word = /^("[^"]*"|'[^']*') publish --stage /.exec(staged.state === 'staged' ? staged.finish ?? '' : '')?.[1] ?? ''
+    // tools/helper-replies-gen records the plugin folder as `$PLUGIN` (a stand-in, not the real
+    // root): both sides compare over the portable root `/p` put in its place.
+    const recorded = /^("[^"]*"|'[^']*') publish --stage /.exec(staged.state === 'staged' ? staged.finish ?? '' : '')?.[1] ?? ''
+    const word = recorded.split('$PLUGIN').join('/p')
     const tail = '/' + LAUNCHER_DIR + '/' + NAME + '-store'
-    expect([word.slice(1, -1).endsWith(tail), storeWord(word.slice(1, -1 - tail.length), NAME)]).toEqual([true, word])
+    expect([recorded.includes('$PLUGIN'), word.slice(1, -1).endsWith(tail), storeWord(word.slice(1, -1 - tail.length), NAME)]).toEqual([true, true, word])
     expect(await hs('handoff-state-staged-no-finish')).toEqual({
       state: 'staged', stage: "~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
     })
     expect(await hs('handoff-state-published')).toEqual({ state: 'published', path: '~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md' })
     expect(await hs('handoff-state-superseded')).toEqual({ state: 'superseded', nonce: REPLY_NONCE })
+    // DP-28: a claimed handoff file the publish could not write answers `publish-failed <path>`;
+    // the mod reads it as failed, so the cycle falls back to the full summary text.
+    expect(join(reply('handoff-state-publish-failed').stdout)).toMatch(/^publish-failed ~\/\S+_retry-2\.md\n$/)
+    expect(await hs('handoff-state-publish-failed')).toEqual({ state: 'failed' })
     expect(parseHandoffState(join(reply('handoff-state-none').stdout))).toEqual({ state: 'none' })
     const jobs = reply('log-jobs-caller')
     expect([jobs.exitCode, join(jobs.stdout), jobs.stdin !== undefined]).toEqual([3, 'REFUSED: jobs-caller\n', true])
@@ -165,15 +190,16 @@ describe('BT-05 recorded helper replies', () => {
 // above checks the two agree on a real root.
 describe('AT-PK-03 storeWord', () => {
   test('double quotes; single quotes for ", $, backquote, backslash; refused when \' is there too', () => {
-    expect(launcherPath('/p', 'x')).toBe('/p/scripts/x-store')
-    expect(storeWord('/p', 'x')).toBe('"/p/scripts/x-store"')
-    expect(storeWord('/Users/a b/.claude/plugins/cache/m/x/1.0.0', 'x')).toBe('"/Users/a b/.claude/plugins/cache/m/x/1.0.0/scripts/x-store"')
-    expect(storeWord("/p/it's", 'x')).toBe('"/p/it\'s/scripts/x-store"')
-    expect(storeWord('/p/$HOME', 'x')).toBe("'/p/$HOME/scripts/x-store'")
-    expect(storeWord('/p/a"b', 'x')).toBe("'/p/a\"b/scripts/x-store'")
-    expect(storeWord('/p/a`b', 'x')).toBe("'/p/a`b/scripts/x-store'")
-    expect(storeWord('/p/a\\b', 'x')).toBe("'/p/a\\b/scripts/x-store'")
-    expect(storeWord('/p/a"b\'c', 'x')).toBeUndefined()
-    expect(storeWord('/p/$it\'s', 'x')).toBeUndefined()
+    const tail = '/scripts/' + NAME + '-store'
+    expect(launcherPath('/p', NAME)).toBe('/p' + tail)
+    expect(storeWord('/p', NAME)).toBe('"/p' + tail + '"')
+    expect(storeWord('/opt/a b/.claude/plugins/cache/m/x/1.0.0', NAME)).toBe('"/opt/a b/.claude/plugins/cache/m/x/1.0.0' + tail + '"')
+    expect(storeWord("/p/it's", NAME)).toBe('"/p/it\'s' + tail + '"')
+    expect(storeWord('/p/$HOME', NAME)).toBe("'/p/$HOME" + tail + "'")
+    expect(storeWord('/p/a"b', NAME)).toBe("'/p/a\"b" + tail + "'")
+    expect(storeWord('/p/a`b', NAME)).toBe("'/p/a`b" + tail + "'")
+    expect(storeWord('/p/a\\b', NAME)).toBe("'/p/a\\b" + tail + "'")
+    expect(storeWord('/p/a"b\'c', NAME)).toBeUndefined()
+    expect(storeWord('/p/$it\'s', NAME)).toBeUndefined()
   })
 })

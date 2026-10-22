@@ -13,20 +13,20 @@ const TURN = hasAsset('handoff-turn')
 const halted = (w: World, reason: keyof typeof HALT_REASON_TEXT, tokens = '610,000') =>
   assemble(w.name, 'checkpoint-nudge', TURN ? ['halt', 'halt-handoff'] : ['halt'], { tokens, halt_reason: HALT_REASON_TEXT[reason] })
 const handoffSubmit = (w: World, reason: keyof typeof HALT_REASON_TEXT) =>
-  assembleIf(w.name, 'handoff-turn', ['submit'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(maxCalls()) })
+  assembleIf(w.name, 'handoff-turn', ['submit', 'submit-halt'], { halt_reason: HALT_REASON_TEXT[reason], max_calls: String(maxCalls()), store: storeWord(w.root, w.name) ?? '' })
 
 const CONT = 'the session was compacted at the checkpoint you reached. Continue from Step 1 of the summary; questions the user owns stay open.'
 
 /** A main turn that crosses the soft max (nudge), ends with `answer`, and compacts at 500 ms. */
 async function nudgedTurn($: Engine, w: World, answer = 'Checkpoint: clean · Step 1: run the tests'): Promise<void> {
-  await w.turnStart($)
+  await w.userTurn($)
   w.tokens = 610000
   await w.tool($)
   await w.turnEnd($, answer)
   await w.advance(500)
 }
 
-test('AT-M2-01: boundary at 410K after a clean answer: one $.session.compact with the mod-self nonce', async ($, on) => {
+test('AT-M2-01: boundary at 410K after a clean answer: one $.session.compact with the mod-self nonce', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
   let dispatchedBefore = false
   w.atCompact = () => {
@@ -50,7 +50,7 @@ test('AT-M2-01: boundary at 410K after a clean answer: one $.session.compact wit
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-01: timer at 2000 ms; a turn.start 1 s later cancels it', async ($, on) => {
+test('AT-B-01: timer at 2000 ms; a turn.start 1 s later cancels it', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -88,7 +88,7 @@ test('AT-B-02: a turn ending while an AskUserQuestion call is open: skip why=ask
   await open
 })
 
-test('AT-B-03: an eligible turn end 10 s after a plugin compaction: skip why=cooldown', async ($, on) => {
+test('AT-B-03: an eligible turn end 10 s after a plugin compaction: skip why=cooldown', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -166,7 +166,7 @@ test('CR-F20: a continue answered { drop }: continue skipped:submit-failed', asy
   expect(w.rowsOf('continue').map(r => r.result)).toEqual(['submitted', 'skipped:submit-failed'])
 })
 
-test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped at its nudged turn end, then the handoff turn, then one compaction, no continue', async ($, on) => {
+test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped at its nudged turn end, then the handoff turn, then one compaction, no continue', { options: { max_auto_continues_per_hour: 3 } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   for (let i = 0; i < 4; i++) {
@@ -204,7 +204,46 @@ test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped 
   expect(w.rowsOf('halt')[0]?.reason).toBe('cap')
 })
 
-test('AT-B-07: two plugin compactions, each re-reaching target within 2 main turns: thrash + halt', async ($, on) => {
+// S-SETTINGS A (owner 04:10): the default cap is 6 per rolling hour.
+test('AT-CAP-01: default config, 7 nudge-driven cycles within 55 min: 6 continues; the 7th capped at its nudged turn end (halt cap, handoff turn, one compaction, no continue)', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  for (let i = 0; i < 7; i++) {
+    if (i === 6) {
+      await w.turnStart($)
+      w.tokens = 610000
+      expect((await w.tool($)).context?.[0]).toBe(halted(w, 'cap'))
+      await w.turnEnd($)
+      expect(w.rowsOf('continue_capped').length).toBe(1)
+      expect(w.compacts.length).toBe(6)
+      if (TURN) {
+        await w.advance(2000)
+        expect(w.submits.slice(6)).toEqual([handoffSubmit(w, 'cap')])
+        await w.turnStart($, '')
+        await w.turnEnd($, 'LINT stop.')
+      }
+      await w.advance(500)
+      break
+    }
+    await nudgedTurn($, w)
+    w.tokens = 100000
+    await w.turnStart($, 'continue text')
+    await w.turnEnd($)
+    for (let q = 0; q < 2; q++) {
+      await w.turnStart($)
+      await w.turnEnd($)
+    }
+    await w.advance(8 * 60000)
+  }
+  expect(w.compacts.length).toBe(7)
+  expect(w.submits.length).toBe(TURN ? 7 : 6)
+  expect(w.submits.slice(0, 6).every(t => t.includes(CONT))).toBe(true)
+  expect(w.rowsOf('thrash').length).toBe(0)
+  expect(w.rowsOf('continue').filter(r => r.result === 'submitted').length).toBe(6)
+  expect(w.rowsOf('halt')[0]?.reason).toBe('cap')
+})
+
+test('AT-B-07: two plugin compactions, each re-reaching target within 2 main turns: thrash + halt', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   w.tokens = 410000
@@ -238,7 +277,7 @@ test('AT-B-08: halt, then a user-typed turn: halt cleared; the next nudge-driven
   expect(w.submits.length).toBe(1)
 })
 
-test('AT-B-09: a nudged turn that ends aborted: no continue', async ($, on) => {
+test('AT-B-09: a nudged turn that ends aborted: no continue', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -255,14 +294,14 @@ test('AT-B-09: a nudged turn that ends aborted: no continue', async ($, on) => {
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-10: continue with the claim still free: fixed line + block, ≤6,500 chars (DP-14 (2)), claim prompt.submit', async ($, on) => {
+test('AT-B-10: continue with the claim still free: fixed line + block, ≤7,000 chars (compaction-rem-6), claim prompt.submit', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await nudgedTurn($, w)
   expect(w.submits.length).toBe(1)
   const text = w.submits[0] ?? ''
   expect(text.startsWith(`Note from the user's ${w.name} plugin: ${CONT}\n\nThe ${w.name} plugin adds this after compaction`)).toBe(true)
-  expect(text.length <= 6500).toBe(true)
+  expect(text.length <= 7000).toBe(true)
   const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
   expect(w.claims.get(nonce)).toBe('prompt.submit')
   expect(w.rowsOf('continue')[0]?.result).toBe('submitted')
@@ -318,11 +357,11 @@ test('halt mode survives a reload (halt.json) until a user-typed turn clears it'
   await raiseCompact($, { trigger: 'auto', agentId: undefined })
   await $.turn.complete({ answer: 'x', durationMs: 1, isAborted: false, turnId: 't0', reason: 'answer' })
   expect(w.rowsOf('skip').map(r => r.why)).toEqual(['halt'])
-  await w.turnStart($)
+  await w.userTurn($)
   expect(w.rowsOf('halt').map(r => r.active)).toEqual([false])
 })
 
-test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no timer; the next turn end schedules again', async ($, on) => {
+test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no timer; the next turn end schedules again', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -379,8 +418,9 @@ test('AT-P-04: window 200000: trigger_disabled_small_window; no nudge or plugin 
   await w.turnEnd($)
   await w.advance(5000)
   const eff = w.rowsOf('config_effective')[0]
-  expect(eff?.soft_max).toBe(51000)
-  expect(eff?.target).toBe(34000)
+  // P5-FOLD A3: disabled, so the thresholds are null and the computed values are the raw fields.
+  expect([eff?.soft_max, eff?.target, eff?.soft_max_raw, eff?.target_raw]).toEqual([null, null, 51000, 34000])
+  expect([eff?.disabled, eff?.small_window, eff?.min_window]).toEqual(['trigger-disabled-small-window', true, 329000])
   expect(w.rowsOf('trigger_disabled_small_window').length).toBe(1)
   expect(w.compacts.length).toBe(0)
   await raiseCompact($, { trigger: 'auto' })
@@ -420,4 +460,47 @@ test('AT-Q-08 (mod part): queue_cmd unset: the nudge has no [queue] line', async
   await w.turnStart($)
   w.tokens = 610000
   expect((await w.tool($)).context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['continue'], { tokens: '610,000' }))
+})
+
+test('AT-P5-07 (row): window 100000: config_effective has null thresholds, raw -49000 / -32667, min_window 329000; triggers off still computes them', async ($, on) => {
+  const w = new World({ window: 100000 }).install(on)
+  await w.start($)
+  const eff = w.rowsOf('config_effective')[0]
+  expect([eff?.soft_max, eff?.target, eff?.soft_max_raw, eff?.target_raw, eff?.disabled, eff?.small_window, eff?.min_window])
+    .toEqual([null, null, -49000, -32667, 'trigger-disabled-small-window', true, 329000])
+  expect(eff?.clamped).toEqual(['soft_max', 'target'])
+})
+
+test('AT-P5-07 (row, triggers off): small_window, min_window and the clamped list are computed as with triggers on', { options: { triggers: false } }, async ($, on) => {
+  const w = new World({ window: 100000 }).install(on)
+  await w.start($)
+  const eff = w.rowsOf('config_effective')[0]
+  expect([eff?.disabled, eff?.small_window, eff?.min_window, eff?.soft_max, eff?.soft_max_raw]).toEqual(['triggers-off', true, 329000, null, -49000])
+  expect(eff?.clamped).toEqual(['soft_max', 'target'])
+  expect(w.rowsOf('triggers_off').length).toBe(1)
+})
+
+test('AT-P5-07 (row): native_window_tokens 50000 counts as 100000, with one config_clamped', { options: { native_window_tokens: 50000 } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  expect(w.rowsOf('config_effective')[0]?.window).toBe(100000)
+  expect(w.rowsOf('config_clamped').filter(r => r.key === 'native_window_tokens').map(r => [r.configured, r.effective])).toEqual([[50000, 100000]])
+})
+
+// DP-30 (4): `compacted.ms` has one definition on every path: from the dispatch record written
+// (or reused) to the compaction's answer, as on the mod-hook path.
+test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'code' } }, async ($, on) => {
+  const w = new World().install(on)
+  w.atHelper = async (sub) => {
+    if (sub === 'dispatch') await w.clock.set(w.clock.now() + 250)
+  }
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 410000
+  await w.turnEnd($)
+  await w.advance(2000)
+  await raiseCompact($, { trigger: 'manual' })
+  const rows = w.rowsOf('compacted')
+  expect(rows.length).toBe(2)
+  expect(rows.map(r => r.ms)).toEqual([0, 0])
 })
