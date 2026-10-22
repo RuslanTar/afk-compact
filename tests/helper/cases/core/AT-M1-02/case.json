@@ -19,7 +19,7 @@
    },
    "expect": {
     "exit": 0,
-    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫(?:, ends|; its last line before </summary>:) ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
     "stdout_max_bytes": 8192,
     "stderr_empty": true,
     "stdout_contains": [
@@ -103,7 +103,7 @@
    },
    "expect": {
     "exit": 0,
-    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫, ends ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
+    "stdout_re": "\\A[\\s\\S]*⟪$BRAND v1 n=([0-9a-f]{8}) s=main⟫[\\s\\S]*⟪/$BRAND n=\\1⟫[\\s\\S]*Only if this is a subagent's assigned task[\\s\\S]*⟪$BRAND v1 n=\\1 s=sub⟫(?:, ends|; its last line before </summary>:) ⟪/$BRAND n=\\1⟫[\\s\\S]*\\n\\z",
     "stdout_contains": [
      "full text in ~/.claude/handoffs/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md (never U-)."
     ],
