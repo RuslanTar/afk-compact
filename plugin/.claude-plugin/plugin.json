@@ -38,7 +38,7 @@
     "queue_cmd": {
       "type": "file",
       "title": "Queue command",
-      "description": "Executable answering 'list --json --session <sid>', 'adopt --lane <id> [--if-free]' and 'add --json ...' (draft on stdin). Empty = off.",
+      "description": "Executable for an optional question queue: answers `list --json --session <sid>` with a `queue-stub/v1` object (the version tag is required), `adopt --lane <id> [--if-free] [--must-exist]` and `add --json ...` (draft on stdin; exit codes in README). Empty = off: no queue or lane text reaches the model. Read from your settings file only (flags and env are ignored).",
       "default": ""
     },
     "triggers": {
@@ -83,7 +83,7 @@
       "type": "number",
       "title": "Auto-continues per hour",
       "description": "Cap on automatic continues in a rolling hour; 0 = never auto-continue, so every nudged cycle is a last cycle.",
-      "default": 3,
+      "default": 6,
       "min": 0,
       "max": 10
     },
@@ -122,7 +122,7 @@
     "watcher": {
       "type": "string",
       "title": "Watcher",
-      "description": "shadow = log every compaction (content-free); off = no watcher rows. Case and spaces are ignored; any other value counts as shadow.",
+      "description": "Local content-free compaction logs (shadow) or off. Nothing is sent; share with /compactinue:report.",
       "default": "shadow"
     },
     "stall_min": {
@@ -164,7 +164,7 @@
     "relaunch_allow": {
       "type": "string",
       "title": "Relaunch allowlist",
-      "description": "Patterns (each starts ^), separated by ';', for repeat-safe local commands. No effect in this version: only read-only jobs relaunch by themselves. Read from your settings file only (flags and env are ignored).",
+      "description": "Patterns (each starts ^), separated by ';', for repeat-safe local commands that may start again by themselves after a lost-job check. A chained command, an outward step or a production command always asks. Read from your settings file only (flags and env are ignored).",
       "default": ""
     },
     "relaunch_quiet_s": {
@@ -174,6 +174,32 @@
       "default": 120,
       "min": 30,
       "max": 3600
+    },
+    "unattended_prod_reads": {
+      "type": "string",
+      "title": "Unattended production reads",
+      "description": "forbid = a resumed session asks before any production step; allow = a read-only production check the session builds itself may run without asking. Production writes and commands from a handoff always ask. Read from your settings file only (flags and env are ignored).",
+      "default": "forbid"
+    },
+    "prod_patterns": {
+      "type": "string",
+      "title": "Production patterns",
+      "description": "Extra patterns, separated by ';', that mark a command as production, beside the shipped prod-token class. They can only make the plugin ask more. Empty = the shipped class only.",
+      "default": ""
+    },
+    "idle_handoff_turn": {
+      "type": "string",
+      "title": "Pre-idle handoff turn",
+      "description": "on = when the session has been idle for about 49 minutes, the model gets one turn to write a handoff before the prompt cache expires; off = none. Any other value counts as off.",
+      "default": "off"
+    },
+    "idle_handoff_min_tokens": {
+      "type": "number",
+      "title": "Pre-idle handoff minimum (tokens)",
+      "description": "No pre-idle handoff turn below this context size.",
+      "default": 200000,
+      "min": 100000,
+      "max": 1000000
     }
   }
 }
