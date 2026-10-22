@@ -101,6 +101,12 @@
       "min": 20000,
       "max": 150000
     },
+    "precompact_turn": {
+      "type": "string",
+      "title": "Pre-compaction handoff turn",
+      "description": "model = before each planned compaction the model gets one extra turn to write a handoff; code = code records the checkpoint alone, which saves usage. Any other value counts as code.",
+      "default": "model"
+    },
     "measured_block": {
       "type": "boolean",
       "title": "Measured facts to the summarizer",
