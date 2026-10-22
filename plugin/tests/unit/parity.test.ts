@@ -128,14 +128,11 @@ describe('BT-05 recorded helper replies', () => {
       finish: join(reply('handoff-state-staged').stdout).replace(/^.* finish=/, '').trimEnd(),
     })
     const staged = await hs('handoff-state-staged')
-    // The finish command starts with the helper's `ctx::store_cmd()` word, which is the word
-    // `storeWord()` makes for the same root (PKG-RUNTIME A.1, A.2).
-    // tools/helper-replies-gen records the plugin folder as `$PLUGIN` (a stand-in, not the real
-    // root): both sides compare over the portable root `/p` put in its place.
-    const recorded = /^("[^"]*"|'[^']*') publish --stage /.exec(staged.state === 'staged' ? staged.finish ?? '' : '')?.[1] ?? ''
-    const word = recorded.split('$PLUGIN').join('/p')
-    const tail = '/' + LAUNCHER_DIR + '/' + NAME + '-store'
-    expect([recorded.includes('$PLUGIN'), word.slice(1, -1).endsWith(tail), storeWord(word.slice(1, -1 - tail.length), NAME)]).toEqual([true, true, word])
+    // core C-2 (core-to-mod §24): the finish command starts with the token `<store>`, which the
+    // resume block's first line defines as `@store@`; it holds no launcher word or plugin root of
+    // its own. The storeWord()/`ctx::store_cmd()` parity is checked on `@store@` (AT-PK-03 below).
+    const finish = staged.state === 'staged' ? staged.finish ?? '' : ''
+    expect([finish.startsWith("<store> publish --stage '"), finish.includes('$PLUGIN'), finish.includes('/' + LAUNCHER_DIR + '/')]).toEqual([true, false, false])
     expect(await hs('handoff-state-staged-no-finish')).toEqual({
       state: 'staged', stage: "~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
     })
@@ -186,8 +183,7 @@ describe('BT-05 recorded helper replies', () => {
 })
 
 // AT-PK-03 (mod part): the launcher word for the root classes PKG-RUNTIME A.1 names. The helper's
-// `ctx::store_cmd()` gives the same words; the recorded `handoff-state-staged` finish command
-// above checks the two agree on a real root.
+// `ctx::store_cmd()` gives the same words (core case AT-PK-03-store-word holds the same roots).
 describe('AT-PK-03 storeWord', () => {
   test('double quotes; single quotes for ", $, backquote, backslash; refused when \' is there too', () => {
     const tail = '/scripts/' + NAME + '-store'
