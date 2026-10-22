@@ -4,7 +4,7 @@
     "AT-ST-09"
   ],
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
-  "note": "Unmarked subagent summaries (no nonce): fill joins by body sha (b), else by time only when exactly one agent file has an unjoined boundary row in the copy's window (c). The two boundary rows are 35 s apart, so a 120 s window holds both. The summary rows carry the engine trailers: a reader computing the row's normalized-body sha must cut them first, or join (b) never matches (see README).",
+  "note": "Unmarked subagent summaries (no nonce): fill joins by body sha (b), else by time only when exactly one agent file has an unjoined boundary row in the copy's window (c), the reconcile.pm P3 sub window: the boundary row at most TOL_S (2 s) before and at most SUB_WINDOW_S (120 s) after the PostCompact time. The two boundary rows are 35 s apart. The summary rows carry the engine trailers: a reader computing the row's normalized-body sha must cut them first, or join (b) never matches (fix-escalations item 1; `--check` reads them with the option (a) prefixes in ENGINE_TRAILERS). verify-fail is time-join with the test-mode fault that flips one byte of the new file before the re-read (needs/fix-to-core.md).",
   "agents": {
     "A2": "a5c0ffee0a1b2c3d4",
     "A3": "a7d00d1e5e6f7a8b9"
@@ -22,18 +22,53 @@
         "filled": true,
         "agent": "a5c0ffee0a1b2c3d4",
         "attributed_by": "reconcile-b"
-      }
+      },
+      "note": "the body is A2's summary row (after the engine trailers are cut); A3's row is also in the window"
     },
     {
       "id": "ambiguous",
       "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
-      "postcompact_now": "2026-10-21T14:04:50.650+03:00",
+      "postcompact_now": "2026-10-21T14:04:31.250+03:00",
       "expect": {
         "filled": false,
         "row": "copy_attribution_ambiguous",
         "candidates": [
           "a5c0ffee0a1b2c3d4",
           "a7d00d1e5e6f7a8b9"
+        ]
+      },
+      "note": "A2's row is 1.0 s before (inside TOL_S), A3's 34 s after: both in the window, no sha holder"
+    },
+    {
+      "id": "time-join",
+      "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
+      "postcompact_now": "2026-10-21T14:05:05.650+03:00",
+      "note": "the body is in no agent file; A3's row is 0.4 s before (in the window), A2's 35.4 s before (outside TOL_S): exactly one candidate",
+      "expect": {
+        "filled": true,
+        "agent": "a7d00d1e5e6f7a8b9",
+        "attributed_by": "reconcile-c"
+      }
+    },
+    {
+      "id": "verify-fail",
+      "payload": "payloads/PostCompact/fill-unmarked-sub-x.json",
+      "postcompact_now": "2026-10-21T14:05:05.650+03:00",
+      "note": "time-join with the fault: the re-read finds the body sha changed, so the new file is unlinked and the old one stays",
+      "fault": {
+        "env": {
+          "STORE_TEST_FILL_CORRUPT": "1"
+        },
+        "what": "test mode only: after the exclusive create of the -a<agent8> name and before the re-read, the helper flips the last body byte of the new file"
+      },
+      "expect": {
+        "filled": false,
+        "row": "copy_attribution_failed",
+        "why": "verify",
+        "old_file": "kept, byte-identical",
+        "new_file": "absent",
+        "rows_absent": [
+          "copy_attributed"
         ]
       }
     }

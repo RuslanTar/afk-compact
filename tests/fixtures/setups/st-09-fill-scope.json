@@ -1,0 +1,164 @@
+{
+  "v": 1,
+  "id": "st-09-fill-scope",
+  "ruling": "C-STORE D5 step 5 (scope of fill)",
+  "tests": [
+    "AT-ST-09"
+  ],
+  "note": "AT-ST-09 (d): three copies of the P5 subagent's compactions c1-c3, each with the marker nonce of a summary row in agent-a494e1b0fa1a73786.jsonl, so a nonce join (a) would match all three. Only the control in compact/subagents/ with actor sub-unknown may be filled (renamed to -aa494e1b0, copy_attributed); the main copy in compact/ and the one in compact/unattributed/ stay byte-identical under their names, with no copy_attributed or copy_attribution_* row for their id6. The copies are mode 0400 and have copy rows in the classic stream and their classic dispatch records; the invoke is one Stop (reconcile).",
+  "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
+  "invoke": {
+    "argv": [
+      "hook",
+      "Stop"
+    ],
+    "stdin": "$TMP/stop.json",
+    "cwd": "$TMP/example-repo"
+  },
+  "expect": {
+    "copies": {
+      "main": {
+        "path": "$ROOT/example-repo/general/compact/2026-10-21_14-00-57_5e55a001_c1-da24cc.md",
+        "slot": "main",
+        "actor": "main",
+        "nonce": "da24cc4a",
+        "id6": "da24cc",
+        "filled": false
+      },
+      "unattributed": {
+        "path": "$ROOT/example-repo/general/compact/unattributed/2026-10-21_14-01-08_5e55a001_c2-f5d2cc.md",
+        "slot": "unattributed",
+        "actor": "unattributed",
+        "nonce": "f5d2ccf6",
+        "id6": "f5d2cc",
+        "filled": false
+      },
+      "control": {
+        "path": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001_c3-d21582.md",
+        "slot": "subagents",
+        "actor": "sub-unknown",
+        "nonce": "d2158267",
+        "id6": "d21582",
+        "filled": true,
+        "renamed_to": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001-aa494e1b0_c1-d21582.md"
+      }
+    },
+    "rows_absent_for_id6": [
+      "da24cc",
+      "f5d2cc"
+    ],
+    "rows": [
+      {
+        "file": "$WATCH/$SID.classic.jsonl",
+        "ev": "copy_attributed",
+        "count": 1,
+        "fields": {
+          "id6": "d21582",
+          "actor": "a494e1b0fa1a73786"
+        }
+      }
+    ]
+  },
+  "setup": [
+    {
+      "mkdir": "$TMP/example-repo"
+    },
+    {
+      "copy": "transcripts/P5-replay/main.jsonl",
+      "to": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl"
+    },
+    {
+      "copy": "transcripts/P5-replay/subagents/agent-a494e1b0fa1a73786.jsonl",
+      "to": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a494e1b0fa1a73786.jsonl"
+    },
+    {
+      "copy": "watch/dispatch-da24cc4a.json",
+      "to": "$WATCH/$SID/dispatch/da24cc4a.json"
+    },
+    {
+      "write": "$ROOT/example-repo/general/compact/2026-10-21_14-00-57_5e55a001_c1-da24cc.md",
+      "content": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: da24cc4a\ndate: 2026-10-21T14:00:57.036+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\ntranscript_path: $HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl\nrepository: example-repo\nbucket: example-repo/general\nbucket_source: default\nstatus: in-progress\ntrigger: auto\ncompaction_seq: 1\nverdict: ok\nchannel: classic\n---\n⟪{{plugin}} v1 n=da24cc4a s=sub⟫\n\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: read in two Read calls. Call 1 (lines 1-465) was truncated at a 25000-token cap and named offset=466. Call 2 (offset 466, limit 485) returned lines 466-950. The file has 951 total lines per the truncation notice. Line 951 has not been displayed. [unverified]\n- Last displayed line of app-1.log (line 950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log through app-6.log: not started.\n- No errors seen in the Read results. The log content is routine DEBUG/INFO/WARN lines, with one WARN (\"billing slow upstream ms=1018 host=billing-3\", line 8). Nothing security-relevant.\n\n## Findings\n- app-1.log line count: 951 total (per truncation notice). Confirmed through line 950 only.\n\n## Produced but not yet delivered\nNone. No final lines have been sent yet.\n\n## Own background tasks\nNone (not checked)\n\n## Next action\nRead `/tmp/example-repo/logs/app-1.log` with offset 950, limit 1 to confirm line 951 and the true last line of app-1. Then Read app-2.log in full (with continuation as needed), then app-3.log through app-6.log, one Read per message. Then call SubagentHandback with the six last lines.\n⟪/{{plugin}} n=da24cc4a⟫\n",
+      "mode": "0400"
+    },
+    {
+      "copy": "watch/dispatch-f5d2ccf6.json",
+      "to": "$WATCH/$SID/dispatch/f5d2ccf6.json"
+    },
+    {
+      "write": "$ROOT/example-repo/general/compact/unattributed/2026-10-21_14-01-08_5e55a001_c2-f5d2cc.md",
+      "content": "---\nkind: subagent-summary\nwriter: postcompact-fallback\nnonce: f5d2ccf6\ndate: 2026-10-21T14:01:08.080+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: unattributed\ntranscript_path: $HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl\nrepository: example-repo\nbucket: example-repo/general\nbucket_source: default\nstatus: in-progress\ntrigger: auto\ncompaction_seq: 2\nverdict: ok\nchannel: classic\n---\n⟪{{plugin}} v1 n=f5d2ccf6 s=sub⟫\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read (lines 1-950 with content; Read at offset 951 limit 10 returned only line 951 with empty content, so line 950 is the last non-empty line). Last line: `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: read in two calls (full read truncated at line 464, then offset 465 limit 464). Reads returned lines 1-928 of a file the truncation notice says has 951 lines. Lines 929-951 not yet read. Last displayed line (928): `2026-10-02T00:22:38.134 INFO auth token refreshed client=9272 req=6d0f69c606b6`\n- app-3.log through app-6.log: not started.\n- Log content is routine DEBUG/INFO/WARN lines. No errors seen. Nothing security-relevant.\n\n## Findings\n- app-1.log: 950 content lines.\n- app-2.log: 951 total lines per truncation notice; read through line 928.\n\n## Produced but not yet delivered\nNone. No final lines sent yet.\n\n## Own background tasks\nNone (not checked).\n\n## Next action\nRead app-2.log with offset 928, limit 30 (or until EOF) to get lines 929-951 and its true last line. Then read app-3.log, app-4.log, app-5.log, app-6.log in full (with continuation as needed), one Read per message. Then call SubagentHandback with the six last lines.\n⟪/{{plugin}} n=f5d2ccf6⟫\n",
+      "mode": "0400"
+    },
+    {
+      "copy": "watch/dispatch-d2158267.json",
+      "to": "$WATCH/$SID/dispatch/d2158267.json"
+    },
+    {
+      "write": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001_c3-d21582.md",
+      "content": "---\nkind: subagent-summary\nwriter: postcompact-fallback\nnonce: d2158267\ndate: 2026-10-21T14:01:18.235+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: sub-unknown\ntranscript_path: $HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl\nrepository: example-repo\nbucket: example-repo/general\nbucket_source: default\nstatus: in-progress\ntrigger: auto\ncompaction_seq: 3\nverdict: ok\nchannel: classic\n---\n⟪{{plugin}} v1 n=d2158267 s=sub⟫\n## Task as assigned\n\"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else.\"\nBase path: /tmp/example-repo/logs/\n\n## Constraints from the parent\n- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.\n- One Read call per message, in file order.\n- Continue any truncated read from the offset it names, until the file's last line.\n- Final output is the last line of each file, one per line, nothing else.\n- Report goes back through SubagentHandback, not plain text.\n- No user-level constraints were stated beyond these.\n\n## Report\nDefault: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.\n\n## Done\n- app-1.log: fully read. Last content line (950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`\n- app-2.log: fully read (lines 1-950; line 951 is empty). Last content line (950): `2026-10-02T00:23:15.379 INFO billing request served path=/v1/x84336 status=200 ms=8048 req=5bd241710e65`\n- app-3.log: partially read. Reads cover lines 1-934 of a file the truncation notice says has 951 lines. Lines 935-951 not yet read. Last displayed line (934): `2026-10-03T00:21:30.934 DEBUG ledger queue depth=5662 topic=x97405 req=1053d5a8966b`. Notable: line 501 is an ERROR line: `2026-10-03T00:11:17.231 ERROR scheduler ReconcileMismatch account=ACC-7731 delta=-218.58 batch=b8890`.\n- app-4.log, app-5.log, app-6.log: not started.\n\n## Findings\n- app-1.log: 950 content lines.\n- app-2.log: 950 content lines.\n- app-3.log: 951 total lines per truncation notice; read through line 934.\n- Log content is routine DEBUG/INFO/WARN lines. One ERROR seen in app-3.log (line 501). Nothing security-relevant noted.\n\n## Produced but not yet delivered\nNone. No final lines sent yet.\n\n## Own background tasks\nNone (not checked).\n\n## Next action\nRead app-3.log with offset 934 and limit 30 (or until EOF) to get lines 935-951 and its true last line. Then read app-4.log, app-5.log, app-6.log in full (with continuation as needed), one Read per message. Then call SubagentHandback with the six last lines.\n⟪/{{plugin}} n=d2158267⟫\n",
+      "mode": "0400"
+    },
+    {
+      "write": "$WATCH/$SID.classic.jsonl",
+      "jsonl": [
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:00:57.036+03:00",
+          "ev": "copy",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "main",
+          "writer": "postcompact-fallback",
+          "nonce": "da24cc4a",
+          "id6": "da24cc",
+          "result": "saved",
+          "slot": "main",
+          "rel_path": "example-repo/general/compact/2026-10-21_14-00-57_5e55a001_c1-da24cc.md",
+          "seq": 1
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:01:08.080+03:00",
+          "ev": "copy",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "unattributed",
+          "writer": "postcompact-fallback",
+          "nonce": "f5d2ccf6",
+          "id6": "f5d2cc",
+          "result": "saved",
+          "slot": "unattributed",
+          "rel_path": "example-repo/general/compact/unattributed/2026-10-21_14-01-08_5e55a001_c2-f5d2cc.md",
+          "seq": 2
+        },
+        {
+          "v": 1,
+          "ts": "2026-10-21T14:01:18.235+03:00",
+          "ev": "copy",
+          "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "actor": "sub-unknown",
+          "writer": "postcompact-fallback",
+          "nonce": "d2158267",
+          "id6": "d21582",
+          "result": "saved",
+          "slot": "subagents",
+          "rel_path": "example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001_c3-d21582.md",
+          "seq": 3
+        }
+      ]
+    },
+    {
+      "write": "$TMP/stop.json",
+      "json": {
+        "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+        "transcript_path": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+        "cwd": "$TMP/example-repo",
+        "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+        "hook_event_name": "Stop",
+        "permission_mode": "default",
+        "stop_hook_active": false,
+        "last_assistant_message": "done",
+        "background_tasks": [],
+        "session_crons": []
+      }
+    }
+  ]
+}

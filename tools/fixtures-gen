@@ -48,7 +48,9 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             frontmatter_keys_export), the Dev-1 scenarios (job sha, process records, the
             transcript stub as V1 reads it, sidecar seq against mtime, the case clock) and the
             C-STORE ones (st-05: each record's pid state, host and ended- twin against the §5.8
-            finish reading; st-13: exactly the declared BD-4 detector fires for each task output)
+            finish reading; st-13: exactly the declared BD-4 detector fires for each task output;
+            st-09: each copy is fillable by nonce, and only the sub-unknown one in compact/subagents/
+            may be filled, C-STORE D5 step 5)
   stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
             ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
@@ -56,8 +58,11 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             outside B.5, entry over 50 MB, total over 200 MB, ratio over 100) and verify (manifest
             sha256, pattern classes) verdict equals beta/cases.json; zip members are secret-scanned
   manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
-            idle-cases.json) agree with the payloads, dispatch records and corpus files they name
-  prod      settings/prod-cases.json: each recorded command's effects class, each placement's
+            idle-cases.json) agree with the payloads, dispatch records and corpus files they name;
+            each fill-joins outcome follows the C-STORE D5 join order (sha with the engine trailers
+            cut, else the P3 sub window [t - TOL_S, t + SUB_WINDOW_S]), and verify-fail is a fill
+            that only its fault blocks
+  prod     settings/prod-cases.json: each recorded command's effects class, each placement's
             unattended_prod_reads value and each prod_patterns file's kept/dropped list follow a
             reference of S-SETTINGS B and C (effects order, limits, no chaining after end_suffix)
   stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
@@ -1459,6 +1464,48 @@ def st_semantics(doc, sc):
                 p.append("{}: result {} does not follow from the detectors {}".format(tid, want.get("result"), fired))
         if sorted(sc.sub(doc["expect"]["paths"])) != sorted(o for _, o in types.values()):
             p.append("expect.paths must list every slot output_path")
+    elif doc["id"] == "st-09-fill-scope":
+        p += st09_semantics(doc, sc)
+    return p
+
+
+def st09_semantics(doc, sc):
+    """AT-ST-09 (d): every copy is fillable by nonce (its nonce is the marker nonce of a summary row
+    in a planted agent file), and `filled` follows C-STORE D5 step 5: only a sub-unknown copy in
+    compact/subagents/ is filled; compact/ and compact/unattributed/ are never touched."""
+    p, b = [], sc.b
+    subdir = sc.sub("$HOME/.claude/projects/-tmp-example-repo/$SID/subagents")
+    nonces = set()
+    for f in sorted(os.listdir(subdir)) if os.path.isdir(subdir) else []:
+        for line in read(os.path.join(subdir, f)).split("\n"):
+            r = json.loads(line) if line.strip() else {}
+            if r.get("isCompactSummary") is True:
+                nonces.add(detect(fill(row_text(r), b), b["name"])[3])
+    slots = {"main": "/compact/", "unattributed": "/compact/unattributed/", "subagents": "/compact/subagents/"}
+    want_slots = set(slots)
+    for key, c in sorted(doc["expect"]["copies"].items()):
+        path = sc.sub(c["path"])
+        if not os.path.isfile(path):
+            p.append("{}: {} missing".format(key, path))
+            continue
+        fm = dict(ln.split(": ", 1) for ln in read(path).split("---\n")[1].split("\n") if ": " in ln)
+        if os.path.dirname(path) + "/" != sc.sub("$ROOT/example-repo/general") + slots[c["slot"]].rstrip("/") + "/":
+            p.append("{}: {} is not in the {} folder".format(key, path, c["slot"]))
+        if (fm.get("actor"), fm.get("nonce")) != (c["actor"], c["nonce"]) or not path.endswith("-{}.md".format(c["id6"])):
+            p.append("{}: frontmatter actor/nonce or the -<id6>.md name differ from expect".format(key))
+        if c["nonce"] not in nonces:
+            p.append("{}: nonce {} is no agent summary row's marker nonce, so a scope bug could not fill it".format(key, c["nonce"]))
+        rule = c["slot"] == "subagents" and c["actor"] == "sub-unknown"
+        if c.get("filled") != rule:
+            p.append("{}: filled={} but C-STORE D5 step 5 gives {} (only sub-unknown copies in compact/subagents/)".format(
+                key, c.get("filled"), rule))
+        if rule and not c.get("renamed_to", "").endswith("-{}.md".format(c["id6"])):
+            p.append("{}: a filled copy names its -a<agent8> renamed_to path".format(key))
+        if os.stat(path).st_mode & 0o777 != 0o400:
+            p.append("{}: copies are mode 0400".format(key))
+        want_slots.discard(c["slot"])
+    if want_slots:
+        p.append("st-09 needs a copy in each of compact/, compact/unattributed/ and compact/subagents/; missing {}".format(sorted(want_slots)))
     return p
 
 
@@ -2025,10 +2072,36 @@ def check_replay(b):
     return p
 
 
+# The engine's trailer lines after a transcript summary row's body (fix-escalations item 1,
+# option (a): prefixes for copy_trailers). Not shipped yet; the joins reference reads a summary
+# row with them so that join (b) is proven under that option.
+ENGINE_TRAILERS = [re.compile(r"^If you need specific details from before compaction \("),
+                   re.compile(r"^Continue the conversation from where it left off without asking"),
+                   re.compile(r"^The messages after this summary are the most recent messages from before compaction")]
+
+
+def join_ref(c, summ, bounds, pay, b):
+    """C-STORE D5 join order for an unmarked copy (no nonce, so no join a): (b) one agent whose
+    summary row's normalized body (engine trailers cut) has the copy's sha; else (c) exactly one
+    agent with an unjoined boundary row in the P3 sub window [t - TOL_S, t + SUB_WINDOW_S];
+    several -> copy_attribution_ambiguous with the candidates; none -> no fill, no row."""
+    sha = detect(fill(pay["compact_summary"], b), b["name"])[5]
+    holders = sorted(a for a, r in summ.items() if detect(fill(row_text(r), b), b["name"], trailers=ENGINE_TRAILERS)[5] == sha)
+    t = parse_iso(c["postcompact_now"])
+    cands = sorted(a for a, e in bounds.items() if t is not None and e is not None and t - TOL_S <= e <= t + SUB_WINDOW_S)
+    if len(holders) == 1:
+        return {"filled": True, "agent": holders[0], "attributed_by": "reconcile-b"}, holders, cands
+    if len(cands) == 1:
+        return {"filled": True, "agent": cands[0], "attributed_by": "reconcile-c"}, holders, cands
+    if cands:
+        return {"filled": False, "row": "copy_attribution_ambiguous", "candidates": cands}, holders, cands
+    return {"filled": False}, holders, cands
+
+
 def check_joins(b):
     p = []
     m = json.loads(read(os.path.join(TRANSCRIPTS, "fill-joins", "joins.json")))
-    summ = {}
+    summ, bounds = {}, {}
     for k, agent in m["agents"].items():
         rows = jsonl_rows("transcripts/fill-joins/subagents/agent-{}.jsonl".format(agent))
         bs = [r for r in rows if r.get("subtype") == "compact_boundary"]
@@ -2038,12 +2111,16 @@ def check_joins(b):
             continue
         if detect(fill(row_text(ss[0]), b), b["name"])[3] is not None:
             p.append("fill-joins {}: the summary row must be unmarked".format(k))
-        summ[agent] = ss[0]
+        if detect(fill(row_text(ss[0]), b), b["name"])[5] == detect(fill(row_text(ss[0]), b), b["name"], trailers=ENGINE_TRAILERS)[5]:
+            p.append("fill-joins {}: the summary row must end with the engine trailers (the transcript form)".format(k))
+        summ[agent], bounds[agent] = ss[0], parse_iso(bs[0]["timestamp"])
     times = [parse_iso(t) for t in m["boundaries"].values()]
-    if None in times or max(times) - min(times) >= 120:
-        p.append("fill-joins: both boundary rows must sit inside one 120 s window")
+    if None in times or max(times) - min(times) >= SUB_WINDOW_S:
+        p.append("fill-joins: both boundary rows must sit inside one {} s window".format(SUB_WINDOW_S))
+    seen = set()
     for c in m["cases"]:
         w = "fill-joins {}".format(c["id"])
+        seen.add(c["id"])
         try:
             pay = payload_of(c["payload"], m["sid"])
         except (OSError, ValueError) as e:
@@ -2051,13 +2128,27 @@ def check_joins(b):
             continue
         if detect(fill(pay["compact_summary"], b), b["name"])[3] is not None:
             p.append("{}: the payload summary must be unmarked".format(w))
-        holders = sorted(a for a, r in summ.items() if not body_lines_in(pay["compact_summary"], r, b))
-        want = [c["expect"]["agent"]] if c["expect"].get("filled") else []
-        if holders != want:
-            p.append("{}: the body is in the summary rows of {}, the case expects {}".format(w, holders, want))
-        t = parse_iso(c["postcompact_now"])
-        if t is None or any(abs(t - x) >= 120 for x in times if x is not None):
-            p.append("{}: postcompact_now must lie within 120 s of both boundary rows".format(w))
+        ref, holders, cands = join_ref(c, summ, bounds, pay, b)
+        lines = sorted(a for a, r in summ.items() if not body_lines_in(pay["compact_summary"], r, b))
+        if lines != holders:
+            p.append("{}: every body line is in the rows of {}, but the sha (engine trailers cut) matches {}".format(w, lines, holders))
+        e = c["expect"]
+        if "fault" in c:
+            if not ref.get("filled"):
+                p.append("{}: without the fault the join gives {}, so the fault proves nothing".format(w, ref))
+            if not (c["fault"].get("env") and e.get("filled") is False and e.get("row") == "copy_attribution_failed"
+                    and e.get("old_file", "").startswith("kept") and e.get("new_file") == "absent"
+                    and "copy_attributed" in e.get("rows_absent", [])):
+                p.append("{}: a verify failure keeps the old file, leaves no new file and writes copy_attribution_failed "
+                         "and no copy_attributed (C-STORE D5 step 3)".format(w))
+            continue
+        got = {k: e.get(k) for k in ref}
+        if got != ref or set(e) - set(ref) - {"note"}:
+            p.append("{}: expect {} but the D5 join order gives {} (sha holders {}, window candidates {})".format(
+                w, e, ref, holders, cands))
+    for need in ("sha-join", "ambiguous", "time-join", "verify-fail"):
+        if need not in seen:
+            p.append("fill-joins: no {} case (AT-ST-09)".format(need))
     return p
 
 
