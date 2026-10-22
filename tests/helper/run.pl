@@ -36,7 +36,8 @@
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
-#     write + jsonl_repeat {row, count} (then any jsonl rows);
+#     write + jsonl_repeat {row, count} (then any jsonl rows); write + jsonl + jsonl_pad
+#     {key (dotted), text, bytes} (the first row's key holds text repeated to bytes);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
 #     (+ subst: true fills the placeholders in the copied text)
 #   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
@@ -770,6 +771,16 @@ sub setup {
         elsif (exists $s->{bytes}) { $text = ('x' x 63 . "\n") x int($s->{bytes} / 64); $text .= 'x' x ($s->{bytes} - length $text) }
         elsif (exists $s->{lines}) { $text = join('', map { "line $_ of the output\n" } 1 .. $s->{lines}) }
         else { $text = $s->{text} // '' }
+        # jsonl_pad {key, text, bytes}: the first jsonl row's dotted key holds text repeated to
+        # bytes (a row longer than a reader's first block, e.g. a long agent prompt)
+        if ($s->{jsonl} && $s->{jsonl_pad} && @{ $s->{jsonl} }) {
+            my ($pad, $h) = ($s->{jsonl_pad}, $s->{jsonl}[0]);
+            my @k = split /\./, $pad->{key};
+            my $last = pop @k;
+            $h = ($h->{$_} = ref $h->{$_} eq 'HASH' ? $h->{$_} : {}) for @k;
+            my $t = $pad->{text};
+            $h->{$last} = substr($t x (int($pad->{bytes} / length($t)) + 1), 0, $pad->{bytes});
+        }
         if ($s->{jsonl}) { $text = join('', map { jsonc::encode($_) . "\n" } @{ $s->{jsonl} }) }
         # jsonl_repeat {row, count}: one row many times (a long session's stream), then the jsonl rows
         if ($s->{jsonl_repeat}) { $text = (jsonc::encode($s->{jsonl_repeat}{row}) . "\n") x $s->{jsonl_repeat}{count} . ($s->{jsonl} ? $text : '') }

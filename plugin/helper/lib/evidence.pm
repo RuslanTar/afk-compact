@@ -147,6 +147,8 @@ sub copy {
 # (c) its first non-empty line parses as a transcript row (a JSON object with type and
 # sessionId or parentUuid). Read in memory only.
 our %SHELL_TYPES = map { $_ => 1 } qw(shell monitor);
+# the longest first line detector (c) reads whole (the excerpt read cap)
+our $FIRST_LINE_MAX = 12 * 1024 * 1024;
 sub agent_output {
     my ($src) = @_;
     my $real = eval { util::real_path($src) };
@@ -160,15 +162,37 @@ sub agent_output {
         if (!defined $type) { my $j = eval { jobrec::record_of($sd, $id) }; $type = $j->{type} if ref $j eq 'HASH' }
         return 'b' if defined $type && !$SHELL_TYPES{$type};
     }
-    my $head = util::read_file($src, 64 * 1024) // '';
-    for my $l (split /\n/, $head) {
-        next if $l =~ /^\s*$/;
-        last unless $l =~ /^\s*\{/;
-        my $j = eval { jsonc::decode($l) };
-        return 'c' if ref $j eq 'HASH' && defined $j->{type} && (exists $j->{sessionId} || exists $j->{parentUuid});
-        last;
-    }
+    my ($l, $cut) = _first_line($src, $FIRST_LINE_MAX);
+    return undef unless defined $l && $l =~ /^\s*\{/;
+    # fail closed: a JSON-looking first line longer than the cap cannot be parsed, so it is
+    # treated as a transcript row (withheld) rather than excerpted
+    return 'c' if $cut;
+    my $j = eval { jsonc::decode($l) };
+    return 'c' if ref $j eq 'HASH' && defined $j->{type} && (exists $j->{sessionId} || exists $j->{parentUuid});
     return undef;
+}
+
+# _first_line(path, cap) -> (the first non-empty line without its newline, cut flag), read in
+# 64 KB blocks up to cap bytes, so a long first row (a long agent prompt) is read whole; cut is
+# 1 when the line runs past the cap. Blank lines before it are skipped. (undef, 0) when unreadable
+# or when no non-empty line starts within the cap.
+sub _first_line {
+    my ($src, $cap) = @_;
+    open(my $fh, '<:raw', $src) or return (undef, 0);
+    my ($buf, $total, $from) = ('', 0, 0);
+    while (1) {
+        $from = 0 if $buf =~ s/\A(?:[^\S\n]*\n)+//;
+        my $nl = index($buf, "\n", $from);    # scan only the bytes not searched yet
+        if ($nl >= 0) { close $fh; return (substr($buf, 0, $nl), 0) }
+        $from = length $buf;
+        if ($total >= $cap) { close $fh; return ($buf =~ /\S/ ? ($buf, 1) : (undef, 0)) }
+        my $n = read($fh, my $chunk, 64 * 1024);
+        last unless $n;
+        $total += $n;
+        $buf .= $chunk;
+    }
+    close $fh;
+    return ($buf =~ /\S/ ? ($buf, 0) : (undef, 0));
 }
 
 # du(dir) -> bytes, own tree walk (File::Find is off the floor)
