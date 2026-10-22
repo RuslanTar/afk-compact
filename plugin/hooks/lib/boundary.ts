@@ -180,10 +180,27 @@ function nativeCheck(d: Deps, opts: BoundaryOpts): 'wait' | 'ran' | undefined {
   return d.state.nativeCompactSeq !== ah.seq ? 'ran' : undefined
 }
 
-/** `nativeCheck` with its `skip why=compacted` row; true when the compaction is not run now. */
+/**
+ * The rows for a post-handoff compaction a native one made a second one: `skip why=compacted`,
+ * and, when its dispatch record is already written (`prepared`), `compacted` with
+ * `skip: native-ran` and that nonce, which closes the record: reconcile and the watcher then do
+ * not report it unresolved (DP-29, E-M-15).
+ */
+async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void> {
+  const ht = opts.afterHandoff?.ht ?? null
+  await log(d, sid, 'skip', { why: 'compacted', ht })
+  const p = opts.prepared
+  if (p === undefined) return
+  await log(d, sid, 'compacted', {
+    nonce: p.nonce, skip: 'native-ran', tokens_before: null, tokens_after: null, usage_present: false, ms: null,
+    ...(ht !== null ? { handoff_ht: ht } : {}),
+  })
+}
+
+/** `nativeCheck` with its rows; true when the compaction is not run now. */
 async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<boolean> {
   const c = nativeCheck(d, opts)
-  if (c === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: opts.afterHandoff?.ht ?? null })
+  if (c === 'ran') await nativeRan(d, sid, opts)
   return c !== undefined
 }
 
@@ -254,9 +271,10 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     // Once more after the dispatch write, with no await between this check and the call. A
     // native compaction that started during the write: the rerun after its end reuses this
     // record (`prepared`), so a skipped native one leaves no orphan and no second record.
-    const late = nativeCheck(d, { ...opts, prepared: { nonce, text, pref } })
+    const withRecord: BoundaryOpts = { ...opts, prepared: { nonce, text, pref } }
+    const late = nativeCheck(d, withRecord)
     if (late !== undefined) {
-      if (late === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: ah?.ht ?? null })
+      if (late === 'ran') await nativeRan(d, sid, withRecord)
       return
     }
     let r

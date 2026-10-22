@@ -1137,3 +1137,59 @@ test('DP-30 (1): a native compaction that stops the post-handoff compaction afte
   expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(named)
   expect(w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').map(c => w.flag(c, '--nonce'))).toEqual([named])
 })
+
+// DP-29 (E-M-15 option): the post-handoff dispatch record a native compaction made a second one
+// is closed by a `compacted` row with `skip: native-ran` and its nonce.
+test('DP-29: a native compaction that starts while the post-handoff dispatch record is written and compacts: no second compaction; compacted skip native-ran with that nonce', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub !== 'dispatch' || !args.includes('mod-self') || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  expect(p).toBeDefined()
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  await w.advance(60000)
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto'])
+  const self = w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self')
+  expect(self.length).toBe(1)
+  const nonce = w.flag(self[0], '--nonce') ?? ''
+  expect(w.rowsOf('compacted').filter(r => r.nonce === nonce).map(r => [r.skip, r.handoff_ht])).toEqual([['native-ran', ht]])
+  expect(w.rowsOf('skip').map(r => [r.why, r.ht])).toEqual([['compacted', ht]])
+})
+
+test('DP-29: a native compaction that compacts during the post-handoff checkpoint: no dispatch record, so no native-ran row', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  w.publish(w.lastHt() ?? '', PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let p: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (sub !== 'checkpoint' || p !== undefined) return
+    p = raiseCompact($, { trigger: 'auto' })
+    await p
+  }
+  await w.advance(500)
+  await w.advance(60000)
+  expect(w.rowsOf('compacted').filter(r => r.skip === 'native-ran').length).toBe(0)
+  expect(w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').length).toBe(0)
+})
