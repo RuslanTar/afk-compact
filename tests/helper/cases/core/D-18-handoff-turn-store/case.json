@@ -165,7 +165,28 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout": "staged $ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4 draft=0 finish=\"$STORE\" publish --stage '$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4' --slug lab-123 --status in-progress\n"
+    "stdout": "staged $ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4 draft=0 finish=<store> publish --stage '$ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4' --slug lab-123 --status in-progress\n",
+    "stdout_lacks": [
+     "$STORE"
+    ]
+   }
+  },
+  {
+   "name": "C-2: a plugin copy under a root holding both quote kinds",
+   "setup": [
+    {
+     "mkdir": "$TMP/q\"it's"
+    }
+   ],
+   "exec": ["/bin/cp", "-R", "$PLUGIN", "$TMP/q\"it's/p"],
+   "expect": {"exit": 0}
+  },
+  {
+   "name": "C-2: no launcher word can be written there, so <store> is undefined: finish=none",
+   "exec": ["$TMP/q\"it's/p/scripts/$BRAND-store", "handoff-state", "--sid", "$SID", "--ht", "a1b2c3d4"],
+   "expect": {
+    "exit": 0,
+    "stdout": "staged $ROOT/repo/LAB-123/.staging/11111111-a1b2c3d4 draft=0 finish=none\n"
    }
   },
   {
@@ -199,7 +220,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout_re": "^staged \\S+ draft=1 finish=\"$STORE\" publish --stage '\\S+' --slug lab-123 --status in-progress\\n\\z",
+    "stdout_re": "^staged \\S+ draft=1 finish=<store> publish --stage '\\S+' --slug lab-123 --status in-progress\\n\\z",
     "stdout_lacks": [
      "$SID"
     ]
