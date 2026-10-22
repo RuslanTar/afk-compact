@@ -1,7 +1,7 @@
 # AT-WB-10 (W-BETA B.6; BUILD-ROUND-9 WCH-09): over `--max-mb` the newest rows are kept and the
 # oldest dropped, the written zip fits the cap, the manifest says `truncated: true` with the
-# `from` date of the oldest kept row, and the TRUNCATED line prints. STORE (no DEFLATE) is
-# forced here so that the rows really take room.
+# `from` date of the oldest kept row, and the TRUNCATED line prints. The zip is STORE, so
+# the rows really take room.
 my @rows;
 for my $i (0 .. 7999) {
     push @rows, T::row('continue', -3 * 86400 + $i * 60, result => 'submitted', continues_last_hour => $i % 6,

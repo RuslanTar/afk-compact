@@ -1,11 +1,13 @@
 package watch::bundle;
 # lib/watch/bundle.pm: the `report` zip writer and reader, and HMAC-SHA256 (WATCHER-SPEC
 # §8.1 Output, W-BETA B.6). Owner: WP-watch. Floor modules only (R-1, AT-P-11 L1): an own
-# zip writer (local headers, central directory, CRC-32 from a 256-entry table). DEFLATE is
-# used only when IO::Compress::RawDeflate loads (inside an eval), else STORE; the reader
-# inflates with IO::Uncompress::RawInflate when it loads. HMAC-SHA256 uses Digest::SHA when
-# present, else the caller's sha256 (the helper's embedded one). No encryption, no
-# symlinks, no absolute names, no `..`.
+# zip writer (local headers, central directory, CRC-32 from a 256-entry table), STORE
+# method. HMAC-SHA256 uses Digest::SHA when present, else the caller's sha256 (the helper's
+# embedded one). No encryption, no symlinks, no absolute names, no `..`.
+# STORE only for now: W-BETA B.6 allows DEFLATE through an optional module inside an eval,
+# but the helper's floor lint (tests/helper/run.pl AT-P-11, WP-core) lists only Digest::SHA and
+# Time::HiRes as optional modules (needs/watch-to-core.md W2C-4). The reader refuses any
+# other method.
 use strict;
 use warnings;
 use utf8;
@@ -23,25 +25,6 @@ sub crc32 {
     my $c = 0xFFFFFFFF;
     $c = $CRC[($c ^ $_) & 0xFF] ^ ($c >> 8) for unpack('C*', $data);
     return ($c ^ 0xFFFFFFFF) & 0xFFFFFFFF;
-}
-
-my $DEFLATE;
-sub _deflate {
-    my ($data) = @_;
-    return undef if ($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_ZIP_STORE} // '') eq '1';
-    $DEFLATE = eval { require IO::Compress::RawDeflate; 1 } ? 1 : 0 unless defined $DEFLATE;
-    return undef unless $DEFLATE;
-    my $out;
-    my $ok = eval { IO::Compress::RawDeflate::rawdeflate(\$data => \$out) };
-    return ($ok && defined $out) ? $out : undef;
-}
-
-sub _inflate {
-    my ($data) = @_;
-    return undef unless eval { require IO::Uncompress::RawInflate; 1 };
-    my $out;
-    my $ok = eval { IO::Uncompress::RawInflate::rawinflate(\$data => \$out) };
-    return $ok ? $out : undef;
 }
 
 sub _dos_time {
@@ -72,8 +55,7 @@ sub zip {
         die "bundle: bad entry name\n" unless safe_name($name);
         utf8::encode($data) if utf8::is_utf8($data);
         my $crc = crc32($data);
-        my $def = _deflate($data);
-        my ($method, $body) = (defined $def && length($def) < length($data)) ? (8, $def) : (0, $data);
+        my ($method, $body) = (0, $data);
         my $off = length $out;
         $out .= pack('VvvvvvVVVvv', 0x04034b50, 20, 0x0800, $method, $time, $date, $crc,
                      length($body), length($data), length($name), 0) . $name . $body;
@@ -110,7 +92,6 @@ sub unzip {
         my ($lnlen, $lxlen) = unpack('vv', substr($z, $loff + 26, 4));
         my $body = substr($z, $loff + 30 + $lnlen + $lxlen, $csize);
         if ($method == 0) { $r{data} = $body }
-        elsif ($method == 8) { $r{data} = _inflate($body); $r{error} = 'cannot-inflate' unless defined $r{data} }
         else { $r{error} = 'method' }
         $r{error} //= 'crc' if defined $r{data} && crc32($r{data}) != $crc;
         push @e, \%r;
