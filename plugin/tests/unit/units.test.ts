@@ -295,6 +295,8 @@ test('clamp constants: one shared source (the spec-literals clamp object when co
 // S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.
 test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
   expect(DEFAULTS.max_auto_continues_per_hour).toBe(6)
+  // BLD-08 / OD-4 provisional: the same default as src/plugin.json (`model`).
+  expect(DEFAULTS.precompact_turn).toBe('model')
   expect(parseOptions({}).max_auto_continues_per_hour).toBe(6)
   const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
   expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'on', 100000])

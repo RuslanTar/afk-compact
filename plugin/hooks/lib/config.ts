@@ -53,7 +53,8 @@ export const DEFAULTS: Config = {
   handoff_turn: 'halt',
   handoff_turn_max_tokens: 64000,
   queue_cmd: '',
-  precompact_turn: 'code',
+  // OD-4 provisional (DP-31 (6), card xxxxxxxx-18): the root-provisional `model`; one value with the manifest.
+  precompact_turn: 'model',
   unattended_prod_reads: 'forbid',
   idle_handoff_turn: 'off',
   idle_handoff_min_tokens: 200000,
