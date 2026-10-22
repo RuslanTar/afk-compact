@@ -1,0 +1,251 @@
+{
+  "v": 1,
+  "id": "st-13-agent-output",
+  "ruling": "C-STORE D6 (BD-4: agent output is always withheld)",
+  "tests": [
+    "AT-ST-13"
+  ],
+  "note": "Task outputs of session S1 in the CC temp layout, and the sidecar slot that types them. Each withheld form is set up so that only its own detector fires: a1 and t1 are typed shell, so (a) the symlink to a transcript JSONL and (c) a first line that parses as a transcript row decide alone; b1 (subagent) and w1 (workflow) are plain text, so only (b) the sidecar type decides. m1 (monitor) is copied. x is the AT-E-05 5,000-line shell output: the case also runs tempfiles/at-e-05-task-output.json. The case records every path in `paths` before it runs the sweep or `evidence --keep`.",
+  "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
+  "invoke": {
+    "argv": [
+      "sweep",
+      "--sid",
+      "5e55a001-0c0f-4f1e-9a00-00000000a001",
+      "--nonce",
+      "1a2b3c4d",
+      "--cwd",
+      "$TMP/example-repo"
+    ]
+  },
+  "setup": [
+    {
+      "mkdir": "$TMP/example-repo"
+    },
+    {
+      "write": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a5c0ffee0a1b2c3d4.jsonl",
+      "jsonl": [
+        {
+          "parentUuid": null,
+          "isSidechain": true,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.307",
+          "gitBranch": "main",
+          "agentId": "a5c0ffee0a1b2c3d4",
+          "type": "user",
+          "uuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e01",
+          "timestamp": "2026-10-21T10:50:00.000Z",
+          "message": {
+            "role": "user",
+            "content": "List the callers of RetryWorker.enqueue."
+          }
+        },
+        {
+          "parentUuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e01",
+          "isSidechain": true,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.307",
+          "gitBranch": "main",
+          "agentId": "a5c0ffee0a1b2c3d4",
+          "type": "assistant",
+          "uuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e02",
+          "timestamp": "2026-10-21T10:51:00.000Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Seven callers; two pass a raw hash."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "symlink": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/a1.output",
+      "to": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a5c0ffee0a1b2c3d4.jsonl"
+    },
+    {
+      "write": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/t1.output",
+      "jsonl": [
+        {
+          "parentUuid": null,
+          "isSidechain": true,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.307",
+          "gitBranch": "main",
+          "agentId": "a5c0ffee0a1b2c3d4",
+          "type": "user",
+          "uuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e01",
+          "timestamp": "2026-10-21T10:50:00.000Z",
+          "message": {
+            "role": "user",
+            "content": "List the callers of RetryWorker.enqueue."
+          }
+        },
+        {
+          "parentUuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e01",
+          "isSidechain": true,
+          "userType": "external",
+          "cwd": "/tmp/example-repo",
+          "sessionId": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+          "version": "2.1.307",
+          "gitBranch": "main",
+          "agentId": "a5c0ffee0a1b2c3d4",
+          "type": "assistant",
+          "uuid": "0d3c5b1e-7a0f-5c2e-9d41-6b8f2a1c0e02",
+          "timestamp": "2026-10-21T10:51:00.000Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Seven callers; two pass a raw hash."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "write": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b1.output",
+      "content": "Seven callers; two pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n"
+    },
+    {
+      "write": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/w1.output",
+      "content": "workflow fixture: step 1 done, step 2 done\n"
+    },
+    {
+      "write": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/m1.output",
+      "content": "monitor fixture: queue depth 4\nmonitor fixture: queue depth 0\n"
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot-0.json",
+      "json": {
+        "v": 1,
+        "ts": "2026-10-21T14:04:00.000+03:00",
+        "seq": 1,
+        "set_hash": "abcd1301",
+        "source": "Stop",
+        "tasks": [
+          {
+            "id": "a1",
+            "type": "shell",
+            "status": "completed",
+            "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/a1.output",
+            "output_path_source": "sidecar",
+            "command_sha256": null,
+            "command_chars": null
+          },
+          {
+            "id": "t1",
+            "type": "shell",
+            "status": "completed",
+            "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/t1.output",
+            "output_path_source": "sidecar",
+            "command_sha256": null,
+            "command_chars": null
+          },
+          {
+            "id": "b1",
+            "type": "subagent",
+            "status": "completed",
+            "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b1.output",
+            "output_path_source": "sidecar",
+            "command_sha256": null,
+            "command_chars": null
+          },
+          {
+            "id": "w1",
+            "type": "workflow",
+            "status": "completed",
+            "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/w1.output",
+            "output_path_source": "sidecar",
+            "command_sha256": null,
+            "command_chars": null
+          },
+          {
+            "id": "m1",
+            "type": "monitor",
+            "status": "completed",
+            "output_path": "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/m1.output",
+            "output_path_source": "sidecar",
+            "command_sha256": null,
+            "command_chars": null
+          },
+          {
+            "id": "x",
+            "type": "shell",
+            "status": "completed",
+            "output_path": "$TMP/claude-tasks/tasks/x.output",
+            "output_path_source": "sidecar",
+            "command_sha256": null,
+            "command_chars": null
+          }
+        ],
+        "crons": []
+      }
+    },
+    {
+      "touch": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot-0.json",
+      "at": "2026-10-21T14:04:00+03:00"
+    },
+    {
+      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/bg/slot.lock",
+      "json": {
+        "n": 1,
+        "last": "abcd1301"
+      }
+    }
+  ],
+  "expect": {
+    "paths": [
+      "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/a1.output",
+      "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/t1.output",
+      "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/b1.output",
+      "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/w1.output",
+      "$TMP/claude-501/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/tasks/m1.output",
+      "$TMP/claude-tasks/tasks/x.output"
+    ],
+    "outputs": {
+      "a1": {
+        "detector": "a",
+        "result": "withheld",
+        "rules": "agent-output"
+      },
+      "t1": {
+        "detector": "c",
+        "result": "withheld",
+        "rules": "agent-output"
+      },
+      "b1": {
+        "detector": "b",
+        "type": "subagent",
+        "result": "withheld",
+        "rules": "agent-output"
+      },
+      "w1": {
+        "detector": "b",
+        "type": "workflow",
+        "result": "withheld",
+        "rules": "agent-output"
+      },
+      "m1": {
+        "type": "monitor",
+        "result": "copied"
+      },
+      "x": {
+        "type": "shell",
+        "result": "excerpt",
+        "max_lines": 80
+      }
+    }
+  }
+}

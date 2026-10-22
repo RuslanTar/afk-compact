@@ -24,6 +24,8 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
             its fragments are joined, and no single fragment hits anything
+  bd2       C-STORE D6 (AT-ST-12): each corpus entry, redacted by the reference BD-2 rule with the spec
+            secret_rules, has no two markers that touch, and matches its `redacted` / `markers` pins
   drift     the generated files are current
   sequences every sequences/<id>/ replays: files exist, payloads match their step, the main
             transcript after each step's appends holds the declared transcript_state, and with
@@ -37,8 +39,12 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
             (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
             repos (worktrees, submodule, symlinked root, declarations, exports against
-            frontmatter_keys_export) and the Dev-1 scenarios (job sha, process records, the
-            transcript stub as V1 reads it, sidecar seq against mtime, the case clock)
+            frontmatter_keys_export), the Dev-1 scenarios (job sha, process records, the
+            transcript stub as V1 reads it, sidecar seq against mtime, the case clock) and the
+            C-STORE ones (st-05: each record's pid state, host and ended- twin against the §5.8
+            finish reading; st-13: exactly the declared BD-4 detector fires for each task output)
+  stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
+            ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
   manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
             idle-cases.json) agree with the payloads, dispatch records and corpus files they name
@@ -451,6 +457,79 @@ def load_corpus():
         return json.load(f)
 
 
+# BD-2 reference redaction (C-STORE D6, AT-ST-12): every rule runs on the original text; overlapping
+# or touching hits merge into one span, replaced once by `[redacted:<rule>]`, labelled by the first
+# rule of the spec list among the merged hits. A rule's leading `(^|[^…])` or trailing `($|[^…])`
+# guard group is not part of the hit. Corpus entries may pin the result: `redacted` (exact text) and
+# `markers` (marker count).
+def spec_rules_full():
+    rules = literals().get("secret_rules") or []
+    out = []
+    for r in rules:
+        try:
+            out.append((r["id"], re.compile(r["re"]), r.get("min_entropy"), r["re"]))
+        except (KeyError, re.error):
+            pass
+    return out
+
+
+def hit_spans(text, rules):
+    spans = []
+    for order, (rid, rx, min_ent, src) in enumerate(rules):
+        lead = src.startswith("(^|[^")
+        trail = src.endswith(")") and re.search(r"\(\$\|\[\^[^\]]*\]\)$", src) is not None
+        for m in rx.finditer(text):
+            a, z = m.span()
+            if lead and m.re.groups >= 1:
+                a = m.end(1)
+            if trail and m.re.groups >= 1:
+                z = m.start(m.re.groups)
+            if z <= a:
+                continue
+            if min_ent is not None and entropy(text[a:z]) < min_ent:
+                continue
+            spans.append((a, z, order, rid))
+    return spans
+
+
+def redact_bd2(text, rules):
+    spans = sorted(hit_spans(text, rules))
+    merged = []
+    for a, z, order, rid in spans:
+        if merged and a <= merged[-1][1]:
+            m = merged[-1]
+            merged[-1] = [m[0], max(m[1], z), min(m[2], (order, rid))]
+        else:
+            merged.append([a, z, (order, rid)])
+    out, at = [], 0
+    for a, z, (order, rid) in merged:
+        out.append(text[at:a] + "[redacted:{}]".format(rid))
+        at = z
+    out.append(text[at:])
+    return "".join(out), len(merged)
+
+
+def check_bd2(corpus):
+    rules = spec_rules_full()
+    problems, pinned = [], 0
+    if not rules:
+        return ["bd2: no spec secret_rules to run"], 0
+    for e in corpus["entries"]:
+        joined = "".join(e["fragments"])
+        out, n = redact_bd2(joined, rules)
+        if re.search(r"\]\s*\[redacted:", out):
+            problems.append("bd2 {}: two markers touch or sit apart by whitespace only: {!r}".format(e["id"], out[:80]))
+        if "redacted" in e:
+            pinned += 1
+            if out != e["redacted"]:
+                problems.append("bd2 {}: redacts to {!r}, the pin says {!r}".format(e["id"], out, e["redacted"]))
+        if "markers" in e:
+            pinned += 1
+            if n != e["markers"]:
+                problems.append("bd2 {}: {} markers, the pin says {}".format(e["id"], n, e["markers"]))
+    return problems, pinned
+
+
 # ---------------------------------------------------------------- generated modules
 
 HEADER = "// GEN by tools/fixtures-gen from tests/fixtures. Do not edit; edit the fixtures and run tools/fixtures-gen.\n"
@@ -717,7 +796,7 @@ class Scenario:
         os.makedirs(home)
         root = home + "/.claude/handoffs"
         self.v = {"TMP": self.tmp, "HOME": home, "ROOT": root, "WATCH": root + "/.watch", "SID": sid, "SID8": sid[:8],
-                  "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1)}
+                  "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1), "HOST": os.uname().nodename}
         self.touched = {}
 
     def sub(self, x):
@@ -728,7 +807,7 @@ class Scenario:
         if not isinstance(x, str):
             return x
         x = fill(x, self.b)
-        return re.sub(r"\$\{?(TMP|HOME|ROOT|WATCH|SID8|SID|BRAND|FIXTURES|FIX|LSTART1)\b\}?", lambda m: self.v[m.group(1)], x)
+        return re.sub(r"\$\{?(TMP|HOME|ROOT|WATCH|SID8|SID|BRAND|FIXTURES|FIX|LSTART1|HOST)\b\}?", lambda m: self.v[m.group(1)], x)
 
     def env(self):
         e = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": self.v["HOME"], "GIT_CONFIG_NOSYSTEM": "1",
@@ -1048,6 +1127,93 @@ def rm_semantics(doc, sc):
     return p
 
 
+def pid_state(pid, lstart):
+    """live (pid alive, same start time), restarted (alive, another start time) or dead."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return "dead"
+    except (PermissionError, OverflowError):
+        pass
+    except OSError:
+        return "dead"
+    return "live" if process_lstart(pid) == " ".join(str(lstart).split()) else "restarted"
+
+
+def transcript_row_line(path):
+    """True when the first non-empty line parses as a transcript row (BD-4 detector c)."""
+    for line in read(path).split("\n"):
+        if line.strip():
+            try:
+                r = json.loads(line)
+            except ValueError:
+                return False
+            return isinstance(r, dict) and "type" in r and ("sessionId" in r or "parentUuid" in r)
+    return False
+
+
+def st_semantics(doc, sc):
+    """What the C-STORE setups must have built (AT-ST-04/05 records, AT-ST-13 agent outputs)."""
+    p = []
+    if doc["id"] == "st-05-finish-records":
+        byp = sc.v["ROOT"] + "/.sessions/by-pid"
+        files = sorted(os.listdir(byp)) if os.path.isdir(byp) else []
+        for sid8, want in sorted(doc["expect"]["records"].items()):
+            live = [f for f in files if f.endswith(".live-{}.json".format(sid8))]
+            ended = [f for f in files if f.endswith(".ended-{}.json".format(sid8))]
+            if not live:
+                state, host = "none", None
+            else:
+                d = json.loads(read(os.path.join(byp, live[0])))
+                state = pid_state(d["pid"], d["pid_lstart"])
+                host = d.get("host")
+                if host is not None and host != sc.v["HOST"]:
+                    p.append("{}: host {!r} is not this machine's node name".format(sid8, host))
+            if state != want["state"]:
+                p.append("{}: the record reads {}, the recipe says {}".format(sid8, state, want["state"]))
+            if "host" in want and (host is not None) != want["host"]:
+                p.append("{}: host {} but the recipe says {}".format(sid8, "present" if host else "absent", want["host"]))
+            if "ended" in want and bool(ended) != want["ended"]:
+                p.append("{}: ended- record {} but the recipe says {}".format(sid8, bool(ended), want["ended"]))
+            if "eligible" in want:
+                rule = bool(ended) or (state in ("dead", "restarted") and host is not None)
+                if rule != want["eligible"]:
+                    p.append("{}: the C-STORE §5.8 reading gives eligible={}, the recipe says {}".format(sid8, rule, want["eligible"]))
+    elif doc["id"] == "st-13-agent-output":
+        sid = doc["invoke"]["argv"][doc["invoke"]["argv"].index("--sid") + 1]
+        slot = json.loads(read(sc.v["WATCH"] + "/" + sid + "/bg/slot-0.json"))
+        types = {t["id"]: (t["type"], t["output_path"]) for t in slot["tasks"]}
+        for tid, want in sorted(doc["expect"]["outputs"].items()):
+            if tid not in types:
+                p.append("{}: not in the sidecar slot".format(tid))
+                continue
+            typ, out = types[tid]
+            if want.get("type") and want["type"] != typ:
+                p.append("{}: slot type {} but the recipe says {}".format(tid, typ, want["type"]))
+            det = want.get("detector")
+            if tid == "x":
+                at = json.loads(read(os.path.join(FIX, "tempfiles", "at-e-05-task-output.json")))
+                if out != sc.sub(at["files"][0]["path"]):
+                    p.append("x: output_path must be the AT-E-05 tempfile path")
+                continue
+            if not os.path.lexists(out):
+                p.append("{}: {} missing".format(tid, out))
+                continue
+            link = os.path.islink(out)
+            real = os.path.realpath(out)
+            is_a = link and real.endswith(".jsonl") and "/.claude/projects/" in real
+            is_c = not link and transcript_row_line(out)
+            is_b = typ not in ("shell", "monitor")
+            fired = sorted(k for k, v in (("a", is_a), ("b", is_b), ("c", is_c)) if v)
+            if fired != ([det] if det else []):
+                p.append("{}: BD-4 detectors {} fire, the recipe expects {}".format(tid, fired, [det] if det else []))
+            if want.get("result") == "withheld" and not fired or want.get("result") == "copied" and fired:
+                p.append("{}: result {} does not follow from the detectors {}".format(tid, want.get("result"), fired))
+        if sorted(sc.sub(doc["expect"]["paths"])) != sorted(o for _, o in types.values()):
+            p.append("expect.paths must list every slot output_path")
+    return p
+
+
 def check_setups(b):
     problems, n = [], 0
     if not os.path.isdir(SETUPS):
@@ -1083,6 +1249,8 @@ def check_setups(b):
                     sem = jobs_semantics(doc, sc)
                 elif doc["id"].startswith("rm-"):
                     sem = rm_semantics(doc, sc)
+                elif doc["id"].startswith("st-"):
+                    sem = st_semantics(doc, sc)
                 else:
                     sem = []
                 problems += ["{}: {}".format(where, x) for x in sem]
@@ -1091,6 +1259,49 @@ def check_setups(b):
         finally:
             sc.done()
     return problems, n
+
+
+# PATH stubs (README "bin/"): bin/git-noexclude must defeat an exclude pathspec that the real git
+# honours (C-STORE D7 BD-1: the rebuilt clone patch, AT-ST-11 fail-closed). Proven on a temp repo.
+def numstat_paths(sc, cwd, env, args):
+    patch = subprocess.run(["git", "-C", cwd] + args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+    if patch.returncode != 0:
+        raise RuntimeError("git {}: exit {}".format(" ".join(args[:2]), patch.returncode))
+    r = subprocess.run(["git", "-C", cwd, "apply", "--numstat", "-z", "-"], input=patch.stdout, env=sc.env(),
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+    return sorted(x.split("\t")[-1] for x in r.stdout.decode("utf-8", "replace").split("\0") if "\t" in x)
+
+
+def check_stubs(b):
+    problems = []
+    stub = os.path.join(FIX, "bin", "git-noexclude")
+    if not os.access(stub, os.X_OK):
+        return ["stubs: bin/git-noexclude missing or not executable"], 0
+    sc = Scenario(b)
+    try:
+        repo = sc.tmp + "/r"
+        sc.run({"repo": {"commits": [{"files": {"README.md": "seed\n"}, "msg": "seed"},
+                                     {"files": {"src/a.rb": "x = 1\n", ".netrc": "fixture netrc line\n"}, "msg": "both"}]},
+                "at": repo})
+        args = ["format-patch", "--stdout", "--no-renames", "-1", "HEAD", "--", ".", ":(top,literal,exclude).netrc"]
+        real = numstat_paths(sc, repo, sc.env(), args)
+        if real != ["src/a.rb"]:
+            problems.append("stubs: the real git does not honour ':(top,literal,exclude)' with --no-renames here: numstat {}".format(real))
+        bindir = sc.tmp + "/stubbin"
+        os.makedirs(bindir)
+        os.symlink(stub, bindir + "/git")
+        log = sc.tmp + "/noexclude.log"
+        env = dict(sc.env(), PATH=bindir + os.pathsep + sc.env()["PATH"], GIT_NOEXCLUDE_LOG=log)
+        stubbed = numstat_paths(sc, repo, env, args)
+        if stubbed != [".netrc", "src/a.rb"]:
+            problems.append("stubs: bin/git-noexclude did not keep the excluded path: numstat {}".format(stubbed))
+        if not os.path.exists(log) or read(log) != "dropped 1\n":
+            problems.append("stubs: bin/git-noexclude wrote no `dropped 1` line to GIT_NOEXCLUDE_LOG")
+    except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+        problems.append("stubs: {}".format(e))
+    finally:
+        sc.done()
+    return problems, 1
 
 
 def check_settings():
@@ -1518,6 +1729,9 @@ def check(b):
             problems.append("secrets name {}: deny-list says {}".format(n["name"], deny_name(n["name"])))
     print("secrets: {} files scanned with the {} rule set; {} corpus entries, {} names".format(
         len(texts), source, len(corpus["entries"]), len(corpus["names"])))
+    bd2_problems, nbd2 = check_bd2(corpus)
+    problems += bd2_problems
+    print("bd2: every corpus entry redacted once per merged span (C-STORE D6); {} pins checked".format(nbd2))
     # sequences
     seq_problems, nseq = check_sequences()
     problems += seq_problems
@@ -1534,6 +1748,9 @@ def check(b):
     setup_problems, nsetup = check_setups(b)
     problems += setup_problems
     print("setups: {} recipes built in temp dirs and checked (D-12 repos, Dev-1 scenarios)".format(nsetup))
+    stub_problems, nstub = check_stubs(b)
+    problems += stub_problems
+    print("stubs: {} PATH stub proven on a temp repo (bin/git-noexclude keeps a path the real git excludes)".format(nstub))
     settings_problems, nsettings = check_settings()
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))

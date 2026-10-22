@@ -1,0 +1,176 @@
+{
+  "v": 1,
+  "id": "st-05-finish-records",
+  "ruling": "C-STORE D4 (§5.8 finish rule), D8 (record shape with host); RRP-05",
+  "tests": [
+    "AT-ST-04",
+    "AT-ST-05"
+  ],
+  "note": "Per-process records for the cross-session finish pass, run from session S1 (the live record with pid 1). Each other session has an empty pending/ folder; the case adds its stash, marker and reconcile.lock. Dead pids use 2147483646, above every pid_max. $HOST is the machine's node name (uname), the value the helper records.",
+  "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
+  "invoke": {
+    "argv": [
+      "hook",
+      "SessionStart"
+    ],
+    "stdin": "payloads/SessionStart/startup.json",
+    "env": {
+      "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+    }
+  },
+  "setup": [
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1760000000.live-5e55a001.json",
+      "json": {
+        "pid": 1,
+        "pid_lstart": "$LSTART1",
+        "host": "$HOST",
+        "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T14:00:00+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/2147483646-1792562400.live-5e55a002.json",
+      "json": {
+        "pid": 2147483646,
+        "pid_lstart": "Wed Oct 21 09:00:00 2026",
+        "host": "$HOST",
+        "session_id": "5e55a002-0c0f-4f1e-9a00-00000000a002",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1760000000.live-5e55a003.json",
+      "json": {
+        "pid": 1,
+        "pid_lstart": "$LSTART1",
+        "host": "$HOST",
+        "session_id": "5e55a003-0c0f-4f1e-9a00-00000000a003",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/1-1.live-5e55a004.json",
+      "json": {
+        "pid": 1,
+        "pid_lstart": "Thu Jan  1 00:00:00 1970",
+        "host": "$HOST",
+        "session_id": "5e55a004-0c0f-4f1e-9a00-00000000a004",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/2147483646-1792562400.live-5e55a005.json",
+      "json": {
+        "pid": 2147483646,
+        "pid_lstart": "Wed Oct 21 09:00:00 2026",
+        "session_id": "5e55a005-0c0f-4f1e-9a00-00000000a005",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "mkdir": "$WATCH/5e55a006-0c0f-4f1e-9a00-00000000a006/pending"
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/2147483646-1792559700.live-5e55a007.json",
+      "json": {
+        "pid": 2147483646,
+        "pid_lstart": "Wed Oct 21 08:15:00 2026",
+        "host": "$HOST",
+        "session_id": "5e55a007-0c0f-4f1e-9a00-00000000a007",
+        "cwd": "/tmp/example-repo",
+        "worktree": "/tmp/example-repo",
+        "source": "startup",
+        "ts": "2026-10-21T09:00:05+03:00"
+      }
+    },
+    {
+      "write": "$ROOT/.sessions/by-pid/2147483646-1792559700.ended-5e55a007.json",
+      "json": {
+        "session_id": "5e55a007-0c0f-4f1e-9a00-00000000a007",
+        "reason": "prompt_input_exit",
+        "ts": "2026-10-21T13:40:00+03:00"
+      }
+    },
+    {
+      "mkdir": "$WATCH/5e55a002-0c0f-4f1e-9a00-00000000a002/pending"
+    },
+    {
+      "mkdir": "$WATCH/5e55a003-0c0f-4f1e-9a00-00000000a003/pending"
+    },
+    {
+      "mkdir": "$WATCH/5e55a004-0c0f-4f1e-9a00-00000000a004/pending"
+    },
+    {
+      "mkdir": "$WATCH/5e55a005-0c0f-4f1e-9a00-00000000a005/pending"
+    },
+    {
+      "mkdir": "$WATCH/5e55a007-0c0f-4f1e-9a00-00000000a007/pending"
+    }
+  ],
+  "expect": {
+    "records": {
+      "5e55a001": {
+        "state": "live",
+        "host": true,
+        "ended": false,
+        "role": "the current session (B)"
+      },
+      "5e55a002": {
+        "state": "dead",
+        "host": true,
+        "ended": false,
+        "eligible": true,
+        "case": "AT-ST-05 (a): a live record with a dead pid and no ended-"
+      },
+      "5e55a003": {
+        "state": "live",
+        "host": true,
+        "ended": false,
+        "eligible": false,
+        "case": "AT-ST-05 (b): pid alive with the same start time"
+      },
+      "5e55a004": {
+        "state": "restarted",
+        "host": true,
+        "ended": false,
+        "eligible": true,
+        "case": "AT-ST-05 (a) second half, CORE-08 (C-STORE-1 Recommended, provisional): the pid is alive but its start time changed"
+      },
+      "5e55a005": {
+        "state": "dead",
+        "host": false,
+        "ended": false,
+        "eligible": false,
+        "case": "AT-ST-05 (e): a record without host and no ended-"
+      },
+      "5e55a006": {
+        "state": "none",
+        "eligible": false,
+        "case": "AT-ST-05 (d): no record at all"
+      },
+      "5e55a007": {
+        "state": "dead",
+        "host": true,
+        "ended": true,
+        "eligible": true,
+        "case": "AT-ST-04: finish via the ended- record"
+      }
+    }
+  }
+}
