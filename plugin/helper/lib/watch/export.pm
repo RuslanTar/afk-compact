@@ -333,8 +333,52 @@ sub identity_list {
     push @c, @{ $o{extra} || [] };
     push @c, _git_remotes(\@roots, watch::io::mono() + $GIT_BUDGET_S) unless $o{no_git};
     my %seen;
-    return [ grep { length($_) >= $IDENTITY_MIN && !$seen{ lc $_ }++ } map { my $x = $_; utf8::encode($x) if utf8::is_utf8($x); $x }
-             grep { defined && !ref } @c ];
+    my $vocab = vocabulary($ctx->{brand} // 'plugin');
+    return [ grep { length($_) >= $IDENTITY_MIN && !$vocab->{ lc $_ } && !$seen{ lc $_ }++ }
+             map { my $x = $_; utf8::encode($x) if utf8::is_utf8($x); $x } grep { defined && !ref } @c ];
+}
+
+# E-W-1 (provisional; needs/watch-escalations.md): the bundle's own vocabulary. The transform
+# can emit these words only as themselves (field names, enum values, event names, the brand,
+# the fixed README words), so an identity string that is exactly one of them (case-folded) is
+# no leak and is left off the list; otherwise a repo folder named like the plugin, `main` or
+# `shadow` would withhold every file.
+sub vocabulary {
+    my ($brand) = @_;
+    my %v;
+    my $add = sub { for my $w (@_) { $v{ lc $w } = 1 if defined $w && !ref $w && length $w } };
+    my $walk;
+    $walk = sub {
+        my ($c) = @_;
+        return unless ref $c eq 'ARRAY';
+        my ($k, @a) = @$c;
+        if ($k eq 'enum') { $add->(@a) }
+        elsif ($k eq 'pre') { $add->(@{ $a[0] }, @{ $a[1] }) }
+        elsif ($k eq 'list' || $k eq 'counts') { $walk->($a[0]) }
+        elsif ($k eq 'obj') { for my $f (keys %{ $a[0] }) { $add->($f); $walk->($a[0]{$f}) } }
+    };
+    my $s = watch::export_schema::schema();
+    for my $ev (keys %$s) {
+        $add->($ev);
+        for my $f (keys %{ $s->{$ev} }) { $add->($f); $walk->($s->{$ev}{$f}) }
+    }
+    $add->(keys %{ watch::export_schema::envelope() });
+    $add->($brand, @FIXED, 'rows', 'other', 'none', 'true', 'false', 'null', 'report');
+    # The manifest, probes and sizes files' own keys and fixed values, and the system facts the
+    # manifest states (operating system name and architecture, the runtime word).
+    $add->(qw(schema plugin plugin_version created install_id cc_versions_seen os name release_major arch runtime
+              window from to truncated since notice_shown watcher files bytes sha256 withheld dropped scan
+              secret_rules_version identity_list_size export_schema ms file reason count rules identity secret
+              shadow off perl available why no-export-classes export-view-failed
+              smoke result check version smokeDue last_version canaries seat_state mod_alive yes no keyset_hashes
+              triggers idle idle_source output_path_source runtime_trailer_active alert_delivery status-only
+              system-message watch_error_classes PASS FAIL total kinds classic_stream alerts mod_stream rollup events
+              dispatch pending bg handoff-turn checkpoint watch-cache offsets heal resume-claimed jobs fingerprints
+              keyset notice reports .orphans key));
+    my @u = POSIX::uname();
+    $add->($u[0], $u[4]);
+    $add->(_readme($brand) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
+    return \%v;
 }
 
 sub identity_hits {
@@ -346,6 +390,31 @@ sub identity_hits {
 }
 
 # --- secret scan (B.4) ------------------------------------------------------
+
+# E-W-3 (provisional; needs/watch-escalations.md): what the secret scan reads in a staged
+# JSON file. Field names are the schema's fixed vocabulary (the WARN key-value rule hits the
+# schema's own `"key":"soft_max"`), so a JSON file is scanned as its values, one per line
+# (every string value and every object key below the top level, which are class-checked
+# words). A file that does not parse is scanned as it is.
+sub scan_text {
+    my ($name, $data) = @_;
+    return $data unless defined $name && $name =~ /\.jsonl?\z/;
+    my @vals;
+    my $walk;
+    $walk = sub {
+        my ($v, $depth) = @_;
+        if (ref $v eq 'HASH') { for my $k (sort keys %$v) { push @vals, $k if $depth > 0; $walk->($v->{$k}, $depth + 1) } }
+        elsif (ref $v eq 'ARRAY') { $walk->($_, $depth + 1) for @$v }
+        elsif (defined $v && !ref $v) { push @vals, $v }
+    };
+    for my $line ($name =~ /\.jsonl\z/ ? split(/\n/, $data) : ($data)) {
+        next unless $line =~ /\S/;
+        my $j = eval { watch::json::decode($line) };
+        return $data unless defined $j || !$@;
+        $walk->($j, 0);
+    }
+    return join("\n", @vals) . "\n";
+}
 
 sub secret_hits {
     my ($ctx, $data) = @_;
@@ -604,7 +673,7 @@ sub _assemble {
             push @withheld, { file => $name, reason => 'identity', count => $n };
             next;
         }
-        my $sh = secret_hits($ctx, $data);
+        my $sh = secret_hits($ctx, scan_text($name, $data));
         if (@$sh) {
             my %u;
             push @withheld, { file => $name, reason => 'secret', rules => [ grep { !$u{$_}++ } @$sh ] };
@@ -638,7 +707,7 @@ sub _assemble {
     };
     my $mtext = _canon($manifest);
     die "report: identity in the manifest\n" if identity_hits($mtext, $id_list);
-    die "report: secret in the manifest\n" if @{ secret_hits($ctx, $mtext) };
+    die "report: secret in the manifest\n" if @{ secret_hits($ctx, scan_text('manifest.json', $mtext)) };
     my @entries = grep { $_->[0] eq 'README.txt' } @ok;
     push @entries, [ 'manifest.json', $mtext ];
     push @entries, grep { $_->[0] ne 'README.txt' } @ok;
@@ -851,7 +920,7 @@ sub verify_zip {
     for my $n (sort keys %data) {
         my $d = $data{$n};
         for my $c (@PATTERN_CLASSES) { push @p, "pattern $c->[0]: $n" if $d =~ $c->[1] }
-        my $sh = secret_hits($ctx, $d);
+        my $sh = secret_hits($ctx, scan_text($n, $d));
         push @p, 'secret ' . join(',', @$sh) . ": $n" if @$sh;
     }
     return @p;
