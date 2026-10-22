@@ -1,0 +1,21 @@
+<summary>
+⟪{{plugin}} v1 n=5e6f7081 s=sub⟫
+## Task as assigned
+Find every caller of RetryWorker.enqueue and list the ones that pass a raw hash
+## Constraints from the parent
+read-only; report paths and line numbers only
+## Report
+7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88
+## Done
+searched app/ and lib/ with rg; read each caller
+## Findings
+the two raw-hash callers predate the request id field
+## Produced but not yet delivered
+none
+## Own background tasks
+none
+## Next action
+return the report to the parent
+</summary>
+Fixture engine sentence before the sentinel.
+⟪/{{plugin}} n=5e6f7081⟫

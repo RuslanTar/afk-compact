@@ -1,0 +1,13 @@
+file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatch	sentinel_place
+01-p5-c1-after-close.txt	ok	1	1	da24cc4a	sub	47b8763fa9467857276b341d88257a6beacbf9e0f7c364dd487edec4ad3eaa20		after-close
+02-p5-c2-after-close.txt	ok	1	1	f5d2ccf6	sub	5bdfd1c22a99d6f5081c226da493b2d1a06ebd0a9d9904ddf531db7e86b9f66c		after-close
+03-p5-c3-inside.txt	ok	1	1	d2158267	sub	c6ed5208113e468074e3333fe3f54a872ebebe0d98c248ef64f2e88a7c876dea		inside
+04-p5-c4-inside.txt	ok	1	1	4dae03c4	sub	c7eff3dabda4f4047a3734201b64e2285f8296f1b80507f56bc607b8de719161		inside
+05-p5-c5-inside.txt	ok	1	1	228e0cc9	sub	6fbfe69e9d7b37ccbb5e3f8083ce22eacf58b80a8092c7bbbd791030773b350b		inside
+06-p5-c6-after-close.txt	ok	1	1	084ad868	sub	5911abc9d6632247c1ab361af96b584d86ae8b0977a32cdb330b42b27e62750a		after-close
+07-after-close-sentinel-other-nonce.txt	truncated	1	1	5e6f7081	sub	b5cfa1045520898d4b608182dd252add888c00d16cdf0423c318bf07c4599747		after-close
+08-after-close-text-then-sentinel.txt	truncated	1	-	5e6f7081	sub	7183728795119f3ef838b8eb10498875f731772e349c1ef2ad8510eab20aacc5		-
+09-after-close-sentinel-listed-trailer.txt	ok	1	1	5e6f7081	sub	8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29		after-close
+10-after-close-sentinel-unlisted-text.txt	ok-trailer	1	2	5e6f7081	sub	a197420a0edd9b3c286cd49127895ad411ca838ca0bd01be70d4d774bdd47586		after-close
+11-after-close-marker-absent.txt	unshaped	-	1	-	-	d88fac43955849a116570bc9e8ea79b66f54f9a35ab3c9508ecd57ff4d2f1892		after-close
+12-after-close-same-line.txt	ok	1	1	5e6f7081	sub	8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29		after-close

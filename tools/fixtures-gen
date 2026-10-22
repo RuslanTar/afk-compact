@@ -11,14 +11,16 @@ Usage:
   tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
                                      must equal a fresh render; exit 1 on any problem
   tools/fixtures-gen --clean         remove the three generated files (nothing else)
-  tools/fixtures-gen --print-expected
-                                     print summaries/expected.tsv as the reference detector
-                                     computes it (authoring aid; never writes)
+  tools/fixtures-gen --print-expected [p5|acuity]
+                                     print summaries/expected.tsv (or summaries/<table>/expected.tsv)
+                                     as the reference detector computes it (authoring aid; never
+                                     writes)
   tools/fixtures-gen --refresh-sha   only the sha-column refresh of the regenerate step
 
 Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   parse     every *.json under tests/fixtures parses; every *.jsonl line parses
-  expected  summaries/expected.tsv equals the reference detector (MOD-SPEC §5.1) on every file
+  expected  summaries/expected.tsv and each sub-table (p5/, acuity/) equal the reference
+            detector (MOD-SPEC §5.1, with the P5-FOLD A1 sentinel-after-close rule) on every file
   secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
             its fragments are joined, and no single fragment hits anything
@@ -63,11 +65,17 @@ GEN_REL = os.path.join("plugin", "tests", "unit", "_gen")
 GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts")
 SUMMARIES = os.path.join(FIX, "summaries")
 EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
+# Sub-tables (README "Corpus"): summaries/<table>/ with its own expected.tsv, in the same columns,
+# for corpus files that must stay out of the AT-C-03 41-file corpus. p5: P5-FOLD A1 (sentinel after
+# </summary>; the 6 P5 summaries and the AT-P5-02 cases), apart so AT-C-03 stays green until
+# CORE-05 and MOD-05 build the rule; p5/copy_trailers.json lists extra trailers for that table only.
+# acuity: T-TEXT E6 golden summaries with the Acuity field (AT-AC-02, AT-AC-03).
+SUB_TABLES = ("p5", "acuity")
 PAYLOADS = os.path.join(FIX, "payloads")
 SEQUENCES = os.path.join(FIX, "sequences")
 SECRET_MARK = "$SECRET{"
 COLUMNS = ["file", "verdict", "marker_line", "sentinel_from_end", "nonce", "scope",
-           "normalized_sha256", "dispatch"]
+           "normalized_sha256", "dispatch", "sentinel_place"]
 SKIP_DIRS = {".git", "node_modules", ".types", "__pycache__"}
 # jsonl lines that are malformed on purpose (WATCH T-16: the sweeper must survive them)
 INTENDED_MALFORMED = {"tests/fixtures/transcripts/T-16/main.jsonl": {5}}
@@ -94,15 +102,72 @@ def read(path):
 
 # ---------------------------------------------------------------- reference detector (MOD §5.1)
 
-def normalize(text):
+_TRAILERS = {}
+
+
+def shipped_trailers():
+    """copy_trailers of the spec literals and of plugin/assets/canary-baseline.json (compiled)."""
+    if "v" not in _TRAILERS:
+        src = list(literals().get("copy_trailers") or [])
+        base = os.path.join(REPO, "plugin", "assets", "canary-baseline.json")
+        if os.path.exists(base):
+            try:
+                src += json.loads(read(base)).get("copy_trailers") or []
+            except ValueError:
+                pass
+        _TRAILERS["v"] = compile_trailers(src)
+    return _TRAILERS["v"]
+
+
+def compile_trailers(src):
+    out = []
+    for t in src:
+        s = t.get("re") if isinstance(t, dict) else t
+        if isinstance(s, str) and s:
+            try:
+                out.append(re.compile(s))
+            except re.error:
+                pass
+    return out
+
+
+def table_trailers(d):
+    """Shipped trailers plus the table's own copy_trailers.json (p5 only)."""
+    extra = os.path.join(d, "copy_trailers.json")
+    own = compile_trailers(json.loads(read(extra)).get("copy_trailers") or []) if os.path.exists(extra) else []
+    return shipped_trailers() + own
+
+
+def cut_trailers(body, trailers, keep):
+    """Cut listed installed-message trailers from the end of body, never at or above index keep."""
+    j = len(body) - 1
+    while j >= keep:
+        if not body[j].strip():
+            j -= 1
+            continue
+        if not any(rx.search(body[j]) for rx in trailers):
+            break
+        del body[j:]
+        j -= 1
+    return body
+
+
+def normalize(text, name=None, trailers=()):
     """Normalized body: wrapper parts stripped from the head, cut at </summary>, \\n line ends.
 
     Head (repeated until none applies, blank lines between parts dropped): a line starting
     `This session is being continued`; a `<tools-used-before-summary>` block through its closing
     tag; a `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
     Tail: the body ends before the first line holding `</summary>` (text before the tag on that
-    line is body). Trailing blank lines are trimmed. Result: lines joined by \\n plus one final
-    \\n, or the empty string for an empty body.
+    line is body). Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1; needs `name`): when
+    the first non-blank text after `</summary>` (the rest of that line, else the next non-blank
+    line) matches the sentinel grammar, that line is appended as the body's last line and the
+    lines after it follow it as trailers; any other first line keeps everything after the tag
+    outside the body. Listed trailers (`trailers`) are then cut from the end, never the moved
+    sentinel itself; with no `</summary>` the same cut applies to the end of the body (detect.pm).
+    Trailing blank lines are trimmed. Result: (text, moved) with text = lines joined by \\n plus
+    one final \\n or the empty string for an empty body, and moved = the sentinel line's index in
+    the body when it was moved, else None.
     """
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     i = 0
@@ -126,41 +191,62 @@ def normalize(text):
             i += 1
         else:
             break
-    body = []
-    for line in lines[i:]:
+    body, moved, closed = [], None, False
+    rest = lines[i:]
+    for j, line in enumerate(rest):
         if "</summary>" in line:
-            head = line[:line.index("</summary>")]
+            closed = True
+            k = line.index("</summary>")
+            head, tail = line[:k], line[k + len("</summary>"):]
             if head.strip():
                 body.append(head)
+            after = ([tail] if tail.strip() else []) + rest[j + 1:]
+            while after and not after[0].strip():
+                after.pop(0)
+            if name is not None and after and sentinel_grammar(name).match(after[0]):
+                while body and not body[-1].strip():
+                    body.pop()
+                moved = len(body)
+                body += after
             break
         body.append(line)
+    if moved is not None:
+        cut_trailers(body, trailers, moved + 1)
+    elif not closed:
+        cut_trailers(body, trailers, 0)
     while body and not body[-1].strip():
         body.pop()
-    return "\n".join(body) + "\n" if body else ""
+    return ("\n".join(body) + "\n" if body else ""), moved
 
 
-def detect(text, name, dispatch=None):
-    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256) per MOD §5.1.
+def sentinel_grammar(name):
+    return re.compile(r"^⟪/" + re.escape(name) + r" n=([0-9a-f]{8})⟫$")
+
+
+def detect(text, name, dispatch=None, trailers=()):
+    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256, sentinel_place) per MOD §5.1.
 
     dispatch: None = text alone; "none" = a PostCompact with no dispatch at all; else the
-    dispatch record (dict) of this compaction.
+    dispatch record (dict) of this compaction. sentinel_place: `inside`, `after-close` (the
+    sentinel found is the line moved from after `</summary>`) or None (no sentinel found).
     """
-    body = normalize(text)
+    body, moved = normalize(text, name, trailers)
     lines = body.split("\n")[:-1] if body else []
     marker_re = re.compile(r"^⟪" + re.escape(name) + r" v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$")
-    sentinel_re = re.compile(r"^⟪/" + re.escape(name) + r" n=([0-9a-f]{8})⟫$")
+    sentinel_re = sentinel_grammar(name)
     marker_line = nonce = scope = None
     for idx, line in enumerate(lines[:5]):
         m = marker_re.match(line)
         if m:
             marker_line, nonce, scope = idx + 1, m.group(1), m.group(2)
             break
-    nonblank = [ln for ln in lines if ln.strip()]
-    sfe = s_nonce = None
+    nonblank = [(ix, ln) for ix, ln in enumerate(lines) if ln.strip()]
+    sfe = s_nonce = place = None
     for k in range(1, min(3, len(nonblank)) + 1):
-        m = sentinel_re.match(nonblank[-k])
+        m = sentinel_re.match(nonblank[-k][1])
         if m:
             sfe, s_nonce = k, m.group(1)
+            place = "after-close" if nonblank[-k][0] == moved else "inside"
             break
     resume_heading = any(ln.startswith("## Resume here") for ln in lines)
     verdict = None
@@ -189,11 +275,21 @@ def detect(text, name, dispatch=None):
         else:
             verdict = "ok"
     sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    return verdict, marker_line, sfe, nonce, scope, sha
+    return verdict, marker_line, sfe, nonce, scope, sha, place
 
 
-def summary_files():
-    return sorted(f for f in os.listdir(SUMMARIES) if f.endswith(".txt"))
+def tables():
+    """(dir, expected.tsv) of each corpus table: the main corpus, then each SUB_TABLES folder."""
+    out = [(SUMMARIES, EXPECTED)]
+    for name in SUB_TABLES:
+        d = os.path.join(SUMMARIES, name)
+        if os.path.isdir(d):
+            out.append((d, os.path.join(d, "expected.tsv")))
+    return out
+
+
+def summary_files(d=SUMMARIES):
+    return sorted(f for f in os.listdir(d) if f.endswith(".txt"))
 
 
 def load_dispatch(ref):
@@ -210,7 +306,7 @@ def read_expected(path=EXPECTED):
     with open(path, encoding="utf-8") as f:
         header = f.readline().rstrip("\n").split("\t")
         if header != COLUMNS:
-            die("expected.tsv header is {}, want {}".format(header, COLUMNS))
+            die("{} header is {}, want {}".format(os.path.relpath(path, REPO), header, COLUMNS))
         for line in f:
             line = line.rstrip("\n")
             if line:
@@ -224,14 +320,16 @@ def dash(v):
     return "-" if v is None else str(v)
 
 
-def expected_rows(b, dispatch_refs):
+def expected_rows(b, dispatch_refs, d=SUMMARIES):
     out = []
-    for f in summary_files():
+    trailers = table_trailers(d)
+    for f in summary_files(d):
         ref = dispatch_refs.get(f, "")
-        v, ml, sfe, n, sc, sha = detect(fill(read(os.path.join(SUMMARIES, f)), b), b["name"],
-                                        load_dispatch(ref))
+        v, ml, sfe, n, sc, sha, place = detect(fill(read(os.path.join(d, f)), b), b["name"],
+                                               load_dispatch(ref), trailers)
         out.append({"file": f, "verdict": v, "marker_line": dash(ml), "sentinel_from_end": dash(sfe),
-                    "nonce": dash(n), "scope": dash(sc), "normalized_sha256": sha, "dispatch": ref})
+                    "nonce": dash(n), "scope": dash(sc), "normalized_sha256": sha, "dispatch": ref,
+                    "sentinel_place": dash(place)})
     return out
 
 
@@ -239,14 +337,14 @@ def tsv(rows):
     return "\t".join(COLUMNS) + "\n" + "".join("\t".join(r[c] for c in COLUMNS) + "\n" for r in rows)
 
 
-def sha_refreshed(b):
-    """(rows of expected.tsv with normalized_sha256 recomputed for brand b, number changed).
+def sha_refreshed(b, d=SUMMARIES, path=EXPECTED):
+    """(rows of one expected.tsv with normalized_sha256 recomputed for brand b, number changed).
 
     Only the sha column is touched: it is a function of the text and the brand alone, so a
     rename changes it (README "Corpus"). The other columns stay as authored for --check.
     """
-    rows = read_expected()
-    fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
+    rows = read_expected(path)
+    fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows}, d)}
     changed = 0
     for r in rows:
         f = fresh.get(r["file"])
@@ -257,13 +355,16 @@ def sha_refreshed(b):
 
 
 def refresh_sha(b):
-    rows, changed = sha_refreshed(b)
-    if changed:
-        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
-            f.write(tsv(rows))
-        print("fixtures-gen: refreshed normalized_sha256 for {} rows of {} (brand {})".format(
-            changed, os.path.relpath(EXPECTED, REPO), b["name"]))
-    return changed
+    total = 0
+    for d, path in tables():
+        rows, changed = sha_refreshed(b, d, path)
+        if changed:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(tsv(rows))
+            print("fixtures-gen: refreshed normalized_sha256 for {} rows of {} (brand {})".format(
+                changed, os.path.relpath(path, REPO), b["name"]))
+        total += changed
+    return total
 
 
 # ---------------------------------------------------------------- secret rules
@@ -358,33 +459,52 @@ def js(v):
     return json.dumps(v, ensure_ascii=True, indent=1, sort_keys=False)
 
 
-def render(b, rows=None):
-    out = {}
-    out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
-        {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
-         "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
-
-    rows = read_expected() if rows is None else rows
-    dispatch_refs = {r["file"]: r["dispatch"] for r in rows}
+def corpus_entries(b, d, rows):
     corpus = []
     for r in rows:
-        text = read(os.path.join(SUMMARIES, r["file"]))
+        text = read(os.path.join(d, r["file"]))
         if SECRET_MARK in text:
             continue
-        d = load_dispatch(dispatch_refs.get(r["file"], ""))
+        disp = load_dispatch(r.get("dispatch", ""))
         corpus.append({"file": r["file"], "text": fill(text, b), "verdict": r["verdict"],
                        "marker_line": None if r["marker_line"] == "-" else int(r["marker_line"]),
                        "sentinel_from_end": None if r["sentinel_from_end"] == "-" else int(r["sentinel_from_end"]),
                        "nonce": None if r["nonce"] == "-" else r["nonce"],
                        "scope": None if r["scope"] == "-" else r["scope"],
                        "normalized_sha256": r["normalized_sha256"],
-                       "dispatch": json.loads(fill(json.dumps(d), b)) if isinstance(d, dict) else d})
-    out["corpus.gen.ts"] = (HEADER +
+                       "dispatch": json.loads(fill(json.dumps(disp), b)) if isinstance(disp, dict) else disp,
+                       "sentinel_place": None if r["sentinel_place"] in ("-", "") else r["sentinel_place"]})
+    return corpus
+
+
+def render(b, rows=None):
+    """rows: {expected.tsv path: rows} to render instead of the files on disk (--out)."""
+    out = {}
+    out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
+        {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
+         "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
+
+    rows = rows or {}
+    main_rows = rows.get(EXPECTED) or read_expected()
+    corpus_ts = (HEADER +
         "export type CorpusEntry = {\n  file: string; text: string; verdict: string;\n"
         "  marker_line: number | null; sentinel_from_end: number | null; nonce: string | null;\n"
         "  scope: string | null; normalized_sha256: string;\n"
-        "  dispatch: null | 'none' | Readonly<Record<string, unknown>>\n}\n"
-        "export const CORPUS: readonly CorpusEntry[] = " + js(corpus) + "\n")
+        "  dispatch: null | 'none' | Readonly<Record<string, unknown>>;\n"
+        "  sentinel_place: null | 'inside' | 'after-close'\n}\n"
+        "export const CORPUS: readonly CorpusEntry[] = " + js(corpus_entries(b, SUMMARIES, main_rows)) + "\n")
+    for d, path in tables()[1:]:
+        name = os.path.basename(d)
+        sub_rows = rows.get(path) or read_expected(path)
+        corpus_ts += ("// summaries/{}/expected.tsv (tests/fixtures/README.md \"Corpus\")\n".format(name) +
+                      "export const CORPUS_{}: readonly CorpusEntry[] = ".format(name.upper()) +
+                      js(corpus_entries(b, d, sub_rows)) + "\n")
+        extra = os.path.join(d, "copy_trailers.json")
+        if os.path.exists(extra):
+            corpus_ts += ("// read CORPUS_{0} with the shipped copy_trailers plus these\n"
+                          "export const {0}_COPY_TRAILERS: readonly string[] = ".format(name.upper()) +
+                          js(json.loads(read(extra)).get("copy_trailers", [])) + "\n")
+    out["corpus.gen.ts"] = corpus_ts
 
     payloads, raw = {}, {}
     for ev in sorted(os.listdir(PAYLOADS)):
@@ -1130,7 +1250,8 @@ def rename_drill(b):
     problems = []
     tmp = tempfile.mkdtemp(prefix="fixtures-gen-drill-")
     try:
-        for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md")):
+        for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md"),
+                    os.path.join("plugin", "assets", "canary-baseline.json")):
             if os.path.exists(os.path.join(REPO, rel)):
                 os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
                 shutil.copy2(os.path.join(REPO, rel), os.path.join(tmp, rel))
@@ -1179,18 +1300,26 @@ def check(b):
                     except ValueError as e:
                         problems.append("parse {}:{}: {}".format(rel, no, e))
     print("parse: {} json files and every jsonl line checked".format(njson))
-    # expected
-    rows = read_expected()
-    want = {r["file"]: r for r in rows}
-    files = summary_files()
-    if sorted(want) != files:
-        problems.append("expected.tsv files {} != summaries {}".format(sorted(set(want) ^ set(files)), ""))
-    for r in expected_rows(b, {k: v["dispatch"] for k, v in want.items()}):
-        w = want.get(r["file"])
-        if w and w != r:
-            diff = ["{} {}!={}".format(c, w[c], r[c]) for c in COLUMNS if w[c] != r[c]]
-            problems.append("expected {}: {}".format(r["file"], ", ".join(diff)))
-    print("expected: {} corpus files against the reference detector".format(len(files)))
+    # expected (every corpus table: the main corpus and summaries/p5)
+    nfiles, ntables = 0, 0
+    for d, path in tables():
+        ntables += 1
+        tname = os.path.relpath(path, FIX)
+        if not os.path.exists(path):
+            problems.append("expected {}: missing".format(tname))
+            continue
+        rows = read_expected(path)
+        want = {r["file"]: r for r in rows}
+        files = summary_files(d)
+        nfiles += len(files)
+        if sorted(want) != files:
+            problems.append("{} files and the .txt files differ: {}".format(tname, sorted(set(want) ^ set(files))))
+        for r in expected_rows(b, {k: v["dispatch"] for k, v in want.items()}, d):
+            w = want.get(r["file"])
+            if w and w != r:
+                diff = ["{} {}!={}".format(c, w[c], r[c]) for c in COLUMNS if w[c] != r[c]]
+                problems.append("expected {}: {}".format(os.path.relpath(os.path.join(d, r["file"]), SUMMARIES), ", ".join(diff)))
+    print("expected: {} corpus files in {} tables against the reference detector".format(nfiles, ntables))
     # secrets
     rules, source = load_rules()
     targets = list(walk(FIX)) + [os.path.join(REPO, "tools", "fixtures-gen")]
@@ -1292,7 +1421,7 @@ def main(argv):
         root = os.path.abspath(argv[1])
         if root == REPO:
             die("--out must not be the repo; run without arguments instead")
-        write(root, b, sha_refreshed(b)[0])
+        write(root, b, {path: sha_refreshed(b, d, path)[0] for d, path in tables()})
         return 0
     if argv == ["--clean"]:
         for name in GEN_FILES:
@@ -1301,9 +1430,18 @@ def main(argv):
                 os.unlink(p)
                 print("removed " + os.path.join(GEN_REL, name))
         return 0
-    if argv == ["--print-expected"]:
-        refs = {r["file"]: r["dispatch"] for r in read_expected()} if os.path.exists(EXPECTED) else {}
-        sys.stdout.write(tsv(expected_rows(b, refs)))
+    if argv[:1] == ["--print-expected"] and len(argv) <= 2 and set(argv[1:]) <= set(SUB_TABLES):
+        d = os.path.join(SUMMARIES, argv[1]) if argv[1:] else SUMMARIES
+        path = os.path.join(d, "expected.tsv")
+        refs = {}
+        if os.path.exists(path):   # only the file and dispatch columns, by header name (authoring aid)
+            with open(path, encoding="utf-8") as f:
+                head = f.readline().rstrip("\n").split("\t")
+                for line in f:
+                    r = dict(zip(head, line.rstrip("\n").split("\t")))
+                    if r.get("file"):
+                        refs[r["file"]] = r.get("dispatch", "")
+        sys.stdout.write(tsv(expected_rows(b, refs, d)))
         return 0
     if argv == ["--refresh-sha"]:
         if not refresh_sha(b):
