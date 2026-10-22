@@ -2,5 +2,5 @@
   "name": "compactinue",
   "marketplace": "compactinue",
   "version": "0.1.0",
-  "description": "Shapes Claude Code's native compaction into a handoff, keeps a read-only copy of every summary, and resumes from it. Adds handoff, resume and status skills."
+  "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going."
 }
