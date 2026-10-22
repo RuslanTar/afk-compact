@@ -112,9 +112,12 @@ describe('BT-05 recorded helper replies', () => {
     const staged = await hs('handoff-state-staged')
     // The finish command starts with the helper's `ctx::store_cmd()` word, which is the word
     // `storeWord()` makes for the same root (PKG-RUNTIME A.1, A.2).
-    const word = /^("[^"]*"|'[^']*') publish --stage /.exec(staged.state === 'staged' ? staged.finish ?? '' : '')?.[1] ?? ''
+    // tools/helper-replies-gen records the plugin folder as `$PLUGIN` (a stand-in, not the real
+    // root): both sides compare over the portable root `/p` put in its place.
+    const recorded = /^("[^"]*"|'[^']*') publish --stage /.exec(staged.state === 'staged' ? staged.finish ?? '' : '')?.[1] ?? ''
+    const word = recorded.split('$PLUGIN').join('/p')
     const tail = '/' + LAUNCHER_DIR + '/' + NAME + '-store'
-    expect([word.slice(1, -1).endsWith(tail), storeWord(word.slice(1, -1 - tail.length), NAME)]).toEqual([true, word])
+    expect([recorded.includes('$PLUGIN'), word.slice(1, -1).endsWith(tail), storeWord(word.slice(1, -1 - tail.length), NAME)]).toEqual([true, true, word])
     expect(await hs('handoff-state-staged-no-finish')).toEqual({
       state: 'staged', stage: "~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
     })
@@ -165,15 +168,16 @@ describe('BT-05 recorded helper replies', () => {
 // above checks the two agree on a real root.
 describe('AT-PK-03 storeWord', () => {
   test('double quotes; single quotes for ", $, backquote, backslash; refused when \' is there too', () => {
-    expect(launcherPath('/p', 'x')).toBe('/p/scripts/x-store')
-    expect(storeWord('/p', 'x')).toBe('"/p/scripts/x-store"')
-    expect(storeWord('/Users/a b/.claude/plugins/cache/m/x/1.0.0', 'x')).toBe('"/Users/a b/.claude/plugins/cache/m/x/1.0.0/scripts/x-store"')
-    expect(storeWord("/p/it's", 'x')).toBe('"/p/it\'s/scripts/x-store"')
-    expect(storeWord('/p/$HOME', 'x')).toBe("'/p/$HOME/scripts/x-store'")
-    expect(storeWord('/p/a"b', 'x')).toBe("'/p/a\"b/scripts/x-store'")
-    expect(storeWord('/p/a`b', 'x')).toBe("'/p/a`b/scripts/x-store'")
-    expect(storeWord('/p/a\\b', 'x')).toBe("'/p/a\\b/scripts/x-store'")
-    expect(storeWord('/p/a"b\'c', 'x')).toBeUndefined()
-    expect(storeWord('/p/$it\'s', 'x')).toBeUndefined()
+    const tail = '/scripts/' + NAME + '-store'
+    expect(launcherPath('/p', NAME)).toBe('/p' + tail)
+    expect(storeWord('/p', NAME)).toBe('"/p' + tail + '"')
+    expect(storeWord('/opt/a b/.claude/plugins/cache/m/x/1.0.0', NAME)).toBe('"/opt/a b/.claude/plugins/cache/m/x/1.0.0' + tail + '"')
+    expect(storeWord("/p/it's", NAME)).toBe('"/p/it\'s' + tail + '"')
+    expect(storeWord('/p/$HOME', NAME)).toBe("'/p/$HOME" + tail + "'")
+    expect(storeWord('/p/a"b', NAME)).toBe("'/p/a\"b" + tail + "'")
+    expect(storeWord('/p/a`b', NAME)).toBe("'/p/a`b" + tail + "'")
+    expect(storeWord('/p/a\\b', NAME)).toBe("'/p/a\\b" + tail + "'")
+    expect(storeWord('/p/a"b\'c', NAME)).toBeUndefined()
+    expect(storeWord('/p/$it\'s', NAME)).toBeUndefined()
   })
 })

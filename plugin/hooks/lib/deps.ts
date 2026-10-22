@@ -22,7 +22,7 @@ export type Version = { version: string; base?: string; builtAt?: string }
 /** The launcher's folder under the plugin root (PKG-RUNTIME A.1): this spelling lives here only. */
 export const LAUNCHER_DIR = 'scripts'
 
-/** `<root>/scripts/<name>-store`: the launcher's absolute path (an argv element, no quoting). */
+/** The launcher's absolute path, `<root>/scripts/` + the name + `-store` (an argv element, no quoting). */
 export function launcherPath(root: string, name: string): string {
   return root + '/' + LAUNCHER_DIR + '/' + name + '-store'
 }
@@ -45,7 +45,7 @@ export interface Deps {
   readonly name: string
   /** `$.plugin.root`: the plugin's folder (shipped assets live under it). */
   readonly root: string
-  /** `launcherPath($.plugin.root, $.plugin.name)`: `<root>/scripts/<name>-store`. */
+  /** `launcherPath($.plugin.root, $.plugin.name)`: the launcher under `<root>/scripts/`. */
   readonly helper: string
   readonly cfg: Config
   readonly state: LoadState
