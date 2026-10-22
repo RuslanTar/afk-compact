@@ -44,7 +44,7 @@ Never, in any step: edit an older handoff; write `.planning/HANDOFF.json` or edi
 ## Step 1 — Measure (one batch)
 
 Run together:
-- `<store> begin --sid '${CLAUDE_SESSION_ID}' --topic '<slug>' --root '${user_config.handoff_root}' --disposable-root '${user_config.disposable_root}' --keep-days '${user_config.disposable_keep_days}' --quota-mb '${user_config.evidence_quota_mb}' --queue-cmd '${user_config.queue_cmd}'`
+- `<store> begin --sid '${CLAUDE_SESSION_ID}' --topic '<slug>' --root '${user_config.handoff_root}' --disposable-root '${user_config.disposable_root}' --keep-days '${user_config.disposable_keep_days}' --quota-mb '${user_config.evidence_quota_mb}'` <!-- Q-ADAPTER QA-4 (QU-02): queue_cmd is file-only; the helper reads it from the settings file -->
 - each runtime listing tool you have for background agents, workflows, scheduled tasks and background tasks.
 
 `<slug>` is the topic, else a 2–4 word kebab slug of the goal; the helper uses it only without a session pin or a ticket in the branch. A topic from the arguments also takes `--topic-explicit`: the helper then re-pins the bucket to it unless another live session holds that bucket (`ownership.repin`). Copy the setting references as written, in single quotes: an unsubstituted `${user_config.…}` in double quotes is a shell "bad substitution" error, while in single quotes it reaches the helper, which applies the default and a note. <!-- review-fix -->
