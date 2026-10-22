@@ -544,9 +544,13 @@ sub evaluate {
             $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'arm'], %k,
                  evidence => { arm_fp => $P->{arm_fp} });
         }
-        if ($c->{main} && $c->{bypass_suspected}) {
+        # M-06 / A-16 (P5-FOLD A5): a subagent's compaction can set off bypass_suspected too.
+        # Classic payloads carry no agent id, so a row for a compaction not proven main has
+        # `actor: unknown` (the alert text says "possibly in a subagent").
+        if ($c->{bypass_suspected} && !$c->{precompute}) {
             $R->(rule => 'A-16', severity => $once->('A-16'), id_parts => \@idp, %k,
-                 evidence => { bypass_suspected => \1, channel => $c->{channel} });
+                 actor => ($c->{main} ? 'main' : 'unknown'),
+                 evidence => { bypass_suspected => \1, channel => $c->{channel}, main => watch::ctx::B($c->{main}) });
         }
         if ($P && @{ $P->{secret_hits} || [] }) {
             my @hard = grep { ($secret_class->{$_} // '') eq 'HARD' } @{ $P->{secret_hits} };
