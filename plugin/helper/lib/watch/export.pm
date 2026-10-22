@@ -320,8 +320,13 @@ sub identity_list {
     push @c, $ENV{HOME} if defined $ENV{HOME};
     my @pw = getpwuid($<);
     push @c, $pw[0], $pw[7], (defined $pw[6] ? split(/[ ,]+/, $pw[6]) : ());
+    # the account name as the process sees it too (USER, LOGNAME), besides the user database
+    push @c, grep { defined && length } @ENV{qw(USER LOGNAME)};
     my $host = (POSIX::uname())[1];
     if (defined $host) { push @c, $host; (my $short = $host) =~ s/\..*//s; push @c, $short }
+    # B.3 names `hostname -s`: run it through PATH as written (1 s), besides uname
+    my $hs = _run_capture([ 'hostname', '-s' ], 1);
+    if (defined $hs) { $hs =~ s/\s+\z//; $hs =~ s/\A\s+//; push @c, $hs if length $hs && $hs !~ /\n/ }
     my @roots;
     my $rr = $ctx->{settings}{repo_roots_list} || [];
     for my $r (@$rr) { push @c, $r; (my $b = $r) =~ s{/+\z}{}; $b =~ s{.*/}{}s; push @c, $b; push @roots, $r }
