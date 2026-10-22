@@ -103,9 +103,9 @@ The handoff and the compaction instructions share one format, so `/{{plugin}}:re
 
 Set on the install screen, or later in `/config` (rows named `{{plugin}}.<key>`). An empty value means the default.
 
-Three keys let the plugin act without asking: `repo_roots`, `relaunch_auto` and `relaunch_allow`. The plugin reads them **from your settings file only** (under the plugin's `options` in `pluginConfigs`). Flags and environment values are ignored for these keys, and `/{{plugin}}:status` prints a note when it ignores one. Nothing the plugin or the model runs can set them for you.
+Three keys let the plugin act without asking: `repo_roots`, `relaunch_auto` and `relaunch_allow`. The plugin reads them **from your settings file only**: `~/.claude/settings.json`, under the plugin's `options` in `pluginConfigs`. Flags and plugin option values are ignored for these keys, and `/{{plugin}}:status` prints a note when it ignores one. The plugin itself never writes them. These keys are read only from `~/.claude/settings.json`. If `CLAUDE_CONFIG_DIR` names another folder, the plugin uses their safe values (no repository accepted, automatic relaunch off, no allow patterns) and `/{{plugin}}:status` prints a note, so a command that sets `CLAUDE_CONFIG_DIR` cannot pick another settings file for these keys.
 
-Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. It does not read them from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
+Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. A `--settings` file works for every other key, but not for these three: the plugin reads them from the user settings file alone. So an opt-out such as `relaunch_auto: "off"` belongs in the user settings file; in a `--settings` file it has no effect, the default stays, and `/{{plugin}}:status` prints the note. Claude Code does not read `pluginConfigs` from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -155,7 +155,7 @@ Every clamped value is logged, and `/{{plugin}}:status` marks it.
 
 - The nudge is added once per main turn, to a main-agent tool result, never to a subagent's or a denied call's.
 - After a compaction that a nudge led to, the plugin submits one short continue note, but only if the turn ended normally, did not end with a question to you, and the hourly cap allows it.
-- Two non-ok verdicts in a row, a compaction loop, or the hourly cap put the session in **halt mode**: no auto-continue, no plugin compactions, and the nudge says the plugin will not resume the work by itself. Your next typed message clears it. Native auto-compaction is never touched. A cycle that will not auto-continue also gets a handoff turn; see below.
+- Two non-ok verdicts in a row, a compaction loop, or the hourly cap put the session in **halt mode**: no auto-continue, no plugin compactions, and the nudge says the plugin will not resume the work by itself, and that it compacts afterwards only after a cap or auto-continue-off halt. Your next typed message clears it. Native auto-compaction is never touched. A cycle that will not auto-continue also gets a handoff turn; see below.
 
 </details>
 
@@ -165,7 +165,7 @@ A **last cycle** is a nudged cycle that will not be followed by an automatic con
 
 The nudge of a last cycle tells the model that the plugin will not resume the work by itself. It does not ask for a handoff in the middle of the task. With `handoff_turn` set to `halt` (the default), the plugin acts when the nudged turn has ended normally:
 
-1. It checks that the turn did not end on a question to you, that no native compaction ran meanwhile, and that at least 20,000 tokens of room are left below the native trigger. If not, it skips the handoff turn and compacts as usual.
+1. It checks that the turn did not end on a question to you, that no native compaction ran meanwhile, and that the handoff turn would get at least 20,000 tokens. The plugin keeps a 15,000-token margin below the native trigger, so this needs at least 35,000 tokens of room there. If not, it skips the handoff turn. After a cap or auto-continue-off halt it then compacts as usual; after a halt for failed verdicts or a loop it runs no compaction.
 2. After `boundary_delay_ms` it submits one turn of its own to the same session. That turn has the full context, runs on your model and effort, and starts from a warm prompt cache. It asks the model to run `/{{plugin}}:handoff` and to put one plain line above the report that says auto-continue paused and why. You see this turn in the chat like any other.
 3. If the handoff is published after a cap or auto-continue-off halt, the plugin runs one compaction and submits no continue. A toast says `{{plugin}}: auto-continue paused (<reason>); handoff saved: <path>`. After a halt for failed verdicts or a loop, it runs no compaction: native auto-compaction stays the backstop, and the toast says why.
 
@@ -175,7 +175,7 @@ Edge cases:
 
 - A message you type during the delay cancels the handoff turn. A message you type during the turn lifts the plugin's limits, and you lead from there.
 - If native compaction fires during the turn, the summary is complete anyway. The resume block says a draft exists and gives the exact command that publishes it.
-- A handoff written in the last 15 minutes is reused. Nothing new is published, and the compaction uses the full summary text.
+- A handoff the session wrote in the last 15 minutes is reused only when nothing has changed since: the same commit, the same working-tree state, and no new decision or background change. Then nothing new is published, and the compaction uses the full summary text. Otherwise the turn writes and publishes a new handoff.
 - There are at most two handoff turns per session in a rolling hour.
 - There is no handoff turn on the turn-end compaction at `compact_target_tokens`, for subagents, or in a cycle that will auto-continue.
 - Windows too small for plugin compactions get no nudge, so no handoff turn.
@@ -210,12 +210,12 @@ Limits and tips:
 - The command only reads. In auto mode it ran without a prompt (Claude Code 2.1.306). In default mode the allow rule `Bash({{plugin}}-store wait *)` silences the usual form, the bare name. When the helper is called by its full path (`<plugin folder>/bin/{{plugin}}-store wait …`), that rule does not match: add `Bash(<plugin folder>/bin/{{plugin}}-store wait *)` with the absolute folder too, the rule the prompt offers as "don't ask again".
 - Monitor is not available on Amazon Bedrock, Google Cloud Agent Platform or Microsoft Foundry, nor when `DISABLE_TELEMETRY` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set. Each Monitor watch ends after 5 minutes by default and 30 at most.
 - With `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` there is no `run_in_background` and no notification. Every wait then follows the subagent rule above.
-- In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. A `--max` of 1800 fits.
+- In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. `wait` prints its pending line only after `--max` has passed, so keep `--max` a little under the limit, for example `--max 1740`. With exactly 1800 the limit can end the wait before it prints exit code 10.
 - Cache: on a subscription within plan usage, the main conversation's prompt cache lives one hour. With an API key or a cloud provider it lives five minutes, so a long wait costs one cache rewrite when the session wakes. Set `promptCacheTtl` to `1h` in your Claude Code settings to avoid that (Claude Code 2.1.242 or newer). Polling to keep the cache warm costs more than it saves for most waits.
 
 ## Lost background jobs
 
-Background shells survive a compaction and `/clear` (Claude Code 2.1.306). At exit they stop, unless you pick "Move to background and exit". So after `/clear` resume first checks a listed job with `{{plugin}}-store wait` and treats it as possibly still running; after an exit or a restart the job may be gone. `/{{plugin}}:resume` does not trust the handoff's text for this. It uses a record the plugin wrote when the job started: the exact command, the folder, the time and the output file. The mod writes it from the tool call itself, so the model cannot edit it. A command that held a credential-like value is stored as a hash and rule ids only, and such a job is never started again by itself.
+Background shells survive a compaction and `/clear` (Claude Code 2.1.306). At exit they stop, unless you pick "Move to background and exit". So after `/clear` resume first checks a listed job with `{{plugin}}-store wait` and treats it as possibly still running; after an exit or a restart the job may be gone. `/{{plugin}}:resume` does not trust the handoff's text for this. It uses a record the plugin wrote when the job started: the exact command, the folder, the time and the output file. The mod writes it from the tool call itself, so the model cannot edit it. A command with a hard secret hit (a provider key, a token in an auth header, a password in a URL and similar) is stored as a hash and rule ids only, and such a job is never started again by itself. A weaker hit (a `password=` or `token=` pair, a cookie, a long random-looking string) does not withhold the command: it is stored as typed, and a published handoff's restart recipe can carry it. Keep credentials out of background commands; read them from a file or the environment instead.
 
 Resume re-checks seven facts:
 
@@ -227,7 +227,7 @@ Resume re-checks seven facts:
 6. nothing the job was expected to write is newer than its start;
 7. the folder exists and the command can be found.
 
-Only when all seven hold, and the relation is the same session or a successor (`/clear` or a proven lineage), does resume start the job again, once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). The command is never run by the helper itself.
+Resume starts the job again by itself only when the relation is the same session or a successor (`/clear` or a proven lineage), and then in two cases: all seven hold, or the job failed (its output ends with a non-zero exit code, so check 4 fails) while checks 1 and 7 hold. Either way it starts a job at most once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). The command is never run by the helper itself.
 
 What may start again by itself: **read-only jobs only**, as Claude Code's own read-only check decides. Anything with outside effects (a push, a deploy, a write to a service) always asks. `relaunch_allow` exists, but it has no effect in this version. Nothing is ever stopped to make room: an old process that may still run blocks the start. A job whose output ends with `[killed]` (stopped with TaskStop or at exit) always asks.
 
@@ -246,7 +246,7 @@ Repo mode needs two things, and neither works alone:
    ```
 
    `root` is a relative folder of up to four plain names. It cannot leave the repository or sit in `.git` or `.planning`.
-2. **You accept the repository.** Add its main checkout to `repo_roots` in `/config`, or edit your settings file by hand. Listing the main checkout covers every worktree of that clone. Another clone needs its own entry. There is no command that does this for you.
+2. **You accept the repository.** Add its main checkout to `repo_roots` in `/config`, or edit your settings file by hand. Listing the main checkout covers every worktree of that clone. A worktree counts only when git created it for that clone (`git worktree add`); a folder whose `.git` file merely points at the clone's git folder needs its own entry. Another clone needs its own entry. There is no command that does this for you.
 
 To create the declaration, a README and a `.gitignore` for the folder, run `! {{plugin}}-store project init` in the repository. It writes no consent and leaves existing files unchanged. `! {{plugin}}-store project status` prints the mode; `/{{plugin}}:status` prints the same lines (`handoff mode: private (not-accepted)` until you accept, then `handoff mode: repo (accepted)`).
 
@@ -305,7 +305,7 @@ With `watcher: shadow` (the default) the plugin keeps a local record of how comp
 | `<session>/bg/slot-0.json` … `slot-19.json` | A fixed ring of 20 background-task snapshots (ids, kinds, status, output paths) |
 | `<session>/dispatch/`, `checkpoint/`, `offsets/`, `paths.jsonl` and small marker files | Per-compaction records, git and project-state measurements, transcript read offsets, and the temp paths the session cited |
 | `<session>/pending/` | The raw summary text handed between hooks so the copy can be written |
-| `<session>/jobs.jsonl`, `jobs-pending.jsonl` | Background shells the mod recorded (time, folder, output file, and the command text unless it held a secret), and relaunches waiting for a matching job. See [Lost background jobs](#lost-background-jobs) |
+| `<session>/jobs.jsonl`, `jobs-pending.jsonl` | Background shells the mod recorded (time, folder, output file, and the command text unless it held a hard secret hit), and relaunches waiting for a matching job. See [Lost background jobs](#lost-background-jobs) |
 | `<session>/handoff-turn/` | One small record per handoff turn: its id, reason, budget, stage and published markers (see [The handoff turn](#the-handoff-turn-of-a-last-cycle)) |
 | `<session>/queue-adds.jsonl` | One row per question sent to `queue_cmd add`: client id, result, queue id. No question text |
 | `<watch>/queue-caps.json` | Whether your `queue_cmd` supports `add`, cached for a day |
@@ -320,7 +320,7 @@ Alerts are listed in `/{{plugin}}:status` with their seven-day counts. In this v
 ## Privacy
 
 - **Local only.** No network calls and no telemetry. The watcher reads OpenTelemetry output only from a file you already write and name in `otel_log_path`.
-- **Content-free logs.** Log rows never store summary or handoff text, your or the model's messages, commands, file contents, permission-denial reasons, environment values or secrets. An unknown value is logged as the class `other`. The one file with command text is the job record (`jobs.jsonl`), which the plugin needs to start a lost job again byte for byte; a command with a secret-like value is stored as a hash and rule ids only.
+- **Content-free logs.** Log rows never store summary or handoff text, your or the model's messages, commands, file contents, permission-denial reasons, environment values or secrets. An unknown value is logged as the class `other`. The one file with command text is the job record (`jobs.jsonl`), which the plugin needs to start a lost job again byte for byte. A command with a hard secret hit is stored as a hash and rule ids only; a command with only a weaker hit (such as `password=…`) is stored as typed and can appear in a published restart recipe. See [Lost background jobs](#lost-background-jobs).
 - **In-process reading.** Summaries, transcript rows and commands are read in memory to compute classes and counts, then dropped.
 - **Secrets.** Summary copies with a hard secret hit are saved redacted. Evidence files that look like credentials (`.env`, keys, `.netrc` and similar) are withheld; logs and JSON with a hit are copied redacted; other files with a hard hit are withheld. Only rule ids are logged, never values. `/{{plugin}}:handoff` scans its draft before publishing.
 - **Private files.** `umask 077`; the private store is never inside a git work tree (unless the path is git-ignored) or a `.planning/` folder. In repo mode the only write into a repository is the scanned export, and the plugin never stages, commits or pushes it.
@@ -354,7 +354,7 @@ The managed-machine path is built and tested offline. It has not yet been run on
 - **Automatic relaunch covers read-only jobs only.** `relaunch_allow` has no effect yet, and a job whose output file could not be confirmed asks.
 - **Repo mode exports only.** There is no command that accepts a repository for you, and the plugin never stages or commits an export.
 - **Handoff turn limits are advice.** The plugin adds notes to tool results and denies nothing, so a model that ignores a note can run past its budget. Native auto-compaction is the backstop.
-- **Not yet run live:** the end-to-end runs in a real session, on a managed machine, the handoff turn, the wait helper in a subagent, and the week-long shadow run.
+- **Not yet run live:** the end-to-end runs in a real session, on a managed machine, the handoff turn, and the week-long shadow run. The wait helper in a subagent has been run live (Claude Code 2.1.306).
 
 ## License
 
