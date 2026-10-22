@@ -92,6 +92,8 @@ export type Detection = {
   marker_line: number | null
   /** 1 = last non-blank line, or null. */
   sentinel_from_end: number | null
+  /** Where the sentinel the scan found sat: inside the summary, or moved in from after `</summary>`. */
+  sentinel_place: 'inside' | 'after-close' | null
   nonce: string | null
   scope: Scope | null
   normalized: string
@@ -101,7 +103,7 @@ export type Detection = {
 /** Detector of MOD-SPEC §5.1 over one summary text. */
 export function detectSummary(raw: string, plugin: string, ctx: DetectContext = {}): Detection {
   const g = grammar(plugin)
-  const { lines, body } = strip(raw, specStrings('copy_trailers'))
+  const { lines, body, movedSentinel } = strip(raw, specStrings('copy_trailers'), g.sentinel)
   let markerLine: number | null = null
   let nonce: string | null = null
   let scope: Scope | null = null
@@ -116,6 +118,7 @@ export function detectSummary(raw: string, plugin: string, ctx: DetectContext = 
   }
   let sentinelFromEnd: number | null = null
   let sentinelNonce: string | null = null
+  let sentinelAt: number | null = null
   let k = 0
   for (let i = lines.length - 1; i >= 0 && k < 3; i--) {
     const line = lines[i] ?? ''
@@ -125,14 +128,17 @@ export function detectSummary(raw: string, plugin: string, ctx: DetectContext = 
     if (m) {
       sentinelFromEnd = k
       sentinelNonce = m[1] ?? null
+      sentinelAt = i
       break
     }
   }
   const verdict = judge()
+  const place = sentinelAt === null ? null : sentinelAt === movedSentinel ? 'after-close' : 'inside'
   return {
     verdict,
     marker_line: markerLine,
     sentinel_from_end: sentinelFromEnd,
+    sentinel_place: place,
     nonce,
     scope,
     normalized: body,

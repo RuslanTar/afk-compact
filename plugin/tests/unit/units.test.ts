@@ -6,7 +6,7 @@ import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, leftovers } from '../../hooks/lib/assemble'
 import { CLAMP_DEFAULTS, DEFAULTS, clamp, clampConstants, minWindow, parseOptions } from '../../hooks/lib/config'
-import { CLOSE, OPEN, detectSummary, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
+import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
@@ -310,3 +310,58 @@ test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idl
     .toEqual([DEFAULTS.precompact_turn, 'forbid', 'off', 200000, { invalid: [], clamped: [] }])
   expect(parseOptions({ precompact_turn: 'CODE' }).precompact_turn).toBe('code')
 })
+
+// P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.
+describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
+  const N = '1a2b3c4d'
+  const body = (n = N) => markerText(NAME, n, 'main') + '\n# LAB-42 retry\n## Resume here\nStatus: active\n'
+  const post = (inner: string, tail: string) => '<summary>\n' + inner + '</summary>' + tail
+  const installed = (inner: string, tail: string) => 'This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n<summary>\n' + inner + '</summary>' + tail
+  const S = sentinelText(NAME, N)
+
+  test('AT-P5-01: three summaries with the sentinel inside, three after the close tag: 6/6 ok, the place reported, the body ends with the sentinel, the same sha in both message forms', () => {
+    const cases = [
+      { text: post(body() + S + '\n', '\n'), place: 'inside' },
+      { text: post(body() + S + '\n\n', ''), place: 'inside' },
+      { text: installed(body() + S + '\n', '\n\n'), place: 'inside' },
+      { text: post(body(), '\n' + S + '\n'), place: 'after-close' },
+      { text: post(body(), '\n\n' + S), place: 'after-close' },
+      { text: installed(body(), S + '\n'), place: 'after-close' },
+    ]
+    const shas = new Set<string>()
+    for (const c of cases) {
+      const r = detectSummary(c.text, NAME, { dispatchNonce: N, scope: 'main' })
+      expect([r.verdict, r.sentinel_place, r.sentinel_from_end]).toEqual(['ok', c.place, 1])
+      expect(r.normalized.endsWith(S + '\n')).toBe(true)
+      shas.add(r.sha256)
+    }
+    expect(shas.size).toBe(1)
+  })
+
+  test('AT-P5-02: another nonce after the close tag is truncated; a non-sentinel line first stays outside; a listed trailer is cut; unlisted text after it is ok-trailer; no marker is unshaped', () => {
+    const other = sentinelText(NAME, '9f9f9f9f')
+    expect(detectSummary(post(body(), '\n' + other + '\n'), NAME, { dispatchNonce: N, scope: 'main' }).verdict).toBe('truncated')
+    const notFirst = detectSummary(post(body(), '\nan engine line\n' + S + '\n'), NAME, { dispatchNonce: N, scope: 'main' })
+    expect([notFirst.verdict, notFirst.sentinel_place]).toEqual(['truncated', null])
+    expect(notFirst.normalized.includes(S)).toBe(false)
+    const listed = specStrings('copy_trailers')[0]
+    if (listed !== undefined) {
+      const r = detectSummary(installed(body(), '\n' + S + '\n\n' + listed), NAME, { dispatchNonce: N, scope: 'main' })
+      expect([r.verdict, r.sentinel_place]).toEqual(['ok', 'after-close'])
+    }
+    const unlisted = detectSummary(post(body(), '\n' + S + '\nFixture trailer line: an engine sentence that no baseline lists.\n'), NAME, { dispatchNonce: N, scope: 'main' })
+    expect([unlisted.verdict, unlisted.sentinel_place, unlisted.sentinel_from_end]).toEqual(['ok-trailer', 'after-close', 2])
+    const bare = '<summary>\n# LAB-42 retry\nNo marker here.\n</summary>\n' + S + '\n'
+    expect(detectSummary(bare, NAME, { dispatchNonce: N, scope: 'main' }).verdict).toBe('unshaped')
+    // Text after the close tag never joins the body when it is not the sentinel (unchanged).
+    expect(strip(post(body() + S + '\n', '\nan engine line\n'), [], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+    expect(strip(post(body(), '\n' + S + '\n'), []).body).toBe(body())
+    // A listed trailer after the moved sentinel is cut (the shipped list is empty today).
+    expect(strip(installed(body(), '\n' + S + '\n\nPlease go on.'), ['Please go on.'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
+  })
+})
+
+function specStrings(key: string): string[] {
+  const v = specValue(key)
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+}

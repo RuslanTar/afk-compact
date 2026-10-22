@@ -7,6 +7,8 @@ export type Stripped = {
   lines: string[]
   /** The normalized body: those lines joined by `\n` plus one final `\n`; empty for no body. */
   body: string
+  /** Index in `lines` of a sentinel line moved in from after `</summary>`, or null (P5-FOLD A1). */
+  movedSentinel: number | null
 }
 
 const CONTINUED = 'This session is being continued'
@@ -24,8 +26,14 @@ const SUMMARY_CLOSE = '</summary>'
  * trailer (`copy_trailers`) is cut; trailing blank lines are trimmed. The normalized body is the
  * lines joined by `\n` plus one final `\n`, or empty for an empty body (the same reading as the
  * fixture tool's reference detector and the helper, so the sha256 values agree).
+ *
+ * Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1): when `sentinel` is given and the
+ * first non-blank line after the `</summary>` line (or the text after `</summary>` on that same
+ * line) matches it, that line is appended to the body, and the rest after it goes on as
+ * installed-message text (a listed trailer is cut, as above). Only that one line moves: text
+ * after `</summary>` that is not the sentinel stays outside the body.
  */
-export function strip(raw: string, trailers: readonly string[] = []): Stripped {
+export function strip(raw: string, trailers: readonly string[] = [], sentinel?: RegExp): Stripped {
   const all = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
   let i = 0
   while (i < all.length) {
@@ -47,16 +55,29 @@ export function strip(raw: string, trailers: readonly string[] = []): Stripped {
     } else break
   }
   let lines: string[] = []
-  for (const line of all.slice(i)) {
+  let after: string[] | undefined
+  for (let j = i; j < all.length; j++) {
+    const line = all[j] ?? ''
     const at = line.indexOf(SUMMARY_CLOSE)
     if (at >= 0) {
       const head = line.slice(0, at)
       if (head.trim() !== '') lines.push(head)
+      after = [line.slice(at + SUMMARY_CLOSE.length), ...all.slice(j + 1)]
       break
     }
     lines.push(line)
   }
   lines = trimTrailingBlank(lines)
+  let movedSentinel: number | null = null
+  if (sentinel && after) {
+    const k = after.findIndex(l => l.trim() !== '')
+    const first = k >= 0 ? (after[k] ?? '') : undefined
+    // The line as is (no trim), as the scan reads lines inside the body.
+    if (first !== undefined && sentinel.test(first)) {
+      movedSentinel = lines.length
+      lines = trimTrailingBlank([...lines, first, ...after.slice(k + 1)])
+    }
+  }
   for (const t of trailers) {
     const joined = lines.join('\n')
     if (t !== '' && joined.endsWith(t)) {
@@ -64,7 +85,8 @@ export function strip(raw: string, trailers: readonly string[] = []): Stripped {
       break
     }
   }
-  return { lines, body: lines.length === 0 ? '' : lines.join('\n') + '\n' }
+  if (movedSentinel !== null && movedSentinel >= lines.length) movedSentinel = null
+  return { lines, body: lines.length === 0 ? '' : lines.join('\n') + '\n', movedSentinel }
 }
 
 function trimTrailingBlank(lines: string[]): string[] {
