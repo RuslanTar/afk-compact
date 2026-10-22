@@ -7,7 +7,7 @@
     "AT-WB-03",
     "AT-WB-04"
   ],
-  "note": "A watcher install with a unique canary in every place W-BETA B.3 names. The report is built from it, unpacked, and every canary (and the expanded $HOME, and each $SECRET{} value of the shared corpus) must have 0 hits in the zip. Canaries sit in the allowlisted streams (in fields the export must drop or hash), in the never-opened files (jobs.jsonl, evidence-index.tsv, queue-adds.jsonl, paths.jsonl), in the summary copy and the handoff, in the settings file and in the git remote. The account and host canaries need the process to see them: the case sets USER and LOGNAME, and the host canary comes from a `hostname` PATH stub (B.3 reads `hostname -s`), with STORE_TEST_HOSTNAME as the fallback for a helper that reads the host name another way (needs/fix-to-watch.md). The bucket is a topic bucket, so the ticket names no folder: `expect.identity_list` is the B.3 list for this install, and the `transform_only` canaries contain no identity string, so 0 hits for them proves the export transform, not the identity scan.",
+  "note": "A watcher install with a unique canary in every place W-BETA B.3 names. The report is built from it, unpacked, and every canary (and the expanded $HOME, and each $SECRET{} value of the shared corpus) must have 0 hits in the zip. Canaries sit in the allowlisted streams (in fields the export must drop or hash), in the never-opened files (jobs.jsonl, evidence-index.tsv, queue-adds.jsonl, paths.jsonl), in the summary copy and the handoff, in the settings file and in the git remote. The watcher files sit under the settings file's `log_dir` ($TMP/wb-canary-root01-logs, which also holds the config-path canary): `log_dir` is the watch folder `report` reads, so rows written under the default $WATCH would leave the bundle empty and every 0-hit check vacuous. The account and host canaries need the process to see them: the case sets USER and LOGNAME, and the host canary comes from a `hostname` PATH stub (B.3 reads `hostname -s`), with STORE_TEST_HOSTNAME as the fallback for a helper that reads the host name another way (needs/fix-to-watch.md). The bucket is a topic bucket, so the ticket names no folder: `expect.identity_list` is the B.3 list for this install, and the `transform_only` canaries contain no identity string, so 0 hits for them proves the export transform, not the identity scan.",
   "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
   "invoke": {
     "argv": [
@@ -71,7 +71,7 @@
       }
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001.classic.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001.classic.jsonl",
       "jsonl": [
         {
           "v": 1,
@@ -231,7 +231,7 @@
       ]
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
       "jsonl": [
         {
           "v": 1,
@@ -270,7 +270,7 @@
       ]
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001.alerts.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001.alerts.jsonl",
       "jsonl": [
         {
           "actor": "main",
@@ -301,7 +301,7 @@
       ]
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/compactions.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001/compactions.jsonl",
       "jsonl": [
         {
           "v": 1,
@@ -330,7 +330,7 @@
       ]
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/mod-alive.json",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001/mod-alive.json",
       "json": {
         "v": 1,
         "pid": 43210,
@@ -339,7 +339,7 @@
       }
     },
     {
-      "write": "$WATCH/version.json",
+      "write": "$TMP/wb-canary-root01-logs/version.json",
       "json": {
         "v": 1,
         "cc_version": "2.1.307",
@@ -349,7 +349,7 @@
       }
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/jobs.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001/jobs.jsonl",
       "jsonl": [
         {
           "v": 1,
@@ -364,11 +364,11 @@
       ]
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/evidence-index.tsv",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001/evidence-index.tsv",
       "content": "1a2b3c4d\t$TMP/wb-canary-evidence01/2026-10-21/app.log\tcopied\n"
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/queue-adds.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001/queue-adds.jsonl",
       "jsonl": [
         {
           "v": 1,
@@ -379,7 +379,7 @@
       ]
     },
     {
-      "write": "$WATCH/5e55a001-0c0f-4f1e-9a00-00000000a001/paths.jsonl",
+      "write": "$TMP/wb-canary-root01-logs/5e55a001-0c0f-4f1e-9a00-00000000a001/paths.jsonl",
       "content": "{\"path\": \"$TMP/wb-canary-evidence01/2026-10-21/app.log\"}\n"
     },
     {
