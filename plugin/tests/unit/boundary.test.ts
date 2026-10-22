@@ -294,14 +294,14 @@ test('AT-B-09: a nudged turn that ends aborted: no continue', { options: { preco
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-10: continue with the claim still free: fixed line + block, ≤6,500 chars (DP-14 (2)), claim prompt.submit', async ($, on) => {
+test('AT-B-10: continue with the claim still free: fixed line + block, ≤7,000 chars (compaction-rem-6), claim prompt.submit', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await nudgedTurn($, w)
   expect(w.submits.length).toBe(1)
   const text = w.submits[0] ?? ''
   expect(text.startsWith(`Note from the user's ${w.name} plugin: ${CONT}\n\nThe ${w.name} plugin adds this after compaction`)).toBe(true)
-  expect(text.length <= 6500).toBe(true)
+  expect(text.length <= 7000).toBe(true)
   const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
   expect(w.claims.get(nonce)).toBe('prompt.submit')
   expect(w.rowsOf('continue')[0]?.result).toBe('submitted')

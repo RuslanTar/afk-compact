@@ -13,7 +13,7 @@ import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
-import { prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { BLOCK_MAX, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -104,7 +104,10 @@ describe('AT-C-02 detector', () => {
 })
 
 const PREV = '~/.claude/handoffs/example-repo/LAB-123/' + 'p'.repeat(141 - '~/.claude/handoffs/example-repo/LAB-123/'.length)
+/** PKG-RUNTIME A.2: budgets render `@store@` with a 160-character root stand-in. */
+const STORE = '"' + '/' + 'r'.repeat(159) + '/scripts/' + NAME + '-store"'
 const WORST = {
+  store: STORE, idle_min: '49',
   nonce: 'a1b2c3d4', previous_copy: PREV, measured_at: '2026-10-21T04:40:00+03:00', session_id: '00000000-0000-4000-8000-000000000000',
   saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4',
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
@@ -114,14 +117,23 @@ const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'prod-forbid', 'prod-allow'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
-  'handoff-turn': ['submit', 'near', 'spent', 'imminent'],
+  'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
 }
 
+/**
+ * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
+ * exactly one of `prod-forbid`/`prod-allow` on the resume block, `idle` never with `midturn`,
+ * `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
+ */
 function combos(tags: Tag[]): Tag[][] {
-  const out: Tag[][] = [[]]
+  let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
+  const has = (c: Tag[], t: Tag) => c.includes(t)
+  if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
+  out = out.filter(c => !(has(c, 'idle') && has(c, 'midturn')) && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
 
@@ -151,12 +163,22 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('resume protocol ≤2,500 chars (DP-8 hard; ADVISORY above 2,000) for every tag combination the mod builds', () => {
-    // `[handoff]` and `[handoff-partial]` never come together (MOD-SPEC §3.4).
-    for (const tags of combos(['midturn', 'nonok', 'handoff', 'handoff-partial']).filter(t => !(t.includes('handoff') && t.includes('handoff-partial')))) {
+  test('resume protocol ≤3,000 chars (compaction-rem-6 hard; soft 2,500) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+    for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 2500).toBe(true)
+      expect(s.length <= 3000).toBe(true)
     }
+  })
+  test('AT-TX-11 (U half): a 3,000-char protocol and a 3,000-byte measured block go out untrimmed (≤6,500, BLOCK_MAX)', () => {
+    const protocol = 'p'.repeat(2999) + '\n'
+    const measured = Array.from({ length: 30 }, (_, i) => 'm'.repeat(98) + String(i % 10)).join('\n').slice(0, 3000)
+    const render = (m: string) => protocol + 'Measured facts (2026-10-22T05:00:00+03:00; saved copy of this summary: ' + PREV + '):\n' + m + '\n'
+    const block = fitBlock(render, measured)
+    expect(block).toBe(render(measured))
+    expect(block.length <= BLOCK_MAX && BLOCK_MAX === 6500).toBe(true)
+    // Over the total, whole re-measure lines go first, with a note.
+    const big = fitBlock(render, measured + '\n' + 'z'.repeat(600))
+    expect(big.length <= 6500 && big.includes('(+')).toBe(true)
   })
   test('the queue tag is applied when given (D-10: the mod gives it only with queue_cmd set)', () => {
     const t = text('checkpoint-nudge')

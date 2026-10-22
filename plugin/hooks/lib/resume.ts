@@ -9,8 +9,11 @@ import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 
-/** MOD-SPEC §3.4: total ≤6,000 chars (DP-8; never >10,000, the SessionStart cutoff). */
-export const BLOCK_MAX = 6000
+/**
+ * MOD-SPEC §3.4: total ≤6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
+ * a 3,000-byte measured block; never >10,000, the SessionStart cutoff).
+ */
+export const BLOCK_MAX = 6500
 
 /** `@handoff_finish@` when a raced draft has no safe finish command (its line says draft absent). */
 export const NO_FINISH = '(none)'
@@ -82,11 +85,18 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
     runtime.handoff_finish = present ? '`' + (h.finish ?? '') + '`' : NO_FINISH
   }
   if (remeasure === undefined) return assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
+  return fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
+}
+
+/**
+ * The block within `BLOCK_MAX`: whole re-measure lines are cut from the end, with a
+ * `(+N lines)` note, only while the rendered block is over the total.
+ */
+export function fitBlock(render: (remeasure: string) => string, remeasure: string, max = BLOCK_MAX): string {
   const lines = remeasure.split('\n')
-  let block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure }, store.drop)
-  for (let keep = lines.length - 1; block.length > BLOCK_MAX && keep >= 0; keep--) {
-    const cut = lines.slice(0, keep).concat(`(+${lines.length - keep} lines)`).join('\n')
-    block = assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: cut }, store.drop)
+  let block = render(remeasure)
+  for (let keep = lines.length - 1; block.length > max && keep >= 0; keep--) {
+    block = render(lines.slice(0, keep).concat(`(+${lines.length - keep} lines)`).join('\n'))
   }
   return block
 }
