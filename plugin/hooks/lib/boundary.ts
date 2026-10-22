@@ -34,6 +34,12 @@ export type BoundaryOpts = {
     /** `nativeCompactSeq` when scheduled: a native compaction since then makes it a second one. */
     seq: number
   }
+  /**
+   * The dispatch record already written for this compaction, when a native one started while it
+   * was written: the rerun after that one's end uses it (same nonce, same text), never a second
+   * record (REG-boundary-205, MOD-SPEC §3.1 step 0).
+   */
+  prepared?: { nonce: string; text: string; pref: ResumePref }
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -194,25 +200,42 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
   if (!ah && (tokens === undefined || tokens < eff.target)) return
   s.busy = true
   try {
-    // The nonce the nudge named in `@queue_add@` belongs to this cycle's compaction.
-    const named = s.nudgeNonce
-    s.nudgeNonce = undefined
-    const nonce = named !== undefined && !(await dispatchExists(d, sid, named)) ? named : await drawNonce(n => dispatchExists(d, sid, n))
-    const prev = await prevCopy(d, sid)
-    const cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
-    const measured = d.cfg.measured_block && cp ? cp.measured_block : null
-    const { text, tags } = await mainText(d, nonce, false, prev, measured, ah?.path)
-    const pref = await resumePref(d, sid)
-    // The checkpoint above can take seconds: a native compaction may have started or run since.
-    if (await stopForNative(d, sid, opts)) return
-    s.selfNonces.add(nonce)
-    await writeDispatch(d, {
-      sid, nonce, agentId: null, trigger: 'plugin', channel: 'mod-self', resumePref: pref, midturn: false, tags, text,
-      ...(ah ? { handoffHt: ah.ht } : {}),
-    })
-    const t0 = await d.now()
-    // Once more after the dispatch write, with no await between this check and the call.
-    const late = nativeCheck(d, opts)
+    let nonce: string
+    let text: string
+    let pref: ResumePref
+    let t0: number
+    if (opts.prepared) {
+      ({ nonce, text, pref } = opts.prepared)
+      t0 = await d.now()
+    } else {
+      // The nonce the nudge named in `@queue_add@` belongs to this cycle's compaction.
+      const named = s.nudgeNonce
+      s.nudgeNonce = undefined
+      nonce = named !== undefined && !(await dispatchExists(d, sid, named)) ? named : await drawNonce(n => dispatchExists(d, sid, n))
+      const prev = await prevCopy(d, sid)
+      const cp = await checkpoint(d, sid, nonce, d.cfg.measured_block)
+      const measured = d.cfg.measured_block && cp ? cp.measured_block : null
+      const main = await mainText(d, nonce, false, prev, measured, ah?.path)
+      text = main.text
+      pref = await resumePref(d, sid)
+      t0 = await d.now()
+      // The checkpoint above can take seconds: a native compaction may have started or run since.
+      // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
+      // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205).
+      if (await stopForNative(d, sid, opts)) {
+        s.nudgeNonce = named
+        return
+      }
+      s.selfNonces.add(nonce)
+      await writeDispatch(d, {
+        sid, nonce, agentId: null, trigger: 'plugin', channel: 'mod-self', resumePref: pref, midturn: false, tags: main.tags, text,
+        ...(ah ? { handoffHt: ah.ht } : {}),
+      })
+    }
+    // Once more after the dispatch write, with no await between this check and the call. A
+    // native compaction that started during the write: the rerun after its end reuses this
+    // record (`prepared`), so a skipped native one leaves no orphan and no second record.
+    const late = nativeCheck(d, { ...opts, prepared: { nonce, text, pref } })
     if (late !== undefined) {
       if (late === 'ran') await log(d, sid, 'skip', { why: 'compacted', ht: ah?.ht ?? null })
       return

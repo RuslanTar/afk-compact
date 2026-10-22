@@ -14,7 +14,7 @@ import type { Deps } from '../../hooks/lib/deps'
 import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, submitPending } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { BRAND } from './_gen/brand.gen'
-import { HOME, SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
+import { HOME, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 const TURN = hasAsset('handoff-turn')
 const C = maxCalls() ?? 0
@@ -890,6 +890,79 @@ test('CR-F17 (REG-register-42): a peer hook beneath rewrites our handoff-turn pr
   // Our submit is settled: the user's next turn is theirs (halt clears), not taken as ours.
   await w.turnStart($, 'what now?')
   expect(w.rowsOf('halt').filter(r => r.active === false).length).toBe(1)
+})
+
+test('REG-boundary-205 (CR-F19): a native compaction that starts during the post-handoff checkpoint and ends skipped: no dispatch before it, the rerun uses the nudge\'s nonce, one record', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  const r = await lastCycleTurn($, w)
+  if (!TURN) return
+  const named = /--nonce ([0-9a-f]{8})/.exec(r.context?.[0] ?? '')?.[1] ?? ''
+  expect(named).not.toBe('')
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (sub !== 'checkpoint' || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    w.compactMode = { skip: 'nothing to compact' }
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  expect(p).toBeDefined()
+  const selfDispatch = () => w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self')
+  expect(selfDispatch().length).toBe(0)
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  w.compactMode = 'ok'
+  await w.advance(60000)
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto', undefined])
+  expect(selfDispatch().map(c => w.flag(c, '--nonce'))).toEqual([named])
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(named)
+})
+
+test('REG-boundary-205 (CR-F19): a native compaction that starts while the dispatch record is written and ends skipped: the rerun reuses that record (one dispatch, same nonce and text)', async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  await w.turnEnd($, 'Handoff written.')
+  let release!: () => void
+  let p: Promise<unknown> | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub !== 'dispatch' || !args.includes('mod-self') || p !== undefined) return
+    w.compactGate = new Promise<void>(res => { release = res })
+    w.compactMode = { skip: 'nothing to compact' }
+    p = raiseCompact($, { trigger: 'auto' })
+  }
+  await w.advance(500)
+  await w.advance(1000)
+  expect(p).toBeDefined()
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto'])
+  w.atHelper = undefined
+  w.compactGate = undefined
+  release()
+  await p
+  w.compactMode = 'ok'
+  await w.advance(60000)
+  const self = w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self')
+  expect(self.length).toBe(1)
+  const nonce = w.flag(self[0], '--nonce') ?? ''
+  expect(w.compacts.map(c => c.trigger)).toEqual(['auto', undefined])
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(nonce)
+  expect(w.rowsOf('compacted').filter(r => r.nonce === nonce && r.skip === null && r.handoff_ht === ht).length).toBe(1)
+  expect(w.rowsOf('skip').length).toBe(0)
 })
 
 test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt runs after it with no nudge', async ($, on) => {
