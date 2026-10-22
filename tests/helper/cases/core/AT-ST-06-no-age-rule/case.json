@@ -1,0 +1,37 @@
+{
+ "id": "AT-ST-06 (no age rule)",
+ "note": "C-STORE RRP-05 'no age limit' / MOD-SPEC §5.8 (CORE-07): the unproven stash of a live session (pid 1 with its own start time, no ended- record) whose files are 30 days old is untouched by every pass (B's SessionStart, Stop, SessionEnd and the user-run reconcile --orphans --full); and reconcile.pm, copies.pm and postcompact.pm hold no file-time test",
+ "tz": "Etc/GMT-3",
+ "vars": {"A": "a6a6a6a6-1111-4222-8333-444444444444"},
+ "steps": [
+  {"name": "no file-time test", "lib": "no_age_rule", "args": {"files": ["lib/reconcile.pm", "lib/copies.pm", "lib/postcompact.pm"]}},
+  {"name": "A (live): a stash, its meta and its marker, 30 days old on disk",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$ROOT/.sessions/by-pid/1-1.live-a6a6a6a6.json",
+     "json": {"pid": 1, "pid_lstart": "$LSTART1", "host": "$HOST", "session_id": "$A", "cwd": "$TMP/work", "source": "startup", "ts": "2026-09-21T14:00:00+03:00"}},
+    {"write": "$WATCH/$A/pending/h60aaa.post.md", "text": "<summary>\n# LAB-60 OLDBODY\n</summary>", "mode": "0600", "mtime_ago_s": 2592000},
+    {"write": "$WATCH/$A/pending/h60aaa.post.json", "mode": "0600", "mtime_ago_s": 2592000,
+     "json": {"id6": "h60aaa", "nonce": null, "scope": "unknown", "agent": null, "trigger": "manual", "cwd": "$TMP/work", "transcript": "$TMP/proj/$A.jsonl",
+              "tokens": null, "precomputed": false, "ts": "2026-09-21T14:05:00.800+03:00", "dispatch": null, "deferred": null, "scope_deferred": true, "stale": false, "marker": null, "join": null}},
+    {"write": "$WATCH/.orphans/$A", "text": "", "mtime_ago_s": 2592000}
+   ]},
+  {"name": "B: SessionStart(startup)", "now": "2026-10-21T14:20:00+03:00",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$A/pending/h60aaa.post.md", "count": 1}]}},
+  {"name": "B: Stop", "now": "2026-10-21T14:21:00+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$A/pending/h60aaa.post.md", "count": 1}]}},
+  {"name": "B: reconcile --orphans --full", "now": "2026-10-21T14:22:00+03:00",
+   "argv": ["reconcile", "--sid", "$SID", "--orphans", "--full"],
+   "expect": {"exit": 0, "stdout_re": "; orphans finished=0 kept=0 left=0\\n$", "files": [{"path": "$WATCH/$A/pending/h60aaa.post.md", "count": 1}]}},
+  {"name": "B: SessionEnd", "now": "2026-10-21T14:23:00+03:00",
+   "argv": ["hook", "SessionEnd"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionEnd", "reason": "other"},
+   "expect": {"exit": 0,
+    "files": [{"path": "$WATCH/$A/pending/h60aaa.post.md", "count": 1}, {"path": "$WATCH/.orphans/$A", "count": 1}, {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 0}],
+    "rows_absent": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished"}, {"file": "$WATCH/$A.classic.jsonl", "ev": "copy"}]}}
+ ]
+}

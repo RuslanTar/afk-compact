@@ -3,6 +3,7 @@ package rc;
 # checks, the row envelope and once-per-session markers. Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 our %R;
 
@@ -43,17 +44,66 @@ sub claude {
     return $R{claude};
 }
 
-sub cc_version {
-    return $R{cc_version} if exists $R{cc_version};
-    my $v;
-    if (defined $R{watch}) {
+# finished_by() -> the finisher's sid8 while this call runs reconcile for another session
+# (the cross-session finish, MOD-SPEC §5.8), else undef. Every row written then carries it.
+sub finished_by { $R{finished_by} }
+
+# as_session(S, {finished_by => sid8, claude => {pid, lstart} | undef}, fn) -> fn's value:
+# runs fn in session S's context (S's sid dir and streams), the claude process taken from
+# S's newest per-process record (pid null when there is none); the caller's context is
+# restored afterwards, also when fn dies.
+sub as_session {
+    my ($sid, $o, $fn) = @_;
+    my @keys = qw(sid claude finished_by cc_dispatch cc_transcript cc_version cc_version_src);
+    my %save = map { ($_ => $R{$_}) } grep { exists $R{$_} } @keys;
+    delete @R{@keys};
+    $R{sid} = $sid;
+    $R{finished_by} = $o->{finished_by};
+    my $c = $o->{claude};
+    $R{claude} = { pid => (ref $c eq 'HASH' ? $c->{pid} : undef), lstart => (ref $c eq 'HASH' ? $c->{lstart} : undef), found => 0 };
+    my @r = eval { $fn->() };
+    my $err = $@;
+    delete @R{@keys};
+    @R{ keys %save } = values %save;
+    die $err if $err;
+    return wantarray ? @r : $r[0];
+}
+
+# cc_version() / cc_version_src() (PKG-RUNTIME D.2, MOD-SPEC §2.5): the first source present
+# wins: `mod` the matched dispatch record's cc_version (a mod-channel record: $.session.version(),
+# exact for the compaction; note_dispatch), `exec` the CLAUDE_CODE_EXECPATH basename (exact for
+# this process), `transcript` the version of the newest row in the last 64 KB of the payload's
+# transcript (exact for this session; note_transcript), `mirror` <watch>/version.json
+# lastVersion (machine-wide, the last version any session's mod saw); otherwise undef.
+sub cc_version { _cc(); return $R{cc_version} }
+sub cc_version_src { _cc(); return $R{cc_version_src} }
+
+sub _cc {
+    return if exists $R{cc_version};
+    my ($v, $src);
+    my $d = $R{cc_dispatch};
+    if (ref $d eq 'HASH' && ($d->{channel} // '') =~ /^mod-/ && _ver_ok($d->{cc_version})) { ($v, $src) = ($d->{cc_version}, 'mod') }
+    elsif (defined(my $e = exec_version())) { ($v, $src) = ($e, 'exec') }
+    elsif (defined $R{cc_transcript} && defined(my $t = transcript::version($R{cc_transcript}))) { ($v, $src) = ($t, 'transcript') }
+    elsif (defined $R{watch}) {
         my $raw = util::read_file("$R{watch}/version.json");
         my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
-        $v = $j->{lastVersion} if ref $j eq 'HASH' && defined $j->{lastVersion} && !ref $j->{lastVersion};
+        ($v, $src) = ($j->{lastVersion}, 'mirror') if ref $j eq 'HASH' && _ver_ok($j->{lastVersion});
     }
-    $v //= exec_version();
     $R{cc_version} = $v;
-    return $v;
+    $R{cc_version_src} = defined $v ? $src : undef;
+}
+
+sub _ver_ok { my ($v) = @_; return defined $v && !ref $v && $v =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/ ? 1 : 0 }
+
+# The dispatch record this call matched (a mod record is source 1) and the payload's
+# transcript path (source 3); each resets the cached value.
+sub note_dispatch { my ($rec) = @_; $R{cc_dispatch} = $rec; delete @R{qw(cc_version cc_version_src)} }
+sub note_transcript {
+    my ($p) = @_;
+    return unless defined $p && !ref $p && $p ne '';
+    $R{cc_transcript} = $p;
+    delete @R{qw(cc_version cc_version_src)};
 }
 
 # C1h hint: basename of CLAUDE_CODE_EXECPATH when it looks like a version.
@@ -81,15 +131,19 @@ sub envelope {
     my (%o) = @_;
     my $c = claude();
     return { sid => $R{sid}, actor => $o{actor} // $R{actor}, writer => $o{writer} // $R{writer},
-             pid => $c->{pid}, cc_version => cc_version(), turn_seq => undef, ts => $o{ts} };
+             pid => $c->{pid}, cc_version => (exists $o{cc_version} ? $o{cc_version} : cc_version()), turn_seq => undef, ts => $o{ts} };
 }
 
-# emit(ev, fields, stream => classic|mod|compactions|<path>, actor => .., ts => ISO)
+# emit(ev, fields, stream => classic|mod|compactions|<path>, actor => .., ts => ISO, cc_version => V)
 # (ts: a row written later for an earlier event, e.g. reconcile's rollup of a deferred save)
 sub emit {
     my ($ev, $fields, %o) = @_;
     my $path = stream_path($o{stream} // 'classic');
     return 0 unless defined $path;
+    if (defined $R{finished_by}) {
+        if (ref $fields eq 'HASH') { $fields = { %$fields, finished_by => $R{finished_by} } }
+        else { $fields = [@{ $fields || [] }, finished_by => $R{finished_by}] }
+    }
     my $row = log::row($ev, $fields, envelope(%o));
     my $ok = eval { log::append($path, $row); 1 };
     return $ok ? 1 : 0;
@@ -138,6 +192,13 @@ sub preamble {
         } elsif ($n =~ /^([a-z_]+): HOME is not the account home, safe value used$/) {
             emit('config_note', [key => $1, note => 'home-not-account']) if once("config_note.$1.home");
         }
+    }
+    # S-SETTINGS B: an invalid unattended_prod_reads value (forbid used) or a dropped
+    # prod_patterns entry, once per session each; the row names the position, never the pattern.
+    my $p = eval { settings::prod($R{settings}) };
+    for my $x (@{ $p ? $p->{invalid} : [] }) {
+        my $tag = defined $x->{index} ? "$x->{key}.$x->{index}" : $x->{key};
+        emit('config_invalid', [key => $x->{key}, (defined $x->{index} ? (index => $x->{index}) : ())]) if once("config_invalid.$tag");
     }
 }
 

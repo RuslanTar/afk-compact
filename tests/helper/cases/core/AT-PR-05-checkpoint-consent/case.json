@@ -1,0 +1,31 @@
+{
+ "id": "AT-PR-05 (checkpoint consent field)",
+ "note": "S-SETTINGS B / MOD-SPEC §9.3 (CORE-15, mod-to-core §6): the checkpoint JSON carries consent {unattended_prod_reads: allow|forbid}, the helper's own reading of the consent key: the settings file's allow (trimmed, case-folded) gives allow; no value, another value, the env or the flag alone give forbid; under a foreign CLAUDE_CONFIG_DIR the safe value forbid. The mod keeps [prod-allow] only when this says allow",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "no value: forbid",
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c01", "--budget-ms", "10000", "--cwd", "$TMP"],
+   "expect": {"exit": 0, "json": {"consent.unattended_prod_reads": "forbid"},
+    "files": [{"path": "$WATCH/$SID/checkpoint/1a2b3c01.json", "json": {"consent": {"unattended_prod_reads": "forbid"}}}]}},
+  {"name": "settings file allow",
+   "options": {"unattended_prod_reads": " Allow "},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c02", "--budget-ms", "10000", "--cwd", "$TMP"],
+   "expect": {"exit": 0, "json": {"consent.unattended_prod_reads": "allow"},
+    "files": [{"path": "$WATCH/$SID/checkpoint/1a2b3c02.json", "json": {"consent": {"unattended_prod_reads": "allow"}}}]}},
+  {"name": "another value: forbid",
+   "options": {"unattended_prod_reads": "yes"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c03", "--budget-ms", "10000", "--cwd", "$TMP"],
+   "expect": {"exit": 0, "json": {"consent.unattended_prod_reads": "forbid"}}},
+  {"name": "env and flag alone: forbid",
+   "options": {"unattended_prod_reads": ""},
+   "env": {"CLAUDE_PLUGIN_OPTION_UNATTENDED_PROD_READS": "allow"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c04", "--budget-ms", "10000", "--cwd", "$TMP", "--unattended-prod-reads", "allow"],
+   "expect": {"exit": 0, "json": {"consent.unattended_prod_reads": "forbid"}}},
+  {"name": "foreign config dir: safe value",
+   "setup": [{"write": "$TMP/cfg/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"unattended_prod_reads": "allow"}}}}}],
+   "env": {"CLAUDE_CONFIG_DIR": "$TMP/cfg"},
+   "argv": ["checkpoint", "--sid", "s-foreign", "--nonce", "1a2b3c05", "--budget-ms", "10000", "--cwd", "$TMP"],
+   "expect": {"exit": 0, "json": {"consent.unattended_prod_reads": "forbid"}}}
+ ]
+}

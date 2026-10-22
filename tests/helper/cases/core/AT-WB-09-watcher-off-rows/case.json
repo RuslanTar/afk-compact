@@ -1,0 +1,24 @@
+{
+ "id": "AT-WB-09 (watcher off stops stop_failure and permission_denied)",
+ "note": "W-BETA A / WATCHER §8 item 6 off switch (CONFIG-REVIEW BG-29, CORE-13): with watcher = off (trimmed and folded as the watcher seam reads it) StopFailure and PermissionDenied write no row; with the default (shadow) each writes its one core row",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "watcher off: StopFailure", "options": {"watcher": " OFF "},
+   "argv": ["hook", "StopFailure"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "StopFailure", "error": "rate_limit"},
+   "expect": {"exit": 0, "stdout": ""}},
+  {"name": "watcher off: PermissionDenied",
+   "argv": ["hook", "PermissionDenied"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "PermissionDenied", "tool_name": "Bash", "reason": "denied by rule"},
+   "expect": {"exit": 0, "stdout": "",
+    "rows_absent": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "stop_failure"}, {"file": "$WATCH/$SID.classic.jsonl", "ev": "permission_denied"}]}},
+  {"name": "watcher shadow: one row each", "options": {"watcher": "shadow"},
+   "argv": ["hook", "StopFailure"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "StopFailure", "error": "rate_limit"},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "stop_failure", "count": 1}]}},
+  {"argv": ["hook", "PermissionDenied"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "PermissionDenied", "tool_name": "Bash", "reason": "denied by rule"},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "permission_denied", "count": 1}]}}
+ ]
+}

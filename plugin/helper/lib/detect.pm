@@ -7,15 +7,21 @@ package detect;
 # `Summary:` line, a `<summary>` tag, and blank lines between them), cut before
 # the first `</summary>` when present, else cut installed-message trailers
 # (spec `copy_trailers`, canary-baseline `copy_trailers`), trim trailing blank
+# lines. Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1): when the first non-blank
+# text after `</summary>` (the rest of that line, else the next non-blank line) matches
+# `sentinel_re`, that line is appended as the body's last line and the lines after it
+# follow as trailers (listed ones cut, never the moved sentinel); any other first line
+# keeps everything after the tag outside the body. Then trim trailing blank
 # lines; line ends `\n`; the body lines joined by `\n` plus one final `\n`
 # (empty body: empty string), the reading of tests/fixtures/summaries/expected.tsv
 # and hooks/lib/normalize.ts. Marker: anchored grammar in the first 5 body lines.
 # Sentinel: the last 3 non-blank lines.
 use strict;
 use warnings;
+use utf8;
 
-my @TRAILERS;
-my $TRAILERS_LOADED;
+our @TRAILERS;
+our $TRAILERS_LOADED;
 sub _trailers {
     return @TRAILERS if $TRAILERS_LOADED;
     $TRAILERS_LOADED = 1;
@@ -39,7 +45,8 @@ sub _chars {
     return $t;
 }
 
-# normalize(text) -> (\@body_lines, $normalized)
+# normalize(text) -> (\@body_lines, $normalized, $moved): $moved = the body index of a sentinel
+# moved from after `</summary>`, else undef
 sub normalize {
     my ($text) = @_;
     $text = _chars($text);
@@ -65,36 +72,50 @@ sub normalize {
         last;
     }
     my @b = @l[$i .. $#l];
-    my $cut;
+    my ($cut, $moved);
     for (my $j = 0; $j <= $#b; $j++) {
-        if ($b[$j] =~ m{^(.*?)</summary>}) {
-            my $before = $1;
+        if ($b[$j] =~ m{^(.*?)</summary>(.*)$}) {
+            my ($before, $tail) = ($1, $2);
+            my @after = (($tail =~ /\S/ ? ($tail) : ()), @b[$j + 1 .. $#b]);
+            shift @after while @after && $after[0] =~ /^\s*$/;
             $cut = 1;
             splice(@b, $j);
             push @b, $before if $before =~ /\S/;
+            if (@after && _rstrip($after[0]) =~ spec::re('sentinel_re')) {
+                pop @b while @b && $b[-1] =~ /^\s*$/;
+                $moved = scalar @b;
+                push @b, @after;
+            }
             last;
         }
     }
-    if (!$cut && (my @tr = _trailers())) {
-        my $j = $#b;
-        while ($j >= 0) {
-            if ($b[$j] =~ /^\s*$/) { $j--; next }
-            last unless grep { $b[$j] =~ $_ } @tr;
-            splice(@b, $j);
-            $j--;
-        }
-    }
+    _cut_trailers(\@b, 0) if !$cut;
+    _cut_trailers(\@b, $moved + 1) if defined $moved;
     pop @b while @b && $b[-1] =~ /^\s*$/;
-    return (\@b, @b ? join("\n", @b) . "\n" : '');
+    return (\@b, @b ? join("\n", @b) . "\n" : '', $moved);
+}
+
+# Cut listed installed-message trailers from the end of the body, never at or above index keep.
+sub _cut_trailers {
+    my ($b, $keep) = @_;
+    my @tr = _trailers() or return;
+    my $j = $#$b;
+    while ($j >= $keep) {
+        if ($b->[$j] =~ /^\s*$/) { $j--; next }
+        last unless grep { $b->[$j] =~ $_ } @tr;
+        splice(@$b, $j);
+        $j--;
+    }
 }
 
 sub _rstrip { my $s = $_[0]; $s =~ s/\s+$//; return $s }
 
 # scan(text) -> {lines, normalized, sha256, marker_line, nonce, scope,
-#   sentinel_from_end, sentinel_nonce, has_main_heading, chars}
+#   sentinel_from_end, sentinel_nonce, sentinel_place (inside | after-close | undef),
+#   has_main_heading, chars}
 sub scan {
     my ($text) = @_;
-    my ($b, $norm) = normalize($text);
+    my ($b, $norm, $moved) = normalize($text);
     my $mre = spec::re('marker_re');
     my $sre = spec::re('sentinel_re');
     my %r = (lines => $b, normalized => $norm, chars => length($norm));
@@ -111,7 +132,11 @@ sub scan {
         next if $b->[$j] =~ /^\s*$/;
         $k++;
         my $x = _rstrip($b->[$j]);
-        if ($x =~ $sre) { @r{qw(sentinel_from_end sentinel_nonce)} = ($k, $1); last }
+        if ($x =~ $sre) {
+            @r{qw(sentinel_from_end sentinel_nonce)} = ($k, $1);
+            $r{sentinel_place} = (defined $moved && $j == $moved) ? 'after-close' : 'inside';
+            last;
+        }
     }
     my @heads = spec::list('sections_main');
     my $first = $heads[0];
@@ -119,6 +144,15 @@ sub scan {
         $r{has_main_heading} = (grep { index($_, $first) == 0 } @$b) ? 1 : 0;
     }
     return \%r;
+}
+
+# acuity(scan) -> the Acuity word of a shaped summary (spec acuity_re, T-TEXT E6), or -
+our $ACUITY_RE = '(?:^|· )Acuity: (stable|watch|unstable)\b';
+sub acuity {
+    my ($s) = @_;
+    my $re = spec::has('acuity_re') ? spec::re('acuity_re') : do { my $x = $ACUITY_RE; qr/$x/ };
+    for my $l (@{ $s->{lines} || [] }) { return $1 if $l =~ $re }
+    return '-';
 }
 
 # verdict(scan, %ctx) -> verdict string (first match of the MOD-SPEC §5.1 table)

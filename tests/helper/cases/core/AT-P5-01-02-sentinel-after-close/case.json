@@ -1,0 +1,15 @@
+{
+ "id": "AT-P5-01, AT-P5-02 (shapes)",
+ "note": "P5-FOLD A1 / MOD-SPEC §5.1 (CORE-05): the first non-blank text after </summary> (the rest of that line, else the next non-blank line) that matches sentinel_re is moved into the body as its last line, so a summary ending '</summary>' + sentinel reads ok with sentinel_place after-close; another nonce there still reads truncated; a non-sentinel line first keeps everything outside (truncated, no sentinel); an unlisted line after the moved sentinel reads ok-trailer; marker absent stays unshaped; a sentinel before the tag is inside. The normalized body ends with the sentinel line (step 2)",
+ "steps": [
+  {"name": "shapes", "lib": "detect_tsv", "args": {"tsv": "$CASE/s/expected.tsv"}},
+  {"name": "the moved sentinel is the body's last line in the saved copy",
+   "setup": [{"dispatch": {"nonce": "5e6f7081", "actor": "a9a00b3f363327444", "channel": "mod-hook", "trigger": "auto", "age_s": 5, "midturn": false}}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "PostCompact", "trigger": "auto",
+                  "compact_summary": "<summary>\n⟪$BRAND v1 n=5e6f7081 s=sub⟫\n## Task as assigned: \"count rows\"\n## Next action\nreturn the report\n</summary>\n⟪/$BRAND n=5e6f7081⟫\n"},
+   "expect": {"exit": 0,
+     "files": [{"path": "$ROOT/*/*/compact/subagents/*.md", "count": 1, "has": ["return the report\\n⟪/$BRAND n=5e6f7081⟫\\n\\z"]}],
+     "rows": [{"file": "$WATCH/$SID/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"nonce": "5e6f7081", "verdict": "ok", "sentinel_place": "after-close"}}]}}
+ ]
+}

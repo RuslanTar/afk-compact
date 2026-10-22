@@ -3,8 +3,9 @@ package transcript;
 # Only ids, counts, flags and timestamps leave this module; text is read in memory.
 use strict;
 use warnings;
+use utf8;
 
-# boundary(line) -> {uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed} or undef
+# boundary(line) -> {uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed, version} or undef
 sub boundary {
     my ($line) = @_;
     return undef unless index($line, 'compact_boundary') >= 0;
@@ -13,7 +14,81 @@ sub boundary {
     my $m = ref $j->{compactMetadata} eq 'HASH' ? $j->{compactMetadata} : {};
     return { uuid => $j->{uuid}, ts => $j->{timestamp}, epoch => util::parse_iso($j->{timestamp} // '') // 0,
              trigger => $m->{trigger}, pre => $m->{preTokens}, post => $m->{postTokens},
-             duration_ms => $m->{durationMs}, precomputed => ($m->{precomputed} ? 1 : 0) };
+             duration_ms => $m->{durationMs}, precomputed => ($m->{precomputed} ? 1 : 0),
+             version => ((defined $j->{version} && !ref $j->{version}) ? $j->{version} : undef) };
+}
+
+# The native idle-compaction notices (IC-1 D1): a system row whose content starts with one of
+# these prefixes, after a main boundary row, marks that compaction as idle. The prefixes come
+# from canary-baseline.json c8.idle_prefixes (tools/canary-baseline, C8 counts them in the
+# binary); the literals are the fallback for a baseline without them. Only the prefix is
+# matched; no text leaves this module.
+our %IDLE_FALLBACK = (notice => 'Compacted while idle', return => 'Compacted using a summary written while you were away');
+our $IDLE_PREFIXES;
+sub idle_prefixes {
+    return $IDLE_PREFIXES if $IDLE_PREFIXES;
+    my %p = %IDLE_FALLBACK;
+    my $raw = util::read_file(ctx::asset_path('canary-baseline.json'));
+    my $b = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    my $ip = ref $b eq 'HASH' && ref $b->{c8} eq 'HASH' ? $b->{c8}{idle_prefixes} : undef;
+    if (ref $ip eq 'HASH') {
+        for my $k (keys %IDLE_FALLBACK) { $p{$k} = $ip->{$k} if defined $ip->{$k} && !ref $ip->{$k} && $ip->{$k} ne '' }
+    }
+    return $IDLE_PREFIXES = \%p;
+}
+
+# idle_notice(line) -> 'notice' | 'return' for a system row whose content starts with a native
+# idle prefix, else undef
+sub idle_notice {
+    my ($line) = @_;
+    return undef unless index($line, '"system"') >= 0;
+    my $p = idle_prefixes();
+    my @hit = grep { index($line, $p->{$_}) >= 0 } sort keys %$p;
+    return undef unless @hit;
+    my $j = eval { jsonc::decode($line) };
+    return undef unless ref $j eq 'HASH' && ($j->{type} // '') eq 'system' && defined $j->{content} && !ref $j->{content};
+    for my $k (@hit) { return $k if index($j->{content}, $p->{$k}) == 0 }
+    return undef;
+}
+
+# The engine's closing sentences of a transcript summary row (not in a PostCompact
+# compact_summary, so not in a copy): cut from the row's end before its body sha is taken
+# (fix-escalations 1, option (b): this reader's own cut; the shared copy_trailers lists stay).
+our @ENGINE_TRAILERS = (
+    qr/^If you need specific details from before compaction \(/,
+    qr/^Continue the conversation from where it left off without asking/,
+    qr/^The messages after this summary are the most recent messages from before compaction/,
+);
+
+# summary_facts(line) -> {n => marker nonce | undef, h => normalized-body sha256} for an
+# isCompactSummary user row, else undef. In memory only: no text leaves (C-STORE D5 step 1).
+sub summary_facts {
+    my ($line) = @_;
+    return undef unless index($line, 'isCompactSummary') >= 0;
+    my $j = eval { jsonc::decode($line) };
+    return undef unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user' && $j->{isCompactSummary};
+    my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+    my $text = !ref $c ? $c : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : undef;
+    return undef unless defined $text;
+    my @l = split /\n/, $text, -1;
+    while (@l && ($l[-1] =~ /^\s*$/ || grep { $l[-1] =~ $_ } @ENGINE_TRAILERS)) { pop @l }
+    my $s = detect::scan(join("\n", @l));
+    return { n => $s->{nonce}, h => sha::hex256($s->{normalized}) };
+}
+
+# version(path) -> the Claude Code version of the newest row that has one in the last 64 KB
+# (PKG-RUNTIME D.2 source 3), or undef
+sub version {
+    my ($path) = @_;
+    return undef unless defined $path && -f $path;
+    my $tail = util::read_tail($path, 64 * 1024) // return undef;
+    for my $line (reverse split /\n/, $tail) {
+        next unless index($line, '"version"') >= 0;
+        my $j = eval { jsonc::decode($line) };
+        next unless ref $j eq 'HASH' && defined $j->{version} && !ref $j->{version};
+        return $j->{version} if $j->{version} =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/;
+    }
+    return undef;
 }
 
 # boundaries(path [, tail => bytes]) -> [{uuid, ts, epoch, trigger, pre, post, duration_ms, precomputed}]

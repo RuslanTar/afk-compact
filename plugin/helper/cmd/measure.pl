@@ -3,6 +3,7 @@
 #   measure <handoff> [...]                           -> lib/skills/measure_handoff (WP-skills)
 use strict;
 use warnings;
+use utf8;
 
 package cmd_measure;
 

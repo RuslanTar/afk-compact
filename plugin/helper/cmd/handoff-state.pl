@@ -13,6 +13,7 @@
 #                                                 and nothing was staged
 use strict;
 use warnings;
+use utf8;
 
 package cmd_handoff_state;
 

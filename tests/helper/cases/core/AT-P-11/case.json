@@ -1,10 +1,32 @@
 {
  "id": "AT-P-11",
- "note": "RUNTIME AT-P-11 / ROOT-RULINGS R-5: every use or require in plugin/helper is on the perl-base floor, a helper library, or (Digest::SHA, Time::HiRes) inside an eval with a fallback",
+ "note": "RUNTIME AT-P-11 / ROOT-RULINGS R-5 / PKG-RUNTIME B.2 (CORE-03): every use or require in plugin/helper is on the perl-base floor, a helper library, or (Digest::SHA, Time::HiRes) inside an eval with a fallback (L1); no implicit load the floor image lacks: %+ %- $+{ $-{, \\N{NAME}, \\p{}, use open, Encode:: (L2); no version above the floor (use v5.N, post-5.28 features, builtin::) (L3). Each hit carries its reason and its fix. Step 1 lints a fixture tree with one hit per rule; step 2 the real tree, where lib/watch/shape.pm still uses %+ until WCH-03 (PKG-RUNTIME B.5) changes it to numbered captures",
  "steps": [
   {
+   "name": "fixture: one hit per rule, each with reason and fix",
    "lib": "floor_lint",
-   "args": {}
+   "args": {
+    "root": "$CASE/bad",
+    "want": [
+     "^cmd/bad\\.pl:4: use JSON::PP is not on the perl-base 5\\.28 \\(Debian 10\\) floor list\\. Fix: ",
+     "^cmd/bad\\.pl:5: require \"nolib\\.pm\" is not a helper library\\. Fix: ",
+     "^cmd/bad\\.pl:6: %\\+ / %- load Tie::Hash::NamedCapture, which perl-base 5\\.28 \\(Debian 10\\) lacks\\. Fix: numbered captures \\(\\$1, \\$2\\)\\.$",
+     "^cmd/bad\\.pl:7: %\\+ / %- load Tie::Hash::NamedCapture",
+     "^cmd/bad\\.pl:8: \\\\N\\{NAME\\} loads charnames, which perl-base trims\\. Fix: ",
+     "^cmd/bad\\.pl:9: \\\\p\\{\\.\\.\\} / \\\\P\\{\\.\\.\\} load Unicode property tables",
+     "^cmd/bad\\.pl:10: use open is not on the perl-base 5\\.28 \\(Debian 10\\) floor list",
+     "^cmd/bad\\.pl:10: use open loads open\\.pm and the Encode layers, not on the floor\\. Fix: ",
+     "^cmd/bad\\.pl:11: Encode is not in perl-base\\. Fix: ",
+     "^cmd/bad\\.pl:12: use v5\\.36 needs perl 5\\.36, above the floor 5\\.28\\. Fix: ",
+     "^cmd/bad\\.pl:13: feature 'signatures' is newer than perl 5\\.28\\. Fix: ",
+     "^cmd/bad\\.pl:14: builtin:: functions need perl 5\\.36, above the floor 5\\.28\\. Fix: "
+    ]
+   }
+  },
+  {
+   "name": "plugin/helper",
+   "lib": "floor_lint",
+   "args": {"known": {"lib/watch/shape.pm": "WCH-03 changes %+ to numbered captures, PKG-RUNTIME B.5"}}
   }
  ]
 }

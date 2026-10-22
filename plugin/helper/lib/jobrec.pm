@@ -25,6 +25,7 @@ package jobrec;
 # next epoch; one still unmatched at a Stop is `relaunch_unmatched`.
 use strict;
 use warnings;
+use utf8;
 
 # Output path source (DP-2 / REVIEW A-2, probe P-D1-6; DP-24 (a)). BackgroundTaskSummary
 # has no output path (types :820-851) and result.backgroundOutputPath is set only for jobs

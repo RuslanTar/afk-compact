@@ -6,6 +6,7 @@ package checkpoint;
 # <watch>/<sid>/checkpoint/<nonce>.json by exclusive create.
 use strict;
 use warnings;
+use utf8;
 
 sub _shrink_json {
     my ($obj, $max) = @_;
@@ -20,6 +21,8 @@ sub _shrink_json {
     if (length($j) > $max) { $obj->{measured_block} = undef; $j = jsonc::encode_bytes($obj) }
     return $j;
 }
+
+sub _prod_reads { my $r = eval { settings::prod(rc::settings())->{reads} }; return (defined $r && $r eq 'allow') ? 'allow' : 'forbid' }
 
 # run(sid, nonce, budget_ms, measured, cwd, transcript) -> (json_bytes, obj)
 sub run {
@@ -99,6 +102,9 @@ sub run {
         evidence_map   => [@emap[0 .. ($#emap > 7 ? 7 : $#emap)]],
         checkpoint_ms  => jsonc::obj(map { ($_ => $ms{$_} // 0) } qw(inventory git gsd lane evidence total)),
         timeouts       => \@timeouts,
+        # S-SETTINGS B: the helper's own reading of the consent key (settings file only, safe
+        # forbid under a foreign config dir); the mod keeps [prod-allow] only when this says allow
+        consent        => jsonc::obj(unattended_prod_reads => _prod_reads()),
     };
     my $json = _shrink_json($obj, 6 * 1024);
     if (defined $sid_dir) {

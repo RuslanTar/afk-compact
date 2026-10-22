@@ -83,7 +83,7 @@
      "has": ["\"task_id\":\"b8\".*\"output_path\":\"$TBASE/$SLUG/$SID/tasks/b8\\.output\",\"output_path_source\":\"result-text\",\"output_path_check\":\"agrees\"",
              "\"task_id\":\"b8\".*\"layout_session\":\\{\"path\":\"$TBASE/$SLUG/$SID/tasks/b8\\.output\""]}]}},
   {"name": "status: relaunch state and the session's output paths", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
-   "expect": {"exit": 0, "stdout_has": ["^automatic relaunch: active for read-only jobs · relaunch_auto on$",
+   "expect": {"exit": 0, "stdout_has": ["^automatic relaunch: active \\(read-only jobs and allowlisted jobs\\) · relaunch_auto on$",
      "^  output path: from the Bash result text, checked against the task-file layout · this session 6 jobs, 1 with an output path, 1 differ from the layout$"],
      "stdout_lacks": ["inactive \\(no output path\\)"]}},
   {"name": "DP-24 (a): the session start layout confirms a path after a cd", "lib": "jobs_output_path",

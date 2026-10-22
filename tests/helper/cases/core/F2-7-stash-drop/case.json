@@ -1,6 +1,6 @@
 {
  "id": "F2-7-stash-drop",
- "note": "ROOT-RULINGS F2-7 (PRIV-03): the plugin's own raw-summary stash goes once a copy holds the summary: PostCompact's pending/<id6>.post.md after its save, the mod's pending/<nonce>.mod.md after save-copy prints Saved or EXISTS sha-match; an unsaved stash (EXISTS sha-differs) stays for reconcile, a --from file outside pending/ is never touched, and the content-free .post.json meta stays",
+ "note": "ROOT-RULINGS F2-7 (PRIV-03): the plugin's own raw-summary stash goes once a copy holds the summary: PostCompact's pending/<id6>.post.md after its save, the mod's pending/<nonce>.mod.md after save-copy prints Saved or EXISTS sha-match; an unsaved stash (EXISTS sha-differs) is settled once (RRP-04: here a real mismatch, kept redacted as pending/<nonce>.mod.mismatch.md, the raw stash gone), a --from file outside pending/ is never touched, and the content-free .post.json meta stays",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -85,7 +85,7 @@
    }
   },
   {
-   "name": "an unsaved mod stash stays",
+   "name": "a mismatching mod stash is settled (RRP-04 keep)",
    "setup": [
     {
      "write": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
@@ -113,7 +113,21 @@
     "files": [
      {
       "path": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
-      "count": 1
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/1a2b3c4d.mod.mismatch.md",
+      "count": 1,
+      "mode": "0600",
+      "has": ["Status: a different text"]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stash_kept",
+      "count": 1,
+      "fields": {"nonce": "1a2b3c4d", "why": "mismatch", "redacted_n": 0}
      }
     ]
    }

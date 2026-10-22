@@ -9,6 +9,7 @@ package bucket;
 # path under <root> (the pin format is WP-skills'; see the WP-core report).
 use strict;
 use warnings;
+use utf8;
 
 sub _pin_bucket {
     my ($root, $sid) = @_;

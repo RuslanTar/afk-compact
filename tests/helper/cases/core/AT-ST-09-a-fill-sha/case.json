@@ -1,0 +1,102 @@
+{
+   "id" : "AT-ST-09 a (fill by body sha, fill-joins)",
+   "needs" : [
+      "fixture:transcripts/fill-joins/joins.json"
+   ],
+   "note" : "C-STORE D5 / MOD-SPEC Â§5.9 join (b) (CORE-09) on the WP-fix fill-joins fixture, case sha-join: an unmarked subagent summary (no dispatch) is deferred, P3 at the Stop proves sub, the copy is saved sub-unknown (a time match names no agent), and the fill joins it by body sha to agent A2 (the engine trailers cut from the summary row): -aa5c0ffee, attributed_by reconcile-b. Skipped until the WP-fix fixtures are merged.",
+   "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
+   "steps" : [
+      {
+         "name" : "transcripts",
+         "setup" : [
+            {
+               "mkdir" : "$TMP/example-repo"
+            },
+            {
+               "copy" : "transcripts/fill-joins/main.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+            },
+            {
+               "copy" : "transcripts/fill-joins/subagents/agent-a5c0ffee0a1b2c3d4.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a5c0ffee0a1b2c3d4.jsonl"
+            },
+            {
+               "copy" : "transcripts/fill-joins/subagents/agent-a7d00d1e5e6f7a8b9.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a7d00d1e5e6f7a8b9.jsonl"
+            }
+         ]
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_deferred",
+                  "fields" : {
+                     "why" : "scope"
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "PostCompact: unmarked, unproven",
+         "now" : "2026-10-21T14:04:30.650+03:00",
+         "stdin" : "payloads/PostCompact/fill-unmarked-sub-a.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a5c0ffee0a1b2c3d4",
+                     "attributed_by" : "reconcile-b",
+                     "renamed_from" : "/_5e55a001_c1-h[0-9a-f]{5}\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5c0ffee_c1-h*.md"
+               },
+               {
+                  "count" : 1,
+                  "path" : "$ROOT/*/*/compact/subagents/*.md"
+               }
+            ],
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a5c0ffee0a1b2c3d4",
+                     "proof" : "b",
+                     "seq" : 1
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "Stop: P3 sub, saved sub-unknown, filled by sha",
+         "now" : "2026-10-21T14:05:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/example-repo",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+         }
+      }
+   ],
+   "tz" : "Etc/GMT-3"
+}

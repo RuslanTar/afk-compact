@@ -5,6 +5,7 @@
 # there, so neither side writes under a refused root. Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_ident;
 

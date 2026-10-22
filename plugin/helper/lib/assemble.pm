@@ -8,6 +8,7 @@ package assemble;
 #   (unknown tokens are left as they are).
 use strict;
 use warnings;
+use utf8;
 
 # `turn` (handoff-turn.txt, D-18 B6) is assembled by the mod; the helper knows it so the
 # BT-04 goldens of every asset compare. Tags are kept only when a caller passes them: the
@@ -54,10 +55,11 @@ sub grammar {
     return _strip(join("\n", @out)) . "\n";
 }
 
+# The asset is text (characters): a byte value (a path) is decoded where it joins it (§2.6).
 sub fill {
     my ($s, $runtime) = @_;
     $runtime ||= {};
-    $s =~ s/\@([a-z_]+)\@/exists $runtime->{$1} && defined $runtime->{$1} ? $runtime->{$1} : "\@$1\@"/ge;
+    $s =~ s/\@([a-z_]+)\@/exists $runtime->{$1} && defined $runtime->{$1} ? util::text($runtime->{$1}) : "\@$1\@"/ge;
     return $s;
 }
 

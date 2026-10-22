@@ -1,0 +1,6 @@
+{
+ "id": "AT-ST-12 (BD-2 one marker per merged span)",
+ "needs": ["fixture:setups/st-13-agent-output.json"],
+ "note": "C-STORE D6 BD-2 (CORE-10), a pin of the built rule (secrets.pm): the WP-fix corpus pins hold: bearer-jwt redacts to exactly 'Authorization: [redacted:jwt]', cookie-after-kv to one marker, and across the whole corpus output no two markers touch. Skipped until the WP-fix corpus (44 entries, with the pins) is merged.",
+ "steps": [{"lib": "bd2_pins", "args": {}}]
+}

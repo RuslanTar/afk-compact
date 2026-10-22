@@ -1,0 +1,124 @@
+{
+ "id": "AT-ST-09 d (fill touches only subagents/ copies, st-09-fill-scope)",
+ "needs": [
+  "fixture:setups/st-09-fill-scope.json"
+ ],
+ "note": "C-STORE D5 step 5 (scope of fill) / MOD-SPEC §5.9 (CORE-09) on the WP-fix setup st-09-fill-scope: three 0400 copies of the P5 subagent's compactions in compact/, compact/unattributed/ and compact/subagents/, each fillable by the nonce of a summary row in agent-a494e1b0fa1a73786.jsonl. One Stop runs reconcile: only the subagents/ copy is renamed (-aa494e1b0, one copy_attributed for d21582); the main and unattributed copies keep their bytes and get no attribution row. Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "fixture_setup": "st-09-fill-scope.json"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "count": 1,
+      "path": "$ROOT/example-repo/general/compact/2026-10-21_14-00-57_5e55a001_c1-da24cc.md",
+      "snapshot": "main"
+     },
+     {
+      "count": 1,
+      "path": "$ROOT/example-repo/general/compact/unattributed/2026-10-21_14-01-08_5e55a001_c2-f5d2cc.md",
+      "snapshot": "unattributed"
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop: reconcile fills the subagents/ copy only",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "cwd": "$TMP/example-repo",
+   "stdin_json": {
+    "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+    "transcript_path": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl",
+    "cwd": "$TMP/example-repo",
+    "prompt_id": "9f0e1d2c-3b4a-4596-8877-665544332211",
+    "hook_event_name": "Stop",
+    "permission_mode": "default",
+    "stop_hook_active": false,
+    "last_assistant_message": "done",
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "count": 1,
+      "path": "$ROOT/example-repo/general/compact/2026-10-21_14-00-57_5e55a001_c1-da24cc.md",
+      "mode": "0400",
+      "same_bytes_as": "main",
+      "frontmatter": {
+       "actor": "main",
+       "renamed_from": null
+      }
+     },
+     {
+      "count": 1,
+      "path": "$ROOT/example-repo/general/compact/unattributed/2026-10-21_14-01-08_5e55a001_c2-f5d2cc.md",
+      "mode": "0400",
+      "same_bytes_as": "unattributed",
+      "frontmatter": {
+       "actor": "unattributed",
+       "renamed_from": null
+      }
+     },
+     {
+      "count": 0,
+      "path": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001_c3-d21582.md"
+     },
+     {
+      "count": 1,
+      "path": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001-aa494e1b0_c1-d21582.md",
+      "mode": "0400",
+      "frontmatter": {
+       "actor": "a494e1b0fa1a73786",
+       "renamed_from": "/_5e55a001_c3-d21582\\.md$/"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attributed",
+      "count": 1,
+      "fields": {
+       "id6": "d21582",
+       "actor": "a494e1b0fa1a73786"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attributed",
+      "count": 1
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attribution_failed"
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attribution_ambiguous"
+     }
+    ]
+   }
+  }
+ ]
+}

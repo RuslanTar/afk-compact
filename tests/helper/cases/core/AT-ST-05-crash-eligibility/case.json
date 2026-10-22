@@ -1,0 +1,49 @@
+{
+ "id": "AT-ST-05 a, e (crash eligibility, provisional C-STORE-1)",
+ "note": "C-STORE D4 / MOD-SPEC §5.8 'Eligible' under the provisional root reading of owner question C-STORE-1 (CORE-08): (a) a live- record of this host whose pid is gone, with no ended- record, counts as ended (a crash): finished; a live- record whose pid runs with another start time (restarted) counts as ended too; (e) a record without host and no ended- record is untouched (fail closed); and (b) a pid that runs with the same start time stays untouched",
+ "tz": "Etc/GMT-3",
+ "vars": {"A1": "5e55a002-0c0f-4f1e-9a00-00000000a002", "B1": "5e55a003-0c0f-4f1e-9a00-00000000a003", "R1": "5e55a004-0c0f-4f1e-9a00-00000000a004", "E1": "5e55a005-0c0f-4f1e-9a00-00000000a005"},
+ "steps": [
+  {"name": "four unproven stashes", "now": "2026-10-21T14:05:00.800+03:00",
+   "setup": [{"mkdir": "$TMP/work"}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$A1", "transcript_path": "$TMP/proj/$A1.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-91 CRASHA\n</summary>"},
+   "expect": {"exit": 0}},
+  {"now": "2026-10-21T14:05:01.800+03:00", "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$B1", "transcript_path": "$TMP/proj/$B1.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-92 LIVEB\n</summary>"},
+   "expect": {"exit": 0}},
+  {"now": "2026-10-21T14:05:02.800+03:00", "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$R1", "transcript_path": "$TMP/proj/$R1.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-93 RESTARTR\n</summary>"},
+   "expect": {"exit": 0}},
+  {"now": "2026-10-21T14:05:03.800+03:00", "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$E1", "transcript_path": "$TMP/proj/$E1.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-95 HOSTLESSE\n</summary>"},
+   "expect": {"exit": 0}},
+  {"name": "records (wp/fix setups/st-05-finish-records shapes)",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/2147483646-1792562400.live-5e55a002.json",
+     "json": {"pid": 2147483646, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "$A1", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T09:00:05+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/1-1760000000.live-5e55a003.json",
+     "json": {"pid": 1, "pid_lstart": "$LSTART1", "host": "$HOST", "session_id": "$B1", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T09:00:05+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/1-1.live-5e55a004.json",
+     "json": {"pid": 1, "pid_lstart": "Thu Jan  1 00:00:00 1970", "host": "$HOST", "session_id": "$R1", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T09:00:05+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/2147483646-1792562400.live-5e55a005.json",
+     "json": {"pid": 2147483646, "pid_lstart": "Wed Oct 21 09:00:00 2026", "session_id": "$E1", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T09:00:05+03:00"}}
+   ]},
+  {"name": "B's SessionStart(startup) finishes the crashed and the restarted session only", "now": "2026-10-21T14:20:00+03:00",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0, "stdout": "",
+    "files": [
+     {"path": "$WATCH/$A1/pending/*.post.md", "count": 0}, {"path": "$WATCH/.orphans/$A1", "count": 0},
+     {"path": "$WATCH/$R1/pending/*.post.md", "count": 0},
+     {"path": "$WATCH/$B1/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$B1", "count": 1},
+     {"path": "$WATCH/$E1/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$E1", "count": 1},
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 2}
+    ],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 2},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 1, "fields": {"sid": "$A1", "saved": 1}},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 1, "fields": {"sid": "$R1", "saved": 1}}
+    ]}}
+ ]
+}

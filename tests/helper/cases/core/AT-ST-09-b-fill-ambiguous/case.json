@@ -1,0 +1,122 @@
+{
+   "id" : "AT-ST-09 b (no fill when two agents are near, fill-joins)",
+   "needs" : [
+      "fixture:transcripts/fill-joins/joins.json"
+   ],
+   "note" : "C-STORE D5 / MOD-SPEC §5.9 join (c) (CORE-09) on the WP-fix fill-joins fixture, case ambiguous: an unmarked subagent summary whose body is in neither agent summary row; two agents have unjoined boundary rows inside the copy's window [e - TOL_S, e + SUB_WINDOW_S] (A2's 1.0 s before, A3's 34 s after): no fill, one copy_attribution_ambiguous with both candidates, also after a second Stop. Skipped until the WP-fix fixtures are merged.",
+   "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
+   "steps" : [
+      {
+         "name" : "transcripts",
+         "setup" : [
+            {
+               "mkdir" : "$TMP/example-repo"
+            },
+            {
+               "copy" : "transcripts/fill-joins/main.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+            },
+            {
+               "copy" : "transcripts/fill-joins/subagents/agent-a5c0ffee0a1b2c3d4.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a5c0ffee0a1b2c3d4.jsonl"
+            },
+            {
+               "copy" : "transcripts/fill-joins/subagents/agent-a7d00d1e5e6f7a8b9.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a7d00d1e5e6f7a8b9.jsonl"
+            }
+         ]
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0
+         },
+         "name" : "PostCompact: unmarked, unproven",
+         "now" : "2026-10-21T14:04:31.250+03:00",
+         "stdin" : "payloads/PostCompact/fill-unmarked-sub-x.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown",
+                     "renamed_from" : null
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c1-h*.md"
+               },
+               {
+                  "count" : 0,
+                  "path" : "$ROOT/*/*/compact/subagents/*-a*.md"
+               }
+            ],
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_attribution_ambiguous",
+                  "fields" : {
+                     "candidates" : [
+                        "a5c0ffee0a1b2c3d4",
+                        "a7d00d1e5e6f7a8b9"
+                     ]
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ],
+            "rows_absent" : [
+               {
+                  "ev" : "copy_attributed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "Stop: P3 sub, sub-unknown, ambiguous",
+         "now" : "2026-10-21T14:05:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/example-repo",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_attribution_ambiguous",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "a second Stop: still one row",
+         "now" : "2026-10-21T14:06:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/example-repo",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+         }
+      }
+   ],
+   "tz" : "Etc/GMT-3"
+}

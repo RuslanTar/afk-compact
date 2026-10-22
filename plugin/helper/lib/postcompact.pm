@@ -9,6 +9,11 @@ package postcompact;
 # watch.on_hook.
 use strict;
 use warnings;
+use utf8;
+
+# The Late-copy defer window (MOD-SPEC §5.3 step 2, C-STORE D2, XR-23): a BD-3-class estimate in
+# the same table as reconcile's windows (floor 120 s, tuned by the MOD-SPEC §5.4 rule).
+our $LATE_WINDOW_S = 600;
 
 # _resolved(sid_dir, classic) -> (\%nonce_resolved, \%nonce_copy_rels): nonces this session
 # already compacted under, and the copies (paths under <root>) its copy rows name for each.
@@ -140,13 +145,17 @@ sub run {
     my $erec = $stale ? undef : $rec;
     my $id6 = copies::id6($emn, $s->{sha256});
 
-    # 1. stash (0600, unique name), so reconcile can save if we die or defer
+    # 1. stash (0600, unique name), so reconcile can save if we die or defer; the orphan
+    # index marker first (MOD-SPEC §5.8), so a stash left by a session that ends before it
+    # is settled is found by the cross-session finish
+    orphans::mark($sid);
     eval { util::write_excl("$sid_dir/pending/$id6.post.md", $text, 0600) };
 
     # 2. dispatch lookup; time join only for seat/channel/trigger, never as scope proof
     my ($tjoin) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && !$closed->{ $_->{nonce} }
                          && $_->{_epoch} >= $now - 120 && $_->{_epoch} <= $now + 5 } reverse @all;
     my $drec = $erec // $tjoin;
+    rc::note_dispatch($drec) if $drec;
     my $join = $erec ? 'nonce' : $tjoin ? 'time' : undef;
 
     # Scope from the proofs a hook can use: P1 (the dispatch record) and P2 (s=sub). P3
@@ -159,13 +168,13 @@ sub run {
     my $tokens = $boundary ? [$boundary->{pre}, $boundary->{post}] : undef;
 
     # defer rule (MOD-SPEC §5.3 step 2): no usable marker, and an unresolved mod-hook/mod-self
-    # dispatch <= 600 s old that can still get its after-step. The newest open dispatch
+    # dispatch <= $LATE_WINDOW_S old that can still get its after-step. The newest open dispatch
     # decides: a newer classic one (a PreCompact fallback) means this compaction is the
     # classic one; a dispatch the mod logged as rejected or skipped gets no after-step.
     my $deferred;
     if (!defined $emn) {
         my ($open) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && !$closed->{ $_->{nonce} }
-                            && $_->{_epoch} >= $now - 600 } reverse @all;
+                            && $_->{_epoch} >= $now - $LATE_WINDOW_S } reverse @all;
         $deferred = $open if $open && dispatch::is_mod($open);
     }
     # F2-1: nothing proves the scope here -> no save and no sweep now; reconcile proves it
@@ -211,6 +220,7 @@ sub run {
                              trigger => $trigger, dispatch => $erec, seat_state => $seat, channel => $channel,
                              precomputed => $precomputed, verdict => $verdict, queue_lane => $lane, evidence => $evid);
         copies::drop_stash("$sid_dir/pending/$id6.post.md", $save->{result});
+        copies::settle_mismatch(path => "$sid_dir/pending/$id6.post.md", save => $save, scan => $s);
         # Main-proven: sweep whatever the save outcome (MOD-SPEC §5.3 step 5); a refused
         # copy under an unsafe handoff_root does not stop evidence going to the
         # disposable root, which sweep checks on its own.
@@ -228,17 +238,19 @@ sub run {
     # whose after-step saves it with the scope the mod knows; the rollup row carries that
     # dispatch's actor and nonce (no save or sweep happens here on it).
     if ($deferred) { $actor = $deferred->{agent_id} // 'main'; $drec = $deferred }
-    my $claim = $drec ? util::read_file("$sid_dir/resume-claimed/$drec->{nonce}") : undef;
-    my $resume = $actor ne 'main' && $actor ne 'unattributed' ? 'none-subagent' : defined $claim ? 'delivered:' . ($claim =~ /^(\S+)/)[0] : undef;
+    my $resume = rollup::resume_state($sid_dir, ($drec ? $drec->{nonce} : undef),
+                                      ($actor eq 'main' ? 'main' : $actor eq 'unattributed' ? 'unknown' : 'sub'), $channel);
     my $tot = $sweep ? $sweep->{totals} : undef;
     my $measured = $drec && grep { $_ eq 'measured' } @{ $drec->{tags} || [] };
     # A scope-deferred compaction gets its one rollup row from reconcile, with the proven actor.
     rollup::write(
         session_id => $sid, actor => $actor, compaction_seq => ($save ? $save->{seq} : undef),
         nonce => ($drec ? $drec->{nonce} : $emn), id6 => $id6, join => $join, trigger => $trigger,
-        midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', channel => $channel, seat_state => $seat,
+        # idle: unknown until reconcile reads the native idle row after the boundary (IC-1 D1)
+        midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', idle_gap_s => ($drec ? $drec->{idle_gap_s} : undef),
+        channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
-        sentinel_from_end => $s->{sentinel_from_end},
+        sentinel_from_end => $s->{sentinel_from_end}, sentinel_place => $s->{sentinel_place},
         fabricated_check_tokens => ($measured ? 0 : detect::fabricated_check_tokens($s->{normalized})),
         instructions_bytes => ($drec ? $drec->{instructions_bytes} : undef), summary_chars => $s->{chars},
         shape_class => detect::shape_class($s), pre_tokens => ($boundary ? $boundary->{pre} : undef),
@@ -249,6 +261,13 @@ sub run {
         evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                               redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
         nudged => undef, continued => undef, halt => undef,
+        # BD-3: P1 (or P2) proved the scope inside this hook; a row for a deferred summary names
+        # the mod dispatch by time only (no proof). The lag only when this compaction's own
+        # boundary row was already written (S-21: usually not).
+        proof => ($deferred ? 'none' : 'P1'),
+        proof_lag_ms => ($boundary && !$deferred ? int(($boundary->{epoch} - $now) * 1000 + ($boundary->{epoch} >= $now ? 0.5 : -0.5)) : undef),
+        settle_waited_ms => undef,
+        acuity => detect::acuity($s), acuity_floor => rollup::acuity_floor($sid_dir, ($drec ? $drec->{nonce} : undef)),
     ) unless $scope_deferred;
     rc::emit('scope_leak', [nonce => $mn, scope => $scope, marker_scope => $s->{scope}]) if $verdict eq 'scope-leak';
     rc::emit('layers_missing', [id6 => $id6, trigger => $trigger]) if $seat eq 'none' && $scope ne 'sub';

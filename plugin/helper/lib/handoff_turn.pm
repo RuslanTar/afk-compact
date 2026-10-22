@@ -15,8 +15,11 @@ package handoff_turn;
 # (`resumed`), mark_published refuses with the existing path.
 use strict;
 use warnings;
+use utf8;
 
-our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off);
+# precompact: the OD-4 pre-compaction turn (MOD-SPEC §9.3, S-SETTINGS D); idle: the pre-idle
+# handoff turn (§9.4, IC-1 D5)
+our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off precompact idle);
 our $OPEN_MAX_AGE_S = 3600;
 our %CLOSE_WHY = map { $_ => 1 } qw(cancelled ended);
 
@@ -111,7 +114,8 @@ sub supersede {
     return util::write_excl(_f($sid_dir, $ht, 'superseded'), "$nonce\n", 0600);
 }
 
-# finish_command(stage, meta) -> the literal publish command for a staged draft: the stage
+# finish_command(stage, meta) -> the publish command for a staged draft, `<store> publish …`
+# (the resume context's own name for the launcher word): the stage
 # path single-quoted (undef when it holds a quote, or when the launcher path cannot be
 # quoted), the slug and status from the stage meta
 # when the skill recorded them, else the kebab name of the bucket's topic and in-progress
@@ -128,10 +132,12 @@ sub finish_command {
         $slug = 'handoff' if $slug eq '';
     }
     my $status = (defined $meta->{status} && !ref $meta->{status} && $meta->{status} =~ /\A(in-progress|blocked|completed)\z/) ? $meta->{status} : 'in-progress';
-    # The quoted absolute launcher path (PKG-RUNTIME A.1); none when no quoting holds it.
-    my $store = ctx::store_cmd();
-    return undef unless defined $store;
-    return $store . " publish --stage '$stage' --slug $slug --status $status";
+    # The command starts with the token <store> (XR-03 (1), DP-31 (1)): the resume context
+    # defines it once in its first line as the quoted launcher word (PKG-RUNTIME A.1), so the
+    # word is not repeated here. None when no quoting holds the launcher path: then <store>
+    # cannot be defined either.
+    return undef unless defined ctx::store_cmd();
+    return "<store> publish --stage '$stage' --slug $slug --status $status";
 }
 
 # published_ok(sid_dir, ht, path) -> 1 when the claimed handoff is in place: a regular file

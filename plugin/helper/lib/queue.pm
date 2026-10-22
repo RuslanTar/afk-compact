@@ -6,10 +6,18 @@ package queue;
 # The caps cache <watch>/queue-caps.json is keyed by the queue_cmd path, mtime and size:
 # a `commands` array in a list reply is kept there (absent = contract v1: list and
 # adopt only), and an `add` the tool rejected as unsupported is kept for 24 h.
+# Modes (Q-ADAPTER QA-1, MOD-SPEC §10.4): mode() is off (queue_cmd empty), degraded (<why>)
+# (not an executable file, or this session's last `list` reply broke the contract: untagged,
+# schema, not-json, exit, timeout), else on. lane() is the one parser of a `list` reply for
+# every caller (checkpoint, measure, postcompact, begin, locate); a contract break logs one
+# content-free `queue_contract {why}` row per session and why.
 use strict;
 use warnings;
+use utf8;
 
 # call(argv, budget_ms) -> run result (the user's PERL5LIB/PERLLIB restored for the child)
+# `out` stays the bytes the tool printed (WP-skills callers decode their own); lane() and
+# add() decode it once where they read it (MOD-SPEC §2.6 text encoding).
 sub call {
     my ($argv, $budget_ms) = @_;
     util::trace('queue_cmd');
@@ -25,20 +33,23 @@ my $LANE_RE = qr/^(lane|auto):[A-Za-z0-9._\/-]+$/;
 # The `list --json` reply is the v1 contract `queue-stub/v1` (ROOT-RULINGS F2-8,
 # provisional): one object {"schema": "queue-stub/v1", "session", "lane": "lane:<repo>/<name>"
 # | "auto:…" | null, "open": n, "pending": n, "preview": bool, "held_by": sid | null,
-# "lanes": [{id, holder, open, preview}]}. A reply naming another schema is not read;
-# one without `schema` is read as v1. Also taken: `minted` as `preview`, `label`, and the
-# open items as `items`/`open`/`pending` arrays (ids, or objects with `id`).
+# "lanes": [{id, holder, open, preview}]}. The `schema` tag is required (QA-1, QA-2): a reply
+# without it is not read (`untagged`), nor one naming another schema (`schema`). Also taken:
+# `minted` as `preview`, `label`, and the open items as `items`/`open`/`pending` arrays (ids,
+# or objects with `id`). `lanes` is informational and ignored.
 our $SCHEMA = 'queue-stub/v1';
 sub lane {
     my ($sid, $cmd, $budget_ms) = @_;
     return { status => 'off' } unless defined $cmd && $cmd ne '';
-    return { status => 'unknown', why => 'not-executable' } unless -x $cmd;
+    return { status => 'unknown', why => 'not-executable' } unless -f $cmd && -x _;
     my $r = call([$cmd, 'list', '--json', '--session', $sid], $budget_ms);
-    return { status => 'timeout' } if $r->{timed_out};
-    return { status => 'unknown', why => 'exit' } unless $r->{exit} == 0;
-    my $j = eval { jsonc::decode($r->{out}) };
-    return { status => 'unknown', why => 'not-json' } unless ref $j eq 'HASH';
-    return { status => 'unknown', why => 'schema' } if defined $j->{schema} && (ref $j->{schema} || $j->{schema} ne $SCHEMA);
+    if ($r->{timed_out}) { _contract($cmd, 'timeout'); return { status => 'timeout' } }
+    if ($r->{exit} != 0) { _contract($cmd, 'exit'); return { status => 'unknown', why => 'exit' } }
+    my $j = eval { jsonc::decode(util::text($r->{out})) };
+    if (ref $j ne 'HASH') { _contract($cmd, 'not-json'); return { status => 'unknown', why => 'not-json' } }
+    if (!defined $j->{schema}) { _contract($cmd, 'untagged'); return { status => 'unknown', why => 'untagged' } }
+    if (ref $j->{schema} || $j->{schema} ne $SCHEMA) { _contract($cmd, 'schema'); return { status => 'unknown', why => 'schema' } }
+    _contract($cmd, undef);
     eval { caps_put($cmd, commands => (ref $j->{commands} eq 'ARRAY' ? [grep { defined && !ref } @{ $j->{commands} }] : undef)) };
     my $lane = $j->{lane};
     return { status => 'unknown', why => 'no-lane' } unless defined $lane && !ref $lane && $lane =~ $LANE_RE;
@@ -70,6 +81,65 @@ sub lane {
         $line = "Queued: $count open in $label$idl; answered only via the queue; never re-ask.";
     }
     return { status => 'ok', lane => $lane, open => $count, ids => \@ids, label => $label, queued_line => $line };
+}
+
+# ---------------------------------------------------------------- mode (QA-1)
+our %CONTRACT_WHY = map { $_ => 1 } qw(untagged schema not-json exit timeout);
+
+# _state_path([sid]) -> <watch>/<sid>/queue-state.json, this session's when no sid is given;
+# undef for a sid that is not one path component of the session-id alphabet
+sub _state_path {
+    my ($sid) = @_;
+    if (defined $sid) {
+        my $w = rc::watch();
+        return undef unless defined $w && !ref $sid && $sid =~ /\A[0-9A-Za-z][0-9A-Za-z_-]{0,127}\z/;
+        return "$w/$sid/queue-state.json";
+    }
+    my $d = rc::sid_dir();
+    return defined $d ? "$d/queue-state.json" : undef;
+}
+
+# _contract(cmd, why|undef): this session's last list outcome for this tool (path, mtime, size);
+# a break logs queue_contract {why} once per session and why
+sub _contract {
+    my ($cmd, $why) = @_;
+    my $p = _state_path();
+    if (defined $p) {
+        eval { util::write_atomic($p, jsonc::encode_bytes(jsonc::obj(v => 1, key => _caps_key($cmd), why => $why,
+                                                                     ts => util::iso(util::now()))) . "\n", 0600) };
+    }
+    rc::emit('queue_contract', [why => $why]) if defined $why && $CONTRACT_WHY{$why} && rc::once("queue_contract-$why");
+}
+
+# mode([cmd]) or mode(sid, cmd) -> {mode => off|on|degraded, why => …}: no queue call (the
+# setting, the file and the session's last list outcome: this session's, or sid's record when
+# given, skills-to-core §5). cmd defaults to the queue_cmd setting (also for an undef cmd in the
+# two-argument form).
+sub mode {
+    my ($sid, $cmd);
+    if (@_ >= 2) { ($sid, $cmd) = @_; $cmd //= rc::val('queue_cmd') }
+    else { $cmd = @_ ? $_[0] : rc::val('queue_cmd') }
+    return { mode => 'off' } unless defined $cmd && $cmd ne '';
+    return { mode => 'degraded', why => 'not-executable' } unless -f $cmd && -x _;
+    my $p = _state_path($sid);
+    my $raw = defined $p ? util::read_file($p) : undef;
+    my $s = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    if (ref $s eq 'HASH' && defined $s->{why} && $CONTRACT_WHY{ $s->{why} } && ($s->{key} // '') eq (_caps_key($cmd) // '')) {
+        return { mode => 'degraded', why => $s->{why} };
+    }
+    return { mode => 'on' };
+}
+
+# mode_text([cmd]) or mode_text(sid, cmd) -> `off` | `on` | `degraded (<why>)`: the words
+# /status, begin and locate print
+sub mode_text { my $m = mode(@_); return $m->{mode} eq 'degraded' ? "degraded ($m->{why})" : $m->{mode} }
+
+# must_exist(cmd) -> 1 when the cached `commands` of the last list reply hold adopt:must-exist
+# (`lane adopt` then passes --must-exist; QA-2)
+sub must_exist {
+    my ($cmd) = @_;
+    my $c = caps_get($cmd);
+    return (grep { defined && $_ eq 'adopt:must-exist' } @{ $c->{commands} || [] }) ? 1 : 0;
 }
 
 # ---------------------------------------------------------------- caps cache
@@ -139,7 +209,7 @@ sub add {
     my $r = util::run(\@argv, timeout_ms => $budget_ms // 5000, env => \%env, stdin => $json, max_out => 64 * 1024);
     my %res = (exit => $r->{exit}, ms => util::clock_ms() - $t0);
     return { %res, result => 'timeout' } if $r->{timed_out};
-    my $out = $r->{out} // '';
+    my $out = util::text($r->{out} // "");
     if ($r->{exit} == 0) {
         my ($line) = grep { /\S/ } split /\n/, $out;
         my $j = defined $line ? eval { jsonc::decode($line) } : undef;

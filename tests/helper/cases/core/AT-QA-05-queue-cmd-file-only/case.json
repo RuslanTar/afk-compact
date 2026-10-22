@@ -1,0 +1,24 @@
+{
+ "id": "AT-QA-05 (helper part)",
+ "note": "Q-ADAPTER QA-B1 / MOD-SPEC §1.2 (CORE-02): queue_cmd is file-only (%FILE_ONLY, safe value empty). A --queue-cmd flag and a CLAUDE_PLUGIN_OPTION_QUEUE_CMD env value are ignored with the note 'queue_cmd: settings file only' and one config_note row: no queue_cmd process starts. The value in the settings file is used. Under a foreign CLAUDE_CONFIG_DIR the queue stays off (safe value) even when that folder's file names a queue tool",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "flag and env ignored",
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP", "--queue-cmd", "$FIX/bin/queue-stub"],
+   "env": {"CLAUDE_PLUGIN_OPTION_QUEUE_CMD": "$FIX/bin/queue-stub", "QUEUE_STUB_DIR": "$CASE/../AT-E-10/queue-v1", "QUEUE_STUB_LOG": "$TMP/queue.log"},
+   "expect": {"exit": 0, "json": {"lane": null, "queued_line": null}, "trace_absent": ["queue_cmd"],
+     "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "queue_cmd", "note": "settings-file-only"}}]}},
+  {"name": "the settings file value is used",
+   "options": {"queue_cmd": "$FIX/bin/queue-stub"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "2b3c4d5e", "--budget-ms", "10000", "--measured", "--cwd", "$TMP"],
+   "env": {"QUEUE_STUB_DIR": "$CASE/../AT-E-10/queue-v1", "QUEUE_STUB_LOG": "$TMP/queue.log"},
+   "expect": {"exit": 0, "trace_has": ["queue_cmd"]}},
+  {"name": "foreign config dir: safe value (off)",
+   "setup": [{"write": "$TMP/cfg/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"queue_cmd": "$FIX/bin/queue-stub"}}}}}],
+   "argv": ["checkpoint", "--sid", "s-foreign", "--nonce", "3c4d5e6f", "--budget-ms", "10000", "--measured", "--cwd", "$TMP"],
+   "env": {"CLAUDE_CONFIG_DIR": "$TMP/cfg", "QUEUE_STUB_DIR": "$CASE/../AT-E-10/queue-v1", "QUEUE_STUB_LOG": "$TMP/queue.log"},
+   "expect": {"exit": 0, "trace_absent": ["queue_cmd"],
+     "rows": [{"file": "$WATCH/s-foreign.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "queue_cmd", "note": "config-dir-not-home"}}]}}
+ ]
+}

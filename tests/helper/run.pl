@@ -4,7 +4,7 @@
 # given on the command line (files or folders), each case in a fresh temporary HOME
 # with STORE_TEST_MODE=1, and asserts exit codes, stdout, files, log rows and traces.
 #
-# Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] <case dir|case.json|cases root>...
+# Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] [--fixtures DIR] <case dir|case.json|cases root>...
 #
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form of §3.5 (argv, stdin, setup, expect, then).
@@ -15,7 +15,7 @@
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $STORE (the
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
 #   variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
@@ -24,6 +24,9 @@
 #                            under /tmp, /private/tmp and /var/folders as ephemeral)
 #   step "cwd"               the helper's working directory (default: the case's $TMP)
 #   step "capture"           {VAR: "json:<dotted path>" | "re:<regex, one group>"} from stdout
+#   case / step "options"  {key: value}: plugin options in $HOME/.claude/settings.json
+#                            (pluginConfigs["<brand>@m"].options, merged), for file-only keys
+#   case "stage_overlay"   {"<path under plugin/>": "<file>"}: a staged copy with those files replaced
 #   a step without argv, lib or setup that holds a setup action runs as a setup step
 #   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
@@ -31,13 +34,15 @@
 #   expect: stdout_has / stdout_lacks (regexes, /m); json_keys; json {dotted path: value |
 #     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
+#   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
 #     write + jsonl_repeat {row, count} (then any jsonl rows);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
 #     (+ subst: true fills the placeholders in the copied text)
 #   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
-#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "nocase-fs" skips
+#     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
+#     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
@@ -67,7 +72,7 @@ binmode(STDERR, ':encoding(UTF-8)');
 # HUP) cleans up the same way in END. Only this process cleans: forked children never do.
 my $OWNER_PID = $$;
 my ($RUN_TMP, $REPO_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
-my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, @ARGS);
+my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, $FIXTURES_DIR, @ARGS);
 $SIG{$_} = sub { exit 130 } for qw(INT TERM HUP);
 END {
     my $code = $?;
@@ -84,10 +89,14 @@ while (@ARGV) {
     # in place of <repo>/tmp for tmp_base "repo" cases.
     if ($a eq '--plugin') { $PLUGIN_SRC = shift @ARGV; next }
     if ($a eq '--repo-tmp') { $REPO_TMP_BASE = shift @ARGV; next }
+    # Check a WP-fix fixture set before it merges: read tests/fixtures/ from DIR (an export of
+    # that branch's tests/fixtures), for "fixture:" needs, $FIX, $FIXTURES, stdin and copy sources.
+    if ($a eq '--fixtures') { $FIXTURES_DIR = Cwd::abs_path(shift @ARGV); next }
     push @ARGS, $a;
 }
 @ARGS = ("$HERE/cases") unless @ARGS;
 $REPO_TMP_BASE //= "$REPO/tmp";
+$FIXTURES_DIR //= "$REPO/tests/fixtures";
 $REPO_TMP_BASE =~ s{/+$}{};
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
@@ -231,8 +240,9 @@ for my $cf (@CASES) {
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
-                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv")
-                      || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs()) } @{ $case->{needs} || [] };
+                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
+                      || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
+                      || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -335,8 +345,65 @@ sub _rm_tree {
 }
 
 # ---------------------------------------------------------------- one case
+# sequence_case(case) -> the case with its steps from tests/fixtures/sequences/<id>/ (the WP-fix
+# sequence format, tests/fixtures/README.md "Sequences"): input.json's sid, now, env,
+# store_test_claude_pid, repo and seed, then each step with its transcript_append appended to
+# the payload's transcript_path before it runs; expected.json's step_asserts join the expect of
+# the step they follow (absent_rows -> rows_absent; an assert's fields_ge goes on its last
+# rows entry that names fields). The case's own keys (tz, note, needs) stay.
+sub sequence_case {
+    my ($case) = @_;
+    my $dir = "sequences/$case->{sequence}";
+    my $in = jsonc::decode(util::read_file("$FIXTURES_DIR/$dir/input.json") // die "no $dir/input.json\n");
+    my $ex = -f "$FIXTURES_DIR/$dir/expected.json" ? jsonc::decode(util::read_file("$FIXTURES_DIR/$dir/expected.json")) : {};
+    my %c = %$case;
+    $c{sid} //= $in->{sid};
+    $c{now} //= $in->{now};
+    $c{env} = { %{ $in->{env} || {} }, (defined $in->{store_test_claude_pid} ? (STORE_TEST_CLAUDE_PID => $in->{store_test_claude_pid}) : ()), %{ $case->{env} || {} } };
+    my @setup;
+    if (defined $in->{repo}) {
+        my $rc = jsonc::decode(util::read_file("$FIXTURES_DIR/$in->{repo}"));
+        (my $name = $in->{repo}) =~ s{^repos/}{};
+        push @setup, { repo_fixture => $name, at => '$TMP/' . ($rc->{dir} // 'repo') };
+    }
+    push @setup, map { my %s = %$_; delete $s{note}; $s{subst} = jsonc::true() if exists $s{copy}; \%s } @{ $in->{seed} || [] };
+    my %asserts;
+    for my $a (@{ $ex->{step_asserts} || [] }) { push @{ $asserts{ $a->{after_step} } }, $a }
+    my @steps = ({ name => "$case->{sequence}: setup", setup => \@setup });
+    my $i = 0;
+    for my $s (@{ $in->{steps} || [] }) {
+        $i++;
+        my %st = (name => "$case->{sequence} step $i" . (defined $s->{note} ? ": $s->{note}" : ''), now => $s->{now}, argv => $s->{argv},
+                  stdin => $s->{stdin}, (exists $s->{env} ? (env => $s->{env}) : ()), (exists $s->{capture} ? (capture => $s->{capture}) : ()));
+        my %x = %{ $s->{expect} || {} };
+        delete $x{stdout} if exists $x{stdout} && !defined $x{stdout};
+        if (defined $s->{transcript_append}) {
+            my $p = jsonc::decode(util::read_file("$FIXTURES_DIR/$s->{stdin}") // die "no $s->{stdin}\n");
+            $st{setup} = [{ append => $s->{transcript_append}, to => $p->{transcript_path} }];
+        }
+        for my $a (@{ $asserts{$i} || [] }) {
+            push @{ $x{files} }, @{ $a->{files} || [] };
+            my @rows = @{ $a->{rows} || [] };
+            if ($a->{fields_ge}) { my ($last) = grep { $_->{fields} } reverse @rows; $last->{fields_ge} = $a->{fields_ge} if $last }
+            push @{ $x{rows} }, @rows;
+            push @{ $x{rows_absent} }, @{ $a->{absent_rows} || [] };
+            push @{ $x{joined} }, @{ $a->{joined} || [] };
+        }
+        $st{expect} = \%x;
+        push @steps, \%st;
+    }
+    # metrics {join_conflict: n}: the status count (CORE-11) after the last step
+    if (ref $ex->{metrics} eq 'HASH' && defined $ex->{metrics}{join_conflict}) {
+        push @steps, { name => "$case->{sequence}: status counts join_conflict", argv => ['status', '--sid', '$SID'],
+                       expect => { exit => 0, stdout_has => ["^compactions: .* . join_conflict $ex->{metrics}{join_conflict}:\$"] } };
+    }
+    $c{steps} = \@steps;
+    return \%c;
+}
+
 sub run_case {
     my ($case, $cdir) = @_;
+    $case = sequence_case($case) if defined $case->{sequence};
     my $tmp = (($case->{tmp_base} // '') eq 'repo' ? repo_tmp() : $RUN_TMP) . "/c$N";
     util::mkdir_p("$tmp/home");
     util::mkdir_p("$tmp/tmpdir");
@@ -346,7 +413,7 @@ sub run_case {
     $V{SID} = $case->{sid} // $DEFAULT_SID;
     $V{SID8} = substr($V{SID}, 0, 8);
     $V{PLUGIN} = $STAGE;
-    $V{FIX} = "$REPO/tests/fixtures";
+    $V{FIX} = $FIXTURES_DIR;
     $V{CASE} = $cdir;
     $V{BRAND} = $BRAND;
     $V{HOST} = $HOSTNAME;
@@ -368,10 +435,25 @@ sub run_case {
         unlink "$V{TMP}/plugin-account/.test-consent-home";
         $V{PLUGIN} = "$V{TMP}/plugin-account";
     }
+    # "stage_overlay": {"<path under plugin/>": "<file, placeholders filled>"}: this case runs
+    # against a staged copy with those files replaced (AT-WF-01: a ctx-recording watcher seam).
+    if (ref $case->{stage_overlay} eq 'HASH') {
+        my $dst = "$V{TMP}/plugin-overlay";
+        copy_tree($V{PLUGIN}, $dst);
+        for my $rel (sort keys %{ $case->{stage_overlay} }) {
+            my $src = subst($case->{stage_overlay}{$rel}, \%V);
+            my $data = util::read_file($src);
+            die "stage_overlay: $src missing\n" unless defined $data;
+            util::write_atomic("$dst/$rel", $data, 0644);
+        }
+        $V{PLUGIN} = $dst;
+    }
     # The launcher by its real path: the one the helper itself prints in the commands it
     # writes (ctx::store_cmd, from the real path of main.pl; the temp folder may be a link).
     $V{STORE} = "$V{PLUGIN}/$LAUNCHER_DIR/$BRAND-store";
     $V{STORE} = Cwd::abs_path($V{STORE}) // $V{STORE};
+    # the staged manifest's version (the backstop cursor of the cross-session finish keys on it)
+    $V{PLUGIN_VERSION} = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) }; ref $m eq 'HASH' ? $m->{version} // '0.0.0' : '0.0.0' };
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
@@ -387,6 +469,14 @@ sub run_case {
         my $label = $st->{name} // "step $i";
         my $now = $st->{now} // $case->{now};
         $V{TODAY} = defined $now ? substr($now, 0, 10) : POSIX::strftime('%Y-%m-%d', localtime);
+        # "options": {key: value} (case level before step 1, and per step): plugin options in
+        # the case's settings file, pluginConfigs["<brand>@m"].options, merged into the file.
+        # The way to give a file-only key (DP-3: consent keys, queue_cmd, prod_patterns).
+        for my $o (($i == 1 ? $case->{options} : undef), $st->{options}) {
+            next unless ref $o eq 'HASH';
+            my $e = eval { write_options(subst_deep($o, \%V), \%V); 1 };
+            if (!$e) { push @errs, "$label options: $@"; return @errs }
+        }
         for my $s (@{ $st->{setup} || [] }) {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; return @errs }
@@ -413,6 +503,20 @@ sub run_case {
     return @errs;
 }
 
+sub write_options {
+    my ($o, $V) = @_;
+    my $f = "$V->{HOME}/.claude/settings.json";
+    my $raw = -f $f ? util::read_file($f) : undef;
+    my $s = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    $s = {} unless ref $s eq 'HASH';
+    $s->{pluginConfigs} = {} unless ref $s->{pluginConfigs} eq 'HASH';
+    my $k = "$BRAND\@m";
+    $s->{pluginConfigs}{$k} = {} unless ref $s->{pluginConfigs}{$k} eq 'HASH';
+    $s->{pluginConfigs}{$k}{options} = {} unless ref $s->{pluginConfigs}{$k}{options} eq 'HASH';
+    $s->{pluginConfigs}{$k}{options}{$_} = $o->{$_} for keys %$o;
+    util::write_atomic($f, jsonc::encode_bytes($s) . "\n", 0600);
+}
+
 # chars(bytes) -> the text as characters (UTF-8 decoded when it is valid UTF-8), for
 # printing helper output through the UTF-8 STDOUT layer.
 sub chars {
@@ -428,7 +532,7 @@ my %SECRET;
 sub secret_value {
     my ($id) = @_;
     if (!%SECRET) {
-        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) } || {};
+        my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) } || {};
         $SECRET{ $_->{id} } = join('', @{ $_->{fragments} || [] }) for @{ $c->{entries} || [] };
     }
     die "no secret corpus entry $id\n" unless exists $SECRET{$id};
@@ -442,7 +546,7 @@ sub subst {
     $s =~ s/\$SECRET\{([a-z0-9-]+)\}/secret_value($1)/ge;
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
-    $s =~ s/\$FIXTURES\b/$REPO\/tests\/fixtures/g;
+    $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
     $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
     # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
@@ -462,7 +566,7 @@ sub src_file {
     my ($name, $cdir) = @_;
     return $name if $name =~ m{^/} && -e $name;
     return "$cdir/$name" if -e "$cdir/$name";
-    return "$REPO/tests/fixtures/$name" if -e "$REPO/tests/fixtures/$name";
+    return "$FIXTURES_DIR/$name" if -e "$FIXTURES_DIR/$name";
     die "no file $name in the case dir or tests/fixtures\n";
 }
 
@@ -522,7 +626,7 @@ sub make_repo {
 sub is_setup_action {
     my ($s) = @_;
     return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
-                                               tempfiles secret_files repo_fixture paths fixture_setup touch);
+                                               tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha append);
 }
 
 # ---------------------------------------------------------------- fixture recipes (tests/fixtures/README.md)
@@ -572,7 +676,7 @@ sub fixture_tempfiles {
 # recipe's $TMP/sweep); "record" appends their paths as paths.jsonl rows.
 sub fixture_secret_files {
     my ($s, $V, $cdir) = @_;
-    my $c = jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json"));
+    my $c = jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json"));
     my @rec;
     for my $f (@{ $c->{files} || [] }) {
         (my $rel = $f->{path}) =~ s{^\$TMP/sweep/}{} or die "secret file $f->{path} is not under \$TMP/sweep\n";
@@ -697,6 +801,27 @@ sub setup {
         # {"touch": path, "at": ISO}: the file's mtime on the case clock (age and mtime_ago_s are real-clock relative)
         my $t = util::parse_iso($s->{at} // '') // die "touch $s->{touch}: bad time " . ($s->{at} // 'none') . "\n";
         utime($t, $t, $s->{touch}) or die "touch $s->{touch}: $!\n";
+        return;
+    }
+    if (exists $s->{append}) {
+        # {"append": src, "to": path}: the source file (placeholders filled) appended to path
+        # (a sequence step's transcript_append)
+        my $t = util::read_file(src_file($s->{append}, $cdir)) // die "append $s->{append}: unreadable\n";
+        utf8::decode($t);
+        $t = subst($t, $V);
+        utf8::encode($t);
+        util::mkdir_p(util::dirname($s->{to}));
+        open(my $fh, '>>:raw', $s->{to}) or die "append $s->{to}: $!\n";
+        print $fh $t;
+        close $fh;
+        return;
+    }
+    if (exists $s->{normalized_sha}) {
+        # {"normalized_sha": path, "var": NAME}: NAME = sha256 of the file's normalized summary
+        # body (the staged detect.pm), e.g. a stash's raw_sha256 (AT-ST-02)
+        _libs();
+        my $t = util::read_file($s->{normalized_sha}) // die "normalized_sha $s->{normalized_sha}: unreadable\n";
+        $V->{ $s->{var} // 'SHA' } = sha::hex256(detect::scan($t)->{normalized});
         return;
     }
     if (exists $s->{tempfiles}) { fixture_tempfiles($s, $V, $cdir); return }
@@ -848,8 +973,9 @@ sub spawn {
     my $pid = fork();
     die "fork: $!\n" unless defined $pid;
     if ($pid == 0) {
-        %ENV = %$env;
-        if (defined $cwd) { chdir($cwd) or POSIX::_exit(125) }
+        # The environment is bytes: a case value with a non-ASCII character goes in as UTF-8.
+        %ENV = map { ($_ => util::to_bytes($env->{$_})) } keys %$env;
+        if (defined $cwd) { chdir(util::to_bytes($cwd)) or POSIX::_exit(125) }
         open(STDOUT, '>', $outf) or POSIX::_exit(126);
         open(STDERR, '>', $errf) or POSIX::_exit(126);
         my $inf = "$outf.in";
@@ -917,7 +1043,7 @@ sub invoke {
 my $LIBS_READY;
 sub _libs {
     return if $LIBS_READY;
-    for my $l (qw(ctx spec settings paths roots log rc identity lock nonce git detect assemble secrets dispatch)) { require "$l.pm" }
+    for my $l (qw(sha ctx spec settings paths roots log rc identity lock nonce git detect assemble secrets dispatch)) { require "$l.pm" }
     ctx::init("$STAGE/helper");
     $LIBS_READY = 1;
 }
@@ -938,6 +1064,11 @@ sub builtin {
         my $tsv = src_file($a->{tsv}, $cdir);
         my $dir = $a->{dir} ? src_file($a->{dir}, $cdir) : util::dirname($tsv);
         open(my $fh, '<:raw', $tsv) or return ("cannot read $tsv");
+        # copy_trailers.json beside the TSV: extra installed-message trailers for this table only
+        # (AT-P5-02 'sentinel then a listed trailer'), added to the shipped lists.
+        my $xt = -f "$dir/copy_trailers.json" ? eval { jsonc::decode(util::read_file("$dir/copy_trailers.json")) } : undef;
+        no warnings "once";
+        local @detect::TRAILERS = (detect::_trailers(), map { qr/$_/ } @{ ref $xt eq 'HASH' ? $xt->{copy_trailers} || [] : [] });
         my $head = <$fh>;
         chomp $head;
         my @cols = split /\t/, $head;
@@ -982,8 +1113,9 @@ sub builtin {
                 $sha = sha::hex256($n);
             }
             my %got = (verdict => $s->{verdict}, marker_line => $s->{marker_line} // '-', sentinel_from_end => $s->{sentinel_from_end} // '-',
-                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $sha);
-            for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256)) {
+                       nonce => $s->{nonce} // '-', scope => $s->{scope} // '-', normalized_sha256 => $sha,
+                       sentinel_place => $s->{sentinel_place} // '-');
+            for my $k (qw(verdict marker_line sentinel_from_end nonce scope normalized_sha256 sentinel_place)) {
                 next unless exists $r{$k} && defined $r{$k} && $r{$k} ne '';
                 push @e, "$r{file}: $k $got{$k}, want $r{$k}" if $got{$k} ne $r{$k};
             }
@@ -993,7 +1125,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'assemble_goldens') {
-        my $dir = $a->{dir} // "$REPO/tests/fixtures/assembly/expected";
+        my $dir = $a->{dir} // "$FIXTURES_DIR/assembly/expected";
         my $rt = assembly_runtime($a->{runtime});
         my %stem = map { (my $f = $assemble::FILES{$_}) =~ s/\.txt$//; ($f => $_) } keys %assemble::FILES;
         my $n = 0;
@@ -1045,14 +1177,39 @@ sub builtin {
         return @e;
     }
     if ($name eq 'floor_lint') {
-        # AT-P-11: every use/require in plugin/helper is a floor module (RUNTIME §2.4, plus
-        # overload, lib and utf8, probed present in debian:bookworm-slim perl-base), one of
-        # the helper's own libraries, or sits inside an eval with a fallback.
+        # AT-P-11 (PKG-RUNTIME B.2): every .pl/.pm under plugin/helper (or args.root), three rules.
+        # L1 modules: every use/require is a floor module (RUNTIME §2.4, plus overload, lib and
+        #   utf8, probed present in debian:bookworm-slim perl-base), one of the helper's own
+        #   libraries, or sits inside an eval with a fallback. `feature` is the core pragma (its
+        #   newer features are L3).
+        # L2 implicit loads: %+ %- $+{ $-{ (Tie::Hash::NamedCapture), \N{NAME} (charnames),
+        #   \p{..} \P{..} (Unicode tables), use open, Encode::.
+        # L3 version: use v5.N / use 5.0NN above the floor, use feature with a post-5.28
+        #   feature, any builtin:: call.
+        # Each hit is one line `<file>:<line>: <what> <reason>. Fix: <fix>.` (PR-4 convention).
+        # args.want: regexes each hit list must match; args.known: {relative file: reason}, hits
+        # in that file are accepted (an entry whose file is clean is harmless: drop it after the fix lands).
         my %floor = map { $_ => 1 } qw(strict warnings constant Fcntl POSIX Errno Cwd File::Spec File::Path File::Temp
             File::Basename IPC::Open3 Getopt::Long IO::Handle List::Util Scalar::Util Text::ParseWords IO::File IO::Select
-            Socket Exporter Carp parent integer bytes overload lib utf8);
-        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes);
-        my $root = "$REPO/plugin/helper";
+            Socket Exporter Carp parent integer bytes overload lib utf8 feature);
+        # optional: loaded only inside an eval on the same line (W-BETA B.6 allows DEFLATE for the
+        # report zip only when present: watch-to-core W2C-4)
+        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes IO::Compress::RawDeflate IO::Uncompress::RawInflate);
+        my $root = defined $a->{root} ? $a->{root} : "$REPO/plugin/helper";
+        # The floor value has one source in the helper: main.pl's guard (`$] < 5.028`).
+        my ($floor_v) = (util::read_file("$REPO/plugin/helper/main.pl") // '') =~ /\$\]\s*<\s*(5\.\d+)/;
+        $floor_v //= '5.028';
+        my $floor_txt = sprintf('%d.%d', int($floor_v), int((($floor_v - int $floor_v) * 1000) + 0.5));
+        my %newfeat = map { $_ => 1 } qw(isa try defer class module_true extra_paired_delimiters signatures);
+        my $pb = "perl-base $floor_txt (Debian 10)";
+        my @l2 = (
+            [qr/\$[+-]\{|(?:keys|values|each|exists|delete|scalar)\s*\(?\s*%[+-](?![\w])|\\%[+-](?![\w])|[=(,]\s*%[+-]\s*[;,)]/,
+             '%+ / %- load Tie::Hash::NamedCapture, which ' . $pb . ' lacks', 'numbered captures ($1, $2)'],
+            [qr/\\N\{(?!U\+)/, '\\N{NAME} loads charnames, which perl-base trims', '\\x{HEX} escapes'],
+            [qr/\\[pP](?:\{|[A-Z])/, '\\p{..} / \\P{..} load Unicode property tables, which perl-base trims', 'an explicit character class'],
+            [qr/\buse\s+open\b/, 'use open loads open.pm and the Encode layers, not on the floor', 'binmode :raw and encode once at the edge (util::to_bytes)'],
+            [qr/\bEncode::/, 'Encode is not in perl-base', 'utf8::encode / utf8::decode'],
+        );
         my %own;
         my @stack = ("$root/lib");
         while (@stack) {
@@ -1065,37 +1222,68 @@ sub builtin {
                 $own{$rel} = 1;
             }
         }
+        my %known = %{ $a->{known} || {} };
+        my (%known_hit, @hits);
         @stack = ($root);
         my $n = 0;
         while (@stack) {
             my $d = pop @stack;
-            for my $f (util::list_dir($d)) {
+            for my $f (sort(util::list_dir($d))) {
                 my $p = "$d/$f";
                 if (-d $p) { push @stack, $p; next }
                 next unless $f =~ /\.p[lm]$/;
+                my $rel = substr($p, length("$root/"));
                 my $src = util::read_file($p);
-                my $ln = 0;
+                my ($ln, $pod) = (0, 0);
+                my @fh;
                 for my $line (split /\n/, $src) {
                     $ln++;
-                    next if $line =~ /^\s*#/;
+                    if ($line =~ /^=(\w+)/) { $pod = $1 ne 'cut'; next }
+                    next if $pod || $line =~ /^\s*#/;
+                    last if $line =~ /^__(END|DATA)__\b/;
                     while ($line =~ /\b(use|require)\s+([A-Za-z_][A-Za-z0-9_:]*)/g) {
                         my ($kw, $m) = ($1, $2);
                         next if $m =~ /^v?\d/ || $m eq 'if';
                         $n++;
                         next if $floor{$m} || $own{$m};
                         next if $optional{$m} && $line =~ /eval\s*\{/;
-                        push @e, "$p:$ln: $kw $m is not on the floor";
+                        push @fh, "$rel:$ln: $kw $m is not on the $pb floor list. Fix: a floor module, or load it in an eval with a fallback.";
                     }
                     while ($line =~ /\brequire\s+"([^"\$]+)\.pm"/g) {
                         (my $m = $1) =~ s{/}{::}g;
                         $n++;
-                        push @e, "$p:$ln: require \"$1.pm\" is not a helper library" unless $own{$m};
+                        push @fh, "$rel:$ln: require \"$1.pm\" is not a helper library. Fix: require a file under helper/lib." unless $own{$m};
                     }
+                    for my $r (@l2) {
+                        push @fh, "$rel:$ln: $r->[1]. Fix: $r->[2]." if $line =~ $r->[0];
+                    }
+                    if ($line =~ /\buse\s+(v5\.(\d+)(?:\.\d+)?|5\.(\d{3})(?:_?\d+)?)\b/) {
+                        my $minor = defined $2 ? $2 : 0 + $3;
+                        my $fmin = int((($floor_v - int $floor_v) * 1000) + 0.5);
+                        push @fh, "$rel:$ln: use $1 needs perl 5.$minor, above the floor $floor_txt. Fix: drop it (use strict; use warnings)."
+                            if $minor > $fmin;
+                    }
+                    if ($line =~ /\buse\s+feature\b(.*)/) {
+                        my $rest = $1;
+                        for my $ft (grep { $newfeat{$_} } $rest =~ /([a-z_]+)/g) {
+                            push @fh, "$rel:$ln: feature '$ft' is newer than perl $floor_txt. Fix: plain subs and eval blocks.";
+                        }
+                    }
+                    push @fh, "$rel:$ln: builtin:: functions need perl 5.36, above the floor $floor_txt. Fix: Scalar::Util / List::Util or plain code."
+                        if $line =~ /\bbuiltin::/;
                 }
+                if (exists $known{$rel}) { $known_hit{$rel} = scalar @fh; next }
+                push @hits, @fh;
             }
         }
-        push @e, 'no use/require found' unless $n;
-        return @e;
+        push @hits, 'no use/require found' unless $n;
+        if ($a->{want}) {
+            for my $re (@{ $a->{want} }) { push @e, "no lint hit matches /$re/" unless grep { /$re/ } @hits }
+            my @un = grep { my $h = $_; !grep { $h =~ /$_/ } @{ $a->{want} } } @hits;
+            push @e, map { "unexpected lint hit: $_" } @un;
+            return @e;
+        }
+        return @hits;
     }
     if ($name eq 'secret_corpus') {
         # PRIV-05: every entry and name of tests/fixtures/secrets/corpus.json through the shipped
@@ -1104,7 +1292,7 @@ sub builtin {
         # fragment of 8+ characters. A name: withheld <-> denied by name. Rule ids are reported
         # (the corpus ids are WP-fix's; they are not compared). `known_gaps` {id: reason} turns
         # that entry's failures into TODO lines (a gap another work package owns).
-        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) };
+        my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) };
         return ('no secret corpus') unless ref $c eq 'HASH';
         my %gap = %{ $a->{known_gaps} || {} };
         my $n = 0;
@@ -1137,6 +1325,42 @@ sub builtin {
             push @e, "name $nm->{name}: " . ($got ? 'withheld' : 'copied') . ", want $nm->{expect}" if $got != $want;
         }
         push @e, 'no corpus entries' unless $n;
+        return @e;
+    }
+    if ($name eq 'resume_block') {
+        # AT-TX-11 H half (T-TEXT E3) and text-to-core C-1: resumeblock::build over a stand-in
+        # protocol of protocol_chars, the fixed lines (frame_chars, default 300) and a measured block of
+        # remeasure_bytes keeps the block
+        # untrimmed within max; the tags it asks the asset for are exactly `tags`.
+        for my $l (qw(measure resumeblock)) { require "$l.pm" }
+        no warnings qw(redefine once);
+        my @seen;
+        local *assemble::asset = sub { my ($n, $tags, $rt) = @_; @seen = @{ $tags || [] };
+                                       return ('P' x ($a->{protocol_chars} // 3000)) . "\n" . ('F' x ($a->{frame_chars} // 300)) . "\n" . ($rt->{remeasure} // '') };
+        local %rc::R = (settings => { values => { unattended_prod_reads => $a->{reads} // 'forbid' } });
+        my $n = int(($a->{remeasure_bytes} // 3000) / 100);
+        my $re = join("\n", map { sprintf('%-99s', "fact $_") } 1 .. $n);
+        my $t = resumeblock::build(sid => 'x', midturn => $a->{midturn}, nonok => $a->{nonok}, saved_copy => 'p', measured_at => 'now', remeasure => $re);
+        push @e, 'block is ' . length($t) . " chars > $a->{max}" if defined $a->{max} && length($t) > $a->{max};
+        push @e, 'the measured block was trimmed' if $a->{untrimmed} && index($t, $re) < 0;
+        push @e, 'tags [' . join(',', @seen) . '], want [' . join(',', @{ $a->{tags} }) . ']' if $a->{tags} && join(',', @seen) ne join(',', @{ $a->{tags} });
+        return @e;
+    }
+    if ($name eq 'bd2_pins') {
+        # AT-ST-12 (BD-2, C-STORE D6): the corpus pins `redacted` (the exact text after redaction
+        # with every rule) and `markers` (the marker count) hold, and across every entry's output
+        # no two markers touch or sit apart by whitespace only (one marker per merged span).
+        my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) };
+        return ('no secret corpus') unless ref $c eq 'HASH';
+        my $pins = 0;
+        for my $en (@{ $c->{entries} || [] }) {
+            my $v = join('', @{ $en->{fragments} || [] });
+            my ($out) = secrets::redact($v);
+            if (defined $en->{redacted}) { $pins++; push @e, "entry $en->{id}: redacted " . jsonc::encode($out) . ", want " . jsonc::encode($en->{redacted}) if $out ne $en->{redacted} }
+            if (defined $en->{markers}) { $pins++; my $k = () = $out =~ /\[redacted:/g; push @e, "entry $en->{id}: $k markers, want $en->{markers}" if $k != $en->{markers} }
+            push @e, "entry $en->{id}: two markers touch" if $out =~ /\]\[redacted:|\][ \t]+\[redacted:/;
+        }
+        push @e, 'no BD-2 pins in the corpus' unless $pins;
         return @e;
     }
     if ($name eq 'runner_cleanup') {
@@ -1305,6 +1529,61 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'queue_mode') {
+        # CORE-18, skills-to-core §5: queue::mode(sid, cmd) and mode_text(sid, cmd) read only
+        # that session's record under {watch} (no queue call): {mode, why, text} as expected
+        require "queue.pm";
+        no warnings "once";
+        local %rc::R = (watch => $a->{watch}, settings => { values => {} });
+        my $m = queue::mode($a->{sid}, $a->{cmd});
+        my $t = queue::mode_text($a->{sid}, $a->{cmd});
+        push @e, "mode $m->{mode}, want $a->{mode}" if defined $a->{mode} && $m->{mode} ne $a->{mode};
+        push @e, 'why ' . ($m->{why} // 'none') . ', want ' . ($a->{why} // 'none') if exists $a->{why} && ($m->{why} // '') ne ($a->{why} // '');
+        push @e, "text '$t', want '$a->{text}'" if defined $a->{text} && $t ne $a->{text};
+        return @e;
+    }
+    if ($name eq 'settings_prod') {
+        # S-SETTINGS B (CORE-02): settings::prod over resolved values {values}: reads, the
+        # class id each text matches (null = none), the user pattern count, the invalid entries.
+        my $p = settings::prod({ values => $a->{values} || {} });
+        push @e, "reads $p->{reads}, want $a->{reads}" if defined $a->{reads} && $p->{reads} ne $a->{reads};
+        push @e, "user patterns $p->{user}, want $a->{user}" if defined $a->{user} && $p->{user} != $a->{user};
+        for my $t (sort keys %{ $a->{matches} || {} }) {
+            my ($got, $want) = (settings::prod_class($t, $p), $a->{matches}{$t});
+            push @e, "'$t' matches " . ($got // 'none') . ', want ' . ($want // 'none') unless ($got // '') eq ($want // '');
+        }
+        if ($a->{invalid}) {
+            my $got = join(',', map { $_->{key} . (defined $_->{index} ? ":$_->{index}" : '') } @{ $p->{invalid} });
+            my $want = join(',', @{ $a->{invalid} });
+            push @e, "invalid [$got], want [$want]" unless $got eq $want;
+        }
+        return @e;
+    }
+    if ($name eq 'settings_export') {
+        # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).
+        my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };
+        push @e, 'keys without an export class: ' . join(', ', map { $_->[0] } @none) if @none;
+        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        # "noarg": export_view() with no argument (the watcher's report call, W2C-2). With
+        # "values" the run context holds them; without, there is no run context (no rc::init)
+        # and the view must still be the resolved settings, not empty values.
+        my $view;
+        if ($a->{noarg}) {
+            local $ENV{CLAUDE_CONFIG_DIR};
+            delete local @ENV{ grep { /^CLAUDE_PLUGIN_OPTION_/ } keys %ENV };
+            local %rc::R = $a->{values} ? (settings => { values => $a->{values} }) : ();
+            $view = settings::export_view();
+        }
+        else { $view = settings::export_view({ values => $a->{values} || {} }) }
+        my %got = @$view;
+        for my $k (sort keys %{ $a->{want} || {} }) {
+            my ($g, $w) = ($got{$k}, $a->{want}{$k});
+            $g = "$g" if jsonc::is_bool($g);
+            push @e, "$k exports " . ($g // 'null') . ', want ' . ($w // 'null') unless ($g // "\0") eq ($w // "\0");
+        }
+        for my $k (@{ $a->{absent} || [] }) { push @e, "$k is exported" if exists $got{$k} }
+        return @e;
+    }
     if ($name eq 'jobs_output_path') {
         # DP-2 / DP-13 / DP-24 (a): the two output-path readers of lib/jobrec.pm and the
         # switch between them. The default source is the result text, used only when it
@@ -1344,6 +1623,22 @@ sub builtin {
         my $want = join(',', sort @{ $a->{expect} || [] });
         my $got = join(',', sort @live);
         push @e, "live peers [$got], want [$want]" unless $got eq $want;
+        return @e;
+    }
+    if ($name eq 'no_age_rule') {
+        # AT-ST-06 (RRP-05 "no age limit"): no file-time test in the staged files named (file
+        # tests -M -A -C, a stat() field 8-10, File::stat's ->mtime, the word mtime)
+        for my $f (@{ $a->{files} || [] }) {
+            my $p = "$STAGE/helper/$f";
+            my $src = util::read_file($p) // do { push @e, "$f: unreadable"; next };
+            my $k = 0;
+            for my $l (split /\n/, $src) {
+                $k++;
+                next if $l =~ /^\s*#/;
+                push @e, "$f:$k: file-time test: $l"
+                    if $l =~ /(?:^|[\s(!])-[MAC]\s+[\$"'_]|\bstat\s*\(.*\)\s*\)?\s*\[\s*(?:8|9|10)\s*\]|\$s\[\s*(?:8|9|10)\s*\]|->\s*mtime\b|\bmtime\b/;
+            }
+        }
         return @e;
     }
     if ($name eq 'repo_check') {
@@ -1428,7 +1723,7 @@ sub assembly_runtime {
               halt_reason => 'compactions keep repeating without progress', max_calls => '34', handoff_path => $prev,
               draft_state => 'present',
               handoff_finish => "`$BRAND-store publish --stage '$prev/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`");
-    my $rf = $file // "$REPO/tests/fixtures/assembly/runtime.json";
+    my $rf = $file // "$FIXTURES_DIR/assembly/runtime.json";
     # runtime.json may spell the brand {{plugin}} (the BT-02 rename drill regenerates goldens first)
     if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, map { my $v = $j->{$_}; $v =~ s/\{\{plugin\}\}/$BRAND/g if defined $v && !ref $v; ($_ => $v) } keys %$j) if ref $j eq 'HASH' }
     return \%rt;
@@ -1585,6 +1880,13 @@ sub check {
         if (exists $f->{exists} && !$f->{exists}) { push @e, "$f->{path}: exists" if @m; next }
         if (!@m) { push @e, "$f->{path}: missing"; next }
         for my $p (@m) {
+            # snapshot <label> keeps the file's bytes for a later step's same_bytes_as <label>
+            if (defined $f->{snapshot}) { $V->{"__snapshot_$f->{snapshot}"} = util::read_file($p) }
+            if (defined $f->{same_bytes_as}) {
+                my $was = $V->{"__snapshot_$f->{same_bytes_as}"};
+                push @e, "$p: no snapshot $f->{same_bytes_as}" unless defined $was;
+                push @e, "$p: bytes differ from snapshot $f->{same_bytes_as}" if defined $was && (util::read_file($p) // '') ne $was;
+            }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
             next if -d $p;
             my $raw = util::read_file($p) // '';
@@ -1622,8 +1924,25 @@ sub check {
     for my $rw (@{ $x->{rows} || [] }) {
         my @rows = grep { ($_->{ev} // '') eq $rw->{ev} } read_rows($rw->{file});
         @rows = grep { !subset($rw->{fields}, $_) } @rows if $rw->{fields};
+        # fields_ge {field: min}: every matched row has a number >= min there
+        for my $k (sort keys %{ $rw->{fields_ge} || {} }) {
+            for my $r (@rows) { push @e, "rows $rw->{ev}: $k = " . ($r->{$k} // 'null') . " < $rw->{fields_ge}{$k}" unless defined $r->{$k} && !ref $r->{$k} && $r->{$k} =~ /^-?\d+(?:\.\d+)?$/ && $r->{$k} >= $rw->{fields_ge}{$k} }
+        }
         if (defined $rw->{count}) { push @e, "rows $rw->{ev} in $rw->{file}: " . scalar(@rows) . ", want $rw->{count}" if @rows != $rw->{count} }
         elsif (!@rows) { push @e, "no $rw->{ev} row" . ($rw->{fields} ? ' with ' . jsonc::encode($rw->{fields}) : '') . " in $rw->{file}" }
+    }
+    # joined [{nonce, field: value}]: the rollup row as the staged rollup::rows returns it after
+    # the nonce join with compaction_boundary (PKG-RUNTIME E.2)
+    if ($x->{joined}) {
+        _libs();
+        require "rollup.pm";
+        my $rows = rollup::rows("$V->{WATCH}/$V->{SID}");
+        for my $j (@{ $x->{joined} }) {
+            my @m = grep { ($_->{nonce} // '') eq ($j->{nonce} // '') } @$rows;
+            if (@m != 1) { push @e, "joined: " . scalar(@m) . " rollup rows for nonce " . ($j->{nonce} // '-') . ", want 1"; next }
+            my $msg = subset($j, $m[0], "joined");
+            push @e, $msg if $msg;
+        }
     }
     for my $rw (@{ $x->{rows_absent} || [] }) {
         my @rows = grep { ($_->{ev} // '') eq $rw->{ev} } read_rows($rw->{file});

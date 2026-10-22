@@ -5,6 +5,7 @@ package identity;
 # `ps -o lstart=`. Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk.
 use strict;
 use warnings;
+use utf8;
 use POSIX ();
 
 my %START;

@@ -1,0 +1,28 @@
+{
+ "id": "DP-29 (no compaction_unresolved for a dispatch the mod closed: native-ran)",
+ "note": "ROOT-RULINGS DP-29 (E-M-15 option, provisional), core part: when the mod drops its dispatch because a native compaction ran, it logs compacted {nonce, skip: native-ran}; reconcile then writes no compaction_unresolved for that nonce, while a dispatch with no outcome row, or one the mod logged as compact_rejected, still gets one once it is 10 minutes old",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "three mod dispatches 11 minutes old: closed by native-ran, rejected, no outcome",
+   "now": "2026-10-21T14:16:12+03:00",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"dispatch": {"nonce": "9a9a0001", "actor": "main", "channel": "mod-self", "trigger": "plugin", "ts": "2026-10-21T14:05:00+03:00"}},
+    {"dispatch": {"nonce": "9a9a0002", "actor": "main", "channel": "mod-self", "trigger": "plugin", "ts": "2026-10-21T14:05:01+03:00"}},
+    {"dispatch": {"nonce": "9a9a0003", "actor": "main", "channel": "mod-hook", "trigger": "auto", "ts": "2026-10-21T14:05:02+03:00"}},
+    {"write": "$WATCH/$SID.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-21T14:05:00.500+03:00", "ev": "compacted", "sid": "$SID", "actor": "main", "writer": "mod", "nonce": "9a9a0001", "skip": "native-ran", "tokens_before": null, "tokens_after": null, "usage_present": false, "ms": null},
+     {"v": 1, "ts": "2026-10-21T14:05:01.500+03:00", "ev": "compact_rejected", "sid": "$SID", "actor": "main", "writer": "mod", "nonce": "9a9a0002"}
+    ]}
+   ],
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "compaction_unresolved", "count": 2},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "compaction_unresolved", "count": 1, "fields": {"nonce": "9a9a0002"}},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "compaction_unresolved", "count": 1, "fields": {"nonce": "9a9a0003"}},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "compaction_unresolved", "count": 0, "fields": {"nonce": "9a9a0001"}}
+    ]}}
+ ]
+}

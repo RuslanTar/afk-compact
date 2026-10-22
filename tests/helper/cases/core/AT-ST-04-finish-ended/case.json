@@ -1,0 +1,51 @@
+{
+ "id": "AT-ST-04 (RRP-05 cross-session finish via an ended- record)",
+ "note": "C-STORE D4 / MOD-SPEC §5.8 case 4 (CORE-07): session A leaves an unproven PostCompact stash, its marker and an ended- record (its SessionEnd never reconciled). Session B's SessionStart(startup) finishes A in final mode under A's reconcile.lock: A's copy is saved (unattributed: no boundary row), A's rows carry finished_by = B's sid8, the copy's frontmatter takes claude_pid from A's newest record and finished_by, A's marker is gone, and B's own stream gains only one orphan_finished row for A (no copy row of its own)",
+ "tz": "Etc/GMT-3",
+ "vars": {"A": "a0a0a0a0-1111-4222-8333-444444444444"},
+ "steps": [
+  {"name": "A: PostCompact, unproven, deferred",
+   "now": "2026-10-21T14:05:00.800+03:00",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"transcript": "$TMP/proj/$A.jsonl", "rows": [{"prompt": {"ts": "2026-10-21T14:04:40+03:00"}}]}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$A", "transcript_path": "$TMP/proj/$A.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual",
+    "compact_summary": "<summary>\n# LAB-42 ORPHANBODY\n## Resume here\nStatus: active\n</summary>"},
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$A/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$A", "count": 1}]}
+  },
+  {"name": "B: SessionStart(startup) finishes A",
+   "now": "2026-10-21T14:20:00+03:00",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/777777-1761022800.live-a0a0a0a0.json",
+     "json": {"pid": 777777, "pid_lstart": "Tue Oct 21 08:00:00 2026", "host": "$HOST", "session_id": "$A", "cwd": "$TMP/work", "worktree": null, "source": "startup", "ts": "2026-10-21T14:00:00+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/777777-1761022800.ended-a0a0a0a0.json",
+     "json": {"session_id": "$A", "reason": "prompt_input_exit", "ts": "2026-10-21T14:06:00+03:00"}}
+   ],
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0, "stdout": "",
+    "files": [
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 1, "has": ["ORPHANBODY"],
+      "frontmatter": {"session_id": "$A", "finished_by": "$SID8", "claude_pid": "777777"}},
+     {"path": "$WATCH/$A/pending/*.post.md", "count": 0},
+     {"path": "$WATCH/.orphans/$A", "count": 0}
+    ],
+    "rows": [
+     {"file": "$WATCH/$A.classic.jsonl", "ev": "copy", "count": 1, "fields": {"result": "unattributed", "finished_by": "$SID8", "sid": "$A"}},
+     {"file": "$WATCH/$A.classic.jsonl", "ev": "copy_late", "count": 1, "fields": {"finished_by": "$SID8"}},
+     {"file": "$WATCH/$A/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"actor": "unattributed", "finished_by": "$SID8"}},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 1, "fields": {"sid": "$A", "saved": 1, "kept": 0, "left": 0}}
+    ],
+    "rows_absent": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "copy"}, {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_late"}]}
+  },
+  {"name": "a second pass (B's Stop) finds nothing more",
+   "now": "2026-10-21T14:21:00+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 1}, {"file": "$WATCH/$A.classic.jsonl", "ev": "copy", "count": 1}]}
+  }
+ ]
+}

@@ -3,6 +3,7 @@
 # then `TOTAL …`, then `WARN quota <bucket> <mb>` when over. Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 package cmd_sweep;
 

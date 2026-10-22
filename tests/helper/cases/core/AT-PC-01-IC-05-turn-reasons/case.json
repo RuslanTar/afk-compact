@@ -1,0 +1,24 @@
+{
+ "id": "AT-PC-01, AT-IC-05 (handoff-turn open reasons precompact and idle)",
+ "note": "MOD-SPEC §9.3 (S-SETTINGS D, OD-4 pre-compaction turn) and §9.4 (IC-1 D5 pre-idle turn), core part (CORE-15): handoff_turn %REASONS gains precompact and idle, so `handoff-turn open --reason precompact|idle` creates the ht record with that reason and one handoff_turn_open row; another reason stays a usage error",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "precompact",
+   "argv": ["handoff-turn", "open", "--sid", "$SID", "--ht", "0c0d0e0f", "--reason", "precompact", "--max-calls", "34", "--max-tokens", "64000"],
+   "expect": {"exit": 0, "stdout": "ok\n",
+    "files": [{"path": "$WATCH/$SID/handoff-turn/0c0d0e0f.json", "json": {"ht": "0c0d0e0f", "reason": "precompact", "max_calls": 34}}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "handoff_turn_open", "count": 1, "fields": {"ht": "0c0d0e0f", "reason": "precompact"}}]}},
+  {"name": "idle",
+   "argv": ["handoff-turn", "open", "--sid", "$SID", "--ht", "1c1d1e1f", "--reason", "idle", "--max-calls", "34", "--max-tokens", "64000"],
+   "expect": {"exit": 0, "stdout": "ok\n",
+    "files": [{"path": "$WATCH/$SID/handoff-turn/1c1d1e1f.json", "json": {"ht": "1c1d1e1f", "reason": "idle"}}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "handoff_turn_open", "count": 1, "fields": {"ht": "1c1d1e1f", "reason": "idle"}}]}},
+  {"name": "handoff-state sees the open idle turn",
+   "argv": ["handoff-state", "--sid", "$SID", "--ht", "1c1d1e1f"],
+   "expect": {"exit": 0, "stdout_lacks": ["^REFUSED"]}},
+  {"name": "another reason",
+   "argv": ["handoff-turn", "open", "--sid", "$SID", "--ht", "2c2d2e2f", "--reason", "nap", "--max-calls", "34", "--max-tokens", "64000"],
+   "expect": {"exit": 64, "stdout": "", "files": [{"path": "$WATCH/$SID/handoff-turn/2c2d2e2f.json", "count": 0}]}}
+ ]
+}

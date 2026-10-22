@@ -4,6 +4,7 @@ package secrets;
 # `deny_names`). Owner: WP-core. Rule ids are reported, values never.
 use strict;
 use warnings;
+use utf8;
 
 sub _entropy {
     my ($s) = @_;

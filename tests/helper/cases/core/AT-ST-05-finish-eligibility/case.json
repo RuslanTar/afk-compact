@@ -1,0 +1,72 @@
+{
+ "id": "AT-ST-05 b, c, d, f (finish eligibility)",
+ "note": "C-STORE D4 / MOD-SPEC §5.8 'Eligible' (CORE-07). Each foreign session leaves an unproven stash and its marker; B's SessionStart(startup) pass must leave them untouched: (b) a live- record whose pid runs with the same start time and no ended- twin; (c) an ended session whose reconcile.lock is held by a live owner (taken without waiting: skipped); (d) no per-process record at all; (f) an ended session that goes live between the eligibility check and the lock (TOCTOU re-check under the lock). Then the lock is free and (c) is finished.",
+ "tz": "Etc/GMT-3",
+ "vars": {"B5": "b5b5b5b5-1111-4222-8333-444444444444", "C5": "c5c5c5c5-1111-4222-8333-444444444444", "D5": "d5d5d5d5-1111-4222-8333-444444444444", "F5": "f5f5f5f5-1111-4222-8333-444444444444"},
+ "steps": [
+  {"name": "(b) stash", "now": "2026-10-21T14:05:00.800+03:00",
+   "setup": [{"mkdir": "$TMP/work"}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$B5", "transcript_path": "$TMP/proj/$B5.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-51 BODYB\n</summary>"},
+   "expect": {"exit": 0}},
+  {"name": "(c) stash", "now": "2026-10-21T14:05:01.800+03:00",
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$C5", "transcript_path": "$TMP/proj/$C5.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-52 BODYC\n</summary>"},
+   "expect": {"exit": 0}},
+  {"name": "(d) stash", "now": "2026-10-21T14:05:02.800+03:00",
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$D5", "transcript_path": "$TMP/proj/$D5.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-53 BODYD\n</summary>"},
+   "expect": {"exit": 0}},
+  {"name": "records: (b) live pid 1 same start; (c) ended, lock held by a live owner; (d) none",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/1-1.live-b5b5b5b5.json",
+     "json": {"pid": 1, "pid_lstart": "$LSTART1", "host": "$HOST", "session_id": "$B5", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T14:00:00+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/777777-1761022800.live-c5c5c5c5.json",
+     "json": {"pid": 777777, "pid_lstart": "Tue Oct 21 08:00:00 2026", "host": "$HOST", "session_id": "$C5", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T14:00:00+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/777777-1761022800.ended-c5c5c5c5.json",
+     "json": {"session_id": "$C5", "reason": "other", "ts": "2026-10-21T14:06:00+03:00"}},
+    {"write": "$WATCH/$C5/reconcile.lock",
+     "json": {"sid": "$C5", "actor": "reconcile", "pid": 1, "pid_lstart": "$LSTART1", "host": "$HOST", "ts": "2026-10-21T14:06:00+03:00"}}
+   ]},
+  {"name": "B's SessionStart(startup): b, c, d untouched",
+   "now": "2026-10-21T14:20:00+03:00",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0, "stdout": "",
+    "files": [
+     {"path": "$WATCH/$B5/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$B5", "count": 1},
+     {"path": "$WATCH/$C5/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$C5", "count": 1},
+     {"path": "$WATCH/$D5/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$D5", "count": 1},
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 0}
+    ],
+    "rows_absent": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished"}, {"file": "$WATCH/$C5.classic.jsonl", "ev": "copy"}]}},
+  {"name": "(f) stash; ended", "now": "2026-10-21T14:25:00.800+03:00",
+   "setup": [
+    {"write": "$WATCH/$C5/reconcile.lock", "text": ""},
+    {"write": "$ROOT/.sessions/by-pid/888888-1761022800.live-f5f5f5f5.json",
+     "json": {"pid": 888888, "pid_lstart": "Tue Oct 21 08:00:00 2026", "host": "$HOST", "session_id": "$F5", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T14:00:00+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/888888-1761022800.ended-f5f5f5f5.json",
+     "json": {"session_id": "$F5", "reason": "other", "ts": "2026-10-21T14:06:00+03:00"}},
+    {"write": "$TMP/golive.json",
+     "json": {"pid": 1, "pid_lstart": "$LSTART1", "host": "$HOST", "session_id": "$F5", "cwd": "$TMP/work", "source": "resume", "ts": "2026-10-21T14:26:00+03:00"}}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$F5", "transcript_path": "$TMP/proj/$F5.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual", "compact_summary": "<summary>\n# LAB-56 BODYF\n</summary>"},
+   "expect": {"exit": 0}},
+  {"name": "(f) F goes live between the check and the lock; (c) is free now and finished",
+   "now": "2026-10-21T14:30:00+03:00",
+   "env": {"STORE_TEST_FINISH_GOLIVE": "$F5=$TMP/golive.json=$ROOT/.sessions/by-pid/1-2.live-f5f5f5f5.json"},
+   "argv": ["hook", "SessionEnd"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionEnd", "reason": "other"},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$ROOT/.sessions/by-pid/1-2.live-f5f5f5f5.json", "count": 1},
+     {"path": "$WATCH/$F5/pending/*.post.md", "count": 1}, {"path": "$WATCH/.orphans/$F5", "count": 1},
+     {"path": "$WATCH/$C5/pending/*.post.md", "count": 0}, {"path": "$WATCH/.orphans/$C5", "count": 0},
+     {"path": "$WATCH/$B5/pending/*.post.md", "count": 1}, {"path": "$WATCH/$D5/pending/*.post.md", "count": 1},
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 1, "has": ["BODYC"]}
+    ],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 1, "fields": {"sid": "$C5"}}],
+    "rows_absent": [{"file": "$WATCH/$F5.classic.jsonl", "ev": "copy"}]}}
+ ]
+}

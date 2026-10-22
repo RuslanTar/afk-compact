@@ -14,6 +14,7 @@ package scope;
 #   save to reconcile: no main-slot save and no sweep without proof (MOD-SPEC §0 item 6).
 use strict;
 use warnings;
+use utf8;
 
 sub stored_count {
     my ($sid_dir) = @_;

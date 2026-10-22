@@ -10,9 +10,11 @@
 #        that ht (CR-F17/F25). Unknown ht -> exit 3 `REFUSED: no-ht`; handoff-state is
 #        unchanged by it
 # The mod runs all three; the reason is the halt reason of the last cycle (2-nonok, thrash,
-# cap, continue-off); C and T are the mod's limits for the turn (D-18 B1 step 2).
+# cap, continue-off), or the optional turn: precompact (§9.3) or idle (§9.4); C and T are the
+# mod's limits for the turn (D-18 B1 step 2).
 use strict;
 use warnings;
+use utf8;
 
 package cmd_handoff_turn;
 
@@ -40,7 +42,7 @@ sub run {
         return 0;
     }
     args::need($opt, qw(reason max-calls max-tokens));
-    die "usage: --reason 2-nonok|thrash|cap|continue-off\n" unless $handoff_turn::REASONS{ $opt->{reason} };
+    die "usage: --reason " . join('|', sort keys %handoff_turn::REASONS) . "\n" unless $handoff_turn::REASONS{ $opt->{reason} };
     for my $k (qw(max-calls max-tokens)) { die "usage: --$k is a positive number\n" unless $opt->{$k} =~ /\A[1-9][0-9]{0,8}\z/ }
     if (!handoff_turn::open_ht($d, $sid, $opt->{ht}, $opt->{reason}, $opt->{'max-calls'}, $opt->{'max-tokens'})) {
         args::out('EXISTS');

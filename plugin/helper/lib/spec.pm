@@ -5,6 +5,7 @@ package spec;
 # from here; nothing below hard-codes a heading or a regex. Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
 my $SPEC;
 my %RE;

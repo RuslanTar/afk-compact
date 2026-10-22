@@ -1,0 +1,60 @@
+{
+ "id": "AT-ST-03 (RRP-05 final mode)",
+ "note": "C-STORE D3 / MOD-SPEC §5.4 Final mode (CORE-07), the RR-deferred-end case: an unproven PostCompact stash (no dispatch, no marker), then SessionEnd 1 s later. (b) No boundary row: saved unattributed at once (the SETTLE_S wait waived), copy_late, the stash and the stash marker gone, within 2 s. (c) A transcript not read to its end within the read limit: the stash and the marker stay for the next run. (a), a boundary row present -> the slot by P3, is RR-S21-02-session-end.",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "(b) PostCompact: unproven, deferred",
+   "now": "2026-10-21T14:05:00.800+03:00",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"transcript": "$TMP/proj/$SID.jsonl", "rows": [{"prompt": {"ts": "2026-10-21T14:04:40+03:00"}}]}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual",
+    "compact_summary": "<summary>\n# LAB-42 FINALBODY\n## Resume here\nStatus: active\n</summary>"},
+   "expect": {"exit": 0, "files": [
+    {"path": "$WATCH/$SID/pending/*.post.md", "count": 1},
+    {"path": "$WATCH/.orphans/$SID", "count": 1}
+   ]}
+  },
+  {"name": "(b) SessionEnd 1 s later: unattributed at once",
+   "now": "2026-10-21T14:05:01.800+03:00",
+   "argv": ["hook", "SessionEnd"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionEnd", "reason": "prompt_input_exit"},
+   "expect": {"exit": 0, "ms_max": 2500,
+    "files": [
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 1, "has": ["FINALBODY"]},
+     {"path": "$ROOT/work/general/compact/*.md", "count": 0},
+     {"path": "$WATCH/$SID/pending/*.post.md", "count": 0},
+     {"path": "$WATCH/.orphans/$SID", "count": 0}
+    ],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_late", "count": 1},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy", "count": 1, "fields": {"result": "unattributed", "proof": "none"}}
+    ]}
+  },
+  {"name": "(c) another session: PostCompact, unproven",
+   "now": "2026-10-21T15:05:00.800+03:00",
+   "setup": [
+    {"transcript": "$TMP/proj/c3c3c3c3-1111-4222-8333-444444444444.jsonl", "rows": [{"prompt": {"ts": "2026-10-21T15:04:40+03:00"}}, {"text": "a long answer that makes the transcript longer than the read limit of this step"}]}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "c3c3c3c3-1111-4222-8333-444444444444", "transcript_path": "$TMP/proj/c3c3c3c3-1111-4222-8333-444444444444.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "manual",
+    "compact_summary": "<summary>\n# LAB-44 LONGBODY\n## Resume here\nStatus: active\n</summary>"},
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/c3c3c3c3-1111-4222-8333-444444444444/pending/*.post.md", "count": 1}]}
+  },
+  {"name": "(c) SessionEnd with the transcript over the read limit: the stash stays",
+   "now": "2026-10-21T15:05:01.800+03:00",
+   "env": {"STORE_TEST_READ_MAX": "100"},
+   "argv": ["hook", "SessionEnd"],
+   "stdin_json": {"session_id": "c3c3c3c3-1111-4222-8333-444444444444", "transcript_path": "$TMP/proj/c3c3c3c3-1111-4222-8333-444444444444.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionEnd", "reason": "prompt_input_exit"},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$WATCH/c3c3c3c3-1111-4222-8333-444444444444/pending/*.post.md", "count": 1},
+     {"path": "$WATCH/.orphans/c3c3c3c3-1111-4222-8333-444444444444", "count": 1},
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 1}
+    ],
+    "rows_absent": [{"file": "$WATCH/c3c3c3c3-1111-4222-8333-444444444444.classic.jsonl", "ev": "copy_late"}]}
+  }
+ ]
+}

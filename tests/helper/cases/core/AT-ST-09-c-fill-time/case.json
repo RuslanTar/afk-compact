@@ -1,0 +1,108 @@
+{
+ "id": "AT-ST-09 c (fill by time when exactly one agent row is in the window, fill-joins)",
+ "needs": [
+  "fixture:transcripts/fill-joins/joins.json"
+ ],
+ "note": "C-STORE D5 / MOD-SPEC §5.9 join (c) (CORE-09) on the WP-fix fill-joins fixture, case time-join: an unmarked subagent summary whose body is in no agent summary row; A3's boundary row is 0.4 s before the PostCompact (in the window), A2's 35.4 s before (outside TOL_S): exactly one candidate. The copy is saved sub-unknown at the Stop and the fill renames it to -aa7d00d1e, attributed_by reconcile-c, one copy_attributed {proof: c}. Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "transcripts",
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "copy": "transcripts/fill-joins/main.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+    },
+    {
+     "copy": "transcripts/fill-joins/subagents/agent-a5c0ffee0a1b2c3d4.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a5c0ffee0a1b2c3d4.jsonl"
+    },
+    {
+     "copy": "transcripts/fill-joins/subagents/agent-a7d00d1e5e6f7a8b9.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a7d00d1e5e6f7a8b9.jsonl"
+    }
+   ]
+  },
+  {
+   "name": "PostCompact: unmarked, unproven",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "now": "2026-10-21T14:05:05.650+03:00",
+   "stdin": "payloads/PostCompact/fill-unmarked-sub-x.json",
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_deferred",
+      "count": 1,
+      "fields": {
+       "why": "scope"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "Stop: P3 sub, saved sub-unknown, filled by time (one candidate)",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "now": "2026-10-21T14:06:30+03:00",
+   "stdin_json": {
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "session_id": "$SID",
+    "stop_hook_active": false,
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "count": 1,
+      "mode": "0400",
+      "path": "$ROOT/*/*/compact/subagents/*_5e55a001-aa7d00d1e_c1-h*.md",
+      "frontmatter": {
+       "actor": "a7d00d1e5e6f7a8b9",
+       "attributed_by": "reconcile-c",
+       "renamed_from": "/_5e55a001_c1-h[0-9a-f]{5}\\.md$/"
+      }
+     },
+     {
+      "count": 1,
+      "path": "$ROOT/*/*/compact/subagents/*.md"
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attributed",
+      "count": 1,
+      "fields": {
+       "actor": "a7d00d1e5e6f7a8b9",
+       "proof": "c",
+       "seq": 1
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy_attribution_ambiguous"
+     }
+    ]
+   }
+  }
+ ]
+}

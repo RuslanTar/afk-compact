@@ -1,11 +1,13 @@
 package sessions;
 # lib/sessions.pm: per-process records and lineage (MOD-SPEC §7, HK-49, OD-16).
 # Owner: WP-core. All records are write-once by exclusive create.
-#   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.live-<sid8>.json  {pid, pid_lstart, session_id, cwd, worktree, source, ts}
+#   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.live-<sid8>.json  {pid, pid_lstart, host, session_id, cwd, worktree, source, ts}
+#     (host added for the cross-session finish, MOD-SPEC §5.8 / C-STORE D8; additive)
 #   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.ended-<sid8>.json {session_id, reason, ts}
 #   <root>/.sessions/<sid>.lineage.json {previous_session_id, lineage_reason}
 use strict;
 use warnings;
+use utf8;
 
 sub dir { return rc::root() . '/.sessions' }
 sub by_pid { return dir() . '/by-pid' }
@@ -20,7 +22,7 @@ sub write_live {
     my ($sid, $cwd, $worktree, $source) = @_;
     my $c = rc::claude();
     my $f = by_pid() . '/' . _key($c) . '.live-' . substr($sid, 0, 8) . '.json';
-    my $rec = jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, session_id => $sid, cwd => $cwd,
+    my $rec = jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, host => identity::host(), session_id => $sid, cwd => $cwd,
                          worktree => $worktree, source => $source, ts => util::iso(util::now()));
     return util::write_excl($f, jsonc::encode_bytes($rec) . "\n", 0600);
 }
@@ -71,6 +73,52 @@ sub lineage {
     my $raw = util::read_file(dir() . "/$sid.lineage.json") // return undef;
     my $j = eval { jsonc::decode($raw) };
     return ref $j eq 'HASH' ? $j : undef;
+}
+
+# records_for(sid) -> {n, live => [records with no ended- twin], newest => record | undef}:
+# the per-process records of one session (file names by sid8, the full id checked inside).
+sub records_for {
+    my ($sid) = @_;
+    my $sid8 = substr($sid // '', 0, 8);
+    my (%ended, @live, $newest, $newest_t);
+    my $n = 0;
+    my @files = util::list_dir(by_pid());
+    for my $f (@files) {
+        next unless $f =~ /^(\d+-\d+)\.(live|ended)-\Q$sid8\E\.json$/;
+        my ($key, $kind) = ($1, $2);
+        my $raw = util::read_file(by_pid() . "/$f") // next;
+        my $j = eval { jsonc::decode($raw) };
+        next unless ref $j eq 'HASH' && ($j->{session_id} // '') eq $sid;
+        $n++;
+        if ($kind eq 'ended') { $ended{$key} = 1; next }
+        push @live, { %$j, _key => $key };
+        my $t = util::parse_iso($j->{ts} // '') // 0;
+        ($newest, $newest_t) = ($j, $t) if !defined $newest_t || $t >= $newest_t;
+    }
+    return { n => $n, live => [grep { !$ended{ $_->{_key} } } @live], newest => $newest };
+}
+
+# record_live(record) -> 1 when a live- record with no ended- twin still counts as live
+# (MOD-SPEC §5.8, MOD-SPEC §7 liveness). Provisional root reading of owner question C-STORE-1
+# (Recommended "Process gone counts"): a record of this host whose pid is gone or runs with
+# another start time counts as ended (a crash). A record with no host field (written before
+# the host field) or of another host counts as live: only an ended- record ends it (fail
+# closed). The literal reading (only an ended- record) is `return 1` here.
+sub record_live {
+    my ($rec) = @_;
+    my $h = $rec->{host};
+    return 1 unless defined $h && !ref $h && $h ne '' && $h eq identity::host();
+    return identity::alive($rec->{pid}, $rec->{pid_lstart}) ? 1 : 0;
+}
+
+# ended(sid) -> 1 when another session may finish sid's stashes (MOD-SPEC §5.8 "Eligible"):
+# sid has at least one per-process record and none of them is live. A session with no
+# record at all is never touched.
+sub ended {
+    my ($sid) = @_;
+    my $r = records_for($sid);
+    return 0 unless $r->{n};
+    return (grep { record_live($_) } @{ $r->{live} }) ? 0 : 1;
 }
 
 # live_peers() -> [{session_id, pid, pid_lstart, cwd, worktree}] : a session is

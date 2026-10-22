@@ -2,10 +2,13 @@ package keyset;
 # lib/keyset.pm: C5 payload key-set canary (MOD-SPEC §5.6). Owner: WP-core.
 # The baseline (assets/canary-baseline.json, tools/canary-baseline) lists each
 # event's required and optional top-level keys. A payload with a key outside that
-# set, or without a required key, logs one `keyset_change` per Claude Code version
-# (exclusive-create marker <watch>/keyset/<version>-<event>).
+# set, or without a required key, logs one `keyset_change` per (event, key set): the
+# exclusive-create marker <watch>/keyset/<event>-<keyset_sha8> (P5-FOLD A7: not per version,
+# so a key set first seen before the version is known does not fire again under it); the
+# row carries cc_version in its envelope.
 use strict;
 use warnings;
+use utf8;
 
 my $BASE;
 sub baseline {
@@ -31,12 +34,12 @@ sub check {
     my @missing = grep { !$have{$_} } @{ $ks->{required} || [] };
     return unless @added || @missing;
     my $w = rc::watch() // return;
-    my $ver = rc::cc_version() // 'unknown';
-    (my $tag = "$ver-$event") =~ s/[^A-Za-z0-9._-]/_/g;
+    my $ks8 = sha8(\@keys);
+    (my $tag = "$event-$ks8") =~ s/[^A-Za-z0-9._-]/_/g;
     my $first = eval { util::write_excl("$w/keyset/$tag", '', 0600) };
     return unless $first;
     my @clip = map { /^[A-Za-z0-9_]{1,64}$/ ? $_ : 'other' } @added;
-    rc::emit('keyset_change', [event => $event, keyset_sha8 => sha8(\@keys), baseline_sha8 => $ks->{sha8},
+    rc::emit('keyset_change', [event => $event, keyset_sha8 => $ks8, baseline_sha8 => $ks->{sha8},
                                added => [@clip[0 .. ($#clip > 9 ? 9 : $#clip)]], missing => \@missing]);
 }
 

@@ -3,6 +3,7 @@ package args;
 # parse(\@argv, bools => [names], multi => [names]) -> (\%opt, \@rest) or dies "usage: ..."
 use strict;
 use warnings;
+use utf8;
 
 sub parse {
     my ($argv, %o) = @_;

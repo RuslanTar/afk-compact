@@ -1,0 +1,71 @@
+{
+ "id": "AT-P5-05",
+ "note": "P5-FOLD A4 text encoding: every output is valid UTF-8 with each character encoded once (no c3 82 c2 b7 'Â·', no c3 a2 c2 80 c2 a6 'â€¦') and a non-ASCII path round-trips. Inputs: a repo at $TMP/Док/h on branch fix-ü (git line with ·), an in-flight task (·), an evidence row (→), a STATE.md line with — over 160 chars (cut with …), a handoff root given by env at $TMP/Док/root. Outputs: (1) checkpoint --measured block, (2) SessionStart(compact) additionalContext, (3) classic PreCompact fallback stdout with the [chain] path, (4) status",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup: repo, branch, STATE.md, previous copy",
+   "setup": [
+    {"repo_fixture": "main-branch.json", "at": "$TMP/Док/h"},
+    {"git": ["checkout", "-q", "-b", "fix-ü"], "cwd": "$TMP/Док/h"},
+    {"write": "$TMP/Док/h/.planning/STATE.md", "text": "# State\n\nPhase 2 — the retry worker’s backoff is wired; next: the dead-letter path, the metrics, the alert rule and the runbook page for the on-call rotation, then the soak test over two nights\nsecond line\n"}
+   ]
+  },
+  {
+   "name": "(1) checkpoint --measured",
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/Док/h"],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["git: branch fix-ü · HEAD ", "Phase 2 — the retry worker’s backoff", "…", "Док/h/.planning/STATE.md):"],
+    "stdout_absent": ["Â", "Ã", "â€", "Ð"]
+   }
+  },
+  {
+   "name": "sidecar: one running task",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/Док/h", "hook_event_name": "Stop",
+                  "background_tasks": [{"id": "b1x2y3", "type": "local_bash", "status": "running"}]},
+   "expect": {"exit": 0}
+  },
+  {
+   "name": "(2) SessionStart(compact) additionalContext",
+   "setup": [
+    {"dispatch": {"nonce": "3c4d5e6f", "actor": "unknown", "channel": "classic", "trigger": "auto", "age_s": 30, "resume_pref": "sessionstart"}},
+    {"write": "$WATCH/$SID/checkpoint/3c4d5e6f.json", "json": {"evidence_rows": [{"origin": "/private/tmp/Док/build.log", "copy": "$TMP/Док/root/work/general/evidence/build.log", "status": "copied"}]}}
+   ],
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/Док/h", "hook_event_name": "SessionStart", "source": "compact"},
+   "expect": {
+    "exit": 0,
+    "context_contains": ["git: branch fix-ü · HEAD ", "  b1x2y3 · local_bash · running", "  /private/tmp/Док/build.log → ", "Phase 2 — the retry worker’s backoff", "…", "Док/h/.planning/STATE.md):"],
+    "stdout_absent": ["Â", "Ã", "â€", "Ð"]
+   }
+  },
+  {
+   "name": "(3) classic PreCompact fallback with the [chain] path under a non-ASCII root",
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/Док/root"},
+   "setup": [
+    {"write": "$TMP/Док/root/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md", "mode": "0400",
+     "text": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 0a0b0c0d\ndate: 2026-10-21T13:00:00+03:00\nsession_id: $SID\nactor: main\n---\nbody\n"}
+   ],
+   "argv": ["hook", "PreCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/Док/h", "hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": null},
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["full text in $TMP/Док/root/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md (never U-).", "⟪$BRAND v1 n="],
+    "stdout_absent": ["Â", "Ã", "â€", "Ð"]
+   }
+  },
+  {
+   "name": "(4) status",
+   "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/Док/root"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": ["^halt: off · continues this hour: 0 of \\d+$"],
+    "stdout_absent": ["Â", "Ã", "â€", "Ð"]
+   }
+  }
+ ]
+}

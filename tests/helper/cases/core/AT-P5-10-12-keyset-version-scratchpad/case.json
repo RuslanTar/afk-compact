@@ -1,0 +1,31 @@
+{
+ "id": "AT-P5-10, AT-P5-11, AT-P5-12",
+ "note": "P5-FOLD A7 (CORE-06). AT-P5-10: the C5 key-set canary fires once per (event, key set), marker <watch>/keyset/<event>-<keyset_sha8>: a SessionStart with an unknown key while the version is unknown, then the same key set under 2.1.307 -> 1 row; a new key set -> 1 more. AT-P5-11: watcher rows carry the version (sweep_evidence and session rows here, from the exec hint). AT-P5-12: SessionStart(startup) with scratchpad_dir: the private sidecar <watch>/<sid>/scratchpad.json has the path; no row in any stream holds it; the session row has scratchpad present and under_temp_root true (absent and null without it)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "unknown version, a new key",
+   "argv": ["hook", "SessionStart"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "SessionStart", "source": "startup", "zz_new_key": 1},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "keyset_change", "count": 1, "fields": {"event": "SessionStart", "cc_version": null}}]}},
+  {"name": "same key set under 2.1.307: no second row", "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+   "argv": ["hook", "SessionStart"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "SessionStart", "source": "resume", "zz_new_key": 1},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "keyset_change", "count": 1}]}},
+  {"name": "another key set: one more", "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+   "argv": ["hook", "SessionStart"], "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP", "hook_event_name": "SessionStart", "source": "resume", "zz_other_key": 1},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "keyset_change", "count": 2},
+                                  {"file": "$WATCH/$SID.classic.jsonl", "ev": "keyset_change", "count": 1, "fields": {"cc_version": "2.1.307"}}]}},
+  {"name": "scratchpad_dir: sidecar only; rows carry the version", "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+   "argv": ["hook", "SessionStart"], "stdin_json": {"session_id": "s-sp", "transcript_path": "$TMP/proj/s-sp.jsonl", "cwd": "$TMP", "hook_event_name": "SessionStart", "source": "startup", "scratchpad_dir": "/private/tmp/claude-501/-Users-r-Projects-acme/1234abcd/scratchpad"},
+   "expect": {"exit": 0,
+     "files": [{"path": "$WATCH/s-sp/scratchpad.json", "count": 1, "mode": "0600", "json": {"scratchpad_dir": "/private/tmp/claude-501/-Users-r-Projects-acme/1234abcd/scratchpad"}}],
+     "rows": [{"file": "$WATCH/s-sp.classic.jsonl", "ev": "session", "count": 1, "fields": {"phase": "start", "scratchpad": "present", "under_temp_root": true, "cc_version": "2.1.307"}}],
+     "grep_absent": [{"dir": "$WATCH", "text": "Projects-acme", "exclude": "scratchpad\\.json$"}]}},
+  {"name": "no scratchpad_dir",
+   "argv": ["hook", "SessionStart"], "stdin_json": {"session_id": "s-nosp", "transcript_path": "$TMP/proj/s-nosp.jsonl", "cwd": "$TMP", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0, "absent": ["$WATCH/s-nosp/scratchpad.json"],
+     "rows": [{"file": "$WATCH/s-nosp.classic.jsonl", "ev": "session", "count": 1, "fields": {"scratchpad": "absent", "under_temp_root": null}}]}},
+  {"name": "AT-P5-11: a sweep row carries the version", "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+   "argv": ["sweep", "--sid", "s-sw", "--nonce", "abc12345", "--transcript", "$TMP/proj/none.jsonl", "--cwd", "$TMP"],
+   "expect": {"rows": [{"file": "$WATCH/s-sw.classic.jsonl", "ev": "sweep_evidence", "count": 1, "fields": {"cc_version": "2.1.307"}}]}}
+ ]
+}

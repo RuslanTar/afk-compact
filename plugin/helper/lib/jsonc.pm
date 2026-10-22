@@ -14,6 +14,7 @@ package jsonc;
 #   characters, control characters are escaped.
 use strict;
 use warnings;
+use utf8;
 
 {
     package jsonc::Bool;

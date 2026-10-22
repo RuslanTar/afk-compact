@@ -9,6 +9,7 @@ package copies;
 # Mode 0400; frontmatter from the dispatch record and the boundary row only.
 use strict;
 use warnings;
+use utf8;
 
 our @SLOTS = ('compact', 'compact/subagents', 'compact/unattributed');
 
@@ -70,6 +71,143 @@ sub drop_stash {
     return 0 unless defined $result && $result =~ /\A(?:saved|unattributed|late|exists)\z/;
     return 0 unless own_stash($path);
     return unlink($path) ? 1 : 0;
+}
+
+# settle_mismatch(path => stash, save => copies::save result (EXISTS sha-differs), scan => scan)
+# -> 'dropped' | 'kept' | undef (not our stash, or no mismatch). RRP-04, MOD-SPEC §5.8 cases 2-3:
+#   redundant: the stash verdict is ok-trailer and its body cut after the sentinel line has the
+#     copy's body sha (an engine trailer only in this text, AT-M3-17) -> the stash goes,
+#     row stash_dropped {id6, nonce, why: redundant, copy_rel};
+#   real: the stash is rewritten with the summary-copy redaction (HARD, as a saved copy) to
+#     pending/<id>.<post|mod>.mismatch.md (0600, temp + link, never over an earlier keep), its
+#     sha side file beside it, then the raw stash goes; row stash_kept {id6, nonce, why: mismatch,
+#     redacted_n}. Kept files are never deleted by the plugin (D-8).
+sub settle_mismatch {
+    my (%a) = @_;
+    my ($path, $save) = @a{qw(path save)};
+    return undef unless ref $save eq 'HASH' && ($save->{result} // '') eq 'mismatch';
+    return undef unless own_stash($path);
+    my $text = util::read_file($path) // return undef;
+    my $s = $a{scan} || detect::scan($text);
+    my $raw_sha = sha::hex256($s->{normalized});
+    my ($csha) = defined $save->{path} ? copy_sha($save->{path}) : (undef);
+    my $base = util::basename($path);
+    my ($stem, $kind) = $base =~ /\A(.+)\.(post|mod)\.md\z/ or return undef;
+    my $id6 = $save->{id6} // ($kind eq 'mod' ? substr($stem, 0, 6) : $stem);
+    my $nonce = $save->{nonce} // ($kind eq 'mod' ? $stem : undef);
+    if (($save->{verdict} // '') eq 'ok-trailer' && defined $csha && defined $s->{sentinel_from_end}) {
+        my @b = @{ $s->{lines} };
+        my ($k, $at) = (0, undef);
+        for (my $j = $#b; $j >= 0; $j--) {
+            next if $b[$j] =~ /^\s*$/;
+            if (++$k == $s->{sentinel_from_end}) { $at = $j; last }
+        }
+        if (defined $at && sha::hex256(join("\n", @b[0 .. $at]) . "\n") eq $csha) {
+            return undef unless unlink $path;
+            rc::emit('stash_dropped', [id6 => $id6, nonce => $nonce, why => 'redundant', copy_rel => $save->{rel}]);
+            return 'dropped';
+        }
+    }
+    my $chars = $text;
+    utf8::decode($chars) unless utf8::is_utf8($chars);
+    my ($kept, $rh) = secrets::redact($chars, ['HARD']);
+    my $n = 0;
+    $n += $_->{count} for @$rh;
+    my $dir = util::dirname($path);
+    my $target;
+    my $tmp = sprintf('%s/.%s.%s.mismatch.tmp-%d-%04x', $dir, $stem, $kind, $$, int(rand(65536)));
+    return undef unless eval { util::write_excl($tmp, $kept, 0600) };
+    for my $try (1 .. 9) {
+        my $cand = "$dir/$stem.$kind" . ($try > 1 ? "-$try" : '') . '.mismatch.md';
+        if (link($tmp, $cand)) { $target = $cand; last }
+        last unless $!{EEXIST};
+    }
+    unlink $tmp;
+    return undef unless defined $target;
+    (my $side = $target) =~ s/\.md\z/.json/;
+    my $kb = $kept;
+    utf8::encode($kb) if utf8::is_utf8($kb);
+    eval {
+        util::write_excl($side, jsonc::encode_bytes(jsonc::obj(
+            v => 1, id6 => $id6, nonce => $nonce, kind => $kind, raw_sha256 => $raw_sha, kept_sha256 => sha::hex256($kb),
+            redacted => sprintf('%d (%s)', $n, ($n ? secrets::rule_ids($rh) : '-')), copy_rel => $save->{rel},
+            copy_sha256 => $csha, ts => util::iso_ms(util::now()))) . "\n", 0600);
+    };
+    unlink $path;
+    rc::emit('stash_kept', [id6 => $id6, nonce => $nonce, why => 'mismatch', redacted_n => $n]);
+    return 'kept';
+}
+
+# attribute(path => old copy, agent => agent id, proof => a|b|c) -> {ok => 1, path, rel, seq}
+# or {why}: MOD-SPEC §5.9 step 3 (fill). A sub-unknown copy in compact/subagents/ is
+# re-created under <same stamp>_<sid8>-a<agent8>_c<seq'>-<id6>.md (seq' under seq.lock), its
+# frontmatter the old one in the old order with actor, compaction_seq replaced and
+# attributed_by, attributed_at, renamed_from added; the body byte-identical. Exclusive create,
+# 0400, then re-read: the frontmatter parses and the body sha equals the old body's; only then
+# the old name is unlinked (OD-17: a new file, never an edit in place). Any failure leaves the
+# old file, and a new file that was written but did not verify is unlinked.
+sub attribute {
+    my (%a) = @_;
+    my ($old, $agent, $proof) = @a{qw(path agent proof)};
+    my $base = util::basename($old // '');
+    return { why => 'not-sub-unknown' } unless $base =~ /\A(\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d)_([0-9a-z]{8})_c\d+-([0-9a-z-]+)\.md\z/;
+    my ($stamp, $sid8, $id6) = ($1, $2, $3);
+    my $dir = util::dirname($old);
+    return { why => 'not-subagents' } unless util::basename($dir) eq 'subagents' && util::basename(util::dirname($dir)) eq 'compact';
+    return { why => 'agent' } unless defined $agent && $agent =~ /\A[A-Za-z0-9][A-Za-z0-9_-]*\z/;
+    my $raw = util::read_file($old) // return { why => 'unreadable' };
+    return { why => 'frontmatter' } unless $raw =~ /\A(---\n)(.*?\n)(---\n)(.*)\z/s;
+    my ($head, $body) = ($2, $4);
+    my ($fm) = frontmatter::read($raw);
+    return { why => 'frontmatter' } unless $fm && ($fm->{actor} // '') eq 'sub-unknown';
+    my $sid = $fm->{session_id} // return { why => 'frontmatter' };
+    my $body_sha = sha::hex256($body);
+    my $tag = '-a' . substr($agent, 0, 8);
+    my $sd = rc::sid_dir() // return { why => 'no-watch' };
+    my $out = eval {
+        lock::with("$sd/seq.lock", { sid => $sid, actor => $agent }, sub {
+            my $seq = _seq($dir, $sid8, $tag);
+            my $new = "$dir/${stamp}_${sid8}${tag}_c${seq}-$id6.md";
+            my @lines;
+            for my $l (split /\n/, $head) {
+                if ($l =~ /\Aactor: /) { push @lines, 'actor: ' . frontmatter::_scalar($agent) }
+                elsif ($l =~ /\Acompaction_seq: /) { push @lines, "compaction_seq: $seq" }
+                else { push @lines, $l }
+            }
+            push @lines, "compaction_seq: $seq" unless grep { /\Acompaction_seq: / } @lines;
+            push @lines, 'attributed_by: ' . frontmatter::_scalar("reconcile-$proof"), 'attributed_at: ' . frontmatter::_scalar(util::iso(util::now())),
+                         'renamed_from: ' . frontmatter::_scalar($base);
+            my $data = "---\n" . join("\n", @lines) . "\n---\n" . $body;
+            return { why => 'exists' } unless util::write_excl($new, $data, 0400);
+            _test_corrupt($new);
+            my $back = util::read_file($new);
+            my ($bfm) = frontmatter::read($back);
+            my ($bbody) = defined $back && $back =~ /\A---\n.*?\n---\n(.*)\z/s;
+            if (!$bfm || ($bfm->{actor} // '') ne $agent || !defined $bbody || sha::hex256($bbody) ne $body_sha) {
+                unlink $new;
+                return { why => 'verify' };
+            }
+            unlink($old) or do { unlink $new; return { why => 'unlink' } };
+            return { ok => 1, path => $new, seq => $seq };
+        }, wait_ms => 500);
+    };
+    return { why => (($@ // '') =~ /lock-timeout/ ? 'lock-timeout' : 'write-error') } unless $out;
+    $out->{rel} = substr($out->{path}, length(rc::root()) + 1) if $out->{ok};
+    return $out;
+}
+
+# Test seam (STORE_TEST_MODE only): STORE_TEST_FILL_CORRUPT=1 flips one byte of a fill's new
+# file before its read-back, so the verification fails (AT-ST-09 c).
+sub _test_corrupt {
+    my ($p) = @_;
+    return unless util::test_mode() && ($ENV{STORE_TEST_FILL_CORRUPT} // '') eq '1';
+    chmod 0600, $p;
+    my $d = util::read_file($p) // return;
+    substr($d, -2, 1) = substr($d, -2, 1) eq 'x' ? 'y' : 'x';
+    open(my $fh, '>:raw', $p) or return;
+    print $fh $d;
+    close $fh;
+    chmod 0400, $p;
 }
 
 sub _seq {
@@ -223,6 +361,7 @@ sub save {
                 seat_state          => $a{seat_state},
                 evidence            => $a{evidence},
                 redacted            => $redacted,
+                finished_by         => rc::finished_by(),
             ]);
             util::mkdir_p($dir);
             my $ok = util::write_excl($path, $fm . ($body =~ /\n\z/ ? $body : $body . "\n"), 0400);

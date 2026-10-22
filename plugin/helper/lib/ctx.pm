@@ -5,6 +5,7 @@ package ctx;
 # Code holds no literal plugin name.
 use strict;
 use warnings;
+use utf8;
 
 our ($ROOT, $HELPER, $BRAND, $VERSION, $MANIFEST);
 

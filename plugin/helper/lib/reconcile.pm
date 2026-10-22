@@ -16,6 +16,15 @@ package reconcile;
 #   - order canary C6: a boundary row with no PostCompact, or a PostCompact with no
 #     PreCompact and no `precomputed` -> `order_anomaly`
 #   - an undelivered main resume block -> `resume_undelivered`
+#   - a save that returned EXISTS sha-differs settles its stash once (RRP-04, MOD-SPEC §5.8):
+#     `stash_dropped` (redundant) or `stash_kept` (a redacted *.mismatch.md keep)
+#   - final mode (SessionEnd, the cross-session finish): no SETTLE_S wait (RRP-05)
+#   - the stash index marker <watch>/.orphans/<sid> goes once pending/ holds no stash
+#   - idle (IC-1 D1): the first native idle row after a main boundary row (prefix only) and the
+#     mod record's `idle` give the rollup idle, idle_source, idle_gap_s (on the compaction_boundary
+#     row, or on a rollup row written here); a disagreement -> one `idle_mismatch {nonce}`
+# No rule here looks at a stash's age or file time (RRP-05 "no age limit"); SETTLE_S is the
+# wait for a boundary row, measured from the PostCompact time in the stash meta.
 # Every row is written once (reconcile reads the rows it wrote before).
 #
 # Persisted incremental state (F2-4): <watch>/<sid>/reconcile.json, written atomically,
@@ -26,14 +35,17 @@ package reconcile;
 # that was replaced or shortened is read again from its start (rows dedupe by key).
 use strict;
 use warnings;
+use utf8;
 
-our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered);
+our @OWN_ROWS = qw(copy_late compaction_unresolved precompute_not_reused order_anomaly resume_undelivered idle_mismatch);
 our $STATE = 'reconcile.json';
+our $LOGGED;
 our $READ_MAX = 32 * 1024 * 1024;   # bytes read from one file per Stop; the rest at the next
 our $SETTLE_S = 10;                 # an unproven PostCompact younger than this waits
 our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long after its PostCompact
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
 our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
+our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main (BD-3)
 # A main boundary row's PostCompact is one at or before the row, never after it (RR-S21-01):
 # the row is written after PostCompact and the mod after-step (S-21), and the stash time
 # has milliseconds, so a later PostCompact (an unproven subagent one) cannot take its place.
@@ -45,7 +57,7 @@ sub _load {
     my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
     $j = {} unless ref $j eq 'HASH' && ($j->{v} // 0) == 1;
     $j->{v} = 1;
-    for my $k (qw(classic rolls main subs copied logged done)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
+    for my $k (qw(classic rolls main subs copied logged done mism fill cbn subc)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
     for my $k (qw(pre rolls_l bounds sbounds)) { $j->{$k} = [] unless ref $j->{$k} eq 'ARRAY' }
     return $j;
 }
@@ -98,9 +110,22 @@ sub _ingest_classic {
         if ($ev eq 'copy') {
             next if ($r->{result} // '') =~ /^failed/;
             # the copy's path under <root> ('' for a mismatch: that copy holds another body)
-            my $rel = ($r->{result} // '') eq 'mismatch' ? '' : ($r->{rel_path} // '');
+            my $mism = ($r->{result} // '') eq 'mismatch';
+            my $rel = $mism ? '' : ($r->{rel_path} // '');
             $st->{copied}{ $r->{id6} } = $rel if defined $r->{id6};
             $st->{copied}{ 'n:' . $r->{nonce} } = $rel if defined $r->{nonce};
+            # a subagent copy not named by agent (MOD-SPEC §5.9): a fill candidate even when its
+            # PostCompact is no longer pending (id6, time and nonce only; _fill checks the file)
+            if (defined $r->{id6} && !ref $r->{id6} && ($r->{slot} // '') eq 'subagents' && $rel ne ''
+                && util::basename($rel) !~ /_[0-9a-z]{8}-a/ && !$st->{fill}{ $r->{id6} }) {
+                my $e = util::parse_iso($r->{ts} // '');
+                $st->{subc}{ $r->{id6} } = { e => $e, (defined $r->{nonce} && !ref $r->{nonce} ? (nonce => $r->{nonce}) : ()) } if defined $e;
+            }
+            # the copy a mismatch row names (MOD-SPEC §5.8): a stash still beside it is settled once
+            if ($mism && defined $r->{rel_path} && !ref $r->{rel_path}) {
+                $st->{mism}{ $r->{id6} } = $r->{rel_path} if defined $r->{id6};
+                $st->{mism}{ 'n:' . $r->{nonce} } = $r->{rel_path} if defined $r->{nonce};
+            }
         } elsif ($ev =~ /^precompact/) {
             my $e = util::parse_iso($r->{ts} // '');
             push @{ $st->{pre} }, $e if defined $e;
@@ -116,6 +141,9 @@ sub _ingest_rolls {
     for my $l (@$lines) {
         my $r = eval { jsonc::decode($l) };
         next unless ref $r eq 'HASH';
+        # the boundary sizes appended for a nonce (PKG-RUNTIME E.2) are no rollup row of their own
+        if (($r->{ev} // 'compaction') eq 'compaction_boundary') { $st->{cbn}{ $r->{nonce} } = 1 if defined $r->{nonce}; next }
+        next unless ($r->{ev} // 'compaction') eq 'compaction';
         push @{ $st->{rolls_l} }, { id6 => $r->{id6}, nonce => $r->{nonce}, e => util::parse_iso($r->{ts} // '') // 0,
                                     actor => $r->{actor}, pc => ($r->{precomputed} ? 1 : 0), join => $r->{join} };
     }
@@ -127,12 +155,89 @@ sub _ingest_bounds {
     my ($lines, $to_end) = _new_lines($path, $fst);
     my %seen = map { (($_->{u} // '') => 1) } @$list;
     for my $l (@$lines) {
+        # IC-1 D1: the first system row after a main boundary row that starts with a native idle
+        # prefix marks that compaction (ni = notice | return); later ones are not read
+        if (!defined $agent && @$list && !defined $list->[-1]{ni} && defined(my $k = transcript::idle_notice($l))) {
+            $list->[-1]{ni} = $k;
+            next;
+        }
+        # An agent file's summary row after a boundary (MOD-SPEC §5.9 step 1): its marker nonce
+        # and normalized-body sha only, on the newest boundary of that agent that has none yet
+        # (a boundary read in an earlier chunk is carried in the saved state).
+        if (defined $agent && (my $sf = transcript::summary_facts($l))) {
+            my ($last) = grep { ($_->{a} // '') eq $agent } reverse @$list;
+            if ($last && !$last->{s}) { $last->{s} = 1; $last->{n} = $sf->{n}; $last->{h} = $sf->{h} }
+            next;
+        }
         my $bd = transcript::boundary($l) or next;
         next if defined $bd->{uuid} && $seen{ $bd->{uuid} }++;
         push @$list, { u => $bd->{uuid}, e => $bd->{epoch}, pc => $bd->{precomputed}, pre => $bd->{pre}, post => $bd->{post},
-                       ms => $bd->{duration_ms}, (defined $agent ? (a => $agent) : ()), by => undef };
+                       ms => $bd->{duration_ms}, v => $bd->{version}, (defined $agent ? (a => $agent) : ()), by => undef };
     }
     return $to_end;
+}
+
+# ---------------------------------------------------------------- fill (MOD-SPEC §5.9)
+# A PostCompact whose copy may be a sub-unknown one: proven sub (P2, or P3 at this reconcile)
+# with no agent id from P1.
+sub _fill_cand { my ($it) = @_; return !defined $it->{agent} && ($it->{scope} eq 'sub' || ($it->{p3} // '') eq 'sub') ? 1 : 0 }
+
+# A sub-unknown copy in compact/subagents/ gets its agent from a subagent boundary row:
+# (a) the row's summary nonce equals the copy's nonce; (b) the row's summary sha equals the
+# copy's body sha; (c) time only, when exactly one agent has an unjoined boundary row inside
+# the copy's window. Otherwise copy_attribution_ambiguous (once). Only PostCompact copies this
+# reconcile has metas for (the pool); a copy already named -a<agent8> is never touched.
+sub _fill {
+    my ($st, $pool, $n, $subs_end, $left) = @_;
+    my $root = rc::root();
+    my $logged = $st->{logged};
+    my @sb = @{ $st->{sbounds} };
+    for my $it (grep { _fill_cand($_) } @$pool) {
+        last if !$left->();
+        my $id6 = $it->{id6};
+        next if $st->{fill}{$id6};
+        my $rel = $st->{copied}{$id6};
+        next unless defined $rel && $rel ne '';    # not saved yet
+        my $path = "$root/$rel";
+        my ($csha, $fm) = -f $path ? copies::copy_sha($path) : (undef, undef);
+        if (!$fm || ($fm->{actor} // '') ne 'sub-unknown' || $rel !~ m{(?:\A|/)compact/subagents/[^/]+\z} || util::basename($rel) =~ /_[0-9a-z]{8}-a/) {
+            $st->{fill}{$id6} = 'n/a';    # not a sub-unknown copy in compact/subagents/
+            next;
+        }
+        my ($bd, $proof);
+        my $free = sub { !defined $_[0]{f} };
+        if (defined $fm->{nonce} && $fm->{nonce} ne '') { ($bd) = grep { $free->($_) && defined $_->{n} && $_->{n} eq $fm->{nonce} } @sb; $proof = 'a' if $bd }
+        if (!$bd && defined $csha) { ($bd) = grep { $free->($_) && defined $_->{h} && $_->{h} eq $csha } @sb; $proof = 'b' if $bd }
+        if (!$bd) {
+            next unless $subs_end;    # an agent file not read to its end may still hold the row
+            # candidates: every agent with a free boundary row inside the copy's window, the P3
+            # window of _match [e - TOL_S, e + SUB_WINDOW_S] (C-STORE D5 (c)); a fill only when
+            # there is exactly one agent (its earliest row in the window)
+            my @in = grep { $free->($_) && defined $_->{a} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} - $it->{e} <= $SUB_WINDOW_S } @sb;
+            my %ag = map { ($_->{a} => 1) } @in;
+            if (keys %ag == 1) { ($bd) = sort { $a->{e} <=> $b->{e} } @in; $proof = 'c' }
+            elsif (keys %ag > 1) {
+                $st->{fill}{$id6} = 'ambiguous';
+                next if $logged->{"copy_attribution_ambiguous:$id6"}++;
+                rc::emit('copy_attribution_ambiguous', [id6 => $id6, candidates => [sort keys %ag]]);
+                next;
+            }
+            else { next }
+        }
+        my $r = copies::attribute(path => $path, agent => $bd->{a}, proof => $proof);
+        if (!$r->{ok}) {
+            $st->{fill}{$id6} = 'failed';
+            rc::emit('copy_attribution_failed', [id6 => $id6, why => $r->{why}]);
+            next;
+        }
+        $bd->{f} = $id6;
+        $st->{fill}{$id6} = 'done';
+        $st->{copied}{$id6} = $r->{rel};
+        $st->{copied}{ 'n:' . $fm->{nonce} } = $r->{rel} if defined $fm->{nonce} && $fm->{nonce} ne '';
+        rc::emit('copy_attributed', [id6 => $id6, nonce => $fm->{nonce}, from_rel => $rel, rel_path => $r->{rel}, actor => $bd->{a},
+                                     proof => $proof, seq => $r->{seq}, pre_tokens => $bd->{pre}, post_tokens => $bd->{post}]);
+        $n->{attributed}++;
+    }
 }
 
 # PostCompacts not yet done: their .post.json metas (content-free), oldest first
@@ -184,27 +289,53 @@ sub _match {
         if ($it->{sb}) { $it->{p3} = 'sub'; next }
         next unless $it->{mb};
         # main = P3-main with no subagent signal (MOD-SPEC §2.4): a subagent row beside it -> both
-        my $beside = grep { !defined $_->{by} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} <= $it->{e} + $TOL_S + 5 } @sb;
+        my $beside = grep { !defined $_->{by} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} <= $it->{e} + $TOL_S + $BESIDE_S } @sb;
         $it->{p3} = $beside ? undef : 'main';
     }
 }
 
 # ---------------------------------------------------------------- run
-# run(transcript => P, cwd => C, budget_ms => 2000, cutoff => epoch) -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered}
+# run(transcript => P, cwd => C, budget_ms => 2000, cutoff => epoch, final => 0|1)
+#   -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered, saved, kept, dropped}
+# final (MOD-SPEC §5.4 "Final mode": SessionEnd, and the cross-session finish): P3 first, then
+# every stash still unproven once the transcripts are read to their end is saved as
+# unattributed at once (the SETTLE_S wait is waived); a stash whose transcripts were not
+# read to their end within the budget stays for the next run.
 sub run {
     my (%a) = @_;
     my $sid_dir = rc::sid_dir() // return {};
-    my %n = (late => 0, unresolved => 0, precompute_not_reused => 0, order_anomaly => 0, undelivered => 0);
+    my $n = _counts();
     # one reconciler per session at a time (a Stop and a `reconcile` call may meet)
     my $out = eval {
-        lock::with("$sid_dir/reconcile.lock", { sid => rc::sid(), actor => 'reconcile' }, sub { _run(\%a, \%n, $sid_dir) }, wait_ms => 300);
+        lock::with("$sid_dir/reconcile.lock", { sid => rc::sid(), actor => 'reconcile' }, sub { _run(\%a, $n, $sid_dir) }, wait_ms => 300);
     };
-    return $out // \%n;
+    return $out // $n;
+}
+
+# run_locked(...): the same run for a caller that already holds this session's
+# reconcile.lock (the cross-session finish, lib/orphans.pm, in the ended session's context).
+sub run_locked {
+    my (%a) = @_;
+    my $sid_dir = rc::sid_dir() // return {};
+    my $n = _counts();
+    my $out = eval { _run(\%a, $n, $sid_dir) };
+    return $out // $n;
+}
+
+sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped attributed) } }
+
+# A save that returned EXISTS sha-differs: the stash is settled once (RRP-04, MOD-SPEC §5.8).
+sub _settle {
+    my ($n, $path, $save, $scan) = @_;
+    my $r = copies::settle_mismatch(path => $path, save => $save, scan => $scan) // return;
+    $n->{$r eq 'kept' ? 'kept' : 'dropped'}++;
 }
 
 sub _run {
     my ($args, $n, $sid_dir) = @_;
     my %a = %$args;
+    # test seam: a small read limit stands in for a transcript over READ_MAX (AT-ST-03 c)
+    local $READ_MAX = (util::test_mode() && ($ENV{STORE_TEST_READ_MAX} // '') =~ /\A\d+\z/) ? 0 + $ENV{STORE_TEST_READ_MAX} : $READ_MAX;
     my $sid = rc::sid();
     my $watch = rc::watch();
     my $t0 = util::clock_ms();
@@ -212,6 +343,7 @@ sub _run {
     my $left = sub { my $l = $deadline - util::clock_ms(); return $l > 0 ? $l : 0 };
     my $now = util::now();
     my $st = _load($sid_dir);
+    local $LOGGED = $st->{logged};    # the rows this session already has (_save_deferred reads it)
 
     # only what is new since the last Stop (F2-4)
     _ingest_classic($st, rc::stream_path('classic'));
@@ -229,9 +361,19 @@ sub _run {
     my $root_ok = rc::root_ok('handoff_root');
 
     # A stash whose summary a copy already holds (same normalized body) is dropped (F2-7).
+    # A copy row that said mismatch (rel '') leaves the stash to be settled once (§5.8).
     my $drop_if_held = sub {
         my ($f, $rel, $text) = @_;
-        return unless defined $rel && $rel ne '' && defined $text;
+        return unless defined $text;
+        if (!defined $rel || $rel eq '') {
+            my ($stem) = $f =~ /\A(.+)\.(?:post|mod)\.md\z/ or return;
+            my $mrel = $st->{mism}{$stem} // $st->{mism}{ substr($stem, 0, 6) } // $st->{mism}{"n:$stem"};
+            return unless defined $mrel;
+            my $s = detect::scan($text);
+            _settle($n, "$sid_dir/pending/$f", { result => 'mismatch', path => rc::root() . "/$mrel", rel => $mrel,
+                                                 verdict => detect::verdict($s) }, $s);
+            return;
+        }
         my ($csha) = copies::copy_sha(rc::root() . "/$rel");
         copies::drop_stash("$sid_dir/pending/$f", 'exists')
             if defined $csha && $csha eq sha::hex256(detect::scan($text)->{normalized});
@@ -244,8 +386,18 @@ sub _run {
 
     # 0. P3 for the PostCompacts not yet done
     my $pool = _pool($sid_dir, $st);
+    # fill candidates from this session's subagents/ copy rows whose PostCompact is not in the
+    # pool (C-STORE D5: the fill goes by the agent rows, not by what is still pending); kept
+    # until decided or MAIN_WINDOW_S old
+    my %inpool = map { ($_->{id6} => 1) } @$pool;
+    my @subc;
+    for my $id6 (sort keys %{ $st->{subc} }) {
+        my $c = $st->{subc}{$id6};
+        if ($st->{fill}{$id6} || ref $c ne 'HASH' || !defined $c->{e} || $now - $c->{e} > $MAIN_WINDOW_S) { delete $st->{subc}{$id6}; next }
+        push @subc, { id6 => $id6, e => $c->{e}, scope => 'sub', nonce => $c->{nonce} } unless $inpool{$id6};
+    }
     my $subs_end = 1;
-    if (grep { !$_->{sb} && $_->{scope} ne 'main' } @$pool) {
+    if (@subc || grep { (!$_->{sb} && $_->{scope} ne 'main') || (_fill_cand($_) && !$st->{fill}{ $_->{id6} }) } @$pool) {
         for my $f (@{ transcript::subagent_files($tp, $sid) }) {
             my $fst = ($st->{subs}{ $f->{path} } ||= {});
             $subs_end = 0 unless _ingest_bounds($fst, $f->{path}, $st->{sbounds}, $f->{agent_id});
@@ -263,10 +415,12 @@ sub _run {
         next unless defined $text;
         my ($scope, $agent, $proof);
         if (($it->{p3} // '') eq 'main') { ($scope, $proof) = ('main', 'p3-main') }
-        elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{sb}{a} // $it->{agent}, 'p3-sub') }
-        elsif ($main_end && $subs_end && $now - $it->{e} >= $SETTLE_S) { ($scope, $proof) = ('unknown', 'none') }
+        # P3-sub: the agent only from P1 (the meta); a time match names no agent: the copy is
+        # sub-unknown and the fill below decides (MOD-SPEC §5.3 step 3, §5.9)
+        elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{agent}, 'p3-sub') }
+        elsif ($main_end && $subs_end && ($a{final} || $now - $it->{e} >= $SETTLE_S)) { ($scope, $proof) = ('unknown', 'none') }
         else { next }    # its boundary row may still come: the next Stop decides
-        _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f);
+        _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f, $n);
     }
 
     # 1. stashes without a copy. Not while handoff_root is refused (MOD-SPEC §1.2): every
@@ -308,14 +462,13 @@ sub _run {
         my $agent = $m{agent};
         if ($scope eq 'unknown' && $p3{$id6}) {
             $scope = $p3{$id6}{p3};
-            $agent = $p3{$id6}{sb}{a} if $scope eq 'sub' && $p3{$id6}{sb};
         }
         if ($p1 && dispatch::is_mod($p1)) { $scope = defined $p1->{agent_id} ? 'sub' : 'main' }
         $agent //= $p1->{agent_id} if $p1;
         # unproven: its boundary row may still come; wait as step 0 does
         if ($scope eq 'unknown' && $kind eq 'post') {
             my $e = util::parse_iso($m{ts} // '') // 0;
-            next unless $main_end && $subs_end && $now - $e >= $SETTLE_S;
+            next unless $main_end && $subs_end && ($a{final} || $now - $e >= $SETTLE_S);
         }
         if (defined $mn && exists $copied->{"n:$mn"}) { $drop_if_held->($f, $copied->{"n:$mn"}, $text); next }
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn, content_name => ($m{stale} ? 1 : 0),
@@ -326,8 +479,10 @@ sub _run {
                                 precomputed => $m{precomputed}, late => 1,
                                 verdict_ctx => { dispatch_nonce => ($drec ? $drec->{nonce} : undef), ($m{stale} ? (marker_earlier => 1) : ()) });
         copies::drop_stash("$sid_dir/pending/$f", $save->{result}) if $save->{exit} == 0;
+        _settle($n, "$sid_dir/pending/$f", $save, $s) if $save->{exit} == 0;
         next unless $save->{exit} == 0 && $save->{result} eq 'late';
         $n->{late}++;
+        $n->{saved}++;
         $copied->{ $save->{id6} } = $save->{rel};
         $copied->{"n:$mn"} = $save->{rel} if defined $mn;
         rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
@@ -342,32 +497,81 @@ sub _run {
                                 budget_ms => $left->(), bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $mn);
         }
         my $tot = $sweep ? $sweep->{totals} : undef;
-        my $rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
+        my @rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
+        my $rolled = scalar @rolled;
+        # CORE-20 (C-STORE incidental 1, DP-31 (4)): the rollup row PostCompact wrote names the
+        # deferred dispatch's actor; when the slot this save took differs, a copy_attributed row
+        # says where the copy is and whose it is (readers take it over the rollup row; data only).
+        if ($rolled) {
+            my $slot_actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
+            my ($r0) = @rolled;
+            if (($r0->{actor} // '') ne $slot_actor && !$logged->{"copy_attributed:$id6"}++) {
+                my $tk = ref $m{tokens} eq 'ARRAY' ? $m{tokens} : [];
+                rc::emit('copy_attributed', [id6 => $r0->{id6} // $id6, nonce => $mn, from_rel => undef, rel_path => $save->{rel},
+                                             actor => $slot_actor, proof => 'slot', seq => $save->{seq},
+                                             pre_tokens => $tk->[0], post_tokens => $tk->[1]]);
+            }
+        }
         if (!$rolled) {
             my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
             rollup::write(session_id => $sid, actor => $actor,
                           compaction_seq => $save->{seq}, nonce => $mn, id6 => $save->{id6}, join => 'reconcile',
-                          trigger => ($drec ? $drec->{trigger} : $m{trigger}), idle => 'unknown',
+                          trigger => ($drec ? $drec->{trigger} : $m{trigger}),
+                          ($scope eq 'main' && $p3{$id6} && $p3{$id6}{mb} ? _idle($logged, $drec, $p3{$id6}{mb}, $mn) : (idle => 'unknown')),
                           channel => ($drec ? $drec->{channel} : 'none'), seat_state => ($drec ? (postcompact::seat_state($drec, $a{transcript}))[0] : 'none'),
                           verdict => $save->{verdict}, verdict_source => ($kind eq 'mod' ? 'after-step' : 'postcompact'),
                           marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end},
+                          sentinel_place => $s->{sentinel_place},
                           summary_chars => $s->{chars}, shape_class => detect::shape_class($s),
                           copy => 'late', copy_path => $save->{rel},
+                          resume => rollup::resume_state($sid_dir, $mn, $scope, ($drec ? $drec->{channel} : "none")),
                           evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
-                                                redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef));
+                                                redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
+                          _bd3(proof => (($p1 && dispatch::is_mod($p1)) || ($m{scope} // 'unknown') ne 'unknown') ? 'P1'
+                                        : ($p3{$id6} && $scope ne 'unknown') ? 'P3' : 'none',
+                               item => $p3{$id6}, e => (defined $m{ts} ? util::parse_iso($m{ts}) : undef), now => $now),
+                          acuity => detect::acuity($s), acuity_floor => rollup::acuity_floor($sid_dir, $drec ? $drec->{nonce} : $mn));
             push @{ $st->{rolls_l} }, { id6 => $save->{id6}, nonce => $mn, e => $now, actor => $actor, pc => 0, join => 'reconcile' };
         }
     }
 
-    # done: a PostCompact whose summary is copied and whose rows are matched (or too old to be)
+    # compaction sizes on the mod path (PKG-RUNTIME E.2, MOD-SPEC §5.4): a main boundary row
+    # matched to a nonce that already has a rollup row gets one compaction_boundary row, once
+    # per nonce, append-only (readers join it by nonce; nothing is rewritten)
+    my %pool_by = map { ($_->{id6} => $_) } @$pool;
+    for my $bd (grep { defined $_->{by} && $_->{by} ne '-' && !$_->{cb} } @{ $st->{bounds} }) {
+        my $it = $pool_by{ $bd->{by} } or do { $bd->{cb} = 1; next };
+        my $nn = $it->{nonce} // $it->{dispatch} // $it->{deferred};
+        my ($roll) = defined $nn ? grep { ($_->{nonce} // '') eq $nn && ($_->{join} // '') ne 'reconcile' } @{ $st->{rolls_l} } : ();
+        next unless $roll || $now - $it->{e} > $MAIN_WINDOW_S;    # the row may come at the next Stop
+        # the native idle row is written just after the boundary row: decided once it was read,
+        # or the transcript was read to its end SETTLE_S after the boundary, or a later one exists
+        next if $roll && !_idle_settled($st, $bd, $main_end, $now, $a{final});
+        $bd->{cb} = 1;
+        next unless $roll && !$st->{cbn}{$nn};
+        my @idle = _idle($logged, $disp{$nn}, $bd, $nn);
+        rc::emit('compaction_boundary', [nonce => $nn, id6 => $roll->{id6} // $it->{id6}, boundary_uuid => $bd->{u},
+                                         pre_tokens => $bd->{pre}, post_tokens => $bd->{post}, duration_ms => $bd->{ms},
+                                         precomputed => jsonc::bool($bd->{pc}), @idle],
+                 stream => 'compactions', actor => 'main', writer => 'helper', cc_version => $bd->{v});
+        $st->{cbn}{$nn} = 1;
+    }
+
+    # fill: sub-unknown copies get their agent (MOD-SPEC §5.9)
+    _fill($st, [@$pool, @subc], $n, $subs_end, $left) if $root_ok && $left->();
+
+    # done: a PostCompact whose summary is copied and whose rows are matched (or too old to be);
+    # a sub-unknown copy also waits for its fill decision
     for my $it (@$pool) {
         my $has = defined $held->($it) || !-e "$sid_dir/pending/$it->{id6}.post.md";
-        $st->{done}{ $it->{id6} } = 1 if $has && ($it->{mb} || $it->{sb} || $now - $it->{e} > $MAIN_WINDOW_S);
+        my $fill_open = _fill_cand($it) && !$st->{fill}{ $it->{id6} } && $now - $it->{e} <= $MAIN_WINDOW_S;
+        $st->{done}{ $it->{id6} } = 1 if $has && !$fill_open && ($it->{mb} || $it->{sb} || $now - $it->{e} > $MAIN_WINDOW_S);
     }
 
     my $in_time = $left->() > 0;
     my $cutoff = $a{cutoff};
     # 2. unresolved and precompute dispatches (> 10 min old)
+    my $native_ran;
     if ($in_time) {
         my %post;
         for my $it (@$pool) { $post{$_} = 1 for grep { defined } @$it{qw(nonce dispatch deferred)} }
@@ -384,6 +588,10 @@ sub _run {
                 next;
             }
             next if $logged->{"compaction_unresolved:$nn"} || exists $copied->{"n:$nn"} || $post{$nn};
+            # DP-29 (E-M-15): the mod closed this dispatch because a native compaction ran first
+            # (compacted {skip: native-ran}): an outcome, not an unresolved compaction
+            $native_ran //= _native_ran();
+            next if $native_ran->{$nn};
             next if grep { ($_->{nonce} // '') eq $nn } @{ $st->{rolls_l} };
             next if -e "$sid_dir/pending/$nn.mod.md";
             rc::emit('compaction_unresolved', [nonce => $nn, trigger => $d->{trigger}, channel => $d->{channel}]);
@@ -432,12 +640,55 @@ sub _run {
     my $acc = grep { defined $_->{by} } @{ $st->{bounds} };
     if ($acc != scope::stored_count($sid_dir)) { eval { scope::set_count($sid_dir, $acc, { sid => $sid, actor => 'main' }) } }
     _save($sid_dir, $st);
+    # the stash index: this session's marker goes once pending/ holds no stash (§5.8)
+    orphans::unmark($sid, $sid_dir);
     return $n;
+}
+
+# BD-3 window logging (T-TEXT E5): proof, proof_lag_ms (the matched boundary row's time minus the
+# PostCompact stash time; null when unproven), settle_waited_ms (how long the stash waited for
+# this decision; null when PostCompact itself decided or the stash has no PostCompact time)
+sub _bd3 {
+    my (%a) = @_;
+    my $it = $a{item};
+    my $bd = $it ? ($it->{mb} || $it->{sb}) : undef;
+    my $lag = ($a{proof} ne 'none' && $bd && defined $a{e}) ? int(($bd->{e} - $a{e}) * 1000 + ($bd->{e} >= $a{e} ? 0.5 : -0.5)) : undef;
+    my $wait = defined $a{e} ? int(($a{now} - $a{e}) * 1000 + 0.5) : undef;
+    $wait = 0 if defined $wait && $wait < 0;
+    return (proof => $a{proof}, proof_lag_ms => $lag, settle_waited_ms => $wait);
+}
+
+# IC-1 D1: (idle, idle_source, idle_gap_s) pairs for a main compaction whose boundary row was
+# read, and one idle_mismatch {nonce} row when the mod record and the native row disagree.
+sub _idle {
+    my ($logged, $drec, $bd, $nonce) = @_;
+    my ($idle, $src, $gap, $mism) = rollup::idle_facts($drec, $bd->{ni});
+    my $key = 'idle_mismatch:' . ($nonce // $bd->{u} // '');
+    if ($mism && !$logged->{$key}++) { rc::emit('idle_mismatch', [nonce => $nonce]) }
+    return (idle => $idle, idle_source => $src, idle_gap_s => $gap);
+}
+
+sub _idle_settled {
+    my ($st, $bd, $main_end, $now, $final) = @_;
+    return 1 if defined $bd->{ni};
+    return 1 if $st->{bounds}[-1] && $st->{bounds}[-1] != $bd;
+    return ($main_end && ($final || $now - $bd->{e} >= $SETTLE_S)) ? 1 : 0;
+}
+
+# Nonces the mod closed with compacted {skip: native-ran} (DP-29), read from the mod stream
+# (the same rows postcompact::_mod_closed reads; only this skip class closes an unresolved check).
+sub _native_ran {
+    my %c;
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => ['compacted']) }) {
+        next unless ($row->{ev} // '') eq 'compacted' && defined $row->{nonce} && !ref $row->{nonce};
+        $c{ $row->{nonce} } = 1 if ($row->{skip} // '') eq 'native-ran';
+    }
+    return \%c;
 }
 
 # Save a stash PostCompact deferred for want of scope proof, as P3 decided (F2-1).
 sub _save_deferred {
-    my ($it, $text, $scope, $agent, $proof, $args, $left, $copied, $f) = @_;
+    my ($it, $text, $scope, $agent, $proof, $args, $left, $copied, $f, $n) = @_;
     my $sid = rc::sid();
     my $sid_dir = rc::sid_dir();
     my $s = detect::scan($text);
@@ -460,6 +711,13 @@ sub _save_deferred {
                             precomputed => $precomputed, verdict => $verdict, proof => $proof);
     return unless $save->{exit} == 0;
     copies::drop_stash("$sid_dir/pending/$f", $save->{result});
+    _settle($n, "$sid_dir/pending/$f", $save, $s) if $n;
+    $n->{saved}++ if $n && $save->{result} =~ /\A(?:saved|unattributed|late)\z/;
+    # Final mode saved it without the settle wait: the session ended first (AT-ST-03 b)
+    if ($args->{final} && $save->{result} =~ /\A(?:saved|unattributed)\z/) {
+        rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
+        $n->{late}++ if $n;
+    }
     $copied->{ $it->{id6} } = $save->{rel};
     $copied->{"n:$mn"} = $save->{rel} if defined $mn;
     my $sweep;
@@ -469,26 +727,29 @@ sub _save_deferred {
                             budget_ms => $left->(), bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $mn);
     }
     my $nonce = $drec ? $drec->{nonce} : $mn;
-    my $claim = defined $nonce ? util::read_file("$sid_dir/resume-claimed/$nonce") : undef;
     my $tot = $sweep ? $sweep->{totals} : undef;
     my $measured = $drec && grep { $_ eq 'measured' } @{ $drec->{tags} || [] };
     my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
     rollup::write(
         ts => util::iso($it->{e}), session_id => $sid, actor => $actor, compaction_seq => $save->{seq},
         nonce => $nonce, id6 => $it->{id6}, join => $it->{join}, trigger => $trigger,
-        midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', channel => $channel, seat_state => $seat,
+        midturn => ($drec ? $drec->{midturn} : undef),
+        ($scope eq 'main' && $mb ? _idle($LOGGED // {}, ($rec && dispatch::is_mod($rec) ? $rec : $drec), $mb, $nonce) : (idle => 'unknown')),
+        channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
-        sentinel_from_end => $s->{sentinel_from_end},
+        sentinel_from_end => $s->{sentinel_from_end}, sentinel_place => $s->{sentinel_place},
         fabricated_check_tokens => ($measured ? 0 : detect::fabricated_check_tokens($s->{normalized})),
         instructions_bytes => ($drec ? $drec->{instructions_bytes} : undef), summary_chars => $s->{chars},
         shape_class => detect::shape_class($s), pre_tokens => ($mb ? $mb->{pre} : undef),
         post_tokens => ($mb ? $mb->{post} : undef), duration_ms => ($mb ? $mb->{ms} : undef),
         precomputed => jsonc::bool($precomputed), copy => $save->{result}, copy_path => $save->{rel},
-        resume => ($scope eq 'sub' ? 'none-subagent' : defined $claim ? 'delivered:' . ($claim =~ /^(\S+)/)[0] : undef),
+        resume => rollup::resume_state($sid_dir, $nonce, $scope, $channel),
         checkpoint_ms => undef,
         evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                               redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
-        nudged => undef, continued => undef, halt => undef);
+        nudged => undef, continued => undef, halt => undef,
+        _bd3(proof => ($proof =~ /^p3-/ ? 'P3' : 'none'), item => $it, e => $it->{e}, now => util::now()),
+        acuity => detect::acuity($s), acuity_floor => rollup::acuity_floor($sid_dir, $nonce));
     rc::emit('scope_leak', [nonce => $s->{nonce}, scope => $scope, marker_scope => $s->{scope}]) if $verdict eq 'scope-leak';
 }
 

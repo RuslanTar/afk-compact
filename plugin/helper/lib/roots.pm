@@ -13,6 +13,7 @@ package roots;
 # call to private mode (lib/repomode.pm) and never leads to a write under the repository.
 use strict;
 use warnings;
+use utf8;
 
 my %CACHE;
 # A hook sets one deadline (epoch ms) for all its root checks, so `git check-ignore`

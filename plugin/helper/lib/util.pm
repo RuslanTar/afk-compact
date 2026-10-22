@@ -4,6 +4,7 @@ package util;
 # Sys::Hostname; Time::HiRes only when it loads.
 use strict;
 use warnings;
+use utf8;
 use Fcntl qw(O_WRONLY O_RDONLY O_RDWR O_CREAT O_EXCL O_APPEND O_TRUNC LOCK_EX LOCK_NB LOCK_UN SEEK_SET);
 use POSIX ();
 use Errno ();
@@ -133,7 +134,8 @@ sub expand_tilde {
 sub abbrev {
     my ($p) = @_;
     return $p unless defined $p;
-    my $h = home();
+    $p = text($p);    # display text: a byte path is decoded where it joins text (A4 (3))
+    my $h = text(home());
     return $p if $h eq '' || $h eq '/';
     return '~' if $p eq $h;
     $p =~ s{^\Q$h\E/}{~/};
@@ -185,8 +187,9 @@ sub real_path {
         unshift @tail, basename($head);
         $head = dirname($head);
     }
-    my $real = Cwd::abs_path($head) // $head;
-    return @tail ? ($real eq '/' ? '' : $real) . '/' . join('/', @tail) : $real;
+    # a path is bytes (§2.6 text encoding, SR 1.1): the real path and every tail part
+    my $real = Cwd::abs_path(fsb($head)) // fsb($head);
+    return @tail ? ($real eq '/' ? '' : $real) . '/' . join('/', map { fsb($_) } @tail) : $real;
 }
 
 sub mkdir_p {
@@ -244,6 +247,21 @@ sub _bytes {
 # to_bytes(text) -> the text as UTF-8 bytes (undef stays undef). Output lines are bytes:
 # a character string joined with a byte literal such as `·` prints double-encoded.
 sub to_bytes { return defined $_[0] ? _bytes($_[0]) : undef }
+
+# Text encoding (MOD-SPEC §2.6, P5-FOLD A4): inside the helper text is characters, bytes
+# are only at the edges. text(s) decodes an input once where it is read (UTF-8; bytes that
+# are not UTF-8 stay as they are and so read as Latin-1, the CR-F2 rule); a character
+# string passes unchanged, so a second call never decodes twice. fsb(path) is the path as
+# bytes for a file-system call (a character path is encoded once).
+sub text {
+    my ($s) = @_;
+    return undef unless defined $s;
+    return $s if ref $s || utf8::is_utf8($s) || $s !~ /[\x80-\xff]/;
+    my $c = $s;
+    return utf8::decode($c) ? $c : $s;
+}
+
+sub fsb { return defined $_[0] ? _bytes($_[0]) : undef }
 
 sub _write_all {
     my ($fh, $data) = @_;

@@ -1,0 +1,30 @@
+{
+ "id": "AT-WF-02",
+ "note": "PKG-RUNTIME D.2 (CORE-06): cc_version source order mod record > exec hint > transcript tail > mirror, named by cc_version_src in the dispatch record. With the mirror at 2.1.306, CLAUDE_CODE_EXECPATH=…/2.1.307 and no record: 2.1.307 / exec; without the hint: the transcript's 2.1.305; with neither: the mirror's 2.1.306; a mod-hook dispatch record's 2.1.304 wins over all for its compaction's rows. Hook-written rows carry the value",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"setup": [{"write": "$WATCH/version.json", "json": {"lastVersion": "2.1.306", "smokeDue": null}}]},
+  {"name": "exec beats the mirror", "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+   "argv": ["hook", "PreCompact"], "stdin_json": {"session_id": "s-exec", "transcript_path": "$TMP/proj/none.jsonl", "cwd": "$TMP", "hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": null},
+   "expect": {"exit": 0,
+     "files": [{"path": "$WATCH/s-exec/dispatch/*.json", "count": 1, "json": {"cc_version": "2.1.307", "cc_version_src": "exec"}}],
+     "rows": [{"file": "$WATCH/s-exec.classic.jsonl", "ev": "precompact_fallback", "count": 1, "fields": {"cc_version": "2.1.307"}}]}},
+  {"name": "transcript beats the mirror",
+   "setup": [{"write": "$TMP/proj/s-tr.jsonl", "jsonl": [{"type": "user", "version": "2.1.300", "timestamp": "2026-10-21T13:00:00.000Z"}, {"type": "assistant", "version": "2.1.305", "timestamp": "2026-10-21T13:01:00.000Z"}, {"type": "summary"}]}],
+   "argv": ["hook", "PreCompact"], "stdin_json": {"session_id": "s-tr", "transcript_path": "$TMP/proj/s-tr.jsonl", "cwd": "$TMP", "hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": null},
+   "expect": {"exit": 0,
+     "files": [{"path": "$WATCH/s-tr/dispatch/*.json", "count": 1, "json": {"cc_version": "2.1.305", "cc_version_src": "transcript"}}],
+     "rows": [{"file": "$WATCH/s-tr.classic.jsonl", "ev": "precompact_fallback", "count": 1, "fields": {"cc_version": "2.1.305"}}]}},
+  {"name": "the mirror last",
+   "argv": ["hook", "PreCompact"], "stdin_json": {"session_id": "s-mir", "transcript_path": "$TMP/proj/none.jsonl", "cwd": "$TMP", "hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": null},
+   "expect": {"exit": 0,
+     "files": [{"path": "$WATCH/s-mir/dispatch/*.json", "count": 1, "json": {"cc_version": "2.1.306", "cc_version_src": "mirror"}}]}},
+  {"name": "a mod record wins for its compaction", "env": {"CLAUDE_CODE_EXECPATH": "/x/claude/versions/2.1.307"},
+   "setup": [{"write": "$WATCH/s-mod/dispatch/bb000001.json", "json": {"v": 1, "nonce": "bb000001", "session_id": "s-mod", "actor": "main", "agent_id": null, "trigger": "auto", "channel": "mod-hook", "resume_pref": "prompt.context", "midturn": false, "tags": [], "instructions_sha8": null, "instructions_bytes": null, "cc_version": "2.1.304", "cc_version_src": "mod", "load_id": null, "pid": null, "pid_lstart": null, "ts": "2026-10-21T14:05:08+03:00"}}],
+   "argv": ["hook", "PostCompact"], "stdin_json": {"session_id": "s-mod", "transcript_path": "$TMP/proj/none.jsonl", "cwd": "$TMP", "hook_event_name": "PostCompact", "trigger": "auto",
+     "compact_summary": "<summary>\n⟪$BRAND v1 n=bb000001 s=main⟫\n# LAB-1 — x\n## Resume here\nStatus: active\n⟪/$BRAND n=bb000001⟫\n</summary>\n"},
+   "expect": {"exit": 0,
+     "rows": [{"file": "$WATCH/s-mod/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"nonce": "bb000001", "cc_version": "2.1.304"}}]}}
+ ]
+}

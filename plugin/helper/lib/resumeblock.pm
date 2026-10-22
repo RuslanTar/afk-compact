@@ -1,19 +1,26 @@
 package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
-# resume-context.txt with [midturn]/[nonok], @session_id@, @saved_copy@,
-# @measured_at@, @remeasure@ (<= 3,000 B). Total <= 6,000 chars (DP-8; was 5,000),
-# never over the 10,000-char SessionStart cutoff; no transcript path.
+# resume-context.txt with [midturn]/[nonok] and exactly one of [prod-forbid]/[prod-allow],
+# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B). Total <= 6,500 chars
+# (compaction-rem-6, T-TEXT E3: a 3,000-char protocol and a 3,000-byte measured block fit
+# untrimmed), never over the 10,000-char SessionStart cutoff; no transcript path.
 # Owner: WP-core.
 use strict;
 use warnings;
+use utf8;
 
-our $MAX_CHARS = 6000;
+our $MAX_CHARS = 6500;
 
 sub build {
     my (%a) = @_;
     my @tags;
     push @tags, 'midturn' if $a{midturn};
     push @tags, 'nonok' if $a{nonok};
+    # step 4 is two tagged lines (S-SETTINGS B, XR-19): exactly one prod tag, prod-allow only when
+    # this helper's own unattended_prod_reads (settings file only) is allow. The classic path has
+    # no idle signal at SessionStart, so it never pushes idle (never with midturn).
+    my $prod = eval { settings::prod(rc::settings()) };
+    push @tags, (($prod && ($prod->{reads} // '') eq 'allow') ? 'prod-allow' : 'prod-forbid');
     my $re = $a{remeasure} // '';
     my $max = 3000;
     my $text;

@@ -13,6 +13,7 @@
 # secret-scanned before it is written (a HARD hit keeps only its sha256 and rule ids).
 use strict;
 use warnings;
+use utf8;
 
 package cmd_log;
 

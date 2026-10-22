@@ -1,0 +1,35 @@
+{
+ "id": "CORE-20 (copy_attributed when the late slot differs from the rollup actor)",
+ "note": "C-STORE incidental 1 (DP-31 (4), CORE-20): PostCompact defers an unmarked summary to the open mod-hook main dispatch (copy_deferred why=mod) and its rollup row names actor main; the after-step never comes, so the Stop after the settle wait saves the stash under the deferred nonce in unattributed/ (its own proof: none). The rollup row is not rewritten; one copy_attributed {actor: unattributed, proof: slot} row names the copy, once. A late save into the slot the rollup row names writes no such row.",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "PostCompact defers to the mod dispatch", "now": "2026-10-21T14:05:00+03:00",
+   "setup": [{"mkdir": "$TMP/work"}, {"dispatch": {"nonce": "b2b2b2b2", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 30}}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto", "compact_summary": "<summary>\n# LAB-20 SLOTBODY\n</summary>"},
+   "expect": {"exit": 0,
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_deferred", "count": 1, "fields": {"nonce": "b2b2b2b2", "why": "mod"}},
+             {"file": "$WATCH/$SID/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"actor": "main", "nonce": "b2b2b2b2"}}]}},
+  {"name": "Stop after the settle wait: unattributed, one copy_attributed", "now": "2026-10-21T14:05:30+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "files": [{"path": "$ROOT/work/general/compact/unattributed/*_b2b2b2.md", "count": 1, "has": ["SLOTBODY"]}],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_attributed", "count": 1, "fields": {"nonce": "b2b2b2b2", "actor": "unattributed", "proof": "slot", "from_rel": null}},
+     {"file": "$WATCH/$SID/compactions.jsonl", "ev": "compaction", "count": 1, "fields": {"actor": "main"}}
+    ]}},
+  {"name": "a second Stop: still one", "now": "2026-10-21T14:06:30+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0, "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_attributed", "count": 1}]}},
+  {"name": "a deferred stash whose own proof is main (the mod stash name) goes where the rollup says: no row", "now": "2026-10-21T14:10:00+03:00",
+   "setup": [{"dispatch": {"nonce": "c2c2c2c2", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20}},
+             {"write": "$WATCH/$SID/pending/c2c2c2c2.mod.md", "text": "This session is being continued from a previous conversation.\n\nSummary:\n# LAB-21 MODSTASH\n"}],
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "files": [{"path": "$ROOT/work/general/compact/*_c1-c2c2c2.md", "count": 1, "has": ["MODSTASH"]}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_attributed", "count": 1}]}}
+ ]
+}
