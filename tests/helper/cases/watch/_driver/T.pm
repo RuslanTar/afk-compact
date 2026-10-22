@@ -125,4 +125,99 @@ sub main_body {
     return join("\n", @l) . "\n";
 }
 
+
+# W-BETA fixture install (AT-WB-02..07): a watch tree and a handoff root with planted
+# canaries in every place the report must never copy from. @BETA_CANARIES lists the strings
+# a bundle must not contain (the case adds $HOME, the user and host names).
+our $AGENT = 'a9a00b3f36332744e';
+our @BETA_CANARIES = ('canaryrepoalpha', 'canary-4711-bucketbeta', '4711-bucketbeta', 'canarybranchgamma',
+                      'CANARY-TEXT', 'CANARY-evidence-path', 'AKIAABCDEFGHIJKLMNOP',
+                      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXRlc3Q', $SID, $AGENT,
+                      'abcd0001', '-synthetic-proj');
+sub beta_install {
+    my (%o) = @_;
+    my $rel = 'canaryrepoalpha/canary-4711-bucketbeta/compact/2026-10-21_13-50-00_1b2c3d4e_c1-f0f000.md';
+    my $jwt = $BETA_CANARIES[7];
+    my @mod = (
+        row('dispatch', 1, nonce => 'f0f00001', trigger => 'auto', agent_id => undef, channel => 'mod-hook',
+            instructions_bytes => 3994, cwd => '$HOME/work/canaryrepoalpha', branch => 'canarybranchgamma'),
+        row('compacted', 30, nonce => 'f0f00001', skip => undef, tokens_before => 500000, tokens_after => 40000,
+            usage_present => \1, ms => 30000),
+        row('continue', 40, result => 'halt:cap', continues_last_hour => 6),
+        row('handoff_turn_start', 41, ht => 'abcd0001', reason => 'cap', turn_id => 'p-CANARY-TEXT', t0 => 1,
+            gap_s => undef, max_calls => 34, max_tokens => 64000),
+        row('mystery_event', 42, note => 'CANARY-TEXT-mystery'),
+    );
+    my @classic = (
+        row('precompact', 2, writer => 'classic', trigger => 'auto', ci_bytes => 3994, ci_has_nonce => \1,
+            ci_nonce => 'f0f00001', ci_foreign_header => \0, keyset_hash => '62a951d7'),
+        row('postcompact', 31, writer => 'classic', trigger => 'auto', nonce_found => 'f0f00001', scope_found => 'main',
+            verdict => 'ok', summary_chars => 9000, section_chars => { resume => 300, '## Task as assigned' => 20,
+            'CANARY-TEXT heading' => 5 }, secret_hits => ['jwt'], measured_stamp => '2026-10-21 14:00 +0300',
+            ledger => { lost_U => 0, lost_D => 1, ledger_src => 'copy', excerpt => 'CANARY-TEXT-ledger' }),
+        row('copy', 32, writer => 'classic', nonce => 'f0f00001', id6 => 'f0f000', result => 'saved', slot => 'main',
+            rel_path => $rel),
+        row('copy_failed', 33, writer => 'classic', nonce => 'f0f00002', reason => 'AKIAABCDEFGHIJKLMNOP'),
+        row('sweep', 34, writer => 'classic', file => "$SID.jsonl", from_off => 0, to_off => 999,
+            boundaries => [ { line => 3, uuid => 'u-0001', ts => z(10), trigger => 'auto', pre => 500000,
+                              attributed => $AGENT, summary_text => 'CANARY-TEXT-sweep' } ]),
+        row('heal', 35, writer => 'helper', origin_sid => $SID, item => 'b1', result => 'ok',
+            command => 'CANARY-TEXT-heal make deploy'),
+    );
+    my @alerts = ( row('alert', 36, writer => 'classic', alert_id => 'a01-1234abcd', rule => 'A-01', severity => 'critical',
+                       key => { session_id => $SID, actor => $AGENT, compaction_seq => 1, nonce => 'f0f00001' },
+                       evidence => { copy => 'missing', line => 3, path => '$HOME/CANARY-evidence-path' }) );
+    my @roll = ( row('compaction', 31, writer => 'helper', session_id => $SID, nonce => 'f0f00001', id6 => 'f0f000',
+                     trigger => 'auto', seat_state => 'mod-hook', verdict => 'ok', copy => 'saved', copy_path => $rel,
+                     idle => 'false', pre_tokens => 500000, copy_failed_detail => $jwt) );
+    return [
+        { path => '$WATCH/$SID.jsonl', jsonl => \@mod },
+        { path => '$WATCH/$SID.classic.jsonl', jsonl => \@classic },
+        { path => '$WATCH/$SID.alerts.jsonl', jsonl => \@alerts },
+        { path => '$WATCH/$SID/compactions.jsonl', jsonl => \@roll },
+        { path => '$WATCH/$SID/events/1792580400000-ab12.json', json => row('skip', 50, why => 'cooldown') },
+        { path => '$WATCH/$SID/mod-alive.json', json => { pid => 4242, turn_id => 'p-1', ts => loc(1) } },
+        { path => '$WATCH/$SID/jobs.jsonl', jsonl => [ { ev => 'job', command => 'CANARY-TEXT-jobcmd make deploy' } ] },
+        { path => '$WATCH/$SID/paths.jsonl', jsonl => [ { path => '$HOME/CANARY-evidence-path/a.log' } ] },
+        { path => '$WATCH/$SID/evidence-index.tsv', text => "CANARY-evidence-path\t1\n" },
+        { path => '$WATCH/$SID/queue-adds.jsonl', jsonl => [ { question => 'CANARY-TEXT-question?' } ] },
+        { path => '$WATCH/$SID/handoff-turn/abcd0001.stage', text => "CANARY-TEXT-draft\n" },
+        { path => '$WATCH/$SID/bg/slot-1.json',
+          json => { tasks => [ { id => 'b1', type => 'shell', output_path => '$HOME/CANARY-evidence-path/o' } ] } },
+        { path => '$WATCH/version.json', json => { lastVersion => '2.1.306', smokeDue => '2.1.306' } },
+        { path => '$WATCH/fingerprints/94c3672537e5.seen', text => '' },
+        { path => "\$ROOT/$rel", text => "---\nkind: compact-summary\n---\nCANARY-TEXT-summary\n", mode => 0400 },
+        { path => '$ROOT/canaryrepoalpha/canary-4711-bucketbeta/handoff.md', text => "CANARY-TEXT-handoff\n" },
+    ];
+}
+
+
+# Report test helpers: the zips in a folder (newest last), a tree's files with their bytes'
+# sha (for the D-8 and Dev-6 checks), and the entries of a zip.
+sub zips_in {
+    my ($dir) = @_;
+    return map { "$dir/$_" } grep { /\.zip\z/ } watch::io::list_dir($dir);
+}
+sub tree {
+    my ($dir) = @_;
+    my %t;
+    my @q = ($dir);
+    while (@q) {
+        my $d = shift @q;
+        for my $e (watch::io::list_dir($d)) {
+            my $p = "$d/$e";
+            if (-d $p && !-l $p) { push @q, $p; next }
+            my $c = watch::io::slurp($p) // '';
+            $t{ substr($p, length($dir) + 1) } = length($c) . ':' . watch::io::fnv8($c) . ':' . ((stat $p)[2] & 07777);
+        }
+    }
+    return \%t;
+}
+sub zip_entries {
+    my ($path) = @_;
+    require watch::bundle;
+    my $u = watch::bundle::unzip(watch::io::slurp($path) // '');
+    return { map { $_->{name} => $_ } @{ $u->{entries} || [] } };
+}
+
 1;

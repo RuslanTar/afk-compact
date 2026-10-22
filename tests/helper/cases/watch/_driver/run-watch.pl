@@ -130,6 +130,13 @@ sub cli_launcher {
         copy_tree("$REPO/plugin", "$base/plugin");
         require settings;
         write_file("$base/plugin/$settings::TEST_CONSENT_MARK", "watch driver test stage\n", 0644);
+        # WP-watch's `report` command (WCH-09) until WP-core lists it in main.pl's %KNOWN
+        # (needs/watch-to-core.md W2C-1): the staged copy only, never the repo's main.pl.
+        my $mp = "$base/plugin/helper/main.pl";
+        my $m = watch::io::slurp($mp);
+        if (defined $m && $m !~ /^\s+watch report\b/m && $m =~ s/^(\s+)watch\n\);/$1watch report\n);/m) {
+            write_file($mp, $m, (stat $mp)[2] & 07777);
+        }
         $CLI_STAGE = "$base/plugin";
     }
     my $l = "$CLI_STAGE/scripts/$T::BRAND-store";
