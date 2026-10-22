@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Dev-1 heal-check with recipes from a real publish: published before any job row, a recipe says `job: <id> · not recorded`; a job row recorded later with another command is recipe-mismatch (AT-J-05); a relaunch_allow match with expected outputs is effects local and relaunches (AT-RA-01: Q-J1-1 active, run: the recorded command byte for byte); a production match outranks the allowlist: not read-only is prod-write and always asks, even under unattended_prod_reads allow (AT-PR-03); a chained command (&&, |, $(...)) never counts as local: unknown, ask (AT-RA-02); outward with a recipe asks; an expected output newer than the launch fails V6; a read-only auto recipe passes, and the same recipe edited after the publish is refused sha; inventory prints the job: lines",
+ "note": "Dev-1 heal-check with recipes from a real publish: published before any job row, a recipe says `job: <id> · not recorded`; a job row recorded later with another command is recipe-mismatch (AT-J-05); a relaunch_allow match with expected outputs is effects local and relaunches (AT-RA-01: Q-J1-1 active, run: the recorded command byte for byte); a production match outranks the allowlist: not read-only is prod-write and always asks, even under unattended_prod_reads allow (AT-PR-03); a chained command (&&, ;, |, $(...), <(...), >(...), an ANSI-C quote that hides a ;, ${ ...; }, any unquoted parenthesis) never counts as local: unknown, ask (AT-RA-02); outward with a recipe asks; an expected output newer than the launch fails V6; a read-only auto recipe passes, and the same recipe edited after the publish is refused sha; inventory prints the job: lines",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -51,11 +51,11 @@
     },
     {
      "write": "$HOME/.claude/projects/-x/$SID.jsonl",
-     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_00\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_00\", \"content\": \"Command running in background with ID: j1.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j1\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: j2.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j2\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: j3.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j3\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: j4.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j4\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_04\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_04\", \"content\": \"Command running in background with ID: j5.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j5\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_60\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh --profile prod; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_60\", \"content\": \"Command running in background with ID: j6.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j6\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_61\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh && ./scripts/wipe-db.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_61\", \"content\": \"Command running in background with ID: j7.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j7\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_62\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh | tee build.log; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_62\", \"content\": \"Command running in background with ID: j8.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j8\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_63\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh $(cat target); echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_63\", \"content\": \"Command running in background with ID: j9.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j9\"}}\n"
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_00\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_00\", \"content\": \"Command running in background with ID: j1.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j1\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_01\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01\", \"content\": \"Command running in background with ID: j2.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j2\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_02\", \"name\": \"Bash\", \"input\": {\"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_02\", \"content\": \"Command running in background with ID: j3.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j3\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: j4.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j4\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_04\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_04\", \"content\": \"Command running in background with ID: j5.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j5\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_60\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh --profile prod; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_60\", \"content\": \"Command running in background with ID: j6.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j6\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_61\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh && ./scripts/wipe-db.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_61\", \"content\": \"Command running in background with ID: j7.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j7\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_62\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh | tee build.log; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_62\", \"content\": \"Command running in background with ID: j8.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j8\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_63\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh $(cat target); echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_63\", \"content\": \"Command running in background with ID: j9.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j9\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_64\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh; rm a; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_64\", \"content\": \"Command running in background with ID: j10.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j10\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_65\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh <(sh wipe.sh); echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_65\", \"content\": \"Command running in background with ID: j11.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j11\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_66\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh >(sh wipe.sh); echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_66\", \"content\": \"Command running in background with ID: j12.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j12\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_67\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh $'\\\\'' ; sh wipe.sh; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_67\", \"content\": \"Command running in background with ID: j13.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j13\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_68\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh \\\"${ sh wipe.sh; }\\\"; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_68\", \"content\": \"Command running in background with ID: j14.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j14\"}}\n{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_69\", \"name\": \"Bash\", \"input\": {\"command\": \"sh build.sh *(e:'sh wipe.sh':); echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_69\", \"content\": \"Command running in background with ID: j15.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"j15\"}}\n"
     },
     {
      "write": "$WATCH/$SID/bg/slot-0.json",
-     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"j1\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j2\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j3\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j4\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j5\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j6\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j7\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j8\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j9\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"j1\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j2\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j3\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j4\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j5\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j6\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j7\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j8\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j9\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j10\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j11\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j12\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j13\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j14\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"j15\", \"type\": \"shell\", \"status\": \"running\"}], \"crons\": []}"
     },
     {
      "write": "$TMP/out/j1.output",
@@ -128,6 +128,54 @@
     {
      "age": "$TMP/out/j9.output",
      "minutes": 60
+    },
+    {
+     "write": "$TMP/out/j10.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/j10.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/j11.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/j11.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/j12.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/j12.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/j13.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/j13.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/j14.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/j14.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/j15.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/j15.output",
+     "minutes": 60
     }
    ]
   },
@@ -189,8 +237,32 @@
      "content": "item: B-9 · runtime id j9 · class auto\nscript: none\ncommand: sh build.sh $(cat target); echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/sub.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/sub.bin\n"
     },
     {
+     "write": "$STAGE/restart/B-10.md",
+     "content": "item: B-10 · runtime id j10 · class auto\nscript: none\ncommand: sh build.sh; rm a; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/semi.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/semi.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-11.md",
+     "content": "item: B-11 · runtime id j11 · class auto\nscript: none\ncommand: sh build.sh <(sh wipe.sh); echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/psin.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/psin.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-12.md",
+     "content": "item: B-12 · runtime id j12 · class auto\nscript: none\ncommand: sh build.sh >(sh wipe.sh); echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/psout.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/psout.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-13.md",
+     "content": "item: B-13 · runtime id j13 · class auto\nscript: none\ncommand: sh build.sh $'\\'' ; sh wipe.sh; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/ansi.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/ansi.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-14.md",
+     "content": "item: B-14 · runtime id j14 · class auto\nscript: none\ncommand: sh build.sh \"${ sh wipe.sh; }\"; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/funsub.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/funsub.bin\n"
+    },
+    {
+     "write": "$STAGE/restart/B-15.md",
+     "content": "item: B-15 · runtime id j15 · class auto\nscript: none\ncommand: sh build.sh *(e:'sh wipe.sh':); echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/build/globq.bin\nfinished parts: none yet\nidempotency check: ls $TMP/repo/build/globq.bin\n"
+    },
+    {
      "write": "$STAGE/body.md",
-     "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: 9 running: B-1 j1 to B-9 j9; see In flight\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-1 · j1 | shell · job j1 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j1.output` | report | /clear, exit | auto · restart/B-1.md |\n| B-2 · j2 | shell · job j2 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j2.output` | report | /clear, exit | auto · restart/B-2.md |\n| B-3 · j3 | shell · job j3 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j3.output` | report | /clear, exit | auto · restart/B-3.md |\n| B-4 · j4 | shell · job j4 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j4.output` | report | /clear, exit | auto · restart/B-4.md |\n| B-5 · j5 | shell · job j5 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j5.output` | report | /clear, exit | auto · restart/B-5.md |\n| B-6 · j6 | shell · job j6 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j6.output` | report | /clear, exit | auto · restart/B-6.md |\n| B-7 · j7 | shell · job j7 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j7.output` | report | /clear, exit | auto · restart/B-7.md |\n| B-8 · j8 | shell · job j8 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j8.output` | report | /clear, exit | auto · restart/B-8.md |\n| B-9 · j9 | shell · job j9 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j9.output` | report | /clear, exit | auto · restart/B-9.md |\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+     "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: 15 running: B-1 j1 to B-15 j15; see In flight\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\n| B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |\n|---|---|---|---|---|---|---|\n| B-1 · j1 | shell · job j1 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j1.output` | report | /clear, exit | auto · restart/B-1.md |\n| B-2 · j2 | shell · job j2 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j2.output` | report | /clear, exit | auto · restart/B-2.md |\n| B-3 · j3 | shell · job j3 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j3.output` | report | /clear, exit | auto · restart/B-3.md |\n| B-4 · j4 | shell · job j4 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j4.output` | report | /clear, exit | auto · restart/B-4.md |\n| B-5 · j5 | shell · job j5 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j5.output` | report | /clear, exit | auto · restart/B-5.md |\n| B-6 · j6 | shell · job j6 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j6.output` | report | /clear, exit | auto · restart/B-6.md |\n| B-7 · j7 | shell · job j7 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j7.output` | report | /clear, exit | auto · restart/B-7.md |\n| B-8 · j8 | shell · job j8 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j8.output` | report | /clear, exit | auto · restart/B-8.md |\n| B-9 · j9 | shell · job j9 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j9.output` | report | /clear, exit | auto · restart/B-9.md |\n| B-10 · j10 | shell · job j10 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j10.output` | report | /clear, exit | auto · restart/B-10.md |\n| B-11 · j11 | shell · job j11 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j11.output` | report | /clear, exit | auto · restart/B-11.md |\n| B-12 · j12 | shell · job j12 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j12.output` | report | /clear, exit | auto · restart/B-12.md |\n| B-13 · j13 | shell · job j13 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j13.output` | report | /clear, exit | auto · restart/B-13.md |\n| B-14 · j14 | shell · job j14 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j14.output` | report | /clear, exit | auto · restart/B-14.md |\n| B-15 · j15 | shell · job j15 · main | 2026-10-21 14:05 +0300 · exit code (probe 2026-10-21 14:05 +0300: running) | `tail -n 3 $TMP/out/j15.output` | report | /clear, exit | auto · restart/B-15.md |\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
     }
    ]
   },
@@ -231,7 +303,7 @@
    "setup": [
     {
      "write": "$WATCH/$SID/jobs.jsonl",
-     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j1\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9f75fc6b9e15290ea1fc2fa75f7605acb43190976edb272494f226acbcb649f7\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j1.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j2\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"0860b8d3599e389aa86b2ecffb1b7892e2ee430d93fc469afe294274a30de5ca\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j2.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9edab38589c804560099c89c07c66adb7b86d9ae64a95211d2e898c5d1e7bd37\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j4\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"command_sha256\": \"54703843d2e117a445593b679d2fbe56354b35955c85ca8c8e2915b972995223\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j4.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j5\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"command_sha256\": \"16ed68b993237f37fc578039217e623e0c2a7f37b2a71e62ef255c6a81a6266f\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j5.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j6\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh --profile prod; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9cde218512755a348faa65e09a1d2d0148c257d4e7b88a3a8f11531626e22a3c\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j6.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j7\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh && ./scripts/wipe-db.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"f7162fb4a9cc5670fef7ccb6e2d0e86eea37f5682a489d6addfc2bd3d5541928\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j7.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j8\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh | tee build.log; echo \\\"__exit $?\\\"\", \"command_sha256\": \"21243b2f983c73c6715fdcdce56984938ca6ebf991d3058e9b49a0b06b5a5e92\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j8.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j9\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh $(cat target); echo \\\"__exit $?\\\"\", \"command_sha256\": \"051480267b31b265e648f154c2495779db2c0c88c425f6075d61ce99ebe447ca\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j9.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j1\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9f75fc6b9e15290ea1fc2fa75f7605acb43190976edb272494f226acbcb649f7\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j1.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j2\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"0860b8d3599e389aa86b2ecffb1b7892e2ee430d93fc469afe294274a30de5ca\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j2.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"git push origin feature/LAB-7-retry; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9edab38589c804560099c89c07c66adb7b86d9ae64a95211d2e898c5d1e7bd37\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j4\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"command_sha256\": \"54703843d2e117a445593b679d2fbe56354b35955c85ca8c8e2915b972995223\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j4.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j5\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la bin; echo \\\"__exit $?\\\"\", \"command_sha256\": \"16ed68b993237f37fc578039217e623e0c2a7f37b2a71e62ef255c6a81a6266f\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j5.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j6\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh --profile prod; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9cde218512755a348faa65e09a1d2d0148c257d4e7b88a3a8f11531626e22a3c\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j6.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j7\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh && ./scripts/wipe-db.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"f7162fb4a9cc5670fef7ccb6e2d0e86eea37f5682a489d6addfc2bd3d5541928\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j7.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j8\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh | tee build.log; echo \\\"__exit $?\\\"\", \"command_sha256\": \"21243b2f983c73c6715fdcdce56984938ca6ebf991d3058e9b49a0b06b5a5e92\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j8.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j9\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh $(cat target); echo \\\"__exit $?\\\"\", \"command_sha256\": \"051480267b31b265e648f154c2495779db2c0c88c425f6075d61ce99ebe447ca\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j9.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j10\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh; rm a; echo \\\"__exit $?\\\"\", \"command_sha256\": \"bca565d33b1b6c7b139203c1722bd09b8a28aed672d4d8d97dd0a0b6e2d2983f\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j10.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j11\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh <(sh wipe.sh); echo \\\"__exit $?\\\"\", \"command_sha256\": \"e1af8b485f1e070f23972fb0f04d243ded168dc1b5fe0b97dd02dccabd397759\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j11.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j12\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh >(sh wipe.sh); echo \\\"__exit $?\\\"\", \"command_sha256\": \"5d50d4acd09fc86d1852c3ef960cf3001bd55450868c5d6bcd07f3aef6328c67\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j12.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j13\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh $'\\\\'' ; sh wipe.sh; echo \\\"__exit $?\\\"\", \"command_sha256\": \"def852176fe0e6755bb47d6ead03d5b52f02b380b38d9a2191cb35ca50c6dea0\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j13.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j14\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh \\\"${ sh wipe.sh; }\\\"; echo \\\"__exit $?\\\"\", \"command_sha256\": \"83c3b25bd3749c4eb2805bd8ad20983f77163f83f2f8827b01e3011171751401\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j14.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"j15\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 1, \"lstart\": \"Mon Jan  1 00:00:00 2001\"}, \"cwd\": \"$TMP/repo\", \"command\": \"sh build.sh *(e:'sh wipe.sh':); echo \\\"__exit $?\\\"\", \"command_sha256\": \"83c5ff91bfce3ccc81a9e625044ae9449829db5c3fce9ba0c13bf7aa16823e76\", \"command_withheld\": null, \"is_read_only\": false, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/j15.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
     },
     {
      "write": "$TMP/repo/doc/index.txt",
@@ -406,6 +478,156 @@
    }
   },
   {
+   "name": "AT-RA-02: a `; rm a` tail (the plain sequence form) after an allowlisted prefix: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "j10"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "effects local"
+    ]
+   }
+  },
+  {
+   "name": "AT-RA-02: an input process substitution <(...) after an allowlisted prefix: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "j11"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "effects local"
+    ]
+   }
+  },
+  {
+   "name": "AT-RA-02: an output process substitution >(...) after an allowlisted prefix: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "j12"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "effects local"
+    ]
+   }
+  },
+  {
+   "name": "AT-RA-02: an ANSI-C quote $'\\'' that ends where a plain single quote would not after an allowlisted prefix: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "j13"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "effects local"
+    ]
+   }
+  },
+  {
+   "name": "AT-RA-02: a ${ ...; } command substitution inside double quotes after an allowlisted prefix: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "j14"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "effects local"
+    ]
+   }
+  },
+  {
+   "name": "AT-RA-02: an unquoted ( (a zsh glob qualifier that runs code) after an allowlisted prefix: unknown, ask",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "j15"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "effects local"
+    ]
+   }
+  },
+  {
    "name": "AT-J-08: an outward command with a recipe still asks",
    "cwd": "$TMP/repo",
    "argv": [
@@ -521,7 +743,13 @@
      "^job: j4 · recorded .* V6=fail ",
      "^recipe: B-1 · runtime id j1 · class auto · ",
      "^job: j6 · recorded · read-only no · effects prod-write · ",
-     "^job: j7 · recorded · read-only no · effects unknown · "
+     "^job: j7 · recorded · read-only no · effects unknown · ",
+     "^job: j10 · recorded · read-only no · effects unknown · ",
+     "^job: j11 · recorded · read-only no · effects unknown · ",
+     "^job: j12 · recorded · read-only no · effects unknown · ",
+     "^job: j13 · recorded · read-only no · effects unknown · ",
+     "^job: j14 · recorded · read-only no · effects unknown · ",
+     "^job: j15 · recorded · read-only no · effects unknown · "
     ]
    }
   }

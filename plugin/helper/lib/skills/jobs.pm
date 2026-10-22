@@ -222,10 +222,15 @@ sub prod_class {
 }
 
 # chained(command) -> 1 when the recorded command, without the spec's wait.end_suffix at its
-# end, chains or substitutes commands (S-SETTINGS C): an unquoted `;`, `&&`, `||`, `|`, `&`
-# (a `>&`, `<&` or `&>` redirection is not one) or line break, or a `$(` or backtick outside
-# single quotes (both run inside double quotes too). So a prefix allow pattern such as
-# `^make test` never covers `make test && ./scripts/wipe-db`.
+# end, may chain or substitute commands (S-SETTINGS C: a single command with no shell
+# chaining): an unquoted `;`, `&&`, `||`, `|`, `&` (a `>&`, `<&` or `&>` redirection is not
+# one) or line break; an unquoted `(` or `)` (process substitution `<(…)`/`>(…)`, zsh `=(…)`
+# and glob qualifiers, subshells, extglob: none belongs in a single plain command); a `$(`,
+# backtick, or `${` followed by a blank, `|` or `(` (bash's `${ …; }` / `${| …; }`, zsh's
+# `${(e)…}`) outside single quotes (they run inside double quotes too); or a quote left open.
+# A `$'…'` (ANSI-C) quote is read with its backslash escapes, so `$'\''` does not end early.
+# Unsure means chained (it only makes the job ask). So a prefix allow pattern such as
+# `^make test` never covers `make test && ./scripts/wipe-db` or `make test <(sh wipe.sh)`.
 sub chained {
     my ($cmd) = @_;
     return 1 unless defined $cmd;
@@ -234,21 +239,32 @@ sub chained {
     if (defined $suffix && $suffix ne '' && length($cmd) > length($suffix) && substr($cmd, -length $suffix) eq $suffix) {
         $cmd = substr($cmd, 0, length($cmd) - length($suffix));
     }
-    my ($sq, $dq) = (0, 0);
+    my ($sq, $aq, $dq) = (0, 0, 0);
     my @c = split //, $cmd;
     for (my $i = 0; $i < @c; $i++) {
         my $ch = $c[$i];
         my $next = $i + 1 < @c ? $c[ $i + 1 ] : '';
         my $prev = $i ? $c[ $i - 1 ] : '';
         if ($sq) { $sq = 0 if $ch eq "'"; next }
+        if ($aq) {
+            if ($ch eq '\\') { $i++; next }
+            $aq = 0 if $ch eq "'";
+            next;
+        }
         if ($ch eq '\\') { $i++; next }
         return 1 if $ch eq '`' || ($ch eq '$' && $next eq '(');
+        if ($ch eq '$' && $next eq '{') {
+            my $after = $i + 2 < @c ? $c[ $i + 2 ] : '';
+            return 1 if $after =~ /\A[\s|(]\z/;
+        }
         if ($dq) { $dq = 0 if $ch eq '"'; next }
+        if ($ch eq '$' && $next eq "'") { $aq = 1; $i++; next }
         if ($ch eq "'") { $sq = 1; next }
         if ($ch eq '"') { $dq = 1; next }
-        return 1 if $ch eq ';' || $ch eq '|' || $ch eq "\n" || $ch eq "\r";
+        return 1 if $ch eq ';' || $ch eq '|' || $ch eq "\n" || $ch eq "\r" || $ch eq '(' || $ch eq ')';
         return 1 if $ch eq '&' && $prev ne '>' && $prev ne '<' && $next ne '>';
     }
+    return 1 if $sq || $aq || $dq;
     return 0;
 }
 
