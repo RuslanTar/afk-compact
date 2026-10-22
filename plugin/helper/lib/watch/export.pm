@@ -552,15 +552,122 @@ sub _probes {
 
 sub _w { my $v = shift; return (defined $v && !ref $v && $v =~ /\A[a-z][a-z0-9_.:-]{0,31}\z/) ? $v : defined $v ? 'other' : 'none' }
 
+# config.json (W-BETA B.5, D). Core's settings::export_view([resolved]) returns an ordered
+# object (jsonc::obj, a blessed array of key/value pairs; a plain hash is read too) of the
+# exported values (needs/core-to-watch.md §4). The watcher wraps it as
+# {available: true, keys: {<key>: {class, value, default, clamped}}}: `class` from
+# %settings::EXPORT; `default` true when the value equals core's export of the key's default
+# (export_view over the defaults resolve() would use); `clamped` true for a number the clamp
+# moves (_clamped). Any failure exports nothing: {available: false, why}.
 sub _config {
     my ($ctx) = @_;
-    if (defined &settings::export_view) {
-        my $r = eval { settings::export_view() };
-        return $r if ref $r eq 'HASH';
-        return { available => \0, why => 'export-view-failed' };
-    }
     # settings.pm has no export classes yet (CORE-02): export nothing rather than guess.
-    return { available => \0, why => 'no-export-classes' };
+    return { available => \0, why => 'no-export-classes' } unless defined &settings::export_view;
+    my $r = eval {
+        # `report` runs without rc::init (cmd/report.pl), so rc::settings() is empty there:
+        # pass this call's resolved settings (the ones watch::ctx resolved) explicitly.
+        my $rs = defined &rc::settings ? rc::settings() : undef;
+        $rs = settings::resolve({}) if !(ref $rs eq 'HASH' && ref $rs->{values} eq 'HASH') && defined &settings::resolve;
+        die "no resolved settings\n" unless ref $rs eq 'HASH' && ref $rs->{values} eq 'HASH';
+        my $cur = _pairs(settings::export_view($rs));
+        my %def = @{ _pairs(settings::export_view({ values => _default_values() })) };
+        my (%v, @order);
+        for (my $i = 0; $i < @$cur; $i += 2) {
+            my $k = $cur->[$i];
+            die "config key\n" unless defined $k && !ref $k && $k =~ /\A[a-z][a-z0-9_]{0,63}\z/;
+            push @order, $k unless exists $v{$k};
+            $v{$k} = _plain($cur->[ $i + 1 ]);
+        }
+        my $cl = _clamped($ctx, \%v);
+        my %keys;
+        for my $k (@order) {
+            $keys{$k} = { class => (defined $settings::EXPORT{$k} ? $settings::EXPORT{$k} : 'unknown'), value => $v{$k},
+                          default => ((exists $def{$k} && _same($v{$k}, _plain($def{$k}))) ? \1 : \0),
+                          clamped => ($cl->{$k} ? \1 : \0) };
+        }
+        +{ available => \1, keys => \%keys };
+    };
+    return $r if ref $r eq 'HASH';
+    return { available => \0, why => 'export-view-failed' };
+}
+
+sub _pairs {
+    my ($v) = @_;
+    return [@$v] if ref $v eq 'jsonc::Obj';
+    return [ map { ($_ => $v->{$_}) } sort keys %$v ] if ref $v eq 'HASH';
+    die "export view\n";
+}
+
+# An exported value as a plain JSON scalar: a jsonc bool becomes \1 or \0; a reference of any
+# other kind is no exported value (fail closed).
+sub _plain {
+    my ($x) = @_;
+    return $x unless ref $x;
+    return ($$x ? \1 : \0) if ref $x eq 'jsonc::Bool' || ref $x eq 'SCALAR';
+    die "config value\n";
+}
+
+sub _same {
+    my ($x, $y) = @_;
+    return !defined $y if !defined $x;
+    return 0 unless defined $y;
+    ($x, $y) = map { ref $_ ? ($$_ ? 1 : 0) : $_ } ($x, $y);
+    my $num = qr/\A-?[0-9]+(?:\.[0-9]+)?\z/;
+    return $x == $y if $x =~ $num && $y =~ $num;
+    return "$x" eq "$y";
+}
+
+# The defaults resolve() uses: the manifest's userConfig default, else the @KEYS fallback,
+# coerced the same way.
+sub _default_values {
+    no warnings qw(once);
+    my $uc = defined &ctx::user_config ? (eval { ctx::user_config() } || {}) : {};
+    $uc = {} unless ref $uc eq 'HASH';
+    my %d;
+    for my $k (@settings::KEYS) {
+        next unless ref $k eq 'ARRAY';
+        my ($key, undef, $fallback) = @$k;
+        my $v = (ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default}) ? $uc->{$key}{default} : $fallback;
+        if (defined &settings::_coerce) {
+            my $c = eval { settings::_coerce($key, $v) };
+            $v = $c if defined $c;
+        }
+        $d{$key} = $v;
+    }
+    return \%d;
+}
+
+# The number keys the clamp moves (the mod's config.ts, MOD-SPEC §1.2): a value outside the
+# manifest's min/max; a window below the window floor; handoff_turn_max_tokens outside its
+# bounds; the soft max and target over what the §1.2 clamp gives for the configured window
+# (watch::rules::fallback_thresholds, the watcher's copy of that clamp).
+sub _clamped {
+    my ($ctx, $v) = @_;
+    my %c;
+    my $n = sub { my $x = $v->{ $_[0] }; return (defined $x && !ref $x && $x =~ /\A-?[0-9]+(?:\.[0-9]+)?\z/) ? 0 + $x : undef };
+    for my $key (keys %$v) {
+        next unless (defined $settings::EXPORT{$key} ? $settings::EXPORT{$key} : '') eq 'num' && defined &settings::limits;
+        my $x = $n->($key);
+        next unless defined $x;
+        my ($lo, $hi) = eval { settings::limits($key) };
+        $c{$key} = 1 if (defined $lo && $x < $lo) || (defined $hi && $x > $hi);
+    }
+    require watch::rules;
+    my $K = watch::rules::clamp_constants($ctx->{spec});
+    my $w = $n->('native_window_tokens');
+    $c{native_window_tokens} = 1 if defined $w && $w > 0 && $w < $K->{window_floor};
+    my $ht = $n->('handoff_turn_max_tokens');
+    $c{handoff_turn_max_tokens} = 1 if defined $ht && ($ht < $K->{handoff_tokens_min} || $ht > $K->{handoff_tokens_max});
+    my ($soft, $target) = ($n->('compact_soft_max_tokens'), $n->('compact_target_tokens'));
+    if (defined $soft && defined $target) {
+        my %s = map { ($_ => (ref $v->{$_} ? (${ $v->{$_} } ? 'true' : 'false') : $v->{$_})) } keys %$v;
+        my $t = watch::rules::fallback_thresholds(\%s, $ctx->{spec});
+        if ($t && !$t->{off}) {
+            $c{compact_soft_max_tokens} = 1 if $t->{soft_max} < $soft;
+            $c{compact_target_tokens} = 1 if $t->{target} < $target;
+        }
+    }
+    return \%c;
 }
 
 # --- keys ---------------------------------------------------------------------
