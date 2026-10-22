@@ -2,6 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 import { leftovers } from '../../hooks/lib/assemble'
 import { NOTICE_ID, NOTICE_MAX, noticeFallback, noticeSpec, shippedNotice } from '../../hooks/lib/notice'
+import { BRAND } from './_gen/brand.gen'
 import { WATCH, World } from './harness.test'
 
 test('AT-WB-12 (mod half): two session.start calls give one toast, shown with warn_ui false; the marker is the helper claim', { options: { warn_ui: false } }, async ($, on) => {
@@ -15,7 +16,7 @@ test('AT-WB-12 (mod half): two session.start calls give one toast, shown with wa
 })
 
 test('AT-WB-12: the text is fixed, at most 200 characters, with no template leftovers; a version bump (a new id) shows it again', () => {
-  for (const name of ['x', 'x'.repeat(16), 'compactinue']) {
+  for (const name of ['x', 'x'.repeat(16), BRAND.name]) {
     const t = noticeFallback(name)
     expect(t.length <= NOTICE_MAX).toBe(true)
     expect(leftovers(t)).toEqual([])
@@ -27,7 +28,7 @@ test('AT-WB-12: the text is fixed, at most 200 characters, with no template left
 })
 
 test('AT-WB-12: the shipped pair is the spec-literals notice object when the build carries one, else the built-in pair', () => {
-  for (const name of ['x', 'compactinue']) {
+  for (const name of ['x', BRAND.name]) {
     const n = shippedNotice(name)
     expect(n.text.length <= NOTICE_MAX).toBe(true)
     expect(leftovers(n.text)).toEqual([])
