@@ -99,7 +99,10 @@ sub run {
     my $vraw = util::read_file(rc::watch() . '/version.json');
     my $v = defined $vraw ? _bytes_deep(eval { jsonc::decode($vraw) }) : undef;
     if (ref $v eq 'HASH' && defined $v->{smokeDue} && $v->{smokeDue} ne '') {
-        push @out, "smokeDue: $v->{smokeDue} (Claude Code changed; run: ! " . ctx::store_cmd() . " smoke)";
+        my $store = ctx::store_cmd();
+        push @out, "smokeDue: $v->{smokeDue} (Claude Code changed; "
+                   . (defined $store ? "run: ! $store smoke)"
+                      : "run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)");
         push @out, '  the instruction text\'s "next window has / lacks" list was last reviewed for '
                    . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05';
     } else {

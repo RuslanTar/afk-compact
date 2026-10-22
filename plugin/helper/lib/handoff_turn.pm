@@ -112,7 +112,8 @@ sub supersede {
 }
 
 # finish_command(stage, meta) -> the literal publish command for a staged draft: the stage
-# path single-quoted (undef when it holds a quote), the slug and status from the stage meta
+# path single-quoted (undef when it holds a quote, or when the launcher path cannot be
+# quoted), the slug and status from the stage meta
 # when the skill recorded them, else the kebab name of the bucket's topic and in-progress
 # (an interrupted turn leaves the work in progress). No session id: publish reads it from
 # the stage.
@@ -127,7 +128,10 @@ sub finish_command {
         $slug = 'handoff' if $slug eq '';
     }
     my $status = (defined $meta->{status} && !ref $meta->{status} && $meta->{status} =~ /\A(in-progress|blocked|completed)\z/) ? $meta->{status} : 'in-progress';
-    return ctx::store_cmd() . " publish --stage '$stage' --slug $slug --status $status";
+    # The quoted absolute launcher path (PKG-RUNTIME A.1); none when no quoting holds it.
+    my $store = ctx::store_cmd();
+    return undef unless defined $store;
+    return $store . " publish --stage '$stage' --slug $slug --status $status";
 }
 
 # published_ok(sid_dir, ht, path) -> 1 when the claimed handoff is in place: a regular file

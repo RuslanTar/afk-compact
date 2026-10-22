@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # tests/helper/run.pl: the H-test case runner (BUILD-PLAN §3.5). Owner: WP-core.
-# Runs `bin/<name>-store` (a staged copy of plugin/) for every tests/helper/cases/**/case.json
+# Runs `scripts/<name>-store` (a staged copy of plugin/) for every tests/helper/cases/**/case.json
 # given on the command line (files or folders), each case in a fresh temporary HOME
 # with STORE_TEST_MODE=1, and asserts exit codes, stdout, files, log rows and traces.
 #
@@ -15,7 +15,8 @@
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), plus every
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $STORE (the
+#   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
 #   variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
 #   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
@@ -90,6 +91,8 @@ $REPO_TMP_BASE //= "$REPO/tmp";
 $REPO_TMP_BASE =~ s{/+$}{};
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
+# The launcher folder (PKG-RUNTIME A.1): one constant, as in tools/build, deps.ts and ctx.pm.
+my $LAUNCHER_DIR = 'scripts';
 my $HOSTNAME = (POSIX::uname())[1];
 my $CLAUDE_BIN = find_claude_bin();
 my $DEFAULT_SID = '11111111-2222-4333-8444-555555555555';
@@ -154,8 +157,8 @@ sub copy_tree {
 sub stage_plugin {
     my ($dst) = @_;
     copy_tree($PLUGIN_SRC // "$REPO/plugin", $dst);
-    my $launcher = "$dst/bin/$BRAND-store";
-    die "run.pl: no launcher at plugin/bin/$BRAND-store (run tools/build)\n" unless -x $launcher;
+    my $launcher = "$dst/$LAUNCHER_DIR/$BRAND-store";
+    die "run.pl: no launcher at plugin/$LAUNCHER_DIR/$BRAND-store (run tools/build)\n" unless -x $launcher;
     # CR-F34: in this staged copy (and with STORE_TEST_MODE=1) the consent keys come from the
     # case's $HOME/.claude/settings.json; without the file, from the account's home.
     util::write_atomic("$dst/.test-consent-home", "helper test stage\n", 0644);
@@ -365,6 +368,10 @@ sub run_case {
         unlink "$V{TMP}/plugin-account/.test-consent-home";
         $V{PLUGIN} = "$V{TMP}/plugin-account";
     }
+    # The launcher by its real path: the one the helper itself prints in the commands it
+    # writes (ctx::store_cmd, from the real path of main.pl; the temp folder may be a link).
+    $V{STORE} = "$V{PLUGIN}/$LAUNCHER_DIR/$BRAND-store";
+    $V{STORE} = Cwd::abs_path($V{STORE}) // $V{STORE};
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
@@ -436,8 +443,8 @@ sub subst {
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
     $s =~ s/\$FIXTURES\b/$REPO\/tests\/fixtures/g;
-    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
-    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
+    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
+    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
     # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
     $s =~ s/\$([A-Z][A-Z0-9_]*)/exists $V->{$1} && defined $V->{$1} ? $V->{$1} : "\$$1"/ge;
     return $s;
@@ -858,7 +865,7 @@ sub spawn {
 sub invoke {
     my ($st, $case, $V, $cdir, $i) = @_;
     my $env = child_env($st, $case, $V, $i);
-    my @argv = ("$V->{PLUGIN}/bin/$BRAND-store", map { subst($_, $V) } @{ $st->{argv} || [] });
+    my @argv = ($V->{STORE}, map { subst($_, $V) } @{ $st->{argv} || [] });
     @argv = map { subst($_, $V) } @{ $st->{exec} } if $st->{exec};
     my $stdin = stdin_of($st, $V, $cdir);
     my @inputs = $st->{parallel_inputs} ? @{ $st->{parallel_inputs} } : ((undef) x ($st->{parallel} // 1));
@@ -869,7 +876,7 @@ sub invoke {
         $k++;
         my ($av, $sin) = (\@argv, $stdin);
         if ($in) {
-            $av = ["$V->{PLUGIN}/bin/$BRAND-store", map { subst($_, $V) } @{ $in->{argv} }] if $in->{argv};
+            $av = [$V->{STORE}, map { subst($_, $V) } @{ $in->{argv} }] if $in->{argv};
             $sin = stdin_of($in, $V, $cdir) if grep { exists $in->{$_} } qw(stdin stdin_json stdin_text stdin_parts);
         }
         push @prepared, [$av, $sin, "$V->{TMP}/out-$i-$k", "$V->{TMP}/err-$i-$k"];

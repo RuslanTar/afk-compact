@@ -1,0 +1,94 @@
+{
+ "id": "AT-PK-03-store-word",
+ "note": "PKG-RUNTIME A.1, AT-PK-03 (helper half; the mod's parity test compares storeWord with these words): ctx::store_cmd() is the plugin's own launcher, <root>/scripts/<name>-store, by its real path as one shell word. Double quotes by default (a root with a space or a single quote), single quotes when the root holds a double quote, $, a backquote or a backslash, and no word at all when it holds both quote kinds: the status smoke line then names store_path_unquotable instead of a command. Each step runs a copy of the staged plugin under such a root",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup: smoke due, four plugin copies",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.306",
+      "smokeDue": "2.1.306",
+      "previousVersion": "2.1.305"
+     }
+    },
+    {
+     "mkdir": "$TMP/a b"
+    },
+    {
+     "mkdir": "$TMP/it's"
+    },
+    {
+     "mkdir": "$TMP/d$x"
+    },
+    {
+     "mkdir": "$TMP/q\"it's"
+    }
+   ]
+  },
+  {
+   "name": "copy under a root with a space",
+   "exec": ["/bin/cp", "-R", "$PLUGIN", "$TMP/a b/p"],
+   "expect": {"exit": 0}
+  },
+  {
+   "name": "copy under a root with a single quote",
+   "exec": ["/bin/cp", "-R", "$PLUGIN", "$TMP/it's/p"],
+   "expect": {"exit": 0}
+  },
+  {
+   "name": "copy under a root with a dollar sign",
+   "exec": ["/bin/cp", "-R", "$PLUGIN", "$TMP/d$x/p"],
+   "expect": {"exit": 0}
+  },
+  {
+   "name": "copy under a root with both quote kinds",
+   "exec": ["/bin/cp", "-R", "$PLUGIN", "$TMP/q\"it's/p"],
+   "expect": {"exit": 0}
+  },
+  {
+   "name": "the staged plugin: double quotes",
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["(Claude Code changed; run: ! \"$STORE\" smoke)"]
+   }
+  },
+  {
+   "name": "space: double quotes",
+   "exec": ["$TMP/a b/p/scripts/$BRAND-store", "status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["(Claude Code changed; run: ! \"$TMP/a b/p/scripts/$BRAND-store\" smoke)"]
+   }
+  },
+  {
+   "name": "single quote: double quotes",
+   "exec": ["$TMP/it's/p/scripts/$BRAND-store", "status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["(Claude Code changed; run: ! \"$TMP/it's/p/scripts/$BRAND-store\" smoke)"]
+   }
+  },
+  {
+   "name": "dollar sign: single quotes",
+   "exec": ["$TMP/d$x/p/scripts/$BRAND-store", "status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["(Claude Code changed; run: ! '$TMP/d$x/p/scripts/$BRAND-store' smoke)"]
+   }
+  },
+  {
+   "name": "both quote kinds: no command, store_path_unquotable",
+   "exec": ["$TMP/q\"it's/p/scripts/$BRAND-store", "status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": ["smokeDue: 2.1.306 (Claude Code changed; run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)"],
+    "stdout_absent": ["-store smoke", "run: !"]
+   }
+  }
+ ]
+}
