@@ -25,9 +25,15 @@ NONCE = "1a2b3c4d"
 NOW = "2026-10-21T14:05:12+03:00"
 CLAUDE_PID = "424242:Tue Oct 21 09:00:00 2026"
 # D-18 handoff-turn ids (8 lowercase hex): open/supersede/superseded, none, staged with a draft,
-# staged with no safe finish command, published, and one never opened.
-HT_OPEN, HT_NONE, HT_DRAFT, HT_NOFINISH, HT_PUBLISHED, HT_UNKNOWN = (
-    "0a0b0c01", "0a0b0c02", "0a0b0c03", "0a0b0c04", "0a0b0c05", "0a0b0c09")
+# staged with no safe finish command, published, claimed with no file in place (publish-failed),
+# and one never opened.
+HT_OPEN, HT_NONE, HT_DRAFT, HT_NOFINISH, HT_PUBLISHED, HT_FAILED, HT_UNKNOWN = (
+    "0a0b0c01", "0a0b0c02", "0a0b0c03", "0a0b0c04", "0a0b0c05", "0a0b0c06", "0a0b0c09")
+# Stage nonces of the published and publish-failed hts (the sentinel's n= must match, CR-F9).
+NONCE_PUBLISHED, NONCE_FAILED = "3c4d5e6f", "4d5e6f70"
+# CR-F9 follow-up: the recorded reply of these rows must start so, else the generator fails
+# (a claim alone answers publish-failed, so the published row needs its handoff file in place).
+EXPECT_PREFIX = {"handoff-state-published": "published ", "handoff-state-publish-failed": "publish-failed "}
 
 
 def brand():
@@ -55,8 +61,31 @@ def ht_setup(tmp, home):
             f.write("# LAB-42 retry\n" if ht == HT_DRAFT else "")
         with open(os.path.join(d, ht + ".stage"), "w", encoding="utf-8") as f:
             f.write(st + "\n")
-    with open(os.path.join(d, HT_PUBLISHED + ".published"), "w", encoding="utf-8") as f:
-        f.write(os.path.join(bucket, "2026-10-21_14-05-12_5e55a001_retry.md") + "\n")
+    # Published (CR-F9): a bound stage with its nonce, the claim, and the handoff file in place
+    # as publish writes it (frontmatter, marker, body, the stage's sentinel last). Publish-failed:
+    # a bound stage and a claim whose file was never placed.
+    name = brand()
+    claims = {HT_PUBLISHED: (NONCE_PUBLISHED, "2026-10-21_14-05-12_5e55a001_retry.md"),
+              HT_FAILED: (NONCE_FAILED, "2026-10-21_14-05-12_5e55a001_retry-2.md")}
+    for ht, (nonce, base) in claims.items():
+        st = os.path.join(bucket, ".staging", "5e55a001-" + nonce)
+        os.makedirs(st)
+        with open(os.path.join(st, "body.md"), "w", encoding="utf-8") as f:
+            f.write("# LAB-42 retry\n")
+        with open(os.path.join(st, "settings.json"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"nonce": nonce, "bucket": bucket, "stem": base[:-3]}) + "\n")
+        with open(os.path.join(d, ht + ".stage"), "w", encoding="utf-8") as f:
+            f.write(st + "\n")
+        path = os.path.join(bucket, base)
+        with open(os.path.join(d, ht + ".published"), "w", encoding="utf-8") as f:
+            f.write(path + "\n")
+        if ht == HT_PUBLISHED:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("---\ntype: handoff\nstatus: in-progress\n---\n"
+                        "\u27ea{0} v1 n={1} s=manual\u27eb\n# LAB-42 retry\n"
+                        "\u27ea/{0} n={1}\u27eb\n".format(name, nonce))
+            with open(os.path.join(st, "published"), "w", encoding="utf-8") as f:
+                f.write(path + "\n")
 
 
 def calls(tmp):
@@ -101,6 +130,7 @@ def calls(tmp):
         ("handoff-state-staged", hts(HT_DRAFT)),
         ("handoff-state-staged-no-finish", hts(HT_NOFINISH)),
         ("handoff-state-published", hts(HT_PUBLISHED)),
+        ("handoff-state-publish-failed", hts(HT_FAILED)),
         ("handoff-state-superseded", hts(HT_OPEN)),
         ("log-jobs-caller", ["log", "--sid", SID, "--stream", "jobs", "--stdin"], job + "\n"),
         ("dispatch-handoff-ht", [a if a != NONCE else "2b3c4d5e" for a in disp] + ["--handoff-ht", HT_OPEN]),
@@ -147,6 +177,10 @@ def record():
                 j = json.loads(out)
                 j["checkpoint_ms"] = {k: 0 for k in j.get("checkpoint_ms") or {}}
                 out = json.dumps(j, separators=(",", ":"), ensure_ascii=False) + "\n"
+            want = EXPECT_PREFIX.get(label)
+            if want is not None and (r.returncode != 0 or not out.startswith(want)):
+                sys.exit("helper-replies-gen: {} answered {!r} (exit {}), expected {!r}...".format(
+                    label, out, r.returncode, want))
             rows.append({"name": label, "argv": [portable(a, tmp, home, name) for a in argv],
                          "exitCode": r.returncode, "stdout": portable(out, tmp, home, name)})
         inputs = {"$TMP/summary.txt": text.split(name)}
