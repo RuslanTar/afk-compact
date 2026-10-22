@@ -12,10 +12,14 @@ package watch::ctx;
 #   plugin_root    the plugin folder (default: four levels above this file)
 #   pid, pid_lstart  the Claude Code process (identity.claude_pid)
 #   cc_version     Claude Code version when known
-#   detect         PostCompact: detect.summary result for compact_summary, or
-#                  core's PostCompact result {scan => <that>, verdict, scope, ...}
-#   instr          PreCompact: detect.instructions result (core passes it as
-#                  `instructions`; either key is read)
+#   cc_version_src which source gave cc_version (mod, exec, transcript, mirror; MOD-SPEC §2.5)
+#   detect         PostCompact: core's result {scan => detect.summary result, verdict,
+#                  scope, seat_state, id6, channel, scope_deferred}. ALIAS: the flat
+#                  detect.summary result (no `scan`), still read, marked for removal
+#                  after one release (PKG-RUNTIME D.1)
+#   instructions   PreCompact: detect.instructions result {found, nonce, scope,
+#                  has_record}. ALIAS `instr`: the older name, still read, marked for
+#                  removal after one release (PKG-RUNTIME D.1; core never passes it)
 #   dispatch       PostCompact: the dispatch record matched by core, if any
 #   secret_hits    PostCompact: [rule ids] from secrets.scan on the summary
 #   keyset_hash    C5 sha8 of this payload's key set, as core computes it

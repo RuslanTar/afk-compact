@@ -49,7 +49,8 @@ sub foreign_header {
 }
 
 # Core's PreCompact passes its detect.instructions result as `instructions`
-# (`instr` in the ctx contract); either one is the answer.
+# (BUILD-PLAN §3.6, PKG-RUNTIME D.1). ALIAS: `instr` is the older documented name; core never
+# passes it. It is still read, and marked for removal after one release.
 sub _ci_nonce {
     my ($ctx, $ci) = @_;
     my $in = ref $ctx->{instr} eq 'HASH' ? $ctx->{instr} : ref $ctx->{instructions} eq 'HASH' ? $ctx->{instructions} : undef;
@@ -188,6 +189,8 @@ sub mod_alive_this_turn {
 # The detector result for compact_summary. Core's PostCompact passes its own
 # result: the detect.summary fields (nonce, the marker's scope, normalized,
 # marker_line, sentinel_from_end) under `scan`, and its final verdict on top.
+# ALIAS (PKG-RUNTIME D.1): a flat `detect` (the detect.summary fields with no `scan`) is the
+# older documented form; core never passes it. Still read; marked for removal after one release.
 sub _detect {
     my ($ctx) = @_;
     my $d = $ctx->{detect};

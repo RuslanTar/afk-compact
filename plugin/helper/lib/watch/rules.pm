@@ -34,7 +34,8 @@ our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_e
                 thrash trigger_disabled_small_window trigger_unknown triggers_off version_change
                 warn_quota watch_error
                 handoff_export handoff_mode handoff_race handoff_skipped handoff_turn_open
-                handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched);
+                handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched
+                permission_denied);
 my %KIND = map { $_ => 1 } @KINDS;
 our %MISSED;
 
@@ -69,12 +70,62 @@ sub load_session {
         $S{disp}{ $d->{nonce} } = $d;
     }
     $S{disp_list} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } values %{ $S{disp} } ];
-    $S{rollup} = {};
-    for my $r (@{ $C->{rows}{rollup} }) {
-        $S{rollup}{ $r->{nonce} } = $r if defined $r->{nonce};
-    }
+    ($S{rollup}, $S{boundary}, $S{join_conflict}) = join_rollup($C->{rows}{rollup});
     $S{bg} = _bg_slots($ctx);
     return \%S;
+}
+
+# The rollup stream (<watch>/<sid>/compactions.jsonl) holds the rollup rows (`ev:
+# compaction`, written before the store had an `ev` for them: no `ev`) and core's
+# `compaction_boundary` rows (PKG-RUNTIME E.2; one per nonce, append-only). Join by nonce:
+# a null rollup field takes the boundary value, a non-null rollup value is never replaced,
+# and a disagreement is a `join_conflict` (named on the row as `_join_conflict`, counted).
+# A repeated boundary row for a nonce is ignored (the first one counts).
+our %JOIN_FIELDS = (pre_tokens => 'pre_tokens', post_tokens => 'post_tokens', duration_ms => 'duration_ms',
+                    precomputed => 'precomputed');
+
+sub join_rollup {
+    my ($rows) = @_;
+    my (%roll, %bound);
+    for my $r (@{ $rows || [] }) {
+        next unless ref $r eq 'HASH' && defined $r->{nonce} && !ref $r->{nonce};
+        my $ev = $r->{ev} // 'compaction';
+        if ($ev eq 'compaction_boundary') { $bound{ $r->{nonce} } //= $r }
+        elsif ($ev eq 'compaction') { $roll{ $r->{nonce} } = $r }
+    }
+    my $conflicts = 0;
+    for my $n (sort keys %roll) {
+        my $b = $bound{$n} or next;
+        my $r = { %{ $roll{$n} } };
+        my @c;
+        for my $k (sort keys %JOIN_FIELDS) {
+            my $bv = $b->{ $JOIN_FIELDS{$k} };
+            next unless defined $bv;
+            if (!defined $r->{$k}) { $r->{$k} = $bv; next }
+            my ($x, $y) = map { ref $_ eq 'SCALAR' ? ($$_ ? 1 : 0) : $_ } ($r->{$k}, $bv);
+            push @c, $k if "$x" ne "$y";
+        }
+        $r->{boundary_uuid} //= $b->{boundary_uuid};
+        if (@c) { $r->{_join_conflict} = \@c; $conflicts++ }
+        $roll{$n} = $r;
+    }
+    return (\%roll, \%bound, $conflicts);
+}
+
+# `permission_denied` rows (core's hook, WATCHER-SPEC §6.3; D-13 deny_rate): counts by
+# `turn_kind` (`post-compaction` includes the pending-record case of PKG-RUNTIME E.1),
+# `caused_by` and `guard_class`. Content-free: classes and counts only.
+sub deny_summary {
+    my ($S) = @_;
+    my %o = (total => 0, turn_kind => {}, caused_by => {}, guard_class => {}, post_compaction_plugin => 0);
+    for my $r (rows_of($S, 'permission_denied')) {
+        $o{total}++;
+        my %v = map { my $x = $r->{$_}; ($_ => (defined $x && !ref $x && length $x) ? $x : 'unknown') }
+                qw(turn_kind caused_by guard_class);
+        $o{$_}{ $v{$_} }++ for qw(turn_kind caused_by guard_class);
+        $o{post_compaction_plugin}++ if $v{turn_kind} eq 'post-compaction' && $v{caused_by} eq 'plugin';
+    }
+    return \%o;
 }
 
 sub rows_of {
@@ -303,6 +354,15 @@ sub _derive {
     # Copy, M-14.
     my $copy;
     my $rk = $D ? $D->{nonce} : $P ? $P->{nonce_found} : undef;
+    # Sizes: the swept boundary first; without one, the rollup row joined with core's
+    # `compaction_boundary` row by nonce (PKG-RUNTIME E.2, join_rollup).
+    my $roll = defined $rk ? $S->{rollup}{$rk} : undef;
+    $C->{pre} = ($B && defined $B->{pre}) ? $B->{pre} : $roll ? $roll->{pre_tokens} : undef;
+    $C->{pre_src} = !defined $C->{pre} ? undef : ($B && defined $B->{pre}) ? 'transcript' : 'rollup';
+    $C->{join_conflict} = $roll->{_join_conflict} if $roll && $roll->{_join_conflict};
+    my $pc = $roll ? $roll->{precomputed} : undef;
+    $pc = $$pc if ref $pc eq q(SCALAR);
+    $C->{precompute} = 1 if !$B && $pc;
     if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
     unless (defined $copy) {
         my $ref_t = $P ? _t($P) : $B ? $B->{ts_epoch} : undef;
@@ -394,6 +454,15 @@ sub evaluate {
         if ($P && ($P->{fabricated_check_tokens} // 0) > 0) {
             $R->(rule => 'A-04', severity => 'warn', id_parts => \@idp, %k,
                  evidence => { fabricated_check_tokens => $P->{fabricated_check_tokens}, measured => $P->{measured} });
+        }
+        if ($c->{main} && !$B && !$c->{precompute} && ($c->{pre_src} // '') eq 'rollup') {
+            # No swept boundary (the P-only path): the band from the joined rollup sizes.
+            my $bp = band($th, $c->{pre});
+            if (defined $bp && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
+                $R->(rule => 'A-05', severity => 'warn', id_parts => \@idp, %k,
+                     evidence => { band_position => $bp, tokens_before => $c->{pre}, target => $th->{target},
+                                   soft_max => $th->{soft_max}, native_trigger => $th->{native}, source => 'rollup' });
+            }
         }
         if ($c->{main} && $B && !$c->{precompute}) {
             my $bp = band($th, $B->{pre});
