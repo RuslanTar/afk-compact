@@ -213,16 +213,6 @@ sub relaunch_lines {
 # The first line: the watcher state, the size of its logs and the number of sessions; with
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
-our $NOTICE_FALLBACK = { id => 'watcher-1', version => 1,
-    text => '{{plugin}}: local compaction logs are on (content-free; nothing is sent). To share them: /{{plugin}}:report. To turn them off: set watcher to off in /config.' };
-sub notice_spec {
-    my $n = spec::has('notice') ? eval { spec::get('notice') } : undef;
-    $n = $NOTICE_FALLBACK unless ref $n eq 'HASH' && defined $n->{id} && $n->{id} =~ /\A[a-z0-9][a-z0-9-]{0,40}\z/
-                                 && defined $n->{text} && !ref $n->{text};
-    (my $t = $n->{text}) =~ s/\{\{plugin\}\}/ctx::brand()/ge;
-    return { id => $n->{id}, text => $t };
-}
-
 sub watcher_lines {
     my $w = lc(rc::val('watcher') // 'shadow');
     $w =~ s/^\s+|\s+$//g;
@@ -231,8 +221,8 @@ sub watcher_lines {
             . 'background list, heal counters, rollups, liveness') if $w eq 'off';
     my ($bytes, $sids) = _watch_size(rc::watch());
     my @l = ("watcher: shadow · logs " . _size($bytes) . " in $sids sessions · share: /$brand:report · off: watcher = off in /config");
-    my $n = notice_spec();
-    push @l, "notice: $n->{text}" unless -e rc::watch() . "/notice/$n->{id}.shown";
+    my $n = notice::spec();
+    push @l, "notice: $n->{text}" unless notice::shown(rc::watch(), $n->{id});
     return @l;
 }
 
