@@ -1,0 +1,290 @@
+{
+ "id": "AT-ST-10",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "BD-1 (C-STORE D7, handoff-spec §10 \"Clone patches\"; replaces HT-EV-02's withhold-whole expectation): a commit touching src/a.rb and .netrc gives 0001-<sha8>.partial.patch with src/a.rb only plus one withheld row <clone>#<sha8>:.netrc (rules deny-name, no bytes, no hash); the same for the uncommitted diff (uncommitted.partial.patch, <clone>#uncommitted:.netrc); a commit with only blocked paths (add db.sqlite) and the rename db.sqlite -> notes.txt (both sides withheld, notes.txt rename-from-denied) give withheld rows and no patch file; renames into the names \"a b.txt\", \"x*[y].env\" and one holding a newline are excluded literally: xay.env (which the glob x*[y].env would match) stays in 0005-<sha8>.partial.patch. The MANIFEST meaning and the row label say partial. No blocked text is written anywhere under the root.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "repo": {
+      "commits": [
+       {
+        "files": {
+         "src/a.rb": "a = 1\n",
+         ".netrc": "machine example.invalid login fixture password BD1-NETRC-CANARY\n"
+        },
+        "msg": "seed"
+       },
+       {
+        "files": {
+         "db.sqlite": "SQLite format 3 BD1-SQLITE-CANARY\n"
+        },
+        "msg": "add a db"
+       }
+      ]
+     },
+     "at": "$TMP/clone"
+    },
+    {
+     "git": [
+      "mv",
+      "db.sqlite",
+      "notes.txt"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "git": [
+      "commit",
+      "-q",
+      "-m",
+      "rename the db"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "write": "$TMP/clone/id_rsa",
+     "content": "BD1-RSA-CANARY private\n"
+    },
+    {
+     "write": "$TMP/clone/.npmrc",
+     "content": "BD1-NPMRC-CANARY token\n"
+    },
+    {
+     "write": "$TMP/clone/k.pem",
+     "content": "BD1-PEM-CANARY key\n"
+    },
+    {
+     "write": "$TMP/clone/src/keep.rb",
+     "content": "keep = 1\n"
+    },
+    {
+     "git": [
+      "add",
+      "-A"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "git": [
+      "commit",
+      "-q",
+      "-m",
+      "add keys"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "git": [
+      "mv",
+      "id_rsa",
+      "a b.txt"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "git": [
+      "mv",
+      ".npmrc",
+      "x*[y].env"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "git": [
+      "mv",
+      "k.pem",
+      "nl\nname.txt"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "write": "$TMP/clone/xay.env",
+     "content": "glob victim = 1\n"
+    },
+    {
+     "write": "$TMP/clone/src/b.rb",
+     "content": "b = 1\n"
+    },
+    {
+     "git": [
+      "add",
+      "-A"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "git": [
+      "commit",
+      "-q",
+      "-m",
+      "odd names"
+     ],
+     "cwd": "$TMP/clone"
+    },
+    {
+     "write": "$TMP/clone/src/a.rb",
+     "content": "a = 2\n"
+    },
+    {
+     "write": "$TMP/clone/.netrc",
+     "content": "machine example.invalid login fixture password BD1-NETRC-DIRTY\n"
+    }
+   ],
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "evidence --clone: partial patches, one withheld row per blocked path",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--clone",
+    "$TMP/clone"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0001-[0-9a-f]{8}\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8} partial \\(1 withheld\\)$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:\\.netrc$",
+     "(?s)^withheld - - - \\S+/clone#[0-9a-f]{8}:db\\.sqlite$.*^withheld - - - \\S+/clone#[0-9a-f]{8}:db\\.sqlite$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:notes\\.txt$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8}:notes\\.txt — withheld by the secret gate \\(rename-from-denied\\)$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8}:db\\.sqlite — withheld by the secret gate \\(deny-name\\)$",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0004-[0-9a-f]{8}\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8} partial \\(3 withheld\\)$",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0005-[0-9a-f]{8}\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8} partial \\(6 withheld\\)$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:id_rsa$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:\\.npmrc$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:k\\.pem$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:a b\\.txt$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:x\\*\\[y\\]\\.env$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:nl\\?name\\.txt$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8}:a b\\.txt — withheld by the secret gate \\(rename-from-denied\\)$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8}:id_rsa — withheld by the secret gate \\(deny-name\\)$",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/uncommitted\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#uncommitted partial \\(1 withheld\\)$",
+     "^withheld - - - \\S+/clone#uncommitted:\\.netrc$"
+    ],
+    "stdout_lacks": [
+     "^\\S+ \\S+/000[23]-",
+     "^\\S+ \\S+/\\d{4}-[0-9a-f]{8}\\.patch ",
+     "^withheld - \\d",
+     "^redacted ",
+     "exclude-failed",
+     ":(src/|xay)"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/0001-*.partial.patch",
+      "count": 1,
+      "mode": "0600",
+      "has": [
+       "^diff --git a/src/a\\.rb b/src/a\\.rb$"
+      ],
+      "lacks": [
+       "netrc",
+       "^diff --git a/(?!src/a\\.rb )"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/0002-*",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/0003-*",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/0004-*.partial.patch",
+      "count": 1,
+      "has": [
+       "^diff --git a/src/keep\\.rb b/src/keep\\.rb$"
+      ],
+      "lacks": [
+       "^diff --git a/(?!src/keep\\.rb )"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/0005-*.partial.patch",
+      "count": 1,
+      "has": [
+       "^diff --git a/xay\\.env b/xay\\.env$",
+       "^diff --git a/src/b\\.rb b/src/b\\.rb$"
+      ],
+      "lacks": [
+       "^diff --git a/(?!xay\\.env |src/b\\.rb )",
+       "^rename ",
+       "a b\\.txt",
+       "name\\.txt",
+       "\\[y\\]"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/uncommitted.partial.patch",
+      "count": 1,
+      "has": [
+       "^diff --git a/src/a\\.rb b/src/a\\.rb$",
+       "^\\+a = 2$"
+      ],
+      "lacks": [
+       "netrc",
+       "^diff --git a/(?!src/a\\.rb )"
+      ]
+     },
+     {
+      "path": "$STAGE/evidence.jsonl",
+      "has": [
+       "\"meaning\":\"partial patch: 6 path\\(s\\) left out\"",
+       "\"label\":\"partial \\(6 withheld\\)\"",
+       "\"origin\":\"[^\"]+/clone#[0-9a-f]{8}:nl\\\\nname\\.txt\"",
+       "\"rules\":\\[\"rename-from-denied\"\\]",
+       "^(?=.*\"status\":\"withheld\")(?=.*\"origin\":\"[^\"]+#[0-9a-f]{8}:\\.netrc\").*$"
+      ]
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$ROOT",
+      "text": "BD1-"
+     },
+     {
+      "dir": "$DISP",
+      "text": "BD1-"
+     }
+    ]
+   }
+  }
+ ]
+}

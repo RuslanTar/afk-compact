@@ -146,7 +146,8 @@ sub run {
         push @manifest, {
             copy_path => $r->{copy}, origin => $r->{origin}, bytes => $r->{bytes}, sha256 => $r->{sha256},
             mtime => $r->{mtime}, copied_at => $r->{ts}, mode => ($r->{copy} ? '0600' : ''),
-            scan => _scan($r), regen_cmd => '', meaning => ($r->{where} eq 'dispose' ? 'disposable' : ''),
+            scan => _scan($r), regen_cmd => '',
+            meaning => ($r->{meaning} // ($r->{where} eq 'dispose' ? 'disposable' : '')),
         };
     }
     my %by_copy = map { ($_->{copy} // '') => $_ } grep { $_->{copy} } @$ev;

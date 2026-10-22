@@ -517,23 +517,37 @@ sub unset_value {
 
 # ---------------------------------------------------------------- processes
 
-# Run argv with a deadline. Returns {rc, out, timed_out}. stderr is discarded.
+# Run argv with a deadline. Returns {rc, out, timed_out}. stderr is discarded. stdin => BYTES
+# feeds those bytes to the command's standard input (written as it reads; a command that
+# stops reading early ends the write, never the helper), else stdin is /dev/null.
 sub run {
     my ($argv, $timeout_ms, %o) = @_;
     trace($o{trace}) if $o{trace};
     pipe(my $r, my $w) or return { rc => -1, out => '', timed_out => 0 };
+    my ($ir, $iw);
+    if (defined $o{stdin}) { pipe($ir, $iw) or return { rc => -1, out => '', timed_out => 0 } }
+    local $SIG{PIPE} = 'IGNORE' if defined $o{stdin};
     my $pid = fork;
     if (!defined $pid) { return { rc => -1, out => '', timed_out => 0 } }
     if ($pid == 0) {
         close $r;
         open(STDOUT, '>&', $w) or POSIX::_exit(127);
         open(STDERR, '>', '/dev/null');
-        open(STDIN, '<', '/dev/null');
+        $SIG{PIPE} = q(DEFAULT);
+        if ($ir) { close $iw; open(STDIN, '<&', $ir) or POSIX::_exit(127) }
+        else { open(STDIN, '<', '/dev/null') }
         if (defined $o{cwd}) { chdir $o{cwd} or POSIX::_exit(127) }
         { no warnings 'exec'; exec { $argv->[0] } @$argv; }
         POSIX::_exit(127);
     }
     close $w;
+    my $in = defined $o{stdin} ? bytes($o{stdin}) : undef;
+    my $win = '';
+    if ($iw) {
+        close $ir;
+        if (length $in) { vec($win, fileno($iw), 1) = 1; _nonblock($iw) }
+        else { close $iw; undef $iw }
+    }
     my $out = '';
     my $deadline = time + ($timeout_ms // 2000) / 1000;
     my $timed_out = 0;
@@ -543,13 +557,20 @@ sub run {
     while (1) {
         my $left = $deadline - time;
         if ($left <= 0) { $timed_out = 1; last }
-        my $n = select(my $rout = $rin, undef, undef, $left > 0.25 ? 0.25 : $left);
+        my $n = select(my $rout = $rin, my $wout = ($iw ? $win : undef), undef, $left > 0.25 ? 0.25 : $left);
         next if $n == 0 || ($n < 0 && $!{EINTR});
+        if ($iw && vec($wout, fileno($iw), 1)) {
+            my $put = syswrite($iw, $in, 65536);
+            if (defined $put) { substr($in, 0, $put, '') }
+            if ((!defined $put && !$!{EAGAIN} && !$!{EINTR}) || !length $in) { close $iw; undef $iw }
+            next unless vec($rout, fileno($r), 1);
+        }
         my $got = sysread($r, my $buf, 65536);
         last unless $got;
         $out .= $buf if length($out) < $max;
     }
     close $r;
+    close $iw if $iw;
     if ($timed_out) {
         kill 'TERM', $pid;
         select(undef, undef, undef, 0.1);
@@ -558,6 +579,12 @@ sub run {
     waitpid($pid, 0);
     my $rc = $timed_out ? -1 : ($? >> 8);
     return { rc => $rc, out => $out, timed_out => $timed_out };
+}
+
+sub _nonblock {
+    my ($fh) = @_;
+    my $fl = fcntl($fh, Fcntl::F_GETFL(), 0);
+    fcntl($fh, Fcntl::F_SETFL(), $fl | Fcntl::O_NONBLOCK()) if defined $fl;
 }
 
 sub trace {

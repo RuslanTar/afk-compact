@@ -1,0 +1,123 @@
+{
+ "id": "AT-ST-11",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "BD-1 fail-closed (C-STORE D7): tests/fixtures/bin/git-noexclude installed as git drops the exclude pathspecs, so the rebuilt patch still holds .netrc; `git apply --numstat` over it lists the blocked path, and the whole patch is withheld (rules exclude-failed), for a commit and for the uncommitted diff. The blocked path keeps its withheld row; nothing is written to the evidence folder.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "path_prepend": [
+  "$TMP/bin"
+ ],
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "repo": {
+      "commits": [
+       {
+        "files": {
+         "src/a.rb": "a = 1\n",
+         ".netrc": "machine example.invalid login fixture password BD1-NETRC-CANARY\n"
+        },
+        "msg": "seed"
+       }
+      ],
+      "dirty": {
+       "src/a.rb": "a = 2\n",
+       ".netrc": "machine example.invalid login fixture password BD1-NETRC-DIRTY\n"
+      }
+     },
+     "at": "$TMP/clone"
+    },
+    {
+     "copy": "bin/git-noexclude",
+     "to": "$TMP/bin/git",
+     "mode": "0755"
+    }
+   ],
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "evidence --clone through a git that ignores the excludes: withheld exclude-failed",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--clone",
+    "$TMP/clone"
+   ],
+   "env": {
+    "GIT_NOEXCLUDE_LOG": "$TMP/noexclude.log"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8}$",
+     "^withheld - - - \\S+/clone#[0-9a-f]{8}:\\.netrc$",
+     "^Volatile: \\S+/clone#[0-9a-f]{8} — withheld by the secret gate \\(exclude-failed\\)$",
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/clone#uncommitted$",
+     "^withheld - - - \\S+/clone#uncommitted:\\.netrc$",
+     "^Volatile: \\S+/clone#uncommitted — withheld by the secret gate \\(exclude-failed\\)$"
+    ],
+    "stdout_lacks": [
+     "^copied ",
+     "^redacted ",
+     "^Evidence: ",
+     "partial"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/noexclude.log",
+      "has": [
+       "\\Adropped 1\\ndropped 1\\n\\z"
+      ]
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$ROOT",
+      "text": "BD1-"
+     },
+     {
+      "dir": "$DISP",
+      "text": "BD1-"
+     }
+    ]
+   }
+  }
+ ]
+}
