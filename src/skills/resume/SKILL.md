@@ -207,7 +207,7 @@ Write owner steps as a walk-through: where, what, the exact command. Never short
 
 By default, start Step 1 in this turn, plus anything the questions don't block. Stop only when:
 1. drift or a refuted claim invalidates Step 1 or the plan. Re-plan from the ledger; ask if the plan no longer holds;
-2. Step 1 is outward, destructive, production or self-modifying (Rule 3);
+2. Step 1 is outward, destructive, a production write, a production read under `unattended_prod_reads: forbid`, or self-modifying (Rule 3); <!-- S-SETTINGS B -->
 3. the arguments conflict with a `U-`, `D-` or `X-` item;
 4. a user-owned question blocks Step 1.
 
