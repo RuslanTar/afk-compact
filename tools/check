@@ -912,10 +912,7 @@ def x_variants(name):
 # its first failing step must match (any other case failing, or a different first failure,
 # fails X-H). Remove a row when it prints KNOWN-RED-DONE.
 KNOWN_RED = {
-    # BLD-03 (S-SETTINGS A, owner 04:10): the manifest cap default is 6; the case (core) still
-    # expects "0 of 3". Until the wp/core CORE-02 merge (needs/build-to-core.md).
-    "SR-1.1-non-ascii-manifest": r"^#   step 2: stdout lacks /\^halt: off · continues this hour: 0 of 3\$/: .*"
-                                 r"\\nhalt: off · continues this hour: 0 of 6\\n",
+    # (SR-1.1-non-ascii-manifest left with the wp/core CORE-02 merge, build round 9.)
 }
 
 

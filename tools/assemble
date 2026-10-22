@@ -81,12 +81,12 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            # nudge.ts builds queue_add with storeWord (PKG-RUNTIME A.2).
            "queue_add": STORE + " queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", "measured_facts": "", "remeasure": "",
            # D-18 tokens (worst case; text-to-build.md §1): the longest halt reason, c = 1 + call_cap
-           # + recipe_cap (DP-19), and core's handoff_turn::finish_command form. The finish command
-           # carries the full launcher word as ctx::store_cmd() builds it (PKG-RUNTIME A.2), the
-           # longer form; CROSS-REVIEW XR-03 (1) writes it with `<store>` once that is built.
+           # + recipe_cap (DP-19), and core's handoff_turn::finish_command form. Since wp/core C-2
+           # (XR-03 (1), DP-31 (1)) that command starts with the `<store>` token, which the resume
+           # context defines once; it no longer carries the full launcher word (B-4).
            "halt_reason": "compactions keep repeating without progress", "max_calls": "34", "handoff_path": PREV,
            "draft_state": "present",
-           "handoff_finish": "`" + STORE + " publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`",
+           "handoff_finish": "`<store> publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`",
            # IC-1 D5 [submit-idle]: minutes idle when the pre-idle turn fires (MOD-SPEC §9.4: 49).
            "idle_min": "49"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
