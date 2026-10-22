@@ -2,9 +2,11 @@
   "name": "compactinue",
   "files": [
     ".claude-plugin/marketplace.json",
+    "NOTICE",
     "README.md",
     "plugin/.claude-plugin/plugin.json",
     "plugin/LICENSE",
+    "plugin/NOTICE",
     "plugin/README.md",
     "plugin/assets/checkpoint-nudge.txt",
     "plugin/assets/handoff-instructions.txt",

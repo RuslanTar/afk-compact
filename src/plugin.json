@@ -3,7 +3,7 @@
   "version": "{{version}}",
   "description": "{{description}}",
   "author": { "name": "Ruslan Taranenko" },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "userConfig": {
     "handoff_root": {
       "type": "directory",

@@ -189,6 +189,9 @@ def plan(brand):
         readme = "# {}\n\n{}\n".format(name, brand["description"])
     if os.path.exists(os.path.join(REPO, "LICENSE")):
         out["plugin/LICENSE"] = (read("LICENSE"), PLAIN)
+    notice = render(read("src/NOTICE"), name)
+    out["NOTICE"] = (notice, PLAIN)
+    out["plugin/NOTICE"] = (notice, PLAIN)
     out["README.md"] = (readme, PLAIN)
     out["plugin/README.md"] = (readme, PLAIN)
     return out

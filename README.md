@@ -477,4 +477,4 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
