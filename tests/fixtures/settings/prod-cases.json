@@ -1,0 +1,304 @@
+{
+  "v": 1,
+  "id": "prod-cases",
+  "ruling": "S-SETTINGS B (unattended_prod_reads, prod_patterns, the effects order), C (relaunch_allow active, no chaining)",
+  "tests": [
+    "AT-PR-01",
+    "AT-PR-02",
+    "AT-PR-03",
+    "AT-PR-04",
+    "AT-RA-01",
+    "AT-RA-02"
+  ],
+  "note": "Recorded commands (each with the spec end_suffix, as the helper records them) and the effects class the BUILD-PLAN §3.7 order gives under the named settings file (null = no settings file: forbid, no patterns, empty relaunch_allow). `tools/fixtures-gen --check` (`prod`) recomputes every class with a reference of that order: unknown → outward (spec outward_classes) → prod-write (production match and not read-only) → prod-read (production match and read-only) → none (read-only) → local (a relaunch_allow match, a recipe with expected outputs, no unquoted ; && || | & newline $( or backquote once the end_suffix is cut) → unknown. Production match = the shipped prod_classes (spec literal when present, else the S-SETTINGS B prod-token regex) plus the file's valid prod_patterns. `gate` is the heal-check outcome: prod-read relaunches only under allow read from the settings file.",
+  "placements": {
+    "file": {
+      "settings_path": "$HOME/.claude/settings.json",
+      "env": {},
+      "flag": null,
+      "reads": "allow"
+    },
+    "flag": {
+      "settings_path": null,
+      "env": {},
+      "flag": [
+        "--unattended-prod-reads",
+        "allow"
+      ],
+      "reads": "forbid",
+      "note": "settings file only"
+    },
+    "env": {
+      "settings_path": null,
+      "env": {
+        "CLAUDE_PLUGIN_OPTION_UNATTENDED_PROD_READS": "allow"
+      },
+      "flag": null,
+      "reads": "forbid",
+      "note": "settings file only"
+    },
+    "foreign": {
+      "settings_path": "$TMP/team-config/settings.json",
+      "env": {
+        "CLAUDE_CONFIG_DIR": "$TMP/team-config"
+      },
+      "flag": null,
+      "reads": "forbid",
+      "note": "CR-F34: consent keys are not read from a foreign config dir"
+    },
+    "folded": {
+      "settings_path": "$HOME/.claude/settings.json",
+      "file": "settings/prod-reads-allow-folded.json",
+      "env": {},
+      "flag": null,
+      "reads": "allow"
+    },
+    "invalid": {
+      "settings_path": "$HOME/.claude/settings.json",
+      "file": "settings/prod-reads-invalid.json",
+      "env": {},
+      "flag": null,
+      "reads": "forbid",
+      "row": "config_invalid"
+    }
+  },
+  "placement_file": "settings/prod-reads-allow.json",
+  "patterns": {
+    "settings/prod-patterns.json": {
+      "kept": [
+        "--context=acme-eu1"
+      ],
+      "dropped": []
+    },
+    "settings/prod-patterns-invalid.json": {
+      "kept": [
+        "--context=acme-eu1"
+      ],
+      "dropped": [
+        0,
+        1,
+        2
+      ],
+      "why": {
+        "0": "Dev-7 forbidden construct (?{",
+        "1": "201 chars",
+        "2": "does not compile"
+      }
+    },
+    "settings/prod-patterns-33.json": {
+      "kept_count": 32,
+      "dropped": [
+        32
+      ],
+      "why": {
+        "32": "33rd pattern"
+      }
+    },
+    "flag": {
+      "argv": [
+        "--prod-patterns",
+        "--context=acme-eu1"
+      ],
+      "kept": [],
+      "note": "ignored with the settings-file-only note"
+    }
+  },
+  "commands": [
+    {
+      "id": "pr-read",
+      "command": "kubectl get pods --context prod-eu; echo \"__exit $?\"",
+      "is_read_only": true,
+      "recipe_expected_outputs": true,
+      "settings": null,
+      "effects": "prod-read",
+      "tests": [
+        "AT-PR-01",
+        "AT-PR-02"
+      ],
+      "note": "forbid: REFUSED: effects-prod-read plus ask-command:; allow (file placement): ok plus run:"
+    },
+    {
+      "id": "pr-read-allow",
+      "command": "kubectl get pods --context prod-eu; echo \"__exit $?\"",
+      "is_read_only": true,
+      "recipe_expected_outputs": true,
+      "settings": "settings/prod-reads-allow.json",
+      "effects": "prod-read",
+      "tests": [
+        "AT-PR-02"
+      ]
+    },
+    {
+      "id": "pr-write-allowlisted",
+      "command": "sh scripts/reindex.sh --env production; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-reindex-prod.json",
+      "effects": "prod-write",
+      "tests": [
+        "AT-PR-03"
+      ],
+      "note": "a production match outranks the relaunch_allow match; refused under allow; never local"
+    },
+    {
+      "id": "pr-pattern-hit",
+      "command": "kubectl get pods --context=acme-eu1; echo \"__exit $?\"",
+      "is_read_only": true,
+      "recipe_expected_outputs": true,
+      "settings": "settings/prod-patterns.json",
+      "effects": "prod-read",
+      "tests": [
+        "AT-PR-04"
+      ]
+    },
+    {
+      "id": "pr-pattern-none",
+      "command": "kubectl get pods --context=acme-eu1; echo \"__exit $?\"",
+      "is_read_only": true,
+      "recipe_expected_outputs": true,
+      "settings": null,
+      "effects": "none",
+      "tests": [
+        "AT-PR-04"
+      ],
+      "note": "without the pattern the same command is plain read-only"
+    },
+    {
+      "id": "pr-pattern-dropped",
+      "command": "kubectl get pods --context=acme-eu1; echo \"__exit $?\"",
+      "is_read_only": true,
+      "recipe_expected_outputs": true,
+      "settings": "settings/prod-patterns-invalid.json",
+      "effects": "prod-read",
+      "tests": [
+        "AT-PR-04"
+      ],
+      "note": "the valid 4th pattern survives the three bad ones"
+    },
+    {
+      "id": "pr-product",
+      "command": "ls -la product-build; echo \"__exit $?\"",
+      "is_read_only": true,
+      "recipe_expected_outputs": true,
+      "settings": null,
+      "effects": "none",
+      "tests": [
+        "AT-PR-04"
+      ],
+      "note": "product-build does not match prod-token"
+    },
+    {
+      "id": "ra-local",
+      "command": "make test; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "local",
+      "tests": [
+        "AT-RA-01",
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-quoted-semicolon",
+      "command": "make test ARGS='a;b'; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "local",
+      "tests": [
+        "AT-RA-02"
+      ],
+      "note": "a quoted ; is no chaining"
+    },
+    {
+      "id": "ra-and",
+      "command": "make test && ./x.sh; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-semicolon",
+      "command": "make test; rm a; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-pipe",
+      "command": "make test | tee out.log; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-subst",
+      "command": "make test $(cat args.txt); echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-backquote",
+      "command": "make test `cat args.txt`; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-or",
+      "command": "make test || true; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-background",
+      "command": "make test & sleep 1; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": true,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ]
+    },
+    {
+      "id": "ra-no-recipe",
+      "command": "make test; echo \"__exit $?\"",
+      "is_read_only": false,
+      "recipe_expected_outputs": false,
+      "settings": "settings/relaunch-allow-make-test.json",
+      "effects": "unknown",
+      "tests": [
+        "AT-RA-02"
+      ],
+      "note": "no recipe with expected outputs"
+    }
+  ]
+}

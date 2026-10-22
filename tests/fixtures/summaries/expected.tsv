@@ -1,42 +1,42 @@
-file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatch
-01-post-main-ok.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-02-mod-wrapper-main-ok.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-03-mod-wrapper-no-summary-tags.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-04-bare-marker-byte0.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-05-post-main-crlf.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-06-marker-body-line6.txt	unshaped	-	1	-	-	40770a8717bd26eb9d2829a56c3beb8fc76910e262b1c35bd335fbc0896bf798	
-07-marker-body-line5.txt	ok	5	1	1a2b3c4d	main	fe0ae698f7fc37751dc62d6b593d763861103ae76899cb774680f43016289d47	
-08-foreign-header-only.txt	unshaped	-	-	-	-	206279c7cfb2f766bfabac4f96a8c25e40168d1ce074ab0c70834403743f9a57	
-09-foreign-bracket-header-only.txt	unshaped	-	-	-	-	7e24584299aa2a4718a23669a7f008737db021f9479a131e49049a8edb7e4c46	
-10-foreign-header-then-ours.txt	ok	2	1	1a2b3c4d	main	d5afc3d136c0b9bef2a0583193c2eedb8999170227ef5528b4c82d6e8a4e77b4	
-11-sentinel-closing-tag-blank-lines.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-12-text-after-sentinel.txt	ok-trailer	1	2	1a2b3c4d	main	32c704cb7f4971dd9e5c161c5743e172bc4ce6497bd22d001f726a8a052dd70c	
-13-sentinel-missing.txt	truncated	1	-	1a2b3c4d	main	3a286a7bc92589593f840ba867301cd3297412133d9fce40a9245c7110748385	
-14-sentinel-nonce-differs.txt	truncated	1	1	1a2b3c4d	main	dde325c9c95c40b5fd638159a55abaf70939164acb727cc9c7bded5370316eb7	
-15-sentinel-fourth-from-end.txt	truncated	1	-	1a2b3c4d	main	813b29f70098667f8bf0a234c7063a92c2e31038ed9c1deb89dbb39917c33233	
-16-sentinel-third-from-end.txt	ok-trailer	1	3	1a2b3c4d	main	08b642e56a88c4daada715753e1c464896da72b334c21d565977522874844505	
-17-post-sub-ok.txt	ok	1	1	5e6f7081	sub	8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29	
-18-mod-wrapper-sub-ok.txt	ok	1	1	5e6f7081	sub	8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29	
-19-manual-marker-handoff.txt	ok	1	1	cd2e3f40	manual	377147e6d8cda830acf63c9c80470c66fa5d2427dc7585846afcb93e0c59c85b	
-20-native-numbered.txt	unshaped	-	-	-	-	6787af9ae1ca5d3b1d4b5fcc9dcbd47f1e1663495cd84d985f03ec83210abbe3	
-21-native-prose.txt	unshaped	-	-	-	-	be1b826c2c86816f5263a4c24212b901c4efd2473ad913e94dc51bf0ba3fae44	
-22-native-headings.txt	unshaped	-	-	-	-	598173d8d3e447f28fac9bdd080d6e024668b32ce00f5f52992567468550f600	
-23-pasted-old-marker-deep.txt	unshaped	-	1	-	-	a906456af8d2db032e7128b1b8667b5b42a73386f50a4b32073842960f63ae32	
-24-marker-mid-line.txt	unshaped	-	1	-	-	2ded3608bf204cec7f975fa0b280fe62ab7eccdec9a530aff9b4326e283ec2a5	
-25-marker-uppercase-nonce.txt	unshaped	-	-	-	-	b219145c09172920e402ea486dd422dcd4a556c39089bc1a9de07b5d1bebba1f	
-26-marker-short-nonce.txt	unshaped	-	-	-	-	3ab39959d53873e0d7261ca59ccbd651a412036b5be9ff27620512aa54437f33	
-27-marker-leading-blank-lines.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-28-stale-earlier-nonce.txt	stale	1	1	5ca1ab1e	main	441d2c76308c65091b9f08e3f89098d4e2a6dc6227c7bc2d98cfed3450ebf0d6	watch/dispatch-1a2b3c4d.json
-29-stale-no-dispatch.txt	stale	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	none
-30-scope-leak-main-under-sub.txt	scope-leak	1	1	5e6f7081	main	7c1a44965b05acbee3f3130516bbf15046f4d4b21d4b08fab90b58084d41c9ea	watch/dispatch-5e6f7081.json
-31-scope-leak-sub-under-main.txt	scope-leak	1	1	1a2b3c4d	sub	d03fc3b6909c01f01ea344b5209bf7d26de6f7254db272fed3a920433f42b99b	watch/dispatch-1a2b3c4d.json
-32-scope-leak-resume-heading-unmarked.txt	scope-leak	-	-	-	-	434bd9e52ebbfdfcfc357a16e64f065a58a02eb4c0842fed701bc0a054d26bf9	watch/dispatch-5e6f7081.json
-33-unmarked-main-a.txt	unshaped	-	-	-	-	434bd9e52ebbfdfcfc357a16e64f065a58a02eb4c0842fed701bc0a054d26bf9	
-34-unmarked-main-b.txt	unshaped	-	-	-	-	87f59d07463e2d50343bba3ad3cc6cac4f2fc261210e2ea8fac184813422a735	
-35-frontmatter-spoof-lines.txt	ok	1	1	1a2b3c4d	main	e13f3209123e34bb9c54eaa19572629a1c57c09b8e5a544a0e0107df939c1f52	
-36-canary-in-summary.txt	ok	1	1	1a2b3c4d	main	e0bdf11fd9074a443e9fbc61448c6bbc889187109adaeecb26e6f80c304f2b61	
-37-mod-unlisted-trailer.txt	ok-trailer	1	2	1a2b3c4d	main	9ebdac9c926fc294721ce4f8e38e77c9e7f0bb68930cfb7b865e12c112024475	
-38-mod-text-after-summary-close.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	
-39-sub-native-numbered.txt	unshaped	-	-	-	-	e770844275df35871a098a0c03c051cecac26e6c3dcf175bde8a589acf3e25d9	
-40-empty-summary.txt	unshaped	-	-	-	-	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	
-41-sub-marker-main-heading.txt	scope-leak	1	1	5e6f7081	sub	112a1d8cdbf807f1bc8932210a06003646128b03a47dadb743ee8f451c6d8786	watch/dispatch-5e6f7081.json
+file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatch	sentinel_place
+01-post-main-ok.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+02-mod-wrapper-main-ok.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+03-mod-wrapper-no-summary-tags.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+04-bare-marker-byte0.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+05-post-main-crlf.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+06-marker-body-line6.txt	unshaped	-	1	-	-	40770a8717bd26eb9d2829a56c3beb8fc76910e262b1c35bd335fbc0896bf798		inside
+07-marker-body-line5.txt	ok	5	1	1a2b3c4d	main	fe0ae698f7fc37751dc62d6b593d763861103ae76899cb774680f43016289d47		inside
+08-foreign-header-only.txt	unshaped	-	-	-	-	206279c7cfb2f766bfabac4f96a8c25e40168d1ce074ab0c70834403743f9a57		-
+09-foreign-bracket-header-only.txt	unshaped	-	-	-	-	7e24584299aa2a4718a23669a7f008737db021f9479a131e49049a8edb7e4c46		-
+10-foreign-header-then-ours.txt	ok	2	1	1a2b3c4d	main	d5afc3d136c0b9bef2a0583193c2eedb8999170227ef5528b4c82d6e8a4e77b4		inside
+11-sentinel-closing-tag-blank-lines.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+12-text-after-sentinel.txt	ok-trailer	1	2	1a2b3c4d	main	32c704cb7f4971dd9e5c161c5743e172bc4ce6497bd22d001f726a8a052dd70c		inside
+13-sentinel-missing.txt	truncated	1	-	1a2b3c4d	main	3a286a7bc92589593f840ba867301cd3297412133d9fce40a9245c7110748385		-
+14-sentinel-nonce-differs.txt	truncated	1	1	1a2b3c4d	main	dde325c9c95c40b5fd638159a55abaf70939164acb727cc9c7bded5370316eb7		inside
+15-sentinel-fourth-from-end.txt	truncated	1	-	1a2b3c4d	main	813b29f70098667f8bf0a234c7063a92c2e31038ed9c1deb89dbb39917c33233		-
+16-sentinel-third-from-end.txt	ok-trailer	1	3	1a2b3c4d	main	08b642e56a88c4daada715753e1c464896da72b334c21d565977522874844505		inside
+17-post-sub-ok.txt	ok	1	1	5e6f7081	sub	8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29		inside
+18-mod-wrapper-sub-ok.txt	ok	1	1	5e6f7081	sub	8f3caa529913d70399872d93863ea215412a25bd8afd4fa72b9a5937c8c94d29		inside
+19-manual-marker-handoff.txt	ok	1	1	cd2e3f40	manual	377147e6d8cda830acf63c9c80470c66fa5d2427dc7585846afcb93e0c59c85b		inside
+20-native-numbered.txt	unshaped	-	-	-	-	6787af9ae1ca5d3b1d4b5fcc9dcbd47f1e1663495cd84d985f03ec83210abbe3		-
+21-native-prose.txt	unshaped	-	-	-	-	be1b826c2c86816f5263a4c24212b901c4efd2473ad913e94dc51bf0ba3fae44		-
+22-native-headings.txt	unshaped	-	-	-	-	598173d8d3e447f28fac9bdd080d6e024668b32ce00f5f52992567468550f600		-
+23-pasted-old-marker-deep.txt	unshaped	-	1	-	-	a906456af8d2db032e7128b1b8667b5b42a73386f50a4b32073842960f63ae32		inside
+24-marker-mid-line.txt	unshaped	-	1	-	-	2ded3608bf204cec7f975fa0b280fe62ab7eccdec9a530aff9b4326e283ec2a5		inside
+25-marker-uppercase-nonce.txt	unshaped	-	-	-	-	b219145c09172920e402ea486dd422dcd4a556c39089bc1a9de07b5d1bebba1f		-
+26-marker-short-nonce.txt	unshaped	-	-	-	-	3ab39959d53873e0d7261ca59ccbd651a412036b5be9ff27620512aa54437f33		-
+27-marker-leading-blank-lines.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+28-stale-earlier-nonce.txt	stale	1	1	5ca1ab1e	main	441d2c76308c65091b9f08e3f89098d4e2a6dc6227c7bc2d98cfed3450ebf0d6	watch/dispatch-1a2b3c4d.json	inside
+29-stale-no-dispatch.txt	stale	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb	none	inside
+30-scope-leak-main-under-sub.txt	scope-leak	1	1	5e6f7081	main	7c1a44965b05acbee3f3130516bbf15046f4d4b21d4b08fab90b58084d41c9ea	watch/dispatch-5e6f7081.json	inside
+31-scope-leak-sub-under-main.txt	scope-leak	1	1	1a2b3c4d	sub	d03fc3b6909c01f01ea344b5209bf7d26de6f7254db272fed3a920433f42b99b	watch/dispatch-1a2b3c4d.json	inside
+32-scope-leak-resume-heading-unmarked.txt	scope-leak	-	-	-	-	434bd9e52ebbfdfcfc357a16e64f065a58a02eb4c0842fed701bc0a054d26bf9	watch/dispatch-5e6f7081.json	-
+33-unmarked-main-a.txt	unshaped	-	-	-	-	434bd9e52ebbfdfcfc357a16e64f065a58a02eb4c0842fed701bc0a054d26bf9		-
+34-unmarked-main-b.txt	unshaped	-	-	-	-	87f59d07463e2d50343bba3ad3cc6cac4f2fc261210e2ea8fac184813422a735		-
+35-frontmatter-spoof-lines.txt	ok	1	1	1a2b3c4d	main	e13f3209123e34bb9c54eaa19572629a1c57c09b8e5a544a0e0107df939c1f52		inside
+36-canary-in-summary.txt	ok	1	1	1a2b3c4d	main	e0bdf11fd9074a443e9fbc61448c6bbc889187109adaeecb26e6f80c304f2b61		inside
+37-mod-unlisted-trailer.txt	ok-trailer	1	2	1a2b3c4d	main	9ebdac9c926fc294721ce4f8e38e77c9e7f0bb68930cfb7b865e12c112024475		inside
+38-mod-text-after-summary-close.txt	ok	1	1	1a2b3c4d	main	fe08410c8e4184de779f00610747995c8ca2049b231f5aba64db4af5a7d0cebb		inside
+39-sub-native-numbered.txt	unshaped	-	-	-	-	e770844275df35871a098a0c03c051cecac26e6c3dcf175bde8a589acf3e25d9		-
+40-empty-summary.txt	unshaped	-	-	-	-	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855		-
+41-sub-marker-main-heading.txt	scope-leak	1	1	5e6f7081	sub	112a1d8cdbf807f1bc8932210a06003646128b03a47dadb743ee8f451c6d8786	watch/dispatch-5e6f7081.json	inside

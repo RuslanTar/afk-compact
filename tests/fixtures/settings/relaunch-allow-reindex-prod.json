@@ -1,0 +1,10 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "relaunch_allow": "^sh scripts/reindex\\.sh",
+        "unattended_prod_reads": "allow"
+      }
+    }
+  }
+}

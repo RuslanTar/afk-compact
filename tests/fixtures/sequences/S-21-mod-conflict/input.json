@@ -1,0 +1,126 @@
+{
+  "id": "S-21-mod-conflict",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "now": "2026-10-21T14:05:12+03:00",
+  "order": "S-21",
+  "source": "lab E1/probes/S-21-S-26.md §3b, §3c (2.1.306; runs e1-8f29fa manual and e1-689914 auto showed the same order); ROOT-RULINGS F2-1",
+  "repo": "repos/main-branch.json",
+  "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
+  "env": {},
+  "transcripts": "transcripts/S-21-mod-conflict",
+  "transcript_mode": "append each step's transcript_append to the payload transcript_path before the step runs",
+  "seed": [
+    {
+      "copy": "watch/dispatch-1a2b3c4d.json",
+      "to": "$WATCH/$SID/dispatch/1a2b3c4d.json",
+      "note": "the mod's session.compact before-step (mod-hook, agent_id null), 73-104 ms before PreCompact"
+    }
+  ],
+  "steps": [
+    {
+      "now": "2026-10-21T14:05:00+03:00",
+      "argv": [
+        "hook",
+        "PreCompact"
+      ],
+      "stdin": "sequences/S-21-mod-conflict/payloads/01-PreCompact.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 0
+      },
+      "note": "classic PreCompact after the mod's before-step; part-01 ends with the stand-in boundary row (no summary row)",
+      "transcript_append": "transcripts/S-21-mod-conflict/main.part-01.jsonl",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:55+03:00",
+      "argv": [
+        "hook",
+        "SubagentStop"
+      ],
+      "stdin": "sequences/S-21-mod-conflict/payloads/02-SubagentStop.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 0
+      },
+      "note": "the summarizer fork (agent_type empty; its last message is the summary), 12-56 s after PreCompact",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:56+03:00",
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin": "sequences/S-21-mod-conflict/payloads/03-SessionStart.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 0
+      },
+      "note": "SessionStart(compact), 142-448 ms after the fork: the main transcript has no new boundary yet",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:05:56+03:00",
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin": "sequences/S-21-mod-conflict/payloads/04-PostCompact.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 0
+      },
+      "note": "PostCompact, 89-101 ms later: still no boundary or summary row in the main transcript",
+      "expect": {
+        "exit": 0,
+        "stdout": ""
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:22+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "sequences/S-21-mod-conflict/payloads/05-Stop.json",
+      "transcript_state": {
+        "boundaries": 2,
+        "summaries": 1
+      },
+      "note": "the next main turn end (+26 s): the first hook that sees the boundary row; part-02 is what landed after PostCompact (boundary row, then the summary row, then the reply)",
+      "transcript_append": "transcripts/S-21-mod-conflict/main.part-02.jsonl",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    },
+    {
+      "now": "2026-10-21T14:06:40+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "sequences/S-21-mod-conflict/payloads/05-Stop.json",
+      "transcript_state": {
+        "boundaries": 2,
+        "summaries": 1
+      },
+      "note": "AT-WD-11: a second reconcile (Stop) adds no second compaction_boundary row",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
+    }
+  ],
+  "note": "AT-WD-11 (conflict), synthetic: part-01 ends with a main boundary row stamped 11:04:59.500Z (preTokens 198000), 0.5 s before the mod dispatch, with no summary row (a stand-in for a row that is not this compaction's). PostCompact's own-boundary read takes it, so the rollup row carries pre_tokens 198000; reconcile at the Stop matches the real row (223438) to the nonce and writes compaction_boundary from it. The rollup value is kept, the join counts one join_conflict."
+}

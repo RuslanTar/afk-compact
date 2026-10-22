@@ -1,0 +1,9 @@
+{
+  "pluginConfigs": {
+    "{{plugin}}@{{marketplace}}": {
+      "options": {
+        "relaunch_allow": "^make test"
+      }
+    }
+  }
+}

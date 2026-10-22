@@ -1,0 +1,6 @@
+{
+  "note": "Extra installed-message trailers for this table only (AT-P5-02 'sentinel then a listed trailer'). A reader of p5/expected.tsv adds these to the spec and canary-baseline copy_trailers lists; the shipped lists are empty, so the main corpus never sees them.",
+  "copy_trailers": [
+    "^Fixture listed trailer: .*$"
+  ]
+}

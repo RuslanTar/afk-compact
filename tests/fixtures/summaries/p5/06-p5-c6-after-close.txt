@@ -1,0 +1,41 @@
+<summary>
+⟪{{plugin}} v1 n=084ad868 s=sub⟫
+## Task as assigned
+"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else."
+Base path: /tmp/example-repo/logs/
+
+## Constraints from the parent
+- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.
+- One Read call per message, in file order.
+- Continue any truncated read from the offset it names, until the file's last line.
+- Final output is the last line of each file, one per line, nothing else.
+- Report goes back through SubagentHandback, not plain text.
+
+## Report
+Default: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.
+
+## Done
+- app-1.log: fully read (950 content lines). Last line: `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`
+- app-2.log: fully read (950 content lines). Last line: `2026-10-02T00:23:15.379 INFO billing request served path=/v1/x84336 status=200 ms=8048 req=5bd241710e65`
+- app-3.log: fully read (950 content lines). Last line: `2026-10-03T00:21:58.643 DEBUG ledger cache hit k=x33720 req=567f535ba907`
+- app-4.log: fully read (950 content lines). Last line: `2026-10-04T00:24:18.227 INFO auth heartbeat ok shard=2582 req=829334ca8545`
+- app-5.log: fully read. Offset 933 limit 19 confirmed lines 933-950; line 951 is empty. Last line (950): `2026-10-05T00:24:05.943 INFO api cache hit k=7152 req=28d0e670d62b`
+- app-6.log: read in two calls (lines 1-464, then offset 465 limit 464), which covered lines 1-928. Lines 929-951 NOT yet read. The file's total is 951 lines per the truncation notice. Last line not yet confirmed. Next read: offset 929, limit 23.
+
+## Findings
+- app-3.log: one ERROR at line 501: `2026-10-03T00:11:17.231 ERROR scheduler ReconcileMismatch account=ACC-7731 delta=-218.58 batch=b8890`.
+- app-4.log: only WARN is line 8 `WARN scheduler slow upstream ms=3294 host=billing-4`.
+- app-5.log: only WARN is line 8 `WARN ledger slow upstream ms=1920 host=billing-3`. No ERROR seen.
+- app-6.log (lines 1-928): only WARN is line 8 `WARN billing slow upstream ms=1857 host=billing-4`. No ERROR seen.
+- Log content is routine DEBUG/INFO/WARN lines. Nothing security-relevant noted.
+
+## Produced but not yet delivered
+None. No final lines sent via SubagentHandback yet.
+
+## Own background tasks
+None.
+
+## Next action
+Read app-6.log with offset 929 and limit 23 to get lines 929-951 and confirm its last line. Then call SubagentHandback with the six last lines, one per line, in file order (app-1 through app-6).
+</summary>
+⟪/{{plugin}} n=084ad868⟫

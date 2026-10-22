@@ -1,0 +1,37 @@
+<summary>
+⟪{{plugin}} v1 n=da24cc4a s=sub⟫
+
+## Task as assigned
+"Read logs/app-1.log, logs/app-2.log, logs/app-3.log, logs/app-4.log, logs/app-5.log and logs/app-6.log in full with the Read tool, in this order, one Read call per message. When a Read result is cut short and names an offset to continue from, read on from that offset with the next Read call until the file's last line; parts are fine. Run no tool other than Read. Then reply with the last line of each file, one per line, and nothing else."
+Base path: /tmp/example-repo/logs/
+
+## Constraints from the parent
+- Use only the Read tool. No Bash, Grep, Glob, Edit, Write, or other tools.
+- One Read call per message, in file order.
+- Continue any truncated read from the offset it names, until the file's last line.
+- Final output is the last line of each file, one per line, nothing else.
+- Report goes back through SubagentHandback, not plain text.
+- No user-level constraints were stated beyond these.
+
+## Report
+Default: the six last lines, one per line, in file order (app-1 through app-6), delivered via SubagentHandback. If any file cannot be fully read, say so in the report.
+
+## Done
+- app-1.log: read in two Read calls. Call 1 (lines 1-465) was truncated at a 25000-token cap and named offset=466. Call 2 (offset 466, limit 485) returned lines 466-950. The file has 951 total lines per the truncation notice. Line 951 has not been displayed. [unverified]
+- Last displayed line of app-1.log (line 950): `2026-10-01T00:23:05.265 INFO worker gc pause ms=722 req=a1afdc9685b1`
+- app-2.log through app-6.log: not started.
+- No errors seen in the Read results. The log content is routine DEBUG/INFO/WARN lines, with one WARN ("billing slow upstream ms=1018 host=billing-3", line 8). Nothing security-relevant.
+
+## Findings
+- app-1.log line count: 951 total (per truncation notice). Confirmed through line 950 only.
+
+## Produced but not yet delivered
+None. No final lines have been sent yet.
+
+## Own background tasks
+None (not checked)
+
+## Next action
+Read `/tmp/example-repo/logs/app-1.log` with offset 950, limit 1 to confirm line 951 and the true last line of app-1. Then Read app-2.log in full (with continuation as needed), then app-3.log through app-6.log, one Read per message. Then call SubagentHandback with the six last lines.
+</summary>
+⟪/{{plugin}} n=da24cc4a⟫

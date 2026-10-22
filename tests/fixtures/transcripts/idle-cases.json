@@ -1,0 +1,69 @@
+{
+  "id": "idle-cases",
+  "tests": [
+    "AT-IC-02"
+  ],
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+  "nonce": "1d1e0c0a",
+  "note": "IC-1 D1: after this compaction's main boundary row, the first system row whose content starts with a native prefix (canary-baseline C8) gives idle_source; only the prefix is matched and no text is logged. The `return` text past its prefix is a fixture tail (F5 gives the prefix only). Seed watch/dispatch-1d1e0c0a.json (mod idle true) or watch/dispatch-1d1e0c0a-not-idle.json (mod idle false) at $WATCH/$SID/dispatch/1d1e0c0a.json.",
+  "prefixes": {
+    "notice": "Compacted while idle",
+    "return": "Compacted using a summary written while you were away"
+  },
+  "last_turn_end": "2026-10-21T10:10:41.000Z",
+  "dispatch_ts": "2026-10-21T14:04:36+03:00",
+  "idle_gap_s": 3235,
+  "cases": [
+    {
+      "id": "notice-mod-idle",
+      "transcript": "transcripts/idle-notice",
+      "dispatch": "watch/dispatch-1d1e0c0a.json",
+      "expect": {
+        "idle": true,
+        "idle_source": "both",
+        "idle_mismatch": 0
+      }
+    },
+    {
+      "id": "notice-mod-not-idle",
+      "transcript": "transcripts/idle-notice",
+      "dispatch": "watch/dispatch-1d1e0c0a-not-idle.json",
+      "expect": {
+        "idle": true,
+        "idle_source": "notice",
+        "idle_mismatch": 1
+      }
+    },
+    {
+      "id": "return-mod-idle",
+      "transcript": "transcripts/idle-return",
+      "dispatch": "watch/dispatch-1d1e0c0a.json",
+      "expect": {
+        "idle": true,
+        "idle_source": "both",
+        "idle_mismatch": 0,
+        "native_source": "return"
+      }
+    },
+    {
+      "id": "none-mod-idle",
+      "transcript": "transcripts/idle-none",
+      "dispatch": "watch/dispatch-1d1e0c0a.json",
+      "expect": {
+        "idle": true,
+        "idle_source": "mod",
+        "idle_mismatch": 1
+      }
+    },
+    {
+      "id": "none-mod-not-idle",
+      "transcript": "transcripts/idle-none",
+      "dispatch": "watch/dispatch-1d1e0c0a-not-idle.json",
+      "expect": {
+        "idle": false,
+        "idle_source": "none",
+        "idle_mismatch": 0
+      }
+    }
+  ]
+}

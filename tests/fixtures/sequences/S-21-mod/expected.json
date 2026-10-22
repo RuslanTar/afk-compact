@@ -20,7 +20,8 @@
       "files": [
         {
           "path": "$ROOT/example-repo/general/compact/*_c1-1a2b3c.md",
-          "count": 1
+          "count": 1,
+          "snapshot": "copy-c1"
         }
       ]
     },
@@ -39,6 +40,62 @@
         {
           "path": "$ROOT/example-repo/general/compact/subagents/*.md",
           "count": 0
+        }
+      ]
+    },
+    {
+      "after_step": 5,
+      "why": "PKG-RUNTIME E.2: reconcile matched the main boundary row to the nonce that has a rollup row: one compaction_boundary row with the boundary's sizes, duration and version",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction_boundary",
+          "count": 1,
+          "fields": {
+            "nonce": "1a2b3c4d",
+            "pre_tokens": 223438,
+            "post_tokens": 14943,
+            "duration_ms": 55960,
+            "precomputed": false,
+            "cc_version": "2.1.306"
+          }
+        }
+      ]
+    },
+    {
+      "after_step": 6,
+      "why": "one row per nonce: the second reconcile adds none",
+      "rows": [
+        {
+          "file": "$WATCH/$SID/compactions.jsonl",
+          "ev": "compaction_boundary",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "after_step": 6,
+      "why": "PKG-RUNTIME E.2: the copy is not rewritten by the join: it keeps mode 0400 and the bytes it had after PostCompact, and its frontmatter still has no tokens_before/tokens_after (null on the mod path, so the keys are left out); the joined rollup row has the boundary's non-null sizes and no join_conflict",
+      "files": [
+        {
+          "path": "$ROOT/example-repo/general/compact/*_c1-1a2b3c.md",
+          "count": 1,
+          "mode": "0400",
+          "same_bytes_as": "copy-c1",
+          "frontmatter": {
+            "tokens_before": null,
+            "tokens_after": null,
+            "nonce": "1a2b3c4d"
+          }
+        }
+      ],
+      "joined": [
+        {
+          "nonce": "1a2b3c4d",
+          "pre_tokens": 223438,
+          "post_tokens": 14943,
+          "duration_ms": 55960,
+          "join_conflict": 0
         }
       ]
     }

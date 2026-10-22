@@ -1,0 +1,20 @@
+#!/bin/sh
+# AT-ST-11 (C-STORE D7, BD-1 fail-closed): a git that ignores exclude pathspecs. Install it as `git`
+# in a directory first on PATH; it drops every `:(…exclude…)…`, `:!…` and `:^…` argument and runs the
+# next git on PATH, so a rebuilt clone patch still holds the blocked path and the `git apply
+# --numstat` check must withhold the whole patch. With GIT_NOEXCLUDE_LOG set, it appends one line
+# per call that dropped something (`dropped <n>`), so a case can prove the stub ran.
+self_dir=$(cd "$(dirname "$0")" && pwd -P)
+rest=$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do [ -n "$d" ] && [ "$(cd "$d" 2>/dev/null && pwd -P)" != "$self_dir" ] && printf '%s:' "$d"; done)
+n=0
+for a do
+  shift
+  case $a in
+    ':('*exclude*')'*|':!'*|':^'*) n=$((n + 1)) ;;
+    *) set -- "$@" "$a" ;;
+  esac
+done
+if [ "$n" -gt 0 ] && [ -n "${GIT_NOEXCLUDE_LOG:-}" ]; then
+  printf 'dropped %s\n' "$n" >> "$GIT_NOEXCLUDE_LOG"
+fi
+PATH=${rest%:} exec git "$@"

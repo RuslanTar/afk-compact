@@ -103,6 +103,23 @@
         "exit": 0,
         "stdout": null
       }
+    },
+    {
+      "now": "2026-10-21T14:06:40+03:00",
+      "argv": [
+        "hook",
+        "Stop"
+      ],
+      "stdin": "sequences/S-21-mod/payloads/05-Stop.json",
+      "transcript_state": {
+        "boundaries": 1,
+        "summaries": 1
+      },
+      "note": "AT-WD-11: a second reconcile (Stop) adds no second compaction_boundary row",
+      "expect": {
+        "exit": 0,
+        "stdout": null
+      }
     }
   ]
 }

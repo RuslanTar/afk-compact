@@ -11,33 +11,66 @@ Usage:
   tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
                                      must equal a fresh render; exit 1 on any problem
   tools/fixtures-gen --clean         remove the three generated files (nothing else)
-  tools/fixtures-gen --print-expected
-                                     print summaries/expected.tsv as the reference detector
-                                     computes it (authoring aid; never writes)
+  tools/fixtures-gen --print-expected [p5|acuity]
+                                     print summaries/expected.tsv (or summaries/<table>/expected.tsv)
+                                     as the reference detector computes it (authoring aid; never
+                                     writes)
   tools/fixtures-gen --refresh-sha   only the sha-column refresh of the regenerate step
 
 Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   parse     every *.json under tests/fixtures parses; every *.jsonl line parses
-  expected  summaries/expected.tsv equals the reference detector (MOD-SPEC §5.1) on every file
+  expected  summaries/expected.tsv and each sub-table (p5/, acuity/) equal the reference
+            detector (MOD-SPEC §5.1, with the P5-FOLD A1 sentinel-after-close rule) on every file
   secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
             its fragments are joined, and no single fragment hits anything
+  bd2       C-STORE D6 (AT-ST-12): each corpus entry, redacted by the reference BD-2 rule with the spec
+            secret_rules, has no two markers that touch, and matches its `redacted` / `markers` pins
   drift     the generated files are current
   sequences every sequences/<id>/ replays: files exist, payloads match their step, the main
             transcript after each step's appends holds the declared transcript_state, and with
             "order": "S-21" SessionStart(compact) and PostCompact see no boundary row newer than
-            PreCompact (lab S-21: the row lands after PostCompact)
+            PreCompact (lab S-21: the row lands after PostCompact); then every pinned value is
+            recomputed from the replayed transcript and step times: BD-3 proof / proof_lag_ms /
+            settle wait (AT-BD-01), PKG-RUNTIME E.1 turn_kind (AT-WD-10) and the E.2
+            compaction_boundary sizes, rollup sizes and joined view (AT-WD-11)
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
             expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
             equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
-  queue     a JSON queue/<case>/list.out has the queue-stub/v1 shape (ROOT-RULINGS F2-8; optional
-            `commands`); a queue/<case>/add.rc follows the D-10 exit table (small-rulings §1.2)
+  queue     a JSON queue/<case>/list.out follows the strict v1 contract (Q-ADAPTER QA-2: the
+            `queue-stub/v1` tag required, `lanes` optional in either shape) and gives the mode its
+            list.expect names (untagged and v2 replies are degraded on purpose); an adopt answer
+            follows the QA-2 exit table and its adopt.expect the plugin's mapping (AT-QA-04); an
+            add.rc follows the D-10 exit table (small-rulings §1.2)
   setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
             (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
             repos (worktrees, submodule, symlinked root, declarations, exports against
-            frontmatter_keys_export) and the Dev-1 scenarios (job sha, process records, the
-            transcript stub as V1 reads it, sidecar seq against mtime, the case clock)
+            frontmatter_keys_export), the Dev-1 scenarios (job sha, process records, the
+            transcript stub as V1 reads it, sidecar seq against mtime, the case clock) and the
+            C-STORE ones (st-05: each record's pid state, host and ended- twin against the §5.8
+            finish reading; st-13: exactly the declared BD-4 detector fires for each task output;
+            st-09: each copy is fillable by nonce, and only the sub-unknown one in compact/subagents/
+            may be filled, C-STORE D5 step 5) and the W-BETA one (wb-canary-install: every canary
+            planted; the B.3 identity list recomputed; transform_only canaries hold no identity
+            string; the bucket canary is a bucket folder; `hostname -s` prints the host canary)
+  stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
+            ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
+  runtime   assembly/runtime.json has every key of tools/assemble's worst-case RUNTIME (the helper's
+            BT-04-H fills only runtime.json keys, so a missing one makes its render differ)
+  beta      beta/*.zip (AT-WB-13): each zip's intake (refuse: .. or absolute name, symlink, name
+            outside B.5, entry over 50 MB, total over 200 MB, ratio over 100) and verify (manifest
+            sha256, pattern classes) verdict equals beta/cases.json; zip members are secret-scanned
+  manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
+            idle-cases.json) agree with the payloads, dispatch records and corpus files they name;
+            each fill-joins outcome follows the C-STORE D5 join order over the rows no earlier copy
+            joined (sha with the engine trailers cut, else by time: candidates within SUB_WINDOW_S
+            on either side, E-C9-10, and a fill only for exactly one whose row is in the P3 sub
+            window [t - TOL_S, t + SUB_WINDOW_S]), and verify-fail is a fill that only its fault
+            blocks
+  prod     settings/prod-cases.json: each recorded command's effects class, each placement's
+            unattended_prod_reads value and each prod_patterns file's kept/dropped list follow a
+            reference of S-SETTINGS B and C (effects order, limits, no chaining after end_suffix)
   stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
             fixture text, except the files listed in LEGACY_TIME_OK, which test the legacy
             reading and must still hold one (a stale list entry fails too)
@@ -54,7 +87,7 @@ src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the pr
 built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
 deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
-import datetime, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
+import datetime, hashlib, json, math, os, re, shutil, stat, subprocess, sys, tempfile, zipfile
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -63,11 +96,17 @@ GEN_REL = os.path.join("plugin", "tests", "unit", "_gen")
 GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts")
 SUMMARIES = os.path.join(FIX, "summaries")
 EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
+# Sub-tables (README "Corpus"): summaries/<table>/ with its own expected.tsv, in the same columns,
+# for corpus files that must stay out of the AT-C-03 41-file corpus. p5: P5-FOLD A1 (sentinel after
+# </summary>; the 6 P5 summaries and the AT-P5-02 cases), apart so AT-C-03 stays green until
+# CORE-05 and MOD-05 build the rule; p5/copy_trailers.json lists extra trailers for that table only.
+# acuity: T-TEXT E6 golden summaries with the Acuity field (AT-AC-02, AT-AC-03).
+SUB_TABLES = ("p5", "acuity")
 PAYLOADS = os.path.join(FIX, "payloads")
 SEQUENCES = os.path.join(FIX, "sequences")
 SECRET_MARK = "$SECRET{"
 COLUMNS = ["file", "verdict", "marker_line", "sentinel_from_end", "nonce", "scope",
-           "normalized_sha256", "dispatch"]
+           "normalized_sha256", "dispatch", "sentinel_place"]
 SKIP_DIRS = {".git", "node_modules", ".types", "__pycache__"}
 # jsonl lines that are malformed on purpose (WATCH T-16: the sweeper must survive them)
 INTENDED_MALFORMED = {"tests/fixtures/transcripts/T-16/main.jsonl": {5}}
@@ -94,15 +133,72 @@ def read(path):
 
 # ---------------------------------------------------------------- reference detector (MOD §5.1)
 
-def normalize(text):
+_TRAILERS = {}
+
+
+def shipped_trailers():
+    """copy_trailers of the spec literals and of plugin/assets/canary-baseline.json (compiled)."""
+    if "v" not in _TRAILERS:
+        src = list(literals().get("copy_trailers") or [])
+        base = os.path.join(REPO, "plugin", "assets", "canary-baseline.json")
+        if os.path.exists(base):
+            try:
+                src += json.loads(read(base)).get("copy_trailers") or []
+            except ValueError:
+                pass
+        _TRAILERS["v"] = compile_trailers(src)
+    return _TRAILERS["v"]
+
+
+def compile_trailers(src):
+    out = []
+    for t in src:
+        s = t.get("re") if isinstance(t, dict) else t
+        if isinstance(s, str) and s:
+            try:
+                out.append(re.compile(s))
+            except re.error:
+                pass
+    return out
+
+
+def table_trailers(d):
+    """Shipped trailers plus the table's own copy_trailers.json (p5 only)."""
+    extra = os.path.join(d, "copy_trailers.json")
+    own = compile_trailers(json.loads(read(extra)).get("copy_trailers") or []) if os.path.exists(extra) else []
+    return shipped_trailers() + own
+
+
+def cut_trailers(body, trailers, keep):
+    """Cut listed installed-message trailers from the end of body, never at or above index keep."""
+    j = len(body) - 1
+    while j >= keep:
+        if not body[j].strip():
+            j -= 1
+            continue
+        if not any(rx.search(body[j]) for rx in trailers):
+            break
+        del body[j:]
+        j -= 1
+    return body
+
+
+def normalize(text, name=None, trailers=()):
     """Normalized body: wrapper parts stripped from the head, cut at </summary>, \\n line ends.
 
     Head (repeated until none applies, blank lines between parts dropped): a line starting
     `This session is being continued`; a `<tools-used-before-summary>` block through its closing
     tag; a `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
     Tail: the body ends before the first line holding `</summary>` (text before the tag on that
-    line is body). Trailing blank lines are trimmed. Result: lines joined by \\n plus one final
-    \\n, or the empty string for an empty body.
+    line is body). Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1; needs `name`): when
+    the first non-blank text after `</summary>` (the rest of that line, else the next non-blank
+    line) matches the sentinel grammar, that line is appended as the body's last line and the
+    lines after it follow it as trailers; any other first line keeps everything after the tag
+    outside the body. Listed trailers (`trailers`) are then cut from the end, never the moved
+    sentinel itself; with no `</summary>` the same cut applies to the end of the body (detect.pm).
+    Trailing blank lines are trimmed. Result: (text, moved) with text = lines joined by \\n plus
+    one final \\n or the empty string for an empty body, and moved = the sentinel line's index in
+    the body when it was moved, else None.
     """
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     i = 0
@@ -126,41 +222,62 @@ def normalize(text):
             i += 1
         else:
             break
-    body = []
-    for line in lines[i:]:
+    body, moved, closed = [], None, False
+    rest = lines[i:]
+    for j, line in enumerate(rest):
         if "</summary>" in line:
-            head = line[:line.index("</summary>")]
+            closed = True
+            k = line.index("</summary>")
+            head, tail = line[:k], line[k + len("</summary>"):]
             if head.strip():
                 body.append(head)
+            after = ([tail] if tail.strip() else []) + rest[j + 1:]
+            while after and not after[0].strip():
+                after.pop(0)
+            if name is not None and after and sentinel_grammar(name).match(after[0]):
+                while body and not body[-1].strip():
+                    body.pop()
+                moved = len(body)
+                body += after
             break
         body.append(line)
+    if moved is not None:
+        cut_trailers(body, trailers, moved + 1)
+    elif not closed:
+        cut_trailers(body, trailers, 0)
     while body and not body[-1].strip():
         body.pop()
-    return "\n".join(body) + "\n" if body else ""
+    return ("\n".join(body) + "\n" if body else ""), moved
 
 
-def detect(text, name, dispatch=None):
-    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256) per MOD §5.1.
+def sentinel_grammar(name):
+    return re.compile(r"^⟪/" + re.escape(name) + r" n=([0-9a-f]{8})⟫$")
+
+
+def detect(text, name, dispatch=None, trailers=()):
+    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256, sentinel_place) per MOD §5.1.
 
     dispatch: None = text alone; "none" = a PostCompact with no dispatch at all; else the
-    dispatch record (dict) of this compaction.
+    dispatch record (dict) of this compaction. sentinel_place: `inside`, `after-close` (the
+    sentinel found is the line moved from after `</summary>`) or None (no sentinel found).
     """
-    body = normalize(text)
+    body, moved = normalize(text, name, trailers)
     lines = body.split("\n")[:-1] if body else []
     marker_re = re.compile(r"^⟪" + re.escape(name) + r" v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$")
-    sentinel_re = re.compile(r"^⟪/" + re.escape(name) + r" n=([0-9a-f]{8})⟫$")
+    sentinel_re = sentinel_grammar(name)
     marker_line = nonce = scope = None
     for idx, line in enumerate(lines[:5]):
         m = marker_re.match(line)
         if m:
             marker_line, nonce, scope = idx + 1, m.group(1), m.group(2)
             break
-    nonblank = [ln for ln in lines if ln.strip()]
-    sfe = s_nonce = None
+    nonblank = [(ix, ln) for ix, ln in enumerate(lines) if ln.strip()]
+    sfe = s_nonce = place = None
     for k in range(1, min(3, len(nonblank)) + 1):
-        m = sentinel_re.match(nonblank[-k])
+        m = sentinel_re.match(nonblank[-k][1])
         if m:
             sfe, s_nonce = k, m.group(1)
+            place = "after-close" if nonblank[-k][0] == moved else "inside"
             break
     resume_heading = any(ln.startswith("## Resume here") for ln in lines)
     verdict = None
@@ -189,11 +306,21 @@ def detect(text, name, dispatch=None):
         else:
             verdict = "ok"
     sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    return verdict, marker_line, sfe, nonce, scope, sha
+    return verdict, marker_line, sfe, nonce, scope, sha, place
 
 
-def summary_files():
-    return sorted(f for f in os.listdir(SUMMARIES) if f.endswith(".txt"))
+def tables():
+    """(dir, expected.tsv) of each corpus table: the main corpus, then each SUB_TABLES folder."""
+    out = [(SUMMARIES, EXPECTED)]
+    for name in SUB_TABLES:
+        d = os.path.join(SUMMARIES, name)
+        if os.path.isdir(d):
+            out.append((d, os.path.join(d, "expected.tsv")))
+    return out
+
+
+def summary_files(d=SUMMARIES):
+    return sorted(f for f in os.listdir(d) if f.endswith(".txt"))
 
 
 def load_dispatch(ref):
@@ -210,7 +337,7 @@ def read_expected(path=EXPECTED):
     with open(path, encoding="utf-8") as f:
         header = f.readline().rstrip("\n").split("\t")
         if header != COLUMNS:
-            die("expected.tsv header is {}, want {}".format(header, COLUMNS))
+            die("{} header is {}, want {}".format(os.path.relpath(path, REPO), header, COLUMNS))
         for line in f:
             line = line.rstrip("\n")
             if line:
@@ -224,14 +351,16 @@ def dash(v):
     return "-" if v is None else str(v)
 
 
-def expected_rows(b, dispatch_refs):
+def expected_rows(b, dispatch_refs, d=SUMMARIES):
     out = []
-    for f in summary_files():
+    trailers = table_trailers(d)
+    for f in summary_files(d):
         ref = dispatch_refs.get(f, "")
-        v, ml, sfe, n, sc, sha = detect(fill(read(os.path.join(SUMMARIES, f)), b), b["name"],
-                                        load_dispatch(ref))
+        v, ml, sfe, n, sc, sha, place = detect(fill(read(os.path.join(d, f)), b), b["name"],
+                                               load_dispatch(ref), trailers)
         out.append({"file": f, "verdict": v, "marker_line": dash(ml), "sentinel_from_end": dash(sfe),
-                    "nonce": dash(n), "scope": dash(sc), "normalized_sha256": sha, "dispatch": ref})
+                    "nonce": dash(n), "scope": dash(sc), "normalized_sha256": sha, "dispatch": ref,
+                    "sentinel_place": dash(place)})
     return out
 
 
@@ -239,14 +368,14 @@ def tsv(rows):
     return "\t".join(COLUMNS) + "\n" + "".join("\t".join(r[c] for c in COLUMNS) + "\n" for r in rows)
 
 
-def sha_refreshed(b):
-    """(rows of expected.tsv with normalized_sha256 recomputed for brand b, number changed).
+def sha_refreshed(b, d=SUMMARIES, path=EXPECTED):
+    """(rows of one expected.tsv with normalized_sha256 recomputed for brand b, number changed).
 
     Only the sha column is touched: it is a function of the text and the brand alone, so a
     rename changes it (README "Corpus"). The other columns stay as authored for --check.
     """
-    rows = read_expected()
-    fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows})}
+    rows = read_expected(path)
+    fresh = {r["file"]: r for r in expected_rows(b, {r["file"]: r["dispatch"] for r in rows}, d)}
     changed = 0
     for r in rows:
         f = fresh.get(r["file"])
@@ -257,13 +386,16 @@ def sha_refreshed(b):
 
 
 def refresh_sha(b):
-    rows, changed = sha_refreshed(b)
-    if changed:
-        with open(EXPECTED, "w", encoding="utf-8", newline="\n") as f:
-            f.write(tsv(rows))
-        print("fixtures-gen: refreshed normalized_sha256 for {} rows of {} (brand {})".format(
-            changed, os.path.relpath(EXPECTED, REPO), b["name"]))
-    return changed
+    total = 0
+    for d, path in tables():
+        rows, changed = sha_refreshed(b, d, path)
+        if changed:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(tsv(rows))
+            print("fixtures-gen: refreshed normalized_sha256 for {} rows of {} (brand {})".format(
+                changed, os.path.relpath(path, REPO), b["name"]))
+        total += changed
+    return total
 
 
 # ---------------------------------------------------------------- secret rules
@@ -348,6 +480,79 @@ def load_corpus():
         return json.load(f)
 
 
+# BD-2 reference redaction (C-STORE D6, AT-ST-12): every rule runs on the original text; overlapping
+# or touching hits merge into one span, replaced once by `[redacted:<rule>]`, labelled by the first
+# rule of the spec list among the merged hits. A rule's leading `(^|[^…])` or trailing `($|[^…])`
+# guard group is not part of the hit. Corpus entries may pin the result: `redacted` (exact text) and
+# `markers` (marker count).
+def spec_rules_full():
+    rules = literals().get("secret_rules") or []
+    out = []
+    for r in rules:
+        try:
+            out.append((r["id"], re.compile(r["re"]), r.get("min_entropy"), r["re"]))
+        except (KeyError, re.error):
+            pass
+    return out
+
+
+def hit_spans(text, rules):
+    spans = []
+    for order, (rid, rx, min_ent, src) in enumerate(rules):
+        lead = src.startswith("(^|[^")
+        trail = src.endswith(")") and re.search(r"\(\$\|\[\^[^\]]*\]\)$", src) is not None
+        for m in rx.finditer(text):
+            a, z = m.span()
+            if lead and m.re.groups >= 1:
+                a = m.end(1)
+            if trail and m.re.groups >= 1:
+                z = m.start(m.re.groups)
+            if z <= a:
+                continue
+            if min_ent is not None and entropy(text[a:z]) < min_ent:
+                continue
+            spans.append((a, z, order, rid))
+    return spans
+
+
+def redact_bd2(text, rules):
+    spans = sorted(hit_spans(text, rules))
+    merged = []
+    for a, z, order, rid in spans:
+        if merged and a <= merged[-1][1]:
+            m = merged[-1]
+            merged[-1] = [m[0], max(m[1], z), min(m[2], (order, rid))]
+        else:
+            merged.append([a, z, (order, rid)])
+    out, at = [], 0
+    for a, z, (order, rid) in merged:
+        out.append(text[at:a] + "[redacted:{}]".format(rid))
+        at = z
+    out.append(text[at:])
+    return "".join(out), len(merged)
+
+
+def check_bd2(corpus):
+    rules = spec_rules_full()
+    problems, pinned = [], 0
+    if not rules:
+        return ["bd2: no spec secret_rules to run"], 0
+    for e in corpus["entries"]:
+        joined = "".join(e["fragments"])
+        out, n = redact_bd2(joined, rules)
+        if re.search(r"\]\s*\[redacted:", out):
+            problems.append("bd2 {}: two markers touch or sit apart by whitespace only: {!r}".format(e["id"], out[:80]))
+        if "redacted" in e:
+            pinned += 1
+            if out != e["redacted"]:
+                problems.append("bd2 {}: redacts to {!r}, the pin says {!r}".format(e["id"], out, e["redacted"]))
+        if "markers" in e:
+            pinned += 1
+            if n != e["markers"]:
+                problems.append("bd2 {}: {} markers, the pin says {}".format(e["id"], n, e["markers"]))
+    return problems, pinned
+
+
 # ---------------------------------------------------------------- generated modules
 
 HEADER = "// GEN by tools/fixtures-gen from tests/fixtures. Do not edit; edit the fixtures and run tools/fixtures-gen.\n"
@@ -358,33 +563,52 @@ def js(v):
     return json.dumps(v, ensure_ascii=True, indent=1, sort_keys=False)
 
 
-def render(b, rows=None):
-    out = {}
-    out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
-        {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
-         "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
-
-    rows = read_expected() if rows is None else rows
-    dispatch_refs = {r["file"]: r["dispatch"] for r in rows}
+def corpus_entries(b, d, rows):
     corpus = []
     for r in rows:
-        text = read(os.path.join(SUMMARIES, r["file"]))
+        text = read(os.path.join(d, r["file"]))
         if SECRET_MARK in text:
             continue
-        d = load_dispatch(dispatch_refs.get(r["file"], ""))
+        disp = load_dispatch(r.get("dispatch", ""))
         corpus.append({"file": r["file"], "text": fill(text, b), "verdict": r["verdict"],
                        "marker_line": None if r["marker_line"] == "-" else int(r["marker_line"]),
                        "sentinel_from_end": None if r["sentinel_from_end"] == "-" else int(r["sentinel_from_end"]),
                        "nonce": None if r["nonce"] == "-" else r["nonce"],
                        "scope": None if r["scope"] == "-" else r["scope"],
                        "normalized_sha256": r["normalized_sha256"],
-                       "dispatch": json.loads(fill(json.dumps(d), b)) if isinstance(d, dict) else d})
-    out["corpus.gen.ts"] = (HEADER +
+                       "dispatch": json.loads(fill(json.dumps(disp), b)) if isinstance(disp, dict) else disp,
+                       "sentinel_place": None if r["sentinel_place"] in ("-", "") else r["sentinel_place"]})
+    return corpus
+
+
+def render(b, rows=None):
+    """rows: {expected.tsv path: rows} to render instead of the files on disk (--out)."""
+    out = {}
+    out["brand.gen.ts"] = HEADER + "export const BRAND = " + js(
+        {"name": b["name"], "marketplace": b["marketplace"], "version": b["version"],
+         "plugin_id": b["name"] + "@" + b["marketplace"]}) + " as const\n"
+
+    rows = rows or {}
+    main_rows = rows.get(EXPECTED) or read_expected()
+    corpus_ts = (HEADER +
         "export type CorpusEntry = {\n  file: string; text: string; verdict: string;\n"
         "  marker_line: number | null; sentinel_from_end: number | null; nonce: string | null;\n"
         "  scope: string | null; normalized_sha256: string;\n"
-        "  dispatch: null | 'none' | Readonly<Record<string, unknown>>\n}\n"
-        "export const CORPUS: readonly CorpusEntry[] = " + js(corpus) + "\n")
+        "  dispatch: null | 'none' | Readonly<Record<string, unknown>>;\n"
+        "  sentinel_place: null | 'inside' | 'after-close'\n}\n"
+        "export const CORPUS: readonly CorpusEntry[] = " + js(corpus_entries(b, SUMMARIES, main_rows)) + "\n")
+    for d, path in tables()[1:]:
+        name = os.path.basename(d)
+        sub_rows = rows.get(path) or read_expected(path)
+        corpus_ts += ("// summaries/{}/expected.tsv (tests/fixtures/README.md \"Corpus\")\n".format(name) +
+                      "export const CORPUS_{}: readonly CorpusEntry[] = ".format(name.upper()) +
+                      js(corpus_entries(b, d, sub_rows)) + "\n")
+        extra = os.path.join(d, "copy_trailers.json")
+        if os.path.exists(extra):
+            corpus_ts += ("// read CORPUS_{0} with the shipped copy_trailers plus these\n"
+                          "export const {0}_COPY_TRAILERS: readonly string[] = ".format(name.upper()) +
+                          js(json.loads(read(extra)).get("copy_trailers", [])) + "\n")
+    out["corpus.gen.ts"] = corpus_ts
 
     payloads, raw = {}, {}
     for ev in sorted(os.listdir(PAYLOADS)):
@@ -433,6 +657,232 @@ def transcript_counts(text):
     return nb, ns
 
 
+def main_boundaries(text):
+    """Main-thread compact_boundary rows of transcript text: {e, off, meta, version} in file order
+    (off = the byte offset of the row's line, for the 512 KB tail rule of PKG-RUNTIME E.1)."""
+    out, off = [], 0
+    for line in text.split("\n"):
+        try:
+            r = json.loads(line) if line.strip() else None
+        except ValueError:
+            r = None
+        if (isinstance(r, dict) and r.get("type") == "system" and r.get("subtype") == "compact_boundary"
+                and not r.get("isSidechain")):
+            out.append({"e": parse_iso(r.get("timestamp")), "off": off, "meta": r.get("compactMetadata") or {},
+                        "version": r.get("version")})
+        off += len(line.encode("utf-8")) + 1
+    return out
+
+
+# The reconcile constants the sequence references read (reconcile.pm, MOD-SPEC §5.4; BD-3 keeps
+# them as built, T-TEXT E5), the lab S-21 lag range (AT-BD-01) and the E.1 tail read.
+SETTLE_S, MAIN_WINDOW_S, TOL_S, SUB_WINDOW_S = 10, 600, 2, 120
+S21_LAG_MS = (12, 42)
+TAIL_BYTES = 512 * 1024
+
+
+def seq_compactions(inp, info):
+    """One entry per PreCompact step: its capture var, the main boundary count at PreCompact,
+    the PostCompact step that follows, and whether a seeded mod dispatch proves it main (P1)."""
+    seeded = {}
+    for s in inp.get("seed", []):
+        m = re.match(r"^\$WATCH/\$SID/dispatch/([0-9a-f]{8})\.json$", s.get("to", ""))
+        if m and os.path.exists(os.path.join(FIX, s.get("copy", ""))):
+            seeded[m.group(1)] = json.loads(read(os.path.join(FIX, s["copy"])))
+    comps = []
+    for i, st in enumerate(info):
+        if st["ev"] != "PreCompact":
+            continue
+        post = next((j for j in range(i + 1, len(info)) if info[j]["ev"] == "PostCompact"), None)
+        var = next(iter(st["capture"]), None)
+        comps.append({"var": var, "pre": i, "at_pre": len(st["mains"]), "post": post,
+                      "post_e": info[post]["now"] if post is not None else None})
+    loose = [c for c in comps if c["var"] is None]
+    for n, d in seeded.items():
+        if len(loose) == 1:
+            loose[0].update(nonce=n, p1=d.get("agent_id") is None and d.get("channel") in ("mod-hook", "mod-self"),
+                            dispatch_e=parse_iso(d.get("ts")))
+    return comps
+
+
+def seq_comp_for(comps, nonce):
+    if isinstance(nonce, str) and nonce.startswith("$"):
+        return next((c for c in comps if c["var"] == nonce[1:]), None)
+    return next((c for c in comps if c.get("nonce") == nonce), None)
+
+
+def seq_boundary(c, comps, st):
+    """The main boundary row that reconcile matches to compaction c at step st (the first one
+    after c's PreCompact count, not yet a later compaction's, at most MAIN_WINDOW_S after its
+    PostCompact), or None."""
+    later = [x["at_pre"] for x in comps if x["pre"] > c["pre"]]
+    lim = min(later) if later else None
+    for k, bd in enumerate(st["mains"]):
+        if k < c["at_pre"] or (lim is not None and k >= lim) or bd["e"] is None or c["post_e"] is None:
+            continue
+        if c["post_e"] <= bd["e"] + 0.0005 and bd["e"] - c["post_e"] <= MAIN_WINDOW_S:
+            return bd
+    return None
+
+
+def seq_bd3(c, comps, st):
+    """BD-3 (T-TEXT E5) rollup fields of compaction c as reconcile decides them at step st."""
+    bd = seq_boundary(c, comps, st)
+    proof = "P1" if c.get("p1") else ("P3" if bd else "none")
+    lag = int(round((bd["e"] - c["post_e"]) * 1000)) if bd and proof != "none" else None
+    return {"proof": proof, "proof_lag_ms": lag, "settle_ms": int(round((st["now"] - c["post_e"]) * 1000))}
+
+
+def seq_copied(c, comps, info, upto):
+    """True when a Stop before step index upto has saved compaction c's copy: P1 already in
+    PostCompact, else a reconcile that proves it (P3) or decides it after SETTLE_S."""
+    if c.get("p1"):
+        return True
+    for j in range(c["post"] + 1, upto):
+        if info[j]["ev"] == "Stop" and (seq_boundary(c, comps, info[j]) or info[j]["now"] - c["post_e"] >= SETTLE_S):
+            return True
+    return False
+
+
+def seq_turn_kind(comps, info, k):
+    """PKG-RUNTIME E.1 for the step index k (no rollup row, receipt or nudge in these sequences):
+    a pending record qualifies when its ts is after the last Stop, it has no copy row yet, and a
+    main boundary row inside the last 512 KB lies in [ts - TOL_S, ts + MAIN_WINDOW_S]."""
+    stops = [info[j]["now"] for j in range(k) if info[j]["ev"] == "Stop"]
+    last_stop = max(stops) if stops else None
+    st = info[k]
+    tail_from = st["bytes"] - TAIL_BYTES
+    for c in comps:
+        if c["post"] is None or c["post"] >= k or c.get("p1"):
+            continue
+        ts = c["post_e"]
+        if last_stop is not None and ts <= last_stop:
+            continue
+        if seq_copied(c, comps, info, k):
+            continue
+        if any(bd["off"] >= tail_from and bd["e"] is not None and ts - TOL_S <= bd["e"] <= ts + MAIN_WINDOW_S
+               for bd in st["mains"]):
+            return "post-compaction"
+    return "other"
+
+
+def seq_reference(where, inp, exp, info):
+    """Recompute the values step_asserts pins from the replayed transcript and hook times:
+    BD-3 proof / proof_lag_ms / settle wait (AT-BD-01), E.1 turn_kind (AT-WD-10) and the E.2
+    compaction_boundary sizes and the rollup join (AT-WD-11)."""
+    p, comps, snaps = [], seq_compactions(inp, info), {}
+    for a in exp.get("step_asserts", []):
+        k = a.get("after_step", 0) - 1
+        if not 0 <= k < len(info):
+            continue
+        st = info[k]
+        for f in a.get("files", []):
+            if f.get("snapshot"):
+                snaps[f["snapshot"]] = (k, f["path"])
+            if f.get("same_bytes_as"):
+                s = snaps.get(f["same_bytes_as"])
+                if s is None or s[0] >= k or s[1] != f["path"]:
+                    p.append("{} after step {}: same_bytes_as {!r} needs an earlier snapshot of {}".format(
+                        where, k + 1, f["same_bytes_as"], f["path"]))
+        for rw in a.get("rows", []):
+            f = rw.get("fields") or {}
+            w = "{} after step {} {}".format(where, k + 1, rw.get("ev"))
+            if rw.get("ev") == "compaction" and ({"proof", "proof_lag_ms"} & set(f)):
+                c = seq_comp_for(comps, f.get("nonce"))
+                if c is None or c["post"] is None or c["post"] > k:
+                    p.append("{}: nonce {} names no compaction whose PostCompact ran by then".format(w, f.get("nonce")))
+                    continue
+                ref = seq_bd3(c, comps, st)
+                for key in ("proof", "proof_lag_ms"):
+                    if key in f and f[key] != ref[key]:
+                        p.append("{}: {} is {!r}, the BD-3 reference gives {!r} (boundary row time minus the "
+                                 "PostCompact time)".format(w, key, f[key], ref[key]))
+                if ref["proof"] == "P3" and inp.get("order") == "S-21" and not S21_LAG_MS[0] <= ref["proof_lag_ms"] <= S21_LAG_MS[1]:
+                    p.append("{}: proof_lag_ms {} is outside the lab S-21 range {}-{} ms".format(w, ref["proof_lag_ms"], *S21_LAG_MS))
+                if ref["proof"] == "none":
+                    if ref["settle_ms"] < SETTLE_S * 1000:
+                        p.append("{}: unproven, but the stash is only {} ms old: reconcile waits SETTLE_S".format(w, ref["settle_ms"]))
+                    ge = (a.get("fields_ge") or {}).get("settle_waited_ms")
+                    if ge is None or not 0 <= ge <= ref["settle_ms"]:
+                        p.append("{}: an unproven stash needs fields_ge settle_waited_ms between 0 and {}".format(w, ref["settle_ms"]))
+            if rw.get("ev") == "compaction" and ({"pre_tokens", "post_tokens", "duration_ms"} & set(f)):
+                c = seq_comp_for(comps, f.get("nonce"))
+                if c is None or c["post"] is None or c["post"] > k:
+                    p.append("{}: nonce {} names no compaction whose PostCompact ran by then".format(w, f.get("nonce")))
+                    continue
+                ref = seq_rollup_sizes(c, comps, info)
+                for key in ("pre_tokens", "post_tokens", "duration_ms"):
+                    if key in f and f[key] != ref[key]:
+                        p.append("{}: rollup {} is {!r}, the writer's reading gives {!r}".format(w, key, f[key], ref[key]))
+            if rw.get("ev") == "permission_denied" and "turn_kind" in f:
+                if st["ev"] != "PermissionDenied":
+                    p.append("{}: a turn_kind assert must follow a PermissionDenied step".format(w))
+                    continue
+                ref = seq_turn_kind(comps, info, k)
+                if f["turn_kind"] != ref:
+                    p.append("{}: turn_kind is {!r}, the E.1 reference gives {!r}".format(w, f["turn_kind"], ref))
+            if rw.get("ev") == "compaction_boundary" and "nonce" in f:
+                c = seq_comp_for(comps, f["nonce"])
+                bd = seq_boundary(c, comps, st) if c else None
+                if bd is None:
+                    p.append("{}: no main boundary row is matched to nonce {} by then".format(w, f["nonce"]))
+                    continue
+                ref = {"pre_tokens": bd["meta"].get("preTokens"), "post_tokens": bd["meta"].get("postTokens"),
+                       "duration_ms": bd["meta"].get("durationMs"), "precomputed": bool(bd["meta"].get("precomputed")),
+                       "cc_version": bd["version"]}
+                for key, v in sorted(ref.items()):
+                    if key in f and f[key] != v:
+                        p.append("{}: {} is {!r}, the matched boundary row gives {!r}".format(w, key, f[key], v))
+                if rw.get("count") != 1:
+                    p.append("{}: one compaction_boundary row per nonce (count 1)".format(w))
+        for j in a.get("joined", []):
+            p += seq_joined(where, k, j, comps, info)
+    return p
+
+
+SIZE_KEYS = (("pre_tokens", "preTokens"), ("post_tokens", "postTokens"), ("duration_ms", "durationMs"))
+
+
+def seq_rollup_sizes(c, comps, info):
+    """The rollup row's sizes as its writer fills them. P1 (mod path): PostCompact writes the row,
+    with the sizes of postcompact.pm own_boundary (the newest main row already in the transcript,
+    stamped no earlier than the dispatch time minus 1 s; S-21: usually none, so null). Otherwise
+    reconcile writes it with the matched boundary's sizes once that row is in."""
+    if c.get("p1"):
+        since = c.get("dispatch_e")
+        own = [x for x in info[c["post"]]["mains"] if since is not None and x["e"] is not None and x["e"] >= since - 1]
+        own = own[[x["e"] for x in own].index(max(x["e"] for x in own))] if own else None   # the newest row
+    else:
+        own = next((seq_boundary(c, comps, st) for st in info[c["post"] + 1:] if st["ev"] == "Stop"
+                    and seq_boundary(c, comps, st)), None)
+    return {k2: (own["meta"].get(m) if own else None) for k2, m in SIZE_KEYS}
+
+
+def seq_joined(where, k, j, comps, info):
+    """E.2 join: a null rollup field takes the matched boundary's value, a non-null one is kept;
+    join_conflict counts the nonces whose kept value disagrees with the boundary."""
+    w = "{} after step {} joined {}".format(where, k + 1, j.get("nonce"))
+    c = seq_comp_for(comps, j.get("nonce"))
+    if c is None or c["post"] is None:
+        return ["{}: names no compaction".format(w)]
+    bd = seq_boundary(c, comps, info[k])
+    keys = SIZE_KEYS
+    rollup = seq_rollup_sizes(c, comps, info)
+    joined, conflict = {}, 0
+    for k2, m in keys:
+        b = bd["meta"].get(m) if bd else None
+        joined[k2] = rollup[k2] if rollup[k2] is not None else b
+        conflict = 1 if rollup[k2] is not None and b is not None and rollup[k2] != b else conflict
+    p = []
+    for k2, v in sorted(joined.items()):
+        if k2 in j and j[k2] != v:
+            p.append("{}: {} is {!r}, the E.2 join gives {!r} (rollup {!r}, boundary {!r})".format(
+                w, k2, j[k2], v, rollup[k2], bd["meta"] if bd else None))
+    if "join_conflict" in j and j["join_conflict"] != conflict:
+        p.append("{}: join_conflict is {}, the E.2 join gives {}".format(w, j["join_conflict"], conflict))
+    return p
+
+
 def check_sequences():
     problems, count = [], 0
     if not os.path.isdir(SEQUENCES):
@@ -454,7 +904,7 @@ def check_sequences():
         for s in inp.get("seed", []):
             if not os.path.exists(os.path.join(FIX, s.get("copy", ""))):
                 problems.append("{}: seed file {} missing".format(where, s.get("copy")))
-        steps, text, at_pre = inp.get("steps", []), "", None
+        steps, text, at_pre, info, broken = inp.get("steps", []), "", None, [], False
         for i, st in enumerate(steps, 1):
             argv = st.get("argv", [])
             ev = argv[1] if len(argv) > 1 and argv[0] == "hook" else None
@@ -463,12 +913,14 @@ def check_sequences():
                 p = os.path.join(FIX, st["transcript_append"])
                 if not os.path.exists(p):
                     problems.append("{}: transcript_append {} missing".format(label, st["transcript_append"]))
+                    broken = True
                     continue
                 text += read(p)
             try:
                 payload = json.loads(read(os.path.join(FIX, st.get("stdin", ""))))
             except (OSError, ValueError) as e:
                 problems.append("{}: stdin {}: {}".format(label, st.get("stdin"), e))
+                broken = True
                 continue
             if payload.get("hook_event_name") != ev or payload.get("session_id") != inp.get("sid"):
                 problems.append("{}: stdin {} is a {} payload for {}".format(
@@ -479,15 +931,23 @@ def check_sequences():
                 problems.append("{}: the replayed transcript holds {} boundary and {} summary rows, "
                                 "transcript_state says {} and {}".format(label, nb, ns, want.get("boundaries"),
                                                                           want.get("summaries")))
+            nbytes = len(text.encode("utf-8"))
+            if st.get("transcript_bytes_min") is not None and nbytes < st["transcript_bytes_min"]:
+                problems.append("{}: the replayed transcript is {} bytes, transcript_bytes_min says {}".format(
+                    label, nbytes, st["transcript_bytes_min"]))
             if ev == "PreCompact":
                 at_pre = nb
             in_hook = ev == "PostCompact" or (ev == "SessionStart" and payload.get("source") == "compact")
             if inp.get("order") == "S-21" and in_hook and at_pre is not None and nb != at_pre:
                 problems.append("{}: S-21 order: the boundary row lands after PostCompact, but this step sees "
                                 "{} new since PreCompact".format(label, nb - at_pre))
+            info.append({"ev": ev, "now": parse_iso(st.get("now")), "capture": st.get("capture") or {},
+                         "mains": main_boundaries(text), "bytes": nbytes})
         for a in exp.get("step_asserts", []):
             if not 1 <= a.get("after_step", 0) <= len(steps):
                 problems.append("{}: step_asserts after_step {} is not a step".format(where, a.get("after_step")))
+        if not broken and len(info) == len(steps):
+            problems += seq_reference(where, inp, exp, info)
     return problems, count
 
 
@@ -595,7 +1055,7 @@ class Scenario:
         os.makedirs(home)
         root = home + "/.claude/handoffs"
         self.v = {"TMP": self.tmp, "HOME": home, "ROOT": root, "WATCH": root + "/.watch", "SID": sid, "SID8": sid[:8],
-                  "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1)}
+                  "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1), "HOST": os.uname().nodename}
         self.touched = {}
 
     def sub(self, x):
@@ -606,7 +1066,7 @@ class Scenario:
         if not isinstance(x, str):
             return x
         x = fill(x, self.b)
-        return re.sub(r"\$\{?(TMP|HOME|ROOT|WATCH|SID8|SID|BRAND|FIXTURES|FIX|LSTART1)\b\}?", lambda m: self.v[m.group(1)], x)
+        return re.sub(r"\$\{?(TMP|HOME|ROOT|WATCH|SID8|SID|BRAND|FIXTURES|FIX|LSTART1|HOST)\b\}?", lambda m: self.v[m.group(1)], x)
 
     def env(self):
         e = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": self.v["HOME"], "GIT_CONFIG_NOSYSTEM": "1",
@@ -926,6 +1386,135 @@ def rm_semantics(doc, sc):
     return p
 
 
+def pid_state(pid, lstart):
+    """live (pid alive, same start time), restarted (alive, another start time) or dead."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return "dead"
+    except (PermissionError, OverflowError):
+        pass
+    except OSError:
+        return "dead"
+    return "live" if process_lstart(pid) == " ".join(str(lstart).split()) else "restarted"
+
+
+def transcript_row_line(path):
+    """True when the first non-empty line parses as a transcript row (BD-4 detector c)."""
+    for line in read(path).split("\n"):
+        if line.strip():
+            try:
+                r = json.loads(line)
+            except ValueError:
+                return False
+            return isinstance(r, dict) and "type" in r and ("sessionId" in r or "parentUuid" in r)
+    return False
+
+
+def st_semantics(doc, sc):
+    """What the C-STORE setups must have built (AT-ST-04/05 records, AT-ST-13 agent outputs)."""
+    p = []
+    if doc["id"] == "st-05-finish-records":
+        byp = sc.v["ROOT"] + "/.sessions/by-pid"
+        files = sorted(os.listdir(byp)) if os.path.isdir(byp) else []
+        for sid8, want in sorted(doc["expect"]["records"].items()):
+            live = [f for f in files if f.endswith(".live-{}.json".format(sid8))]
+            ended = [f for f in files if f.endswith(".ended-{}.json".format(sid8))]
+            if not live:
+                state, host = "none", None
+            else:
+                d = json.loads(read(os.path.join(byp, live[0])))
+                state = pid_state(d["pid"], d["pid_lstart"])
+                host = d.get("host")
+                if host is not None and host != sc.v["HOST"]:
+                    p.append("{}: host {!r} is not this machine's node name".format(sid8, host))
+            if state != want["state"]:
+                p.append("{}: the record reads {}, the recipe says {}".format(sid8, state, want["state"]))
+            if "host" in want and (host is not None) != want["host"]:
+                p.append("{}: host {} but the recipe says {}".format(sid8, "present" if host else "absent", want["host"]))
+            if "ended" in want and bool(ended) != want["ended"]:
+                p.append("{}: ended- record {} but the recipe says {}".format(sid8, bool(ended), want["ended"]))
+            if "eligible" in want:
+                rule = bool(ended) or (state in ("dead", "restarted") and host is not None)
+                if rule != want["eligible"]:
+                    p.append("{}: the C-STORE §5.8 reading gives eligible={}, the recipe says {}".format(sid8, rule, want["eligible"]))
+    elif doc["id"] == "st-13-agent-output":
+        sid = doc["invoke"]["argv"][doc["invoke"]["argv"].index("--sid") + 1]
+        slot = json.loads(read(sc.v["WATCH"] + "/" + sid + "/bg/slot-0.json"))
+        types = {t["id"]: (t["type"], t["output_path"]) for t in slot["tasks"]}
+        for tid, want in sorted(doc["expect"]["outputs"].items()):
+            if tid not in types:
+                p.append("{}: not in the sidecar slot".format(tid))
+                continue
+            typ, out = types[tid]
+            if want.get("type") and want["type"] != typ:
+                p.append("{}: slot type {} but the recipe says {}".format(tid, typ, want["type"]))
+            det = want.get("detector")
+            if tid == "x":
+                at = json.loads(read(os.path.join(FIX, "tempfiles", "at-e-05-task-output.json")))
+                if out != sc.sub(at["files"][0]["path"]):
+                    p.append("x: output_path must be the AT-E-05 tempfile path")
+                continue
+            if not os.path.lexists(out):
+                p.append("{}: {} missing".format(tid, out))
+                continue
+            link = os.path.islink(out)
+            real = os.path.realpath(out)
+            is_a = link and real.endswith(".jsonl") and "/.claude/projects/" in real
+            is_c = not link and transcript_row_line(out)
+            is_b = typ not in ("shell", "monitor")
+            fired = sorted(k for k, v in (("a", is_a), ("b", is_b), ("c", is_c)) if v)
+            if fired != ([det] if det else []):
+                p.append("{}: BD-4 detectors {} fire, the recipe expects {}".format(tid, fired, [det] if det else []))
+            if want.get("result") == "withheld" and not fired or want.get("result") == "copied" and fired:
+                p.append("{}: result {} does not follow from the detectors {}".format(tid, want.get("result"), fired))
+        if sorted(sc.sub(doc["expect"]["paths"])) != sorted(o for _, o in types.values()):
+            p.append("expect.paths must list every slot output_path")
+    elif doc["id"] == "st-09-fill-scope":
+        p += st09_semantics(doc, sc)
+    return p
+
+
+def st09_semantics(doc, sc):
+    """AT-ST-09 (d): every copy is fillable by nonce (its nonce is the marker nonce of a summary row
+    in a planted agent file), and `filled` follows C-STORE D5 step 5: only a sub-unknown copy in
+    compact/subagents/ is filled; compact/ and compact/unattributed/ are never touched."""
+    p, b = [], sc.b
+    subdir = sc.sub("$HOME/.claude/projects/-tmp-example-repo/$SID/subagents")
+    nonces = set()
+    for f in sorted(os.listdir(subdir)) if os.path.isdir(subdir) else []:
+        for line in read(os.path.join(subdir, f)).split("\n"):
+            r = json.loads(line) if line.strip() else {}
+            if r.get("isCompactSummary") is True:
+                nonces.add(detect(fill(row_text(r), b), b["name"])[3])
+    slots = {"main": "/compact/", "unattributed": "/compact/unattributed/", "subagents": "/compact/subagents/"}
+    want_slots = set(slots)
+    for key, c in sorted(doc["expect"]["copies"].items()):
+        path = sc.sub(c["path"])
+        if not os.path.isfile(path):
+            p.append("{}: {} missing".format(key, path))
+            continue
+        fm = dict(ln.split(": ", 1) for ln in read(path).split("---\n")[1].split("\n") if ": " in ln)
+        if os.path.dirname(path) + "/" != sc.sub("$ROOT/example-repo/general") + slots[c["slot"]].rstrip("/") + "/":
+            p.append("{}: {} is not in the {} folder".format(key, path, c["slot"]))
+        if (fm.get("actor"), fm.get("nonce")) != (c["actor"], c["nonce"]) or not path.endswith("-{}.md".format(c["id6"])):
+            p.append("{}: frontmatter actor/nonce or the -<id6>.md name differ from expect".format(key))
+        if c["nonce"] not in nonces:
+            p.append("{}: nonce {} is no agent summary row's marker nonce, so a scope bug could not fill it".format(key, c["nonce"]))
+        rule = c["slot"] == "subagents" and c["actor"] == "sub-unknown"
+        if c.get("filled") != rule:
+            p.append("{}: filled={} but C-STORE D5 step 5 gives {} (only sub-unknown copies in compact/subagents/)".format(
+                key, c.get("filled"), rule))
+        if rule and not c.get("renamed_to", "").endswith("-{}.md".format(c["id6"])):
+            p.append("{}: a filled copy names its -a<agent8> renamed_to path".format(key))
+        if os.stat(path).st_mode & 0o777 != 0o400:
+            p.append("{}: copies are mode 0400".format(key))
+        want_slots.discard(c["slot"])
+    if want_slots:
+        p.append("st-09 needs a copy in each of compact/, compact/unattributed/ and compact/subagents/; missing {}".format(sorted(want_slots)))
+    return p
+
+
 def check_setups(b):
     problems, n = [], 0
     if not os.path.isdir(SETUPS):
@@ -961,6 +1550,10 @@ def check_setups(b):
                     sem = jobs_semantics(doc, sc)
                 elif doc["id"].startswith("rm-"):
                     sem = rm_semantics(doc, sc)
+                elif doc["id"].startswith("st-"):
+                    sem = st_semantics(doc, sc)
+                elif doc["id"].startswith("wb-"):
+                    sem = wb_semantics(doc, sc)
                 else:
                     sem = []
                 problems += ["{}: {}".format(where, x) for x in sem]
@@ -969,6 +1562,318 @@ def check_setups(b):
         finally:
             sc.done()
     return problems, n
+
+
+# PATH stubs (README "bin/"): bin/git-noexclude must defeat an exclude pathspec that the real git
+# honours (C-STORE D7 BD-1: the rebuilt clone patch, AT-ST-11 fail-closed). Proven on a temp repo.
+def numstat_paths(sc, cwd, env, args):
+    patch = subprocess.run(["git", "-C", cwd] + args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+    if patch.returncode != 0:
+        raise RuntimeError("git {}: exit {}".format(" ".join(args[:2]), patch.returncode))
+    r = subprocess.run(["git", "-C", cwd, "apply", "--numstat", "-z", "-"], input=patch.stdout, env=sc.env(),
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+    return sorted(x.split("\t")[-1] for x in r.stdout.decode("utf-8", "replace").split("\0") if "\t" in x)
+
+
+def check_stubs(b):
+    problems = []
+    stub = os.path.join(FIX, "bin", "git-noexclude")
+    if not os.access(stub, os.X_OK):
+        return ["stubs: bin/git-noexclude missing or not executable"], 0
+    sc = Scenario(b)
+    try:
+        repo = sc.tmp + "/r"
+        sc.run({"repo": {"commits": [{"files": {"README.md": "seed\n"}, "msg": "seed"},
+                                     {"files": {"src/a.rb": "x = 1\n", ".netrc": "fixture netrc line\n"}, "msg": "both"}]},
+                "at": repo})
+        args = ["format-patch", "--stdout", "--no-renames", "-1", "HEAD", "--", ".", ":(top,literal,exclude).netrc"]
+        real = numstat_paths(sc, repo, sc.env(), args)
+        if real != ["src/a.rb"]:
+            problems.append("stubs: the real git does not honour ':(top,literal,exclude)' with --no-renames here: numstat {}".format(real))
+        bindir = sc.tmp + "/stubbin"
+        os.makedirs(bindir)
+        os.symlink(stub, bindir + "/git")
+        log = sc.tmp + "/noexclude.log"
+        env = dict(sc.env(), PATH=bindir + os.pathsep + sc.env()["PATH"], GIT_NOEXCLUDE_LOG=log)
+        stubbed = numstat_paths(sc, repo, env, args)
+        if stubbed != [".netrc", "src/a.rb"]:
+            problems.append("stubs: bin/git-noexclude did not keep the excluded path: numstat {}".format(stubbed))
+        if not os.path.exists(log) or read(log) != "dropped 1\n":
+            problems.append("stubs: bin/git-noexclude wrote no `dropped 1` line to GIT_NOEXCLUDE_LOG")
+    except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+        problems.append("stubs: {}".format(e))
+    finally:
+        sc.done()
+    return problems, 1
+
+
+# Production and relaunch settings (settings/prod-cases.json; S-SETTINGS B, C; BUILD-PLAN §3.7):
+# a reference of the effects order, the prod_patterns validation and the no-chaining rule.
+PROD_TOKEN = [("prod-token", r"(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)")]
+PATTERN_MAX, PATTERN_CHARS = 32, 200
+
+
+def options_of(rel):
+    d = json.loads(read(os.path.join(FIX, rel)))
+    for plug, cfg in (d.get("pluginConfigs") or {}).items():
+        if plug.startswith("{{plugin}}@"):
+            return cfg.get("options") or {}
+    return {}
+
+
+def split_patterns(value, need_caret=False):
+    """(kept regexes, dropped indexes) by the S-SETTINGS limits: at most 32, each <= 200 chars,
+    no Dev-7 forbidden construct, compiles (relaunch_allow also needs a leading ^)."""
+    forbidden = (literals().get("wait") or {}).get("marker_regex_forbidden") or ["(?{", "(??{", "(*"]
+    kept, dropped = [], []
+    for i, p in enumerate(x for x in (value or "").split(";") if x != ""):
+        ok = i < PATTERN_MAX and len(p) <= PATTERN_CHARS and not any(f in p for f in forbidden) and (p.startswith("^") or not need_caret)
+        if ok:
+            try:
+                kept.append((p, re.compile(p)))
+            except re.error:
+                ok = False
+        if not ok:
+            dropped.append(i)
+    return kept, dropped
+
+
+def chained(cmd):
+    """An unquoted ; && || | & or newline, or a $( or backquote outside single quotes."""
+    q = None
+    i = 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if q == "'":
+            q = None if ch == "'" else q
+        elif ch == "\\":
+            i += 1
+        elif ch == "`" or cmd.startswith("$(", i):
+            return True
+        elif q == '"':
+            q = None if ch == '"' else q
+        elif ch in "'\"":
+            q = ch
+        elif ch in ";&|\n":
+            return True
+        i += 1
+    return False
+
+
+def effects_ref(case, options):
+    cmd = case["command"]
+    outward = [re.compile(c["re"]) for c in literals().get("outward_classes") or []]
+    shipped = literals().get("prod_classes") or [{"id": i, "re": r} for i, r in PROD_TOKEN]
+    prod = [re.compile(c["re"]) for c in shipped] + [rx for _, rx in split_patterns(options.get("prod_patterns"))[0]]
+    if any(rx.search(cmd) for rx in outward):
+        return "outward"
+    is_prod = any(rx.search(cmd) for rx in prod)
+    if is_prod:
+        return "prod-read" if case["is_read_only"] else "prod-write"
+    if case["is_read_only"]:
+        return "none"
+    suffix = (literals().get("wait") or {}).get("end_suffix") or ""
+    core = cmd[:-len(suffix)] if suffix and cmd.endswith(suffix) else cmd
+    allow = [rx for _, rx in split_patterns(options.get("relaunch_allow"), need_caret=True)[0]]
+    if case.get("recipe_expected_outputs") and any(rx.search(core) for rx in allow) and not chained(core):
+        return "local"
+    return "unknown"
+
+
+def reads_value(raw):
+    v = (raw or "").strip().lower() if isinstance(raw, str) else ""
+    return v if v in ("forbid", "allow") else "forbid"
+
+
+def check_prod():
+    path = os.path.join(FIX, "settings", "prod-cases.json")
+    if not os.path.exists(path):
+        return ["prod: settings/prod-cases.json missing"], 0
+    m = json.loads(read(path))
+    p = []
+    for c in m["commands"]:
+        options = options_of(c["settings"]) if c.get("settings") else {}
+        got = effects_ref(c, options)
+        if got != c["effects"]:
+            p.append("prod {}: the §3.7 order gives {}, the case says {}".format(c["id"], got, c["effects"]))
+    for name, pl in sorted(m["placements"].items()):
+        if pl.get("settings_path") is None or name == "foreign":
+            got = "forbid"
+        else:
+            got = reads_value(options_of(pl.get("file") or m["placement_file"]).get("unattended_prod_reads"))
+        if got != pl["reads"]:
+            p.append("prod placement {}: reads {}, the case says {}".format(name, got, pl["reads"]))
+    for rel, want in sorted(m["patterns"].items()):
+        if not rel.startswith("settings/"):
+            continue
+        kept, dropped = split_patterns(options_of(rel).get("prod_patterns"))
+        if dropped != want["dropped"] or ("kept" in want and [k for k, _ in kept] != want["kept"]) or \
+                ("kept_count" in want and len(kept) != want["kept_count"]):
+            p.append("prod patterns {}: kept {} dropped {}, the case says {}".format(rel, len(kept), dropped, want))
+    return p, len(m["commands"])
+
+
+# W-BETA fixtures (README "Beta"): the canary install (setups/wb-canary-install.json, AT-WB-02) and
+# the analyzer zips (beta/, AT-WB-13). The zip checks are a reference of W-BETA F.1 intake and F.2
+# verify, read-only (zipfile infolist and member reads; nothing is extracted).
+BETA = os.path.join(FIX, "beta")
+B5_NAME = re.compile(r"^(README\.txt|manifest\.json|config\.json|probes\.json|sizes\.json|rows/[0-9a-f]{12}\.jsonl)$")
+PATTERN_CLASSES = [re.compile(r"(^|[\s\"'=(])/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]*"), re.compile(r"/Users/|/home/"),
+                   re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s\"']+")]
+
+
+def zip_texts(path):
+    """[(entry name, text)] of a zip, members decoded as UTF-8 (replacement for bad bytes)."""
+    with zipfile.ZipFile(path) as z:
+        return [(i.filename, z.read(i).decode("utf-8", "replace")) for i in z.infolist()
+                if not stat.S_ISLNK(i.external_attr >> 16) and i.file_size <= 4 * 1024 * 1024]
+
+
+def intake_ref(path):
+    """W-BETA F.1: `accept`, or `refuse` with the first reason."""
+    with zipfile.ZipFile(path) as z:
+        infos = z.infolist()
+    total = 0
+    for i in infos:
+        n = i.filename
+        if n.startswith("/") or ".." in n.split("/"):
+            return "refuse", "absolute or .. name"
+        if stat.S_ISLNK(i.external_attr >> 16):
+            return "refuse", "symlink"
+        if not B5_NAME.match(n):
+            return "refuse", "name outside B.5"
+        if i.file_size > 50 * 1024 * 1024:
+            return "refuse", "entry over 50 MB"
+        if i.compress_size and i.file_size / i.compress_size > 100:
+            return "refuse", "ratio over 100"
+        total += i.file_size
+    if total > 200 * 1024 * 1024:
+        return "refuse", "total over 200 MB"
+    return "accept", None
+
+
+def verify_ref(path):
+    """W-BETA F.2: `valid`, or `quarantined` with the reason (manifest hashes, pattern classes)."""
+    texts = dict(zip_texts(path))
+    man = json.loads(texts.get("manifest.json", "{}"))
+    with zipfile.ZipFile(path) as z:
+        for f in man.get("files", []):
+            if hashlib.sha256(z.read(f["name"])).hexdigest() != f["sha256"]:
+                return "quarantined", "sha256 " + f["name"]
+    for n, t in sorted(texts.items()):
+        if n.startswith("rows/") or n in ("config.json", "probes.json", "sizes.json"):
+            for rx in PATTERN_CLASSES:
+                if rx.search(t):
+                    return "quarantined", "pattern " + n
+    return "valid", None
+
+
+def check_beta():
+    p = []
+    cases_path = os.path.join(BETA, "cases.json")
+    if not os.path.exists(cases_path):
+        return ["beta: beta/cases.json missing"], 0
+    cases = json.loads(read(cases_path))
+    present = sorted(f for f in os.listdir(BETA) if f.endswith(".zip"))
+    if present != sorted(cases["zips"]):
+        p.append("beta: zips {} and cases.json {} differ".format(present, sorted(cases["zips"])))
+    for name, want in sorted(cases["zips"].items()):
+        path = os.path.join(BETA, name)
+        if not os.path.exists(path):
+            continue
+        got, why = intake_ref(path)
+        if got != want["intake"]:
+            p.append("beta {}: intake {} ({}), cases.json says {}".format(name, got, why, want["intake"]))
+            continue
+        if got == "accept":
+            v, why = verify_ref(path)
+            if v != want["verify"]:
+                p.append("beta {}: verify {} ({}), cases.json says {}".format(name, v, why, want["verify"]))
+        if want.get("dedupe_with"):
+            with open(path, "rb") as a, open(os.path.join(BETA, want["dedupe_with"]), "rb") as b2:
+                if a.read() != b2.read():
+                    p.append("beta {}: not byte-identical to {}".format(name, want["dedupe_with"]))
+    return p, len(cases["zips"])
+
+
+def wb_semantics(doc, sc):
+    """The canary install: every canary is planted somewhere it can leak from, and grep-safe."""
+    p = []
+    canaries = doc["expect"]["canaries"]
+    vals = sorted(canaries.values())
+    for a in vals:
+        if len(a) < 4:
+            p.append("canary {!r} is shorter than 4 characters (the identity scan skips it)".format(a))
+        for b2 in vals:
+            if a != b2 and a in b2:
+                p.append("canary {!r} is inside canary {!r}; a grep could not tell them apart".format(a, b2))
+    blob = []
+    for f in walk(sc.tmp):
+        if os.path.islink(f):
+            continue
+        try:
+            blob.append(read(f))
+        except (UnicodeDecodeError, OSError):
+            pass
+    blob = "\n".join(blob) + "\n" + json.dumps(doc["invoke"].get("env", {}))
+    for cid, v in sorted(canaries.items()):
+        if v not in blob:
+            p.append("canary {} ({}) is planted nowhere".format(cid, v))
+    if SECRET_MARK not in blob:
+        p.append("no $SECRET{} token: the shared secret corpus is not planted")
+    if sc.v["HOME"] not in blob:
+        p.append("no $HOME path is planted")
+    p += wb_identity(doc, sc)
+    return p
+
+
+def wb_identity(doc, sc):
+    """W-BETA B.3 for the built install: the identity list a reference computes ($HOME, the account,
+    the host as `hostname -s` prints it with the recipe's PATH, every repo_roots entry and its
+    basename, the basenames of the repo and bucket folders under the handoff root, the git remote
+    hosts and owner paths; strings under 4 characters skipped) must equal expect.identity_list.
+    The bucket canary is a bucket folder; each transform_only canary neither contains nor sits
+    inside an identity string (case-insensitive), and every other canary is one."""
+    p, e = [], doc["expect"]
+    env = dict(sc.env(), **sc.sub(doc["invoke"].get("env", {})))
+    env.pop("STORE_TEST_HOSTNAME", None)
+    env["PATH"] = os.pathsep.join(sc.sub(doc["invoke"].get("path_prepend", [])) + [env["PATH"]])
+    host = subprocess.run(["hostname", "-s"], env=env, stdout=subprocess.PIPE, universal_newlines=True, timeout=10).stdout.strip()
+    ids = {sc.v["HOME"], env.get("USER", ""), host}
+    opts = json.loads(read(sc.v["HOME"] + "/.claude/settings.json"))["pluginConfigs"]
+    roots = [r for o in opts.values() for r in (o.get("options", {}).get("repo_roots") or "").split(";") if r]
+    for r in roots:
+        ids |= {r, os.path.basename(r.rstrip("/"))}
+        for line in sc.git(r, "remote", "-v").splitlines():
+            m = re.match(r"^\S+\s+(?:[^@\s]+@)?([^:/\s]+)[:/](\S+?)(?:\.git)?\s", line + " ")
+            if m:
+                ids |= {m.group(1), m.group(2)}
+    buckets = set()
+    root = sc.v["ROOT"]
+    for repo in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        if repo.startswith(".") or not os.path.isdir(os.path.join(root, repo)):
+            continue
+        ids.add(repo)
+        for bk in sorted(os.listdir(os.path.join(root, repo))):
+            if not bk.startswith(".") and os.path.isdir(os.path.join(root, repo, bk)):
+                ids.add(bk)
+                buckets.add(bk)
+    ids = sorted(x for x in ids if len(x) >= 4)
+    if ids != sorted(sc.sub(e.get("identity_list", []))):
+        p.append("identity_list {} but the B.3 reference gives {}".format(sorted(sc.sub(e.get("identity_list", []))), ids))
+    can = e["canaries"]
+    if host != can.get("host"):
+        p.append("`hostname -s` with the recipe's PATH prints {!r}, not the host canary".format(host))
+    if can.get("bucket") not in buckets:
+        p.append("the bucket canary {!r} is no bucket folder (built: {})".format(can.get("bucket"), sorted(buckets)))
+    low = [x.lower() for x in ids]
+    for cid, v in sorted(can.items()):
+        hit = [x for x in low if x in v.lower() or v.lower() in x]
+        if cid in e.get("transform_only", []) and hit:
+            p.append("canary {} ({}) overlaps the identity strings {}: the identity scan, not the transform, would stop it".format(cid, v, hit))
+        if cid not in e.get("transform_only", []) and v.lower() not in low:
+            p.append("canary {} ({}) is neither transform_only nor an identity string".format(cid, v))
+    return p
 
 
 def check_settings():
@@ -999,28 +1904,105 @@ def check_settings():
     return problems, n
 
 
+RUNTIME_JSON = os.path.join(FIX, "assembly", "runtime.json")
+
+
+def assemble_runtime_keys():
+    """The keys of tools/assemble's worst-case RUNTIME dict, read from its source (the tool runs at
+    import, so it is parsed, not imported); None when the file or the dict is absent."""
+    import ast
+    path = os.path.join(REPO, "tools", "assemble")
+    if not os.path.exists(path):
+        return None
+    for node in ast.walk(ast.parse(read(path))):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "RUNTIME" for t in node.targets) \
+                and isinstance(node.value, ast.Dict):
+            return {k.value for k in node.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+    return None
+
+
+def check_runtime():
+    """assembly/runtime.json names every token tools/assemble fills (BT-04-H, text-to-fix F-1): the
+    helper's golden check fills only runtime.json keys, so a key tools/assemble fills from its own
+    worst case (e.g. idle_min) would make the helper render differ from the goldens."""
+    problems = []
+    keys = assemble_runtime_keys()
+    try:
+        have = set(json.loads(read(RUNTIME_JSON)))
+    except (OSError, ValueError):
+        return problems, 0   # the parse check reports a bad file
+    if keys is None:
+        return problems, len(have)
+    for k in sorted(keys - have):
+        problems.append("runtime assembly/runtime.json: no {!r}; tools/assemble fills it with its own worst case, "
+                        "so the helper's BT-04-H render differs from the goldens".format(k))
+    return problems, len(have)
+
+
 # Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
-# answer has the queue-stub/v1 shape that ROOT-RULINGS F2-8 adopts as the v1 contract.
+# answer follows the strict contract of Q-ADAPTER QA-2 (MOD-SPEC §10.3 as amended): `schema`
+# `queue-stub/v1` required, `lanes` optional in either shape, unknown keys ignored. `list.expect`
+# names the mode a reply gives (`on: …`, `degraded (untagged)`, `degraded (schema)`); a reply that
+# breaks the contract on purpose must say so there. `adopt.rc` / `adopt.out` / `adopt.expect` are
+# the QA-2 adopt refusals and the plugin's mapping of them (AT-QA-04).
 QUEUE = os.path.join(FIX, "queue")
-QUEUE_V1_KEYS = ["schema", "session", "lane", "open", "pending", "preview", "held_by", "lanes"]
+QUEUE_V1_REQUIRED = ["schema", "session", "lane", "open", "pending", "preview", "held_by"]
+QUEUE_V1_OPTIONAL = ["label", "commands", "lanes"]
 QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
 LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
+LANE_IN_RE = re.compile(r"(?:lane|auto):[A-Za-z0-9._/-]+")
 
 
-QUEUE_COMMANDS = {"list", "adopt", "add"}
+QUEUE_COMMANDS = {"list", "adopt", "adopt:must-exist", "add"}
 QUEUE_ADD_STATUS = {"queued", "exists"}
 CLIENT_ID_RE = re.compile(r"^ck-[0-9a-f]{12}$")
+ADOPT_REFUSAL = {3: r"^REFUSED: held: holder=([0-9a-f-]{36}) kind=(process|heartbeat) lane=\S+$",
+                 4: r"^REFUSED: no-lane: \S.*$", 6: r"^REFUSED: (untrusted|damaged|no-process): \S.*$"}
+
+
+def queue_list_mode(doc):
+    """The mode a parsed list reply gives under the strict contract, and the shape problems."""
+    if "schema" not in doc:
+        return "degraded (untagged)", []
+    if doc["schema"] != "queue-stub/v1":
+        return "degraded (schema)", []
+    bad = []
+    missing = [k for k in QUEUE_V1_REQUIRED if k not in doc]
+    if missing:
+        bad.append("missing {}".format(missing))
+    op = doc.get("open")
+    if not (isinstance(op, list) and all(isinstance(x, str) for x in op)) and not (isinstance(op, int) and not isinstance(op, bool)):
+        bad.append("open is neither an id list nor a count")
+    if not (isinstance(doc.get("pending"), int) and not isinstance(doc.get("pending"), bool)):
+        bad.append("pending is not a count")
+    if not isinstance(doc.get("preview"), bool):
+        bad.append("preview is not a bool")
+    if not (doc.get("lane") is None or (isinstance(doc.get("lane"), str) and LANE_RE.match(doc["lane"]))):
+        bad.append("lane is not lane:/auto: or null")
+    cmds = doc.get("commands")
+    if cmds is not None and (not isinstance(cmds, list) or not set(cmds) <= QUEUE_COMMANDS):
+        bad.append("commands must be a list within {}".format(sorted(QUEUE_COMMANDS)))
+    lanes = doc.get("lanes")
+    if lanes is not None and (not isinstance(lanes, list) or any(
+            not (isinstance(x, str) or (isinstance(x, dict) and sorted(x) == sorted(QUEUE_V1_LANE_KEYS))) for x in lanes)):
+        bad.append("lanes must be strings or {} objects".format(QUEUE_V1_LANE_KEYS))
+    n = len(op) if isinstance(op, list) else op
+    return "on: Queued: {} open".format(n), bad
 
 
 def check_queue():
-    """List answers in the queue-stub/v1 shape (optional `commands`); add answers per D-10
-    (small-rulings §1.2): rc 0 prints a queue-add/v1 object, rc 2 has no REFUSED line, rc 5 a
-    `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the other refusals."""
+    """List answers per the strict v1 contract (QA-2) and their list.expect; adopt answers per
+    the QA-2 exit table; add answers per D-10 (small-rulings §1.2): rc 0 prints a queue-add/v1
+    object, rc 2 has no REFUSED line, rc 5 a `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the
+    other refusals."""
     problems, njson = [], 0
     for case in sorted(os.listdir(QUEUE)) if os.path.isdir(QUEUE) else []:
         p = os.path.join(QUEUE, case, "list.out")
         text = read(p) if os.path.exists(p) else ""
         where = "queue/{}/list.out".format(case)
+        exp_file = os.path.join(QUEUE, case, "list.expect")
+        expect = read(exp_file).strip() if os.path.exists(exp_file) else None
+        commands = None
         if text.lstrip().startswith("{"):
             njson += 1
             try:
@@ -1028,16 +2010,16 @@ def check_queue():
             except ValueError as e:
                 problems.append("{}: {}".format(where, e))
                 continue
-            commands = doc.pop("commands", None)
-            int_ok = all(isinstance(doc.get(k), int) and not isinstance(doc.get(k), bool) for k in ("open", "pending"))
-            if (sorted(doc) != sorted(QUEUE_V1_KEYS) or doc["schema"] != "queue-stub/v1" or not int_ok
-                    or not isinstance(doc["preview"], bool) or not isinstance(doc["lanes"], list)
-                    or not (doc["lane"] is None or LANE_RE.match(doc["lane"]))
-                    or any(not isinstance(x, dict) or sorted(x) != sorted(QUEUE_V1_LANE_KEYS) for x in doc["lanes"])):
-                problems.append("{}: not the queue-stub/v1 shape {} with lanes[] {}".format(
-                    where, QUEUE_V1_KEYS, QUEUE_V1_LANE_KEYS))
-            if commands is not None and (not isinstance(commands, list) or not set(commands) <= QUEUE_COMMANDS):
-                problems.append("{}: commands must be a list within {}".format(where, sorted(QUEUE_COMMANDS)))
+            commands = doc.get("commands")
+            mode, bad = queue_list_mode(doc)
+            problems += ["{}: {}".format(where, b) for b in bad]
+            if expect is not None and expect != mode:
+                problems.append("{}: the strict contract gives `{}`, list.expect says `{}`".format(where, mode, expect))
+            if expect is None and not mode.startswith("on"):
+                problems.append("{}: gives `{}`; a reply that breaks the contract on purpose needs a list.expect".format(where, mode))
+        elif expect is not None:
+            problems.append("{}: list.expect is only for JSON replies".format(where))
+        problems += check_adopt(case, commands)
         rc_file = os.path.join(QUEUE, case, "add.rc")
         if not os.path.exists(rc_file):
             continue
@@ -1069,6 +2051,270 @@ def check_queue():
     return problems, njson
 
 
+def check_adopt(case, commands):
+    """QA-2 adopt: rc 0 with the bound lane id in the first stdout line; rc 3/4/6 with one stdout
+    `REFUSED: <kind>: <reason>` line (<= 200 B, no command text); rc 2 usage. adopt.expect is the
+    plugin's mapping (AT-QA-04): `lane: <id>`, `held holder=<sid> kind=<k>`, `no-lane`, `error`,
+    `unsupported`."""
+    p = []
+    d = os.path.join(QUEUE, case)
+    if not os.path.exists(os.path.join(d, "adopt.rc")):
+        return p
+    where = "queue/{}/adopt".format(case)
+    rc = read(os.path.join(d, "adopt.rc")).strip()
+    out = read(os.path.join(d, "adopt.out")) if os.path.exists(os.path.join(d, "adopt.out")) else ""
+    expect = read(os.path.join(d, "adopt.expect")).strip() if os.path.exists(os.path.join(d, "adopt.expect")) else None
+    if rc not in ("0", "2", "3", "4", "6"):
+        return ["{}.rc: {!r} is not a QA-2 adopt exit code (0, 2, 3, 4, 6)".format(where, rc)]
+    rc = int(rc)
+    first = out.split("\n", 1)[0]
+    if rc == 0:
+        m = LANE_IN_RE.search(first)
+        want = "lane: " + m.group(0) if m else None
+        if not m:
+            p.append("{}.out: rc 0 needs the bound lane id in the first line".format(where))
+    elif rc == 2:
+        want = "unsupported"
+        if "REFUSED:" in out:
+            p.append("{}: exit 2 is usage and carries no REFUSED line".format(where))
+    else:
+        m = re.match(ADOPT_REFUSAL[rc], first)
+        if not m or len(first.encode("utf-8")) > 200 or "`" in first or "queue-stub" in first:
+            p.append("{}.out: exit {} needs one line matching {} (<= 200 B, no command text)".format(where, rc, ADOPT_REFUSAL[rc]))
+        want = ("held holder={} kind={}".format(m.group(1), m.group(2)) if m else "held") if rc == 3 else ("no-lane" if rc == 4 else "error")
+    if expect is None:
+        p.append("{}: adopt.expect missing".format(where))
+    elif want is not None and expect.split(" (")[0] != want:
+        p.append("{}: the QA-2 mapping gives `{}`, adopt.expect says `{}`".format(where, want, expect))
+    if "(no --must-exist" in (expect or "") and commands is not None and "adopt:must-exist" in commands:
+        p.append("{}: adopt.expect says no --must-exist but the caps hold adopt:must-exist".format(where))
+    return p
+
+
+# Transcript manifests (README "Transcripts"): FIX-03 inputs that tie transcripts to payloads, records
+# and corpus files. P5-replay (C-STORE D5 fill, AT-ST-08), fill-joins (AT-ST-09), idle-cases (IC-1 D1,
+# AT-IC-02). Each check proves the pieces agree, so a core case can rely on them.
+TRANSCRIPTS = os.path.join(FIX, "transcripts")
+
+
+def jsonl_rows(rel):
+    return [json.loads(l) for l in read(os.path.join(FIX, rel)).split("\n") if l.strip()]
+
+
+def row_text(r):
+    c = (r.get("message") or {}).get("content")
+    if isinstance(c, list):
+        c = "".join(x.get("text", "") for x in c if isinstance(x, dict))
+    return c if isinstance(c, str) else ""
+
+
+def body_lines_in(post_text, row, b):
+    """Every non-blank normalized-body line of a PostCompact text is a line of the summary row text."""
+    body, _ = normalize(fill(post_text, b), b["name"])
+    have = set(fill(row_text(row), b).split("\n"))
+    return [ln for ln in body.split("\n") if ln.strip() and ln not in have]
+
+
+def payload_of(rel, sid):
+    d = json.loads(read(os.path.join(FIX, rel)))
+    if d.get("hook_event_name") != "PostCompact" or d.get("session_id") != sid:
+        raise ValueError("{} is not a PostCompact payload of {}".format(rel, sid))
+    return d
+
+
+def check_replay(b):
+    p = []
+    m = json.loads(read(os.path.join(TRANSCRIPTS, "P5-replay", "replay.json")))
+    rows = jsonl_rows(m["agent_transcript"])
+    jsonl_rows(m["main_transcript"])
+    seen = set()
+    for c in m["compactions"]:
+        w = "P5-replay c{}".format(c["seq"])
+        try:
+            pay = payload_of(c["payload"], m["sid"])
+        except (OSError, ValueError) as e:
+            p.append("{}: {}".format(w, e))
+            continue
+        if pay["compact_summary"] != read(os.path.join(FIX, c["corpus"])):
+            p.append("{}: the payload compact_summary is not the corpus file {}".format(w, c["corpus"]))
+        d = json.loads(read(os.path.join(FIX, c["dispatch"])))
+        if (d.get("nonce"), d.get("agent_id"), d.get("channel")) != (c["nonce"], None, "classic"):
+            p.append("{}: {} must be a classic dispatch, agent_id null, nonce {}".format(w, c["dispatch"], c["nonce"]))
+        bl, sl = rows[c["boundary_line"] - 1], rows[c["summary_line"] - 1]
+        meta = bl.get("compactMetadata") or {}
+        if (bl.get("subtype") != "compact_boundary" or bl.get("agentId") != m["agent"] or not bl.get("isSidechain")
+                or (meta.get("preTokens"), meta.get("postTokens"), meta.get("durationMs")) != (c["pre_tokens"], c["post_tokens"], c["duration_ms"])):
+            p.append("{}: agent line {} is not its boundary row with the listed sizes".format(w, c["boundary_line"]))
+        if sl.get("isCompactSummary") is not True or detect(fill(row_text(sl), b), b["name"])[3] != c["nonce"]:
+            p.append("{}: agent line {} is not a summary row with marker nonce {}".format(w, c["summary_line"], c["nonce"]))
+        missing = body_lines_in(pay["compact_summary"], sl, b)
+        if missing:
+            p.append("{}: the summary row lacks {} body lines of the PostCompact text, first {!r}".format(w, len(missing), missing[0][:60]))
+        t_pre, t_b, t_post = parse_iso(c["precompact_now"]), parse_iso(bl.get("timestamp")), parse_iso(c["postcompact_now"])
+        if not (t_pre is not None and t_b is not None and t_post is not None and t_pre < t_b <= t_post):
+            p.append("{}: want PreCompact < boundary row <= PostCompact (lab order)".format(w))
+        seen.add(c["nonce"])
+    if len(seen) != len(m["compactions"]) or len(m["compactions"]) != 6:
+        p.append("P5-replay: six compactions with distinct nonces")
+    nb = sum(1 for r in rows if r.get("subtype") == "compact_boundary")
+    ns = sum(1 for r in rows if r.get("isCompactSummary") is True)
+    if (nb, ns) != (6, 6):
+        p.append("P5-replay: the agent file holds {} boundary and {} summary rows, want 6 and 6".format(nb, ns))
+    return p
+
+
+# The engine's trailer lines after a transcript summary row's body (fix-escalations item 1). Core
+# built option (b): the transcript-row reader cuts them itself (transcript.pm @ENGINE_TRAILERS,
+# core-escalations E-C9-12) and the shipped copy_trailers stay empty. The joins reference cuts the
+# same three prefixes, so join (b) is proven the way core reads a row (and under option (a) alike).
+ENGINE_TRAILERS = [re.compile(r"^If you need specific details from before compaction \("),
+                   re.compile(r"^Continue the conversation from where it left off without asking"),
+                   re.compile(r"^The messages after this summary are the most recent messages from before compaction")]
+
+
+def join_ref(c, summ, bounds, pay, b, taken=()):
+    """C-STORE D5 join order for an unmarked copy (no nonce, so no join a), over the boundary rows
+    no earlier copy has joined (`taken`: the case's joined_before agents): (b) one agent whose
+    summary row's normalized body (engine trailers cut) has the copy's sha; else (c) by time, with
+    the candidate count of core-escalations E-C9-10 (core-to-fix 3; provisional until the root
+    rules on it): every agent with a free boundary row within SUB_WINDOW_S on either side of the
+    PostCompact time t counts; exactly one, with its row in the P3 sub window
+    [t - TOL_S, t + SUB_WINDOW_S] -> fill; several -> copy_attribution_ambiguous with them;
+    else no fill, no row. Returns (outcome, all sha holders, the candidates)."""
+    sha = detect(fill(pay["compact_summary"], b), b["name"])[5]
+    holders = sorted(a for a, r in summ.items() if detect(fill(row_text(r), b), b["name"], trailers=ENGINE_TRAILERS)[5] == sha)
+    free = [a for a in holders if a not in taken]
+    if len(free) == 1:
+        return {"filled": True, "agent": free[0], "attributed_by": "reconcile-b"}, holders, []
+    t = parse_iso(c["postcompact_now"])
+    cands = sorted(a for a, e in bounds.items()
+                   if a not in taken and t is not None and e is not None and abs(e - t) <= SUB_WINDOW_S)
+    if len(cands) == 1:
+        if t - TOL_S <= bounds[cands[0]] <= t + SUB_WINDOW_S:
+            return {"filled": True, "agent": cands[0], "attributed_by": "reconcile-c"}, holders, cands
+        return {"filled": False}, holders, cands
+    if cands:
+        return {"filled": False, "row": "copy_attribution_ambiguous", "candidates": cands}, holders, cands
+    return {"filled": False}, holders, cands
+
+
+def check_joins(b):
+    p = []
+    m = json.loads(read(os.path.join(TRANSCRIPTS, "fill-joins", "joins.json")))
+    summ, bounds = {}, {}
+    for k, agent in m["agents"].items():
+        rows = jsonl_rows("transcripts/fill-joins/subagents/agent-{}.jsonl".format(agent))
+        bs = [r for r in rows if r.get("subtype") == "compact_boundary"]
+        ss = [r for r in rows if r.get("isCompactSummary") is True]
+        if len(bs) != 1 or len(ss) != 1 or bs[0]["timestamp"] != m["boundaries"][k]:
+            p.append("fill-joins {}: one boundary row at {} and one summary row".format(k, m["boundaries"][k]))
+            continue
+        if detect(fill(row_text(ss[0]), b), b["name"])[3] is not None:
+            p.append("fill-joins {}: the summary row must be unmarked".format(k))
+        if detect(fill(row_text(ss[0]), b), b["name"])[5] == detect(fill(row_text(ss[0]), b), b["name"], trailers=ENGINE_TRAILERS)[5]:
+            p.append("fill-joins {}: the summary row must end with the engine trailers (the transcript form)".format(k))
+        summ[agent], bounds[agent] = ss[0], parse_iso(bs[0]["timestamp"])
+    times = [parse_iso(t) for t in m["boundaries"].values()]
+    if None in times or max(times) - min(times) >= SUB_WINDOW_S:
+        p.append("fill-joins: both boundary rows must sit inside one {} s window".format(SUB_WINDOW_S))
+    seen = set()
+    for c in m["cases"]:
+        w = "fill-joins {}".format(c["id"])
+        seen.add(c["id"])
+        try:
+            pay = payload_of(c["payload"], m["sid"])
+        except (OSError, ValueError) as e:
+            p.append("{}: {}".format(w, e))
+            continue
+        if detect(fill(pay["compact_summary"], b), b["name"])[3] is not None:
+            p.append("{}: the payload summary must be unmarked".format(w))
+        before = c.get("joined_before", [])
+        if not set(before) <= set(m["agents"]):
+            p.append("{}: joined_before names no agent of the manifest: {}".format(w, sorted(set(before) - set(m["agents"]))))
+        taken = {m["agents"][k] for k in before if k in m["agents"]}
+        ref, holders, cands = join_ref(c, summ, bounds, pay, b, taken)
+        if c["id"] == "two-sided":   # the E-C9-10 pin must separate the readings
+            t = parse_iso(c["postcompact_now"])
+            one = [a for a, e in bounds.items() if a not in taken and t is not None and e is not None
+                   and t - TOL_S <= e <= t + SUB_WINDOW_S]
+            if len(one) != 1 or len(cands) < 2:
+                p.append("{}: the one-sided P3 window must hold exactly one candidate ({}) and the two-sided "
+                         "count several ({}), or the case does not pin E-C9-10".format(w, one, cands))
+        lines = sorted(a for a, r in summ.items() if not body_lines_in(pay["compact_summary"], r, b))
+        if lines != holders:
+            p.append("{}: every body line is in the rows of {}, but the sha (engine trailers cut) matches {}".format(w, lines, holders))
+        e = c["expect"]
+        if "fault" in c:
+            if not ref.get("filled"):
+                p.append("{}: without the fault the join gives {}, so the fault proves nothing".format(w, ref))
+            if not (c["fault"].get("env") and e.get("filled") is False and e.get("row") == "copy_attribution_failed"
+                    and e.get("old_file", "").startswith("kept") and e.get("new_file") == "absent"
+                    and "copy_attributed" in e.get("rows_absent", [])):
+                p.append("{}: a verify failure keeps the old file, leaves no new file and writes copy_attribution_failed "
+                         "and no copy_attributed (C-STORE D5 step 3)".format(w))
+            continue
+        got = {k: e.get(k) for k in ref}
+        if got != ref or set(e) - set(ref) - {"note"}:
+            p.append("{}: expect {} but the D5 join order gives {} (sha holders {}, window candidates {})".format(
+                w, e, ref, holders, cands))
+    for need in ("sha-join", "ambiguous", "time-join", "verify-fail", "two-sided"):
+        if need not in seen:
+            p.append("fill-joins: no {} case (AT-ST-09)".format(need))
+    return p
+
+
+def check_idle(b):
+    p = []
+    m = json.loads(read(os.path.join(TRANSCRIPTS, "idle-cases.json")))
+    for c in m["cases"]:
+        w = "idle-cases {}".format(c["id"])
+        rows = jsonl_rows(c["transcript"] + "/main.jsonl")
+        main_b = [i for i, r in enumerate(rows) if r.get("subtype") == "compact_boundary" and not r.get("isSidechain")]
+        if len(main_b) != 1 or (rows[main_b[0]].get("compactMetadata") or {}).get("trigger") != "auto":
+            p.append("{}: one main boundary row with trigger auto".format(w))
+            continue
+        native = None
+        for r in rows[main_b[0] + 1:]:
+            if r.get("type") == "system":
+                for k, pre in sorted(m["prefixes"].items()):
+                    if str(r.get("content", "")).startswith(pre):
+                        native = k
+                if native:
+                    break
+        summ = [r for r in rows if r.get("isCompactSummary") is True]
+        if len(summ) != 1 or detect(fill(row_text(summ[0]), b), b["name"])[3] != m["nonce"]:
+            p.append("{}: one summary row with marker nonce {}".format(w, m["nonce"]))
+        d = json.loads(read(os.path.join(FIX, c["dispatch"])))
+        if d.get("nonce") != m["nonce"] or not isinstance(d.get("idle"), bool) or d.get("channel") != "mod-hook":
+            p.append("{}: {} must be a mod-hook dispatch for {} with a boolean idle".format(w, c["dispatch"], m["nonce"]))
+            continue
+        mod = d["idle"]
+        source = "both" if mod and native else "mod" if mod else native or "none"
+        want = {"idle": bool(mod or native), "idle_source": source, "idle_mismatch": int(bool(mod) != bool(native))}
+        got = {k: c["expect"].get(k) for k in want}
+        if got != want:
+            p.append("{}: expect {} but the IC-1 D1 rule gives {}".format(w, got, want))
+        ends = [r for r in rows if r.get("type") == "assistant" and not r.get("isSidechain")]
+        if not ends or ends[-1]["timestamp"] != m["last_turn_end"]:
+            p.append("{}: the last main assistant row must end at last_turn_end".format(w))
+        gap = parse_iso(m["dispatch_ts"]) - parse_iso(m["last_turn_end"])
+        if int(gap) != m["idle_gap_s"] or gap < 1500:
+            p.append("{}: idle_gap_s {} must be the dispatch ts minus the last turn end and at least 1,500 s".format(w, m["idle_gap_s"]))
+    return p
+
+
+def check_manifests(b):
+    problems, n = [], 0
+    for name, fn in (("P5-replay/replay.json", check_replay), ("fill-joins/joins.json", check_joins), ("idle-cases.json", check_idle)):
+        if not os.path.exists(os.path.join(TRANSCRIPTS, name)):
+            problems.append("manifests: transcripts/{} missing".format(name))
+            continue
+        n += 1
+        try:
+            problems += fn(b)
+        except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
+            problems.append("manifests transcripts/{}: {}: {}".format(name, type(e).__name__, e))
+    return problems, n
 # The scope-proof table (transcripts/scope-cases.json; MOD-SPEC §2.4 as amended by ROOT-RULINGS F2-1).
 SCOPE_CASES = os.path.join(FIX, "transcripts", "scope-cases.json")
 SCOPE_KEYS = {"expect_scope": True, "expect_scope_postcompact": False}   # key -> P3 counted
@@ -1130,7 +2376,8 @@ def rename_drill(b):
     problems = []
     tmp = tempfile.mkdtemp(prefix="fixtures-gen-drill-")
     try:
-        for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md")):
+        for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md"),
+                    os.path.join("plugin", "assets", "canary-baseline.json")):
             if os.path.exists(os.path.join(REPO, rel)):
                 os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
                 shutil.copy2(os.path.join(REPO, rel), os.path.join(tmp, rel))
@@ -1179,23 +2426,40 @@ def check(b):
                     except ValueError as e:
                         problems.append("parse {}:{}: {}".format(rel, no, e))
     print("parse: {} json files and every jsonl line checked".format(njson))
-    # expected
-    rows = read_expected()
-    want = {r["file"]: r for r in rows}
-    files = summary_files()
-    if sorted(want) != files:
-        problems.append("expected.tsv files {} != summaries {}".format(sorted(set(want) ^ set(files)), ""))
-    for r in expected_rows(b, {k: v["dispatch"] for k, v in want.items()}):
-        w = want.get(r["file"])
-        if w and w != r:
-            diff = ["{} {}!={}".format(c, w[c], r[c]) for c in COLUMNS if w[c] != r[c]]
-            problems.append("expected {}: {}".format(r["file"], ", ".join(diff)))
-    print("expected: {} corpus files against the reference detector".format(len(files)))
+    # expected (every corpus table: the main corpus and summaries/p5)
+    nfiles, ntables = 0, 0
+    for d, path in tables():
+        ntables += 1
+        tname = os.path.relpath(path, FIX)
+        if not os.path.exists(path):
+            problems.append("expected {}: missing".format(tname))
+            continue
+        rows = read_expected(path)
+        want = {r["file"]: r for r in rows}
+        files = summary_files(d)
+        nfiles += len(files)
+        if sorted(want) != files:
+            problems.append("{} files and the .txt files differ: {}".format(tname, sorted(set(want) ^ set(files))))
+        for r in expected_rows(b, {k: v["dispatch"] for k, v in want.items()}, d):
+            w = want.get(r["file"])
+            if w and w != r:
+                diff = ["{} {}!={}".format(c, w[c], r[c]) for c in COLUMNS if w[c] != r[c]]
+                problems.append("expected {}: {}".format(os.path.relpath(os.path.join(d, r["file"]), SUMMARIES), ", ".join(diff)))
+    print("expected: {} corpus files in {} tables against the reference detector".format(nfiles, ntables))
     # secrets
     rules, source = load_rules()
     targets = list(walk(FIX)) + [os.path.join(REPO, "tools", "fixtures-gen")]
     rendered = render(b)
-    texts = [(os.path.relpath(p, REPO), read(p)) for p in targets]
+    texts = []
+    for p in targets:
+        rel = os.path.relpath(p, REPO)
+        if p.endswith(".zip"):
+            texts += [(rel + "!" + n, t) for n, t in zip_texts(p)]
+            continue
+        try:
+            texts.append((rel, read(p)))
+        except UnicodeDecodeError:
+            problems.append("secrets {}: not UTF-8 text and not a zip, so it cannot be scanned".format(rel))
     texts += [(os.path.join(GEN_REL, n), t) for n, t in rendered.items()]
     for rel, text in texts:
         for rid, cls in scan(fill(text, b), rules):
@@ -1227,6 +2491,9 @@ def check(b):
             problems.append("secrets name {}: deny-list says {}".format(n["name"], deny_name(n["name"])))
     print("secrets: {} files scanned with the {} rule set; {} corpus entries, {} names".format(
         len(texts), source, len(corpus["entries"]), len(corpus["names"])))
+    bd2_problems, nbd2 = check_bd2(corpus)
+    problems += bd2_problems
+    print("bd2: every corpus entry redacted once per merged span (C-STORE D6); {} pins checked".format(nbd2))
     # sequences
     seq_problems, nseq = check_sequences()
     problems += seq_problems
@@ -1238,14 +2505,31 @@ def check(b):
     # queue
     queue_problems, nqueue = check_queue()
     problems += queue_problems
-    print("queue: {} JSON list answers in the queue-stub/v1 shape, add answers per the D-10 exit table".format(nqueue))
+    print("queue: {} JSON list answers against the strict v1 contract (QA-2), adopt answers per the QA-2 exit table, add answers per D-10".format(nqueue))
     # setups, settings
     setup_problems, nsetup = check_setups(b)
     problems += setup_problems
     print("setups: {} recipes built in temp dirs and checked (D-12 repos, Dev-1 scenarios)".format(nsetup))
+    stub_problems, nstub = check_stubs(b)
+    problems += stub_problems
+    print("stubs: {} PATH stub proven on a temp repo (bin/git-noexclude keeps a path the real git excludes)".format(nstub))
     settings_problems, nsettings = check_settings()
+    prod_problems, nprod = check_prod()
+    problems += prod_problems
+    print("prod: {} recorded commands classed by the BUILD-PLAN §3.7 effects order (S-SETTINGS B, C)".format(nprod))
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))
+    runtime_problems, nruntime = check_runtime()
+    problems += runtime_problems
+    print("runtime: assembly/runtime.json's {} keys cover every token tools/assemble fills (BT-04-H)".format(nruntime))
+    # beta
+    beta_problems, nbeta = check_beta()
+    problems += beta_problems
+    print("beta: {} analyzer zips against the W-BETA F.1 intake and F.2 verify reference".format(nbeta))
+    # manifests
+    man_problems, nman = check_manifests(b)
+    problems += man_problems
+    print("manifests: {} transcript manifests agree with their payloads, records and corpus files".format(nman))
     # stamps
     stamp_problems, nstamp, nlegacy = check_stamps()
     problems += stamp_problems
@@ -1292,7 +2576,7 @@ def main(argv):
         root = os.path.abspath(argv[1])
         if root == REPO:
             die("--out must not be the repo; run without arguments instead")
-        write(root, b, sha_refreshed(b)[0])
+        write(root, b, {path: sha_refreshed(b, d, path)[0] for d, path in tables()})
         return 0
     if argv == ["--clean"]:
         for name in GEN_FILES:
@@ -1301,9 +2585,18 @@ def main(argv):
                 os.unlink(p)
                 print("removed " + os.path.join(GEN_REL, name))
         return 0
-    if argv == ["--print-expected"]:
-        refs = {r["file"]: r["dispatch"] for r in read_expected()} if os.path.exists(EXPECTED) else {}
-        sys.stdout.write(tsv(expected_rows(b, refs)))
+    if argv[:1] == ["--print-expected"] and len(argv) <= 2 and set(argv[1:]) <= set(SUB_TABLES):
+        d = os.path.join(SUMMARIES, argv[1]) if argv[1:] else SUMMARIES
+        path = os.path.join(d, "expected.tsv")
+        refs = {}
+        if os.path.exists(path):   # only the file and dispatch columns, by header name (authoring aid)
+            with open(path, encoding="utf-8") as f:
+                head = f.readline().rstrip("\n").split("\t")
+                for line in f:
+                    r = dict(zip(head, line.rstrip("\n").split("\t")))
+                    if r.get("file"):
+                        refs[r["file"]] = r.get("dispatch", "")
+        sys.stdout.write(tsv(expected_rows(b, refs, d)))
         return 0
     if argv == ["--refresh-sha"]:
         if not refresh_sha(b):

@@ -1,0 +1,1 @@
+{"schema": "queue-stub/v1", "session": "5e55a001-0c0f-4f1e-9a00-00000000a001", "lane": "lane:repo/x", "label": "repo x", "open": 2, "pending": 2, "preview": false, "held_by": "5e55a001-0c0f-4f1e-9a00-00000000a001", "commands": ["list", "adopt"], "lanes": [{"id": "lane:repo/x", "holder": "5e55a001-0c0f-4f1e-9a00-00000000a001", "open": 2, "preview": false}]}
