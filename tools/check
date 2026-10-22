@@ -306,6 +306,17 @@ def probes(name):
         rows = ["| # | Finding (first matching row wins) | Status | Same session or successor | Other relation |",
                 "|---|---|---|---|---|"] + ["| {} | f | s | a | b |".format(r) for r in ("1", "2a", "2b", "3", "4", "5", "6", "7")]
         append(d, "plugin/skills/resume/references/self-heal.md", "\n" + "\n".join(rows) + "\n")
+        # CR-F36 / CR-F27: the old "run the row's own probe" wording back, the two rules gone.
+        p = os.path.join(d, "plugin", "skills", "resume", "references", "self-heal.md")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t = t.replace("Never run a row's `probe` cell", "Run the row").replace("route on the `verdict:` status", "route")
+        write_text(p, t + "\n**5b Probe** each row once, with its `probe` if read-only, else the default.\n"
+                   "- `peer` → the row's own probe only if read-only, else report.\n")
+        p = os.path.join(d, "plugin", "assets", "resume-context.txt")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        write_text(p, t.replace(" (never run row text)", ""))
 
     def config_defaults(d):
         p = os.path.join(d, "plugin", ".claude-plugin", "plugin.json")
@@ -319,6 +330,14 @@ def probes(name):
 
     def resume_hard(d):
         append(d, "src/assets/resume-context.txt", "x" * 600 + "\n")
+
+    def halt_promise(d):
+        """CR-F30/F35: the 28ef06d nudge wording back in the halted path."""
+        p = os.path.join(d, "src", "assets", "checkpoint-nudge.txt")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t = t.replace("only if auto-continue is off or at its hourly limit", "at once")
+        write_text(p, t + "Copy no evidence: after this turn the plugin copies the temp files this session cited.\n")
 
     def owners_prep(d):
         git_repo(d)
@@ -473,13 +492,21 @@ def probes(name):
          [r"^GATE write-first plugin/skills/handoff/SKILL\.md:\d+: AT-SK-03 before-final"], None),
         ("self-heal", "AT-J-13", gates_only("self-heal"), self_heal,
          [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 20480$",
-          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows"], None),
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): 'with its `probe` if read-only'",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): \"the row's own probe only if read-only\"",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md: AT-J-13 probe-rule-missing \(CR-F36/F27\): no \"Never run a row's `probe` cell\"",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md: AT-J-13 probe-rule-missing \(CR-F36/F27\): no 'route on the `verdict:` status'",
+          r"^GATE self-heal plugin/assets/resume-context\.txt:\d+: AT-J-13 step3-row-text"], None),
         ("config-defaults", "AT-WD-02", gates_only("config-defaults"), config_defaults,
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days"], None),
         ("resume-hard", "DP-8", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
+        ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
+         [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",
+          r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),
         ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
         ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,

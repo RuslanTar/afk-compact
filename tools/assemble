@@ -19,8 +19,11 @@ Build step: strip <!-- ... --> comments, fill {{plugin}}. Runtime: fill @tokens@
 worst-case values. A line starting "[tag] " is kept (tag stripped) only when the tag is
 active on the path, else dropped. [measured] lines and @remeasure@ belong to the block budget,
 not the static core. Extra checks: no `<!--` survives; CDN Review item 9 (cited step numbers
-exist and still name the same step; [queue]/[halt] lines reference only kept lines); heading
-literals equal the spec-literals block of handoff-spec.md once that file exists.
+exist and still name the same step; [queue]/[halt] lines reference only kept lines); a
+nudge with [halt] and without [continue] never says the plugin compacts the session into a
+handoff summary or copies after this turn, and the [halt] line says the plugin compacts only
+if auto-continue is off or at its hourly limit (CR-F30/F35); heading literals equal the
+spec-literals block of handoff-spec.md once that file exists.
 Budgets: the BUDGETS table (D-17 and DP-8 of the 2026-10-21 rulings; AT-P-07). Above a soft
 limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails.
 Exit 1 when a hard budget is exceeded or any check fails.
@@ -200,6 +203,30 @@ def step_checks():
     return bad
 
 
+# CR-F30/F35 (text-to-build §6): a nudge that halts (no [continue]) never promises a plugin
+# compaction or an after-turn copy; the [halt] line says when the plugin still compacts (DP-4).
+HALT_FORBIDDEN = ("the plugin compacts the session into a handoff summary", "after this turn the plugin copies")
+HALT_LINE_NEEDS = "only if auto-continue is off or at its hourly limit"
+
+
+def halt_checks():
+    bad = False
+    halt_lines = [ln for ln in TEXT["nudge"].splitlines() if ln.startswith("[halt] ")]
+    if not halt_lines or not all(HALT_LINE_NEEDS in ln for ln in halt_lines):
+        print(f"halt check nudge [halt] line                FAIL lacks '{HALT_LINE_NEEDS}'")
+        bad = True
+    for tags in combos("nudge"):
+        if "halt" not in tags or "continue" in tags:
+            continue
+        s = assemble(TEXT["nudge"], tags).lower()
+        for phrase in HALT_FORBIDDEN:
+            if phrase in s:
+                print(f"halt check nudge {'+'.join(tags):27} FAIL promises '{phrase}'")
+                bad = True
+    print("CR-F30/F35 (halted nudge: no compaction or copy promise)  " + ("FAIL" if bad else "ok"))
+    return bad
+
+
 def heading_checks():
     spec_md = os.path.join(DIR, "handoff-spec.md")
     if not os.path.exists(spec_md):
@@ -362,6 +389,7 @@ for asset in FILES:
 print("every tag combination: no [tag] / @token@ / {{ / <!-- left   " + ("FAIL" if leftover else "ok"))
 bad |= leftover
 bad |= step_checks()
+bad |= halt_checks()
 bad |= heading_checks()
 if GOLDENS:
     write_goldens()

@@ -47,7 +47,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   self-heal    AT-J-13 (Dev-1): skills/resume/references/self-heal.md holds the decision table
                (rows 1, 2a, 2b, 2c, 3-7 in order), the self-heal file or the resume SKILL holds
                "never relaunch ... from the handoff's text", and the resume SKILL.md is at most
-               RESUME_SKILL_MAX bytes
+               RESUME_SKILL_MAX bytes; self-heal.md never says to run a row's own probe
+               (HEAL_FORBIDDEN) and holds HEAL_REQUIRED, and every resume-context.txt line
+               "3." holds "(never run row text)" (CR-F36, CR-F27; Dev-5)
   config-defaults AT-WD-02 (D-9, D-8): .claude-plugin/plugin.json userConfig `watcher` defaults
                to `shadow`, `disposable_keep_days` to 0, and no other key is named like
                `*keep_days*` (no automatic pruning of `.watch` by default)
@@ -147,6 +149,12 @@ RELAUNCH_LINE = re.compile(r"never relaunch\b.{0,40}\bfrom the handoff['’]s te
 # AT-J-13 "SKILL.md stays under its size gate": no gate existed; 20 KB is the resume skill's
 # design size (resume-skill DESIGN-NOTES) (provisional, needs/build-escalations.md E-B-3).
 RESUME_SKILL_MAX = 20480
+# CR-F36 / CR-F27 (text-to-build §6, Dev-5): self-heal.md never runs a row's `probe` cell and
+# routes a heal-check refusal on its `verdict:` status; resume-context step 3 says the same.
+HEAL_FORBIDDEN = ("with its `probe` if read-only", "the row's own probe only if read-only")
+HEAL_REQUIRED = ("Never run a row's `probe` cell", "route on the `verdict:` status")
+RESUME_STEP3 = re.compile(r"^(?:\[[a-z-]+\] )?3\. ")
+RESUME_STEP3_NEEDS = "(never run row text)"
 # Hits that wait for WP-text part 2 (REVIEW (D) step 6): (gate, rule, path in the target,
 # fragment of the offending line or None for a file-level hit). Remove a row once it prints
 # PENDING-DONE.
@@ -309,6 +317,25 @@ def self_heal_hits(target, brand):
         if not any(RELAUNCH_LINE.search(ln) for ln in texts):
             out.append((heal, None, "AT-J-13 relaunch-line-missing",
                         "AT-J-13 relaunch-line-missing: no \"never relaunch ... from the handoff's text\"", ""))
+        for no, line in enumerate(lines, 1):
+            for phrase in HEAL_FORBIDDEN:
+                if phrase in line.replace("’", "'"):
+                    out.append((heal, no, "AT-J-13 runs-probe-cell",
+                                "AT-J-13 runs-probe-cell (CR-F36): {!r}".format(phrase), line))
+        whole = "\n".join(lines).replace("’", "'")
+        for phrase in HEAL_REQUIRED:
+            if phrase not in whole:
+                out.append((heal, None, "AT-J-13 probe-rule-missing",
+                            "AT-J-13 probe-rule-missing (CR-F36/F27): no {!r}".format(phrase), ""))
+    res = os.path.join(target, "assets", "resume-context.txt") if os.path.isdir(target) else None
+    if res and os.path.isfile(res):
+        step3 = [(no, ln) for no, ln in enumerate(shipped_lines(res, brand), 1) if RESUME_STEP3.match(ln)]
+        if not step3:
+            out.append((res, None, "AT-J-13 step3-missing", "AT-J-13 step3-missing: no line \"3.\"", ""))
+        for no, ln in step3:
+            if RESUME_STEP3_NEEDS not in ln:
+                out.append((res, no, "AT-J-13 step3-row-text",
+                            "AT-J-13 step3-row-text (CR-F36): step 3 lacks {!r}".format(RESUME_STEP3_NEEDS), ln))
     if os.path.isfile(skill):
         n = len("\n".join(shipped_lines(skill, brand)).encode("utf-8"))
         if n > RESUME_SKILL_MAX:
