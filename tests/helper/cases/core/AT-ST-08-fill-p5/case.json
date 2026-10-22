@@ -1,0 +1,434 @@
+{
+   "id" : "AT-ST-08 (fill by nonce, P5 replay)",
+   "needs" : [
+      "fixture:transcripts/P5-replay/replay.json"
+   ],
+   "note" : "C-STORE D5 / MOD-SPEC Â§5.9 (CORE-09) on the WP-fix P5 replay (lab e1-131fc3 under the seat): six PostCompacts with a classic dispatch and an s=sub marker save six sub-unknown copies; the next Stop reads the agent transcript's boundary and summary rows (nonce and sha only) and fills all six by nonce: -aa494e1b0_c1..6-<id6>.md, actor = the agent id, renamed_from, attributed_by reconcile-a, mode 0400, six copy_attributed rows with the boundary sizes, the old names gone, nothing else added; a second Stop is a no-op. Skipped until the WP-fix fixtures are merged (tests/helper/run.pl --fixtures DIR checks it before).",
+   "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
+   "steps" : [
+      {
+         "name" : "transcripts",
+         "setup" : [
+            {
+               "mkdir" : "$TMP/example-repo"
+            },
+            {
+               "copy" : "transcripts/P5-replay/main.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+            },
+            {
+               "copy" : "transcripts/P5-replay/subagents/agent-a494e1b0fa1a73786.jsonl",
+               "subst" : true,
+               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a494e1b0fa1a73786.jsonl"
+            }
+         ]
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c1-da24cc.md"
+               }
+            ]
+         },
+         "name" : "PostCompact c1 (classic dispatch, s=sub: a sub-unknown copy)",
+         "now" : "2026-10-21T14:00:57.036+03:00",
+         "setup" : [
+            {
+               "copy" : "watch/dispatch-da24cc4a.json",
+               "subst" : true,
+               "to" : "$WATCH/$SID/dispatch/da24cc4a.json"
+            }
+         ],
+         "stdin" : "payloads/PostCompact/p5-c1.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c2-f5d2cc.md"
+               }
+            ]
+         },
+         "name" : "PostCompact c2 (classic dispatch, s=sub: a sub-unknown copy)",
+         "now" : "2026-10-21T14:01:08.080+03:00",
+         "setup" : [
+            {
+               "copy" : "watch/dispatch-f5d2ccf6.json",
+               "subst" : true,
+               "to" : "$WATCH/$SID/dispatch/f5d2ccf6.json"
+            }
+         ],
+         "stdin" : "payloads/PostCompact/p5-c2.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c3-d21582.md"
+               }
+            ]
+         },
+         "name" : "PostCompact c3 (classic dispatch, s=sub: a sub-unknown copy)",
+         "now" : "2026-10-21T14:01:18.235+03:00",
+         "setup" : [
+            {
+               "copy" : "watch/dispatch-d2158267.json",
+               "subst" : true,
+               "to" : "$WATCH/$SID/dispatch/d2158267.json"
+            }
+         ],
+         "stdin" : "payloads/PostCompact/p5-c3.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c4-4dae03.md"
+               }
+            ]
+         },
+         "name" : "PostCompact c4 (classic dispatch, s=sub: a sub-unknown copy)",
+         "now" : "2026-10-21T14:01:30.789+03:00",
+         "setup" : [
+            {
+               "copy" : "watch/dispatch-4dae03c4.json",
+               "subst" : true,
+               "to" : "$WATCH/$SID/dispatch/4dae03c4.json"
+            }
+         ],
+         "stdin" : "payloads/PostCompact/p5-c4.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c5-228e0c.md"
+               }
+            ]
+         },
+         "name" : "PostCompact c5 (classic dispatch, s=sub: a sub-unknown copy)",
+         "now" : "2026-10-21T14:01:42.811+03:00",
+         "setup" : [
+            {
+               "copy" : "watch/dispatch-228e0cc9.json",
+               "subst" : true,
+               "to" : "$WATCH/$SID/dispatch/228e0cc9.json"
+            }
+         ],
+         "stdin" : "payloads/PostCompact/p5-c5.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c6-084ad8.md"
+               }
+            ]
+         },
+         "name" : "PostCompact c6 (classic dispatch, s=sub: a sub-unknown copy)",
+         "now" : "2026-10-21T14:01:53.340+03:00",
+         "setup" : [
+            {
+               "copy" : "watch/dispatch-084ad868.json",
+               "subst" : true,
+               "to" : "$WATCH/$SID/dispatch/084ad868.json"
+            }
+         ],
+         "stdin" : "payloads/PostCompact/p5-c6.json"
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "attributed_at" : "*",
+                     "attributed_by" : "reconcile-a",
+                     "compaction_seq" : "1",
+                     "nonce" : "da24cc4a",
+                     "renamed_from" : "/_5e55a001_c1-da24cc\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c1-da24cc.md"
+               },
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "attributed_at" : "*",
+                     "attributed_by" : "reconcile-a",
+                     "compaction_seq" : "2",
+                     "nonce" : "f5d2ccf6",
+                     "renamed_from" : "/_5e55a001_c2-f5d2cc\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c2-f5d2cc.md"
+               },
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "attributed_at" : "*",
+                     "attributed_by" : "reconcile-a",
+                     "compaction_seq" : "3",
+                     "nonce" : "d2158267",
+                     "renamed_from" : "/_5e55a001_c3-d21582\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c3-d21582.md"
+               },
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "attributed_at" : "*",
+                     "attributed_by" : "reconcile-a",
+                     "compaction_seq" : "4",
+                     "nonce" : "4dae03c4",
+                     "renamed_from" : "/_5e55a001_c4-4dae03\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c4-4dae03.md"
+               },
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "attributed_at" : "*",
+                     "attributed_by" : "reconcile-a",
+                     "compaction_seq" : "5",
+                     "nonce" : "228e0cc9",
+                     "renamed_from" : "/_5e55a001_c5-228e0c\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c5-228e0c.md"
+               },
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "attributed_at" : "*",
+                     "attributed_by" : "reconcile-a",
+                     "compaction_seq" : "6",
+                     "nonce" : "084ad868",
+                     "renamed_from" : "/_5e55a001_c6-084ad8\\.md$/"
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c6-084ad8.md"
+               },
+               {
+                  "count" : 6,
+                  "path" : "$ROOT/*/*/compact/subagents/*.md"
+               },
+               {
+                  "count" : 0,
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001_c*.md"
+               }
+            ],
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "id6" : "da24cc",
+                     "nonce" : "da24cc4a",
+                     "post_tokens" : 4866,
+                     "pre_tokens" : 69974,
+                     "proof" : "a",
+                     "seq" : 1
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               },
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "id6" : "f5d2cc",
+                     "nonce" : "f5d2ccf6",
+                     "post_tokens" : 5340,
+                     "pre_tokens" : 71757,
+                     "proof" : "a",
+                     "seq" : 2
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               },
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "id6" : "d21582",
+                     "nonce" : "d2158267",
+                     "post_tokens" : 5269,
+                     "pre_tokens" : 72512,
+                     "proof" : "a",
+                     "seq" : 3
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               },
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "id6" : "4dae03",
+                     "nonce" : "4dae03c4",
+                     "post_tokens" : 5424,
+                     "pre_tokens" : 72512,
+                     "proof" : "a",
+                     "seq" : 4
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               },
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "id6" : "228e0c",
+                     "nonce" : "228e0cc9",
+                     "post_tokens" : 5398,
+                     "pre_tokens" : 72910,
+                     "proof" : "a",
+                     "seq" : 5
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               },
+               {
+                  "count" : 1,
+                  "ev" : "copy_attributed",
+                  "fields" : {
+                     "actor" : "a494e1b0fa1a73786",
+                     "id6" : "084ad8",
+                     "nonce" : "084ad868",
+                     "post_tokens" : 5473,
+                     "pre_tokens" : 72716,
+                     "proof" : "a",
+                     "seq" : 6
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ],
+            "rows_absent" : [
+               {
+                  "ev" : "copy_attribution_failed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               },
+               {
+                  "ev" : "copy_attribution_ambiguous",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "Stop: fill by nonce",
+         "now" : "2026-10-21T14:02:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/example-repo",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 6,
+                  "path" : "$ROOT/*/*/compact/subagents/*.md"
+               },
+               {
+                  "count" : 6,
+                  "path" : "$ROOT/*/*/compact/subagents/*-aa494e1b0_c*.md"
+               }
+            ],
+            "rows" : [
+               {
+                  "count" : 6,
+                  "ev" : "copy_attributed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "a second Stop is a no-op",
+         "now" : "2026-10-21T14:03:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/example-repo",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+         }
+      }
+   ],
+   "tz" : "Etc/GMT-3"
+}

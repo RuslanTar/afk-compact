@@ -52,7 +52,7 @@ sub _load {
     my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
     $j = {} unless ref $j eq 'HASH' && ($j->{v} // 0) == 1;
     $j->{v} = 1;
-    for my $k (qw(classic rolls main subs copied logged done mism)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
+    for my $k (qw(classic rolls main subs copied logged done mism fill)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
     for my $k (qw(pre rolls_l bounds sbounds)) { $j->{$k} = [] unless ref $j->{$k} eq 'ARRAY' }
     return $j;
 }
@@ -140,12 +140,84 @@ sub _ingest_bounds {
     my ($lines, $to_end) = _new_lines($path, $fst);
     my %seen = map { (($_->{u} // '') => 1) } @$list;
     for my $l (@$lines) {
+        # An agent file's summary row after a boundary (MOD-SPEC §5.9 step 1): its marker nonce
+        # and normalized-body sha only, on the newest boundary of that agent that has none yet
+        # (a boundary read in an earlier chunk is carried in the saved state).
+        if (defined $agent && (my $sf = transcript::summary_facts($l))) {
+            my ($last) = grep { ($_->{a} // '') eq $agent } reverse @$list;
+            if ($last && !$last->{s}) { $last->{s} = 1; $last->{n} = $sf->{n}; $last->{h} = $sf->{h} }
+            next;
+        }
         my $bd = transcript::boundary($l) or next;
         next if defined $bd->{uuid} && $seen{ $bd->{uuid} }++;
         push @$list, { u => $bd->{uuid}, e => $bd->{epoch}, pc => $bd->{precomputed}, pre => $bd->{pre}, post => $bd->{post},
                        ms => $bd->{duration_ms}, (defined $agent ? (a => $agent) : ()), by => undef };
     }
     return $to_end;
+}
+
+# ---------------------------------------------------------------- fill (MOD-SPEC §5.9)
+# A PostCompact whose copy may be a sub-unknown one: proven sub (P2, or P3 at this reconcile)
+# with no agent id from P1.
+sub _fill_cand { my ($it) = @_; return !defined $it->{agent} && ($it->{scope} eq 'sub' || ($it->{p3} // '') eq 'sub') ? 1 : 0 }
+
+# A sub-unknown copy in compact/subagents/ gets its agent from a subagent boundary row:
+# (a) the row's summary nonce equals the copy's nonce; (b) the row's summary sha equals the
+# copy's body sha; (c) time only, when exactly one agent has an unjoined boundary row inside
+# the copy's window. Otherwise copy_attribution_ambiguous (once). Only PostCompact copies this
+# reconcile has metas for (the pool); a copy already named -a<agent8> is never touched.
+sub _fill {
+    my ($st, $pool, $n, $subs_end, $left) = @_;
+    my $root = rc::root();
+    my $logged = $st->{logged};
+    my @sb = @{ $st->{sbounds} };
+    for my $it (grep { _fill_cand($_) } @$pool) {
+        last if !$left->();
+        my $id6 = $it->{id6};
+        next if $st->{fill}{$id6};
+        my $rel = $st->{copied}{$id6};
+        next unless defined $rel && $rel ne '';    # not saved yet
+        my $path = "$root/$rel";
+        my ($csha, $fm) = -f $path ? copies::copy_sha($path) : (undef, undef);
+        if (!$fm || ($fm->{actor} // '') ne 'sub-unknown' || $rel !~ m{(?:\A|/)compact/subagents/[^/]+\z} || util::basename($rel) =~ /_[0-9a-z]{8}-a/) {
+            $st->{fill}{$id6} = 'n/a';    # not a sub-unknown copy in compact/subagents/
+            next;
+        }
+        my ($bd, $proof);
+        my $free = sub { !defined $_[0]{f} };
+        if (defined $fm->{nonce} && $fm->{nonce} ne '') { ($bd) = grep { $free->($_) && defined $_->{n} && $_->{n} eq $fm->{nonce} } @sb; $proof = 'a' if $bd }
+        if (!$bd && defined $csha) { ($bd) = grep { $free->($_) && defined $_->{h} && $_->{h} eq $csha } @sb; $proof = 'b' if $bd }
+        if (!$bd) {
+            next unless $subs_end;    # an agent file not read to its end may still hold the row
+            # candidates: every agent with a free boundary row within SUB_WINDOW_S on either side
+            # (the stricter count, core-escalations E-C9-10); a fill only when there is exactly
+            # one, and its row lies in the P3 window [e - TOL_S, e + SUB_WINDOW_S]
+            my @near = grep { $free->($_) && defined $_->{a} && abs($_->{e} - $it->{e}) <= $SUB_WINDOW_S } @sb;
+            my @in = grep { $_->{e} >= $it->{e} - $TOL_S } @near;
+            my %ag = map { ($_->{a} => 1) } @near;
+            if (keys %ag == 1 && @in) { ($bd) = sort { $a->{e} <=> $b->{e} } @in; $proof = 'c' }
+            elsif (keys %ag > 1) {
+                $st->{fill}{$id6} = 'ambiguous';
+                next if $logged->{"copy_attribution_ambiguous:$id6"}++;
+                rc::emit('copy_attribution_ambiguous', [id6 => $id6, candidates => [sort keys %ag]]);
+                next;
+            }
+            else { next }
+        }
+        my $r = copies::attribute(path => $path, agent => $bd->{a}, proof => $proof);
+        if (!$r->{ok}) {
+            $st->{fill}{$id6} = 'failed';
+            rc::emit('copy_attribution_failed', [id6 => $id6, why => $r->{why}]);
+            next;
+        }
+        $bd->{f} = $id6;
+        $st->{fill}{$id6} = 'done';
+        $st->{copied}{$id6} = $r->{rel};
+        $st->{copied}{ 'n:' . $fm->{nonce} } = $r->{rel} if defined $fm->{nonce} && $fm->{nonce} ne '';
+        rc::emit('copy_attributed', [id6 => $id6, nonce => $fm->{nonce}, from_rel => $rel, rel_path => $r->{rel}, actor => $bd->{a},
+                                     proof => $proof, seq => $r->{seq}, pre_tokens => $bd->{pre}, post_tokens => $bd->{post}]);
+        $n->{attributed}++;
+    }
 }
 
 # PostCompacts not yet done: their .post.json metas (content-free), oldest first
@@ -230,7 +302,7 @@ sub run_locked {
     return $out // $n;
 }
 
-sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped) } }
+sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped attributed) } }
 
 # A save that returned EXISTS sha-differs: the stash is settled once (RRP-04, MOD-SPEC §5.8).
 sub _settle {
@@ -294,7 +366,7 @@ sub _run {
     # 0. P3 for the PostCompacts not yet done
     my $pool = _pool($sid_dir, $st);
     my $subs_end = 1;
-    if (grep { !$_->{sb} && $_->{scope} ne 'main' } @$pool) {
+    if (grep { (!$_->{sb} && $_->{scope} ne 'main') || (_fill_cand($_) && !$st->{fill}{ $_->{id6} }) } @$pool) {
         for my $f (@{ transcript::subagent_files($tp, $sid) }) {
             my $fst = ($st->{subs}{ $f->{path} } ||= {});
             $subs_end = 0 unless _ingest_bounds($fst, $f->{path}, $st->{sbounds}, $f->{agent_id});
@@ -312,7 +384,9 @@ sub _run {
         next unless defined $text;
         my ($scope, $agent, $proof);
         if (($it->{p3} // '') eq 'main') { ($scope, $proof) = ('main', 'p3-main') }
-        elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{sb}{a} // $it->{agent}, 'p3-sub') }
+        # P3-sub: the agent only from P1 (the meta); a time match names no agent: the copy is
+        # sub-unknown and the fill below decides (MOD-SPEC §5.3 step 3, §5.9)
+        elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{agent}, 'p3-sub') }
         elsif ($main_end && $subs_end && ($a{final} || $now - $it->{e} >= $SETTLE_S)) { ($scope, $proof) = ('unknown', 'none') }
         else { next }    # its boundary row may still come: the next Stop decides
         _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f, $n);
@@ -357,7 +431,6 @@ sub _run {
         my $agent = $m{agent};
         if ($scope eq 'unknown' && $p3{$id6}) {
             $scope = $p3{$id6}{p3};
-            $agent = $p3{$id6}{sb}{a} if $scope eq 'sub' && $p3{$id6}{sb};
         }
         if ($p1 && dispatch::is_mod($p1)) { $scope = defined $p1->{agent_id} ? 'sub' : 'main' }
         $agent //= $p1->{agent_id} if $p1;
@@ -412,10 +485,15 @@ sub _run {
         }
     }
 
-    # done: a PostCompact whose summary is copied and whose rows are matched (or too old to be)
+    # fill: sub-unknown copies get their agent (MOD-SPEC §5.9)
+    _fill($st, $pool, $n, $subs_end, $left) if $root_ok && $left->();
+
+    # done: a PostCompact whose summary is copied and whose rows are matched (or too old to be);
+    # a sub-unknown copy also waits for its fill decision
     for my $it (@$pool) {
         my $has = defined $held->($it) || !-e "$sid_dir/pending/$it->{id6}.post.md";
-        $st->{done}{ $it->{id6} } = 1 if $has && ($it->{mb} || $it->{sb} || $now - $it->{e} > $MAIN_WINDOW_S);
+        my $fill_open = _fill_cand($it) && !$st->{fill}{ $it->{id6} } && $now - $it->{e} <= $MAIN_WINDOW_S;
+        $st->{done}{ $it->{id6} } = 1 if $has && !$fill_open && ($it->{mb} || $it->{sb} || $now - $it->{e} > $MAIN_WINDOW_S);
     }
 
     my $in_time = $left->() > 0;

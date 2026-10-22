@@ -1,0 +1,384 @@
+{
+   "id" : "AT-ST-09 c, d (fill: a failed verification keeps the old copy; main and unattributed copies untouched)",
+   "note" : "C-STORE D5 / MOD-SPEC Â§5.9 steps 3 and 5 (CORE-09): (c) the fill writes the new name, a test seam flips one byte before the read-back: the verification fails, the new file is removed, the old sub-unknown copy stays, one copy_attribution_failed {why: verify}, and the fill is not retried at the next Stop; (d) an agent summary row that holds the nonce of a main copy, or the body of an unattributed copy, never touches either copy",
+   "steps" : [
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown"
+                  },
+                  "path" : "$ROOT/work/general/compact/subagents/*_11111111_c1-c9c9c9.md"
+               }
+            ]
+         },
+         "name" : "(c) a sub-unknown copy (classic dispatch, s=sub marker)",
+         "now" : "2026-10-21T14:05:00.500+03:00",
+         "setup" : [
+            {
+               "mkdir" : "$TMP/work"
+            },
+            {
+               "rows" : [
+                  {
+                     "prompt" : {
+                        "ts" : "2026-10-21T14:04:00+03:00"
+                     }
+                  }
+               ],
+               "transcript" : "$TMP/proj/$SID.jsonl"
+            },
+            {
+               "dispatch" : {
+                  "actor" : "unknown",
+                  "age_s" : 10,
+                  "channel" : "classic",
+                  "nonce" : "c9c9c9c9",
+                  "resume_pref" : "sessionstart",
+                  "trigger" : "auto"
+               }
+            },
+            {
+               "rows" : [
+                  {
+                     "agentId" : "a1b2c3d4e5f60718",
+                     "compactMetadata" : {
+                        "durationMs" : 6000,
+                        "postTokens" : 5000,
+                        "preTokens" : 70000,
+                        "trigger" : "auto"
+                     },
+                     "content" : "Conversation compacted",
+                     "isSidechain" : true,
+                     "sessionId" : "$SID",
+                     "subtype" : "compact_boundary",
+                     "timestamp" : "2026-10-21T11:05:00.200Z",
+                     "type" : "system",
+                     "uuid" : "b-c9c9c9c9",
+                     "version" : "2.1.307"
+                  },
+                  {
+                     "agentId" : "a1b2c3d4e5f60718",
+                     "isCompactSummary" : true,
+                     "isSidechain" : true,
+                     "message" : {
+                        "content" : "This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n⟪{{plugin}} v1 n=c9c9c9c9 s=sub⟫\n## Task as assigned\nCOPYC\n⟪/{{plugin}} n=c9c9c9c9⟫\n\nIf you need specific details from before compaction (like exact code snippets), read the full transcript at: /x\nContinue the conversation from where it left off without asking the user any further questions.\n",
+                        "role" : "user"
+                     },
+                     "sessionId" : "$SID",
+                     "timestamp" : "2026-10-21T11:05:00.200Z",
+                     "type" : "user",
+                     "uuid" : "s-c9c9c9c9"
+                  }
+               ],
+               "transcript" : "$TMP/proj/$SID/subagents/agent-a1b2c3d4e5f60718.jsonl"
+            }
+         ],
+         "stdin_json" : {
+            "compact_summary" : "<summary>\n⟪{{plugin}} v1 n=c9c9c9c9 s=sub⟫\n## Task as assigned\nCOPYC\n⟪/{{plugin}} n=c9c9c9c9⟫\n</summary>",
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "PostCompact",
+            "session_id" : "$SID",
+            "transcript_path" : "$TMP/proj/$SID.jsonl",
+            "trigger" : "auto"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "env" : {
+            "STORE_TEST_FILL_CORRUPT" : "1"
+         },
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "sub-unknown",
+                     "renamed_from" : null
+                  },
+                  "mode" : "0400",
+                  "path" : "$ROOT/work/general/compact/subagents/*_11111111_c1-c9c9c9.md"
+               },
+               {
+                  "count" : 0,
+                  "path" : "$ROOT/work/general/compact/subagents/*-a*.md"
+               }
+            ],
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_attribution_failed",
+                  "fields" : {
+                     "id6" : "c9c9c9",
+                     "why" : "verify"
+                  },
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ],
+            "rows_absent" : [
+               {
+                  "ev" : "copy_attributed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "(c) Stop: the verification fails",
+         "now" : "2026-10-21T14:05:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/proj/$SID.jsonl"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "path" : "$ROOT/work/general/compact/subagents/*_11111111_c1-c9c9c9.md"
+               }
+            ],
+            "rows" : [
+               {
+                  "count" : 1,
+                  "ev" : "copy_attribution_failed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ],
+            "rows_absent" : [
+               {
+                  "ev" : "copy_attributed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "(c) the next Stop does not retry",
+         "now" : "2026-10-21T14:06:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/proj/$SID.jsonl"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "path" : "$ROOT/work/general/compact/*_11111111_c1-d1d1d1.md"
+               }
+            ]
+         },
+         "name" : "(d) a main copy and an agent summary row that names its nonce",
+         "now" : "2026-10-21T14:10:00.500+03:00",
+         "setup" : [
+            {
+               "dispatch" : {
+                  "actor" : "main",
+                  "age_s" : 20,
+                  "channel" : "mod-hook",
+                  "nonce" : "d1d1d1d1",
+                  "trigger" : "auto"
+               }
+            },
+            {
+               "rows" : [
+                  {
+                     "agentId" : "a1b2c3d4e5f60718",
+                     "compactMetadata" : {
+                        "durationMs" : 6000,
+                        "postTokens" : 5000,
+                        "preTokens" : 70000,
+                        "trigger" : "auto"
+                     },
+                     "content" : "Conversation compacted",
+                     "isSidechain" : true,
+                     "sessionId" : "$SID",
+                     "subtype" : "compact_boundary",
+                     "timestamp" : "2026-10-21T11:10:00.200Z",
+                     "type" : "system",
+                     "uuid" : "b-d1d1d1d1",
+                     "version" : "2.1.307"
+                  },
+                  {
+                     "agentId" : "a1b2c3d4e5f60718",
+                     "isCompactSummary" : true,
+                     "isSidechain" : true,
+                     "message" : {
+                        "content" : "This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n⟪{{plugin}} v1 n=d1d1d1d1 s=main⟫\n# LAB-1 MAINBODY\n⟪/{{plugin}} n=d1d1d1d1⟫\n\nIf you need specific details from before compaction (like exact code snippets), read the full transcript at: /x\nContinue the conversation from where it left off without asking the user any further questions.\n",
+                        "role" : "user"
+                     },
+                     "sessionId" : "$SID",
+                     "timestamp" : "2026-10-21T11:10:00.200Z",
+                     "type" : "user",
+                     "uuid" : "s-d1d1d1d1"
+                  }
+               ],
+               "transcript" : "$TMP/proj/$SID/subagents/agent-a1b2c3d4e5f60718.jsonl"
+            }
+         ],
+         "stdin_json" : {
+            "compact_summary" : "<summary>\n⟪{{plugin}} v1 n=d1d1d1d1 s=main⟫\n# LAB-1 MAINBODY\n⟪/{{plugin}} n=d1d1d1d1⟫\n</summary>",
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "PostCompact",
+            "session_id" : "$SID",
+            "transcript_path" : "$TMP/proj/$SID.jsonl",
+            "trigger" : "auto"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "PostCompact"
+         ],
+         "expect" : {
+            "exit" : 0
+         },
+         "name" : "(d) an unproven unmarked summary far from any agent row: unattributed after the settle wait; an agent row then holds its body",
+         "now" : "2026-10-21T14:20:00.500+03:00",
+         "stdin_json" : {
+            "compact_summary" : "<summary>\n# LAB-2 UNATTRBODY\n</summary>",
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "PostCompact",
+            "session_id" : "$SID",
+            "transcript_path" : "$TMP/proj/$SID.jsonl",
+            "trigger" : "manual"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "has" : [
+                     "UNATTRBODY"
+                  ],
+                  "path" : "$ROOT/work/general/compact/unattributed/*.md"
+               }
+            ]
+         },
+         "name" : "(d) Stop after the settle wait",
+         "now" : "2026-10-21T14:20:30+03:00",
+         "stdin_json" : {
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/proj/$SID.jsonl"
+         }
+      },
+      {
+         "argv" : [
+            "hook",
+            "Stop"
+         ],
+         "expect" : {
+            "exit" : 0,
+            "files" : [
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "actor" : "main",
+                     "renamed_from" : null
+                  },
+                  "path" : "$ROOT/work/general/compact/*_11111111_c1-d1d1d1.md"
+               },
+               {
+                  "count" : 1,
+                  "frontmatter" : {
+                     "renamed_from" : null
+                  },
+                  "path" : "$ROOT/work/general/compact/unattributed/*.md"
+               },
+               {
+                  "count" : 0,
+                  "path" : "$ROOT/work/general/compact/subagents/*-a*.md"
+               }
+            ],
+            "rows_absent" : [
+               {
+                  "ev" : "copy_attributed",
+                  "file" : "$WATCH/$SID.classic.jsonl"
+               }
+            ]
+         },
+         "name" : "(d) the agent row with that body lands; another Stop: nothing moves",
+         "now" : "2026-10-21T14:25:00+03:00",
+         "setup" : [
+            {
+               "rows" : [
+                  {
+                     "agentId" : "a1b2c3d4e5f60718",
+                     "compactMetadata" : {
+                        "durationMs" : 6000,
+                        "postTokens" : 5000,
+                        "preTokens" : 70000,
+                        "trigger" : "auto"
+                     },
+                     "content" : "Conversation compacted",
+                     "isSidechain" : true,
+                     "sessionId" : "$SID",
+                     "subtype" : "compact_boundary",
+                     "timestamp" : "2026-10-21T11:20:00.700Z",
+                     "type" : "system",
+                     "uuid" : "b-u0",
+                     "version" : "2.1.307"
+                  },
+                  {
+                     "agentId" : "a1b2c3d4e5f60718",
+                     "isCompactSummary" : true,
+                     "isSidechain" : true,
+                     "message" : {
+                        "content" : "This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n# LAB-2 UNATTRBODY\n\nIf you need specific details from before compaction (like exact code snippets), read the full transcript at: /x\nContinue the conversation from where it left off without asking the user any further questions.\n",
+                        "role" : "user"
+                     },
+                     "sessionId" : "$SID",
+                     "timestamp" : "2026-10-21T11:20:00.700Z",
+                     "type" : "user",
+                     "uuid" : "s-u0"
+                  }
+               ],
+               "transcript" : "$TMP/proj/$SID/subagents/agent-a1b2c3d4e5f60718.jsonl"
+            }
+         ],
+         "stdin_json" : {
+            "cwd" : "$TMP/work",
+            "hook_event_name" : "Stop",
+            "session_id" : "$SID",
+            "stop_hook_active" : false,
+            "transcript_path" : "$TMP/proj/$SID.jsonl"
+         }
+      }
+   ],
+   "tz" : "Etc/GMT-3"
+}

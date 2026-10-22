@@ -138,6 +138,78 @@ sub settle_mismatch {
     return 'kept';
 }
 
+# attribute(path => old copy, agent => agent id, proof => a|b|c) -> {ok => 1, path, rel, seq}
+# or {why}: MOD-SPEC §5.9 step 3 (fill). A sub-unknown copy in compact/subagents/ is
+# re-created under <same stamp>_<sid8>-a<agent8>_c<seq'>-<id6>.md (seq' under seq.lock), its
+# frontmatter the old one in the old order with actor, compaction_seq replaced and
+# attributed_by, attributed_at, renamed_from added; the body byte-identical. Exclusive create,
+# 0400, then re-read: the frontmatter parses and the body sha equals the old body's; only then
+# the old name is unlinked (OD-17: a new file, never an edit in place). Any failure leaves the
+# old file, and a new file that was written but did not verify is unlinked.
+sub attribute {
+    my (%a) = @_;
+    my ($old, $agent, $proof) = @a{qw(path agent proof)};
+    my $base = util::basename($old // '');
+    return { why => 'not-sub-unknown' } unless $base =~ /\A(\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d)_([0-9a-z]{8})_c\d+-([0-9a-z-]+)\.md\z/;
+    my ($stamp, $sid8, $id6) = ($1, $2, $3);
+    my $dir = util::dirname($old);
+    return { why => 'not-subagents' } unless util::basename($dir) eq 'subagents' && util::basename(util::dirname($dir)) eq 'compact';
+    return { why => 'agent' } unless defined $agent && $agent =~ /\A[A-Za-z0-9][A-Za-z0-9_-]*\z/;
+    my $raw = util::read_file($old) // return { why => 'unreadable' };
+    return { why => 'frontmatter' } unless $raw =~ /\A(---\n)(.*?\n)(---\n)(.*)\z/s;
+    my ($head, $body) = ($2, $4);
+    my ($fm) = frontmatter::read($raw);
+    return { why => 'frontmatter' } unless $fm && ($fm->{actor} // '') eq 'sub-unknown';
+    my $sid = $fm->{session_id} // return { why => 'frontmatter' };
+    my $body_sha = sha::hex256($body);
+    my $tag = '-a' . substr($agent, 0, 8);
+    my $sd = rc::sid_dir() // return { why => 'no-watch' };
+    my $out = eval {
+        lock::with("$sd/seq.lock", { sid => $sid, actor => $agent }, sub {
+            my $seq = _seq($dir, $sid8, $tag);
+            my $new = "$dir/${stamp}_${sid8}${tag}_c${seq}-$id6.md";
+            my @lines;
+            for my $l (split /\n/, $head) {
+                if ($l =~ /\Aactor: /) { push @lines, 'actor: ' . frontmatter::_scalar($agent) }
+                elsif ($l =~ /\Acompaction_seq: /) { push @lines, "compaction_seq: $seq" }
+                else { push @lines, $l }
+            }
+            push @lines, "compaction_seq: $seq" unless grep { /\Acompaction_seq: / } @lines;
+            push @lines, 'attributed_by: ' . frontmatter::_scalar("reconcile-$proof"), 'attributed_at: ' . frontmatter::_scalar(util::iso(util::now())),
+                         'renamed_from: ' . frontmatter::_scalar($base);
+            my $data = "---\n" . join("\n", @lines) . "\n---\n" . $body;
+            return { why => 'exists' } unless util::write_excl($new, $data, 0400);
+            _test_corrupt($new);
+            my $back = util::read_file($new);
+            my ($bfm) = frontmatter::read($back);
+            my ($bbody) = defined $back && $back =~ /\A---\n.*?\n---\n(.*)\z/s;
+            if (!$bfm || ($bfm->{actor} // '') ne $agent || !defined $bbody || sha::hex256($bbody) ne $body_sha) {
+                unlink $new;
+                return { why => 'verify' };
+            }
+            unlink($old) or do { unlink $new; return { why => 'unlink' } };
+            return { ok => 1, path => $new, seq => $seq };
+        }, wait_ms => 500);
+    };
+    return { why => (($@ // '') =~ /lock-timeout/ ? 'lock-timeout' : 'write-error') } unless $out;
+    $out->{rel} = substr($out->{path}, length(rc::root()) + 1) if $out->{ok};
+    return $out;
+}
+
+# Test seam (STORE_TEST_MODE only): STORE_TEST_FILL_CORRUPT=1 flips one byte of a fill's new
+# file before its read-back, so the verification fails (AT-ST-09 c).
+sub _test_corrupt {
+    my ($p) = @_;
+    return unless util::test_mode() && ($ENV{STORE_TEST_FILL_CORRUPT} // '') eq '1';
+    chmod 0600, $p;
+    my $d = util::read_file($p) // return;
+    substr($d, -2, 1) = substr($d, -2, 1) eq 'x' ? 'y' : 'x';
+    open(my $fh, '>:raw', $p) or return;
+    print $fh $d;
+    close $fh;
+    chmod 0400, $p;
+}
+
 sub _seq {
     my ($dir, $sid8, $actor_tag) = @_;
     my $n = 0;

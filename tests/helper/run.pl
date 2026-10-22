@@ -4,7 +4,7 @@
 # given on the command line (files or folders), each case in a fresh temporary HOME
 # with STORE_TEST_MODE=1, and asserts exit codes, stdout, files, log rows and traces.
 #
-# Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] <case dir|case.json|cases root>...
+# Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] [--fixtures DIR] <case dir|case.json|cases root>...
 #
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form of §3.5 (argv, stdin, setup, expect, then).
@@ -72,7 +72,7 @@ binmode(STDERR, ':encoding(UTF-8)');
 # HUP) cleans up the same way in END. Only this process cleans: forked children never do.
 my $OWNER_PID = $$;
 my ($RUN_TMP, $REPO_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
-my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, @ARGS);
+my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, $FIXTURES_DIR, @ARGS);
 $SIG{$_} = sub { exit 130 } for qw(INT TERM HUP);
 END {
     my $code = $?;
@@ -89,10 +89,14 @@ while (@ARGV) {
     # in place of <repo>/tmp for tmp_base "repo" cases.
     if ($a eq '--plugin') { $PLUGIN_SRC = shift @ARGV; next }
     if ($a eq '--repo-tmp') { $REPO_TMP_BASE = shift @ARGV; next }
+    # Check a WP-fix fixture set before it merges: read tests/fixtures/ from DIR (an export of
+    # that branch's tests/fixtures), for "fixture:" needs, $FIX, $FIXTURES, stdin and copy sources.
+    if ($a eq '--fixtures') { $FIXTURES_DIR = Cwd::abs_path(shift @ARGV); next }
     push @ARGS, $a;
 }
 @ARGS = ("$HERE/cases") unless @ARGS;
 $REPO_TMP_BASE //= "$REPO/tmp";
+$FIXTURES_DIR //= "$REPO/tests/fixtures";
 $REPO_TMP_BASE =~ s{/+$}{};
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
@@ -236,9 +240,9 @@ for my $cf (@CASES) {
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
-                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$REPO/tests/fixtures/summaries/expected.tsv")
+                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
                       || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
-                      || (/^fixture:(.+)$/ && !-e "$REPO/tests/fixtures/$1") } @{ $case->{needs} || [] };
+                      || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
@@ -352,7 +356,7 @@ sub run_case {
     $V{SID} = $case->{sid} // $DEFAULT_SID;
     $V{SID8} = substr($V{SID}, 0, 8);
     $V{PLUGIN} = $STAGE;
-    $V{FIX} = "$REPO/tests/fixtures";
+    $V{FIX} = $FIXTURES_DIR;
     $V{CASE} = $cdir;
     $V{BRAND} = $BRAND;
     $V{HOST} = $HOSTNAME;
@@ -471,7 +475,7 @@ my %SECRET;
 sub secret_value {
     my ($id) = @_;
     if (!%SECRET) {
-        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) } || {};
+        my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) } || {};
         $SECRET{ $_->{id} } = join('', @{ $_->{fragments} || [] }) for @{ $c->{entries} || [] };
     }
     die "no secret corpus entry $id\n" unless exists $SECRET{$id};
@@ -485,7 +489,7 @@ sub subst {
     $s =~ s/\$SECRET\{([a-z0-9-]+)\}/secret_value($1)/ge;
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
-    $s =~ s/\$FIXTURES\b/$REPO\/tests\/fixtures/g;
+    $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
     $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
     # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
@@ -505,7 +509,7 @@ sub src_file {
     my ($name, $cdir) = @_;
     return $name if $name =~ m{^/} && -e $name;
     return "$cdir/$name" if -e "$cdir/$name";
-    return "$REPO/tests/fixtures/$name" if -e "$REPO/tests/fixtures/$name";
+    return "$FIXTURES_DIR/$name" if -e "$FIXTURES_DIR/$name";
     die "no file $name in the case dir or tests/fixtures\n";
 }
 
@@ -615,7 +619,7 @@ sub fixture_tempfiles {
 # recipe's $TMP/sweep); "record" appends their paths as paths.jsonl rows.
 sub fixture_secret_files {
     my ($s, $V, $cdir) = @_;
-    my $c = jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json"));
+    my $c = jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json"));
     my @rec;
     for my $f (@{ $c->{files} || [] }) {
         (my $rel = $f->{path}) =~ s{^\$TMP/sweep/}{} or die "secret file $f->{path} is not under \$TMP/sweep\n";
@@ -1051,7 +1055,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'assemble_goldens') {
-        my $dir = $a->{dir} // "$REPO/tests/fixtures/assembly/expected";
+        my $dir = $a->{dir} // "$FIXTURES_DIR/assembly/expected";
         my $rt = assembly_runtime($a->{runtime});
         my %stem = map { (my $f = $assemble::FILES{$_}) =~ s/\.txt$//; ($f => $_) } keys %assemble::FILES;
         my $n = 0;
@@ -1216,7 +1220,7 @@ sub builtin {
         # fragment of 8+ characters. A name: withheld <-> denied by name. Rule ids are reported
         # (the corpus ids are WP-fix's; they are not compared). `known_gaps` {id: reason} turns
         # that entry's failures into TODO lines (a gap another work package owns).
-        my $c = eval { jsonc::decode(util::read_file("$REPO/tests/fixtures/secrets/corpus.json")) };
+        my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) };
         return ('no secret corpus') unless ref $c eq 'HASH';
         my %gap = %{ $a->{known_gaps} || {} };
         my $n = 0;
@@ -1588,7 +1592,7 @@ sub assembly_runtime {
               halt_reason => 'compactions keep repeating without progress', max_calls => '34', handoff_path => $prev,
               draft_state => 'present',
               handoff_finish => "`$BRAND-store publish --stage '$prev/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`");
-    my $rf = $file // "$REPO/tests/fixtures/assembly/runtime.json";
+    my $rf = $file // "$FIXTURES_DIR/assembly/runtime.json";
     # runtime.json may spell the brand {{plugin}} (the BT-02 rename drill regenerates goldens first)
     if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, map { my $v = $j->{$_}; $v =~ s/\{\{plugin\}\}/$BRAND/g if defined $v && !ref $v; ($_ => $v) } keys %$j) if ref $j eq 'HASH' }
     return \%rt;

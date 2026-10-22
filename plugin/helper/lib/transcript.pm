@@ -18,6 +18,31 @@ sub boundary {
              version => ((defined $j->{version} && !ref $j->{version}) ? $j->{version} : undef) };
 }
 
+# The engine's closing sentences of a transcript summary row (not in a PostCompact
+# compact_summary, so not in a copy): cut from the row's end before its body sha is taken
+# (fix-escalations 1, option (b): this reader's own cut; the shared copy_trailers lists stay).
+our @ENGINE_TRAILERS = (
+    qr/^If you need specific details from before compaction \(/,
+    qr/^Continue the conversation from where it left off without asking/,
+    qr/^The messages after this summary are the most recent messages from before compaction/,
+);
+
+# summary_facts(line) -> {n => marker nonce | undef, h => normalized-body sha256} for an
+# isCompactSummary user row, else undef. In memory only: no text leaves (C-STORE D5 step 1).
+sub summary_facts {
+    my ($line) = @_;
+    return undef unless index($line, 'isCompactSummary') >= 0;
+    my $j = eval { jsonc::decode($line) };
+    return undef unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user' && $j->{isCompactSummary};
+    my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+    my $text = !ref $c ? $c : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : undef;
+    return undef unless defined $text;
+    my @l = split /\n/, $text, -1;
+    while (@l && ($l[-1] =~ /^\s*$/ || grep { $l[-1] =~ $_ } @ENGINE_TRAILERS)) { pop @l }
+    my $s = detect::scan(join("\n", @l));
+    return { n => $s->{nonce}, h => sha::hex256($s->{normalized}) };
+}
+
 # version(path) -> the Claude Code version of the newest row that has one in the last 64 KB
 # (PKG-RUNTIME D.2 source 3), or undef
 sub version {
