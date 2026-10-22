@@ -14,8 +14,9 @@ package skills::heal;
 # for a question, by `ask-command:` and `ask-source: recorded|handoff`. A shell may
 # relaunch by itself only with relaunch_auto on, relation same-session or successor
 # (recomputed from the lineage; no relation flag exists), status LOST with confidence
-# high (or FAILED with its record and command verified), effects none (local only once
-# relaunch_allow is active: Q-J1-1 read-only only, DP-10), recipe class auto or no recipe,
+# high (or FAILED with its record and command verified), effects none, local (an allowlisted
+# single command, Q-J1-1, S-SETTINGS C) or prod-read with unattended_prod_reads `allow`
+# (S-SETTINGS B; prod-write always asks), recipe class auto or no recipe,
 # the recipe sha matching MANIFEST, and the counters. The helper never runs the command:
 # the model runs `run:` through the Bash tool, so the permission system judges it.
 # --bump also stores the run line's sha as pending, so the next recorded job with that
@@ -120,10 +121,15 @@ sub shell {
     my $v = skills::jobs::verify($ctx, origin => $origin, task => $task, recipe => $recipe, relaunch => $rl, cwd => $cwd,
                                  current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} });
     my $rec = $v->{record};
+    # A consent or protective value given as a flag or env, or under a foreign config dir, did
+    # not count (DP-3, CR-F34): say so, so the question can name the settings file.
+    skills::cli::say("note: $_") for skills::core::settings_notes(qw(relaunch_auto relaunch_allow unattended_prod_reads prod_patterns));
     skills::cli::say(skills::jobs::signal_line($_, $v->{signals}{$_})) for @skills::jobs::SIGNALS;
     @$row{qw(verdict confidence effects mode relation new_task_id)} = ($v->{status}, $v->{confidence}, $v->{effects}, $rl->{auto}, $rel, undef);
     $row->{signals} = skills::jobs::states($v);
     $row->{item} = $task;
+    # The production class id only (prod-token, user-prod-<n>), never the command (S-SETTINGS B).
+    $row->{prod_class} = $v->{prod_class} if defined $v->{prod_class};
 
     # Questions name the command and where it came from; a withheld one is never printed.
     my $rcmd = $recipe && $recipe->{text} =~ /^\s*command:[ \t]*(.*?)[ \t]*$/m ? $1 : undef;
@@ -186,7 +192,10 @@ sub _gate {
         return 'not-lost';
     }
     return 'command-withheld' unless $rec && defined $rec->{command};
+    # S-SETTINGS B: a production read relaunches by itself only with unattended_prod_reads
+    # `allow` (a consent key, read from the settings file only); a production write never does.
     if ($v->{effects} eq 'local') { return 'effects-local' unless $rl->{allow_active} }
+    elsif ($v->{effects} eq 'prod-read') { return 'effects-prod-read' unless (($v->{prod} || {})->{reads} // 'forbid') eq 'allow' }
     elsif ($v->{effects} ne 'none') { return "effects-$v->{effects}" }
     if ($recipe) {
         return 'class' unless ($recipe->{class} // 'ask') eq 'auto';

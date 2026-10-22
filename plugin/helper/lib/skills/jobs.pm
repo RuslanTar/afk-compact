@@ -24,10 +24,14 @@ package skills::jobs;
 #                      (stat only; the recipe's idempotency check is shown, never run)
 #   V7 runnable        the recorded cwd exists; the command's first word resolves on
 #                      PATH, as a path, or is a shell builtin (stat only)
-# Effects class (code-derived, never a score): none (core marked it read-only, no outward
-# lint hit, sandbox kept, command kept) · local (an allowlisted relaunch_allow pattern, no
-# outward hit, a recipe with expected outputs) · outward (any outward lint hit; an allow
-# pattern never overrides it) · unknown (everything else, a missing record included).
+# Effects class (code-derived, never a score; S-SETTINGS B, C), first match wins: unknown (no
+# record, command withheld) · outward (any outward lint hit, or a secret hit) · prod-write (a
+# production match, the shipped prod_classes plus the user's prod_patterns, and not read-only
+# or sandbox disabled) · prod-read (a production match, read-only) · none (core marked it
+# read-only, sandbox kept) · local (an allowlisted relaunch_allow pattern, a single command
+# with no shell chaining, a recipe with expected outputs) · unknown (everything else). A
+# production match always outranks an allowlist match, and an allow pattern never overrides
+# an outward hit.
 # Status: the Dev-1 D4 table, first match wins, except that a recorded stop (row 7) is
 # checked before rows 5 and 6, so a job stopped on purpose is never relaunched, and a
 # `[killed]` output right after row 1 (KILLED: it asks, never LOST, RUNNING or STOPPED).
@@ -141,10 +145,14 @@ sub verify {
     elsif (!defined $r{cwd} || !-d $r{cwd}) { $sig{V7} = ['fail', 'cwd missing'] }
     else { $sig{V7} = runnable($cmd, $r{cwd}) ? ['pass', 'cwd and command found'] : ['fail', 'command not found'] }
 
-    # Effects class
-    $r{effects} = effects($rec, $a{recipe}, $a{relaunch});
+    # Effects class (and the production class id, for the content-free heal row)
+    my $prod = $a{prod} // skills::core::prod();
+    $r{prod} = $prod;
+    $r{effects} = effects($rec, $a{recipe}, $a{relaunch}, $prod);
+    $r{prod_class} = ($r{effects} =~ /\Aprod-/) ? prod_class($rec->{command}, $prod) : undef;
     if ($sig{V6}[0] eq 'pending-class') {
-        $sig{V6} = $r{effects} eq 'none' ? ['pass', 'class none, no recipe'] : ['unmeasured', 'no recipe and not read-only'];
+        # A read-only job (class none, or prod-read) has no effect to check.
+        $sig{V6} = ($r{effects} eq 'none' || $r{effects} eq 'prod-read') ? ['pass', "class $r{effects}, no recipe"] : ['unmeasured', 'no recipe and not read-only'];
     }
 
     my $all = !grep { $sig{$_}[0] ne 'pass' } @SIGNALS;
@@ -183,19 +191,65 @@ sub signal_line { my ($v, $s) = @_; return "signal: $v $NAME{$v} $s->[0]" . (def
 
 sub states { my ($r) = @_; return { map { $_ => $r->{signals}{$_}[0] } @SIGNALS } }
 
-# effects(record, recipe, relaunch settings) -> none | local | outward | unknown
+# effects(record, recipe, relaunch settings, production settings) -> unknown | outward |
+#   prod-write | prod-read | none | local (S-SETTINGS B, C: first match wins)
 sub effects {
-    my ($rec, $recipe, $rl) = @_;
+    my ($rec, $recipe, $rl, $prod) = @_;
     return 'unknown' unless $rec;
     my $cmd = $rec->{command};
     return 'unknown' if !defined $cmd || (ref $rec->{command_withheld} eq 'ARRAY' && @{ $rec->{command_withheld} });
     my $classes = eval { skills::spec::outward_classes() } || [];
     return 'outward' if grep { $cmd =~ $_->{re} } @$classes;
     return 'outward' if @{ skills::core::secrets_scan($cmd) };
-    return 'none' if $rec->{is_read_only} && !$rec->{sandbox_disabled};
+    my $read_only = $rec->{is_read_only} && !$rec->{sandbox_disabled};
+    return ($read_only ? 'prod-read' : 'prod-write') if defined prod_class($cmd, $prod // skills::core::prod());
+    return 'none' if $read_only;
     my $outs = $recipe ? expected_outputs($recipe->{text}) : undef;
-    return 'local' if $outs && @$outs && grep { $cmd =~ $_ } @{ $rl->{allow} || [] };
+    return 'local' if $outs && @$outs && !chained($cmd) && grep { $cmd =~ $_ } @{ $rl->{allow} || [] };
     return 'unknown';
+}
+
+# prod_class(command, production settings) -> the id of the first production class the
+# command matches (prod-token, user-prod-<n>), or undef.
+sub prod_class {
+    my ($cmd, $prod) = @_;
+    return undef unless defined $cmd && ref $prod eq 'HASH';
+    for my $c (@{ ref $prod->{classes} eq 'ARRAY' ? $prod->{classes} : [] }) {
+        next unless ref $c eq 'HASH' && defined $c->{re};
+        return $c->{id} // 'prod' if $cmd =~ $c->{re};
+    }
+    return undef;
+}
+
+# chained(command) -> 1 when the recorded command, without the spec's wait.end_suffix at its
+# end, chains or substitutes commands (S-SETTINGS C): an unquoted `;`, `&&`, `||`, `|`, `&`
+# (a `>&`, `<&` or `&>` redirection is not one) or line break, or a `$(` or backtick outside
+# single quotes (both run inside double quotes too). So a prefix allow pattern such as
+# `^make test` never covers `make test && ./scripts/wipe-db`.
+sub chained {
+    my ($cmd) = @_;
+    return 1 unless defined $cmd;
+    my $w = eval { skills::spec::get('wait') } // {};
+    my $suffix = ref $w eq 'HASH' ? $w->{end_suffix} : undef;
+    if (defined $suffix && $suffix ne '' && length($cmd) > length($suffix) && substr($cmd, -length $suffix) eq $suffix) {
+        $cmd = substr($cmd, 0, length($cmd) - length($suffix));
+    }
+    my ($sq, $dq) = (0, 0);
+    my @c = split //, $cmd;
+    for (my $i = 0; $i < @c; $i++) {
+        my $ch = $c[$i];
+        my $next = $i + 1 < @c ? $c[ $i + 1 ] : '';
+        my $prev = $i ? $c[ $i - 1 ] : '';
+        if ($sq) { $sq = 0 if $ch eq "'"; next }
+        if ($ch eq '\\') { $i++; next }
+        return 1 if $ch eq '`' || ($ch eq '$' && $next eq '(');
+        if ($dq) { $dq = 0 if $ch eq '"'; next }
+        if ($ch eq "'") { $sq = 1; next }
+        if ($ch eq '"') { $dq = 1; next }
+        return 1 if $ch eq ';' || $ch eq '|' || $ch eq "\n" || $ch eq "\r";
+        return 1 if $ch eq '&' && $prev ne '>' && $prev ne '<' && $next ne '>';
+    }
+    return 0;
 }
 
 # Absolute paths named on a recipe's `expected outputs:` line, or undef without one.

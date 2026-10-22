@@ -174,6 +174,11 @@ sub run {
         skills::cli::say(join ' · ', "candidate: $c->{path}", $c->{fm}{date} // '?', skills::store::title_of($c), skills::ctx::sid8($sid_of->($c)),
             ($c->{source} ? ($c->{source}) : ()), ($c->{export_path} ? ("export $c->{export_path}") : ()));
     }
+    # S-SETTINGS B: the production policy the resume follows (R7, R9 stop 2): the consent value
+    # and the class counts, never the user's patterns.
+    my $prod = skills::core::prod();
+    my @shipped = map { $_->{id} } grep { ($_->{id} // '') !~ /\Auser-/ } @{ $prod->{classes} || [] };
+    skills::cli::say(sprintf('production: %s · patterns: %s', $prod->{reads}, join(' + ', @shipped, ($prod->{user} // 0) . ' yours')));
     if ($w->{in_git}) {
         my $top = $w->{worktree};
         my @sf;

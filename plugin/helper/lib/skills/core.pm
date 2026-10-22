@@ -343,6 +343,44 @@ sub relaunch {
     return ref $r eq 'HASH' ? skills::util::text_deep($r) : { auto => 'off', allow => [], quiet_s => 120, allow_active => 0, invalid => [], clamped => [] };
 }
 
+# The run context's settings notes for the given keys (`<key>: settings file only`, the
+# CR-F34 safe-value notes), so a command can say why a flag or env value did not count.
+sub settings_notes {
+    my (@keys) = @_;
+    my %want = map { $_ => 1 } @keys;
+    my $r = eval { rc::settings() };
+    my @n = ref $r eq 'HASH' && ref $r->{notes} eq 'ARRAY' ? @{ $r->{notes} } : ();
+    return map { skills::util::text($_) } grep { /\A([a-z_]+):/ && $want{$1} } @n;
+}
+
+# Production (S-SETTINGS B): settings::prod over the run context's resolved settings (WP-core,
+# CORE-02): {reads => forbid|allow, classes => [{id, re}], user => n, invalid => [..]}, the
+# consent key `unattended_prod_reads` read from the settings file only (DP-3) and the classes
+# the shipped prod_classes plus the user's prod_patterns. Without that seam (or when it fails):
+# forbid, and the shipped classes (the spec's prod_classes, else the same prod-token literal
+# core falls back to), so a missing seam never makes the plugin ask less.
+our @PROD_FALLBACK = ({ id => 'prod-token', re => '(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)' });
+sub prod {
+    my $r = defined &settings::prod ? eval { settings::prod(rc::settings()) } : undef;
+    if (ref $r eq 'HASH' && ref $r->{classes} eq 'ARRAY' && @{ $r->{classes} }) {
+        my %p = %$r;
+        $p{reads} = ($p{reads} // '') eq 'allow' ? 'allow' : 'forbid';
+        $p{user} //= scalar grep { ref $_ eq 'HASH' && ($_->{id} // '') =~ /\Auser-/ } @{ $p{classes} };
+        return \%p;
+    }
+    require skills::spec;
+    my $spec = eval { skills::spec::get('prod_classes') };
+    my @src = ref $spec eq 'ARRAY' && @$spec ? @$spec : @PROD_FALLBACK;
+    my @classes;
+    for my $c (@src) {
+        next unless ref $c eq 'HASH' && defined $c->{id} && defined $c->{re} && !ref $c->{re};
+        my $re = eval { qr/$c->{re}/ } or next;
+        push @classes, { id => $c->{id}, re => $re };
+    }
+    @classes = map { { id => $_->{id}, re => qr/$_->{re}/ } } @PROD_FALLBACK unless @classes;
+    return { reads => 'forbid', classes => \@classes, user => 0, invalid => [], seam => 'missing' };
+}
+
 sub detect_summary {
     my ($text) = @_;
     my $r = eval { detect::summary($text) };
