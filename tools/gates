@@ -81,7 +81,9 @@ NPM_FILES = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.l
 NPM_DIRS = {"node_modules"}
 SKIP_DIRS = {".git", "node_modules", ".types"}
 # BT-09: the phrase a user says for each skill (AT-S-01 names "handoff status" for status).
-SKILL_TRIGGERS = {"handoff": "handoff", "resume": "resume", "status": "handoff status"}
+SKILL_TRIGGERS = {"handoff": "handoff", "resume": "resume", "status": "handoff status",
+                  # W-BETA C (TXT-10): "Only when the user asks for a ... report"
+                  "report": "report"}
 DESC_MAX = 150
 TRIGGER_WITHIN = 50
 
