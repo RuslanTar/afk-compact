@@ -1,13 +1,14 @@
 package watch::bundle;
 # lib/watch/bundle.pm: the `report` zip writer and reader, and HMAC-SHA256 (WATCHER-SPEC
 # §8.1 Output, W-BETA B.6). Owner: WP-watch. Floor modules only (R-1, AT-P-11 L1): an own
-# zip writer (local headers, central directory, CRC-32 from a 256-entry table), STORE
-# method. HMAC-SHA256 uses Digest::SHA when present, else the caller's sha256 (the helper's
-# embedded one). No encryption, no symlinks, no absolute names, no `..`.
-# STORE only for now: W-BETA B.6 allows DEFLATE through an optional module inside an eval,
-# but the helper's floor lint (tests/helper/run.pl AT-P-11, WP-core) lists only Digest::SHA and
-# Time::HiRes as optional modules (needs/watch-to-core.md W2C-4). The reader refuses any
-# other method.
+# zip writer (local headers, central directory, CRC-32 from a 256-entry table). Each entry is
+# STORE, or DEFLATE when the optional raw-deflate module loads (inside an eval: W-BETA B.6,
+# XR-20; the floor lint allows it since W2C-4) and the deflated body is smaller. An entry whose
+# deflated body would be more than $DEFLATE_RATIO_MAX times smaller stays STORE, so a bundle
+# never trips the analyzer's ratio-bomb refusal (tools/beta-analyze RATIO_MAX 100). The reader
+# takes STORE, and DEFLATE when the raw-inflate module loads; any other method is an error.
+# HMAC-SHA256 uses Digest::SHA when present, else the caller's sha256 (the helper's embedded
+# one). No encryption, no symlinks, no absolute names, no `..`.
 use strict;
 use warnings;
 use utf8;
@@ -25,6 +26,47 @@ sub crc32 {
     my $c = 0xFFFFFFFF;
     $c = $CRC[($c ^ $_) & 0xFF] ^ ($c >> 8) for unpack('C*', $data);
     return ($c ^ 0xFFFFFFFF) & 0xFFFFFFFF;
+}
+
+# undef: probe the optional modules once; 0: STORE only (tests set it); 1: available.
+# STORE_TEST_ZIP_STORE=1 (only with STORE_TEST_MODE=1) forces STORE, for the --max-mb case.
+our $DEFLATE;
+our $INFLATE;
+our $DEFLATE_RATIO_MAX = 50;
+
+sub _deflate {
+    my ($data) = @_;
+    $DEFLATE = 0 if !defined $DEFLATE && ($ENV{STORE_TEST_MODE} // q()) eq q(1) && ($ENV{STORE_TEST_ZIP_STORE} // q()) eq q(1);
+    $DEFLATE = (eval { require IO::Compress::RawDeflate; 1 } ? 1 : 0) unless defined $DEFLATE;
+    return undef unless $DEFLATE && length $data;
+    my $out;
+    my $ok = eval { IO::Compress::RawDeflate::rawdeflate(\$data => \$out, -Level => 9) };
+    return undef unless $ok && defined $out;
+    return undef if length($out) >= length($data) || length($data) > $DEFLATE_RATIO_MAX * length($out);
+    return $out;
+}
+
+# _inflate(body, size) -> the bytes, or undef (no module, a bad stream, or more than the declared
+# size: the reader never inflates past what the header says, so a bomb stops at $size).
+sub _inflate {
+    my ($body, $size) = @_;
+    $INFLATE = (eval { require IO::Uncompress::RawInflate; 1 } ? 1 : 0) unless defined $INFLATE;
+    return undef unless $INFLATE;
+    my $out = '';
+    my $ok = eval {
+        my $z = IO::Uncompress::RawInflate->new(\$body, Transparent => 0) or return 0;
+        while (1) {
+            my $buf;
+            my $n = $z->read($buf, 65536);
+            return 0 if !defined $n || $n < 0;
+            last if $n == 0;
+            $out .= $buf;
+            return 0 if length($out) > $size;
+        }
+        $z->close;
+        1;
+    };
+    return $ok ? $out : undef;
 }
 
 sub _dos_time {
@@ -55,7 +97,8 @@ sub zip {
         die "bundle: bad entry name\n" unless safe_name($name);
         utf8::encode($data) if utf8::is_utf8($data);
         my $crc = crc32($data);
-        my ($method, $body) = (0, $data);
+        my $d = _deflate($data);
+        my ($method, $body) = defined $d ? (8, $d) : (0, $data);
         my $off = length $out;
         $out .= pack('VvvvvvVVVvv', 0x04034b50, 20, 0x0800, $method, $time, $date, $crc,
                      length($body), length($data), length($name), 0) . $name . $body;
@@ -92,7 +135,9 @@ sub unzip {
         my ($lnlen, $lxlen) = unpack('vv', substr($z, $loff + 26, 4));
         my $body = substr($z, $loff + 30 + $lnlen + $lxlen, $csize);
         if ($method == 0) { $r{data} = $body }
+        elsif ($method == 8) { $r{data} = _inflate($body, $size); $r{error} = 'method' unless defined $r{data} }
         else { $r{error} = 'method' }
+        $r{error} //= 'size' if defined $r{data} && length($r{data}) != $size;
         $r{error} //= 'crc' if defined $r{data} && crc32($r{data}) != $crc;
         push @e, \%r;
     }
