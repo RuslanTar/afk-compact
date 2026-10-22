@@ -279,4 +279,101 @@ sub w13_session {
     ];
 }
 
+
+# WP-fix fixtures (tests/fixtures, fixtures README). A case that needs one returns
+# `skip => ...` while it is not on the branch (fixture_or_skip). Placeholders as the core case
+# runner fills them: $TMP $HOME $ROOT $WATCH $SID, {{plugin}}, {{marketplace}}, $SECRET{<id>}
+# (the joined fragments of secrets/corpus.json).
+our $REPO;
+sub fixtures_dir { return "$REPO/tests/fixtures" }
+sub fixture_path { my ($rel) = @_; my $p = fixtures_dir() . "/$rel"; return -e $p ? $p : undef }
+sub fixture_json {
+    my ($rel) = @_;
+    my $p = fixture_path($rel) // return undef;
+    return watch::json::decode(watch::io::slurp($p));
+}
+my %SECRET;
+sub secret {
+    my ($id) = @_;
+    unless (%SECRET) {
+        my $c = fixture_json('secrets/corpus.json') || {};
+        $SECRET{ $_->{id} } = join('', @{ $_->{fragments} || [] }) for @{ $c->{entries} || [] };
+    }
+    die "no secret corpus entry $id\n" unless exists $SECRET{$id};
+    return $SECRET{$id};
+}
+sub marketplace {
+    my $b = watch::io::read_json_file("$REPO/brand.json") || {};
+    return $b->{marketplace} // $BRAND;
+}
+sub subst {
+    my ($s, $v) = @_;
+    return $s unless defined $s && !ref $s;
+    $s =~ s/\$SECRET\{([A-Za-z0-9_.-]+)\}/secret($1)/ge;
+    $s =~ s/\{\{plugin\}\}/$BRAND/g;
+    $s =~ s/\{\{marketplace\}\}/marketplace()/ge;
+    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID)\b/$v->{$1}/g;
+    return $s;
+}
+sub subst_deep {
+    my ($x, $v) = @_;
+    return [ map { subst_deep($_, $v) } @$x ] if ref $x eq 'ARRAY';
+    return { map { subst($_, $v) => subst_deep($x->{$_}, $v) } keys %$x } if ref $x eq 'HASH';
+    return ref $x ? $x : subst($x, $v);
+}
+sub _git {
+    my ($cwd, @argv) = @_;
+    my $pid = fork() // die "fork: $!";
+    if (!$pid) {
+        chdir $cwd or POSIX::_exit(126);
+        open(STDOUT, '>', '/dev/null'); open(STDERR, '>', '/dev/null');
+        local $ENV{GIT_CONFIG_NOSYSTEM} = 1;
+        exec('git', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'init.defaultBranch=main',
+             '-c', 'commit.gpgsign=false', @argv) or POSIX::_exit(127);
+    }
+    waitpid($pid, 0);
+    die "git @argv: exit " . ($? >> 8) . "\n" if $?;
+}
+# run_setup(steps, vars): the setup steps of a tests/fixtures/setups/<id>.json recipe, in the
+# vocabulary those recipes use (fixtures README "Setups"): write (content | json | jsonl;
+# mode), mkdir, copy (+ to, mode), repo ({branch, commits: [{files, msg}]} + at), git (argv,
+# cwd). Anything else dies, so a recipe change shows here.
+sub run_setup {
+    my ($steps, $v) = @_;
+    require POSIX;
+    for my $raw (@{ $steps || [] }) {
+        my $s = subst_deep($raw, $v);
+        if (exists $s->{write}) {
+            my $c = exists $s->{json} ? watch::json::encode($s->{json}) . "\n"
+                  : exists $s->{jsonl} ? join('', map { watch::json::encode($_) . "\n" } @{ $s->{jsonl} })
+                  : $s->{content} // '';
+            utf8::encode($c) if utf8::is_utf8($c);
+            main::write_file($s->{write}, $c, oct($s->{mode} // '0600'));
+        } elsif (exists $s->{mkdir}) {
+            watch::io::mkdir_p($s->{mkdir}) or die "mkdir $s->{mkdir}\n";
+        } elsif (exists $s->{copy}) {
+            my $src = fixture_path($raw->{copy}) // die "copy: no fixture $raw->{copy}\n";
+            main::write_file($s->{to}, watch::io::slurp($src), oct($s->{mode} // '0600'));
+        } elsif (exists $s->{repo}) {
+            my $at = $s->{at} // die "repo needs at\n";
+            watch::io::mkdir_p($at);
+            _git($at, 'init', '-q');
+            _git($at, 'checkout', '-q', '-b', $s->{repo}{branch}) if defined $s->{repo}{branch};
+            for my $c (@{ $s->{repo}{commits} || [] }) {
+                for my $f (sort keys %{ $c->{files} || {} }) {
+                    my $t = $c->{files}{$f};
+                    utf8::encode($t) if utf8::is_utf8($t);
+                    main::write_file("$at/$f", $t, 0644);
+                }
+                _git($at, 'add', '-A');
+                _git($at, 'commit', '-q', '-m', $c->{msg} // 'fixture');
+            }
+        } elsif (exists $s->{git}) {
+            _git($s->{cwd} // $v->{TMP}, @{ $s->{git} });
+        } else {
+            die 'run_setup: unknown step ' . join(',', sort keys %$s) . "\n";
+        }
+    }
+}
+
 1;
