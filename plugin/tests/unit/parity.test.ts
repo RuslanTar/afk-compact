@@ -10,6 +10,7 @@ import { assemble } from '../../hooks/lib/assemble'
 import type { DetectContext } from '../../hooks/lib/detect'
 import { detectSummary } from '../../hooks/lib/detect'
 import type { Deps, RunResult } from '../../hooks/lib/deps'
+import { LAUNCHER_DIR, launcherPath, storeWord } from '../../hooks/lib/deps'
 import { checkpoint, claim, handoffState, handoffTurnOpen, handoffTurnSupersede, ident, logJobs, measure, parseHandoffState, parseSave, prevCopy } from '../../hooks/lib/helper'
 import { BRAND } from './_gen/brand.gen'
 import { CORPUS } from './_gen/corpus.gen'
@@ -67,7 +68,7 @@ const argvOf = (r: RecordedReply): string[] => r.argv.map(join)
 /** A Deps whose helper answers with one recorded reply. */
 function depsFor(r: RecordedReply): Deps {
   const res: RunResult = { ok: r.exitCode === 0, exitCode: r.exitCode, stdout: join(r.stdout), error: '' }
-  return { name: NAME, root: '/p', helper: '/p/bin/' + NAME + '-store', run: async () => res } as unknown as Deps
+  return { name: NAME, root: '/p', helper: '/p/scripts/' + NAME + '-store', run: async () => res } as unknown as Deps
 }
 
 /** Output form: paths, 8-hex ids and numbers stand for any value. */
@@ -109,7 +110,11 @@ describe('BT-05 recorded helper replies', () => {
       finish: join(reply('handoff-state-staged').stdout).replace(/^.* finish=/, '').trimEnd(),
     })
     const staged = await hs('handoff-state-staged')
-    expect(staged.state === 'staged' && staged.finish?.startsWith(NAME + '-store publish --stage ')).toBe(true)
+    // The finish command starts with the helper's `ctx::store_cmd()` word, which is the word
+    // `storeWord()` makes for the same root (PKG-RUNTIME A.1, A.2).
+    const word = /^("[^"]*"|'[^']*') publish --stage /.exec(staged.state === 'staged' ? staged.finish ?? '' : '')?.[1] ?? ''
+    const tail = '/' + LAUNCHER_DIR + '/' + NAME + '-store'
+    expect([word.slice(1, -1).endsWith(tail), storeWord(word.slice(1, -1 - tail.length), NAME)]).toEqual([true, word])
     expect(await hs('handoff-state-staged-no-finish')).toEqual({
       state: 'staged', stage: "~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
     })
@@ -125,7 +130,7 @@ describe('BT-05 recorded helper replies', () => {
 
   test('the fake helper answers the same argv with the same exit code and form', () => {
     const w = new World()
-    const bin = '/p/bin/' + NAME + '-store'
+    const bin = '/p/scripts/' + NAME + '-store'
     for (const [path, parts] of Object.entries(REPLY_INPUTS)) w.files.set(path, join(parts))
     for (const r of HELPER_REPLIES) {
       const argv = argvOf(r)
@@ -152,5 +157,23 @@ describe('BT-05 recorded helper replies', () => {
       }
       expect([r.name, fake.exitCode, form(fake.stdout)]).toEqual([r.name, r.exitCode, form(real)])
     }
+  })
+})
+
+// AT-PK-03 (mod part): the launcher word for the root classes PKG-RUNTIME A.1 names. The helper's
+// `ctx::store_cmd()` gives the same words; the recorded `handoff-state-staged` finish command
+// above checks the two agree on a real root.
+describe('AT-PK-03 storeWord', () => {
+  test('double quotes; single quotes for ", $, backquote, backslash; refused when \' is there too', () => {
+    expect(launcherPath('/p', 'x')).toBe('/p/scripts/x-store')
+    expect(storeWord('/p', 'x')).toBe('"/p/scripts/x-store"')
+    expect(storeWord('/Users/a b/.claude/plugins/cache/m/x/1.0.0', 'x')).toBe('"/Users/a b/.claude/plugins/cache/m/x/1.0.0/scripts/x-store"')
+    expect(storeWord("/p/it's", 'x')).toBe('"/p/it\'s/scripts/x-store"')
+    expect(storeWord('/p/$HOME', 'x')).toBe("'/p/$HOME/scripts/x-store'")
+    expect(storeWord('/p/a"b', 'x')).toBe("'/p/a\"b/scripts/x-store'")
+    expect(storeWord('/p/a`b', 'x')).toBe("'/p/a`b/scripts/x-store'")
+    expect(storeWord('/p/a\\b', 'x')).toBe("'/p/a\\b/scripts/x-store'")
+    expect(storeWord('/p/a"b\'c', 'x')).toBeUndefined()
+    expect(storeWord('/p/$it\'s', 'x')).toBeUndefined()
   })
 })

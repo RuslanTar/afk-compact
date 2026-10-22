@@ -3,6 +3,7 @@
 // denied call; `[halt]` with its reason in a last cycle, `[queue]` when `queue_cmd` is set. Also: the open
 // AskUserQuestion count, and the temp paths cited in tool inputs (MOD-SPEC §10 sweep scope).
 import type { Deps } from './deps'
+import { storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import { dispatchExists } from './compact'
@@ -10,7 +11,7 @@ import { effective } from './config'
 import { lastCycleOf } from './cont'
 import { HALT_REASON_TEXT, handoffPossible } from './handoff-turn'
 import { logPaths } from './helper'
-import { log, makeRow } from './log'
+import { escalate, log, makeRow } from './log'
 import { drawNonce } from './nonce'
 import { byteLength } from './normalize'
 
@@ -46,10 +47,16 @@ export async function nudgeText(d: Deps, sid: string): Promise<string | undefine
   if (last !== null) runtime.halt_reason = HALT_REASON_TEXT[last]
   // D-10: `[queue]` whenever `queue_cmd` is set (no I/O here); the nonce it names is the one this
   // cycle's plugin compaction then uses.
+  // `queue_add` starts with the launcher word (PKG-RUNTIME A.2); a root no quoting can carry
+  // drops `[queue]` and escalates (A.1).
   if (d.cfg.queue_cmd !== '') {
-    s.nudgeNonce = await drawNonce(n => dispatchExists(d, sid, n))
-    tags.push('queue')
-    runtime.queue_add = d.name + `-store queue-add --sid ${sid} --nonce ${s.nudgeNonce}`
+    const store = storeWord(d.root, d.name)
+    if (store === undefined) escalate(d, 'store_path_unquotable')
+    else {
+      s.nudgeNonce = await drawNonce(n => dispatchExists(d, sid, n))
+      tags.push('queue')
+      runtime.queue_add = store + ` queue-add --sid ${sid} --nonce ${s.nudgeNonce}`
+    }
   }
   await log(d, sid, 'nudge', { tokens, askq_open: s.askOpen > 0, halt: s.halt.active, last_cycle: last })
   return assemble(d.name, 'checkpoint-nudge', tags, runtime)

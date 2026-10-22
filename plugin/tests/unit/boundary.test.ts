@@ -4,6 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
+import { storeWord } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { AGENT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -406,7 +407,7 @@ test('AT-Q-08 (mod part): queue_cmd set: the nudge keeps [queue] with @queue_add
   await w.turnEnd($)
   await w.advance(500)
   const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
-  const queueAdd = w.name + `-store queue-add --sid ${SID_A} --nonce ${nonce}`
+  const queueAdd = storeWord(w.root, w.name) + ` queue-add --sid ${SID_A} --nonce ${nonce}`
   expect(r.context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['continue', 'queue'], { tokens: '610,000', queue_add: queueAdd }))
   if (assetText('checkpoint-nudge', w.name).includes('@queue_add@')) expect(r.context?.[0]).toContain(queueAdd)
   // The mod itself never runs the queue tool or queue-add (OD-21 as amended by D-10).
