@@ -14,6 +14,9 @@ plugin/hooks/hooks.json	build
 plugin/hooks/lib/*.gen.ts	build
 plugin/assets/**	build
 plugin/skills/**	build
+plugin/scripts/**	build
+# The launcher leaves plugin/bin/ in the launcher move (BLD-01, PKG-RUNTIME Q-R1); this row stays
+# until that move has removed the old folder, so the removal itself is owned.
 plugin/bin/**	build
 plugin/tests/unit/_gen/**	build
 tests/fixtures/assembly/expected/**	build
@@ -30,11 +33,12 @@ tsconfig.json	build
 src/plugin.json	build
 src/marketplace.json	build
 src/hooks.json	build
-tools/{build,assemble,gates,owners-check,typecheck,check}	build
+tools/{build,assemble,gates,owners-check,typecheck,check,matrix}	build
 src/assets/**	text
 src/skills/**	text
 tests/fixtures/**	fix
 tools/fixtures-gen	fix
+tools/beta-analyze	watch
 src/launcher.tmpl	core
 plugin/helper/main.*	core
 plugin/helper/lib/watch.*	watch
@@ -47,12 +51,13 @@ plugin/helper/lib/skills/{wait,jobs,export,project_cmd}.pm	skills
 plugin/helper/lib/skills/**	skills
 plugin/helper/lib/{repomode,handoff_turn}.pm	core
 plugin/helper/lib/**	core
-plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke}.*	core
+plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke,notice}.*	core
 plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
 plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt}.*	skills
 plugin/helper/cmd/{wait,project}.*	skills
-plugin/helper/cmd/watch.*	watch
+plugin/helper/cmd/{watch,report}.*	watch
 tests/helper/run.*	core
+tests/matrix/**	core
 tests/helper/cases/core/{AT-Q,AT-RM,AT-RN}-*/**	core
 tests/helper/cases/core/**	core
 tests/helper/cases/skills/{HT-WA,HT-LT,HT-JV,AT-RM,AT-CF,AT-TS}-*/**	skills
