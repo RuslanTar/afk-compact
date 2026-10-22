@@ -224,7 +224,7 @@ Call budget before the first real work, heal calls excluded: same day ≤10 (typ
 
 If you keep working after the report, end the turn's last message with the still-open Questions again; questions buried above later work go unseen. <!-- review-fix -->
 
-Log one content-free row: `<store> receipt --handoff <path> --relation <r> --tier <T> --calls <n> --drift <classes> --bg <status=count,…> --questions <n> --adopt <result>`.
+Log one content-free row: `<store> receipt --handoff <path> --relation <r> --tier <T> --calls <n> --drift <classes> --bg <status=count,…> --questions <n> --cmds-asked <n> --adopt <result>` (`--cmds-asked`: handoff commands you showed and asked about under Rule 2).
 
 ## R10 Close the loop
 
