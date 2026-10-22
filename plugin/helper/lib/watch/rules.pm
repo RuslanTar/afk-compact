@@ -201,6 +201,10 @@ sub thresholds {
     my ($ctx, $S) = @_;
     return { off => 1 } if rows_of($S, 'triggers_off') || rows_of($S, 'trigger_disabled_small_window');
     my ($cfg) = reverse rows_of($S, 'config_effective');
+    # A disabled row (needs/mod-to-watch.md 5) has null thresholds and the computed values in
+    # soft_max_raw / target_raw, which are never thresholds (they can be negative): off.
+    return { off => 1, why => $cfg->{disabled} }
+        if $cfg && defined $cfg->{disabled} && !ref $cfg->{disabled} && length $cfg->{disabled};
     if ($cfg) {
         my $g = sub { for (@_) { return $cfg->{$_} if defined $cfg->{$_} && !ref $cfg->{$_} } return undef };
         my %t = (target => $g->(qw(target target_tokens compact_target_tokens)),

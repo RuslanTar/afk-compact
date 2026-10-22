@@ -79,5 +79,23 @@ my @T = (
         $E->is($s->{min_window}, 344000, 'spec clamp.reserve_base 60,000 is read (180,000 + 40,000 + 124,000)');
         my $b = $th->({ native_window_tokens => 1000000 }, { clamp => { native_offset => 'x', min_target => -1 } });
         $E->is($b->{native}, 967000, 'a non-numeric constant takes the built-in value');
+        # The mod's config_effective row wins over the fallback (needs/mod-to-watch.md 5): when it
+        # says disabled, its thresholds are null and the _raw values are never taken as thresholds.
+        my $cfg = sub {
+            my ($row) = @_;
+            my $ctx = watch::ctx::init({ sid => $T::SID, settings => { native_window_tokens => 1000000 }, spec => {},
+                                         plugin_root => $E->var('PLUGIN'), now => $T::BASE });
+            return watch::rules::thresholds($ctx, { by => { config_effective => [ $row ] } });
+        };
+        my $d = $cfg->({ ev => 'config_effective', window => 150000, native_trigger => 117000, soft_max => undef, target => undef,
+                         soft_max_raw => -7000, target_raw => -4667, disabled => 'trigger-disabled-small-window',
+                         small_window => 1, min_window => 'never' });
+        $E->ok(($d->{off} ? 1 : 0), 'a disabled config_effective row: off, even with no triggers_off row');
+        $E->is($d->{why}, 'trigger-disabled-small-window', 'its disabled reason');
+        $E->ok((!defined $d->{target} && !defined $d->{soft_max} ? 1 : 0), 'no thresholds taken from the _raw values');
+        my $on = $cfg->({ ev => 'config_effective', window => 1000000, native_trigger => 967000, soft_max => 600000, target => 400000,
+                          soft_max_raw => 600000, target_raw => 400000, disabled => undef, small_window => 0, min_window => 329000 });
+        $E->is($on->{target}, 400000, 'an enabled row gives its target');
+        $E->ok(($on->{off} ? 0 : 1), 'and is on');
     },
 };
