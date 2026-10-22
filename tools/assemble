@@ -24,8 +24,8 @@ nudge with [halt] and without [continue] never says the plugin compacts the sess
 handoff summary or copies after this turn, and the [halt] line says the plugin compacts only
 if auto-continue is off or at its hourly limit (CR-F30/F35); no handoff-turn render has a
 line that starts with "/" and a [submit-idle] render says "launch no agents or workflows"
-(AT-LT-18, AT-IC-12); no mod text names the bare launcher followed by a subcommand, and one
-that writes `<store>` defines it as the @store@ word (AT-PK-03, never skipped); heading literals equal the spec-literals block of handoff-spec.md once
+(AT-LT-18, AT-IC-12); no render of any asset names the bare launcher (with or without a
+subcommand), and one that writes `<store>` defines it as the @store@ word (AT-PK-03, never skipped); heading literals equal the spec-literals block of handoff-spec.md once
 that file exists. Exclusive tag groups (EXCLUSIVE, XR-19) limit every walk over combinations.
 Budgets: the BUDGETS table (D-17 of the 2026-10-21 rulings, compaction-rem-6 of 2026-10-22;
 AT-P-07, AT-TX-10), with @store@ at a 160-character root stand-in (PKG-RUNTIME A.2). Above a soft
@@ -232,18 +232,17 @@ def submit_checks():
     return bad
 
 
-MOD_ASSETS = ("res", "nudge", "turn")   # the texts the mod assembles at run time (PKG-RUNTIME A.2)
-
-
 def store_checks():
     """AT-PK-03 (assembler half), never skipped: since BLD-01 the launcher is not on the Bash PATH,
-    so no mod-assembled render names the bare `<name>-store` followed by a subcommand (the texts
-    call it through @store@ or the `<store>` token), and a render that writes `<store>` also
-    defines it as the filled launcher word, `<store> = <@store@>` (TXT-06, XR-03 (1))."""
-    bare = re.compile(r"(?<![/\w.-])" + re.escape(NAME) + r"-store\s+[a-z]")
+    so no render of any assembled asset (FILES: handoff and subagent instructions, resume context,
+    nudge, handoff turn) names the bare `<name>-store`, with or without a subcommand after it (the
+    texts call it through @store@ or the `<store>` token; the filled @store@ word holds it only
+    after `/scripts/`), and a render that writes `<store>` also defines it as the filled launcher
+    word, `<store> = <@store@>` (TXT-06, XR-03 (1))."""
+    bare = re.compile(r"(?<![/\w.-])" + re.escape(NAME) + r"-store(?![\w-])")
     define = "<store> = " + STORE
     bad = False
-    for asset in MOD_ASSETS:
+    for asset in FILES:
         for tags in combos(asset):
             label = "{} {}".format(asset, "+".join(tags) or "base")
             s = assemble(TEXT[asset], tags)
@@ -257,7 +256,7 @@ def store_checks():
             if "<store>" in s.replace(define, "") and define not in s:
                 print(f"store check {label:32} FAIL uses <store> without the line '{define[:24]}…'")
                 bad = True
-    print("AT-PK-03 bare launcher name in mod texts        " + ("FAIL" if bad else "ok"))
+    print("AT-PK-03 bare launcher name in assembled texts  " + ("FAIL" if bad else "ok"))
     return bad
 
 

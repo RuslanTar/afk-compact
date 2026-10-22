@@ -374,8 +374,8 @@ def probes(name):
 
     def launcher_move(d):
         """AT-PK-01 (BLD-01): an old bin/ launcher left behind, the scripts/ launcher not
-        executable, one hook command back in bin/, and a text line with the bin/ path and the
-        Bash PATH promise."""
+        executable, one hook command back in bin/, a text line with the bin/ path and the
+        Bash PATH promise, and a bare `<brand>-store <subcommand>` call in a shipped skill."""
         write_text(os.path.join(d, "plugin", "bin", name + "-store"), "#!/bin/sh\n")
         os.chmod(os.path.join(d, *launcher_rel(name).split("/")), 0o644)
         p = os.path.join(d, "plugin", "hooks", "hooks.json")
@@ -385,6 +385,8 @@ def probes(name):
                                 "/bin/{}-store\\\" hook Stop\"".format(name), 1))
         append(d, "plugin/assets/subagent-instructions.txt",
                "Call ${{CLAUDE_PLUGIN_ROOT}}/bin/{}-store, which is on the Bash PATH.\n".format(name))
+        append(d, "plugin/skills/report/SKILL.md",
+               "To wait, run `{}-store wait --max 270` in the foreground.\n".format(name))
 
     def resume_hard(d):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
@@ -413,8 +415,11 @@ def probes(name):
 
     def store_bare(d):
         """AT-PK-03 (BLD-04; never skipped since the fix loop of build round 9): a bare launcher
-        call in the resume context and in the handoff turn, and a `<store>` that the handoff turn
+        call in the resume context, the handoff turn and the subagent instructions, the bare name
+        with no subcommand in the handoff instructions, and a `<store>` that the handoff turn
         never defines."""
+        append(d, "src/assets/handoff-instructions.txt", "[chain] The helper is `{{plugin}}-store`.\n")
+        append(d, "src/assets/subagent-instructions.txt", "[fallback] Run {{plugin}}-store wait --max 270 first.\n")
         append(d, "src/assets/resume-context.txt", "[midturn] Then call `{{plugin}}-store status` once.\n")
         append(d, "src/assets/handoff-turn.txt", "[spent] Then call `{{plugin}}-store status` once.\n")
         append(d, "src/assets/handoff-turn.txt", "[near] Then call `<store> status` once.\n")
@@ -713,7 +718,8 @@ def probes(name):
           r"^GATE launcher " + re.escape(launcher_rel(name)) + r": AT-PK-01 launcher: mode 644, want 755$",
           r"^GATE launcher plugin/hooks/hooks\.json: AT-PK-01 hooks: Stop command",
           r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 launcher-dir: '/bin/",
-          r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 bash-path"], None),
+          r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 bash-path",
+          r"^GATE launcher plugin/skills/report/SKILL\.md:\d+: AT-PK-01 bare-call: '" + re.escape(name) + r"-store w'"], None),
         ("template-shape", "AT-TX-01", gates_only("template-shape"), template_shape,
          [r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md:\d+: AT-TX-01 moved-bullet: '- \*\*Caps'",
           r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md: AT-TX-01 pointer: §6 is \d+ chars \(max 700\), no `Why:` sentence$",
@@ -780,7 +786,9 @@ def probes(name):
           r"^submit check turn \S*submit-idle +FAIL \[submit-idle\] lacks 'launch no agents or workflows'",
           r"^AT-LT-18 / AT-IC-12 .* FAIL$", r"^RESULT: FAIL$"], None),
         ("store-bare", "AT-PK-03", ["tools/assemble"], store_bare,
-         [r"^store check res \S*midturn\S* +FAIL bare launcher: .*-store status",
+         [r"^store check main \S*chain\S* +FAIL bare launcher: .*-store`",
+          r"^store check sub \S*fallback\S* +FAIL bare launcher: .*-store wait",
+          r"^store check res \S*midturn\S* +FAIL bare launcher: .*-store status",
           r"^store check turn \S*spent\S* +FAIL bare launcher: .*-store status",
           r"^store check turn \S*near\S* +FAIL uses <store> without the line",
           r"^AT-PK-03 .* FAIL$", r"^RESULT: FAIL$"], None),

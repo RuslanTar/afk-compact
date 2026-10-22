@@ -58,7 +58,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   launcher     AT-PK-01 (PKG-RUNTIME A.1, Q-R1) over a built plugin folder: no top-level `bin/`;
                the launcher is `scripts/<brand>-store`, mode 0755; the 8 hooks.json commands
                are `"${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <Event>`; no file names
-               the launcher in another folder (`/<dir>/<brand>-store`) or says "on the Bash PATH"
+               the launcher in another folder (`/<dir>/<brand>-store`), says "on the Bash PATH"
+               or calls it bare (`<brand>-store <subcommand>`, no folder before it)
   BLD-05 content gates (build round 9, switched on with the wp/text merge):
   template-shape AT-TX-01: template §5 keeps Rule and What, no Caps/Where/Secret gate/Manifest
                or Blocking/Advisory bullet; §6 and §7 are short pointers with a `Why:` sentence;
@@ -449,8 +450,8 @@ def launcher_hits(target, brand):
     """AT-PK-01 over a built plugin folder (one with .claude-plugin/plugin.json): no top-level
     bin/; the launcher is scripts/<brand>-store, mode 0755; every hooks.json command is
     "${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <its Event> (8 of them); no text file
-    names the launcher in another folder (`/<dir>/<brand>-store`, dir not scripts) or says
-    "on the Bash PATH"."""
+    names the launcher in another folder (`/<dir>/<brand>-store`, dir not scripts), says
+    "on the Bash PATH" or calls it bare (`<brand>-store <subcommand>`, no folder before it)."""
     if not os.path.isfile(os.path.join(target, ".claude-plugin", "plugin.json")):
         return []
     out = []
@@ -484,6 +485,10 @@ def launcher_hits(target, brand):
         if groups is not None and n != HOOK_COUNT:
             out.append((hj, None, "AT-PK-01 hooks", "AT-PK-01 hooks: {} commands, want {}".format(n, HOOK_COUNT), ""))
     other_dir = re.compile(r"/([^/\s\"'`()<>]+)/" + re.escape(brand) + r"-store" + E)
+    # A bare call (`<brand>-store <subcommand>`, no folder before it) only works if the launcher
+    # is on the Bash PATH, which it is not since BLD-01: shipped text calls it by its full path
+    # or through `<store>` (AT-PK-01, AT-PK-02).
+    bare_call = re.compile(r'(?<![/\w."-])' + re.escape(brand) + r"-store\s+[a-z]")
     for path in files_of(target):
         text = text_of(path)
         if text is None:
@@ -496,6 +501,10 @@ def launcher_hits(target, brand):
             if BASH_PATH.search(line):
                 out.append((path, no, "AT-PK-01 bash-path",
                             "AT-PK-01 bash-path: nothing is on the Bash PATH (the launcher is called by its full path)", line))
+            for m in bare_call.finditer(line):
+                out.append((path, no, "AT-PK-01 bare-call",
+                            "AT-PK-01 bare-call: {!r} (the launcher is not on the Bash PATH; call {}/{}-store "
+                            "by its full path or through `<store>`)".format(m.group(0), LAUNCHER_DIR, brand), line))
     return out
 
 
