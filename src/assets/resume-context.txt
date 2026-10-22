@@ -9,6 +9,7 @@ Subagent: skip step 3; never end a turn while your job runs: wait in the foregro
 6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.
 [midturn] Compacted mid-turn or precomputed: the last step is [unverified].
 [nonok] Summary not in handoff format: take state from Measured facts and kept messages.
+[idle] Idle compaction: a new request replaces Step 1; a background result: stop if Step 1 needs the user. <!-- IC-1 D3, CROSS-REVIEW XR-03 (2) / DP-31 (1): shortened from 230 chars; never with [midturn] (XR-19) -->
 [handoff] A handoff was saved just before this compaction: @handoff_path@. Where the summary says `see handoff`, read that part there before you act on it.
 [handoff-partial] Compaction cut off the plugin's handoff turn; draft @draft_state@. If present, run @handoff_finish@ once and relay its receipt. Never start a second handoff.
 Measured facts (@measured_at@; saved copy of this summary: @saved_copy@):

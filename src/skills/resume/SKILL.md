@@ -1,6 +1,6 @@
 ---
 name: resume
-description: 'Resume from a handoff: "resume handoff", "continue from handoff", "pick up where I left off", a handoff path or ticket, after /clear or a break.'
+description: 'Resume from a handoff: "resume handoff", "continue from handoff", "pick up where I left off", a handoff path or ticket.'
 argument-hint: "[handoff path | ticket or topic] [instructions]"
 ---
 
