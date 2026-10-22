@@ -56,6 +56,8 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
             ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
+  runtime   assembly/runtime.json has every key of tools/assemble's worst-case RUNTIME (the helper's
+            BT-04-H fills only runtime.json keys, so a missing one makes its render differ)
   beta      beta/*.zip (AT-WB-13): each zip's intake (refuse: .. or absolute name, symlink, name
             outside B.5, entry over 50 MB, total over 200 MB, ratio over 100) and verify (manifest
             sha256, pattern classes) verdict equals beta/cases.json; zip members are secret-scanned
@@ -1900,6 +1902,41 @@ def check_settings():
     return problems, n
 
 
+RUNTIME_JSON = os.path.join(FIX, "assembly", "runtime.json")
+
+
+def assemble_runtime_keys():
+    """The keys of tools/assemble's worst-case RUNTIME dict, read from its source (the tool runs at
+    import, so it is parsed, not imported); None when the file or the dict is absent."""
+    import ast
+    path = os.path.join(REPO, "tools", "assemble")
+    if not os.path.exists(path):
+        return None
+    for node in ast.walk(ast.parse(read(path))):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "RUNTIME" for t in node.targets) \
+                and isinstance(node.value, ast.Dict):
+            return {k.value for k in node.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+    return None
+
+
+def check_runtime():
+    """assembly/runtime.json names every token tools/assemble fills (BT-04-H, text-to-fix F-1): the
+    helper's golden check fills only runtime.json keys, so a key tools/assemble fills from its own
+    worst case (e.g. idle_min) would make the helper render differ from the goldens."""
+    problems = []
+    keys = assemble_runtime_keys()
+    try:
+        have = set(json.loads(read(RUNTIME_JSON)))
+    except (OSError, ValueError):
+        return problems, 0   # the parse check reports a bad file
+    if keys is None:
+        return problems, len(have)
+    for k in sorted(keys - have):
+        problems.append("runtime assembly/runtime.json: no {!r}; tools/assemble fills it with its own worst case, "
+                        "so the helper's BT-04-H render differs from the goldens".format(k))
+    return problems, len(have)
+
+
 # Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
 # answer follows the strict contract of Q-ADAPTER QA-2 (MOD-SPEC §10.3 as amended): `schema`
 # `queue-stub/v1` required, `lanes` optional in either shape, unknown keys ignored. `list.expect`
@@ -2460,6 +2497,9 @@ def check(b):
     print("prod: {} recorded commands classed by the BUILD-PLAN §3.7 effects order (S-SETTINGS B, C)".format(nprod))
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))
+    runtime_problems, nruntime = check_runtime()
+    problems += runtime_problems
+    print("runtime: assembly/runtime.json's {} keys cover every token tools/assemble fills (BT-04-H)".format(nruntime))
     # beta
     beta_problems, nbeta = check_beta()
     problems += beta_problems
