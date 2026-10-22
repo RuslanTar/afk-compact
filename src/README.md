@@ -46,7 +46,7 @@ flowchart TD
 - Claude Code **2.1.287** or newer (mods). The one-line install below needs **2.1.292** or newer. This version was tested against **2.1.306**; the `PermissionDenied` and `StopFailure` hooks are not yet checked on older versions.
 - **Perl 5.28** or newer, using only modules that ship with every perl. It is already on macOS, on Debian and Ubuntu (slim images too), and on Windows with Git for Windows. On Alpine, run `apk add perl` first; on a minimal Fedora image, `dnf install perl-interpreter`.
 - `git` for the git measurements. On a Mac without the Command Line Tools, the plugin skips git rather than open the install dialog.
-- Claude Code in a terminal, or a local session of the desktop app. claude.ai and Cowork do not install plugins that contain a `bin/` folder, and this plugin's helper lives in `bin/`.
+- Claude Code in a terminal, or a local session of the desktop app. claude.ai and Cowork are not tested yet: whether they install the plugin and run its hooks, mod and helper has not been checked.
 
 ## Install
 
@@ -444,7 +444,7 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 
 ## Limits
 
-- **claude.ai and Cowork** do not install plugins with a `bin/` folder, so the plugin is for Claude Code sessions on your own machine.
+- **claude.ai and Cowork** are not tested yet, so for now the plugin is for Claude Code sessions on your own machine.
 - **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/{{plugin}}:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
 - **Subagents** get shaped summaries and copies, but no resume block. They also get no nudge and no handoff turn.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
