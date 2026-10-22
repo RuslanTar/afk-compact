@@ -38,7 +38,7 @@
     "queue_cmd": {
       "type": "file",
       "title": "Queue command",
-      "description": "Executable for an optional question queue: answers `list --json --session <sid>` with a `queue-stub/v1` object (the version tag is required), `adopt --lane <id> [--if-free] [--must-exist]` and `add --json ...` (draft on stdin; exit codes in README). Empty = off: no queue or lane text reaches the model. Read from your settings file only (flags and env are ignored).",
+      "description": "Executable for an optional question queue: answers `list --json --session <sid>` with a `queue-stub/v1` object (the version tag is required), `adopt --lane <id> [--if-free] [--must-exist]` and `add --json ...` (draft on stdin; exit codes in README). Empty = off: the plugin makes no queue call. Read from your settings file only (flags and env are ignored).",
       "default": ""
     },
     "triggers": {
