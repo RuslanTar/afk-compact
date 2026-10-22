@@ -1,0 +1,1 @@
+Note from the user's compactinue plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.

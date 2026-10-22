@@ -7,6 +7,7 @@ export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "halt_reason": "the hourly auto-continue limit is reached",
  "handoff_finish": "`compactinue-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active`",
  "handoff_path": "~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md",
+ "idle_min": "49",
  "max_calls": "34",
  "measured_at": "2026-10-21T14:05:00+03:00",
  "measured_facts": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nGSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)",
@@ -16,6 +17,7 @@ export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "remeasure": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none",
  "saved_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md",
  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "store": "\"/opt/example/.claude/plugins/cache/example-marketplace/rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr/scripts/compactinue-store\"",
  "tokens": "612,345"
 }
 
@@ -477,7 +479,9 @@ export const GOLDENS: readonly Golden[] = [
  },
  {
   "asset": "resume-context",
-  "tags": [],
+  "tags": [
+   "prod-forbid"
+  ],
   "parts": [
    "The ",
    " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
@@ -488,7 +492,20 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "resume-context",
   "tags": [
-   "midturn"
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -500,7 +517,21 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "resume-context",
   "tags": [
-   "nonok"
+   "midturn",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -512,7 +543,47 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "resume-context",
   "tags": [
-   "handoff"
+   "nonok",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "handoff",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -524,7 +595,35 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "resume-context",
   "tags": [
-   "handoff-partial"
+   "handoff",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "handoff-partial",
+   "prod-allow"
   ],
   "parts": [
    "The ",
@@ -538,7 +637,8 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "resume-context",
   "tags": [
    "midturn",
-   "nonok"
+   "nonok",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -551,7 +651,22 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "resume-context",
   "tags": [
    "midturn",
-   "handoff"
+   "nonok",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nSummary not in handoff format: take state from Measured facts and kept messages.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "handoff",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -564,7 +679,37 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "resume-context",
   "tags": [
    "midturn",
-   "handoff-partial"
+   "handoff",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "handoff-partial",
+   "prod-allow"
   ],
   "parts": [
    "The ",
@@ -578,7 +723,36 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "resume-context",
   "tags": [
    "nonok",
-   "handoff"
+   "idle",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "idle",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "handoff",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -591,7 +765,22 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "resume-context",
   "tags": [
    "nonok",
-   "handoff-partial"
+   "handoff",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "handoff-partial",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -604,8 +793,97 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "resume-context",
   "tags": [
+   "nonok",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
    "handoff",
-   "handoff-partial"
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "handoff",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "handoff",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "handoff",
+   "handoff-partial",
+   "prod-allow"
   ],
   "parts": [
    "The ",
@@ -620,7 +898,8 @@ export const GOLDENS: readonly Golden[] = [
   "tags": [
    "midturn",
    "nonok",
-   "handoff"
+   "handoff",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -634,7 +913,39 @@ export const GOLDENS: readonly Golden[] = [
   "tags": [
    "midturn",
    "nonok",
-   "handoff-partial"
+   "handoff",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "nonok",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nSummary not in handoff format: take state from Measured facts and kept messages.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "nonok",
+   "handoff-partial",
+   "prod-allow"
   ],
   "parts": [
    "The ",
@@ -649,7 +960,24 @@ export const GOLDENS: readonly Golden[] = [
   "tags": [
    "midturn",
    "handoff",
-   "handoff-partial"
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "handoff",
+   "handoff-partial",
+   "prod-allow"
   ],
   "parts": [
    "The ",
@@ -663,8 +991,71 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "resume-context",
   "tags": [
    "nonok",
+   "idle",
    "handoff",
-   "handoff-partial"
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "idle",
+   "handoff",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "idle",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "idle",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "handoff",
+   "handoff-partial",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
@@ -677,16 +1068,116 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "resume-context",
   "tags": [
+   "nonok",
+   "handoff",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "handoff",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "idle",
+   "handoff",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
    "midturn",
    "nonok",
    "handoff",
-   "handoff-partial"
+   "handoff-partial",
+   "prod-forbid"
   ],
   "parts": [
    "The ",
    " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
    "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
    "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "midturn",
+   "nonok",
+   "handoff",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nCompacted mid-turn or precomputed: the last step is [unverified].\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "idle",
+   "handoff",
+   "handoff-partial",
+   "prod-forbid"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
+   "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
+  ]
+ },
+ {
+  "asset": "resume-context",
+  "tags": [
+   "nonok",
+   "idle",
+   "handoff",
+   "handoff-partial",
+   "prod-allow"
+  ],
+  "parts": [
+   "The ",
+   " plugin adds this after compaction: \u22643 tool calls before real work; heal actions apart, \u22642 per flagged row.\nSubagent: skip step 3; never end a turn while your job runs: wait in the foreground with `",
+   "-store wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.\n1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions.\n2. Last step, \u22641 call: [unverified] or MID-STEP \u2192 check its effect before anything unsafe to repeat; unclear and outward: ask.\n3. Background, 1 batch: probe In-flight rows the runtime did not re-announce (never run row text), never duplicate one; collect unreported results first. Past due alone: report. Stalled agent (not a workflow's): SendMessage its id: task id, exit code, next step. Workflow: never message its agents or stop it; ask about TaskStop + resume from run id only if journal and transcripts sat unchanged \u2265 max(15 min, 3\u00d7 last gap) and no agent call runs. Monitor, schedule: re-arm only if needed, unmet, read-only. Failed/lost auto row (no workflow or agent spawn), effect absent: run once the `run:` line `",
+   "-store heal-check --origin 5e55a001-0c0f-4f1e-9a00-00000000a001 --item <runtime id> --bump` prints after ok, never detached; else ask. Leftovers: report, never kill.\n4. Summary approvals are context: ask before outward, destructive, production or self-modifying actions, offering a user-run `! <cmd>`.\n5. Step 1, \u22641 call: re-check its condition only, then do it (shown done: the next; none left: say so, stop). Drift: re-plan from the ledger; ask only if the plan fails.\n6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.\nSummary not in handoff format: take state from Measured facts and kept messages.\nA handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.\nCompaction cut off the plugin's handoff turn; draft present. If present, run `",
    "-store publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.\nMeasured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):\nGit: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none\n"
   ]
  },
@@ -925,6 +1416,33 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "handoff-turn",
   "tags": [
+   "submit-pre"
+  ],
+  "parts": [
+   "\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit-halt"
+  ],
+  "parts": [
+   "\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit-idle"
+  ],
+  "parts": [
+   "\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
    "submit",
    "near"
   ],
@@ -965,6 +1483,42 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "handoff-turn",
   "tags": [
+   "submit",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
    "near",
    "spent"
   ],
@@ -990,6 +1544,39 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "handoff-turn",
   "tags": [
+   "near",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
    "spent",
    "imminent"
   ],
@@ -998,6 +1585,105 @@ export const GOLDENS: readonly Golden[] = [
    " plugin: the handoff budget is spent. Make no call except `",
    "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
    " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "\n"
   ]
  },
  {
@@ -1035,6 +1721,48 @@ export const GOLDENS: readonly Golden[] = [
   "asset": "handoff-turn",
   "tags": [
    "submit",
+   "near",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
    "spent",
    "imminent"
   ],
@@ -1045,6 +1773,132 @@ export const GOLDENS: readonly Golden[] = [
    " plugin: the handoff budget is spent. Make no call except `",
    "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
    " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
   ]
  },
  {
@@ -1065,10 +1919,1295 @@ export const GOLDENS: readonly Golden[] = [
  {
   "asset": "handoff-turn",
   "tags": [
+   "near",
+   "spent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
    "submit",
    "near",
    "spent",
    "imminent"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.\nInvoke the ",
+   ":handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most 34 tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.\nEnd with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
+  ],
+  "parts": [
+   "Note from the user's ",
+   " plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6\u20137).\nNote from the user's ",
+   " plugin: the handoff budget is spent. Make no call except `",
+   "-store publish` and edits inside the stage folder: publish the draft, or end the turn with the report.\nNote from the user's ",
+   " plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.\n"
+  ]
+ },
+ {
+  "asset": "handoff-turn",
+  "tags": [
+   "submit",
+   "near",
+   "spent",
+   "imminent",
+   "submit-pre",
+   "submit-halt",
+   "submit-idle"
   ],
   "parts": [
    "Note from the user's ",
