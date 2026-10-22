@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, hasTag, leftovers } from '../../hooks/lib/assemble'
-import { CLAMP_DEFAULTS, DEFAULTS, clamp, clampConstants, minWindow, parseOptions } from '../../hooks/lib/config'
+import { CLAMP_DEFAULTS, DEFAULTS, clamp, clampConstants, minWindow, parseOptions, softCap, targetOf } from '../../hooks/lib/config'
 import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
@@ -309,12 +309,39 @@ test('AT-P5-07: clamp diagnostics: raw negative values, min_window, triggers off
   expect([clamp(ho, 313000).disabled, clamp(ho, 312999).disabled]).toEqual([null, 'trigger-disabled-small-window'])
 })
 
-test('clamp constants: one shared source (the spec-literals clamp object when complete), else the built-in values', () => {
-  expect(CLAMP_DEFAULTS).toEqual({ native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000 })
+// text-to-mod M-2 (spec §16 `clamp`, MOD-02 parity): the ten keys, each read from the shipped object.
+test('clamp constants: one shared source (the spec-literals clamp object, key by key), else the built-in values', () => {
+  expect(CLAMP_DEFAULTS).toEqual({
+    native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000,
+    soft_ratio: 0.8, target_num: 2, target_den: 3, handoff_tokens_min: 20000, handoff_tokens_max: 150000,
+  })
   expect(clampConstants(undefined)).toEqual(CLAMP_DEFAULTS)
-  expect(clampConstants({ native_offset: 33000 })).toEqual(CLAMP_DEFAULTS)
+  expect(clampConstants([1, 2])).toEqual(CLAMP_DEFAULTS)
+  expect(clampConstants({ native_offset: 40000 })).toEqual({ ...CLAMP_DEFAULTS, native_offset: 40000 })
+  // Not positive numbers, or a fractional num/den: that key keeps its built-in value.
+  expect(clampConstants({ target_num: 1.5, target_den: 0, soft_ratio: '0.5', min_target: -1, window_floor: Infinity })).toEqual(CLAMP_DEFAULTS)
+  // Parity: the shipped object holds exactly these keys and values (skipped until the build carries it).
   const shipped = specValue('clamp')
-  if (shipped !== undefined) expect(clampConstants(shipped)).toEqual(CLAMP_DEFAULTS)
+  if (shipped !== undefined) {
+    expect(shipped).toEqual(CLAMP_DEFAULTS)
+    expect(clampConstants(shipped)).toEqual(CLAMP_DEFAULTS)
+  }
+})
+
+test('clamp: target = floor(soft x target_num / target_den) in integers, never a float 2/3; the ratios and bounds come from the constants', () => {
+  expect([targetOf(180000), targetOf(179999), targetOf(3)]).toEqual([120000, 119999, 2])
+  expect(softCap(225000)).toBe(180000)
+  // The 180,000 soft max edge: enabled at min_target exactly.
+  const edge = clamp({ ...DEFAULTS, compact_soft_max_tokens: 180000 }, 1000000)
+  expect([edge.soft_max, edge.target, edge.disabled]).toEqual([180000, 120000, null])
+  // Other constants change the clamp and min_window the same way (the helper's and watcher's reading).
+  const k = { ...CLAMP_DEFAULTS, soft_ratio: 0.5, target_num: 1, target_den: 2 }
+  const e = clamp(DEFAULTS, 1000000, k)
+  expect([e.soft_max, e.target, e.min_window]).toEqual([500000, 250000, 480000])
+  expect(minWindow(DEFAULTS, { ...k, soft_ratio: 0.8 })).toBe(389000)
+  // handoff_turn_max_tokens bounds are the object's handoff_tokens_min / _max.
+  expect(parseOptions({ handoff_turn_max_tokens: 10 }).handoff_turn_max_tokens).toBe(CLAMP_DEFAULTS.handoff_tokens_min)
+  expect(parseOptions({ handoff_turn_max_tokens: 900000 }).handoff_turn_max_tokens).toBe(CLAMP_DEFAULTS.handoff_tokens_max)
 })
 
 // S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.

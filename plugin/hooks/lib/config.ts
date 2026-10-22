@@ -64,9 +64,6 @@ export const DEFAULTS: Config = {
   notes: { invalid: [], clamped: [] },
 }
 
-/** MOD-SPEC §1.2 `handoff_turn_max_tokens` bounds. */
-export const HANDOFF_TOKENS_MIN = 20000
-export const HANDOFF_TOKENS_MAX = 150000
 /** MOD-SPEC §1.2 `idle_handoff_min_tokens` bounds (the native idle floor, IC-1 F3). */
 export const IDLE_TOKENS_MIN = 100000
 export const IDLE_TOKENS_MAX = 1000000
@@ -178,25 +175,41 @@ export function parseOptions(o: PluginOptions): Config {
 }
 
 /**
- * The clamp constants (MOD-SPEC §1.2, P5-FOLD A3), one shared source with the helper and the
- * watcher's fallback clamp: the spec-literals `clamp` object when it holds all five numbers,
- * else these values (the same numbers; a parity test checks the two agree once the object ships).
+ * The clamp constants (MOD-SPEC §1.2, P5-FOLD A3, spec §16), one shared source with the helper's
+ * `/status` and the watcher's fallback clamp: each key from the spec-literals `clamp` object when
+ * it is a positive number there (`target_num`/`target_den` positive integers), else these values
+ * (the same numbers; a parity test checks the two agree once the object ships).
  * - `native_offset`: the native trigger estimate (800K → ≈767K lab reading; probe P-10).
  * - `min_target`: below this effective target, plugin compactions and the nudge are disabled.
  * - `reserve_base`: `reserve` below the native trigger: one oversized nudge-carrying result
  *   25,000 + the checkpoint turn 12,000 + a margin of 15,000, plus the handoff turn's allowance.
  * - `reserve_no_handoff`: `reserve` when `handoff_turn` is off.
  * - `window_floor`: the smallest window Claude Code applies.
+ * - `soft_ratio`: soft max ≤ ⌊`soft_ratio` × window⌋.
+ * - `target_num` / `target_den`: target ≤ ⌊soft max × num / den⌋, two integers because a float
+ *   2/3 gives 119,999 at soft max 180,000.
+ * - `handoff_tokens_min` / `handoff_tokens_max`: the `handoff_turn_max_tokens` bounds.
  */
-export type ClampConstants = { native_offset: number; min_target: number; reserve_base: number; reserve_no_handoff: number; window_floor: number }
-export const CLAMP_DEFAULTS: ClampConstants = { native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000 }
+export type ClampConstants = {
+  native_offset: number; min_target: number; reserve_base: number; reserve_no_handoff: number; window_floor: number
+  soft_ratio: number; target_num: number; target_den: number; handoff_tokens_min: number; handoff_tokens_max: number
+}
+export const CLAMP_DEFAULTS: ClampConstants = {
+  native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000,
+  soft_ratio: 0.8, target_num: 2, target_den: 3, handoff_tokens_min: 20000, handoff_tokens_max: 150000,
+}
 
 export function clampConstants(v: unknown = specValue('clamp')): ClampConstants {
-  if (typeof v !== 'object' || v === null) return CLAMP_DEFAULTS
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return CLAMP_DEFAULTS
   const o = v as Record<string, unknown>
-  const keys = Object.keys(CLAMP_DEFAULTS) as (keyof ClampConstants)[]
-  if (!keys.every(k => typeof o[k] === 'number' && Number.isFinite(o[k]))) return CLAMP_DEFAULTS
-  return Object.fromEntries(keys.map(k => [k, o[k] as number])) as ClampConstants
+  const k = { ...CLAMP_DEFAULTS }
+  for (const key of Object.keys(CLAMP_DEFAULTS) as (keyof ClampConstants)[]) {
+    const x = o[key]
+    if (typeof x !== 'number' || !Number.isFinite(x) || x <= 0) continue
+    if ((key === 'target_num' || key === 'target_den') && !Number.isInteger(x)) continue
+    k[key] = x
+  }
+  return k
 }
 
 export const CLAMP: ClampConstants = clampConstants()
@@ -204,9 +217,22 @@ export const NATIVE_OFFSET = CLAMP.native_offset
 export const MIN_TARGET = CLAMP.min_target
 export const RESERVE_BASE = CLAMP.reserve_base
 export const RESERVE_NO_HANDOFF = CLAMP.reserve_no_handoff
+/** MOD-SPEC §1.2 `handoff_turn_max_tokens` bounds (the clamp object's `handoff_tokens_min`/`_max`). */
+export const HANDOFF_TOKENS_MIN = CLAMP.handoff_tokens_min
+export const HANDOFF_TOKENS_MAX = CLAMP.handoff_tokens_max
 
-export function reserve(cfg: Config): number {
-  return cfg.handoff_turn === 'halt' ? RESERVE_BASE + cfg.handoff_turn_max_tokens : RESERVE_NO_HANDOFF
+export function reserve(cfg: Config, k: ClampConstants = CLAMP): number {
+  return cfg.handoff_turn === 'halt' ? k.reserve_base + cfg.handoff_turn_max_tokens : k.reserve_no_handoff
+}
+
+/** ⌊soft × `target_num` / `target_den`⌋ in integer steps (never a float 2/3). */
+export function targetOf(soft: number, k: ClampConstants = CLAMP): number {
+  return Math.floor((soft * k.target_num) / k.target_den)
+}
+
+/** ⌊`soft_ratio` × window⌋. */
+export function softCap(window: number, k: ClampConstants = CLAMP): number {
+  return Math.floor(k.soft_ratio * window)
 }
 
 export type Effective = {
@@ -230,10 +256,17 @@ export type Effective = {
  * `max(213,000 + reserve, 225,000)` with the defaults (329,000; `handoff_turn` off 313,000).
  * Configured values below those floors can never enable: `never`.
  */
-export function minWindow(cfg: Config): number | 'never' {
-  const soft = Math.ceil((MIN_TARGET * 3) / 2)
-  if (cfg.compact_soft_max_tokens < soft || cfg.compact_target_tokens < MIN_TARGET) return 'never'
-  return Math.max(soft + NATIVE_OFFSET + reserve(cfg), Math.ceil(soft / 0.8))
+export function minWindow(cfg: Config, k: ClampConstants = CLAMP): number | 'never' {
+  // The smallest soft max whose target reaches min_target, then the smallest window whose
+  // soft cap gives it: integer steps from a close start, with the clamp's own expressions.
+  let soft = Math.ceil((k.min_target * k.target_den) / k.target_num)
+  while (soft > 0 && targetOf(soft - 1, k) >= k.min_target) soft--
+  while (targetOf(soft, k) < k.min_target) soft++
+  if (cfg.compact_soft_max_tokens < soft || cfg.compact_target_tokens < k.min_target) return 'never'
+  let w = Math.ceil(soft / k.soft_ratio)
+  while (w > 0 && softCap(w - 1, k) >= soft) w--
+  while (softCap(w, k) < soft) w++
+  return Math.max(soft + k.native_offset + reserve(cfg, k), w)
 }
 
 /**
@@ -241,17 +274,17 @@ export function minWindow(cfg: Config): number | 'never' {
  * false the thresholds, the clamped list, `small_window` and `min_window` are computed as with
  * triggers on (P5-FOLD A3), so the row shows what triggers-on would do.
  */
-export function clamp(cfg: Config, contextWindow: number): Effective {
+export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CLAMP): Effective {
   const window = cfg.native_window_tokens > 0 ? cfg.native_window_tokens : contextWindow
-  const native_trigger = window - NATIVE_OFFSET
-  const soft_max = Math.min(cfg.compact_soft_max_tokens, native_trigger - reserve(cfg), Math.floor(0.8 * window))
-  const target = Math.min(cfg.compact_target_tokens, Math.floor((soft_max * 2) / 3))
+  const native_trigger = window - k.native_offset
+  const soft_max = Math.min(cfg.compact_soft_max_tokens, native_trigger - reserve(cfg, k), softCap(window, k))
+  const target = Math.min(cfg.compact_target_tokens, targetOf(soft_max, k))
   const clamped: Effective['clamped'] = []
   if (soft_max < cfg.compact_soft_max_tokens) clamped.push({ key: 'soft_max', configured: cfg.compact_soft_max_tokens, effective: soft_max })
   if (target < cfg.compact_target_tokens) clamped.push({ key: 'target', configured: cfg.compact_target_tokens, effective: target })
-  const small_window = target < MIN_TARGET
+  const small_window = target < k.min_target
   const disabled = !cfg.triggers ? 'triggers-off' : small_window ? 'trigger-disabled-small-window' : null
-  return { window, native_trigger, soft_max, target, disabled, small_window, min_window: minWindow(cfg), clamped }
+  return { window, native_trigger, soft_max, target, disabled, small_window, min_window: minWindow(cfg, k), clamped }
 }
 
 /** Expands a leading `~` with the home folder; undefined when it cannot. */
