@@ -9,7 +9,8 @@ package skills::publish;
 # frontmatter keys and their order are the spec's frontmatter_keys_handoff (with
 # previous_kind and own_previous_handoff, RV-19); a stage bound to a plugin handoff turn
 # publishes once (`<ht>.published` before the handoff file, else REFUSED: handoff-exists
-# <path>, D-18 B8); shell recipes of a recorded job carry `job:` and the recorded
+# <path>, D-18 B8; a claim whose file was never placed is filled by a retry of the same
+# stage, CR-F9); shell recipes of a recorded job carry `job:` and the recorded
 # command (Dev-1 D2); in repo mode the handoff is then exported (D-12 §1.5.5,
 # skills/export.pm) and one receipt line says what happened to the export.
 use strict;
@@ -55,9 +56,16 @@ sub run {
     # so the watcher's A-18 matches the row to the turn exactly, not by time.
     $row->{ht} = $ht if $ht;
     my $sid_dir = skills::core::sid_dir();
+    # CR-F9: a claim whose file was never placed (the earlier publish of this stage died
+    # between the claim and the link) is fulfilled by this retry, at the claimed path only;
+    # see _claimed_free. Any other claim refuses.
+    my $claimed;
     if ($ht && defined $sid_dir) {
         my $done = skills::core::ht_record($sid_dir, $ht) && handoff_turn::published_of($sid_dir, $ht);
-        _refuse($ctx, $row, "handoff-exists $done") if $done;
+        if ($done) {
+            _refuse($ctx, $row, "handoff-exists $done") unless _claimed_free($done, $s);
+            $claimed = $done;
+        }
     }
 
     my %recipes;
@@ -185,25 +193,35 @@ sub run {
     my ($mre, $sre) = (skills::spec::marker_re(), skills::spec::sentinel_re());
     die "marker does not match the spec grammar\n" if ($mre && $marker !~ $mre) || ($sre && $sentinel !~ $sre);
     (my $btxt = $body) =~ s/\s+\z//;
+    # CR-F9 (D-18 B8): the whole file is written and read back under a temp name first;
+    # only then is the handoff-turn claim made, and the file is linked into place (an
+    # exclusive create). A failed write or read-back leaves no claim behind.
     my ($path, $content);
     for (1 .. 5) {
-        $path = skills::util::unique_path($bucket, $s->{stem}, '.md');
+        $path = $claimed // skills::util::unique_path($bucket, $s->{stem}, '.md');
         (my $bb = $btxt) =~ s/\@self\@/$path/g;
         $content = $fm . $marker . "\n" . $bb . "\n" . $sentinel . "\n";
-        if ($ht && defined $sid_dir) {
-            # One handoff per plugin handoff turn: the claim comes first (D-18 B8).
-            my ($ok, $have) = skills::core::ht_mark_published($sid_dir, $ht, $path);
-            if (!$ok) { _refuse($ctx, $row, "handoff-exists $have") }
-        }
-        last if skills::util::write_excl($path, $content, 0600);
-        die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
+        my $tmp = "$bucket/.$s->{stem}.md.publish-$$-" . int(rand(1e6));
+        my $placed = eval {
+            skills::util::write_excl($tmp, $content, 0600) or die "publish tmp exists: $tmp\n";
+            my $back = skills::util::read_file($tmp);
+            my @tail = grep { /\S/ } split /\n/, ($back // '');
+            die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
+                && @tail && $tail[-1] eq $sentinel;
+            if ($ht && defined $sid_dir && !defined $claimed) {
+                # One handoff per plugin handoff turn: the claim comes before the file (D-18 B8).
+                my ($ok, $have) = skills::core::ht_mark_published($sid_dir, $ht, $path);
+                if (!$ok) { unlink $tmp; _refuse($ctx, $row, "handoff-exists $have") }
+            }
+            _place($tmp, $path, $content, $ht);
+        };
+        my $err = $@;
+        unlink $tmp if -e $tmp;
+        die $err unless defined $placed;
+        last if $placed;
         undef $path;
     }
     die "no free handoff name\n" unless $path;
-    my $back = skills::util::read_file($path);
-    my @tail = grep { /\S/ } split /\n/, ($back // '');
-    die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
-        && @tail && $tail[-1] eq $sentinel;
     skills::util::write_excl("$dir/published", "$path\n", 0600);
 
     # ---- pin under the TPL §6 lock
@@ -273,13 +291,44 @@ sub _job_lines {
         $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · not recorded\n/m;
         return $t;
     }
-    my $cmd = defined $job->{command} ? $job->{command}
+    my $cmd = defined $job->{command} ? skills::core::recipe_command($job->{command})
             : '(withheld: ' . join(',', @{ ref $job->{command_withheld} eq 'ARRAY' ? $job->{command_withheld} : ['secret'] }) . ')';
-    $cmd =~ s/[\r\n]+/ /g;
     if ($t =~ /^\s*command:/m) { $t =~ s/^(\s*)command:[^\n]*/$1command: $cmd/m }
     else { $t =~ s/^(\s*item:[^\n]*\n)/$1command: $cmd\n/m }
     $t =~ s/^(\s*item:[^\n]*\n)/$1job: $rid · recorded\n/m;
     return $t;
+}
+
+# Link the checked temp file to the handoff path, never over an existing file: 1 placed,
+# 0 the name is taken (try the next one; after a handoff-turn claim it dies instead).
+# A file system without hard links falls back to an exclusive create of the same bytes
+# (CR-F9: never a rename, which would replace a file made in the gap), read back.
+sub _place {
+    my ($tmp, $path, $content, $ht) = @_;
+    return 1 if link($tmp, $path);
+    my $eexist = $!{EEXIST};
+    if ($eexist || -e $path || -l $path) {
+        die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
+        return 0;
+    }
+    if (!skills::util::write_excl($path, $content, 0600)) {
+        die "handoff name taken after the handoff-turn claim: $path\n" if $ht;
+        return 0;
+    }
+    my $back = skills::util::read_file($path);
+    die "read-back failed: $path\n" unless defined $back && $back eq $content;
+    return 1;
+}
+
+# CR-F9: the handoff-turn claim names a path this retry may still fill: nothing is there
+# (no file, no link), and it is the name this stage's publish picks (its bucket, its stem,
+# an optional -N), so it was claimed by an earlier publish of the same stage.
+sub _claimed_free {
+    my ($p, $s) = @_;
+    return 0 if -e $p || -l $p;
+    return 0 unless defined $s->{bucket} && defined $s->{stem};
+    return 0 unless File::Basename::dirname($p) eq $s->{bucket};
+    return File::Basename::basename($p) =~ /\A\Q$s->{stem}\E(?:-[0-9]+)?\.md\z/ ? 1 : 0;
 }
 
 sub _refuse {

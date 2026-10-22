@@ -9,7 +9,8 @@ package skills::lint;
 #      previous (text of previous_handoff, the carry base, or undef), times {shown => 1},
 #      evidence [rows], bucket, brand; 2026-10-21 rulings:
 #      previous_kind (own|chain|foreign) and own_previous (text of own_previous_handoff)
-#        for carry-provenance and carry-approval (small-rulings §2.4);
+#        for carry-provenance and carry-approval (small-rulings §2.4) and the
+#        carried-stamp exemption (CR-F29);
 #      repo_mode and export_text (the body after the D-12 §1.5.5 rewrite) for
 #        private-path (repo mode only);
 #      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2).
@@ -35,6 +36,9 @@ sub lint {
     skills::spec::need(qw(time_re claim_tags.verified_re carry.tag_re carry.foreign_approval_note lint_ids private_path_classes));
     # Lines carried byte-identical from the base or from the own chain's file.
     my %prev_lines = map { $_ => 1 } split /\n/, join("\n", grep { defined } $in->{previous}, $in->{own_previous});
+    # CR-F29 (DP-27): tagged ledger lines carried from a foreign base keep the base's
+    # checked/verified stamps verbatim; their times are not checked.
+    my $carried = _foreign_carried($in, \@lines);
     my $mains = skills::spec::sections_main();
     my $locs = skills::spec::sections_location();
     my $nf = skills::spec::none_forms();
@@ -186,7 +190,7 @@ sub lint {
     my $checked = $tre ? qr/\bchecked[ \t]+($tre)(?![0-9])/ : undef;
     for my $i (0 .. $#lines) {
         my $l = $lines[$i];
-        next if $prev_lines{$l};
+        next if $prev_lines{$l} || $carried->{$i};
         my @t;
         if ($checked) { while ($l =~ /$checked/g) { push @t, $1 } }
         if ($vre && $tre) {
@@ -204,7 +208,7 @@ sub lint {
     my $short = qr/(?:[0-9]{4}-[0-9]{2}-[0-9]{2}[ T])?(?:[0-9]{2}-[0-9]{2} )?[0-9]{1,2}:[0-9]{2}/;
     for my $i (0 .. $#lines) {
         my $l = $lines[$i];
-        next if $prev_lines{$l};
+        next if $prev_lines{$l} || $carried->{$i};
         my $bad = 0;
         while ($l =~ /(?:\bchecked|\[verified)[ \t]+/g) {
             my $at = substr($l, pos($l));
@@ -339,7 +343,7 @@ sub lint {
         my $job = defined $rid ? ($in->{jobs} || {})->{$rid} : undef;
         next unless $job && defined $job->{command};
         my ($cmd) = $t =~ /^\s*command:[ \t]*(.*?)[ \t]*$/m;
-        push @adv, [ 'recipe-mismatch', "restart/$name" ] if !defined $cmd || $cmd ne $job->{command};
+        push @adv, [ 'recipe-mismatch', "restart/$name" ] if !defined $cmd || $cmd ne skills::core::recipe_command($job->{command});
     }
     if (defined $in->{previous}) {
         my %pl = map { _norm($_) => 1 } grep { _counts($_) } split /\n/, $in->{previous};
@@ -365,6 +369,24 @@ sub _ledger_norm {
     $c =~ s/\s+/ /g;
     $c =~ s/\A | \z//g;
     return $c eq '' ? undef : $c;
+}
+
+# {line index => 1} for body lines carried from a foreign base (CR-F29, DP-27): a line
+# with a `[from …]` tag whose _ledger_norm (no leading id, no tags, spacing folded) equals
+# a base line's. Its stamps are then the base's own; any tag counts, since a base line
+# that already had a tag keeps that tag (template rule 8).
+sub _foreign_carried {
+    my ($in, $lines) = @_;
+    my %c;
+    return \%c unless ($in->{previous_kind} // '') eq 'foreign' && defined $in->{previous};
+    my $tag_re = skills::spec::regex_at('carry.tag_re') or return \%c;
+    my %base = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, $in->{previous};
+    for my $i (0 .. $#$lines) {
+        next unless $lines->[$i] =~ $tag_re;
+        my $n = _ledger_norm($lines->[$i], $tag_re);
+        $c{$i} = 1 if defined $n && $base{$n};
+    }
+    return \%c;
 }
 
 sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }

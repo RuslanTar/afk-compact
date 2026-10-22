@@ -322,6 +322,19 @@ sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jo
 sub job_add_pending { my ($sid_dir, $p) = @_; return jobrec::add_pending($sid_dir, $p) }
 sub job_output_source { return $jobrec::OUTPUT_PATH_SOURCE // 'none' }
 
+# CR-F8: the one-line form of a recorded command, as a recipe's `command:` line holds it
+# (line breaks become one space each run, outer blanks trimmed). publish writes this form,
+# and heal-check and the lint compare a recipe line with this form of the record; the run
+# line itself is always the record, byte for byte (Dev-1 D5).
+sub recipe_command {
+    my ($c) = @_;
+    return undef unless defined $c;
+    $c =~ s/[\r\n]+/ /g;
+    $c =~ s/\A[ \t]+//;
+    $c =~ s/[ \t]+\z//;
+    return $c;
+}
+
 # settings::relaunch over the run context's resolved settings (consent keys: file only).
 sub relaunch {
     my $r = eval { settings::relaunch(rc::settings()) };

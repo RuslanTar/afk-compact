@@ -1,0 +1,225 @@
+{
+ "id": "HT-LT-04 (CR-F9, CR-F10)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Code review 2026-10-22: a begin that returns the stage already bound to the handoff turn (resumed) appends the checked_at it prints to stamps.log, so a draft citing it publishes (CR-F10); publish writes and reads back the whole handoff under a temp name before the <ht>.published claim, so a write that fails leaves no claim, handoff-state stays staged and a retry publishes (CR-F9)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "the mod opens a handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   },
+   "name": "begin binds the open ht"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$ROOT/repo/LAB-7",
+     "mode": "0500"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 70,
+    "stdout_lacks": [
+     "^LINT ",
+     "^Wrote "
+    ],
+    "absent": [
+     "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+     "$STAGE/published"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 0
+     }
+    ]
+   },
+   "name": "CR-F9: the handoff file cannot be written: no claim is left",
+   "now": "2026-10-21T14:10:00+03:00"
+  },
+  {
+   "name": "CR-F9: handoff-state still reads staged",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Astaged $STAGE draft=1 finish="
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$ROOT/repo/LAB-7",
+     "mode": "0700"
+    }
+   ]
+  },
+  {
+   "name": "CR-F10: a resumed begin records the checked_at it prints",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "now": "2026-10-21T14:20:00+03:00",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": "$STAGE",
+     "resumed": 1,
+     "checked_at": "2026-10-21 14:20 +0300"
+    },
+    "files": [
+     {
+      "path": "$STAGE/stamps.log",
+      "has": [
+       "\\t2026-10-21 14:20 \\+0300$"
+      ]
+     },
+     {
+      "path": "$STAGE/settings.json",
+      "has": [
+       "\"checked_at\":\"2026-10-21 14:05 \\+0300\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:20 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:20 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:20 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/handoff-turn/a1b2c3d4.published",
+      "mode": "0600",
+      "has": [
+       "\\A$ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/*.md",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/.*.publish-*",
+      "count": 0
+     }
+    ]
+   },
+   "name": "CR-F10 + CR-F9: the retry publishes; the draft cites the resumed checked_at; no temp file is left",
+   "now": "2026-10-21T14:22:00+03:00"
+  },
+  {
+   "name": "published",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "published $ROOT/repo/LAB-7/$STEM.md\n"
+   }
+  }
+ ]
+}

@@ -78,7 +78,9 @@ sub verify {
             $sig{V1} = ['unmeasured', 'origin transcript not found'];
         } else {
             my $t = transcript_has($tp, $rec->{command_sha256}, $a{task});
+            # CR-F12: a miss in a bounded scan of a longer transcript is not measured.
             $sig{V1} = !defined $t ? ['unmeasured', 'transcript unreadable']
+                     : $t eq 'partial' ? ['unmeasured', 'no matching Bash call in the scanned tail of the origin transcript']
                      : $t ? ['pass', 'record, sha and transcript agree'] : ['fail', 'no matching Bash call in the origin transcript'];
         }
     }
@@ -88,6 +90,7 @@ sub verify {
     $r{owner} = $own;
     $r{owner_end} = $own->{end};
     if ($own->{state} eq 'unknown') { $sig{V2} = ['unmeasured', 'no owner record'] }
+    elsif ($own->{state} eq 'unverified') { $sig{V2} = ['unmeasured', 'owner pid alive; its start time could not be checked'] }
     elsif ($own->{state} eq 'ended') { $sig{V2} = ['pass', 'owner ended' . (defined $own->{end} ? ' ' . skills::util::stamp($own->{end}) : ' (time unknown)')] }
     elsif ($own->{state} eq 'this') { $sig{V2} = ['fail', 'owner is this process and session'] }
     elsif ($own->{state} eq 'cleared') { $sig{V2} = ['fail', 'owner process still live after /clear' . (defined $own->{end} ? ' ' . skills::util::stamp($own->{end}) : '')] }
@@ -241,7 +244,8 @@ sub runnable {
 }
 
 # owner_state(ctx, origin sid, record, current {sid, pid, lstart})
-#   -> {state => ended|this|cleared|elsewhere|unknown, end => epoch|undef}
+#   -> {state => ended|this|cleared|elsewhere|unverified|unknown, end => epoch|undef}
+#   unverified: the owner pid runs but its start time is missing or unreadable (CR-F11)
 #   cleared: the origin's process is alive under a later session (/clear); end = that
 #   session's start
 sub owner_state {
@@ -273,7 +277,10 @@ sub owner_state {
         # /clear: the same process under a later session. Its shells survive (DP-24 (c)).
         return _cleared($pid, $lstart, $cur, $later[0]) // { state => 'ended', end => $later[0] } if @later;
     }
-    return { state => 'ended', end => undef } unless skills::ctx::pid_matches($pid, $lstart);
+    # CR-F11: a live pid whose start time cannot be checked is not proof the owner ended.
+    my $ps = skills::ctx::pid_state($pid, $lstart);
+    return { state => 'ended', end => undef } if $ps eq 'gone';
+    return { state => 'unverified', end => undef } if $ps eq 'unverified';
     my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
     return { state => ($this && ($cur->{sid} // '') eq $origin) ? 'this' : ($this ? 'cleared' : 'elsewhere') };
 }
@@ -282,7 +289,9 @@ sub owner_state {
 # process, else `elsewhere` (another live process runs the job, if it still runs).
 sub _cleared {
     my ($pid, $lstart, $cur, $t) = @_;
-    return undef unless skills::ctx::pid_matches($pid, $lstart);
+    my $ps = skills::ctx::pid_state($pid, $lstart);
+    return undef if $ps eq 'gone';
+    return { state => 'unverified', end => $t } if $ps eq 'unverified';
     my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
     return { state => ($this ? 'cleared' : 'elsewhere'), end => $t };
 }
@@ -323,14 +332,20 @@ sub transcript_of {
 }
 
 # 1 when the transcript holds a Bash tool_use whose command has this sha and a tool result
-# for it naming this backgroundTaskId; 0 when not; undef when unreadable. Content is read
-# in memory and never printed.
+# for it naming this backgroundTaskId; 0 when not; 'partial' when not found in a
+# transcript longer than the scan window (only its last $TRANSCRIPT_MAX bytes are read;
+# STORE_TEST_TRANSCRIPT_MAX sets the window in test mode); undef when unreadable.
+# Content is read in memory and never printed.
 sub transcript_has {
     my ($path, $sha, $task) = @_;
     return 0 unless defined $sha && defined $task;
     my $size = -s $path;
     open(my $fh, '<:raw', $path) or return undef;
-    seek($fh, $size - $TRANSCRIPT_MAX, 0) if defined $size && $size > $TRANSCRIPT_MAX;
+    my $max = $TRANSCRIPT_MAX;
+    $max = 0 + $ENV{STORE_TEST_TRANSCRIPT_MAX}
+        if skills::util::test_mode() && ($ENV{STORE_TEST_TRANSCRIPT_MAX} // '') =~ /\A[1-9][0-9]{0,9}\z/;
+    my $partial = defined $size && $size > $max;
+    seek($fh, $size - $max, 0) if $partial;
     my (%use, $hit);
     while (my $l = <$fh>) {
         if (index($l, '"tool_use"') >= 0 && index($l, '"Bash"') >= 0) {
@@ -352,7 +367,7 @@ sub transcript_has {
         last if $hit;
     }
     close $fh;
-    return $hit ? 1 : 0;
+    return $hit ? 1 : $partial ? 'partial' : 0;
 }
 
 sub _content {

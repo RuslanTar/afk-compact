@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "heal-check: ok <recipe> for a same-session auto recipe whose script sha256 matches MANIFEST; --bump counts before the restart; a 2nd restart in the same resume and a 3rd in the chain are refused (counter); sha mismatch refused (sha); class ask or another session refused (class); heal rows",
+ "note": "CR-F13 (DP-27: Dev-5 wins over the old same-session restart gate): heal-check never hands back a recipe that came only from handoff text as runnable. With no job record, a same-session `class auto` recipe whose script sha matches MANIFEST, the same with --bump, its B-n handle, other processes of the session, a `class ask` recipe, another session (relation), a changed script and an unknown item are all refused, with no `ok`, no `run:` and no counter written; a recipe's hand-written command is asked with ask-source: handoff; a bad item is a usage error",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -123,8 +123,17 @@
     "b8890"
    ],
    "expect": {
-    "exit": 0,
-    "stdout": "ok $ROOT/repo/LAB-7/evidence/$STEM/restart/B-2.md\n",
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
     "absent": [
      "$WATCH/heal/$SID/b8890.count"
     ]
@@ -141,16 +150,19 @@
     "--bump"
    ],
    "expect": {
-    "exit": 0,
-    "stdout": "ok $ROOT/repo/LAB-7/evidence/$STEM/restart/B-2.md\n",
-    "files": [
-     {
-      "path": "$WATCH/heal/$SID/b8890.count",
-      "mode": "0600",
-      "has": [
-       "\"chain\":1"
-      ]
-     }
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/b8890.count"
     ],
     "rows": [
      {
@@ -159,9 +171,9 @@
       "fields": {
        "origin_sid": "$SID",
        "item": "b8890",
-       "result": "ok",
+       "result": "REFUSED:ended-unexplained",
        "bumped": true,
-       "count": 1
+       "count": null
       }
      }
     ]
@@ -178,7 +190,19 @@
    ],
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: counter\n"
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/b8890.count"
+    ]
    }
   },
   {
@@ -195,14 +219,19 @@
     "STORE_TEST_CLAUDE_PID": "1:Mon Jan  1 00:00:00 2001"
    },
    "expect": {
-    "exit": 0,
-    "files": [
-     {
-      "path": "$WATCH/heal/$SID/b8890.count",
-      "has": [
-       "\"chain\":2"
-      ]
-     }
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: lost-low$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/b8890.count"
     ]
    }
   },
@@ -221,24 +250,18 @@
    },
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: counter\n",
-    "files": [
-     {
-      "path": "$WATCH/heal/$SID/b8890.count",
-      "has": [
-       "\"chain\":2"
-      ]
-     }
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: lost-low$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
     ],
-    "rows": [
-     {
-      "file": "$WATCH/$SID.classic.jsonl",
-      "ev": "heal",
-      "fields": {
-       "result": "REFUSED:counter",
-       "count": 2
-      }
-     }
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/b8890.count"
     ]
    }
   },
@@ -253,7 +276,19 @@
    ],
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: class\n"
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/wf_1.count"
+    ]
    }
   },
   {
@@ -270,7 +305,19 @@
    },
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: class\n"
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: relation$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/b4444.count"
+    ]
    }
   },
   {
@@ -283,7 +330,20 @@
     "b4444"
    ],
    "expect": {
-    "exit": 0
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/b4444.count"
+    ]
    }
   },
   {
@@ -302,7 +362,16 @@
    ],
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: sha\n",
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$",
+     "^ask-command: sh run\\.sh$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
     "absent": [
      "$WATCH/heal/$SID/b4444.count"
     ]
@@ -319,7 +388,17 @@
    ],
    "expect": {
     "exit": 3,
-    "stdout": "REFUSED: class\n"
+    "stdout_has": [
+     "^verdict: ",
+     "^REFUSED: ended-unexplained$"
+    ],
+    "stdout_lacks": [
+     "^ok ",
+     "^run: "
+    ],
+    "absent": [
+     "$WATCH/heal/$SID/nope.count"
+    ]
    }
   },
   {
