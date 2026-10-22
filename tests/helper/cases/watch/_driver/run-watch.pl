@@ -107,6 +107,36 @@ sub write_file {
 
 sub jsonl { return join('', map { watch::json::encode($_) . "\n" } @{ $_[0] }) }
 
+# `cli` steps run a staged copy of plugin/, made once per driver run, as the core case
+# runner (tests/helper/run.pl stage_plugin) does: the copy holds core's CR-F34 test seam
+# mark (settings::$TEST_CONSENT_MARK), so with STORE_TEST_MODE=1 the consent folder is
+# the case's $HOME/.claude. The repo's plugin/ never gets the mark.
+my $CLI_STAGE;
+sub copy_tree {
+    my ($src, $dst) = @_;
+    watch::io::mkdir_p($dst);
+    for my $e (watch::io::list_dir($src)) {
+        next if $e eq 'node_modules';
+        my ($s, $d) = ("$src/$e", "$dst/$e");
+        if (-l $s) { symlink(readlink($s), $d) or die "symlink $d: $!"; next }
+        if (-d $s) { copy_tree($s, $d); next }
+        write_file($d, watch::io::slurp($s), (stat $s)[2] & 07777);
+    }
+    chmod((stat $src)[2] & 07777, $dst);
+}
+sub cli_launcher {
+    if (!defined $CLI_STAGE) {
+        my $base = File::Temp::tempdir('watchstage-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+        copy_tree("$REPO/plugin", "$base/plugin");
+        require settings;
+        write_file("$base/plugin/$settings::TEST_CONSENT_MARK", "watch driver test stage\n", 0644);
+        $CLI_STAGE = "$base/plugin";
+    }
+    my $l = "$CLI_STAGE/bin/$T::BRAND-store";
+    die "run-watch.pl: no launcher at plugin/bin/$T::BRAND-store (run tools/build)\n" unless -x $l;
+    return $l;
+}
+
 sub capture {
     my ($code) = @_;
     my $tmp = File::Temp->new;
@@ -214,7 +244,7 @@ sub run_case {
             close $inf;
             my $of = File::Temp->new;
             my $ef = File::Temp->new;
-            my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } ("$REPO/plugin/bin/" . $T::BRAND . q(-store), @argv));
+            my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } (cli_launcher(), @argv));
             system("$cmd < '" . $inf->filename . "' > '" . $of->filename . "' 2> '" . $ef->filename . "'");
             my $code = $? >> 8;
             $out = watch::io::slurp($of->filename);

@@ -61,6 +61,11 @@ my $nested = sub { my ($v) = @_; return { values => $v, source => { map { $_ => 
         $E->ok(($unk_status =~ /watcher setting is not "shadow" or "off"; it counts as shadow/ ? 1 : 0), "settings file 'Shadow2': status notes it");
         my @pre = $E->rows('classic', 'precompact');
         $E->count(\@pre, 2, "settings file: 'OFF' writes no precompact row, 'Shadow2' writes one per hook");
-        $E->count([ $E->rows('classic', 'config_note') ], 1, "settings file 'Shadow2': one config_note row per session");
+        # CR-F34: the driver's staged plugin holds core's test seam, so the consent folder is
+        # this HOME's .claude and the launcher adds no consent config_note rows.
+        my @cn = $E->rows('classic', 'config_note');
+        $E->count(\@cn, 1, "settings file 'Shadow2': one config_note row per session");
+        $E->is(join(',', map { ($_->{key} // '') . ':' . ($_->{note} // '') } @cn), 'watcher:watcher_value_unknown',
+               "settings file 'Shadow2': the config_note row is the watcher's");
     },
 };
