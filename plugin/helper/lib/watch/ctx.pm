@@ -79,6 +79,10 @@ sub _settings {
         $r = eval { local $SIG{__DIE__}; settings::resolve({}) } if defined &settings::resolve;
         $given = $r if ref $r eq 'HASH';
     }
+    # Core passes settings::resolve's shape {values => {...}, source, notes} (rc::settings),
+    # and the fallback above returns it too; the keys live under `values` (CR-F15). A flat
+    # hash (key => value) is read as it is.
+    $given = $given->{values} if $given && ref $given->{values} eq 'HASH';
     for my $k (keys %DEFAULTS) {
         my $v;
         $v = $given->{$k} if $given && exists $given->{$k};
@@ -95,6 +99,11 @@ sub _settings {
         $s{$k} = $DEFAULTS{$k} unless defined $s{$k} && $s{$k} =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         $s{$k} = 0 + $s{$k};
     }
+    # `triggers` is a bool: resolve gives 1/0, env and flat callers may give text. The rules
+    # read `true`/`false`; the coercion is settings::_coerce's (1|true|yes|on is on).
+    my $t = $s{triggers};
+    $t = UNIVERSAL::isa($t, 'SCALAR') ? ($$t ? 1 : 0) : undef if ref $t;
+    $s{triggers} = (defined $t && !ref $t && $t =~ /\A\s*(?:1|true|yes|on)\s*\z/i) ? 'true' : 'false';
     ($s{watcher}, $s{watcher_unknown}) = _watcher_value($given);
     return \%s;
 }
