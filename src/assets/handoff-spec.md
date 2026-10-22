@@ -50,6 +50,8 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 - **Ids**, one per item, never ranges, kept across a chain: `U-n` user constraint, approval or ask · `D-n` decision · `X-n` rejected option, refuted finding or failed approach · `Q-n` question · `B-n` in-flight row (plus its runtime id).
 - **Questions**: owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` · `answered: <answer>`.
 - **Restart classes**: `auto` · `ask` · `never`.
+- **Acuity** (Resume here, first line, after the status word): `stable` · `watch` · `unstable`. `unstable`: broken build, half-applied migration or destructive step, red test mid-fix, or `MID-STEP`. `watch`: jobs running, or a pending merge request, pipeline, review or answer, or a time limit. `stable`: none of these. It is the writer's rating. The **floor** is what code measured: a merge, rebase, cherry-pick or revert in progress → `unstable`; a measured in-flight row → `watch`; otherwise `stable`. A reader raises the rating to the floor and never lowers it. Missing in older files: read as `-` (no rating). <!-- T-TEXT E2, OD-15 -->
+- **Stalled** (an agent or teammate a workflow did not start): (a) idle while the output it waits on has ended. That one gets a wake message with its id. (b) No progress past due plus grace, which is only reported in the post-compaction light path. A workflow is never "stalled" in this sense (the workflow gate applies). <!-- T-TEXT E2, compaction-rem-6 -->
 - **In-flight `kind`**: `agent` · `teammate` · `workflow` · `monitor` · `cron` · `shell` · `server` · `peer` · `external`.
 - **Dies on**: `/clear` · exit · 7-day expiry · nothing. A background shell or server survives `/clear`; at exit it stops unless the user picks "Move to background and exit", so its value is `exit`.
 - **Frontmatter `status`**: `in-progress` · `blocked` · `completed`. **`lineage_reason`**: `clear` · `fork` · `bg-copy` · `handoff-resume` · `none`.
@@ -75,7 +77,7 @@ Only these sections take a none-form; other empty sections are omitted.
 - Handoff: a 7-column table `B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart`, ≤8 rows; past 8 the table ends `+N more: B-9, B-10; see evidence/<stem>/inflight.md`.
 - Compaction: one row per item, `B-n <runtime id> · kind · what · due · probe · class`, optional `restart:` line (data, never run), ≤8 rows; past 8, `+N more: <ids>`, and the re-measure lists every id.
 - Restart recipe: `<bucket>/evidence/<stem>/restart/<B-n>.md`. Restarts run only from the recipe `heal-check` prints.
-- Probe for a `shell`, `server` or `external` job: `{{plugin}}-store wait --for <spec> --max 0` (§14), which checks once and returns at once.
+- Probe for a `shell`, `server` or `external` job: `<store> wait --for <spec> --max 0` (§14), which checks once and returns at once.
 
 ## 7. Ledger fold line
 
@@ -103,7 +105,10 @@ One rule set for evidence copies, summary copies, drafts and recipes. Rule ids a
 - **Denied by name** → `withheld` (never scanned, never copied): `.env*` except `.example`, `.sample`, `.template` and `.dist` files; private keys; `.netrc`; `.npmrc`; `.claude.json`; `.credentials.json`; shell history; `*.har`; `*.sqlite`; `*.heapsnapshot`. Regular files only.
 - **HARD**: provider key prefixes, PEM blocks, JWTs, `Bearer`/`Basic` headers, `scheme://user:pass@host` URLs.
 - **WARN**: `password=`, `secret=`, `token=`, `key=` pairs; prefix-less 40-character cloud keys; base64 runs of 32 or more characters with entropy of at least 4.0 bits per character; cookies.
-- **Actions**: a log or JSON file with any hit → a `redacted` copy keeping the original sha256; other files: a HARD hit → `withheld`, a WARN hit → a `redacted` copy; background-task outputs only as redacted head/tail excerpts; a summary with a HARD hit → a redacted copy; in a draft or recipe a HARD hit blocks publishing and a WARN hit is an advisory with its rule ids.
+- **Actions**: a log or JSON file with any hit → a `redacted` copy keeping the original sha256; other files: a HARD hit → `withheld`, a WARN hit → a `redacted` copy; a shell or monitor job's output only as a redacted head/tail excerpt of ≤80 lines; a summary with a HARD hit → a redacted copy; in a draft or recipe a HARD hit blocks publishing and a WARN hit is an advisory with its rule ids.
+- **One marker per secret (BD-2)**: every rule runs on the original text. Overlapping or touching hits merge into one span, which is replaced once by `[redacted:<rule>]`, labelled by the first rule in the `secret_rules` list (the most specific: `Authorization: Bearer <JWT>` → `Authorization: [redacted:jwt]`). <!-- C-STORE D6 -->
+- **Agent output is always withheld (BD-4)**: a `tasks/<id>.output` is withheld (`rules: agent-output`) when any of these holds: (a) its real path is a transcript or session JSONL (the never-copy gate); (b) the sidecar or a job record lists task `<id>` with a type other than `shell` or `monitor` (`subagent`, `workflow` or another non-shell type); (c) its first non-empty line parses as a transcript row (a JSON object with `type` and `sessionId` or `parentUuid`). Otherwise (a shell or monitor job's own output) it is a redacted head/tail excerpt of ≤80 lines. <!-- C-STORE D6 -->
+- **Clone patches (BD-1)**: for each local commit (≤50) and for the uncommitted diff, the helper lists every touched path (`git diff-tree -r --root --no-commit-id -z --name-status -M -C <sha>`; uncommitted: `git diff HEAD -z --name-status -M -C`). A path is **blocked** when the name gate refuses it (deny names, `never_copy`, and the user's `NAME:` rules if `secret_extra_rules` is adopted); for a rename or copy, both sides are blocked when either side is. If nothing is blocked, the patch is built as before. Otherwise it is rebuilt **without the blocked paths** (`git format-patch --stdout --no-renames -1 <sha> -- . ':(top,literal,exclude)<path>'…`; uncommitted: `git diff HEAD --binary --no-renames -- . <same excludes>`), argv only, no shell. **Fail-closed check:** `git apply --numstat -z` over the rebuilt bytes must list exactly the touched paths minus the blocked ones; a blocked path in that list, a mismatch or any git error → the whole patch is withheld (`rules: exclude-failed`). A rebuilt patch then goes through the caps and this rule set like any patch (a HARD hit in the text, commit message included → withheld). It is written as `<nnnn>-<sha8>.partial.patch`, its MANIFEST `meaning` is `partial patch: <k> path(s) left out`, and its evidence row label carries `partial (<k> withheld)`. Each blocked path gets one row: `status withheld`, `scan withheld`, `origin <top>#<sha8>:<path>` (or `#uncommitted:<path>`), `rules deny-name` or `rename-from-denied`, no bytes, no hash. A commit whose touched paths are all blocked gets only the withheld rows and no patch file. A partial patch is evidence for reading: applying it would recreate a commit without those files, so a resume never applies it (Dev-5), and the handoff's evidence line says "partial". <!-- C-STORE D7 -->
 
 ## 11. Clutter classes (lint and watcher; flag only)
 
@@ -113,9 +118,13 @@ Absolute-path lines · code blocks over 5 lines · log, warning and stack lines 
 
 `push` · `force-push` · `mr-write` · `http-write` · `deploy` · `publish` · `history-rewrite` · `recursive-delete` · `mcp-write`. A command in one of these classes needs a fresh ask; a handoff or summary never grants it.
 
+**Production classes** (`prod_classes`, helper only): `prod-token` matches a `prod`, `production` or `prd` token (`--context=prod-eu`, `db.prod.example.com`, `AWS_PROFILE=production`, `--profile prd`; not `product` or `produce`). The user's `prod_patterns` add to it, never replace it. A production match that is read-only is `prod-read`, any other is `prod-write`; a production match always outranks an allowlist match. A false hit costs one question, the safe direction. <!-- S-SETTINGS B, OD-20 -->
+
 ## 13. Alert texts
 
 Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id>)`.
+
+**First-run notice** (`notice`): shown once per install at the first main session start, then again only when its `id` changes (the `-1` is the notice version; it is bumped when what is logged changes in a way a user would care about). Fixed text, at most 200 characters, no user content: `{{plugin}}: local compaction logs are on (content-free; nothing is sent). To share them: /{{plugin}}:report. To turn them off: set watcher to off in /config.` <!-- W-BETA A -->
 
 | Rule | Text |
 |---|---|
@@ -149,7 +158,9 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 
 ## 14. Wait specs (Dev-7 D2, D3; DP-1, DP-14)
 
-`{{plugin}}-store wait --for <cond> [--for <cond>…] [--while <guard>…] [--max <s>] [--stall <s>] [--deadline <epoch>]`
+`<store>`: the plugin's helper. The skill or the plugin's note gives its full path. In a handoff, write `<store>`, never the path: the path changes with every plugin update, and repo exports must not carry the home folder (lint `store-path`). <!-- PKG-RUNTIME A.4 -->
+
+`<store> wait --for <cond> [--for <cond>…] [--while <guard>…] [--max <s>] [--stall <s>] [--deadline <epoch>]`
 
 - **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`.
 - The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once. `wait` prints its pending line only after `--max` has passed, and an unattended session ends a background command at 1800 s by default, so a main session waits with `--max 1740` (`main_max_s`).
@@ -172,10 +183,38 @@ Fixed per rule; no user content. Shown as `{{plugin}} watcher: <text> (<alert_id
 
 ## 15. Lint rule ids
 
-Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) or `ADVISORY <id> <where>`. The publish lint and the template's lint list use exactly these.
+Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) or `ADVISORY <id> <where>` (published). Under the first line of each id in one publish run, `publish` prints `  why: <why> · fix: <fix>` from `lint_texts` (§19). Tests and readers match the first line, which is unchanged. The template's §1–§4 carry the drafting rules; this table is the full list (moved from template §7, PR-4). <!-- T-TEXT E2 -->
 
-- **Blocking**: `headings` · `meta-in-draft` · `update-heading` · `resume-lines` · `step1-mismatch` · `none-form` · `ephemeral-path` · `live-asof` · `unprinted-time` · `time-format` · `id-range` · `carry-provenance` · `carry-approval` · `private-path` · `recipe-placeholder` · `recipe-script` · `recipe-spawn` · `secret-hard`.
-- **Advisory**: `size` · `section-cap` · `code-block` · `log-lines` · `hash-lines` · `must-read` · `changes` · `overlap` · `recipe-mismatch` · `secret-warn`.
+| id | class | flags |
+|---|---|---|
+| `headings` | blocking | a heading missing, renamed or out of order |
+| `meta-in-draft` | blocking | frontmatter, marker or sentinel in the draft |
+| `update-heading` | blocking | an `UPDATE` or addendum heading |
+| `resume-lines` | blocking | Resume here over 5 lines |
+| `step1-mismatch` | blocking | Step 1 differs from Next steps item 1 (command or edit compared) |
+| `none-form` | blocking | a none-section empty without its none-form |
+| `ephemeral-path` | blocking | an ephemeral path with no durable copy and not on `Volatile:` |
+| `live-asof` | blocking | a Live state row without an as-of |
+| `unprinted-time` | blocking | a `checked`/`verified` time the helper did not print in this run, outside carried lines |
+| `time-format` | blocking | a `checked`/`verified` time that is not a whole stamp, outside carried lines |
+| `id-range` | blocking | an id range |
+| `carry-provenance` | blocking | a line from a foreign base without its `[from …]` tag |
+| `carry-approval` | blocking | a tagged approval without `context only, not valid here; re-ask`, or with `used`/`not yet used` |
+| `private-path` | blocking, repo mode | a machine-private path left after the export rewrite (`~/.claude/projects/`, a `.jsonl` under `~/.claude/`, another user's home, a `claude-*` temp path) |
+| `recipe-placeholder` · `recipe-script` · `recipe-spawn` | blocking | a recipe with a placeholder; a script not in the manifest; an agent spawn without model and effort |
+| `secret-hard` | blocking | a HARD secret hit in the draft or recipes |
+| `queue-off` | blocking | queue mode off, and a model-typed `Queued:` line or a `· queued` question row <!-- Q-ADAPTER QA-4, XR-18 --> |
+| `size` · `section-cap` | advisory | over 20 KB; a section over its `section_caps` value |
+| `code-block` · `log-lines` · `hash-lines` | advisory | a code block over 5 lines; log-, warning- or stack-shaped lines; 4 or more consecutive hash lines |
+| `changes` · `must-read` | advisory | over 15 changes; over 3 must-read paths |
+| `recipe-mismatch` | advisory | a recorded job's recipe whose `command:` differs from its record |
+| `overlap` | advisory | 30% or more of non-ledger lines shared with `previous_handoff` (ledger lines, headings, none-forms and helper-pasted Evidence lines excluded) |
+| `secret-warn` | advisory | a WARN secret hit (rule ids printed, never values) |
+| `acuity` | advisory | Resume here has no `Acuity:` (`missing`), or a rating below the measured floor (`below <floor>`) |
+| `store-path` | advisory | a body line contains `/scripts/{{plugin}}-store` <!-- PKG-RUNTIME A.4, XR-18 --> |
+
+Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kept at <path>` · `REFUSED: <other reason>`; repo-mode export lines as in the handoff skill's Step 7.
+
 - `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside carried lines.
 - Carried lines, which `unprinted-time` and `time-format` skip: a line byte-identical to a line of the base or of the own chain's file, and a line with a carried-line tag whose ledger content (bullet, id and carried-line tags removed) equals that of a foreign-base line. So a foreign line keeps its `checked` and `verified` times when it is carried.
 - `carry-provenance`: a `U-`, `D-` or `X-` line whose content occurs in the foreign base and not in the own base, with no carried-line tag. `carry-approval`: a tagged approval line without `context only, not valid here; re-ask`, or with `used` / `not yet used` on it.
@@ -184,9 +223,26 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 ## 16. Caps
 
 - `call_cap` 25: the handoff skill's hard cap on tool calls (Step 1 ≤4 · Step 2 ≤11 · Step 4 ≤2 · Step 6 1 · Step 7 ≤7). `recipe_cap` 8: restart-recipe writes (Step 5) on top. The plugin handoff turn derives its own call limit from both (1 + `call_cap` + `recipe_cap`).
-- The compaction text budgets (D-17, DP-8) are not here: `tools/assemble` holds them.
+- The compaction text budgets (D-17, compaction-rem-6) are not here: `tools/assemble` holds them.
+- `clamp` (MOD-SPEC §1.2 effective thresholds; the mod, the helper's `/status` and the watcher's fallback read these, never their own copies): native trigger = window − `native_offset` 33,000; `reserve` = `reserve_base` 52,000 + `handoff_turn_max_tokens` with `handoff_turn: halt`, else `reserve_no_handoff` 100,000; soft max = min(setting, native trigger − reserve, ⌊`soft_max_share_pct` 80 % × window⌋); target = min(setting, ⌊soft max × `target_num` 2 / `target_den` 3⌋); below `min_target` 120,000 plugin compactions and the nudge are off; a configured `native_window_tokens` below `window_floor` 100,000 counts as 100,000. <!-- P5-FOLD A3 -->
 
-## 17. Machine-readable literals
+## 17. Evidence rules (helper)
+
+Moved from the template §5 (PR-4). The helper enforces all of it, and the template keeps the evidence-choice rules. <!-- T-TEXT E2 -->
+- **Caps.** Copy files ≤10 MB, ≤50 MB per handoff; the rest are `ref-only` (bytes, sha256, mtime, regeneration command, ≤40 head/tail lines of text). Dedupe by sha256 across buckets (`dup`); a bucket whose `evidence/` and `compact/` folders together exceed `evidence_quota_mb` gets a warning.
+- **Where.** Needed later → `<handoff root>/<repo>/<bucket>/evidence/<stem>/`. Disposable → `<disposable root>/<YYYY-MM-DD>/<stem>-evidence/`, today's folder only, with a retention note from `disposable_keep_days` ("kept until you remove it" when unset). Defaults `~/.claude/handoffs` and `~/.claude/trash-staging`. Never in a git repository, `.planning/` or a temp folder.
+- **Copy-time secret gate**: §10, applied before each copy. Modes: umask 077; folders 0700, files 0600.
+- **Manifest** `MANIFEST.tsv`: the `manifest_columns` and `manifest_scan` literals; recipes, `ledger.md` and `inflight.md` included. Order: copy, re-hash, manifest, publish by exclusive create, receipt.
+
+## 18. Identity, file name and lock (helper)
+
+Moved from the template §6 (PR-4). <!-- T-TEXT E2 -->
+- **Identity** = full `session_id` + actor, from the plugin's per-process session record, cross-checked against the id the skill passes (mismatch → `begin` prints `identity: degraded (<reason>)` and the writer copies it under Ownership (template §6); none → random token, never a shared name). Compaction and `--resume` keep it; `/clear`, fork and background copies get a new one, linked by `previous_session_id` and `lineage_reason`. `transcript_path` locates, never keys.
+- **Name** `YYYY-MM-DD_HH-MM-SS_<sid8>_<slug>.md`, local time; readers order by frontmatter `date`, never by name or mtime; `-2` on a clash; `-a<agent8>` only with an agent id known to code. Only the main session writes (template §8).
+- **Lock.** Publishing is an exclusive create with no lock; a published file is never rewritten. The one lock guards the helper's read-modify-write of `.sessions/<sid>.json` (bucket, lane, worktree): owner = sid + actor + pid + process start time + host; stale only when that pid is gone or its start time differs (then taken over and logged); a live lock is never broken.
+- **Ownership** is checked before the first write to anything shared (foreign commits, a newer foreign handoff, a lane held elsewhere, another live session on the checkout): read-only there, recorded under Ownership. Never edit or delete another session's files.
+
+## 19. Machine-readable literals
 
 Patterns use the subset that both Perl and JavaScript read the same way: no flags, so letter case is spelled out in classes. A rule with `min_entropy` also needs the match's Shannon entropy (bits per character) at or above that value. A clutter class with `max_lines` flags a fenced block longer than that; one with `min_run` flags that many consecutive matching lines. `copy_trailers` lists engine trailers after a summary body that the normalizer cuts; none is known for the tested version.
 
@@ -240,6 +296,8 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "ok_verdicts": ["ok", "ok-trailer"],
   "scopes": ["main", "sub", "manual"],
   "status_words": ["active", "blocked", "waiting-owner", "waiting-job", "done"],
+  "acuity_words": ["stable", "watch", "unstable"],
+  "acuity_re": "(?:^|· )Acuity: (stable|watch|unstable)\\b",
   "ladder": ["proposed", "queued", "implemented", "tested", "committed", "pushed", "in review", "merged", "deployed", "published", "installed"],
   "claim_tags": {
     "verified_re": "\\[verified [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}: [^\\]]+\\]",
@@ -295,9 +353,43 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   },
   "call_cap": 25,
   "recipe_cap": 8,
+  "section_caps": {"## Resume here": 1500, "## User constraints": 1500, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1200, "## Open questions": 2000, "## Location": 1000, "## Work done and findings": 1800, "## Evidence": 600, "## Next steps": 1000},
+  "lint_texts": {
+    "headings": {"why": "readers find sections by their literal heading, in this order", "fix": "use the template §4 headings unchanged and in order; omit only an empty section without a none-form"},
+    "meta-in-draft": {"why": "frontmatter, marker and sentinel come from code; typed ones break detection", "fix": "delete them from body.md; start at the # title"},
+    "update-heading": {"why": "a handoff is rewritten, never appended", "fix": "fold the update into the sections and drop the heading"},
+    "resume-lines": {"why": "the next session reads Resume here first; more lines bury Step 1", "fix": "keep the four §4.1 lines; move detail to its section"},
+    "step1-mismatch": {"why": "two versions of the next action make the next session guess", "fix": "make Next steps item 1 the same command or edit as Step 1, character for character"},
+    "none-form": {"why": "an empty section must say it was checked, not forgotten", "fix": "write the section's none-form from template §4"},
+    "ephemeral-path": {"why": "temp paths vanish before a resume", "fix": "evidence --keep <path> and cite the durable path, or put it on Volatile: with a reason"},
+    "live-asof": {"why": "a state claim without a time cannot be judged for age", "fix": "give the row an as-of from checked_at or a stamp"},
+    "unprinted-time": {"why": "only a helper-printed time proves a check ran in this session", "fix": "use checked_at or a stamp time, or tag the line [unverified]"},
+    "time-format": {"why": "readers compare stamps; a partial time is ambiguous", "fix": "write the whole stamp YYYY-MM-DD HH:MM +hhmm as printed"},
+    "id-range": {"why": "a range hides which ids exist, so carried ids get lost", "fix": "list each id"},
+    "carry-provenance": {"why": "another session's line is not this session's word", "fix": "add [from <sid8> · <their id> · <their stamp>] with the values from begin"},
+    "carry-approval": {"why": "approvals never carry across sessions", "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"},
+    "private-path": {"why": "in repo mode the path would reach git", "fix": "use a durable bucket path or a pointer; Volatile: does not help here"},
+    "recipe-placeholder": {"why": "a recipe with <…> cannot run as written", "fix": "write the literal value, or class the row ask"},
+    "recipe-script": {"why": "a restart runs only a script whose sha256 is in the manifest", "fix": "evidence --keep <script> and cite the durable path"},
+    "recipe-spawn": {"why": "a spawn without model and effort runs on defaults nobody chose", "fix": "add model <id>, effort <level>"},
+    "secret-hard": {"why": "the file would hold a live credential", "fix": "remove the value and say where it lives; the rule ids name the pattern"},
+    "queue-off": {"why": "no queue is configured, so nothing was queued", "fix": "keep the question in full and drop the Queued: line and the · queued mark"},
+    "size": {"why": "past 20 KB the next session reads less of what matters", "fix": "cut in the template §2 order"},
+    "section-cap": {"why": "one section crowds out the others", "fix": "cut that section toward its template §2 cap"},
+    "code-block": {"why": "code is recoverable from the repository", "fix": "point to path#Symbol; keep ≤5 lines only mid-edit"},
+    "log-lines": {"why": "pasted logs push out decisions", "fix": "write the conclusion and a reproducer command"},
+    "hash-lines": {"why": "hash lists are recoverable from git", "fix": "write the commit range <base>..<head>"},
+    "changes": {"why": "past 15 the list stops ranking", "fix": "keep the top 15 by importance; the commit range covers the rest"},
+    "must-read": {"why": "more than 3 must-reads means none is", "fix": "keep the 3 that Step 1 needs"},
+    "overlap": {"why": "a copied previous file carries stale state", "fix": "rewrite non-ledger lines with the latest values; carry only ledger lines unchanged"},
+    "recipe-mismatch": {"why": "a recorded job is relaunched only byte for byte", "fix": "copy command: from the job record, or class the row ask"},
+    "secret-warn": {"why": "a value that looks secret may leak", "fix": "take it out and say where it lives, or report the rule ids"},
+    "acuity": {"why": "the next session sets its check depth from Acuity; a rating below the measured facts under-checks", "fix": "add Acuity: to the Status line, at least the floor shown (merge or rebase in progress: unstable; a running job: watch)"},
+    "store-path": {"why": "the helper path changes with each plugin update and names your home folder", "fix": "write <store> instead of the path"}
+  },
   "lint_ids": {
-    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard"],
-    "advisory": ["size", "section-cap", "code-block", "log-lines", "hash-lines", "must-read", "changes", "overlap", "recipe-mismatch", "secret-warn"],
+    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard", "queue-off"],
+    "advisory": ["size", "section-cap", "code-block", "log-lines", "hash-lines", "must-read", "changes", "overlap", "recipe-mismatch", "secret-warn", "acuity", "store-path"],
     "repo_mode_only": ["private-path"]
   },
   "private_path_classes": [
@@ -333,7 +425,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
       {"id": "killed", "re": "^\\[killed\\]$", "active": true, "means": "killed"}
     ],
     "end_suffix": "; echo \"__exit $?\"",
-    "inflight_probe_cmd": "{{plugin}}-store wait --for <spec> --max 0"
+    "inflight_probe_cmd": "<store> wait --for <spec> --max 0"
   },
   "frontmatter_kinds": ["handoff", "compact-summary", "subagent-summary"],
   "writers": ["handoff", "mod", "postcompact-fallback"],
@@ -390,6 +482,11 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     {"id": "recursive-delete", "re": "\\b(rm[ \\t]+(-[A-Za-z]*[rR][A-Za-z]*|--recursive)\\b|find\\b.*[ \\t]-delete\\b|git[ \\t]+(.*[ \\t])?clean\\b|rsync\\b.*--delete)"},
     {"id": "mcp-write", "re": "^mcp__.+__([A-Za-z]+_)?([Cc]reate|[Uu]pdate|[Dd]elete|[Rr]emove|[Pp]ost|[Ss]end|[Mm]erge|[Pp]ublish|[Ww]rite|[Aa]dd|[Ee]dit|[Cc]omment|[Tt]ransition|[Aa]pprove|[Cc]lose)"}
   ],
+  "prod_classes": [
+    {"id": "prod-token", "re": "(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)"}
+  ],
+  "notice": {"id": "watcher-1", "version": 1, "text": "{{plugin}}: local compaction logs are on (content-free; nothing is sent). To share them: /{{plugin}}:report. To turn them off: set watcher to off in /config."},
+  "clamp": {"native_offset": 33000, "reserve_base": 52000, "reserve_no_handoff": 100000, "soft_max_share_pct": 80, "target_num": 2, "target_den": 3, "min_target": 120000, "window_floor": 100000},
   "alert_texts": {
     "A-01": "summary copy missing",
     "A-02": "unshaped or truncated shaped compaction",
