@@ -146,9 +146,10 @@ COMMA_IMPERATIVE = re.compile(r"\s*(?:wait|block|keep|run|use|poll|check|stop|st
 DANGLING_NEGATION = re.compile(r"\b(?:never|not|no)\s*$", re.I)
 STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
 MAIN_RULE = re.compile(r"notification wakes you", re.I)
-# AT-W-02: bytes of the full render (every tag line kept); resume = DP-8 protocol hard cap,
-# subagent = the classic +fallback budget (compaction DESIGN-NOTES §1, tools/assemble).
-ASSET_BYTES = {"resume-context.txt": 2500, "subagent-instructions.txt": 1100}
+# AT-W-02: bytes of the full render (every tag line kept); resume = the resume protocol hard cap
+# (compaction-rem-6, 2026-10-22: 3,000; was DP-8's 2,500), subagent = the classic +fallback
+# budget (compaction DESIGN-NOTES §1, tools/assemble).
+ASSET_BYTES = {"resume-context.txt": 3000, "subagent-instructions.txt": 1100}
 EDIT_PER_LINT = re.compile(r"one Edit per LINT line", re.I)
 SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S | re.M)
 HEAL_HEADER = re.compile(r"^\|\s*#\s*\|\s*Finding \(first matching row wins\)\s*\|")

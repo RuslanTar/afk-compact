@@ -26,7 +26,7 @@ only GEN tools write, other candidate names inside longer words, npm manifests o
 node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md
 description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
 AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
-self-heal table and resume SKILL size), a resume protocol over its DP-8 hard cap (assemble), AT-WD-02 manifest defaults,
+self-heal table and resume SKILL size), a resume protocol over its hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults,
 a cross-WP `git mv` (owners-check), a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
 repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), and an X-H runner
@@ -290,7 +290,7 @@ def probes(name):
                "No recap, no status line, no foreground wait.\n")
 
     def asset_grow(d):
-        append(d, "plugin/assets/resume-context.txt", "x" * 600 + "\n")
+        append(d, "plugin/assets/resume-context.txt", "x" * 1200 + "\n")
         append(d, "plugin/assets/subagent-instructions.txt", "y" * 200 + "\n")
 
     def budget_drift(d):
@@ -339,7 +339,25 @@ def probes(name):
         write_text(p, json.dumps(doc, indent=2) + "\n")
 
     def resume_hard(d):
-        append(d, "src/assets/resume-context.txt", "x" * 600 + "\n")
+        append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
+
+    def prod_exclusive(d):
+        """XR-19 (BLD-04): step 4 only as a [prod-forbid] line, so every [prod-allow] path lacks it;
+        the walk over combinations must reach the [prod-allow] paths (exactly one is active)."""
+        p = os.path.join(d, "src", "assets", "resume-context.txt")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        write_text(p, re.sub(r"(?m)^4\. ", "[prod-forbid] 4. ", t, count=1))
+
+    def submit_slash(d):
+        """AT-LT-18 / AT-IC-12 (BLD-04): a [submit-idle] line that starts with "/" and lacks the
+        no-agents rule."""
+        append(d, "src/assets/handoff-turn.txt", "[submit-idle] /{{plugin}}:handoff now, then wait for the user.\n")
+
+    def store_bare(d):
+        """AT-PK-03 (BLD-04): a mod text that uses @store@ while other lines keep the bare launcher
+        name followed by a subcommand."""
+        append(d, "src/assets/resume-context.txt", "[handoff] Finish with @store@ receipt once.\n")
 
     def halt_promise(d):
         """CR-F30/F35: the 28ef06d nudge wording back in the halted path."""
@@ -496,7 +514,7 @@ def probes(name):
             r"'wait in the foreground'"],
          wait_text_negated),
         ("asset-bytes", "AT-W-02", gates_only("asset-bytes"), asset_grow,
-         [r"^GATE asset-bytes plugin/assets/resume-context\.txt: AT-W-02 \d+ B > 2500$",
+         [r"^GATE asset-bytes plugin/assets/resume-context\.txt: AT-W-02 \d+ B > 3000$",
           r"^GATE asset-bytes plugin/assets/subagent-instructions\.txt: AT-W-02 \d+ B > 1100$"], None),
         ("skill-budget", "AT-SK-01", gates_only("skill-budget"), budget_drift,
          [r"^GATE skill-budget plugin/skills/handoff/SKILL\.md:\d+: AT-SK-01 " + r for r in
@@ -515,11 +533,20 @@ def probes(name):
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days"], None),
-        ("resume-hard", "DP-8", ["tools/assemble"], resume_hard,
+        ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER$", r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
          [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",
           r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),
+        ("prod-exclusive", "XR-19", ["tools/assemble"], prod_exclusive,
+         [r"^step check res \S*prod-allow +FAIL steps not 1\.\.n", r"^RESULT: FAIL$"], None),
+        ("submit-slash", "AT-LT-18/AT-IC-12", ["tools/assemble"], submit_slash,
+         [r"^submit check turn \S*submit-idle +FAIL a line starts with '/'",
+          r"^submit check turn \S*submit-idle +FAIL \[submit-idle\] lacks 'launch no agents or workflows'",
+          r"^AT-LT-18 / AT-IC-12 .* FAIL$", r"^RESULT: FAIL$"], None),
+        ("store-bare", "AT-PK-03", ["tools/assemble"], store_bare,
+         [r"^store check res \S+ +FAIL bare launcher: .*-store wait", r"^store check turn \S*spent\S* +FAIL bare launcher",
+          r"^AT-PK-03 .* FAIL$", r"^RESULT: FAIL$"], None),
         ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
         ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,

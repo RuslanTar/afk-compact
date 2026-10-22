@@ -22,9 +22,13 @@ not the static core. Extra checks: no `<!--` survives; CDN Review item 9 (cited 
 exist and still name the same step; [queue]/[halt] lines reference only kept lines); a
 nudge with [halt] and without [continue] never says the plugin compacts the session into a
 handoff summary or copies after this turn, and the [halt] line says the plugin compacts only
-if auto-continue is off or at its hourly limit (CR-F30/F35); heading literals equal the
-spec-literals block of handoff-spec.md once that file exists.
-Budgets: the BUDGETS table (D-17 and DP-8 of the 2026-10-21 rulings; AT-P-07). Above a soft
+if auto-continue is off or at its hourly limit (CR-F30/F35); no handoff-turn render has a
+line that starts with "/" and a [submit-idle] render says "launch no agents or workflows"
+(AT-LT-18, AT-IC-12); once a mod text uses @store@, none names the bare launcher followed by a
+subcommand (AT-PK-03); heading literals equal the spec-literals block of handoff-spec.md once
+that file exists. Exclusive tag groups (EXCLUSIVE, XR-19) limit every walk over combinations.
+Budgets: the BUDGETS table (D-17 of the 2026-10-21 rulings, compaction-rem-6 of 2026-10-22;
+AT-P-07, AT-TX-10), with @store@ at a 160-character root stand-in (PKG-RUNTIME A.2). Above a soft
 limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails.
 Exit 1 when a hard budget is exceeded or any check fails.
 """
@@ -65,21 +69,40 @@ if args:
     sys.exit("assemble: unknown arguments {}\n{}".format(args, __doc__))
 
 PREV = "~/.claude/handoffs/example-repo/LAB-123/" + "p" * (PATH_LEN - len("~/.claude/handoffs/example-repo/LAB-123/"))
+# PKG-RUNTIME A.2 (BLD-04): `@store@` = storeWord(<root>/scripts/<name>-store), the launcher's
+# absolute path as one double-quoted shell word. Budget tests use a 160-character root stand-in.
+STORE_ROOT_LEN = 160
+_ROOT_BASE = "/opt/example/.claude/plugins/cache/example-marketplace/"
+STORE_ROOT = _ROOT_BASE + "r" * (STORE_ROOT_LEN - len(_ROOT_BASE))
+STORE = '"' + STORE_ROOT + "/scripts/" + NAME + '-store"'
 RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-21T04:40:00+03:00",
            "session_id": "00000000-0000-4000-8000-000000000000", "saved_copy": PREV, "tokens": "612,345",
-           "queue_add": NAME + "-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", "measured_facts": "", "remeasure": "",
+           "store": STORE,
+           # nudge.ts builds queue_add with storeWord (PKG-RUNTIME A.2).
+           "queue_add": STORE + " queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", "measured_facts": "", "remeasure": "",
            # D-18 tokens (worst case; text-to-build.md §1): the longest halt reason, c = 1 + call_cap
-           # + recipe_cap (DP-19), and core's handoff_turn::finish_command form.
+           # + recipe_cap (DP-19), and core's handoff_turn::finish_command form. The finish command
+           # carries the full launcher word as ctx::store_cmd() builds it (PKG-RUNTIME A.2), the
+           # longer form; CROSS-REVIEW XR-03 (1) writes it with `<store>` once that is built.
            "halt_reason": "compactions keep repeating without progress", "max_calls": "34", "handoff_path": PREV,
            "draft_state": "present",
-           "handoff_finish": "`" + NAME + "-store publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`"}
+           "handoff_finish": "`" + STORE + " publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`",
+           # IC-1 D5 [submit-idle]: minutes idle when the pre-idle turn fires (MOD-SPEC §9.4: 49).
+           "idle_min": "49"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
 # Tags per asset, in the order DESIGN-NOTES §2 lists them (golden file names use this order).
+# BLD-04: resume-context gains [idle] (IC-1 D3) and [prod-forbid]/[prod-allow] (S-SETTINGS B);
+# handoff-turn gains [submit-pre], [submit-halt] (S-SETTINGS D) and [submit-idle] (IC-1 D5).
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff"], "sub": ["fallback"],
-        "res": ["midturn", "nonok", "handoff", "handoff-partial"], "nudge": ["continue", "halt", "halt-handoff", "queue"],
-        "turn": ["submit", "near", "spent", "imminent"]}
+        "res": ["midturn", "nonok", "idle", "handoff", "handoff-partial", "prod-forbid", "prod-allow"],
+        "nudge": ["continue", "halt", "halt-handoff", "queue"],
+        "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
+# CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
+# active on every path; "most" = at most one. combos() skips every other combination, so the
+# goldens, the step checks and every walk over combinations see only paths that can happen.
+EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "midturn"), "most")]}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
@@ -110,8 +133,9 @@ def assemble(text, tags, drop=()):
 
 # One row per budget: (unit, soft, hard); None = no limit of that kind. Soft = ADVISORY only.
 # D-17 (root DP-8): the static core has a soft target and no hard cap; the mod channel total
-# stays the hard guard on what reaches the summarizer. DP-8: resume protocol soft 2,000 /
-# hard 2,500, resume block total 6,000, and never over the 10,000-char SessionStart cutoff.
+# stays the hard guard on what reaches the summarizer. compaction-rem-6 (2026-10-22, supersedes
+# DP-8): resume protocol soft 2,500 / hard 3,000, resume block total 6,500, and never over the
+# 10,000-char SessionStart cutoff.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
     "mod channel total":     ("bytes", None, 8192),
@@ -119,12 +143,13 @@ BUDGETS = {
     "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
     "subagent mod":          ("chars", 900, None),
     "subagent classic":      ("chars", 1100, None),
-    "resume protocol":       ("chars", 2000, 2500),
-    "resume block total":    ("chars", None, 6000),
+    "resume protocol":       ("chars", 2500, 3000),
+    "resume block total":    ("chars", None, 6500),
     "sessionstart cutoff":   ("chars", None, 10000),
     "nudge":                 ("chars", 2200, None),
     "handoff turn submit":   ("chars", None, None),   # D-18 handoff-turn.txt: printed, no limit set
     "handoff turn note":     ("chars", None, None),
+    "submit-idle lines":     ("chars", None, 600),    # IC-1 D5 / MOD-SPEC §9.4: the [submit-idle] lines alone
 }
 
 
@@ -159,11 +184,77 @@ def static(text, tags, drop=()):
         RUNTIME.update(saved)
 
 
+def valid(asset, tags):
+    """XR-19: the combination keeps every EXCLUSIVE rule of the asset."""
+    for members, rule in EXCLUSIVE.get(asset, []):
+        n = sum(1 for t in members if t in tags)
+        if n > 1 or (rule == "one" and n != 1):
+            return False
+    return True
+
+
 def combos(asset):
     tags = TAGS[asset]
     for r in range(len(tags) + 1):
         for c in itertools.combinations(tags, r):
-            yield list(c)
+            if valid(asset, c):
+                yield list(c)
+
+
+def longest(asset, variants, drop=()):
+    """(tags, text) of the longest render among the tag lists (the worst case of a check)."""
+    best = None
+    for tags in variants:
+        if not valid(asset, tags):
+            sys.exit("assemble: invalid tag combination {} for {}".format(tags, asset))
+        s = assemble(TEXT[asset], tags, drop)
+        if best is None or len(s) > len(best[1]):
+            best = (tags, s)
+    return best
+
+
+def submit_checks():
+    """AT-LT-18 (DP-24 g) and AT-IC-12: no handoff-turn render, at any tag combination, starts
+    with "/" or has a line that starts with "/" (the host refuses such a submit). Once the asset
+    has [submit-idle] lines, every render with that tag says "launch no agents or workflows"."""
+    bad = False
+    has_idle = re.search(r"^\[submit-idle\] ", TEXT["turn"], flags=re.M)
+    for tags in combos("turn"):
+        s = assemble(TEXT["turn"], tags)
+        label = "+".join(tags) or "base"
+        if s.startswith("/") or any(ln.startswith("/") for ln in s.splitlines()):
+            print(f"submit check turn {label:32} FAIL a line starts with '/'")
+            bad = True
+        if has_idle and "submit-idle" in tags and "launch no agents or workflows" not in s.lower():
+            print(f"submit check turn {label:32} FAIL [submit-idle] lacks 'launch no agents or workflows'")
+            bad = True
+    print("AT-LT-18 / AT-IC-12 (handoff-turn submit text)  " + ("FAIL" if bad else "ok"))
+    return bad
+
+
+MOD_ASSETS = ("res", "nudge", "turn")   # the texts the mod assembles at run time (PKG-RUNTIME A.2)
+
+
+def store_checks():
+    """AT-PK-03 (assembler half): once a mod-assembled asset uses @store@, no mod-assembled render
+    names the bare `<name>-store` followed by a subcommand (the launcher is not on the Bash PATH).
+    Before the text growth no asset has @store@ yet and the check is skipped."""
+    if not any("@store@" in TEXT[a] for a in MOD_ASSETS):
+        print("AT-PK-03 bare launcher name in mod texts        skip (no @store@ in the assets yet)")
+        return False
+    bare = re.compile(r"(?<![/\w.-])" + re.escape(NAME) + r"-store\s+[a-z]")
+    bad = False
+    for asset in MOD_ASSETS:
+        for tags in combos(asset):
+            for ln in assemble(TEXT[asset], tags).splitlines():
+                m = bare.search(ln)
+                if m:
+                    print(f"store check {asset} {'+'.join(tags) or 'base':32} FAIL bare launcher: "
+                          f"{ln[max(0, m.start() - 30):m.end() + 20]!r}")
+                    bad = True
+                    break
+    print("AT-PK-03 bare launcher name in mod texts        " + ("FAIL" if bad else "ok"))
+    return bad
 
 
 def step_checks():
@@ -361,22 +452,39 @@ bad |= check("subagent mod", assemble(sub, []), "subagent mod")
 bad |= check("subagent classic +fallback", assemble(sub, ["fallback"]), "subagent classic")
 classic_total = assemble(main, ["auto", "chain"], drop=("measured",)) + assemble(sub, ["fallback"])
 bad |= check("classic channel total main+sub (B)", classic_total, "classic channel total")
-for tags in ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
-             ["midturn", "nonok", "handoff-partial"]):
-    bad |= check(f"resume protocol {'+'.join(tags) or 'base'}",
-                 assemble(res, tags, drop=("measured_at", "remeasure")), "resume protocol")
+# Resume block: every row is checked with both [prod-forbid] and [prod-allow] (exactly one is
+# always active, XR-19) and prints the longer one (AT-PR-05); [idle] stands in for [midturn] on
+# an idle dispatch (AT-IC-03). PROD_LABEL keeps the row names short.
+PROD = ("prod-forbid", "prod-allow")
+PROD_LABEL = {"prod-forbid": "forbid", "prod-allow": "allow"}
+
+
+def res_label(tags):
+    return "+".join(PROD_LABEL.get(t, t) for t in tags)
+
+
+for base in ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
+             ["midturn", "nonok", "handoff-partial"], ["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"],
+             ["idle", "nonok", "handoff-partial"]):
+    tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
+    bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
-resume_total = assemble(res, ["midturn", "nonok"])
-bad |= check("resume block total midturn+nonok", resume_total, "resume block total")
-bad |= check("resume block total vs SessionStart cutoff", resume_total, "sessionstart cutoff")
-resume_total = assemble(res, ["midturn", "nonok", "handoff-partial"])
-bad |= check("resume block total midturn+nonok+handoff-partial", resume_total, "resume block total")
-bad |= check("resume block total +handoff-partial vs cutoff", resume_total, "sessionstart cutoff")
+for base in (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["idle", "nonok"],
+             ["idle", "nonok", "handoff-partial"]):
+    tags, resume_total = longest("res", [base + [p] for p in PROD])
+    bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
+    bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")
 RUNTIME["remeasure"] = ""
 for tags in (["continue"], ["halt"], ["continue", "queue"], ["halt", "queue"], ["halt", "halt-handoff"],
              ["halt", "halt-handoff", "queue"]):
     bad |= check(f"nudge {'+'.join(tags)}", assemble(nudge, tags), "nudge")
 bad |= check("handoff turn [submit]", assemble(turn, ["submit"]), "handoff turn submit")
+# S-SETTINGS D / IC-1 D5: each reason's lines joined with the shared [submit] line.
+for t in ("submit-halt", "submit-pre", "submit-idle"):
+    bad |= check(f"handoff turn [submit]+[{t}]", assemble(turn, ["submit", t]), "handoff turn submit")
+idle_lines = "\n".join(ln[len("[submit-idle] "):] for ln in turn.splitlines() if ln.startswith("[submit-idle] "))
+bad |= check("handoff turn [submit-idle] lines alone", re.sub(r"@([a-z_]+)@", lambda m: RUNTIME.get(m.group(1), m.group(0)),
+                                                              idle_lines.strip() + "\n" if idle_lines else ""), "submit-idle lines")
 for t in ("near", "spent", "imminent"):
     bad |= check(f"handoff turn [{t}]", assemble(turn, [t]), "handoff turn note")
 leftover = False
@@ -390,6 +498,8 @@ print("every tag combination: no [tag] / @token@ / {{ / <!-- left   " + ("FAIL" 
 bad |= leftover
 bad |= step_checks()
 bad |= halt_checks()
+bad |= submit_checks()
+bad |= store_checks()
 bad |= heading_checks()
 if GOLDENS:
     write_goldens()
