@@ -120,12 +120,31 @@ sub fabricated {
     # A near-stamp (a date and a time with the zone dropped or in another form, e.g.
     # `2026-10-21 14:05`, `... +03:00`, `2026-10-21T14:05:12Z`) is a check time too and
     # counts, as `[verified <near-stamp>` does below (CR-F16); it never equals a whole stamp.
-    while ($body =~ /\bchecked (?:(?<f>$full)|(?<n>$NEAR_RE)|(?<l>$legacy)(?![0-9]))/g) {
-        $count->(defined $+{f} ? $+{f} : defined $+{n} ? $+{n} : $+{l});
+    # Numbered captures only (PKG-RUNTIME B.5): `%+` loads Tie::Hash::NamedCapture, which
+    # perl-base 5.28 (Debian 10) lacks. Each form is tried at the same place in the order the
+    # alternation had (whole stamp, near-stamp, legacy), each with its own `$1`, so a capture
+    # group inside a spec regex (`time_legacy_re` has one) never shifts the numbering.
+    while ($body =~ /\bchecked /g) {
+        my $at = pos $body;
+        my $t;
+        if ($body =~ /\G($full)/gc || $body =~ /\G($NEAR_RE)/gc || $body =~ /\G($legacy)(?![0-9])/gc) {
+            $t = $1;
+        } else {
+            pos($body) = $at;
+            next;
+        }
+        $count->($t);
     }
-    while ($body =~ /\[verified (?:(?<f>$full)|(?<o>[^\]\n]{0,40}))/g) {
-        my $t = $+{f};
-        if (!defined $t && $+{o} =~ /\b($legacy)(?![0-9])/) { $t = $1 }
+    while ($body =~ /\[verified /g) {
+        my $t;
+        if ($body =~ /\G($full)/gc) {
+            $t = $1;
+        } else {
+            if ($body =~ /\G([^\]\n]{0,40})/gc) {
+                my $o = $1;
+                $t = $1 if $o =~ /\b($legacy)(?![0-9])/;
+            }
+        }
         $count->($t);
     }
     return $n;
