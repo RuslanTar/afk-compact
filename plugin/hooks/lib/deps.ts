@@ -167,6 +167,11 @@ export type LoadState = {
   lastTurnAnswer: boolean
   /** The pre-idle timer (§9.4). */
   idleTimer: { cancel: () => void } | undefined
+  /**
+   * The sid whose `idle_due` this load wrote or re-armed and has not cleared yet. Kept apart
+   * from `idleTimer`: the hooks cancel the timer synchronously before `cancelIdle` runs.
+   */
+  idleDueSid: string | undefined
   /** The idle episode: from a human-origin turn's end to the next human-origin turn.start (§9.4). */
   idleEpisode: { since: number; done: boolean } | undefined
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
@@ -256,6 +261,7 @@ export function newState(loadId: string): LoadState {
     lastTurnEndAt: undefined,
     lastTurnAnswer: false,
     idleTimer: undefined,
+    idleDueSid: undefined,
     idleEpisode: undefined,
     publishedSinceHuman: false,
   }

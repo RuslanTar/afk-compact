@@ -39,11 +39,19 @@ export function cancelIdleTimer(d: Deps): void {
   d.state.idleTimer = undefined
 }
 
-/** Cancels the timer and forgets the persisted due (a turn started, a prompt entered, the session ended). */
+/**
+ * Cancels the timer and forgets the persisted due (a turn started, a prompt entered, the session
+ * ended), so a reload of the same sid re-arms nothing already cancelled (AT-IC-14). Callers may
+ * have cancelled the timer already (cancelIdleTimer before any await); the due is cleared all
+ * the same.
+ */
 export async function cancelIdle(d: Deps, sid: string): Promise<void> {
-  const had = d.state.idleTimer !== undefined
   cancelIdleTimer(d)
-  if (had) await d.storeSet(dueKey(sid), null)
+  const stored = d.state.idleDueSid
+  if (stored === undefined) return
+  d.state.idleDueSid = undefined
+  await d.storeSet(dueKey(stored), null)
+  if (stored !== sid) await d.storeSet(dueKey(sid), null)
 }
 
 function schedule(d: Deps, sid: string, at: number, now: number): void {
@@ -60,6 +68,7 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
   const due = endAt + IDLE_FIRE_MS
   const rec: Due = { due, sid, episode: d.state.idleEpisode ?? null }
   await d.storeSet(dueKey(sid), rec)
+  d.state.idleDueSid = sid
   schedule(d, sid, due, await d.now())
 }
 
@@ -71,6 +80,7 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   const now = await d.now()
   if (rec.due <= now) return
   if (rec.episode && !d.state.idleEpisode) d.state.idleEpisode = rec.episode
+  d.state.idleDueSid = sid
   schedule(d, sid, rec.due, now)
 }
 
@@ -108,6 +118,7 @@ async function blocked(d: Deps, sid: string): Promise<string | { tokens: number;
 /** The timer fired: one `handoff_skipped {why, reason: idle}` row, or the pre-idle turn. */
 export async function fire(d: Deps, sid: string): Promise<void> {
   const s = d.state
+  if (s.idleDueSid === sid) s.idleDueSid = undefined
   await d.storeSet(dueKey(sid), null)
   const b = await blocked(d, sid)
   if (typeof b === 'string') {

@@ -389,3 +389,46 @@ test('AT-IC-14: a past due and another sid\'s due arm nothing', { options: ON },
   await w.advance(120 * MIN)
   expect(idleSkips(w).length + w.submits.length).toBe(0)
 })
+
+// §9.4: a main turn.start, a prompt entering and session.end cancel the timer and forget the
+// persisted due, so a reload of the same sid re-arms nothing the session already cancelled.
+/** The last value the mod stored for this sid's due (null: forgotten; undefined: never written). */
+function watchDue(on: Parameters<World['install']>[0]): () => unknown {
+  let last: unknown
+  // Registered before World.install, so it stands outside mock.store (first is outermost).
+  on('store.set', { key: 'idle_due:' + SID_A }, (_$, e, next) => {
+    last = e.value ?? null
+    return next(e)
+  })
+  return () => last
+}
+
+test('AT-IC-14: a main turn.start forgets the persisted idle_due', { options: ON }, async ($, on) => {
+  const dueOf = watchDue(on)
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w)
+  expect(dueOf()).toBeTruthy()
+  await w.turnStart($)
+  expect(dueOf()).toBe(null)
+})
+
+test('AT-IC-14: a prompt entering forgets the persisted idle_due', { options: ON }, async ($, on) => {
+  const dueOf = watchDue(on)
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w)
+  expect(dueOf()).toBeTruthy()
+  await $.prompt.submit({ text: 'back again', origin: { kind: 'composer' } } as never)
+  expect(dueOf()).toBe(null)
+})
+
+test('AT-IC-14: session.end forgets the persisted idle_due', { options: ON }, async ($, on) => {
+  const dueOf = watchDue(on)
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w)
+  expect(dueOf()).toBeTruthy()
+  await $.session.end(CLEAR as never)
+  expect(dueOf()).toBe(null)
+})
