@@ -81,7 +81,7 @@ For each path you will cite and each `tmp_candidates` item: `--keep` (a later re
 
 `<store> evidence --stage <stage> --keep <path> <path> --dispose <path> --clone <dir>` (omit empty flags)
 
-It prints `<status> <durable path | -> <bytes> <sha8> <origin>` per path (`copied`, `dup`, `ref-only`, `redacted`, `withheld`, `missing`), then the Evidence lines (`Evidence:`, `Disposable:`, `Ref-only:`, `Volatile:`) and any `WARN quota`. `withheld` → D. `missing` that a resume needs → one corrected call if you know the path; else it stays on `Volatile:` as `missing at <stamp>`.
+It prints `<status> <durable path | -> <bytes> <sha8> <origin>` per path (`copied`, `dup`, `ref-only`, `redacted`, `withheld`, `missing`), then the Evidence lines (`Evidence:`, `Disposable:`, `Ref-only:`, `Volatile:`) and any `WARN quota`. A clone commit with blocked paths prints `copied <path>/<nnnn>-<sha8>.partial.patch <bytes> <sha8> <clone>#<sha8> partial (<k> withheld)` and, per path left out, `withheld - - - <clone>#<sha8>:<path>` (or `#uncommitted:<path>`): call it partial in the handoff; a partial patch is never applied. `withheld` → D. `missing` that a resume needs → one corrected call if you know the path; else it stays on `Volatile:` as `missing at <stamp>`.
 
 ## Step 5 — Restart recipes
 
