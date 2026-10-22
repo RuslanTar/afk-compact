@@ -6,6 +6,7 @@ package watch::hooks;
 # the watcher reads them and writes neither.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::json;
@@ -48,7 +49,8 @@ sub foreign_header {
 }
 
 # Core's PreCompact passes its detect.instructions result as `instructions`
-# (`instr` in the ctx contract); either one is the answer.
+# (BUILD-PLAN §3.6, PKG-RUNTIME D.1). ALIAS: `instr` is the older documented name; core never
+# passes it. It is still read, and marked for removal after one release.
 sub _ci_nonce {
     my ($ctx, $ci) = @_;
     my $in = ref $ctx->{instr} eq 'HASH' ? $ctx->{instr} : ref $ctx->{instructions} eq 'HASH' ? $ctx->{instructions} : undef;
@@ -91,9 +93,23 @@ sub _copy_rows {
     my ($ctx) = @_;
     my @r;
     for my $f (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
-        push @r, @{ watch::io::read_jsonl($f, undef, qr/"ev"\s*:\s*"copy"/) } if -f $f;
+        push @r, @{ watch::io::read_jsonl($f, undef, qr/"ev"\s*:\s*"copy(?:_attributed)?"/) } if -f $f;
     }
     return \@r;
+}
+
+# C-STORE D5 (MOD-SPEC §5.9 step 4): a reconcile fill renames a `sub-unknown` copy; the
+# newest `copy_attributed` row for the copy's id6 has the path that exists now.
+sub _attributed_path {
+    my ($rows, $id6) = @_;
+    return undef unless defined $id6 && !ref $id6;
+    my ($best, $bt);
+    for my $r (@$rows) {
+        next unless ($r->{ev} // '') eq 'copy_attributed' && ($r->{id6} // '') eq $id6;
+        my $t = watch::io::parse_iso($r->{ts}) // 0;
+        if (!defined $bt || $t >= $bt) { $best = $r; $bt = $t }
+    }
+    return $best ? $best->{rel_path} : undef;
 }
 
 sub _strip_frontmatter {
@@ -118,7 +134,7 @@ sub previous_summary {
         if (!defined $best_t || $t >= $best_t) { $best = $r; $best_t = $t }
     }
     if ($best) {
-        my $rel = $best->{rel_path} // $best->{copy_path} // $best->{path};
+        my $rel = _attributed_path($rows, $best->{id6}) // $best->{rel_path} // $best->{copy_path} // $best->{path};
         if (defined $rel && !ref $rel && $rel !~ m{(?:\A|/)\.\.(?:/|\z)}) {
             my $path = $rel =~ m{\A/} ? $rel : $ctx->{root} . '/' . $rel;
             my $t = watch::io::slurp($path, 1 << 20);
@@ -187,6 +203,8 @@ sub mod_alive_this_turn {
 # The detector result for compact_summary. Core's PostCompact passes its own
 # result: the detect.summary fields (nonce, the marker's scope, normalized,
 # marker_line, sentinel_from_end) under `scan`, and its final verdict on top.
+# ALIAS (PKG-RUNTIME D.1): a flat `detect` (the detect.summary fields with no `scan`) is the
+# older documented form; core never passes it. Still read; marked for removal after one release.
 sub _detect {
     my ($ctx) = @_;
     my $d = $ctx->{detect};

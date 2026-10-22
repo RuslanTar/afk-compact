@@ -13,6 +13,7 @@ package watch::rules;
 # the caller drops the run and the next Stop evaluates the same input again.
 use strict;
 use warnings;
+use utf8;
 use watch::alerts;
 use watch::cache;
 use watch::ctx;
@@ -33,7 +34,12 @@ our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_e
                 thrash trigger_disabled_small_window trigger_unknown triggers_off version_change
                 warn_quota watch_error
                 handoff_export handoff_mode handoff_race handoff_skipped handoff_turn_open
-                handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched);
+                handoff_user_interjected jobs_caller_refused queue_add relaunch_unmatched
+                permission_denied
+                stash_dropped stash_kept copy_attributed copy_attribution_ambiguous copy_attribution_failed
+                orphan_finished
+                handoff_turn_start handoff_turn_end idle_mismatch resume_remeasured resume_remeasure_failed
+                submit_dropped queue_contract);
 my %KIND = map { $_ => 1 } @KINDS;
 our %MISSED;
 
@@ -68,12 +74,103 @@ sub load_session {
         $S{disp}{ $d->{nonce} } = $d;
     }
     $S{disp_list} = [ sort { (_t($a) // 0) <=> (_t($b) // 0) } values %{ $S{disp} } ];
-    $S{rollup} = {};
-    for my $r (@{ $C->{rows}{rollup} }) {
-        $S{rollup}{ $r->{nonce} } = $r if defined $r->{nonce};
-    }
+    ($S{rollup}, $S{boundary}, $S{join_conflict}) = join_rollup($C->{rows}{rollup});
+    $S{attributed} = attributed_by_id6(rows_of(\%S, 'copy_attributed'));
     $S{bg} = _bg_slots($ctx);
     return \%S;
+}
+
+# The rollup stream (<watch>/<sid>/compactions.jsonl) holds the rollup rows (`ev:
+# compaction`, written before the store had an `ev` for them: no `ev`) and core's
+# `compaction_boundary` rows (PKG-RUNTIME E.2; one per nonce, append-only). Join by nonce:
+# a null rollup field takes the boundary value, a non-null rollup value is never replaced,
+# and a disagreement is a `join_conflict` (named on the row as `_join_conflict`, counted).
+# A repeated boundary row for a nonce is ignored (the first one counts).
+our %JOIN_FIELDS = (pre_tokens => 'pre_tokens', post_tokens => 'post_tokens', duration_ms => 'duration_ms',
+                    precomputed => 'precomputed');
+our @JOIN_IDLE = qw(idle idle_source idle_gap_s);
+
+sub join_rollup {
+    my ($rows) = @_;
+    my (%roll, %bound);
+    for my $r (@{ $rows || [] }) {
+        next unless ref $r eq 'HASH' && defined $r->{nonce} && !ref $r->{nonce};
+        my $ev = $r->{ev} // 'compaction';
+        if ($ev eq 'compaction_boundary') { $bound{ $r->{nonce} } //= $r }
+        elsif ($ev eq 'compaction') { $roll{ $r->{nonce} } = $r }
+    }
+    my $conflicts = 0;
+    for my $n (sort keys %roll) {
+        my $b = $bound{$n} or next;
+        $roll{$n} = join_row($roll{$n}, $b);
+        $conflicts++ if $roll{$n}{_join_conflict};
+    }
+    return (\%roll, \%bound, $conflicts);
+}
+
+# join_row(rollup row, boundary row) -> a joined copy (neither row is changed): a null rollup
+# field takes the boundary value, a non-null one is kept, and a disagreement is named in
+# `_join_conflict`. `watch report` (lib/watch/report.pm) joins its rollup rows with it too.
+sub join_row {
+    my ($roll, $b) = @_;
+    my $r = { %$roll };
+    my @c;
+    for my $k (sort keys %JOIN_FIELDS) {
+        my $bv = $b->{ $JOIN_FIELDS{$k} };
+        next unless defined $bv;
+        if (!defined $r->{$k}) { $r->{$k} = $bv; next }
+        my ($x, $y) = map { ref $_ eq 'SCALAR' ? ($$_ ? 1 : 0) : $_ } ($r->{$k}, $bv);
+        push @c, $k if "$x" ne "$y";
+    }
+    # IC-1 D1 (needs/core-to-watch.md §6, as core's rollup::rows): reconcile decides the idle
+    # facts once the boundary row exists and writes them on the compaction_boundary row; the
+    # PostCompact rollup row says `unknown` (or null) until then. Such a rollup value takes the
+    # boundary's; a settled one is kept. No join_conflict: the rollup never settles idle itself.
+    for my $k (@JOIN_IDLE) {
+        next unless exists $b->{$k};
+        $r->{$k} = $b->{$k} if !defined $r->{$k} || (!ref $r->{$k} && $r->{$k} eq 'unknown');
+    }
+    $r->{boundary_uuid} //= $b->{boundary_uuid};
+    $r->{_join_conflict} = \@c if @c;
+    return $r;
+}
+
+# C-STORE D5/D10 (MOD-SPEC §5.9 step 4): the newest `copy_attributed` row per id6. The
+# copy-path and actor joins take it over the `copy` row and the rollup row (read-only).
+sub attributed_by_id6 {
+    my (@rows) = @_;
+    my %a;
+    for my $r (sort { (_t($a) // 0) <=> (_t($b) // 0) } @rows) {
+        next unless defined $r->{id6} && !ref $r->{id6};
+        $a{ $r->{id6} } = $r;
+    }
+    return \%a;
+}
+
+# `permission_denied` rows (core's hook, WATCHER-SPEC §6.3; D-13 deny_rate): counts by
+# `turn_kind` (`post-compaction` includes the pending-record case of PKG-RUNTIME E.1),
+# `caused_by` and `guard_class`. D-13 keeps `reason_class` `classifier-unavailable` apart as
+# the control (CR-17): such a row counts in `control`, not in `guard_class`. Content-free:
+# classes and counts only. `watch report` (lib/watch/report.pm) counts with deny_counts.
+sub deny_summary {
+    my ($S) = @_;
+    return deny_counts([ rows_of($S, 'permission_denied') ]);
+}
+
+sub deny_counts {
+    my ($rows) = @_;
+    my %o = (total => 0, control => 0, turn_kind => {}, caused_by => {}, guard_class => {}, post_compaction_plugin => 0);
+    for my $r (@{ $rows || [] }) {
+        next unless ref $r eq 'HASH';
+        $o{total}++;
+        my %v = map { my $x = $r->{$_}; ($_ => (defined $x && !ref $x && length $x) ? $x : 'unknown') }
+                qw(turn_kind caused_by guard_class);
+        $o{$_}{ $v{$_} }++ for qw(turn_kind caused_by);
+        if (($r->{reason_class} // '') eq 'classifier-unavailable') { $o{control}++ }
+        else { $o{guard_class}{ $v{guard_class} }++ }
+        $o{post_compaction_plugin}++ if $v{turn_kind} eq 'post-compaction' && $v{caused_by} eq 'plugin';
+    }
+    return \%o;
 }
 
 sub rows_of {
@@ -104,25 +201,78 @@ sub thresholds {
     my ($ctx, $S) = @_;
     return { off => 1 } if rows_of($S, 'triggers_off') || rows_of($S, 'trigger_disabled_small_window');
     my ($cfg) = reverse rows_of($S, 'config_effective');
+    # A disabled row (needs/mod-to-watch.md 5) has null thresholds and the computed values in
+    # soft_max_raw / target_raw, which are never thresholds (they can be negative): off.
+    return { off => 1, why => $cfg->{disabled} }
+        if $cfg && defined $cfg->{disabled} && !ref $cfg->{disabled} && length $cfg->{disabled};
     if ($cfg) {
         my $g = sub { for (@_) { return $cfg->{$_} if defined $cfg->{$_} && !ref $cfg->{$_} } return undef };
         my %t = (target => $g->(qw(target target_tokens compact_target_tokens)),
                  soft_max => $g->(qw(soft_max soft_max_tokens compact_soft_max_tokens)),
                  window => $g->(qw(window native_window_tokens context_window)),
                  native => $g->(qw(native_trigger native_trigger_tokens)));
-        $t{native} //= $t{window} - 33000 if defined $t{window};
+        $t{native} //= $t{window} - clamp_constants($ctx->{spec})->{native_offset} if defined $t{window};
         return \%t if defined $t{target} && defined $t{soft_max} && defined $t{native};
     }
-    my $s = $ctx->{settings};
-    return { off => 1 } if lc($s->{triggers} // 'true') eq 'false';
+    return fallback_thresholds($ctx->{settings}, $ctx->{spec});
+}
+
+# The clamp constants (P5-FOLD A3): one shared source, the spec's `clamp` object
+# (assets/handoff-spec.json, rendered for the mod too). A missing or non-numeric key takes
+# the built-in value, which equals the mod's config.ts constant.
+our %CLAMP = (native_offset => 33000, min_target => 120000, reserve_base => 52000,
+              reserve_no_handoff => 100000, window_floor => 100000, soft_ratio => 0.8,
+              target_num => 2, target_den => 3, handoff_tokens_min => 20000, handoff_tokens_max => 150000);
+
+sub clamp_constants {
+    my ($spec) = @_;
+    my $c = ref $spec eq 'HASH' && ref $spec->{clamp} eq 'HASH' ? $spec->{clamp} : {};
+    my %k;
+    for my $n (keys %CLAMP) {
+        my $v = $c->{$n};
+        $k{$n} = (defined $v && !ref $v && $v =~ /\A[0-9]+(?:\.[0-9]+)?\z/ && $v > 0) ? 0 + $v : $CLAMP{$n};
+    }
+    return \%k;
+}
+
+# WATCHER-SPEC M-04 fallback: with no mod row (classic-only), the MOD-SPEC §1.2 clamp over
+# the settings, the same formula as the mod's clamp(): the window below the floor counts
+# as the floor; `reserve` from `handoff_turn`/`handoff_turn_max_tokens`; disabled below
+# `min_target`. `min_window` is the smallest window that stays enabled ('never' when the
+# configured pair alone is below the minimum). Unknown window (0): undef.
+sub fallback_thresholds {
+    my ($s, $spec) = @_;
+    return { off => 1, why => 'triggers-off' } if lc($s->{triggers} // 'true') eq 'false';
     my $w = $s->{native_window_tokens};
     return undef unless $w && $w > 0;
-    my $native = $w - 33000;
-    my $soft = _min($s->{compact_soft_max_tokens}, $native - 100000, int(0.8 * $w));
-    my $target = _min($s->{compact_target_tokens}, int($soft * 2 / 3));
-    return { off => 1 } if $target < 120000;
-    return { target => $target, soft_max => $soft, window => $w, native => $native };
+    my $K = clamp_constants($spec);
+    $w = $K->{window_floor} if $w < $K->{window_floor};
+    my $ht = int($s->{handoff_turn_max_tokens} // 64000);
+    $ht = $K->{handoff_tokens_min} if $ht < $K->{handoff_tokens_min};
+    $ht = $K->{handoff_tokens_max} if $ht > $K->{handoff_tokens_max};
+    my $reserve = ($s->{handoff_turn} // 'halt') eq 'off' ? $K->{reserve_no_handoff} : $K->{reserve_base} + $ht;
+    my $native = $w - $K->{native_offset};
+    my $soft = _min($s->{compact_soft_max_tokens}, $native - $reserve, _floor($K->{soft_ratio} * $w));
+    my $tq = sub { _floor(($_[0] * $K->{target_num}) / $K->{target_den}) };
+    my $target = _min($s->{compact_target_tokens}, $tq->($soft));
+    # The smallest soft_max whose target reaches min_target, then the smallest window giving it.
+    # Integer steps from a close start, with the same float expressions as the clamp.
+    my $s0 = _ceil(($K->{min_target} * $K->{target_den}) / $K->{target_num});
+    $s0-- while $s0 > 0 && $tq->($s0 - 1) >= $K->{min_target};
+    $s0++ while $tq->($s0) < $K->{min_target};
+    my $w0 = _ceil($s0 / $K->{soft_ratio});
+    $w0-- while $w0 > 0 && _floor($K->{soft_ratio} * ($w0 - 1)) >= $s0;
+    $w0++ while _floor($K->{soft_ratio} * $w0) < $s0;
+    my $min_window = ($s->{compact_soft_max_tokens} >= $s0 && $s->{compact_target_tokens} >= $K->{min_target})
+        ? _max($s0 + $K->{native_offset} + $reserve, $w0, $K->{window_floor}) : 'never';
+    return { off => 1, why => 'trigger-disabled-small-window', window => $w, min_window => $min_window,
+             soft_max_raw => $soft, target_raw => $target } if $target < $K->{min_target};
+    return { target => $target, soft_max => $soft, window => $w, native => $native, min_window => $min_window };
 }
+
+sub _floor { my $x = shift; my $i = int $x; return $i > $x ? $i - 1 : $i }
+sub _ceil { my $x = shift; my $i = int $x; return $i < $x ? $i + 1 : $i }
+sub _max { my $m = shift; for (@_) { $m = $_ if $_ > $m } return $m }
 
 sub _min { my $m = shift; for (@_) { $m = $_ if $_ < $m } return $m }
 
@@ -221,6 +371,18 @@ sub _derive {
     elsif ($D && defined $D->{agent_id}) { $actor = $D->{agent_id} }
     elsif ($D && ($D->{actor} // '') eq 'main' && ($D->{channel} // '') =~ /\Amod-/) { $actor = 'main' }
     else { $actor = 'unattributed' }
+    # A reconcile fill (copy_attributed, by id6) names the agent of a copy saved as
+    # `sub-unknown`; it never turns a main compaction into a subagent one.
+    my $rk0 = $D ? $D->{nonce} : $P ? $P->{nonce_found} : undef;
+    my $id6 = (defined $rk0 && $S->{rollup}{$rk0}) ? $S->{rollup}{$rk0}{id6} : undef;
+    $id6 //= $D->{id6} if $D;
+    my $att = defined $id6 ? $S->{attributed}{$id6} : undef;
+    if ($att && defined $att->{actor} && !ref $att->{actor} && $actor ne 'main') {
+        $actor = $att->{actor};
+        $C->{actor_src} = 'copy_attributed';
+    }
+    $C->{copy_path} = $att->{rel_path} if $att && defined $att->{rel_path};
+    $C->{id6} = $id6;
     $C->{actor} = $actor;
     $C->{main} = $actor eq 'main' ? 1 : 0;
     $C->{precompute} = (($B && ${ $B->{precomputed} }) || ($D && ($D->{trigger} // '') eq 'precompute')) ? 1 : 0;
@@ -253,6 +415,22 @@ sub _derive {
     # Copy, M-14.
     my $copy;
     my $rk = $D ? $D->{nonce} : $P ? $P->{nonce_found} : undef;
+    # Sizes: the swept boundary first; without one, the rollup row joined with core's
+    # `compaction_boundary` row by nonce (PKG-RUNTIME E.2, join_rollup).
+    my $roll = defined $rk ? $S->{rollup}{$rk} : undef;
+    $C->{pre} = ($B && defined $B->{pre}) ? $B->{pre} : $roll ? $roll->{pre_tokens} : undef;
+    $C->{pre_src} = !defined $C->{pre} ? undef : ($B && defined $B->{pre}) ? 'transcript' : 'rollup';
+    $C->{join_conflict} = $roll->{_join_conflict} if $roll && $roll->{_join_conflict};
+    my $pc = $roll ? $roll->{precomputed} : undef;
+    $pc = $$pc if ref $pc eq q(SCALAR);
+    $C->{precompute} = 1 if !$B && $pc;
+    if ($roll) {
+        my $iv = $roll->{idle};
+        $iv = ($$iv ? 'true' : 'false') if ref $iv eq 'SCALAR';
+        $C->{idle} = (defined $iv && !ref $iv && $iv =~ /\A(?:true|false|unknown)\z/) ? $iv
+                    : (defined $iv && !ref $iv && $iv eq '1') ? 'true' : (defined $iv && !ref $iv && $iv eq '0') ? 'false' : undef;
+        $C->{idle_source} = $roll->{idle_source} if defined $roll->{idle_source} && !ref $roll->{idle_source};
+    }
     if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
     unless (defined $copy) {
         my $ref_t = $P ? _t($P) : $B ? $B->{ts_epoch} : undef;
@@ -298,6 +476,10 @@ sub _derive {
         $B->{bypass_suspected} = watch::ctx::B($C->{bypass_suspected});
         $B->{mod_off} = watch::ctx::B($C->{mod_off});
         $B->{postcompact} = watch::ctx::B($P);
+        # M-01 idle (IC-1 D1): from the rollup row (mod OR the native notice, settled at
+        # reconcile); an idle compaction arrives as trigger `auto`.
+        $B->{idle} = $C->{idle};
+        $B->{idle_source} = $C->{idle_source};
     }
 }
 
@@ -344,6 +526,15 @@ sub evaluate {
         if ($P && ($P->{fabricated_check_tokens} // 0) > 0) {
             $R->(rule => 'A-04', severity => 'warn', id_parts => \@idp, %k,
                  evidence => { fabricated_check_tokens => $P->{fabricated_check_tokens}, measured => $P->{measured} });
+        }
+        if ($c->{main} && !$B && !$c->{precompute} && ($c->{pre_src} // '') eq 'rollup') {
+            # No swept boundary (the P-only path): the band from the joined rollup sizes.
+            my $bp = band($th, $c->{pre});
+            if (defined $bp && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
+                $R->(rule => 'A-05', severity => 'warn', id_parts => \@idp, %k,
+                     evidence => { band_position => $bp, tokens_before => $c->{pre}, target => $th->{target},
+                                   soft_max => $th->{soft_max}, native_trigger => $th->{native}, source => 'rollup' });
+            }
         }
         if ($c->{main} && $B && !$c->{precompute}) {
             my $bp = band($th, $B->{pre});
@@ -398,9 +589,13 @@ sub evaluate {
             $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'arm'], %k,
                  evidence => { arm_fp => $P->{arm_fp} });
         }
-        if ($c->{main} && $c->{bypass_suspected}) {
+        # M-06 / A-16 (P5-FOLD A5): a subagent's compaction can set off bypass_suspected too.
+        # Classic payloads carry no agent id, so a row for a compaction not proven main has
+        # `actor: unknown` (the alert text says "possibly in a subagent").
+        if ($c->{bypass_suspected} && !$c->{precompute}) {
             $R->(rule => 'A-16', severity => $once->('A-16'), id_parts => \@idp, %k,
-                 evidence => { bypass_suspected => \1, channel => $c->{channel} });
+                 actor => ($c->{main} ? 'main' : 'unknown'),
+                 evidence => { bypass_suspected => \1, channel => $c->{channel}, main => watch::ctx::B($c->{main}) });
         }
         if ($P && @{ $P->{secret_hits} || [] }) {
             my @hard = grep { ($secret_class->{$_} // '') eq 'HARD' } @{ $P->{secret_hits} };
@@ -538,6 +733,10 @@ sub _session_rules {
     for my $r (rows_of($S, 'compacted')) {
         $compacted{ $r->{nonce} } = 1 if defined $r->{nonce};
         next unless defined $r->{skip} && !ref $r->{skip};
+        # DP-29 (E-M-15): the mod dropped its dispatch because a native compaction ran; the
+        # row (with the nonce) closes that dispatch, so it is neither a skipped after-step (a)
+        # nor a dispatch without `compacted` (b, the nonce is in %compacted above).
+        next if $r->{skip} eq 'native-ran';
         my $rd = $disp->{ $r->{nonce} // q() };
         next if $rd && $excluded->($rd);
         $R->(rule => 'A-17', severity => 'critical', id_parts => ['skip', $r->{nonce} // $r->{ts}],
@@ -620,9 +819,13 @@ sub _session_rules {
                 $settled = $sess->{ht_seen}{ $ht->{ht} }
                     || grep { ($_->{ht} // '') eq $ht->{ht} } rows_of($S, 'handoff_user_interjected'), rows_of($S, 'handoff_skipped');
             } else {
+                # A skip of an optional turn (pre-compaction `again`, any row with `reason:
+                # precompact` or `idle`; needs/mod-to-watch.md 2: last-cycle rows carry no
+                # reason) says nothing about the last-cycle handoff turn.
                 $settled = !$handoff_on
                     || ($ctx->{now} - $rt) >= $watch::hturn::OPEN_AFTER_ROW_S
-                    || grep { defined _t($_) && _t($_) >= $rt - $watch::hturn::SKEW_S && _t($_) <= $rt + $watch::hturn::OPEN_AFTER_ROW_S }
+                    || grep { defined _t($_) && _t($_) >= $rt - $watch::hturn::SKEW_S && _t($_) <= $rt + $watch::hturn::OPEN_AFTER_ROW_S
+                              && ($_->{why} // '') ne 'again' && ($_->{reason} // '') !~ /\A(?:idle|precompact)\z/ }
                       rows_of($S, q(handoff_skipped));
             }
             next unless $settled;

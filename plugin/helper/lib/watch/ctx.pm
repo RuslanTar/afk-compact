@@ -12,10 +12,14 @@ package watch::ctx;
 #   plugin_root    the plugin folder (default: four levels above this file)
 #   pid, pid_lstart  the Claude Code process (identity.claude_pid)
 #   cc_version     Claude Code version when known
-#   detect         PostCompact: detect.summary result for compact_summary, or
-#                  core's PostCompact result {scan => <that>, verdict, scope, ...}
-#   instr          PreCompact: detect.instructions result (core passes it as
-#                  `instructions`; either key is read)
+#   cc_version_src which source gave cc_version (mod, exec, transcript, mirror; MOD-SPEC §2.5)
+#   detect         PostCompact: core's result {scan => detect.summary result, verdict,
+#                  scope, seat_state, id6, channel, scope_deferred}. ALIAS: the flat
+#                  detect.summary result (no `scan`), still read, marked for removal
+#                  after one release (PKG-RUNTIME D.1)
+#   instructions   PreCompact: detect.instructions result {found, nonce, scope,
+#                  has_record}. ALIAS `instr`: the older name, still read, marked for
+#                  removal after one release (PKG-RUNTIME D.1; core never passes it)
 #   dispatch       PostCompact: the dispatch record matched by core, if any
 #   secret_hits    PostCompact: [rule ids] from secrets.scan on the summary
 #   keyset_hash    C5 sha8 of this payload's key set, as core computes it
@@ -31,6 +35,7 @@ package watch::ctx;
 # lib/watch.pm turn every plain ctx value into UTF-8 bytes first.
 use strict;
 use warnings;
+use utf8;
 use Cwd ();
 use File::Basename ();
 use watch::io;
@@ -45,11 +50,12 @@ my %DEFAULTS = (
     compact_target_tokens       => 400000,
     compact_soft_max_tokens     => 600000,
     native_window_tokens        => 0,
-    max_auto_continues_per_hour => 3,
+    max_auto_continues_per_hour => 6,
     evidence_quota_mb           => 500,
     triggers                    => 'true',
     deny_class_patterns         => '',
     handoff_turn                => 'halt',
+    handoff_turn_max_tokens     => 64000,
 );
 
 my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
@@ -95,7 +101,8 @@ sub _settings {
     }
     $s{handoff_root} = _expand($s{handoff_root}) || _expand($DEFAULTS{handoff_root});
     for my $k (qw(stall_min cache_ttl_s compact_target_tokens compact_soft_max_tokens
-                  native_window_tokens max_auto_continues_per_hour evidence_quota_mb)) {
+                  native_window_tokens max_auto_continues_per_hour evidence_quota_mb
+                  handoff_turn_max_tokens)) {
         $s{$k} = $DEFAULTS{$k} unless defined $s{$k} && $s{$k} =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         $s{$k} = 0 + $s{$k};
     }
@@ -104,6 +111,10 @@ sub _settings {
     my $t = $s{triggers};
     $t = UNIVERSAL::isa($t, 'SCALAR') ? ($$t ? 1 : 0) : undef if ref $t;
     $s{triggers} = (defined $t && !ref $t && $t =~ /\A\s*(?:1|true|yes|on)\s*\z/i) ? 'true' : 'false';
+    # `handoff_turn` as the mod parses it (config.ts handoffTurn): trimmed and case-folded;
+    # anything but `halt` or `off` is the default. It sets the clamp's reserve (rules::thresholds).
+    (my $ht = lc(ref $s{handoff_turn} ? '' : $s{handoff_turn})) =~ s/\A\s+|\s+\z//g;
+    $s{handoff_turn} = ($ht eq 'halt' || $ht eq 'off') ? $ht : $DEFAULTS{handoff_turn};
     ($s{watcher}, $s{watcher_unknown}) = _watcher_value($given);
     return \%s;
 }

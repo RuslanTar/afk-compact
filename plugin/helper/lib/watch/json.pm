@@ -6,6 +6,7 @@ package watch::json;
 # Encode is canonical: object keys sorted, no spaces.
 use strict;
 use warnings;
+use utf8;
 
 sub decode {
     my ($text) = @_;

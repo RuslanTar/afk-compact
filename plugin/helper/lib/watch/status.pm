@@ -4,6 +4,7 @@ package watch::status;
 # Owner: WP-watch. Fixed texts, ids and counts only; never content.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::alerts;
@@ -40,14 +41,60 @@ sub lines {
                                watch::alerts::text_for($ctx, $r->{rule} // ''));
         }
         push @out, sprintf('  (+%d more)', @rows - $SHOW) if @rows > $SHOW;
+        push @out, join_conflict_lines($ctx);
     }
     my ($counts, $sessions) = week_counts($ctx);
     push @out, @$counts
         ? 'Alerts, last 7 days: ' . join(', ', map { "$_->[0] $_->[1]" } @$counts) . " ($sessions sessions)"
         : 'Alerts, last 7 days: none';
+    push @out, stash_lines($ctx);
     my $last = last_row_ts($ctx);
     push @out, 'Last watcher row: ' . ($last // 'none');
     return \@out;
+}
+
+# C-STORE D4/D10 (MOD-SPEC §5.8): the stashes the cross-session finish cannot reach
+# because their session left no per-process record (<root>/.sessions/by-pid/*.{live,ended}-
+# <sid8>.json). Counts and sid8s only; one line, shown only when the count is not zero.
+# Read-only (F2-5: core writes these files). The stashes kept after a real mismatch
+# (`pending/*.mismatch.md`) are core's `status` line (`kept mismatch stashes: N`, with their
+# paths; needs/core-to-watch.md §8), so the watcher no longer repeats their count.
+our $STASH_SIDS = 5;
+sub stash_lines {
+    my ($ctx) = @_;
+    my $w = $ctx->{watch};
+    my %rec;
+    for my $f (watch::io::list_dir(($ctx->{root} // '') . '/.sessions/by-pid')) {
+        $rec{$1} = 1 if $f =~ /\A[0-9]+-[0-9]+\.(?:live|ended)-([0-9A-Za-z-]{1,8})\.json\z/;
+    }
+    my $own = $ctx->{sid} // '';
+    my @unreached;
+    for my $sid (watch::io::list_dir($w)) {
+        next unless $sid =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ && -d "$w/$sid/pending";
+        # a kept `*.mismatch.md` is not an open stash
+        my $open = grep { /\.(?:post|mod)\.md\z/ && !/\.mismatch\.md\z/ } watch::io::list_dir("$w/$sid/pending");
+        push @unreached, substr($sid, 0, 8) if $open && $sid ne $own && !$rec{ substr($sid, 0, 8) };
+    }
+    my @o;
+    if (@unreached) {
+        my @show = @unreached[0 .. ($#unreached < $STASH_SIDS - 1 ? $#unreached : $STASH_SIDS - 1)];
+        push @o, sprintf('Stashes no other session can finish (their session left no process record): %d session%s (%s%s)',
+                         scalar @unreached, (@unreached == 1 ? '' : 's'), join(', ', @show),
+                         (@unreached > @show ? sprintf(', +%d more', @unreached - @show) : ''));
+    }
+    return @o;
+}
+
+# PKG-RUNTIME E.2 (WATCHER-SPEC §6.3 `compaction_boundary`): this session's rollup rows whose
+# non-null size disagrees with core's boundary row for the same nonce (`join_conflict`; the
+# rollup value is kept). One line, shown only when the count is not zero. Read-only.
+sub join_conflict_lines {
+    my ($ctx) = @_;
+    require watch::rules;
+    my $p = watch::ctx::sid_dir($ctx) . '/compactions.jsonl';
+    return () unless -f $p && !-l $p;
+    my (undef, undef, $n) = watch::rules::join_rollup(watch::io::read_jsonl($p));
+    return $n ? (sprintf('Compaction size join conflicts this session: %d (the rollup value is kept)', $n)) : ();
 }
 
 sub week_counts {

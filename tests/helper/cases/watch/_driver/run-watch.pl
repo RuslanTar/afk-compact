@@ -10,6 +10,8 @@
 # pass, plus `cli` steps that run the real launcher (`stdin_vars => 1` fills
 # $WATCH, $SID, $PROJ, ... in their stdin). Every call's stdout and stderr are
 # captured and must be empty unless a step says otherwise.
+# A case that returns `skip => <reason>` (its input, e.g. a WP-fix fixture, is not on this
+# branch yet) prints `ok - <id> # SKIP <reason>` and runs nothing.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
@@ -39,15 +41,19 @@ POSIX::tzset();
 
 my $brand_json = watch::io::read_json_file("$REPO/brand.json") || {};
 $T::BRAND = $brand_json->{name} || 'plugin';
+$T::REPO = $REPO;
 
 my @dirs = @ARGV ? @ARGV : map { "$HERE/../$_" } grep { -f "$HERE/../$_/case.pl" } sort(watch::io::list_dir("$HERE/.."));
-my ($pass, $fail) = (0, 0);
+my ($pass, $fail, $skipped) = (0, 0, 0);
+our $SKIP;
 my @failed;
 
 for my $dir (@dirs) {
     my $id = File::Basename::basename(Cwd::abs_path($dir));
+    local $SKIP;
     my @errs = eval { run_case(Cwd::abs_path($dir)) };
     push @errs, "died: $@" if $@;
+    if (!@errs && defined $SKIP) { $skipped++; print "ok - $id # SKIP $SKIP\n"; next }
     if (@errs) {
         $fail++;
         push @failed, $id;
@@ -58,7 +64,7 @@ for my $dir (@dirs) {
         print "ok - $id\n";
     }
 }
-print "# watch cases: $pass passed, $fail failed\n";
+print "# watch cases: $pass passed, $fail failed" . ($skipped ? ", $skipped skipped" : '') . "\n";
 exit($fail ? 1 : 0);
 
 sub spec_for_tests {
@@ -130,6 +136,13 @@ sub cli_launcher {
         copy_tree("$REPO/plugin", "$base/plugin");
         require settings;
         write_file("$base/plugin/$settings::TEST_CONSENT_MARK", "watch driver test stage\n", 0644);
+        # WP-watch's `report` command (WCH-09) until WP-core lists it in main.pl's %KNOWN
+        # (needs/watch-to-core.md W2C-1): the staged copy only, never the repo's main.pl.
+        my $mp = "$base/plugin/helper/main.pl";
+        my $m = watch::io::slurp($mp);
+        if (defined $m && $m !~ /^\s+watch report\b/m && $m =~ s/^(\s+)watch\n\);/$1watch report\n);/m) {
+            write_file($mp, $m, (stat $mp)[2] & 07777);
+        }
         $CLI_STAGE = "$base/plugin";
     }
     my $l = "$CLI_STAGE/scripts/$T::BRAND-store";
@@ -163,6 +176,8 @@ sub run_case {
     my $case = do "$dir/case.pl";
     die "case.pl: $@" if $@;
     die "case.pl did not return a hash" unless ref $case eq 'HASH';
+    # `skip => reason`: a case whose input is not on this branch yet (a WP-fix fixture)
+    if (defined $case->{skip}) { $SKIP = $case->{skip}; return () }
     my $tmp = File::Temp::tempdir('watchcase-XXXXXX', TMPDIR => 1, CLEANUP => 1);
     my %v = (TMP => $tmp, HOME => "$tmp/home", SID => $T::SID, BRAND => $T::BRAND, PLUGIN => "$tmp/plugin");
     $v{ROOT} = "$v{HOME}/.claude/handoffs";

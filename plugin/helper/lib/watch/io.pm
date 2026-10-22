@@ -5,6 +5,7 @@ package watch::io;
 # 0600 files. Core may inject its own appender through ctx (lib/watch/ctx.pm).
 use strict;
 use warnings;
+use utf8;
 use Fcntl qw(O_WRONLY O_APPEND O_CREAT O_EXCL O_RDONLY O_RDWR LOCK_EX LOCK_NB LOCK_UN SEEK_SET);
 use POSIX ();
 use watch::json;

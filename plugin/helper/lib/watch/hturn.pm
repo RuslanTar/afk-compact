@@ -11,6 +11,7 @@ package watch::hturn;
 # files, never writes them.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 
@@ -60,12 +61,19 @@ sub submit_for {
     return $best;
 }
 
-# The handoff turn opened for a halted `continue` row at epoch $rt (first one at or after the
-# row, with a little skew allowed).
+# The optional handoff turns that never follow a `continue` row: the pre-compaction turn
+# (`precompact`, MOD-SPEC §9.3, OD-4) and the pre-idle turn (`idle`, §9.4). M-17 still
+# classes their submit as a handoff turn (submit_for is reason-blind), but they are no
+# last-cycle handoff for A-18 (S-SETTINGS D: "A-18 does not apply").
+our %OPTIONAL = map { $_ => 1 } qw(precompact idle);
+
+# The last-cycle handoff turn opened for a halted `continue` row at epoch $rt (first one at
+# or after the row, with a little skew allowed; optional turns are skipped).
 sub opened_after {
     my ($ctx, $rt) = @_;
     return undef unless defined $rt;
     for my $r (@{ records($ctx) }) {
+        next if defined $r->{reason} && $OPTIONAL{ $r->{reason} };
         return $r if $r->{opened} >= $rt - $SKEW_S && $r->{opened} <= $rt + $OPEN_AFTER_ROW_S;
     }
     return undef;

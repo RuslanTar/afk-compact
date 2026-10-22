@@ -1,0 +1,920 @@
+#!/usr/bin/python3 -I
+"""tools/beta-analyze: the owner's analysis of closed-beta report bundles (W-BETA F; BUILD-PLAN 2.5).
+
+Dev workspace only, never under plugin/. Python 3 standard library only; run it isolated:
+
+  python3 -I tools/beta-analyze run INBOX [--out DIR] [--store LAUNCHER]
+  python3 -I tools/beta-analyze forget INSTALL_ID INBOX
+
+run     Reads every *.zip directly in INBOX (received files are untrusted data):
+        1. intake: a zip is refused when an entry name is outside the bundle names, absolute or
+           holds `..`, is a symlink (external_attr), is encrypted or uses another method than
+           STORE/DEFLATE, declares more than 50 MB, when the declared total is over 200 MB, or an
+           entry's compression ratio is over 100. The sizes come from the headers, before any read.
+        2. verify: `<store> report verify --zip FILE`, plus the same pattern classes here
+           (absolute paths, macOS and Linux home folders, e-mail addresses, URLs with a host). Any hit marks the
+           bundle `quarantined`: it is not extracted, not counted, and is a P0 (an allowlist hole).
+        3. dedupe: a byte-identical zip is a duplicate; rows are deduped by
+           (install_id, hashed sid, ev, ts, nonce).
+        4. per install: the deduped rows go to DIR/installs/<install_id>/rows/, and
+           `<store> watch report --input ... --since all` writes WATCH-REPORT.md beside them.
+        5. pooled: DIR/BETA-REPORT.md plus bundles.tsv, installs.tsv, alerts.tsv,
+           config-changed.tsv.
+        Valid bundles are extracted into a fresh DIR/raw/<zip sha8>/. Nothing in them is executed
+        or imported. DIR defaults to INBOX/../beta-analysis/<YYYY-MM-DD_HH-MM-SS>/ and must not
+        exist yet or be empty. INBOX and DIR must sit outside any git work tree.
+forget  Prints the files of one install (its zips in INBOX, its folders and the files that
+        mention it under INBOX/../beta-analysis/) for the owner to remove. Removes nothing.
+
+No model and no network: an audit hook refuses every socket and URL event, any process but the
+store launcher, any delete or rename, and any write outside DIR.
+
+Exit: 0 done (also when bundles were refused or quarantined), 64 usage, 69 no store launcher,
+70 internal error, 73 DIR not fresh, not writable, or inside a git work tree.
+"""
+import sys
+
+if not sys.flags.isolated:
+    sys.stderr.write("beta-analyze: run it isolated: python3 -I tools/beta-analyze ...\n")
+    sys.exit(64)
+sys.dont_write_bytecode = True
+
+import calendar  # noqa: E402
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import stat  # noqa: E402
+import subprocess  # noqa: E402
+import time  # noqa: E402
+import zipfile  # noqa: E402
+
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+MB = 1 << 20
+ENTRY_MAX = 50 * MB
+TOTAL_MAX = 200 * MB
+RATIO_MAX = 100
+ENTRIES_MAX = 10000
+FIXED = ("README.txt", "manifest.json", "config.json", "probes.json", "sizes.json")
+ROWS_RE = re.compile(r"\Arows/[0-9a-f]{12}\.jsonl\Z")
+SCHEMA_RE = re.compile(r"\A([a-z0-9][a-z0-9-]{0,40})-report/([0-9]{1,4})\Z")
+SCHEMA_VERSIONS = {"1"}
+INSTALL_RE = re.compile(r"\A[0-9a-f]{16}\Z")
+WORD_RE = re.compile(r"\A[a-z][a-z0-9_.:-]{0,31}\Z")
+VERSION_RE = re.compile(r"\A[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}\Z")
+RULE_RE = re.compile(r"\AA-[0-9]{2}\Z")
+HEX12_RE = re.compile(r"\A[0-9a-f]{12}\Z")
+NONCE_RE = re.compile(r"\A[0-9a-f]{8}\Z")
+# The pattern classes of `report verify` (lib/watch/export.pm @PATTERN_CLASSES), checked here too.
+PATTERNS = (
+    ("abs-path", re.compile(rb"(?:/U[s]ers/|/h[o]me/|/private/|/var/folders/|[A-Za-z]:\\\\)")),
+    ("email", re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]+")),
+    ("url", re.compile(rb"[a-z][a-z0-9+.-]*://[^\s\"/]+", re.I)),
+)
+SHAPED = {"mod-hook", "mod-self", "classic"}
+OK_VERDICTS = {"ok", "ok-trailer"}
+BAND_STEP = 50000
+BAR_WIDTH = 40
+
+
+class Usage(Exception):
+    pass
+
+
+class Refuse(Exception):
+    """Exit 73: the output folder is not fresh, not writable, or inside a git work tree."""
+
+
+# --- the guard: no network, no other process, no delete, writes only under DIR ---------------
+
+GUARD = {"exec": set(), "write_root": None}
+_NET_EVENTS = ("socket.", "urllib.", "http.", "ftplib.", "smtplib.", "imaplib.", "poplib.", "nntplib.",
+               "telnetlib.", "webbrowser.", "ssl.")
+_DELETE_EVENTS = {"os.remove", "os.unlink", "os.rmdir", "os.rename", "os.replace", "os.truncate",
+                  "shutil.rmtree", "shutil.move", "os.removexattr"}
+_EXEC_EVENTS = {"os.system", "os.exec", "os.fork", "os.forkpty", "os.spawn", "os.startfile", "pty.spawn"}
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+
+
+def _real(p):
+    if isinstance(p, bytes):
+        p = os.fsdecode(p)
+    return os.path.realpath(os.fspath(p))
+
+
+def _under_root(p, allow_ancestor=False):
+    root = GUARD["write_root"]
+    if root is None:
+        return False
+    rp = _real(p)
+    if rp == root or rp.startswith(root + os.sep):
+        return True
+    return allow_ancestor and root.startswith(rp.rstrip(os.sep) + os.sep)
+
+
+def _audit(event, args):
+    if event.startswith(_NET_EVENTS):
+        raise PermissionError("beta-analyze: no network (%s)" % event)
+    if event in _DELETE_EVENTS:
+        raise PermissionError("beta-analyze: deletes nothing (%s)" % event)
+    if event in _EXEC_EVENTS:
+        raise PermissionError("beta-analyze: runs no command (%s)" % event)
+    if event in ("subprocess.Popen", "os.posix_spawn"):
+        exe = args[0]
+        if exe is None or _real(exe) not in GUARD["exec"]:
+            raise PermissionError("beta-analyze: runs only the store launcher")
+    elif event == "open":
+        path, _mode, flags = args
+        if isinstance(path, int) or path is None:
+            return
+        if isinstance(flags, int) and flags & _WRITE_FLAGS and _real(path) != os.devnull and not _under_root(path):
+            raise PermissionError("beta-analyze: writes only under DIR (%s)" % clean(path, 200))
+    elif event == "os.mkdir":
+        if not _under_root(args[0], allow_ancestor=True):
+            raise PermissionError("beta-analyze: writes only under DIR (%s)" % clean(args[0], 200))
+    elif event in ("os.chmod", "os.chown", "os.utime", "os.symlink", "os.link"):
+        if not isinstance(args[0], int) and not _under_root(args[0]):
+            raise PermissionError("beta-analyze: writes only under DIR (%s)" % clean(args[0], 200))
+
+
+sys.addaudithook(_audit)
+
+
+# --- small helpers -----------------------------------------------------------------------------
+
+def say(line):
+    sys.stdout.write(line + "\n")
+
+
+def clean(s, n=80):
+    """An untrusted string made safe for a terminal, a table cell or a TSV field."""
+    if s is None:
+        return "-"
+    if isinstance(s, bytes):
+        s = s.decode("utf-8", "replace")
+    s = str(s)
+    out = "".join(c if (" " <= c <= "~" and c not in "|\t`") else "?" for c in s)
+    return out[:n] + ("..." if len(out) > n else "")
+
+
+def word(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, str) and WORD_RE.match(v):
+        return v
+    return "none" if v is None else "other"
+
+
+def version(v):
+    return v if isinstance(v, str) and VERSION_RE.match(v) else "other"
+
+
+def num(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def pct(sorted_vals, p):
+    if not sorted_vals:
+        return None
+    return sorted_vals[int((p / 100.0) * (len(sorted_vals) - 1) + 0.5)]
+
+
+def in_git(path):
+    p = _real(path)
+    while True:
+        if os.path.lexists(os.path.join(p, ".git")):
+            return p
+        up = os.path.dirname(p)
+        if up == p:
+            return None
+        p = up
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(MB), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def mkdir(path):
+    os.mkdir(path, 0o700)
+
+
+def write_new(path, data):
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
+
+
+def tsv(rows):
+    return "".join("\t".join(clean(c, 200) for c in r) + "\n" for r in rows)
+
+
+def parse_created(s):
+    """Date and time with offset -> epoch seconds, else None. Reads the manifest's own `created`
+    stamp (RV-24: `YYYY-MM-DD HH:MM +hhmm`, what `report` writes) and the rows' ISO form
+    (`YYYY-MM-DDTHH:MM:SS[.fff]+hh:mm` or `Z`)."""
+    if not isinstance(s, str):
+        return None
+    m = re.match(r"\A(\d{4})-(\d\d)-(\d\d)(?:T| )(\d\d):(\d\d)(?::(\d\d)(?:\.\d+)?)? ?(Z|[+-]\d\d:?\d\d)\Z", s)
+    if not m:
+        return None
+    y, mo, d, hh, mi, ss, off = m.groups()
+    t = calendar.timegm((int(y), int(mo), int(d), int(hh), int(mi), int(ss or 0), 0, 0, 0))
+    if off != "Z":
+        sign = 1 if off[0] == "+" else -1
+        off = off[1:].replace(":", "")
+        t -= sign * (int(off[:2]) * 3600 + int(off[2:]) * 60)
+    return t
+
+
+# --- 1. intake ---------------------------------------------------------------------------------
+
+def entry_problems(infos):
+    """The intake checks on the central directory alone (nothing is read). -> list of problems."""
+    probs = []
+    seen = set()
+    total = 0
+    if len(infos) > ENTRIES_MAX:
+        return ["too many entries (%d)" % len(infos)]
+    for zi in infos:
+        n = zi.filename
+        shown = clean(n, 60)
+        parts = n.replace("\\", "/").split("/")
+        if n.startswith("/") or "\\" in n or re.match(r"\A[A-Za-z]:", n) or "\x00" in n:
+            probs.append("absolute name %s" % shown)
+            continue
+        if ".." in parts:
+            probs.append("'..' in name %s" % shown)
+            continue
+        mode = (zi.external_attr >> 16) & 0xFFFF
+        if stat.S_ISLNK(mode):
+            probs.append("symlink %s" % shown)
+            continue
+        if n not in FIXED and not ROWS_RE.match(n) and n != "rows/":
+            probs.append("name outside the bundle names %s" % shown)
+            continue
+        if n in seen:
+            probs.append("duplicate entry %s" % shown)
+            continue
+        seen.add(n)
+        if zi.flag_bits & 0x1:
+            probs.append("encrypted %s" % shown)
+        if zi.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            probs.append("method %d %s" % (zi.compress_type, shown))
+        if zi.file_size > ENTRY_MAX:
+            probs.append("entry over 50 MB %s" % shown)
+        if zi.file_size > RATIO_MAX * max(zi.compress_size, 1):
+            probs.append("compression ratio over %d %s" % (RATIO_MAX, shown))
+        total += zi.file_size
+    if total > TOTAL_MAX:
+        probs.append("total over 200 MB")
+    return probs
+
+
+def intake(path):
+    """-> (problems, {name: bytes}). Reads members only after the header checks pass."""
+    try:
+        zf = zipfile.ZipFile(path, "r")
+    except (zipfile.BadZipFile, OSError, ValueError, NotImplementedError) as e:
+        return (["not a zip (%s)" % clean(e.__class__.__name__)], {})
+    with zf:
+        infos = zf.infolist()
+        probs = entry_problems(infos)
+        if probs:
+            return (probs, {})
+        data = {}
+        for zi in infos:
+            if zi.filename.endswith("/"):
+                continue
+            try:
+                with zf.open(zi, "r") as fh:
+                    b = fh.read(zi.file_size + 1)
+            except (zipfile.BadZipFile, OSError, ValueError, NotImplementedError, EOFError, RuntimeError) as e:
+                return (["unreadable entry %s (%s)" % (clean(zi.filename, 60), clean(e.__class__.__name__))], {})
+            if len(b) != zi.file_size:
+                return (["entry size differs from its header %s" % clean(zi.filename, 60)], {})
+            data[zi.filename] = b
+        return ([], data)
+
+
+# --- 2. verify ---------------------------------------------------------------------------------
+
+def run_store(store, argv, timeout=120):
+    try:
+        p = subprocess.run([store] + argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, timeout=timeout, cwd="/")
+    except subprocess.TimeoutExpired:
+        return (None, b"", b"timeout")
+    return (p.returncode, p.stdout, p.stderr)
+
+
+def verify(store, path, data):
+    """-> (status, problems): valid, quarantined or unverified."""
+    probs = []
+    for name in sorted(data):
+        for cls, rx in PATTERNS:
+            if rx.search(data[name]):
+                probs.append("pattern %s: %s" % (cls, clean(name, 60)))
+    m = None
+    try:
+        m = json.loads(data.get("manifest.json", b"").decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        pass
+    if not isinstance(m, dict):
+        probs.append("manifest: missing or not JSON")
+        m = {}
+    else:
+        sm = SCHEMA_RE.match(m.get("schema") or "") if isinstance(m.get("schema"), str) else None
+        if not sm or sm.group(2) not in SCHEMA_VERSIONS or m.get("plugin") != sm.group(1):
+            probs.append("manifest: schema")
+        if not isinstance(m.get("install_id"), str) or not INSTALL_RE.match(m["install_id"]):
+            probs.append("manifest: install_id")
+        listed = set()
+        for f in m.get("files") if isinstance(m.get("files"), list) else []:
+            if not isinstance(f, dict) or not isinstance(f.get("name"), str):
+                continue
+            listed.add(f["name"])
+            d = data.get(f["name"])
+            if d is None:
+                probs.append("missing: %s" % clean(f["name"], 60))
+            elif f.get("sha256") != hashlib.sha256(d).hexdigest() or f.get("bytes") != len(d):
+                probs.append("sha256: %s" % clean(f["name"], 60))
+        for name in sorted(set(data) - listed - {"manifest.json", "README.txt"}):
+            probs.append("not in manifest: %s" % clean(name, 60))
+    code, out, err = run_store(store, ["report", "verify", "--zip", os.path.abspath(path)])
+    if code == 1:
+        for line in out.decode("utf-8", "replace").splitlines():
+            if line.startswith("VERIFY FAIL "):
+                probs.append("verify: " + clean(line[len("VERIFY FAIL "):], 100))
+        if not any(p.startswith("verify: ") for p in probs):
+            probs.append("verify: failed")
+    elif code != 0 or out != b"VERIFY OK\n":
+        if probs:
+            return ("quarantined", probs, m)
+        return ("unverified", ["report verify exit %s" % ("timeout" if code is None else code)], m)
+    return ("quarantined" if probs else "valid", probs, m)
+
+
+# --- 3. rows and dedupe ------------------------------------------------------------------------
+
+def bundle_rows(data):
+    """-> [(hsid, row dict, line bytes)], bad line count."""
+    out, bad = [], 0
+    for name in sorted(n for n in data if ROWS_RE.match(n)):
+        h = name[5:17]
+        for line in data[name].split(b"\n"):
+            if not line.strip():
+                continue
+            try:
+                r = json.loads(line.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                bad += 1
+                continue
+            if not isinstance(r, dict):
+                bad += 1
+                continue
+            out.append((h, r, line))
+    return out, bad
+
+
+def row_key(install, h, r):
+    sid = r.get("sid") if isinstance(r.get("sid"), str) else h
+    ev = r.get("ev") if isinstance(r.get("ev"), str) else "compaction"
+    return (install, sid, ev, json.dumps(r.get("ts")), json.dumps(r.get("nonce")))
+
+
+def ev_of(r):
+    return r.get("ev") if isinstance(r.get("ev"), str) else "compaction"
+
+
+def compactions(rows):
+    """One session's compactions, as lib/watch/report.pm reads them: the sweep's boundary
+    records (deduped by uuid), else the rollup rows."""
+    c, seen = [], set()
+    for r in rows:
+        if ev_of(r) != "sweep" or not isinstance(r.get("boundaries"), list):
+            continue
+        for b in r["boundaries"]:
+            if not isinstance(b, dict):
+                continue
+            k = b.get("uuid") or "%s|%s" % (r.get("file"), b.get("line"))
+            if k in seen:
+                continue
+            seen.add(k)
+            c.append({"main": b.get("attributed") == "main", "trigger": b.get("trigger"), "pre": num(b.get("pre")),
+                      "verdict": b.get("verdict"), "channel": b.get("channel"), "idle": b.get("idle")})
+    if c:
+        return c
+    for r in rows:
+        if ev_of(r) == "compaction":
+            c.append({"main": r.get("actor") == "main", "trigger": r.get("trigger"),
+                      "pre": num(r.get("pre_tokens")) if num(r.get("pre_tokens")) is not None else num(r.get("tokens_before")),
+                      "verdict": r.get("verdict"), "channel": r.get("channel"), "idle": r.get("idle")})
+    return c
+
+
+def is_true(v):
+    return v is True or v == "true"
+
+
+# --- 4/5. the run --------------------------------------------------------------------------------
+
+def default_store():
+    try:
+        with open(os.path.join(REPO, "brand.json"), "rb") as fh:
+            brand = json.loads(fh.read().decode("utf-8")).get("name")
+    except (OSError, ValueError, AttributeError):
+        brand = None
+    if not isinstance(brand, str) or not WORD_RE.match(brand):
+        return None
+    return os.path.join(REPO, "plugin", "scripts", brand + "-store")
+
+
+def config_rows(cfg):
+    """config.json (settings::export_view, W-BETA D) -> {key: changed bool}; None when unavailable."""
+    if not isinstance(cfg, dict) or cfg.get("available") is False:
+        return None
+    keys = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else cfg
+    out = {}
+    for k, v in keys.items():
+        if isinstance(v, dict) and isinstance(v.get("default"), bool) and WORD_RE.match(k):
+            out[k] = not v["default"]
+    return out
+
+
+def os_label(o):
+    if isinstance(o, dict):
+        return " ".join(clean(o.get(k), 20) for k in ("name", "release_major", "arch") if o.get(k) is not None) or "other"
+    return clean(o, 40) if isinstance(o, str) else "other"
+
+
+def cmd_run(argv):
+    inbox = out = store = None
+    a = list(argv)
+    while a:
+        x = a.pop(0)
+        if x == "--out" and a:
+            out = a.pop(0)
+        elif x == "--store" and a:
+            store = a.pop(0)
+        elif x.startswith("-") or inbox is not None:
+            raise Usage()
+        else:
+            inbox = x
+    if not inbox or not os.path.isdir(inbox):
+        raise Usage()
+    inbox = _real(inbox)
+    store = store or default_store()
+    if not store or not os.path.isfile(store) or not os.access(store, os.X_OK):
+        say("beta-analyze: no store launcher at %s (run tools/build, or pass --store)" % clean(store, 200))
+        return 69
+    store = _real(store)
+    GUARD["exec"].add(store)
+    if out is None:
+        out = os.path.join(os.path.dirname(inbox), "beta-analysis", time.strftime("%Y-%m-%d_%H-%M-%S"))
+    out = os.path.abspath(out)
+    for what, p in (("INBOX", inbox), ("DIR", out)):
+        g = in_git(p if os.path.exists(p) else os.path.dirname(p))
+        if g:
+            raise Refuse("%s is inside a git work tree (%s); keep friends' data outside any repo" % (what, g))
+    if os.path.lexists(out) and (not os.path.isdir(out) or os.path.islink(out) or os.listdir(out)):
+        raise Refuse("DIR exists and is not an empty folder: %s" % out)
+    GUARD["write_root"] = _real(out)
+    try:
+        if not os.path.isdir(out):
+            os.makedirs(out, 0o700)
+        os.chmod(out, 0o700)
+        mkdir(os.path.join(out, "raw"))
+        mkdir(os.path.join(out, "installs"))
+    except OSError as e:
+        raise Refuse("DIR not writable: %s (%s)" % (out, e.strerror))
+
+    bundles = []          # dicts: zip, sha, status, problems, manifest, data
+    by_sha = {}
+    for name in sorted(os.listdir(inbox)):
+        if not name.endswith(".zip"):
+            continue
+        p = os.path.join(inbox, name)
+        b = {"zip": name, "sha": "", "status": "", "problems": [], "manifest": {}, "data": {}, "dup_of": None}
+        bundles.append(b)
+        st = os.lstat(p)
+        if not stat.S_ISREG(st.st_mode):
+            b["status"], b["problems"] = "refused", ["not a regular file"]
+            continue
+        if st.st_size > TOTAL_MAX:
+            b["status"], b["problems"] = "refused", ["file over 200 MB"]
+            continue
+        b["sha"] = sha256_file(p)
+        if b["sha"] in by_sha:
+            first = by_sha[b["sha"]]
+            b["status"], b["dup_of"], b["manifest"] = "duplicate", first["zip"], first["manifest"]
+            continue
+        by_sha[b["sha"]] = b
+        probs, data = intake(p)
+        if probs:
+            b["status"], b["problems"] = "refused", probs
+            continue
+        b["status"], b["problems"], b["manifest"] = verify(store, p, data)
+        if b["status"] == "valid":
+            b["data"] = data
+            d = os.path.join(out, "raw", b["sha"][:8])
+            k = 2
+            while os.path.lexists(d):
+                d = os.path.join(out, "raw", "%s-%d" % (b["sha"][:8], k))
+                k += 1
+            mkdir(d)
+            for n in sorted(data):
+                if ROWS_RE.match(n):
+                    if not os.path.isdir(os.path.join(d, "rows")):
+                        mkdir(os.path.join(d, "rows"))
+                    write_new(os.path.join(d, "rows", n[5:]), data[n])
+                elif n in FIXED:
+                    write_new(os.path.join(d, n), data[n])
+            b["raw"] = os.path.relpath(d, out)
+        else:
+            b["manifest"] = {}
+
+    # rows, deduped per install
+    installs = {}
+    seen = set()
+    rows_in = rows_dup = rows_bad = 0
+    for b in bundles:
+        if b["status"] != "valid":
+            continue
+        m = b["manifest"]
+        iid = m["install_id"]
+        I = installs.setdefault(iid, {"bundles": [], "sessions": {}, "latest": None, "ms": []})
+        I["bundles"].append(b)
+        t = parse_created(m.get("created"))
+        if I["latest"] is None or (t or 0) >= (parse_created(I["latest"]["manifest"].get("created")) or 0):
+            I["latest"] = b
+        if num(m.get("ms")) is not None:
+            I["ms"].append(m["ms"])
+        rows, bad = bundle_rows(b["data"])
+        rows_bad += bad
+        for h, r, line in rows:
+            rows_in += 1
+            k = row_key(iid, h, r)
+            if k in seen:
+                rows_dup += 1
+                continue
+            seen.add(k)
+            I["sessions"].setdefault(h, []).append((r, line))
+    for b in bundles:
+        if b["status"] == "duplicate":
+            first = by_sha[b["sha"]]
+            if first["status"] == "valid":
+                installs[first["manifest"]["install_id"]]["bundles"].append(b)
+
+    # per install: merged rows and the WATCHER 10.2 report from the same code as the live one
+    for iid in sorted(installs):
+        I = installs[iid]
+        d = os.path.join(out, "installs", iid)
+        mkdir(d)
+        mkdir(os.path.join(d, "rows"))
+        for h in sorted(I["sessions"]):
+            I["sessions"][h].sort(key=lambda rl: parse_created(rl[0].get("ts")) or 0)
+            write_new(os.path.join(d, "rows", h + ".jsonl"), b"".join(line + b"\n" for _r, line in I["sessions"][h]))
+        code, so, se = run_store(store, ["watch", "report", "--input", os.path.join(d, "rows"), "--since", "all",
+                                         "--out", os.path.join(d, "WATCH-REPORT.md")])
+        I["watch_report"] = "installs/%s/WATCH-REPORT.md" % iid if code == 0 else "failed (exit %s)" % code
+
+    report, tables = render(bundles, installs, rows_in, rows_dup, rows_bad)
+    write_new(os.path.join(out, "BETA-REPORT.md"), report)
+    for name, rows in tables.items():
+        write_new(os.path.join(out, name), tsv(rows))
+
+    n = {s: sum(1 for b in bundles if b["status"] == s) for s in ("valid", "quarantined", "refused", "duplicate", "unverified")}
+    say("ANALYSIS %s" % out)
+    say("BUNDLES %d: %d valid, %d quarantined, %d refused, %d duplicate, %d unverified"
+        % (len(bundles), n["valid"], n["quarantined"], n["refused"], n["duplicate"], n["unverified"]))
+    say("INSTALLS %d, ROWS %d (%d duplicate rows dropped)" % (len(installs), rows_in - rows_dup, rows_dup))
+    for b in bundles:
+        if b["status"] == "refused":
+            say("REFUSED %s (%s)" % (clean(b["zip"]), b["problems"][0]))
+        elif b["status"] == "quarantined":
+            say("QUARANTINED %s (%s) P0: an allowlist hole; do not open it, tell the friend"
+                % (clean(b["zip"]), b["problems"][0]))
+        elif b["status"] == "unverified":
+            say("UNVERIFIED %s (%s)" % (clean(b["zip"]), b["problems"][0]))
+        elif b["status"] == "duplicate":
+            say("DUPLICATE %s (same bytes as %s)" % (clean(b["zip"]), clean(b["dup_of"])))
+    say("REPORT %s" % os.path.join(out, "BETA-REPORT.md"))
+    return 0
+
+
+def bar(n, top):
+    return "#" * (max(1, int(round(BAR_WIDTH * n / float(top)))) if n else 0)
+
+
+def render(bundles, installs, rows_in, rows_dup, rows_bad):
+    L = []
+    tables = {}
+    n = {s: sum(1 for b in bundles if b["status"] == s) for s in ("valid", "quarantined", "refused", "duplicate", "unverified")}
+    created = sorted(t for t in (parse_created(b["manifest"].get("created")) for b in bundles if b["status"] == "valid") if t)
+    rng = ("%s .. %s" % (time.strftime("%Y-%m-%d", time.gmtime(created[0])), time.strftime("%Y-%m-%d", time.gmtime(created[-1])))
+           if created else "none")
+    L += ["# Closed beta report", "",
+          "- Bundles: %d (%d valid, %d quarantined, %d refused at intake, %d duplicate, %d unverified)"
+          % (len(bundles), n["valid"], n["quarantined"], n["refused"], n["duplicate"], n["unverified"]),
+          "- Installs: %d" % len(installs),
+          "- Rows: %d kept, %d duplicate rows dropped, %d bad lines" % (rows_in - rows_dup, rows_dup, rows_bad),
+          "- Bundle dates (created, UTC): %s" % rng,
+          "- Source: deterministic analysis of the bundles only; no model and no network was used.", ""]
+
+    L += ["## Bundles", "", "| Zip | sha8 | Status | Install | Note |", "|---|---|---|---|---|"]
+    trows = [("zip", "sha8", "status", "install_id", "created", "note")]
+    for b in bundles:
+        m = b["manifest"] if b["status"] in ("valid", "duplicate") else {}
+        note = b["problems"][0] if b["problems"] else ("same bytes as %s" % b["dup_of"] if b["dup_of"] else "")
+        L.append("| %s | %s | %s | %s | %s |" % (clean(b["zip"], 60), b["sha"][:8] or "-", b["status"],
+                                                 clean(m.get("install_id"), 16), clean(note, 100)))
+        trows.append((b["zip"], b["sha"][:8], b["status"], m.get("install_id") or "", m.get("created") or "",
+                      "; ".join(b["problems"]) or note))
+    tables["bundles.tsv"] = trows
+    if n["quarantined"]:
+        L += ["", "Quarantined bundles are P0 bugs (an allowlist hole): do not open them; record the bug and tell the friend."]
+    L.append("")
+
+    # per install
+    L += ["## Per install", "",
+          "| Install | Bundles | Sessions | Rows | Main compactions | cc versions | OS | Runtime | Watcher | Notice shown | Alerts | Report ms max | Watch report |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    irows = [("install_id", "bundles", "sessions", "rows", "main_compactions", "cc_versions", "os", "runtime",
+              "watcher", "notice_shown", "alerts", "report_ms_max", "watch_report")]
+    pooled = {"triggers": {}, "idle": 0, "comp": 0, "verdicts": {}, "shaped": 0, "shaped_ok": 0, "bands": [],
+              "alerts": {}, "alert_lines": [], "werr": {}, "cc": {}, "os": {}, "runtime": {}, "seat": {},
+              "config": {}, "config_na": 0, "notice": {"true": 0, "false": 0}, "watcher_off": 0, "ms": [],
+              "marks": {"target": [], "soft max": [], "native": []}, "rows": 0}
+    for iid in sorted(installs):
+        I = installs[iid]
+        m = I["latest"]["manifest"]
+        mains = alerts = rowsn = 0
+        for h in sorted(I["sessions"]):
+            rs = [r for r, _l in I["sessions"][h]]
+            rowsn += len(rs)
+            for c in compactions(rs):
+                pooled["comp"] += 1
+                t = word(c["trigger"])
+                pooled["triggers"][t] = pooled["triggers"].get(t, 0) + 1
+                pooled["idle"] += 1 if is_true(c["idle"]) else 0
+                if not c["main"]:
+                    continue
+                mains += 1
+                if c["pre"] is not None:
+                    pooled["bands"].append(c["pre"])
+                if c["channel"] in SHAPED:
+                    v = word(c["verdict"])
+                    pooled["verdicts"][v] = pooled["verdicts"].get(v, 0) + 1
+                    pooled["shaped"] += 1
+                    pooled["shaped_ok"] += 1 if c["verdict"] in OK_VERDICTS else 0
+            for r in rs:
+                ev = ev_of(r)
+                if ev == "alert":
+                    alerts += 1
+                    rule = r.get("rule") if isinstance(r.get("rule"), str) and RULE_RE.match(r["rule"]) else "other"
+                    pooled["alerts"][rule] = pooled["alerts"].get(rule, 0) + 1
+                    ev_ = r.get("evidence") if isinstance(r.get("evidence"), dict) else {}
+                    key = r.get("key") if isinstance(r.get("key"), dict) else {}
+                    sess = key.get("session_id") if isinstance(key.get("session_id"), str) and HEX12_RE.match(key["session_id"]) else h
+                    nonce = key.get("nonce") if isinstance(key.get("nonce"), str) and NONCE_RE.match(key["nonce"]) else "-"
+                    line = ev_.get("line") if isinstance(ev_.get("line"), int) and not isinstance(ev_.get("line"), bool) else "-"
+                    pooled["alert_lines"].append((iid, word(r.get("alert_id")), rule, word(r.get("severity")), sess, nonce, line))
+                elif ev == "watch_error":
+                    k = "%s/%s" % (word(r.get("stage")), word(r.get("error_class")))
+                    pooled["werr"][k] = pooled["werr"].get(k, 0) + 1
+                elif ev == "config_effective":
+                    for f, lab in (("target", "target"), ("soft_max", "soft max"), ("native_trigger", "native")):
+                        if num(r.get(f)) is not None:
+                            pooled["marks"][lab].append(r[f])
+        pooled["rows"] += rowsn
+        ccs = sorted({version(v) for b in I["bundles"] if b["status"] == "valid"
+                      for v in (b["manifest"].get("cc_versions_seen") or []) if isinstance(b["manifest"].get("cc_versions_seen"), list)})
+        for v in ccs:
+            pooled["cc"][v] = pooled["cc"].get(v, 0) + 1
+        osl = os_label(m.get("os"))
+        pooled["os"][osl] = pooled["os"].get(osl, 0) + 1
+        rt = clean(m.get("runtime"), 30) if isinstance(m.get("runtime"), str) else "other"
+        pooled["runtime"][rt] = pooled["runtime"].get(rt, 0) + 1
+        probes = {}
+        try:
+            probes = json.loads(I["latest"]["data"].get("probes.json", b"{}").decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            pass
+        seat = probes.get("seat_state") if isinstance(probes, dict) and isinstance(probes.get("seat_state"), dict) else {}
+        for k, v in seat.items():
+            if num(v) is not None:
+                pooled["seat"][word(k)] = pooled["seat"].get(word(k), 0) + v
+        cfg = None
+        try:
+            cfg = config_rows(json.loads(I["latest"]["data"].get("config.json", b"null").decode("utf-8")))
+        except (ValueError, UnicodeDecodeError):
+            pass
+        if cfg is None:
+            pooled["config_na"] += 1
+        else:
+            for k, changed in cfg.items():
+                c = pooled["config"].setdefault(k, [0, 0])
+                c[0] += 1 if changed else 0
+                c[1] += 1
+        notice = m.get("notice_shown")
+        pooled["notice"]["true" if notice is True else "false"] += 1
+        watcher = word(m.get("watcher"))
+        pooled["watcher_off"] += 1 if watcher == "off" else 0
+        pooled["ms"] += [x for x in I["ms"]]
+        msmax = max(I["ms"]) if I["ms"] else None
+        L.append("| %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %d | %s | %s |" % (
+            iid, len(I["bundles"]), len(I["sessions"]), rowsn, mains, ", ".join(ccs) or "-", osl, rt, watcher,
+            "yes" if notice is True else "no", alerts, "-" if msmax is None else int(msmax), I["watch_report"]))
+        irows.append((iid, len(I["bundles"]), len(I["sessions"]), rowsn, mains, ",".join(ccs), osl, rt, watcher,
+                      "yes" if notice is True else "no", alerts, "" if msmax is None else int(msmax), I["watch_report"]))
+    if not installs:
+        L.append("| none | - | - | - | - | - | - | - | - | - | - | - | - |")
+    tables["installs.tsv"] = irows
+    L.append("")
+
+    def counts(title, d, unit="installs"):
+        L.extend(["## " + title, "", "| Value | %s |" % unit.capitalize(), "|---|---|"])
+        if not d:
+            L.append("| none | 0 |")
+        for k in sorted(d, key=lambda k: (-d[k], k)):
+            L.append("| %s | %s |" % (clean(k, 60), d[k]))
+        L.append("")
+
+    L += ["## Installs by setup", ""]
+    counts("cc versions seen", pooled["cc"])
+    counts("OS", pooled["os"])
+    counts("Runtime", pooled["runtime"])
+    counts("Seat state (compactions)", pooled["seat"], "compactions")
+
+    L += ["## Trigger mix and idle share", "", "| Trigger | Compactions |", "|---|---|"]
+    for k in ("auto", "plugin", "manual"):
+        L.append("| %s | %d |" % (k, pooled["triggers"].get(k, 0)))
+    for k in sorted(set(pooled["triggers"]) - {"auto", "plugin", "manual"}):
+        L.append("| %s | %d |" % (k, pooled["triggers"][k]))
+    share = "%.0f%%" % (100.0 * pooled["idle"] / pooled["comp"]) if pooled["comp"] else "n/a"
+    L += ["", "- Idle share (rollup `idle` field; idle is not a trigger value): %s (%d of %d)" % (share, pooled["idle"], pooled["comp"]), ""]
+
+    okp = "%.0f%% ok/ok-trailer of %d" % (100.0 * pooled["shaped_ok"] / pooled["shaped"], pooled["shaped"]) if pooled["shaped"] else "no shaped main compaction"
+    L += ["## Verdict mix, shaped main compactions", "", "- %s" % okp, ""]
+    counts("Verdicts", pooled["verdicts"], "compactions")
+
+    L += ["## tokens_before at main compactions (to scale)", "",
+          "Each `#` is %s of the largest bucket; buckets of %dK tokens. Marks: T target, S soft max, N native (from config_effective rows)." % ("1/%d" % BAR_WIDTH, BAND_STEP // 1000), ""]
+    if pooled["bands"]:
+        hist = {}
+        for v in pooled["bands"]:
+            hist[int(v // BAND_STEP)] = hist.get(int(v // BAND_STEP), 0) + 1
+        top = max(hist.values())
+        marks = {}
+        for lab, ch in (("target", "T"), ("soft max", "S"), ("native", "N")):
+            for v in pooled["marks"][lab]:
+                marks.setdefault(int(v // BAND_STEP), set()).add(ch)
+        hi = max(list(hist) + list(marks))
+        L.append("```")
+        for i in range(0, hi + 1):
+            L.append("%5dK-%5dK %-3s %4d %s" % (i * BAND_STEP // 1000, (i + 1) * BAND_STEP // 1000,
+                                                "".join(sorted(marks.get(i, set()))), hist.get(i, 0), bar(hist.get(i, 0), top)))
+        L.append("```")
+    else:
+        L.append("- no main compaction with tokens_before")
+    L.append("")
+
+    counts("Alerts by rule", pooled["alerts"], "alerts")
+    L += ["Alerts to ask the friend about (install, alert id, rule, severity, session, nonce, transcript line):", ""]
+    arows = [("install_id", "alert_id", "rule", "severity", "session", "nonce", "line")]
+    for a in pooled["alert_lines"]:
+        L.append("- %s %s %s %s session %s nonce %s line %s" % a)
+        arows.append(a)
+    if not pooled["alert_lines"]:
+        L.append("- none")
+    tables["alerts.tsv"] = arows
+    L.append("")
+
+    counts("watch_error classes (stage/class)", pooled["werr"], "rows")
+    L += ["## Watcher overhead p95 per hook", "", "- n/a (no timing rows in v1)", ""]
+
+    L += ["## Config changed from default", "", "| Key | Installs changed | Installs reporting |", "|---|---|---|"]
+    crows = [("key", "installs_changed", "installs_reporting")]
+    for k in sorted(pooled["config"]):
+        c = pooled["config"][k]
+        L.append("| %s | %d | %d |" % (k, c[0], c[1]))
+        crows.append((k, c[0], c[1]))
+    if not pooled["config"]:
+        L.append("| none | 0 | 0 |")
+    tables["config-changed.tsv"] = crows
+    L += ["", "- Installs without export classes in config.json: %d" % pooled["config_na"], ""]
+
+    L += ["## Notice and watcher off", "",
+          "- notice_shown: %d yes, %d no" % (pooled["notice"]["true"], pooled["notice"]["false"]),
+          "- watcher off: %d of %d installs" % (pooled["watcher_off"], len(installs)), ""]
+
+    # W-BETA G bars
+    returned = len(installs)
+    total = n["valid"] + n["quarantined"] + n["refused"] + n["unverified"]
+    ms = sorted(pooled["ms"])
+    p95 = pct(ms, 95)
+    L += ["## Benefit bars (W-BETA G)", "", "| Bar | Target | Value | Result |", "|---|---|---|---|",
+          "| Uptake | >=3 installs each return >=1 valid bundle | %d | %s |" % (returned, "PASS" if returned >= 3 else "FAIL"),
+          "| Bundle validity | 100%% pass report verify; any quarantine is a P0 | %d of %d valid, %d quarantined | %s |"
+          % (n["valid"], total, n["quarantined"], "n/a (no bundle)" if not total else "PASS" if n["valid"] == total else "FAIL"),
+          "| Usefulness | >=1 actionable finding from a friend bundle, or friend rows add >=30%% to the 10.3 sample | friend rows: %d | owner review |" % pooled["rows"],
+          "| Ease | report wall time p95 <=10 s; a majority of friends say sending was easy | p95 %s | %s; friend answers: owner review |"
+          % ("-" if p95 is None else "%.1f s" % (p95 / 1000.0), "n/a (no ms in manifests)" if p95 is None else "PASS" if p95 <= 10000 else "FAIL"),
+          "| Cost to users | watcher overhead Stop p95 <=2 s on every install | - | n/a (no timing rows in v1) |", ""]
+    return "\n".join(L), tables
+
+
+# --- forget --------------------------------------------------------------------------------------
+
+def manifest_install(path):
+    """The install id of a zip, read with the intake limits; None when unreadable or unsafe."""
+    try:
+        st = os.lstat(path)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > TOTAL_MAX:
+            return None
+        with zipfile.ZipFile(path, "r") as zf:
+            zi = zf.getinfo("manifest.json")
+            if zi.file_size > MB or zi.file_size > RATIO_MAX * max(zi.compress_size, 1) or zi.flag_bits & 1:
+                return None
+            with zf.open(zi, "r") as fh:
+                m = json.loads(fh.read(MB + 1).decode("utf-8"))
+        return m.get("install_id") if isinstance(m, dict) else None
+    except (KeyError, OSError, ValueError, UnicodeDecodeError, zipfile.BadZipFile, NotImplementedError, RuntimeError, EOFError):
+        return None
+
+
+def cmd_forget(argv):
+    if len(argv) != 2 or not INSTALL_RE.match(argv[0]) or not os.path.isdir(argv[1]):
+        raise Usage()
+    iid, inbox = argv[0], _real(argv[1])
+    found = []
+    shas = set()
+    for name in sorted(os.listdir(inbox)):
+        p = os.path.join(inbox, name)
+        if name.endswith(".zip") and manifest_install(p) == iid:
+            found.append(("FILE", p))
+            shas.add(sha256_file(p)[:8])
+    ana = os.path.join(os.path.dirname(inbox), "beta-analysis")
+    if os.path.isdir(ana) and not os.path.islink(ana):
+        for run in sorted(os.listdir(ana)):
+            rd = os.path.join(ana, run)
+            if not os.path.isdir(rd) or os.path.islink(rd):
+                continue
+            raw = os.path.join(rd, "raw")
+            if os.path.isdir(raw):
+                for d in sorted(os.listdir(raw)):
+                    if d.split("-")[0] in shas:
+                        found.append(("FOLDER", os.path.join(raw, d)))
+            inst = os.path.join(rd, "installs", iid)
+            if os.path.isdir(inst):
+                found.append(("FOLDER", inst))
+            for f in sorted(os.listdir(rd)):
+                fp = os.path.join(rd, f)
+                if os.path.isfile(fp) and not os.path.islink(fp) and (f.endswith(".tsv") or f.endswith(".md")):
+                    with open(fp, "rb") as fh:
+                        if iid.encode() in fh.read(64 * MB):
+                            found.append(("MENTIONS", fp))
+    say("FORGET %s" % iid)
+    for kind, p in found:
+        say("%s %s" % (kind, p))
+    if not found:
+        say("NONE: no file of this install in %s or %s" % (inbox, ana))
+    say("REMOVED NOTHING: delete the FILE and FOLDER paths yourself; a MENTIONS file is pooled output, so rerun"
+        " `run` after the removal instead of editing it.")
+    return 0
+
+
+USAGE = ("usage: python3 -I tools/beta-analyze run INBOX [--out DIR] [--store LAUNCHER]\n"
+         "       python3 -I tools/beta-analyze forget INSTALL_ID INBOX\n")
+
+
+def main(argv):
+    try:
+        if argv[:1] == ["run"]:
+            return cmd_run(argv[1:])
+        if argv[:1] == ["forget"]:
+            return cmd_forget(argv[1:])
+        raise Usage()
+    except Usage:
+        sys.stderr.write(USAGE)
+        return 64
+    except Refuse as e:
+        say("REFUSED: %s" % e)
+        return 73
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except SystemExit:
+        raise
+    except BaseException as e:  # noqa: B902
+        sys.stderr.write("beta-analyze: internal error (%s: %s)\n" % (e.__class__.__name__, clean(e, 120)))
+        sys.exit(70)

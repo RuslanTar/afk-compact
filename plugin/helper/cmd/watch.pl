@@ -1,13 +1,21 @@
 # cmd/watch.pl: `watch` subcommand (BUILD-PLAN §3.1). Owner: WP-watch.
-# v1 has one form: `watch prune --days N [--sid S]` (D-9). It is built and
-# tested but no hook calls it until the owner answers E-8. `watch report`,
-# `audit` and `backfill` are W13, deferred (BUILD-PLAN §0): usage error.
-#
-# stdout: `pruned files=<n> bytes=<n>`; row `watch_prune` (to the given
-# session's classic log, else to `<watch>/unknown.classic.jsonl`).
-# Exit: 0 ran, 64 usage, 70 internal error.
+# Forms:
+#   watch prune --days N [--sid S]      (D-9) built and tested; no hook calls it until the
+#                                       owner answers E-8. stdout `pruned files=<n> bytes=<n>`;
+#                                       row `watch_prune` (the given session's classic log,
+#                                       else <watch>/unknown.classic.jsonl).
+#   watch report [--since <N>d|<YYYY-MM-DD>|all] [--input DIR] [--export] [--out FILE]
+#                                       W13 (WATCHER-SPEC §10.2, §10.7; W-BETA E): the report
+#                                       markdown. Live: <watch>/reports/<date>_watch-report.md;
+#                                       --input DIR (export rows): printed unless --out.
+#                                       stdout `WATCH-REPORT <path>`.
+#   watch audit [--since ...] [--input DIR]   W13 audit: `AUDIT FAIL ...` lines, then
+#                                       `AUDIT: PASS|FAIL (...)`; exit 1 on a failure.
+# `watch backfill` is W13 too and stays deferred (BUILD-PLAN §0): usage error.
+# Exit: 0 ran, 1 audit failed, 3 REFUSED, 64 usage, 70 internal error, 73 output not writable.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::prune;
@@ -15,12 +23,32 @@ use watch::prune;
 $SIG{__WARN__} = sub { };
 
 sub _usage {
-    print STDERR "usage: watch prune --days N [--sid S]\n";
+    print STDERR "usage: watch prune --days N [--sid S]\n"
+               . "       watch report [--since <N>d|<YYYY-MM-DD>|all] [--input DIR] [--export] [--out FILE]\n"
+               . "       watch audit [--since <N>d|<YYYY-MM-DD>|all] [--input DIR]\n";
     exit 64;
 }
 
 my $form = shift @ARGV;
-_usage() unless defined $form && $form eq 'prune';
+_usage() unless defined $form;
+
+if ($form eq 'report' || $form eq 'audit') {
+    require watch::report;
+    my %seed;
+    $seed{sha256} = \&sha::hex256 if defined &sha::hex256;
+    my $code = eval {
+        local $SIG{__DIE__};
+        $form eq 'report' ? watch::report::report_cli([@ARGV], \%seed) : watch::report::audit_cli([@ARGV], \%seed);
+    };
+    unless (defined $code) {
+        print STDERR "watch: internal error\n";
+        exit 70;
+    }
+    _usage() if $code == 64;
+    exit $code;
+}
+
+_usage() unless $form eq 'prune';
 my ($days, $sid) = (30, undef);
 while (@ARGV) {
     my $a = shift @ARGV;

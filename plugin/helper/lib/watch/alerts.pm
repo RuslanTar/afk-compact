@@ -11,6 +11,7 @@ package watch::alerts;
 # and no `delivered/` marker is created; `/status` lists the alerts.
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::spec;
@@ -66,6 +67,16 @@ sub text_for {
     return watch::spec::alert_text($ctx->{spec}, $rule) // $rule;
 }
 
+# The text in the display form `<brand> watcher: <text> (<id>)` (handoff-spec §13). A spec
+# text that itself starts with `<brand>: ` (the A-16 text, WATCHER-SPEC A-16) would show the
+# name twice, so that prefix is dropped here (E-W-6, provisional; text-escalations E-T9-5).
+sub shown_text {
+    my ($ctx, $brand, $rule) = @_;
+    my $t = text_for($ctx, $rule);
+    $t =~ s/\A\Q$brand\E:\s+//;
+    return $t;
+}
+
 # Stop delivery (WATCH §7.2). Returns the one JSON line to print, or undef.
 # Status-only mode returns undef and touches nothing. `$deadline` (the Stop's
 # hard stop, watch::io::mono clock): past it nothing more is picked; an alert
@@ -100,7 +111,7 @@ sub deliver {
         push @pick, $r;
     }
     return undef unless @pick;
-    my $msg = join("\n", map { "$brand watcher: " . text_for($ctx, $_->{rule}) . " ($_->{alert_id})" } @pick)
+    my $msg = join("\n", map { "$brand watcher: " . shown_text($ctx, $brand, $_->{rule}) . " ($_->{alert_id})" } @pick)
             . "\nDetails: /$brand:status";
     return watch::json::encode({ systemMessage => $msg });
 }

@@ -16,6 +16,7 @@ package watch::sweep;
 # marks the run `partial` (the rest is read at the next Stop, WATCH §1.1).
 use strict;
 use warnings;
+use utf8;
 use watch::ctx;
 use watch::io;
 use watch::json;
