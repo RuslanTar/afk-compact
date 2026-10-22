@@ -224,7 +224,7 @@ Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kep
 
 - `call_cap` 25: the handoff skill's hard cap on tool calls (Step 1 ≤4 · Step 2 ≤11 · Step 4 ≤2 · Step 6 1 · Step 7 ≤7). `recipe_cap` 8: restart-recipe writes (Step 5) on top. The plugin handoff turn derives its own call limit from both (1 + `call_cap` + `recipe_cap`).
 - The compaction text budgets (D-17, compaction-rem-6) are not here: `tools/assemble` holds them.
-- `clamp` (MOD-SPEC §1.2 effective thresholds; the mod, the helper's `/status` and the watcher's fallback read these, never their own copies): native trigger = window − `native_offset` 33,000; `reserve` = `reserve_base` 52,000 + `handoff_turn_max_tokens` with `handoff_turn: halt`, else `reserve_no_handoff` 100,000; soft max = min(setting, native trigger − reserve, ⌊`soft_max_share_pct` 80 % × window⌋); target = min(setting, ⌊soft max × `target_num` 2 / `target_den` 3⌋); below `min_target` 120,000 plugin compactions and the nudge are off; a configured `native_window_tokens` below `window_floor` 100,000 counts as 100,000. <!-- P5-FOLD A3 -->
+- `clamp` (MOD-SPEC §1.2 effective thresholds; the mod, the helper's `/status` and the watcher's fallback read these, never their own copies): native trigger = window − `native_offset` 33,000; `reserve` = `reserve_base` 52,000 + `handoff_turn_max_tokens` (held to `handoff_tokens_min` 20,000 – `handoff_tokens_max` 150,000) with `handoff_turn: halt`, else `reserve_no_handoff` 100,000; soft max = min(setting, native trigger − reserve, ⌊`soft_ratio` 0.8 × window⌋); target = min(setting, ⌊soft max × `target_num` 2 / `target_den` 3⌋); below `min_target` 120,000 plugin compactions and the nudge are off; a configured `native_window_tokens` below `window_floor` 100,000 counts as 100,000. The 2/3 is two integers because a float 2/3 gives 119,999 at soft max 180,000. <!-- P5-FOLD A3; key names as WP-watch built them (needs/watch-to-text.md W2T-1) -->
 
 ## 17. Evidence rules (helper)
 
@@ -486,7 +486,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     {"id": "prod-token", "re": "(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)"}
   ],
   "notice": {"id": "watcher-1", "version": 1, "text": "{{plugin}}: local compaction logs are on (content-free; nothing is sent). To share them: /{{plugin}}:report. To turn them off: set watcher to off in /config."},
-  "clamp": {"native_offset": 33000, "reserve_base": 52000, "reserve_no_handoff": 100000, "soft_max_share_pct": 80, "target_num": 2, "target_den": 3, "min_target": 120000, "window_floor": 100000},
+  "clamp": {"native_offset": 33000, "min_target": 120000, "reserve_base": 52000, "reserve_no_handoff": 100000, "window_floor": 100000, "soft_ratio": 0.8, "target_num": 2, "target_den": 3, "handoff_tokens_min": 20000, "handoff_tokens_max": 150000},
   "alert_texts": {
     "A-01": "summary copy missing",
     "A-02": "unshaped or truncated shaped compaction",
