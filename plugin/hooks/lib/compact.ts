@@ -317,6 +317,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   s.mainCompactions++
   // A published handoff names the next window's compaction once (MOD-SPEC §3.1).
   s.published = undefined
+  // §9.3: the next eligible turn end may have its pre-compaction turn again.
+  s.precompactRan = false
   const block = await buildBlock(d, a.sid, {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),

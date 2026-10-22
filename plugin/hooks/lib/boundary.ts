@@ -7,7 +7,7 @@ import { afterStep, dispatchExists, guarded, mainText, writeDispatch } from './c
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
 import type { HandoffTurn } from './handoff-turn'
-import { compactsAfter, endHandoffTurn, haltWins, openAndSubmit, planHandoff } from './handoff-turn'
+import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHandoff, planPrecompact } from './handoff-turn'
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { log, skipClass } from './log'
@@ -64,7 +64,7 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   const end = await endHandoffTurn(d, sid, t.reason)
   if (end.kind === 'done') return
   if (end.kind === 'compact') {
-    schedule(d, 500, { exemptHalt: true, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq } })
+    schedule(d, 500, { exemptHalt: end.exemptHalt, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq } })
     return
   }
   const nudged = s.lastCycle
@@ -108,6 +108,15 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
     return
   }
   if (s.busy) return
+  // §9.3: with `precompact_turn: model`, an eligible turn end that was not nudged gets its
+  // pre-compaction handoff turn first; a skip leaves the normal compaction, as with `code`.
+  if (!s.nudgedThisTurn && last === null && !s.halt.active) {
+    const p = await planPrecompact(d, sid, eff, tokens)
+    if (p) {
+      startHandoffTimer(d, sid, p)
+      return
+    }
+  }
   schedule(d, s.nudgedThisTurn || tokens >= eff.soft_max ? 500 : d.cfg.boundary_delay_ms, { exemptHalt })
 }
 
@@ -144,7 +153,11 @@ function startHandoffTimer(d: Deps, sid: string, h: HandoffTurn): void {
         return
       }
       s.handoffTurn = undefined
-      if (compactsAfter(haltWins(d, h.reason))) await boundary(d, { exemptHalt: true })
+      // The turn cannot start: a last cycle for `cap`/`continue-off` and a pre-compaction turn
+      // get their normal compaction now, with the full text.
+      if (isHalt(h.reason)) {
+        if (compactsAfter(haltWins(d, h.reason))) await boundary(d, { exemptHalt: true })
+      } else if (h.reason === 'precompact') await boundary(d, {})
     })().catch(() => undefined)
   })
 }

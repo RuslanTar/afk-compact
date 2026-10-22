@@ -303,9 +303,9 @@ test('AT-LT-08: a user prompt delivered into the handoff turn lifts the limits t
   expect(w.rowsOf('handoff_turn_end')[0]?.interjected).toBe(true)
 })
 
-const VARIANTS: { name: string; options: Record<string, number>; store: Record<string, unknown> }[] = [
-  { name: 'cap', options: CAP3, store: CAPPED },
-  { name: 'continue-off', options: { max_auto_continues_per_hour: 0 }, store: {} },
+const VARIANTS: { name: string; options: Record<string, number | string>; store: Record<string, unknown> }[] = [
+  { name: 'cap', options: { ...CAP3, precompact_turn: 'code' }, store: CAPPED },
+  { name: 'continue-off', options: { max_auto_continues_per_hour: 0, precompact_turn: 'code' }, store: {} },
 ]
 for (const opt of VARIANTS) {
   test(`AT-LT-09 (${opt.name}): published: one compaction despite halt and cooldown, [handoff] with the path, handoff_ht, no submit, one toast`, { options: opt.options }, async ($, on) => {
@@ -468,7 +468,7 @@ for (const reason of ['2-nonok'] as const) {
   })
 }
 
-test('the handoff turn is never started for a subagent turn, nor on the 400K turn-end path (OD-4)', { options: CAP3 }, async ($, on) => {
+test('the handoff turn is never started for a subagent turn, nor on the 400K turn-end path with precompact_turn code (OD-4)', { options: { ...CAP3, precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await w.turnStart($)
@@ -496,9 +496,9 @@ async function refillTwice($: Engine, w: World): Promise<void> {
   expect(w.rowsOf('halt').length).toBe(0)
 }
 
-const THRASH_VARIANTS: { name: 'cap' | 'continue-off'; options: Record<string, number>; store: Record<string, unknown> }[] = [
-  { name: 'cap', options: CAP3, store: CAPPED },
-  { name: 'continue-off', options: { max_auto_continues_per_hour: 0 }, store: {} },
+const THRASH_VARIANTS: { name: 'cap' | 'continue-off'; options: Record<string, number | string>; store: Record<string, unknown> }[] = [
+  { name: 'cap', options: { ...CAP3, precompact_turn: 'code' }, store: CAPPED },
+  { name: 'continue-off', options: { max_auto_continues_per_hour: 0, precompact_turn: 'code' }, store: {} },
 ]
 for (const opt of THRASH_VARIANTS) {
   test(`CR-F18, CR-F24, AT-LT-17 (thrash): thrash found at the end of a ${opt.name} nudged turn wins: handoff turn for thrash, then no plugin compaction (DP-4)`, { options: opt.options }, async ($, on) => {
@@ -531,7 +531,7 @@ for (const opt of THRASH_VARIANTS) {
   })
 }
 
-test('CR-F18, CR-F24: handoff_turn off: thrash found at a capped nudged turn\'s end: skip why=halt, no plugin compaction (DP-4, DP-22)', { options: { ...CAP3, handoff_turn: 'off' } }, async ($, on) => {
+test('CR-F18, CR-F24: handoff_turn off: thrash found at a capped nudged turn\'s end: skip why=halt, no plugin compaction (DP-4, DP-22)', { options: { precompact_turn: 'code', ...CAP3, handoff_turn: 'off' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await refillTwice($, w)
@@ -558,7 +558,7 @@ test('CR-F26, AT-LT-05 (2-nonok): H < 20K: why=headroom, then no plugin compacti
   expect(w.submits.length).toBe(0)
 })
 
-test('CR-F26, AT-LT-05 (thrash): thrash at a continue-off nudged turn\'s end, H < 20K: why=headroom, then no plugin compaction', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+test('CR-F26, AT-LT-05 (thrash): thrash at a continue-off nudged turn\'s end, H < 20K: why=headroom, then no plugin compaction', { options: { precompact_turn: 'code', max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World({ window: 800000 }).install(on)
   await w.start($)
   await refillTwice($, w)

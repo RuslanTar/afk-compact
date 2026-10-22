@@ -153,6 +153,8 @@ export type LoadState = {
   nativeCompacting: number
   /** The post-handoff compaction waiting for a running native one to end (CR-F19). */
   afterNative: (() => void) | undefined
+  /** A pre-compaction turn ran since this load's last main compaction (§9.3 `again`). */
+  precompactRan: boolean
 }
 
 export type PendingResume = {
@@ -229,6 +231,7 @@ export function newState(loadId: string): LoadState {
     nativeCompactSeq: 0,
     nativeCompacting: 0,
     afterNative: undefined,
+    precompactRan: false,
   }
 }
 
