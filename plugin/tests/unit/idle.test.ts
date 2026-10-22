@@ -342,12 +342,17 @@ test('AT-IC-09: the session id changed with no session.end seen: the continue is
   await w.tool($)
   await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
   w.atHelper = async sub => {
-    if (sub === 'claim') w.sid = SID_B
+    if (sub === 'sweep') w.sid = SID_B
   }
   await w.advance(500)
   await w.advance(60000)
   expect(w.submits.length).toBe(0)
   expect(w.rowsOf('submit_dropped').map(r => [r.why, r.site])).toEqual([['session-changed', 'continue']])
+  // The pending block is not claimed for prompt.submit (the rollup reads the claim file first,
+  // so a claim would report a delivery that never happened); mod_outcome says dropped.
+  expect(w.callsOf('claim').map(c => w.flag(c, '--channel'))).toEqual([])
+  expect([...w.files.keys()].filter(k => k.includes('/resume-claimed/'))).toEqual([])
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['dropped:session-end'])
 })
 
 test('AT-IC-09 (pending): session.end drops a pending block: mod_outcome resume dropped:session-end, nothing at the next prompt.context', async ($, on) => {
