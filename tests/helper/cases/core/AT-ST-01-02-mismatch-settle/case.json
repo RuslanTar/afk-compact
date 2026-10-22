@@ -1,0 +1,93 @@
+{
+ "id": "AT-ST-01, AT-ST-02 (RRP-04 mismatch settle)",
+ "note": "C-STORE D4 / MOD-SPEC §5.8 cases 2-3 (CORE-07). AT-ST-01: PostCompact saved the copy; the mod stash has the same body plus an unlisted trailer after the sentinel; the after-step save-copy --from it prints EXISTS sha-differs, the stash is dropped as redundant (stash_dropped), one copy, no keep. AT-ST-02: a stash whose body really differs and holds a JWT is kept redacted (pending/<nonce>.mod.mismatch.md, 0600, [redacted:jwt]) with its sha side file (raw_sha256 = the normalized original); no raw JWT anywhere under the watch dir; the copy is unchanged; a second and third Stop write nothing new",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "AT-ST-01 PostCompact saves the copy",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"dispatch": {"nonce": "1a2b3c4d", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20}},
+    {"transcript": "$TMP/proj/$SID.jsonl", "rows": [{"prompt": {"age_s": 120}}, {"boundary": {"age_s": 5}}]}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 retry window\n## Resume here\nStatus: active\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>"},
+   "expect": {"exit": 0, "files": [{"path": "$ROOT/work/general/compact/*_c1-1a2b3c.md", "count": 1}]}
+  },
+  {"name": "AT-ST-01 after-step: redundant mismatch, stash dropped",
+   "setup": [
+    {"write": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+     "text": "This session is being continued from a previous conversation.\n\nSummary:\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-42 retry window\n## Resume here\nStatus: active\n⟪/{{plugin}} n=1a2b3c4d⟫\nAn installed-message trailer the baseline does not list."}
+   ],
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "1a2b3c4d", "--from", "$WATCH/$SID/pending/1a2b3c4d.mod.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_re": "^VERDICT ok-trailer marker_line=1 sentinel_from_end=2\\nEXISTS: .* sha-differs\\n$",
+    "files": [
+     {"path": "$WATCH/$SID/pending/1a2b3c4d.mod.md", "count": 0},
+     {"path": "$WATCH/$SID/pending/*.mismatch.*", "count": 0},
+     {"path": "$ROOT/work/general/compact/*.md", "count": 1}
+    ],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "stash_dropped", "count": 1, "fields": {"nonce": "1a2b3c4d", "why": "redundant", "id6": "1a2b3c"}},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "stash_kept", "count": 0}
+    ]}
+  },
+  {"name": "AT-ST-02 PostCompact of a second compaction saves its copy",
+   "setup": [
+    {"dispatch": {"nonce": "2b3c4d5e", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 10}}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=2b3c4d5e s=main⟫\n# LAB-43 token rotation\n## Resume here\nStatus: active\n⟪/{{plugin}} n=2b3c4d5e⟫\n</summary>"},
+   "expect": {"exit": 0, "files": [{"path": "$ROOT/work/general/compact/*_c2-2b3c4d.md", "count": 1, "lacks": ["redacted"]}]}
+  },
+  {"name": "AT-ST-02 after-step: a real mismatch holding a JWT is kept redacted",
+   "setup": [
+    {"write": "$WATCH/$SID/pending/2b3c4d5e.mod.md",
+     "parts": ["This session is being continued from a previous conversation.\n\nSummary:\n⟪{{plugin}} v1 n=2b3c4d5e s=main⟫\n# LAB-43 token rotation\n## Resume here\nStatus: active\nseen in the log: ", "$SECRET{jwt-hs256}", "\n⟪/{{plugin}} n=2b3c4d5e⟫\n"]},
+    {"normalized_sha": "$WATCH/$SID/pending/2b3c4d5e.mod.md", "var": "RAWSHA"}
+   ],
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "2b3c4d5e", "--from", "$WATCH/$SID/pending/2b3c4d5e.mod.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_re": "\\nEXISTS: .*_c2-2b3c4d\\.md sha-differs\\n$",
+    "files": [
+     {"path": "$WATCH/$SID/pending/2b3c4d5e.mod.md", "count": 0},
+     {"path": "$WATCH/$SID/pending/2b3c4d5e.mod.mismatch.md", "count": 1, "mode": "0600", "has": ["\\[redacted:jwt\\]", "LAB-43 token rotation"]},
+     {"path": "$WATCH/$SID/pending/2b3c4d5e.mod.mismatch.json", "count": 1, "mode": "0600",
+      "json": {"v": 1, "id6": "2b3c4d", "nonce": "2b3c4d5e", "kind": "mod", "raw_sha256": "$RAWSHA", "redacted": "1 (jwt)"},
+      "keys": ["kept_sha256", "copy_rel", "copy_sha256", "ts"]},
+     {"path": "$ROOT/work/general/compact/*_c2-2b3c4d.md", "count": 1, "has": ["LAB-43 token rotation"], "lacks": ["seen in the log"]}
+    ],
+    "grep_absent": [{"dir": "$WATCH", "parts": ["$SECRET{jwt-hs256}"]}],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "stash_kept", "count": 1, "fields": {"nonce": "2b3c4d5e", "why": "mismatch", "redacted_n": 1, "id6": "2b3c4d"}}
+    ]}
+  },
+  {"name": "a Stop: nothing new",
+   "now": "2026-10-21T14:06:30+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "files": [{"path": "$WATCH/$SID/pending/*.mismatch.md", "count": 1}, {"path": "$ROOT/work/general/compact/*.md", "count": 2}],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "stash_kept", "count": 1},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "stash_dropped", "count": 1},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy", "count": 4},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy_late", "count": 0}
+    ]}
+  },
+  {"name": "a second Stop: still nothing new",
+   "now": "2026-10-21T14:07:30+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "files": [{"path": "$WATCH/$SID/pending/*.mismatch.*", "count": 2}],
+    "grep_absent": [{"dir": "$WATCH", "parts": ["$SECRET{jwt-hs256}"]}],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "stash_kept", "count": 1},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "copy", "count": 4}
+    ]}
+  }
+ ]
+}

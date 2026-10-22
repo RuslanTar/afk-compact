@@ -39,6 +39,9 @@ sub run {
                          verdict_ctx => \%vc);
     # the mod's own stash (pending/<nonce>.mod.md) goes once the copy holds it (F2-7)
     copies::drop_stash($opt->{from}, $r->{result});
+    # EXISTS sha-differs with --from inside this session's pending/: the stash is settled once
+    # (RRP-04, MOD-SPEC §5.8 cases 2-3): dropped when redundant, else kept redacted
+    copies::settle_mismatch(path => $opt->{from}, save => $r, scan => $s);
     args::out($r->{line1}, $r->{line2});
     return $r->{exit};
 }

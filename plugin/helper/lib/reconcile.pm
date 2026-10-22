@@ -16,6 +16,12 @@ package reconcile;
 #   - order canary C6: a boundary row with no PostCompact, or a PostCompact with no
 #     PreCompact and no `precomputed` -> `order_anomaly`
 #   - an undelivered main resume block -> `resume_undelivered`
+#   - a save that returned EXISTS sha-differs settles its stash once (RRP-04, MOD-SPEC §5.8):
+#     `stash_dropped` (redundant) or `stash_kept` (a redacted *.mismatch.md keep)
+#   - final mode (SessionEnd, the cross-session finish): no SETTLE_S wait (RRP-05)
+#   - the stash index marker <watch>/.orphans/<sid> goes once pending/ holds no stash
+# No rule here looks at a stash's age or file time (RRP-05 "no age limit"); SETTLE_S is the
+# wait for a boundary row, measured from the PostCompact time in the stash meta.
 # Every row is written once (reconcile reads the rows it wrote before).
 #
 # Persisted incremental state (F2-4): <watch>/<sid>/reconcile.json, written atomically,
@@ -46,7 +52,7 @@ sub _load {
     my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
     $j = {} unless ref $j eq 'HASH' && ($j->{v} // 0) == 1;
     $j->{v} = 1;
-    for my $k (qw(classic rolls main subs copied logged done)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
+    for my $k (qw(classic rolls main subs copied logged done mism)) { $j->{$k} = {} unless ref $j->{$k} eq 'HASH' }
     for my $k (qw(pre rolls_l bounds sbounds)) { $j->{$k} = [] unless ref $j->{$k} eq 'ARRAY' }
     return $j;
 }
@@ -99,9 +105,15 @@ sub _ingest_classic {
         if ($ev eq 'copy') {
             next if ($r->{result} // '') =~ /^failed/;
             # the copy's path under <root> ('' for a mismatch: that copy holds another body)
-            my $rel = ($r->{result} // '') eq 'mismatch' ? '' : ($r->{rel_path} // '');
+            my $mism = ($r->{result} // '') eq 'mismatch';
+            my $rel = $mism ? '' : ($r->{rel_path} // '');
             $st->{copied}{ $r->{id6} } = $rel if defined $r->{id6};
             $st->{copied}{ 'n:' . $r->{nonce} } = $rel if defined $r->{nonce};
+            # the copy a mismatch row names (MOD-SPEC §5.8): a stash still beside it is settled once
+            if ($mism && defined $r->{rel_path} && !ref $r->{rel_path}) {
+                $st->{mism}{ $r->{id6} } = $r->{rel_path} if defined $r->{id6};
+                $st->{mism}{ 'n:' . $r->{nonce} } = $r->{rel_path} if defined $r->{nonce};
+            }
         } elsif ($ev =~ /^precompact/) {
             my $e = util::parse_iso($r->{ts} // '');
             push @{ $st->{pre} }, $e if defined $e;
@@ -191,21 +203,47 @@ sub _match {
 }
 
 # ---------------------------------------------------------------- run
-# run(transcript => P, cwd => C, budget_ms => 2000, cutoff => epoch) -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered}
+# run(transcript => P, cwd => C, budget_ms => 2000, cutoff => epoch, final => 0|1)
+#   -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered, saved, kept, dropped}
+# final (MOD-SPEC §5.4 "Final mode": SessionEnd, and the cross-session finish): P3 first, then
+# every stash still unproven once the transcripts are read to their end is saved as
+# unattributed at once (the SETTLE_S wait is waived); a stash whose transcripts were not
+# read to their end within the budget stays for the next run.
 sub run {
     my (%a) = @_;
     my $sid_dir = rc::sid_dir() // return {};
-    my %n = (late => 0, unresolved => 0, precompute_not_reused => 0, order_anomaly => 0, undelivered => 0);
+    my $n = _counts();
     # one reconciler per session at a time (a Stop and a `reconcile` call may meet)
     my $out = eval {
-        lock::with("$sid_dir/reconcile.lock", { sid => rc::sid(), actor => 'reconcile' }, sub { _run(\%a, \%n, $sid_dir) }, wait_ms => 300);
+        lock::with("$sid_dir/reconcile.lock", { sid => rc::sid(), actor => 'reconcile' }, sub { _run(\%a, $n, $sid_dir) }, wait_ms => 300);
     };
-    return $out // \%n;
+    return $out // $n;
+}
+
+# run_locked(...): the same run for a caller that already holds this session's
+# reconcile.lock (the cross-session finish, lib/orphans.pm, in the ended session's context).
+sub run_locked {
+    my (%a) = @_;
+    my $sid_dir = rc::sid_dir() // return {};
+    my $n = _counts();
+    my $out = eval { _run(\%a, $n, $sid_dir) };
+    return $out // $n;
+}
+
+sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped) } }
+
+# A save that returned EXISTS sha-differs: the stash is settled once (RRP-04, MOD-SPEC §5.8).
+sub _settle {
+    my ($n, $path, $save, $scan) = @_;
+    my $r = copies::settle_mismatch(path => $path, save => $save, scan => $scan) // return;
+    $n->{$r eq 'kept' ? 'kept' : 'dropped'}++;
 }
 
 sub _run {
     my ($args, $n, $sid_dir) = @_;
     my %a = %$args;
+    # test seam: a small read limit stands in for a transcript over READ_MAX (AT-ST-03 c)
+    local $READ_MAX = (util::test_mode() && ($ENV{STORE_TEST_READ_MAX} // '') =~ /\A\d+\z/) ? 0 + $ENV{STORE_TEST_READ_MAX} : $READ_MAX;
     my $sid = rc::sid();
     my $watch = rc::watch();
     my $t0 = util::clock_ms();
@@ -230,9 +268,19 @@ sub _run {
     my $root_ok = rc::root_ok('handoff_root');
 
     # A stash whose summary a copy already holds (same normalized body) is dropped (F2-7).
+    # A copy row that said mismatch (rel '') leaves the stash to be settled once (§5.8).
     my $drop_if_held = sub {
         my ($f, $rel, $text) = @_;
-        return unless defined $rel && $rel ne '' && defined $text;
+        return unless defined $text;
+        if (!defined $rel || $rel eq '') {
+            my ($stem) = $f =~ /\A(.+)\.(?:post|mod)\.md\z/ or return;
+            my $mrel = $st->{mism}{$stem} // $st->{mism}{ substr($stem, 0, 6) } // $st->{mism}{"n:$stem"};
+            return unless defined $mrel;
+            my $s = detect::scan($text);
+            _settle($n, "$sid_dir/pending/$f", { result => 'mismatch', path => rc::root() . "/$mrel", rel => $mrel,
+                                                 verdict => detect::verdict($s) }, $s);
+            return;
+        }
         my ($csha) = copies::copy_sha(rc::root() . "/$rel");
         copies::drop_stash("$sid_dir/pending/$f", 'exists')
             if defined $csha && $csha eq sha::hex256(detect::scan($text)->{normalized});
@@ -265,9 +313,9 @@ sub _run {
         my ($scope, $agent, $proof);
         if (($it->{p3} // '') eq 'main') { ($scope, $proof) = ('main', 'p3-main') }
         elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{sb}{a} // $it->{agent}, 'p3-sub') }
-        elsif ($main_end && $subs_end && $now - $it->{e} >= $SETTLE_S) { ($scope, $proof) = ('unknown', 'none') }
+        elsif ($main_end && $subs_end && ($a{final} || $now - $it->{e} >= $SETTLE_S)) { ($scope, $proof) = ('unknown', 'none') }
         else { next }    # its boundary row may still come: the next Stop decides
-        _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f);
+        _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f, $n);
     }
 
     # 1. stashes without a copy. Not while handoff_root is refused (MOD-SPEC §1.2): every
@@ -316,7 +364,7 @@ sub _run {
         # unproven: its boundary row may still come; wait as step 0 does
         if ($scope eq 'unknown' && $kind eq 'post') {
             my $e = util::parse_iso($m{ts} // '') // 0;
-            next unless $main_end && $subs_end && $now - $e >= $SETTLE_S;
+            next unless $main_end && $subs_end && ($a{final} || $now - $e >= $SETTLE_S);
         }
         if (defined $mn && exists $copied->{"n:$mn"}) { $drop_if_held->($f, $copied->{"n:$mn"}, $text); next }
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn, content_name => ($m{stale} ? 1 : 0),
@@ -327,8 +375,10 @@ sub _run {
                                 precomputed => $m{precomputed}, late => 1,
                                 verdict_ctx => { dispatch_nonce => ($drec ? $drec->{nonce} : undef), ($m{stale} ? (marker_earlier => 1) : ()) });
         copies::drop_stash("$sid_dir/pending/$f", $save->{result}) if $save->{exit} == 0;
+        _settle($n, "$sid_dir/pending/$f", $save, $s) if $save->{exit} == 0;
         next unless $save->{exit} == 0 && $save->{result} eq 'late';
         $n->{late}++;
+        $n->{saved}++;
         $copied->{ $save->{id6} } = $save->{rel};
         $copied->{"n:$mn"} = $save->{rel} if defined $mn;
         rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
@@ -435,12 +485,14 @@ sub _run {
     my $acc = grep { defined $_->{by} } @{ $st->{bounds} };
     if ($acc != scope::stored_count($sid_dir)) { eval { scope::set_count($sid_dir, $acc, { sid => $sid, actor => 'main' }) } }
     _save($sid_dir, $st);
+    # the stash index: this session's marker goes once pending/ holds no stash (§5.8)
+    orphans::unmark($sid, $sid_dir);
     return $n;
 }
 
 # Save a stash PostCompact deferred for want of scope proof, as P3 decided (F2-1).
 sub _save_deferred {
-    my ($it, $text, $scope, $agent, $proof, $args, $left, $copied, $f) = @_;
+    my ($it, $text, $scope, $agent, $proof, $args, $left, $copied, $f, $n) = @_;
     my $sid = rc::sid();
     my $sid_dir = rc::sid_dir();
     my $s = detect::scan($text);
@@ -463,6 +515,13 @@ sub _save_deferred {
                             precomputed => $precomputed, verdict => $verdict, proof => $proof);
     return unless $save->{exit} == 0;
     copies::drop_stash("$sid_dir/pending/$f", $save->{result});
+    _settle($n, "$sid_dir/pending/$f", $save, $s) if $n;
+    $n->{saved}++ if $n && $save->{result} =~ /\A(?:saved|unattributed|late)\z/;
+    # Final mode saved it without the settle wait: the session ended first (AT-ST-03 b)
+    if ($args->{final} && $save->{result} =~ /\A(?:saved|unattributed)\z/) {
+        rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
+        $n->{late}++ if $n;
+    }
     $copied->{ $it->{id6} } = $save->{rel};
     $copied->{"n:$mn"} = $save->{rel} if defined $mn;
     my $sweep;

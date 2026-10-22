@@ -44,6 +44,31 @@ sub claude {
     return $R{claude};
 }
 
+# finished_by() -> the finisher's sid8 while this call runs reconcile for another session
+# (the cross-session finish, MOD-SPEC §5.8), else undef. Every row written then carries it.
+sub finished_by { $R{finished_by} }
+
+# as_session(S, {finished_by => sid8, claude => {pid, lstart} | undef}, fn) -> fn's value:
+# runs fn in session S's context (S's sid dir and streams), the claude process taken from
+# S's newest per-process record (pid null when there is none); the caller's context is
+# restored afterwards, also when fn dies.
+sub as_session {
+    my ($sid, $o, $fn) = @_;
+    my @keys = qw(sid claude finished_by cc_dispatch cc_transcript cc_version cc_version_src);
+    my %save = map { ($_ => $R{$_}) } grep { exists $R{$_} } @keys;
+    delete @R{@keys};
+    $R{sid} = $sid;
+    $R{finished_by} = $o->{finished_by};
+    my $c = $o->{claude};
+    $R{claude} = { pid => (ref $c eq 'HASH' ? $c->{pid} : undef), lstart => (ref $c eq 'HASH' ? $c->{lstart} : undef), found => 0 };
+    my @r = eval { $fn->() };
+    my $err = $@;
+    delete @R{@keys};
+    @R{ keys %save } = values %save;
+    die $err if $err;
+    return wantarray ? @r : $r[0];
+}
+
 # cc_version() / cc_version_src() (PKG-RUNTIME D.2, MOD-SPEC §2.5): the first source present
 # wins: `mod` the matched dispatch record's cc_version (a mod-channel record: $.session.version(),
 # exact for the compaction; note_dispatch), `exec` the CLAUDE_CODE_EXECPATH basename (exact for
@@ -115,6 +140,10 @@ sub emit {
     my ($ev, $fields, %o) = @_;
     my $path = stream_path($o{stream} // 'classic');
     return 0 unless defined $path;
+    if (defined $R{finished_by}) {
+        if (ref $fields eq 'HASH') { $fields = { %$fields, finished_by => $R{finished_by} } }
+        else { $fields = [@{ $fields || [] }, finished_by => $R{finished_by}] }
+    }
     my $row = log::row($ev, $fields, envelope(%o));
     my $ok = eval { log::append($path, $row); 1 };
     return $ok ? 1 : 0;

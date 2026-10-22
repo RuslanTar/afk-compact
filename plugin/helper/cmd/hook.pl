@@ -194,6 +194,8 @@ sub on_SessionStart {
                          pid => $c->{pid}, pid_lstart => $c->{lstart},
                          scratchpad => (defined $sp ? 'present' : 'absent'),
                          under_temp_root => (defined $sp ? jsonc::bool(sweep::_temp_root(util::clean_path($sp))) : undef)]);
+    # the cross-session finish pass, after this session's own records (MOD-SPEC §5.8, ≤ 1 s)
+    eval { orphans::pass(budget_ms => $orphans::PASS_MS) } if $src =~ /^(startup|resume|clear)$/;
     return ('', {});
 }
 
@@ -247,9 +249,12 @@ sub on_SessionEnd {
                          previous_session_id => undef, lineage_reason => undef, pid => $c->{pid}, pid_lstart => $c->{lstart}]);
     # RR-S21-02: a PostCompact deferred for want of proof is decided by reconcile (P3,
     # F2-1). A session that ends before its next Stop (/clear, exit) gets that reconcile
-    # here, with the same 2 s budget: the boundary row has landed by now (S-21).
+    # here, with the same 2 s budget: the boundary row has landed by now (S-21). Final mode
+    # (RRP-05, MOD-SPEC §5.4): what P3 leaves unproven is saved unattributed at once.
     my $n = eval { reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000,
-                                  cutoff => reconcile::cutoff()) };
+                                  final => 1, cutoff => reconcile::cutoff()) };
+    # then the cross-session finish pass (MOD-SPEC §5.8, ≤ 1 s)
+    eval { orphans::pass(budget_ms => $orphans::PASS_MS) };
     return ('', { reconcile => $n });
 }
 
@@ -259,7 +264,11 @@ sub on_Stop {
     my $d = rc::sid_dir() // return ('', {});
     eval { sidecar::write($d, $p, 'Stop') };
     eval { util::write_atomic("$d/last-stop", util::iso_ms(util::now()) . "\n", 0600) };
+    my $r0 = util::clock_ms();
     my $n = reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000, cutoff => reconcile::cutoff());
+    # the cross-session finish pass, only when reconcile left ≥ 500 ms of its 2 s (MOD-SPEC §5.8)
+    my $rleft = 2000 - (util::clock_ms() - $r0);
+    eval { orphans::pass(budget_ms => ($rleft < $orphans::PASS_MS ? $rleft : $orphans::PASS_MS)) } if $rleft >= $orphans::STOP_MIN_LEFT_MS;
     # Dev-1 D5: a relaunch bumped in this turn that no recorded job matched
     eval { jobrec::on_stop($d) };
     return ('', { reconcile => $n });

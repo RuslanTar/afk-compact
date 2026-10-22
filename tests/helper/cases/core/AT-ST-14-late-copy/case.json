@@ -1,0 +1,41 @@
+{
+ "id": "AT-ST-14 (Late copy defer, $LATE_WINDOW_S)",
+ "note": "C-STORE D2 / MOD-SPEC §5.3 step 2 (CORE-07, extends AT-M3-15; the newer-classic and compact_rejected cases are M4-defer-open-only): an unmarked summary defers to the newest open mod dispatch only inside $LATE_WINDOW_S (600 s): (a) 300 s old -> copy_deferred why=mod; (d) 601 s old -> no defer (why=scope); (c) a mod dispatch closed by a compacted row with skip -> no defer; (e) the deferred stash with no after-step is named under the deferred nonce at reconcile, scope from the stash (unknown -> unattributed/ after the settle wait), never the main slot",
+ "tz": "Etc/GMT-3",
+ "vars": {"S1": "e1e1e1e1-1111-4222-8333-444444444444", "S2": "e2e2e2e2-1111-4222-8333-444444444444", "S3": "e3e3e3e3-1111-4222-8333-444444444444"},
+ "steps": [
+  {"name": "(a) mod dispatch 300 s old: deferred to it", "now": "2026-10-21T14:05:00+03:00",
+   "setup": [{"mkdir": "$TMP/work"}, {"dispatch": {"nonce": "a1a1a1a1", "session_id": "$S1", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 300}}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$S1", "transcript_path": "$TMP/proj/$S1.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto", "compact_summary": "<summary>\n# LAB-81 BODYA\n</summary>"},
+   "expect": {"exit": 0,
+    "rows": [{"file": "$WATCH/$S1.classic.jsonl", "ev": "copy_deferred", "count": 1, "fields": {"nonce": "a1a1a1a1", "why": "mod"}}],
+    "files": [{"path": "$ROOT/work/general/compact/**/*.md", "count": 0}]}},
+  {"name": "(d) mod dispatch 601 s old: no defer", "now": "2026-10-21T14:05:00+03:00",
+   "setup": [{"dispatch": {"nonce": "d2d2d2d2", "session_id": "$S2", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 601}}],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$S2", "transcript_path": "$TMP/proj/$S2.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto", "compact_summary": "<summary>\n# LAB-82 BODYD\n</summary>"},
+   "expect": {"exit": 0,
+    "rows": [{"file": "$WATCH/$S2.classic.jsonl", "ev": "copy_deferred", "count": 1, "fields": {"why": "scope"}}],
+    "rows_absent": []}},
+  {"name": "(c) mod dispatch closed by compacted skip: no defer", "now": "2026-10-21T14:05:00+03:00",
+   "setup": [
+    {"dispatch": {"nonce": "c3c3c3c3", "session_id": "$S3", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 30}},
+    {"write": "$WATCH/$S3.jsonl", "jsonl": [{"v": 1, "ts": "2026-10-21T14:04:40.000+03:00", "ev": "compacted", "sid": "$S3", "actor": "main", "writer": "mod", "nonce": "c3c3c3c3", "skip": "native-ran"}]}
+   ],
+   "argv": ["hook", "PostCompact"],
+   "stdin_json": {"session_id": "$S3", "transcript_path": "$TMP/proj/$S3.jsonl", "cwd": "$TMP/work", "hook_event_name": "PostCompact", "trigger": "auto", "compact_summary": "<summary>\n# LAB-83 BODYC\n</summary>"},
+   "expect": {"exit": 0,
+    "rows": [{"file": "$WATCH/$S3.classic.jsonl", "ev": "copy_deferred", "count": 1, "fields": {"why": "scope"}}]}},
+  {"name": "(e) no after-step: S1's Stop after the settle wait names the copy under the deferred nonce, unattributed", "now": "2026-10-21T14:05:30+03:00",
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$S1", "transcript_path": "$TMP/proj/$S1.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$ROOT/work/general/compact/unattributed/*_a1a1a1.md", "count": 1, "has": ["BODYA"]},
+     {"path": "$ROOT/work/general/compact/*.md", "count": 0},
+     {"path": "$WATCH/$S1/pending/*.post.md", "count": 0}
+    ],
+    "rows": [{"file": "$WATCH/$S1.classic.jsonl", "ev": "copy_late", "count": 1, "fields": {"nonce": "a1a1a1a1"}}]}}
+ ]
+}

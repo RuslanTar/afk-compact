@@ -1,0 +1,68 @@
+{
+ "id": "AT-ST-07 (backstop full scan)",
+ "note": "C-STORE D4 'Backstop' / MOD-SPEC §5.8 (CORE-07): stashes of ended sessions that have no marker (a build before markers) are found by the first pass after an install (no cursor yet) and after a plugin version change (the cursor names another version), resume from the cursor (.orphans/.fullscan: a sid at or before 'after' is not walked again), and are always found by the user-run reconcile --orphans --full; once the scan is done for this version, a normal pass finds no unmarked stash",
+ "tz": "Etc/GMT-3",
+ "vars": {"G": "a7a7a7a1-1111-4222-8333-444444444444", "H": "a7a7a7a2-1111-4222-8333-444444444444", "I": "a7a7a7a3-1111-4222-8333-444444444444", "J": "a7a7a7a4-1111-4222-8333-444444444444", "K": "a7a7a7a5-1111-4222-8333-444444444444"},
+ "steps": [
+  {"name": "G: an ended session's unmarked stash",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$ROOT/.sessions/by-pid/777777-1.live-a7a7a7a1.json", "json": {"pid": 777777, "pid_lstart": "Tue Oct 21 08:00:00 2026", "host": "$HOST", "session_id": "$G", "cwd": "$TMP/work", "source": "startup", "ts": "2026-10-21T08:00:05+03:00"}},
+    {"write": "$ROOT/.sessions/by-pid/777777-1.ended-a7a7a7a1.json", "json": {"session_id": "$G", "reason": "other", "ts": "2026-10-21T09:00:00+03:00"}},
+    {"write": "$WATCH/$G/pending/h70001.post.md", "text": "<summary>\n# LAB-71 BODYG\n</summary>"},
+    {"write": "$WATCH/$G/pending/h70001.post.json", "json": {"id6": "h70001", "nonce": null, "scope": "unknown", "cwd": "$TMP/work", "transcript": "$TMP/proj/$G.jsonl", "ts": "2026-10-21T08:30:00.100+03:00", "scope_deferred": true, "stale": false}}
+   ]},
+  {"name": "the first pass after an install (no cursor) finds G", "now": "2026-10-21T14:20:00+03:00",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$WATCH/$G/pending/h70001.post.md", "count": 0},
+     {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 1, "has": ["BODYG"]},
+     {"path": "$WATCH/.orphans/.fullscan", "count": 1, "json": {"v": 1, "plugin_version": "$PLUGIN_VERSION", "done": true}}
+    ],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "orphan_finished", "count": 1, "fields": {"sid": "$G"}}]}},
+  {"name": "H: another unmarked ended stash; the scan is done for this version: a normal pass leaves it",
+   "now": "2026-10-21T14:21:00+03:00",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/777777-2.ended-a7a7a7a2.json", "json": {"session_id": "$H", "reason": "other", "ts": "2026-10-21T09:00:00+03:00"}},
+    {"write": "$WATCH/$H/pending/h70002.post.md", "text": "<summary>\n# LAB-72 BODYH\n</summary>"},
+    {"write": "$WATCH/$H/pending/h70002.post.json", "json": {"id6": "h70002", "nonce": null, "scope": "unknown", "cwd": "$TMP/work", "transcript": "$TMP/proj/$H.jsonl", "ts": "2026-10-21T08:30:00.100+03:00", "scope_deferred": true, "stale": false}}
+   ],
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0, "files": [{"path": "$WATCH/$H/pending/h70002.post.md", "count": 1}]}},
+  {"name": "the user-run backstop finds H", "now": "2026-10-21T14:22:00+03:00",
+   "argv": ["reconcile", "--sid", "$SID", "--orphans", "--full"],
+   "expect": {"exit": 0, "stdout_re": "^reconciled .*; orphans finished=1 kept=0 left=0\\n$",
+    "files": [{"path": "$WATCH/$H/pending/h70002.post.md", "count": 0}, {"path": "$ROOT/work/general/compact/unattributed/*.md", "count": 2}]}},
+  {"name": "after a version change: I, J, K unmarked; the cursor says another version, so the scan starts again",
+   "now": "2026-10-21T14:23:00+03:00",
+   "setup": [
+    {"write": "$WATCH/.orphans/.fullscan", "json": {"v": 1, "plugin_version": "0.0.0-old", "done": true, "after": ""}},
+    {"write": "$ROOT/.sessions/by-pid/777777-3.ended-a7a7a7a3.json", "json": {"session_id": "$I", "reason": "other", "ts": "2026-10-21T09:00:00+03:00"}},
+    {"write": "$WATCH/$I/pending/h70003.post.md", "text": "<summary>\n# LAB-73 BODYI\n</summary>"},
+    {"write": "$WATCH/$I/pending/h70003.post.json", "json": {"id6": "h70003", "nonce": null, "scope": "unknown", "cwd": "$TMP/work", "transcript": "$TMP/proj/$I.jsonl", "ts": "2026-10-21T08:30:00.100+03:00", "scope_deferred": true, "stale": false}}
+   ],
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "resume"},
+   "expect": {"exit": 0,
+    "files": [{"path": "$WATCH/$I/pending/h70003.post.md", "count": 0}, {"path": "$WATCH/.orphans/.fullscan", "json": {"plugin_version": "$PLUGIN_VERSION", "done": true}}]}},
+  {"name": "resumable: the cursor stopped after J's name; J (at the cursor) is not walked again, K (after it) is found",
+   "now": "2026-10-21T14:24:00+03:00",
+   "setup": [
+    {"write": "$WATCH/.orphans/.fullscan", "json": {"v": 1, "plugin_version": "$PLUGIN_VERSION", "done": false, "after": "$J"}},
+    {"write": "$ROOT/.sessions/by-pid/777777-4.ended-a7a7a7a4.json", "json": {"session_id": "$J", "reason": "other", "ts": "2026-10-21T09:00:00+03:00"}},
+    {"write": "$WATCH/$J/pending/h70004.post.md", "text": "<summary>\n# LAB-74 BODYJ\n</summary>"},
+    {"write": "$WATCH/$J/pending/h70004.post.json", "json": {"id6": "h70004", "nonce": null, "scope": "unknown", "cwd": "$TMP/work", "transcript": "$TMP/proj/$J.jsonl", "ts": "2026-10-21T08:30:00.100+03:00", "scope_deferred": true, "stale": false}},
+    {"write": "$ROOT/.sessions/by-pid/777777-5.ended-a7a7a7a5.json", "json": {"session_id": "$K", "reason": "other", "ts": "2026-10-21T09:00:00+03:00"}},
+    {"write": "$WATCH/$K/pending/h70005.post.md", "text": "<summary>\n# LAB-75 BODYK\n</summary>"},
+    {"write": "$WATCH/$K/pending/h70005.post.json", "json": {"id6": "h70005", "nonce": null, "scope": "unknown", "cwd": "$TMP/work", "transcript": "$TMP/proj/$K.jsonl", "ts": "2026-10-21T08:30:00.100+03:00", "scope_deferred": true, "stale": false}}
+   ],
+   "argv": ["hook", "Stop"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "Stop", "stop_hook_active": false},
+   "expect": {"exit": 0,
+    "files": [{"path": "$WATCH/$J/pending/h70004.post.md", "count": 1}, {"path": "$WATCH/$K/pending/h70005.post.md", "count": 0},
+              {"path": "$WATCH/.orphans/.fullscan", "json": {"done": true}}]}}
+ ]
+}

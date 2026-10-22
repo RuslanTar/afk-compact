@@ -15,7 +15,7 @@
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $STORE (the
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
 #   variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
@@ -34,6 +34,7 @@
 #   expect: stdout_has / stdout_lacks (regexes, /m); json_keys; json {dotted path: value |
 #     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
+#   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
 #     write + jsonl_repeat {row, count} (then any jsonl rows);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
@@ -390,6 +391,8 @@ sub run_case {
     # writes (ctx::store_cmd, from the real path of main.pl; the temp folder may be a link).
     $V{STORE} = "$V{PLUGIN}/$LAUNCHER_DIR/$BRAND-store";
     $V{STORE} = Cwd::abs_path($V{STORE}) // $V{STORE};
+    # the staged manifest's version (the backstop cursor of the cross-session finish keys on it)
+    $V{PLUGIN_VERSION} = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) }; ref $m eq 'HASH' ? $m->{version} // '0.0.0' : '0.0.0' };
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
@@ -562,7 +565,7 @@ sub make_repo {
 sub is_setup_action {
     my ($s) = @_;
     return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
-                                               tempfiles secret_files repo_fixture paths fixture_setup touch);
+                                               tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha);
 }
 
 # ---------------------------------------------------------------- fixture recipes (tests/fixtures/README.md)
@@ -737,6 +740,14 @@ sub setup {
         # {"touch": path, "at": ISO}: the file's mtime on the case clock (age and mtime_ago_s are real-clock relative)
         my $t = util::parse_iso($s->{at} // '') // die "touch $s->{touch}: bad time " . ($s->{at} // 'none') . "\n";
         utime($t, $t, $s->{touch}) or die "touch $s->{touch}: $!\n";
+        return;
+    }
+    if (exists $s->{normalized_sha}) {
+        # {"normalized_sha": path, "var": NAME}: NAME = sha256 of the file's normalized summary
+        # body (the staged detect.pm), e.g. a stash's raw_sha256 (AT-ST-02)
+        _libs();
+        my $t = util::read_file($s->{normalized_sha}) // die "normalized_sha $s->{normalized_sha}: unreadable\n";
+        $V->{ $s->{var} // 'SHA' } = sha::hex256(detect::scan($t)->{normalized});
         return;
     }
     if (exists $s->{tempfiles}) { fixture_tempfiles($s, $V, $cdir); return }
@@ -958,7 +969,7 @@ sub invoke {
 my $LIBS_READY;
 sub _libs {
     return if $LIBS_READY;
-    for my $l (qw(ctx spec settings paths roots log rc identity lock nonce git detect assemble secrets dispatch)) { require "$l.pm" }
+    for my $l (qw(sha ctx spec settings paths roots log rc identity lock nonce git detect assemble secrets dispatch)) { require "$l.pm" }
     ctx::init("$STAGE/helper");
     $LIBS_READY = 1;
 }
@@ -1477,6 +1488,22 @@ sub builtin {
         my $want = join(',', sort @{ $a->{expect} || [] });
         my $got = join(',', sort @live);
         push @e, "live peers [$got], want [$want]" unless $got eq $want;
+        return @e;
+    }
+    if ($name eq 'no_age_rule') {
+        # AT-ST-06 (RRP-05 "no age limit"): no file-time test in the staged files named (file
+        # tests -M -A -C, a stat() field 8-10, File::stat's ->mtime, the word mtime)
+        for my $f (@{ $a->{files} || [] }) {
+            my $p = "$STAGE/helper/$f";
+            my $src = util::read_file($p) // do { push @e, "$f: unreadable"; next };
+            my $k = 0;
+            for my $l (split /\n/, $src) {
+                $k++;
+                next if $l =~ /^\s*#/;
+                push @e, "$f:$k: file-time test: $l"
+                    if $l =~ /(?:^|[\s(!])-[MAC]\s+[\$"'_]|\bstat\s*\(.*\)\s*\)?\s*\[\s*(?:8|9|10)\s*\]|\$s\[\s*(?:8|9|10)\s*\]|->\s*mtime\b|\bmtime\b/;
+            }
+        }
         return @e;
     }
     if ($name eq 'repo_check') {

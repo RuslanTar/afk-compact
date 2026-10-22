@@ -73,6 +73,71 @@ sub drop_stash {
     return unlink($path) ? 1 : 0;
 }
 
+# settle_mismatch(path => stash, save => copies::save result (EXISTS sha-differs), scan => scan)
+# -> 'dropped' | 'kept' | undef (not our stash, or no mismatch). RRP-04, MOD-SPEC §5.8 cases 2-3:
+#   redundant: the stash verdict is ok-trailer and its body cut after the sentinel line has the
+#     copy's body sha (an engine trailer only in this text, AT-M3-17) -> the stash goes,
+#     row stash_dropped {id6, nonce, why: redundant, copy_rel};
+#   real: the stash is rewritten with the summary-copy redaction (HARD, as a saved copy) to
+#     pending/<id>.<post|mod>.mismatch.md (0600, temp + link, never over an earlier keep), its
+#     sha side file beside it, then the raw stash goes; row stash_kept {id6, nonce, why: mismatch,
+#     redacted_n}. Kept files are never deleted by the plugin (D-8).
+sub settle_mismatch {
+    my (%a) = @_;
+    my ($path, $save) = @a{qw(path save)};
+    return undef unless ref $save eq 'HASH' && ($save->{result} // '') eq 'mismatch';
+    return undef unless own_stash($path);
+    my $text = util::read_file($path) // return undef;
+    my $s = $a{scan} || detect::scan($text);
+    my $raw_sha = sha::hex256($s->{normalized});
+    my ($csha) = defined $save->{path} ? copy_sha($save->{path}) : (undef);
+    my $base = util::basename($path);
+    my ($stem, $kind) = $base =~ /\A(.+)\.(post|mod)\.md\z/ or return undef;
+    my $id6 = $save->{id6} // ($kind eq 'mod' ? substr($stem, 0, 6) : $stem);
+    my $nonce = $save->{nonce} // ($kind eq 'mod' ? $stem : undef);
+    if (($save->{verdict} // '') eq 'ok-trailer' && defined $csha && defined $s->{sentinel_from_end}) {
+        my @b = @{ $s->{lines} };
+        my ($k, $at) = (0, undef);
+        for (my $j = $#b; $j >= 0; $j--) {
+            next if $b[$j] =~ /^\s*$/;
+            if (++$k == $s->{sentinel_from_end}) { $at = $j; last }
+        }
+        if (defined $at && sha::hex256(join("\n", @b[0 .. $at]) . "\n") eq $csha) {
+            return undef unless unlink $path;
+            rc::emit('stash_dropped', [id6 => $id6, nonce => $nonce, why => 'redundant', copy_rel => $save->{rel}]);
+            return 'dropped';
+        }
+    }
+    my $chars = $text;
+    utf8::decode($chars) unless utf8::is_utf8($chars);
+    my ($kept, $rh) = secrets::redact($chars, ['HARD']);
+    my $n = 0;
+    $n += $_->{count} for @$rh;
+    my $dir = util::dirname($path);
+    my $target;
+    my $tmp = sprintf('%s/.%s.%s.mismatch.tmp-%d-%04x', $dir, $stem, $kind, $$, int(rand(65536)));
+    return undef unless eval { util::write_excl($tmp, $kept, 0600) };
+    for my $try (1 .. 9) {
+        my $cand = "$dir/$stem.$kind" . ($try > 1 ? "-$try" : '') . '.mismatch.md';
+        if (link($tmp, $cand)) { $target = $cand; last }
+        last unless $!{EEXIST};
+    }
+    unlink $tmp;
+    return undef unless defined $target;
+    (my $side = $target) =~ s/\.md\z/.json/;
+    my $kb = $kept;
+    utf8::encode($kb) if utf8::is_utf8($kb);
+    eval {
+        util::write_excl($side, jsonc::encode_bytes(jsonc::obj(
+            v => 1, id6 => $id6, nonce => $nonce, kind => $kind, raw_sha256 => $raw_sha, kept_sha256 => sha::hex256($kb),
+            redacted => sprintf('%d (%s)', $n, ($n ? secrets::rule_ids($rh) : '-')), copy_rel => $save->{rel},
+            copy_sha256 => $csha, ts => util::iso_ms(util::now()))) . "\n", 0600);
+    };
+    unlink $path;
+    rc::emit('stash_kept', [id6 => $id6, nonce => $nonce, why => 'mismatch', redacted_n => $n]);
+    return 'kept';
+}
+
 sub _seq {
     my ($dir, $sid8, $actor_tag) = @_;
     my $n = 0;
@@ -224,6 +289,7 @@ sub save {
                 seat_state          => $a{seat_state},
                 evidence            => $a{evidence},
                 redacted            => $redacted,
+                finished_by         => rc::finished_by(),
             ]);
             util::mkdir_p($dir);
             my $ok = util::write_excl($path, $fm . ($body =~ /\n\z/ ? $body : $body . "\n"), 0400);

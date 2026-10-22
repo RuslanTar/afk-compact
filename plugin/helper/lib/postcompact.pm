@@ -11,6 +11,10 @@ use strict;
 use warnings;
 use utf8;
 
+# The Late-copy defer window (MOD-SPEC §5.3 step 2, C-STORE D2, XR-23): a BD-3-class estimate in
+# the same table as reconcile's windows (floor 120 s, tuned by the MOD-SPEC §5.4 rule).
+our $LATE_WINDOW_S = 600;
+
 # _resolved(sid_dir, classic) -> (\%nonce_resolved, \%nonce_copy_rels): nonces this session
 # already compacted under, and the copies (paths under <root>) its copy rows name for each.
 sub _resolved {
@@ -141,7 +145,10 @@ sub run {
     my $erec = $stale ? undef : $rec;
     my $id6 = copies::id6($emn, $s->{sha256});
 
-    # 1. stash (0600, unique name), so reconcile can save if we die or defer
+    # 1. stash (0600, unique name), so reconcile can save if we die or defer; the orphan
+    # index marker first (MOD-SPEC §5.8), so a stash left by a session that ends before it
+    # is settled is found by the cross-session finish
+    orphans::mark($sid);
     eval { util::write_excl("$sid_dir/pending/$id6.post.md", $text, 0600) };
 
     # 2. dispatch lookup; time join only for seat/channel/trigger, never as scope proof
@@ -161,13 +168,13 @@ sub run {
     my $tokens = $boundary ? [$boundary->{pre}, $boundary->{post}] : undef;
 
     # defer rule (MOD-SPEC §5.3 step 2): no usable marker, and an unresolved mod-hook/mod-self
-    # dispatch <= 600 s old that can still get its after-step. The newest open dispatch
+    # dispatch <= $LATE_WINDOW_S old that can still get its after-step. The newest open dispatch
     # decides: a newer classic one (a PreCompact fallback) means this compaction is the
     # classic one; a dispatch the mod logged as rejected or skipped gets no after-step.
     my $deferred;
     if (!defined $emn) {
         my ($open) = grep { ($_->{trigger} // '') ne 'precompute' && !$resolved->{ $_->{nonce} } && !$closed->{ $_->{nonce} }
-                            && $_->{_epoch} >= $now - 600 } reverse @all;
+                            && $_->{_epoch} >= $now - $LATE_WINDOW_S } reverse @all;
         $deferred = $open if $open && dispatch::is_mod($open);
     }
     # F2-1: nothing proves the scope here -> no save and no sweep now; reconcile proves it
@@ -213,6 +220,7 @@ sub run {
                              trigger => $trigger, dispatch => $erec, seat_state => $seat, channel => $channel,
                              precomputed => $precomputed, verdict => $verdict, queue_lane => $lane, evidence => $evid);
         copies::drop_stash("$sid_dir/pending/$id6.post.md", $save->{result});
+        copies::settle_mismatch(path => "$sid_dir/pending/$id6.post.md", save => $save, scan => $s);
         # Main-proven: sweep whatever the save outcome (MOD-SPEC §5.3 step 5); a refused
         # copy under an unsafe handoff_root does not stop evidence going to the
         # disposable root, which sweep checks on its own.
