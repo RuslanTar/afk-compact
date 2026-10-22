@@ -31,7 +31,7 @@ sub version { $VERSION }
 # The launcher folder: one constant here, in tools/build and in the mod's deps.ts (PKG-RUNTIME
 # A.1; the AT-PK-01 gate finds any other spelling).
 our $LAUNCHER_DIR = 'scripts';
-sub launcher { return "$ROOT/$LAUNCHER_DIR/$BRAND-store" }
+sub launcher { return "$ROOT/$LAUNCHER_DIR/" . $BRAND . '-store' }
 
 # store_word(path) -> the launcher path as one shell word, the same word the mod's storeWord()
 # makes (parity test, AT-PK-03): double quotes; single quotes when the path holds `"`, `$`,
