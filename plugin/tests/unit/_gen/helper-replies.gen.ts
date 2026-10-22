@@ -254,7 +254,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "{\"checkpoint_ms\":{\"inventory\":0,\"git\":0,\"gsd\":0,\"lane\":0,\"evidence\":0,\"total\":0},\"evidence_map\":[],\"git\":\"not-git\",\"gsd\":[],\"inventory\":[],\"lane\":null,\"measured_block\":null,\"queued_line\":null,\"timeouts\":[]}\n"
+   "{\"checkpoint_ms\":{\"inventory\":0,\"git\":0,\"gsd\":0,\"lane\":0,\"evidence\":0,\"total\":0},\"consent\":{\"unattended_prod_reads\":\"forbid\"},\"evidence_map\":[],\"git\":\"not-git\",\"gsd\":[],\"inventory\":[],\"lane\":null,\"measured_block\":null,\"queued_line\":null,\"timeouts\":[]}\n"
   ]
  },
  {
@@ -770,8 +770,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "staged ~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=\"$PLUGIN/scripts/",
-   "-store\" publish --stage '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
+   "staged ~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=<store> publish --stage '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
   ]
  },
  {
