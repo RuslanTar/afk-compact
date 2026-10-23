@@ -1526,6 +1526,24 @@ GATE_LIST_NEEDS = [
 ]
 # The looser O-2 half (a carried approval as a yes for one production read) stays out until ruled.
 GATE_LIST_BANNED = ("counts like a fresh yes",)
+# REVIEW-NIGHT TG-02 / TG-03 (REVIEW-NIGHT-2): the F-layer acceptance tests of SPEC-DELTAS §5 that no
+# gate held yet. Rows: (AT id, path, line selector, phrase every selected line must hold).
+AT_TEXT_NEEDS = [
+    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "handle it, then continue Step 1"),
+    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "explicit gate"),
+    ("AT-SR-02", RESUME_REL, r"^- Candidates labelled `repo:`", "only without real risk"),
+    ("AT-SR-02", RESUME_REL, r"^- Candidates labelled `repo:`", "never relaunched"),
+    ("AT-SR-03", HEAL_REL, r"^\*\*Lease rule\*\*", "never a foreign one's"),
+    ("AT-SR-04", TEMPLATE_REL, r"^8\. \*\*Ledger vs state", "only when it carries no real risk"),
+    ("AT-AP-01", TEMPLATE_REL, r"^3\. \*\*Trust\.\*\*", "except an approval recorded with its scope"),
+    ("AT-AP-01", HANDOFF_REL, r"^- Approvals \(template", "words verbatim"),
+    ("AT-AP-06", RESUME_REL, r"^3\. \*\*Approvals", "still match"),
+    ("AT-AP-06", RESUME_REL, r"^3\. \*\*Approvals", "it is not spent"),
+    ("AT-AP-06", RESUME_REL, r"^2\. Step 1 is an explicit gate", "no carried approval covers it"),
+    ("AT-AP-09", RESUME_CTX_REL, r"^(?:\[[a-z-]+\] )?4\. ", "protected-branch push"),
+    ("AT-HC-04", HEAL_REL, r"^\*\*Restart gate\*\*", "`run-source: handoff`"),
+]
+AT_TEXT_BANNED = (("AT-HC-04", HEAL_REL, "never run on its own"),)
 
 
 def gate_list_hits(target, brand):
@@ -1545,6 +1563,19 @@ def gate_list_hits(target, brand):
             for s in GATE_LIST_BANNED:
                 if s in ln:
                     out.append((path, no, "AP-11 gate-list", "AP-11 gate-list banned: {!r}".format(s), ln))
+    for at, rel, sel, phrase in AT_TEXT_NEEDS:
+        path, lines = _shipped(target, rel, brand)
+        if lines is None:
+            out.append(_missing(path, at))
+            continue
+        hits = [ln for ln in lines if re.match(sel, ln)]
+        if not hits or not all(phrase in ln for ln in hits):
+            out.append((path, None, at, "{}: a line matching {!r} lacks {!r}".format(at, sel, phrase), ""))
+    for at, rel, phrase in AT_TEXT_BANNED:
+        path, lines = _shipped(target, rel, brand)
+        for no, ln in enumerate(lines or [], 1):
+            if phrase in ln:
+                out.append((path, no, at, "{} banned: {!r}".format(at, phrase), ln))
     return out
 
 
