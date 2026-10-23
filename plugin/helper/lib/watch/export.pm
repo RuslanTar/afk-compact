@@ -352,9 +352,58 @@ sub identity_list {
     push @c, @{ $o{extra} || [] };
     push @c, _git_remotes(\@roots, watch::io::mono() + $GIT_BUDGET_S) unless $o{no_git};
     my %seen;
-    my $vocab = vocabulary($ctx->{brand} // 'plugin');
+    # The vocabulary exemption holds for the class-checked files only; free text (a summary,
+    # RS-2) is scanned against every identity string (`all => 1`).
+    my $vocab = $o{all} ? {} : vocabulary($ctx->{brand} // 'plugin');
     return [ grep { length($_) >= $IDENTITY_MIN && !$vocab->{ lc $_ } && !$seen{ lc $_ }++ }
              map { my $x = $_; utf8::encode($x) if utf8::is_utf8($x); $x } grep { defined && !ref } @c ];
+}
+
+# --- summaries (RS-2) ---------------------------------------------------------
+
+# RS-2 (owner xxxxxxxx-19, 2026-10-23): the summaries a report may add when the user says yes in
+# that run. O-8 PROVISIONAL (owner decision open): "compaction summaries" are the saved main
+# compaction copies only, <root>/<repo>/<bucket>/compact/*.md (not subagent or unattributed
+# copies, not published handoffs), plain files (no link), modified at or after --since. A file
+# over $SUMMARY_MAX_BYTES is not offered.
+our $SUMMARY_MAX_BYTES = 1 << 20;
+
+sub summary_files {
+    my ($root, $since) = @_;
+    my @out;
+    return \@out unless defined $root && -d $root && !-l $root;
+    for my $repo (watch::io::list_dir($root)) {
+        next if $repo =~ /\A\./;
+        my $rd = "$root/$repo";
+        next if -l $rd || !-d $rd;
+        for my $b (watch::io::list_dir($rd)) {
+            next if $b =~ /\A\./;
+            my $cd = "$rd/$b/compact";
+            next if -l "$rd/$b" || -l $cd || !-d $cd;
+            for my $f (watch::io::list_dir($cd)) {
+                next if $f =~ /\A\./ || $f !~ /\.md\z/;
+                my $p = "$cd/$f";
+                next if -l $p || !-f $p;
+                my @st = stat $p;
+                next if !@st || $st[7] > $SUMMARY_MAX_BYTES;
+                next if defined $since && $st[9] < $since;
+                push @out, { path => $p, bytes => $st[7], mtime => $st[9] };
+            }
+        }
+    }
+    return \@out;
+}
+
+# The staged summaries: [zip name, bytes, source path], the name a keyed hash of the path.
+sub _summary_entries {
+    my ($files, $X) = @_;
+    my @e;
+    for my $s (@$files) {
+        my $data = watch::io::slurp($s->{path}, $SUMMARY_MAX_BYTES);
+        next unless defined $data;
+        push @e, [ 'summaries/' . $X->{hash}->('summary:' . $s->{path}) . '.md', $data, $s->{path} ];
+    }
+    return \@e;
 }
 
 # E-W-1 (provisional; needs/watch-escalations.md): the bundle's own vocabulary. The transform
@@ -406,6 +455,8 @@ sub vocabulary {
     my @u = POSIX::uname();
     $add->($u[0], $u[4]);
     $add->(_readme($brand) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
+    # RS-2: the manifest keys and README words of a bundle with summaries
+    $add->(qw(with_summaries summaries_n summaries_withheld summaries), _readme($brand, 1) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
     return \%v;
 }
 
@@ -467,7 +518,20 @@ sub secret_hits {
 # --- the staged files -------------------------------------------------------
 
 sub _readme {
-    my ($brand) = @_;
+    my ($brand, $with_summaries) = @_;
+    # RS-2: a bundle the user chose to add summaries to says so, and that business content in
+    # them is not masked; without them the content-free promise stands as it was.
+    my @never = $with_summaries
+        ? ('summaries/ holds compaction summaries you chose to add when you made this file. They hold your',
+           'sessions\' text. Secrets and your names, paths and hosts were scanned and any summary with a hit',
+           'was left out, but business content is not masked.',
+           '',
+           'Outside summaries/, never inside: conversation text, handoffs, commands, file or folder paths,',
+           'repo, branch or bucket names, settings paths, secrets. Session, agent and task ids are replaced',
+           'by keyed hashes that only your machine can make.')
+        : ('Never inside: conversation text, summaries, handoffs, commands, file or folder paths, repo,',
+           'branch or bucket names, settings paths, secrets. Session, agent and task ids are replaced by',
+           'keyed hashes that only your machine can make.');
     return join("\n",
         "$brand report",
         '',
@@ -479,9 +543,7 @@ sub _readme {
         'probes.json (capability checks already recorded), sizes.json (log sizes per file kind) and',
         'rows/ (one file per session: event rows with ids, counts, enum values and times).',
         '',
-        'Never inside: conversation text, summaries, handoffs, commands, file or folder paths, repo,',
-        'branch or bucket names, settings paths, secrets. Session, agent and task ids are replaced by',
-        'keyed hashes that only your machine can make.',
+        @never,
         '',
         'Times are included as they were logged (date, time and time zone offset), so rows can be',
         'lined up with release dates.',
@@ -757,12 +819,14 @@ sub _canon { return watch::json::encode($_[0]) . "\n" }
 sub _ts_date { my $t = shift; return defined $t ? watch::io::local_date($t) : undef }
 
 # build(ctx, %o) -> {entries => [[name, bytes]], manifest, withheld, rows_n, sessions_n, from, to, truncated}
-# %o: since (epoch), max_bytes, salt, install_id, identity (list), now.
+# %o: since (epoch), max_bytes, salt, install_id, identity (list), now; with --with-summaries
+# also summaries (summary_files) and identity_all (the list without the vocabulary exemption).
 sub build {
     my ($ctx, %o) = @_;
     my $w = $ctx->{watch};
     my $brand = $ctx->{brand} // 'plugin';
     my $X = { hash => hasher($o{salt}, $ctx->{sha256}), dropped => {}, headings => heading_ids($ctx->{spec}) };
+    $o{summary_entries} = _summary_entries($o{summaries}, $X) if $o{summaries};
     my $S = -d $w ? sessions($w) : {};
     my (@all_raw, %per);
     my %cc;
@@ -802,8 +866,9 @@ sub _assemble {
         $from = $k->[1] if $k->[1] && (!defined $from || $k->[1] < $from);
         $to = $k->[1] if $k->[1] && (!defined $to || $k->[1] > $to);
     }
+    my $with = $o->{summary_entries} ? 1 : 0;
     my @staged = (
-        [ 'README.txt', _readme($brand) ],
+        [ 'README.txt', _readme($brand, $with) ],
         [ 'config.json', _canon(_config($ctx)) ],
         [ 'probes.json', _canon(_probes($ctx, $all_raw)) ],
         [ 'sizes.json', _canon(_sizes($ctx->{watch})) ],
@@ -811,12 +876,16 @@ sub _assemble {
     for my $h (sort keys %rows) {
         push @staged, [ "rows/$h.jsonl", join('', map { _canon($_) } @{ $rows{$h} }) ];
     }
+    # RS-2: each summary passes the same two scans; its identity scan uses every identity
+    # string (identity_all), since a summary is free text. A file with any hit is withheld.
+    push @staged, map { [ $_->[0], $_->[1] ] } @{ $o->{summary_entries} || [] };
     my (@ok, @withheld);
     my $id_list = $o->{identity} || [];
+    my $id_all = $o->{identity_all} || $id_list;
     for my $s (@staged) {
         my ($name, $data) = @$s;
         utf8::encode($data) if utf8::is_utf8($data);
-        if (my $n = identity_hits($data, $id_list)) {
+        if (my $n = identity_hits($data, watch::export_schema::summary_file($name) ? $id_all : $id_list)) {
             push @withheld, { file => $name, reason => 'identity', count => $n };
             next;
         }
@@ -851,6 +920,10 @@ sub _assemble {
                   identity_list_size => scalar(@$id_list) },
         export_schema => $watch::export_schema::VERSION,
         ms => int((watch::io::mono() - ($o->{t0} // watch::io::mono())) * 1000),
+        # RS-2/RS-3: only in a bundle the user added summaries to
+        ($with ? (with_summaries => \1,
+                  summaries_n => scalar(grep { watch::export_schema::summary_file($_->[0]) } @ok),
+                  summaries_withheld => scalar(grep { watch::export_schema::summary_file($_->{file}) } @withheld)) : ()),
     };
     my $mtext = _canon($manifest);
     die "report: identity in the manifest\n" if identity_hits($mtext, $id_list);
@@ -861,7 +934,8 @@ sub _assemble {
     my $zip = watch::bundle::zip(\@entries, $o->{now});
     return { zip => $zip, entries => \@entries, manifest => $manifest, withheld => \@withheld,
              rows_n => scalar(@$keep), sessions_n => scalar(keys %rows), from => $from, to => $to,
-             truncated => $truncated };
+             truncated => $truncated, with_summaries => $with,
+             summary_src => { map { ($_->[0] => $_->[2]) } @{ $o->{summary_entries} || [] } } };
 }
 
 # The first-run notice marker id (W-BETA A): the spec's `notice.id` (`watcher-1`), else that.
@@ -917,6 +991,17 @@ sub out_dir {
     return ("$ctx->{watch}/reports", 'fallback');
 }
 
+# A path for the screen with the home folder as `~` ('?' when unknown).
+sub util_abbrev {
+    my ($p) = @_;
+    return '?' unless defined $p;
+    my $h = $ENV{HOME} // '';
+    $h =~ s{/+\z}{};
+    return $p if $h eq '';
+    $p =~ s{\A\Q$h\E(?=/|\z)}{~};
+    return $p;
+}
+
 sub _human {
     my ($n) = @_;
     return "$n B" if $n < 1024;
@@ -927,9 +1012,17 @@ sub _human {
 # --- the command ------------------------------------------------------------------
 
 sub _usage {
-    print STDERR "usage: report [--dry-run] [--since <N>d|<YYYY-MM-DD>] [--out DIR] [--max-mb N]\n"
+    print STDERR "usage: report [--dry-run] [--since <N>d|<YYYY-MM-DD>] [--out DIR] [--max-mb N] [--with-summaries]\n"
                . "       report verify --zip FILE\n";
     return 64;
+}
+
+# RS-2: `summaries: <n> available (<KB>)`, the dry run's line the report skill asks on.
+sub _summaries_line {
+    my ($files) = @_;
+    my $b = 0;
+    $b += $_->{bytes} for @$files;
+    return sprintf("summaries: %d available (%d KB)\n", scalar @$files, int(($b + 1023) / 1024));
 }
 
 # cli(\@argv, \%ctx_seed) -> exit code; prints the B.7 lines.
@@ -947,6 +1040,9 @@ sub cli {
         elsif ($x =~ /\A--out=(.+)\z/) { $o{out} = $1 }
         elsif ($x eq '--max-mb') { $o{max_mb} = shift @a; return _usage() unless defined $o{max_mb} && $o{max_mb} =~ /\A[1-9][0-9]{0,3}\z/ }
         elsif ($x =~ /\A--max-mb=([1-9][0-9]{0,3})\z/) { $o{max_mb} = $1 }
+        # RS-2: only on the command line, after the user's yes in this run (the report skill);
+        # no setting turns it on
+        elsif ($x eq '--with-summaries') { $o{with_summaries} = 1 }
         else { return _usage() }
     }
     my $t0 = watch::io::mono();
@@ -958,10 +1054,14 @@ sub cli {
     my ($salt, $iid) = keys_for($ctx->{watch}, $o{dry});
     my $rr = defined &settings::repo_roots ? eval { settings::repo_roots(settings::resolve({})) } : undef;
     $ctx->{settings}{repo_roots_list} = ref $rr eq 'HASH' ? $rr->{roots} : [];
-    my $ids = identity_list($ctx, no_git => (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_GIT} // '') eq '1'),
-                            extra => $seed->{identity_extra});
+    my $no_git = (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_GIT} // '') eq '1');
+    my $ids = identity_list($ctx, no_git => $no_git, extra => $seed->{identity_extra});
+    my $sum = summary_files($ctx->{root}, $since);
+    my %with = $o{with_summaries}
+        ? (summaries => $sum, identity_all => identity_list($ctx, no_git => $no_git, extra => $seed->{identity_extra}, all => 1))
+        : ();
     my $res = build($ctx, since => $since, max_bytes => $o{max_mb} * 1024 * 1024, salt => $salt,
-                    install_id => $iid, identity => $ids, now => $ctx->{now}, t0 => $t0);
+                    install_id => $iid, identity => $ids, now => $ctx->{now}, t0 => $t0, %with);
     my $stamp = POSIX::strftime('%Y-%m-%d_%H-%M-%S', localtime(int $ctx->{now}));
     my $name = sprintf('%s-report-%s-%s.zip', $ctx->{brand} // 'plugin', $stamp, substr($iid // 'dryrun00', 0, 8));
     my $path = "$dir/$name";
@@ -975,16 +1075,34 @@ sub cli {
     }
     my $n = scalar @{ $res->{entries} };
     my @rowfiles = grep { $_->[0] =~ m{\Arows/} } @{ $res->{entries} };
-    my @fixed = grep { $_->[0] !~ m{\Arows/} } @{ $res->{entries} };
+    my @sumfiles = grep { watch::export_schema::summary_file($_->[0]) } @{ $res->{entries} };
+    my @fixed = grep { $_->[0] !~ m{\A(?:rows|summaries)/} } @{ $res->{entries} };
     print 'REPORT ' . $path . ' ' . _human(length $res->{zip}) . ($o{dry} ? ' (dry run: nothing written)' : '') . "\n";
-    printf "FILES %d: %s%s\n", $n, join(', ', map { $_->[0] } @fixed),
+    printf "FILES %d: %s%s%s\n", $n, join(', ', map { $_->[0] } @fixed),
         (@rowfiles ? sprintf(', rows/ (%d sessions, %d rows, %s..%s)', scalar @rowfiles, $res->{rows_n},
-                             _ts_date($res->{from}) // '?', _ts_date($res->{to}) // '?') : '');
+                             _ts_date($res->{from}) // '?', _ts_date($res->{to}) // '?') : ''),
+        (@sumfiles ? sprintf(', summaries/ (%d files)', scalar @sumfiles) : '');
     print "TRUNCATED: over --max-mb, the newest rows are kept (from " . (_ts_date($res->{from}) // '?') . ")\n" if $res->{truncated};
-    for my $wh (@{ $res->{withheld} }) {
-        print "WITHHELD $wh->{file} (" . ($wh->{reason} eq 'identity' ? 'identity; please tell the developer' : "secret: " . join(',', @{ $wh->{rules} || [] })) . ")\n";
+    # RS-2: the dry run says what could be added; a run with summaries lists each one (the
+    # source path is shown here, on your screen, never in the zip).
+    print _summaries_line($sum) if $o{dry};
+    my $src = $res->{summary_src} || {};
+    for my $e (@sumfiles) {
+        print "SUMMARY $e->[0] " . _human(length $e->[1]) . ' from ' . util_abbrev($src->{ $e->[0] }) . "\n";
     }
-    print "NOT INCLUDED: conversation text, summaries, handoffs, commands, file paths, repo and branch names, settings paths\n";
+    for my $wh (@{ $res->{withheld} }) {
+        my $s = watch::export_schema::summary_file($wh->{file});
+        print "WITHHELD $wh->{file} ("
+            . ($wh->{reason} eq 'identity' ? ($s ? 'identity: your names, paths or hosts' : 'identity; please tell the developer')
+                                           : "secret: " . join(',', @{ $wh->{rules} || [] }))
+            . ')' . ($s ? ' from ' . util_abbrev($src->{ $wh->{file} }) : '') . "\n";
+    }
+    if ($res->{with_summaries}) {
+        print "SUMMARIES: added at your request; secrets and your names, paths and hosts were scanned, but business content is not masked\n";
+        print "NOT INCLUDED: handoffs, settings paths; outside summaries/ also conversation text, commands, file paths, repo and branch names\n";
+    } else {
+        print "NOT INCLUDED: conversation text, summaries, handoffs, commands, file paths, repo and branch names, settings paths\n";
+    }
     print "SEND: attach this file to a message to the developer. Nothing was uploaded.\n";
     unless ($o{dry}) {
         if (($^O // '') eq 'darwin') {
@@ -1000,6 +1118,7 @@ sub cli {
 sub _file_kind {
     my ($f) = @_;
     return 'rows' if $f =~ m{\Arows/};
+    return 'summaries' if $f =~ m{\Asummaries/};
     (my $k = $f) =~ s/\.[a-z]+\z//;
     return $k;
 }
@@ -1038,9 +1157,12 @@ sub verify_zip {
     return ("unreadable: $u->{error}") if $u->{error} && !$u->{entries};
     push @p, "unreadable: $u->{error}" if $u->{error};
     my %data;
+    my @sum;
     for my $e (@{ $u->{entries} || [] }) {
         my $n = $e->{name};
-        push @p, "name: $n" unless watch::bundle::safe_name($n) && ($NAME_OK{$n} || $n =~ m{\Arows/[0-9a-f]{12}\.jsonl\z});
+        my $s = watch::export_schema::summary_file($n);
+        push @sum, $n if $s;
+        push @p, "name: $n" unless watch::bundle::safe_name($n) && ($NAME_OK{$n} || $s || $n =~ m{\Arows/[0-9a-f]{12}\.jsonl\z});
         push @p, "symlink: $n" if $e->{symlink};
         push @p, "encrypted: $n" if $e->{encrypted};
         push @p, "entry $n: $e->{error}" if $e->{error};
@@ -1049,6 +1171,10 @@ sub verify_zip {
     }
     my $m = defined $data{'manifest.json'} ? eval { watch::json::decode($data{'manifest.json'}) } : undef;
     if (ref $m ne 'HASH') { push @p, 'manifest: missing or not JSON'; return @p }
+    # RS-3: summaries/ only with manifest with_summaries true, and as many as summaries_n says
+    my $with = watch::export_schema::summaries_allowed($m);
+    push @p, "summaries without with_summaries: $_" for ($with ? () : @sum);
+    push @p, 'manifest: summaries_n' if $with && ($m->{summaries_n} // -1) != scalar @sum;
     push @p, 'manifest: schema' unless defined $m->{schema} && !ref $m->{schema} && $m->{schema} =~ /\A[a-z0-9][a-z0-9-]{0,40}-report\/1\z/
         && defined $m->{plugin} && $m->{schema} eq $m->{plugin} . $SCHEMA_NAME_SUFFIX;
     my %listed;
@@ -1066,7 +1192,9 @@ sub verify_zip {
     }
     for my $n (sort keys %data) {
         my $d = $data{$n};
-        for my $c (@PATTERN_CLASSES) { push @p, "pattern $c->[0]: $n" if $d =~ $c->[1] }
+        # A summary the user added holds session text (URLs, paths); the secret scan still applies.
+        my $opted = $with && watch::export_schema::summary_file($n);
+        for my $c ($opted ? () : @PATTERN_CLASSES) { push @p, "pattern $c->[0]: $n" if $d =~ $c->[1] }
         my $sh = secret_hits($ctx, scan_text($n, $d));
         push @p, 'secret ' . join(',', @$sh) . ": $n" if @$sh;
     }

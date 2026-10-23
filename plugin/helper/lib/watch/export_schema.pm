@@ -293,4 +293,18 @@ our %SCHEMA = (
 
 sub schema { return \%SCHEMA }
 
+# RS-3 (owner xxxxxxxx-19, 2026-10-23: summaries opt-in per report, asked each time): the one
+# file kind that holds session text. A `summaries/<12 hex>.md` entry is allowed only in a bundle
+# whose manifest says `with_summaries: true` (the user said yes to `report --with-summaries` in
+# that run); `report verify` fails any other bundle that has one.
+our $SUMMARY_FILE_RE = qr{\Asummaries/[0-9a-f]{12}\.md\z};
+sub summary_file { my ($name) = @_; return (defined $name && !ref $name && $name =~ $SUMMARY_FILE_RE) ? 1 : 0 }
+# A manifest as built (\1) or as decoded (watch::json: 1).
+sub summaries_allowed {
+    my ($m) = @_;
+    my $v = ref $m eq 'HASH' ? $m->{with_summaries} : undef;
+    return 0 unless defined $v;
+    return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : (!ref $v && $v eq '1') ? 1 : 0;
+}
+
 1;

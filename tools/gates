@@ -298,10 +298,8 @@ BASH_PATH = re.compile(r"\bon the Bash PATH\b", re.I)
 PENDING = [
     # (Empty since build round 9: the launcher-move rows printed PENDING-DONE after the wp/text
     # (TXT-05) and wp/docs (DOC-01) merges and were removed. The seven 2026-10-23 SK-7 / IA-1
-    # manifest-default rows were removed once those keys shipped.)
-    # TG-01: the report SKILL asks for summaries with `report --with-summaries` (RS-1); the helper
-    # half (RS-2/RS-3) is not built yet (REVIEW-NIGHT-2 U-03).
-    ("store-flags", "TG-01 flag", "skills/report/SKILL.md", "--with-summaries"),
+    # manifest-default rows were removed once those keys shipped. The TG-01 `report
+    # --with-summaries` row was removed once the helper accepted the flag, RS-2/RS-3.)
 ]
 
 
