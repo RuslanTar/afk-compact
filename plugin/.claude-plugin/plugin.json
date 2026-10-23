@@ -236,7 +236,7 @@
     "evidence_total_max_mb": {
       "type": "number",
       "title": "Evidence total (MB)",
-      "description": "Most evidence one sweep or handoff copies in full; files beyond it keep only a reference and an excerpt. Nothing is deleted.",
+      "description": "Most evidence one sweep or handoff copies in full; a file beyond it is not copied (listed as withheld: over-total) and stays where it is. Nothing is deleted.",
       "default": 50,
       "min": 10,
       "max": 500

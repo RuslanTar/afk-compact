@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "evidence: every status (copied, dup, ref-only, redacted, withheld, missing); 10 MB per file and 50 MB per handoff caps -> ref-only; Evidence/Disposable/Ref-only/Volatile lines; WARN quota over evidence_quota_mb",
+ "note": "evidence: every status (copied, dup, ref-only, redacted, withheld, missing); 10 MB per file -> ref-only, past 50 MB per handoff (evidence_total_max_mb default) -> withheld, rules over-total (SK-5); Evidence/Disposable/Ref-only/Volatile lines; WARN quota over evidence_quota_mb",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -244,7 +244,8 @@
      "^ref-only - 11534336 [0-9a-f]{8} $TMP/s/big.bin$",
      "^copied \\S+/n0.bin 9437184 ",
      "^copied \\S+/n4.bin 9437184 ",
-     "^ref-only - 9437184 [0-9a-f]{8} $TMP/s/n5.bin$",
+     "^withheld - 9437184 [0-9a-f]{8} $TMP/s/n5.bin$",
+     "^Volatile: $TMP/s/n5.bin — withheld: over-total \\(evidence_total_max_mb 50\\)$",
      "^Ref-only: $TMP/s/big.bin — 11534336 B, sha256 [0-9a-f]{8}$",
      "^WARN quota $ROOT/repo/LAB-7 45$"
     ]

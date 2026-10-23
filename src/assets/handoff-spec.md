@@ -238,7 +238,7 @@ Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kep
 ## 17. Evidence rules (helper)
 
 Moved from the template §5 (PR-4). The helper enforces all of it, and the template keeps the evidence-choice rules. <!-- T-TEXT E2 -->
-- **Caps.** Copy files ≤10 MB, ≤50 MB per handoff; the rest are `ref-only` (bytes, sha256, mtime, regeneration command, ≤40 head/tail lines of text). Dedupe by sha256 across buckets (`dup`); a bucket whose `evidence/` and `compact/` folders together exceed `evidence_quota_mb` gets a warning.
+- **Caps.** Copy files ≤10 MB; bigger ones are `ref-only` (bytes, sha256, mtime, regeneration command, ≤40 head/tail lines of text). At most `evidence_total_max_mb` (default 50 MB) per handoff or sweep; a file past it is `withheld` (`rules: over-total`) and stays where it is. Dedupe by sha256 across buckets (`dup`); a bucket whose `evidence/` and `compact/` folders together exceed `evidence_quota_mb` gets a warning.
 - **Where.** Needed later → `<handoff root>/<repo>/<bucket>/evidence/<stem>/`. Disposable → `<disposable root>/<YYYY-MM-DD>/<stem>-evidence/`, today's folder only, with a retention note from `disposable_keep_days` ("kept until you remove it" when unset). Defaults `~/.claude/handoffs` and `~/.claude/trash-staging`. Never in a git repository, `.planning/` or a temp folder.
 - **Copy-time secret gate**: §10, applied before each copy. Modes: umask 077; folders 0700, files 0600.
 - **Manifest** `MANIFEST.tsv`: the `manifest_columns` and `manifest_scan` literals; recipes, `ledger.md` and `inflight.md` included. Order: copy, re-hash, manifest, publish by exclusive create, receipt.

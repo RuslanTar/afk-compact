@@ -15,7 +15,8 @@ use skills::stage;
 use skills::gitfacts;
 
 our $FILE_MAX  = 10 * 1024 * 1024;
-our $TOTAL_MAX = 50 * 1024 * 1024;
+# The total is evidence::total_max() (evidence_total_max_mb, SK-5), one value for the
+# sweep and this command.
 our $CLONE_MAX = 50;
 
 sub run {
@@ -95,7 +96,14 @@ sub run {
         } elsif ($r->{status} eq 'missing') {
             skills::cli::say("Volatile: $r->{origin} — missing at $stamp");
         } elsif ($r->{status} eq 'withheld') {
-            my $rules = ref $r->{rules} eq 'ARRAY' && @{ $r->{rules} } ? ' (' . join(',', @{ $r->{rules} }) . ')' : '';
+            my @rl = ref $r->{rules} eq 'ARRAY' ? @{ $r->{rules} } : ();
+            if (grep { $_ eq 'over-total' } @rl) {
+                my ($mb) = eval { settings::num_clamped('evidence_total_max_mb') };
+                skills::cli::say('Volatile: ' . _line($r->{origin}) . ' — withheld: over-total (evidence_total_max_mb '
+                    . ($mb // '?') . ')');
+                next;
+            }
+            my $rules = @rl ? ' (' . join(',', @rl) . ')' : '';
             skills::cli::say('Volatile: ' . _line($r->{origin}) . " — withheld by the secret gate$rules");
         }
     }
@@ -285,8 +293,12 @@ sub _gate_patch {
     my $sha = skills::util::sha256_hex($bytes);
     my %r = (copy => undef, bytes => length $bytes, sha256 => $sha,
              mtime => skills::util::iso_local(skills::util::now()), rules => []);
-    if (length($bytes) > $FILE_MAX || $used + length($bytes) > evidence::total_max()) {
+    if (length($bytes) > $FILE_MAX) {
         return { %r, status => 'ref-only', scan => 'ref-only' };
+    }
+    # SK-5 (S-SETTINGS E5): past the total, withheld with rules over-total, as a file is
+    if ($used + length($bytes) > evidence::total_max()) {
+        return { %r, status => 'withheld', scan => 'withheld', rules => ['over-total'] };
     }
     my $paths = $pt->{paths};
     if (!$paths || grep { skills::core::denied_path("$pt->{top}/$_") } @$paths) {
