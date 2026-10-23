@@ -504,3 +504,20 @@ test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on t
   expect(rows.length).toBe(2)
   expect(rows.map(r => r.ms)).toEqual([0, 0])
 })
+
+// ID-4 (owner D2, 2026-10-23; SPEC-DELTAS AT-ID-04; REVIEW-NIGHT-2 test gap): after a compaction the
+// plugin did not start (native auto, manual, or a future idle trigger) it submits nothing on its own;
+// only a nudge-driven cycle sets resumeAfter. A background result can still open a turn of its own.
+test('AT-ID-04: after a native auto, manual or idle compaction the plugin submits nothing and logs no continue', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  for (const trigger of ['auto', 'manual', 'idle']) {
+    await raiseCompact($, { trigger })
+    await w.advance(60000)
+  }
+  expect(w.compacts.length).toBe(3)
+  expect(w.submits.length).toBe(0)
+  expect(w.rowsOf('continue').length).toBe(0)
+})
