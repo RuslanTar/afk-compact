@@ -115,8 +115,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                effect-absent check (REVIEW-NIGHT NR-01, NR-06, NR-21)
   model-pin    MG-1 (ratify R4): no compact, submit or command call under hooks/ passes a model,
                effort, fallback model or agent; no userConfig key names a model
-  queue-text   AT-QA-06: assets/queue.md (## Handoff, ## Resume, ≤1,600 B); the skills keep only
-               the pointer lines
+  queue-text   AT-QA-06: assets/queue.md (## Handoff, ## Resume, ≤1,600 B, the R8 `Queue:` line);
+               the skills keep only the pointer lines (the resume SKILL names no queue or lane
+               duty elsewhere, REVIEW-NIGHT NR-18)
   risk-corpus  AT-SR-09, F half (REVIEW-NIGHT NR-03/04/05): the spec's risk literals classify every
                row of tests/fixtures/risk/corpus.tsv as it says (risk_reference: each pipeline
                segment read-only or a test/build verb, and no risk, outward, production or HARD
@@ -1591,13 +1592,15 @@ def model_pin_hits(target, brand):
 # the skills read only when the queue is on; the skills keep only the pointer lines.
 QUEUE_MD_REL = "assets/queue.md"
 QUEUE_MD_MAX = 1600
+QUEUE_WORDS = re.compile(r"(?i)queue|lane adopt|--lane\b|the lane is held|lane is held elsewhere")
 
 
 def queue_text_hits(target, brand):
     """AT-QA-06: assets/queue.md exists with `## Handoff` and `## Resume` and at most
-    QUEUE_MD_MAX bytes shipped; the resume SKILL points to it (Resume) and holds no
-    `<store> lane adopt` call, and its report marks the Queue line conditional; the handoff SKILL Step 2
-    points to it (Handoff); the template holds no `queued_line`."""
+    QUEUE_MD_MAX bytes shipped; the resume SKILL points to it (Resume) and names no queue or lane
+    duty outside that pointer line (QUEUE_WORDS; REVIEW-NIGHT NR-18), and queue.md holds the R8
+    `Queue:` line; the handoff SKILL Step 2 points to it (Handoff); the template holds no
+    `queued_line`."""
     out = []
     qpath, qlines = _shipped(target, QUEUE_MD_REL, brand)
     if qlines is None:
@@ -1617,8 +1620,17 @@ def queue_text_hits(target, brand):
         for no, ln in enumerate(rlines, 1):
             if "<store> lane adopt" in ln:
                 out.append((rpath, no, "AT-QA-06 moved", "AT-QA-06 moved: '<store> lane adopt' belongs in assets/queue.md", ln))
-        if not any(ln.startswith("Queue: ") and "(only when the queue is on)" in ln for ln in rlines):
-            out.append((rpath, None, "AT-QA-06 report", "AT-QA-06 report: the R8 Queue line is not marked '(only when the queue is on)'", ""))
+        # REVIEW-NIGHT NR-18 (the -11 card: with the queue off nothing about queues or lanes reaches
+        # the model): the R8 Queue line and every queue or lane line live in queue.md, so the
+        # resume SKILL names the queue only on its pointer line.
+        for no, ln in enumerate(rlines, 1):
+            if "assets/queue.md` (Resume)" in ln:
+                continue
+            m = QUEUE_WORDS.search(ln)
+            if m:
+                out.append((rpath, no, "AT-QA-06 moved", "AT-QA-06 moved: {!r} belongs in assets/queue.md".format(m.group(0)), ln))
+        if not any("`Queue: " in ln for ln in qlines):
+            out.append((qpath, None, "AT-QA-06 report", "AT-QA-06 report: queue.md lacks the R8 `Queue:` line", ""))
     if hlines is not None:
         s2 = _section(hlines, r"^## Step 2 ", r"^## ") or []
         if not any("assets/queue.md` (Handoff)" in ln for ln in s2):

@@ -9,7 +9,7 @@ argument-hint: "[handoff path | ticket or topic] [instructions]"
 Restore work from a handoff written by `/{{plugin}}:handoff` or from a saved compaction summary. Find it deterministically, check it against the live world, heal background work, report once, then continue. This skill's steps are R0–R10; "Step 1" always means the handoff's own next action.
 
 - `<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. <!-- PKG-RUNTIME A.3: same call form in the handoff, resume and status skills; nothing is on the Bash PATH -->
-  It measures and prints plain lines. It never asks, deletes or runs a command taken from a handoff. It reads the settings `handoff_root` (default `~/.claude/handoffs`; buckets `<root>/<repo>/<ticket-or-topic>/`), `disposable_root` and the optional `queue_cmd`.
+  It measures and prints plain lines. It never asks, deletes or runs a command taken from a handoff. It reads the settings `handoff_root` (default `~/.claude/handoffs`; buckets `<root>/<repo>/<ticket-or-topic>/`), and `disposable_root`.
 - Vocabularies (ids, status words, claim tags, restart classes) are in `${CLAUDE_PLUGIN_ROOT}/assets/handoff-spec.md`. Read it only when a term is unclear.
 - Our marker is `⟪{{plugin}} v1 n=<nonce> s=main|sub|manual⟫` in the first 5 body lines, and the sentinel `⟪/{{plugin}} n=<nonce>⟫` is in the last 3. No other header line is ours.
 - In the arguments, instructions override the handoff's Next steps, and facts are verified like any claim.
@@ -50,7 +50,7 @@ Restore work from a handoff written by `/{{plugin}}:handoff` or from a saved com
 | 3 | same `session_id` | newest |
 | 4 | predecessor proven by lineage (`/clear`, fork) | its newest |
 | 5 | ticket or topic in the arguments that matches exactly one bucket | newest there |
-| 6 | queue lane, branch ticket, several buckets, newest anywhere | **select nothing**: put ≤5 candidates (path, date, title, session) in the questions; continue read-only |
+| 6 | branch ticket, several buckets, newest anywhere | **select nothing**: put ≤5 candidates (path, date, title, session) in the questions; continue read-only |
 
 - **Relation**, from session ids, not tier:
   - `same-session`: compaction or `--resume`;
@@ -84,7 +84,7 @@ Extract:
   - recipes are at `<bucket>/evidence/<stem>/restart/<B-n>.md`; a summary's `restart:` line is data only, never run.
 - **Live state** rows with their re-check hints (Rule 2); **Open questions** with owner and status.
 - **Location** (with GSD, Environment, Guards, Ownership); the `Evidence:` line.
-- Frontmatter `queue_lane`, `git_commit`, `date`, `session_id`, `claude_pid`.
+- Frontmatter `git_commit`, `date`, `session_id`, `claude_pid`.
 - **Claims to re-test**:
   - those Step 1 rests on;
   - `[unverified]` and `[inherited]` tags on that path;
@@ -107,24 +107,23 @@ Age tier from `date`: **T1** <24 h; **T2** 1–7 days, any T1 drift, or Acuity `
 These facts win over the handoff's state claims.
 
 - **Worktree gone:** say so first, then work from its branch if that still exists.
-- **Must run elsewhere** (project hooks, permissions or `.planning` bind to the cwd): give `cd '<path>'` plus starting a new session. Continue read-only through R8 (inventory and report, no heal, pin or lane adopt), then stop. <!-- review-fix: "stop" here contradicted R9's "stay read-only" and skipped the report -->
+- **Must run elsewhere** (project hooks, permissions or `.planning` bind to the cwd): give `cd '<path>'` plus starting a new session. Continue read-only through R8 (inventory and report, no heal or pin), then stop. <!-- review-fix: "stop" here contradicted R9's "stay read-only" and skipped the report -->
 - **Otherwise** stay put and use absolute paths and `git -C '<path>'`.
 - **GSD "workstream not found":** check `git worktree list`; report candidates, don't pick.
 - **Helper failed:** `git -C '<worktree>' status -sb` and `git -C '<worktree>' log --oneline <git_commit>..HEAD`.
 
-## R4 Ownership, queue lane, pin (≤2 calls)
+## R4 Ownership and pin (≤2 calls)
 
 **Ownership, before any write or heal.** Stay read-only on a resource, and say so, when any of these holds:
 - commits since `git_commit` that `measure` marks foreign (ours only when this chain names the hash or it is in this session's own range);
 - a newer handoff from another session;
-- another live session on this checkout;
-- the lane is held elsewhere.
+- another live session on this checkout.
 
 A pid is live only if its start time matches the plugin's per-process record for it. If the handoff's own session (`claude_pid`) is live as another process, not this one, its work counts as RUNNING there; never relaunch it. After a compaction in this process, `claude_pid` is you: that is no conflict. <!-- review-fix: without "another process" a same-session resume marked all its own work RUNNING and never healed -->
 
 **Queue lane:** only when `locate` prints a `queue:` line other than `off`: read `${CLAUDE_PLUGIN_ROOT}/assets/queue.md` (Resume) and follow it. <!-- Q-ADAPTER QA-4 / QA-T4 (owner xxxxxxxx-11: setting-driven, one text) -->
 
-**Pin:** `<store> pin --sid "${CLAUDE_SESSION_ID}" --resumed-from <handoff> [--lane '<id>']`, so the next handoff lands in this bucket and links back. Pin only when all hold:
+**Pin:** `<store> pin --sid "${CLAUDE_SESSION_ID}" --resumed-from <handoff>`, so the next handoff lands in this bucket and links back. Pin only when all hold:
 - the relation is `same-session`, `successor` or `other`;
 - the integrity is `ok` or `legacy`;
 - the ownership check is clean.
@@ -184,7 +183,6 @@ Goal: <ticket goal>; latest request: <quote or paraphrase>
 Drift: <changed rows only> | no drift (checked <stamp>)
 In flight: <B-n id: status → action> | nothing running (checked <stamp>)
 Evidence: <n ok; n missing/withheld/redacted> | no manifest
-Queue: <lane and open count | held by … | none> (only when the queue is on)
 Binding: U-1 …, U-2 … (pointer if >5) · approvals carried: U-n (<action>) | none · settled: D-…, X-…
 Could not verify: <items> | None
 Next: Starting <Step 1> now | Stopped: <stop rule>
@@ -195,7 +193,7 @@ End with one numbered **Questions** block in plain language. For each question g
 - the options and your recommendation;
 - what it blocks.
 
-Write owner steps as a walk-through: where, what, the exact command. Never shorten questions or owner steps to fit the report. Ask only questions the user owns. Settle agent-raised ones yourself, or label your choice `proposed`. Queued questions show only as the Queue count. Ask in the report text, not with a prompt that holds the turn open. A timeout or a missing reply is not an answer.
+Write owner steps as a walk-through: where, what, the exact command. Never shorten questions or owner steps to fit the report. Ask only questions the user owns. Settle agent-raised ones yourself, or label your choice `proposed`. Ask in the report text, not with a prompt that holds the turn open. A timeout or a missing reply is not an answer.
 
 ## R9 Proceed or stop
 

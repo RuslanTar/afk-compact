@@ -665,6 +665,8 @@ def probes(name):
     def queue_text(d):
         """AT-QA-06: the queue lines back in the resume SKILL and the pointer gone from Step 2."""
         append(d, "plugin/skills/resume/SKILL.md", "\nNew session: `<store> lane adopt --lane '<id>' --if-free`.\n")
+        # REVIEW-NIGHT NR-18: the R8 Queue line back in the always-loaded resume SKILL.
+        append(d, "plugin/skills/resume/SKILL.md", "Queue: <lane and open count | none> (only when the queue is on)\n")
         edit(d, "plugin/skills/handoff/SKILL.md", "assets/queue.md` (Handoff)", "assets/queue.md`")
 
     def risk_corpus(d):
@@ -809,6 +811,7 @@ def probes(name):
           r"^GATE model-pin plugin/\.claude-plugin/plugin\.json: AT-MG-01 config: userConfig key compact_model names a model"], None),
         ("queue-text", "AT-QA-06", gates_only("queue-text"), queue_text,
          [r"^GATE queue-text plugin/skills/resume/SKILL\.md:\d+: AT-QA-06 moved",
+          r"^GATE queue-text plugin/skills/resume/SKILL\.md:\d+: AT-QA-06 moved: 'Queue' belongs in assets/queue\.md$",
           r"^GATE queue-text plugin/skills/handoff/SKILL\.md: AT-QA-06 pointer"], None),
         ("risk-corpus", "AT-SR-09", gates_only("risk-corpus"), risk_corpus,
          [r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'jq -n env' carries no risk class$",
