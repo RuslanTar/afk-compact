@@ -1417,8 +1417,7 @@ def approvals_hits(target, brand):
         out.append((spath, None, "AP-11 headings", "AP-11 headings: sections_main lacks '## Approvals'", ""))
     for path in text_docs(target):
         for no, ln in enumerate(shipped_lines(path, brand), 1):
-            m = APPROVALS_BANNED.search(ln)
-            if m:
+            for m in APPROVALS_BANNED.finditer(ln):
                 out.append((path, no, "AP-11 banned", "AP-11 banned: {!r}".format(m.group(0)), ln))
     return out
 
