@@ -26,12 +26,12 @@ Cut first, in order: Work done detail beyond one line per task and finding; chan
 Frontmatter keys, empty ones omitted: `kind: handoff`, `writer: handoff`, `nonce`, `date` (ISO with offset), `session_id`, `actor`, `previous_session_id`, `lineage_reason` (clear · fork · bg-copy · handoff-resume · none), `transcript_path` (locator only), `claude_pid`, `cc_version`, `repository`, `bucket`, `worktree`, `branch`, `git_commit`, `status` (in-progress · blocked · completed), `ticket`, `queue_lane` (§4.6), `previous_handoff` (the file this one was carried from), `previous_kind` (own · chain · foreign), `own_previous_handoff` (only when the base is foreign and an own file exists), `imported_from` (a copy imported from a repository), `approvals_checked` (the `U-` ids of approvals whose quote the helper found in your messages, §4.2), `gsd`. A repository export (repo mode) carries `export: repo` and drops the machine-only keys (spec §8).
 
 ```
-⟪compactinue v1 n=<nonce> s=manual⟫      first body line after the frontmatter
+⟪afk-compact v1 n=<nonce> s=manual⟫      first body line after the frontmatter
 <body>
-⟪/compactinue n=<nonce>⟫                  last line of the file
+⟪/afk-compact n=<nonce>⟫                  last line of the file
 ```
 
-The nonce is 8 lowercase hex from code and equals `nonce:`. Scope: `manual` (this skill) · `main` (main compaction summary) · `sub` (subagent compaction summary). Detection: `^⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$` within the first 5 body lines after wrapper lines are stripped, the sentinel within the last 3 non-blank lines; text after it is a trailer; other marker-like lines belong to someone else and are left untouched. No sentinel means possibly truncated: the resume continues read-only from the previous file in the chain.
+The nonce is 8 lowercase hex from code and equals `nonce:`. Scope: `manual` (this skill) · `main` (main compaction summary) · `sub` (subagent compaction summary). Detection: `^⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$` within the first 5 body lines after wrapper lines are stripped, the sentinel within the last 3 non-blank lines; text after it is a trailer; other marker-like lines belong to someone else and are left untouched. No sentinel means possibly truncated: the resume continues read-only from the previous file in the chain.
 
 ## 4. Body
 

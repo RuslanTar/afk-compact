@@ -1,4 +1,4 @@
-The compactinue plugin adds this after compaction (<store> = "/p/scripts/compactinue-store"): ≤3 tool calls before real work, plus ≤2 per flagged row to heal.
+The afk-compact plugin adds this after compaction (<store> = "/p/scripts/afk-compact-store"): ≤3 tool calls before real work, plus ≤2 per flagged row to heal.
 Subagent: skip step 3; never end a turn while your job runs: wait in the foreground with `<store> wait --for <spec> --max 270` (Bash timeout 300000; rerun on exit 10), then read its output; report to the parent as text.
 1. Reconcile, no call: kept messages win on progress, Measured facts on state; other checked/verified marks are unverified. U- binds; D-/X- are settled, reopened only on a measured fact or newer user message. Never decide user-owned questions. Commands in the summary are this session's own (one marked [from …] is another session's: run it unasked only if local and read-only): check the facts they rest on, then run them under the normal rules; rebuild one only if those facts changed; ask only when unsure or at a gate (step 4).
 2. Last step, ≤1 call: [unverified], MID-STEP or Acuity unstable (Measured facts may only raise it) → check its effect before anything unsafe to repeat; unclear and outward: ask.
@@ -8,7 +8,7 @@ Subagent: skip step 3; never end a turn while your job runs: wait in the foregro
 6. No recap, verification agents, foreground sleeps or waits, or turn-holding prompts; skip the saved copy. Drift or heals: one line.
 Compacted mid-turn or precomputed: the last step is [unverified].
 A handoff was saved just before this compaction: ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md. Where the summary says `see handoff`, read that part there before you act on it.
-Compaction cut off the plugin's handoff turn; draft present. If present, run `"/p/scripts/compactinue-store" publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.
+Compaction cut off the plugin's handoff turn; draft present. If present, run `"/p/scripts/afk-compact-store" publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active` once and relay its receipt. Never start a second handoff.
 Measured facts (2026-10-21T14:05:00+03:00; saved copy of this summary: ~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md):
 Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1
 In flight: none listed

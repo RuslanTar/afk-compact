@@ -1,5 +1,5 @@
 {
-  "name": "compactinue",
+  "name": "afk-compact",
   "version": "0.1.0",
   "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
   "author": { "name": "Ruslan Taranenko" },
@@ -128,7 +128,7 @@
     "watcher": {
       "type": "string",
       "title": "Watcher",
-      "description": "Local content-free compaction logs (shadow) or off. Nothing is sent; share with /compactinue:report.",
+      "description": "Local content-free compaction logs (shadow) or off. Nothing is sent; share with /afk-compact:report.",
       "default": "shadow"
     },
     "stall_min": {

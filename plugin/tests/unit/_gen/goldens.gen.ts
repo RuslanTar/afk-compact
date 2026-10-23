@@ -5,7 +5,7 @@
 export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "draft_state": "present",
  "halt_reason": "the hourly auto-continue limit is reached",
- "handoff_finish": "`\"/p/scripts/compactinue-store\" publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active`",
+ "handoff_finish": "`\"/p/scripts/afk-compact-store\" publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active`",
  "handoff_path": "~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md",
  "idle_min": "49",
  "max_calls": "34",
@@ -13,11 +13,11 @@ export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "measured_facts": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nGSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)",
  "nonce": "1a2b3c4d",
  "previous_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_12-30-00_5e55a001_c1-5ca1ab.md",
- "queue_add": "\"/p/scripts/compactinue-store\" queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d",
+ "queue_add": "\"/p/scripts/afk-compact-store\" queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d",
  "remeasure": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none",
  "saved_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md",
  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
- "store": "\"/p/scripts/compactinue-store\"",
+ "store": "\"/p/scripts/afk-compact-store\"",
  "tokens": "612,345"
 }
 

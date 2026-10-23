@@ -33,9 +33,9 @@ export const SPEC = {
     "## Own background tasks",
     "## Next action"
   ],
-  "marker_re": "^⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
-  "sentinel_re": "^⟪/compactinue n=([0-9a-f]{8})⟫$",
-  "instr_marker_re": "⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
+  "marker_re": "^⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
+  "sentinel_re": "^⟪/afk-compact n=([0-9a-f]{8})⟫$",
+  "instr_marker_re": "⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
   "marker_window_lines": 5,
   "sentinel_window_nonblank_lines": 3,
   "wrappers": {
@@ -894,7 +894,7 @@ export const SPEC = {
   "notice": {
     "id": "watcher-1",
     "version": 1,
-    "text": "compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config."
+    "text": "afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config."
   },
   "clamp": {
     "native_offset": 33000,
@@ -924,7 +924,7 @@ export const SPEC = {
     "A-13": "session-id canary",
     "A-14": "slow resume",
     "A-15": "version, arm or hook-surface change",
-    "A-16": "compactinue: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
+    "A-16": "afk-compact: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
     "A-17": "failed or blocked compaction",
     "A-18": "auto-continue stopped",
     "A-19": "auto-continue cap breached",

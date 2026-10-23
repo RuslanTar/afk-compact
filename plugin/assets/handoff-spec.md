@@ -1,10 +1,10 @@
-# compactinue handoff spec v1 (shared literals)
+# afk-compact handoff spec v1 (shared literals)
 
 One source for the literals that the handoff skill, the resume skill, the compaction texts, the mod, the helper, the publish lint and the watcher share. The handoff template mirrors this file; where they differ, this file wins. Code reads only the `json spec-literals` block at the end and hard-codes no heading, vocabulary or pattern.
 
 ## 1. Marker and sentinel
 
-- Marker: `⟪compactinue v1 n=<nonce> s=main|sub|manual⟫`. Sentinel: `⟪/compactinue n=<nonce>⟫`. The nonce is 8 lowercase hex from code.
+- Marker: `⟪afk-compact v1 n=<nonce> s=main|sub|manual⟫`. Sentinel: `⟪/afk-compact n=<nonce>⟫`. The nonce is 8 lowercase hex from code.
 - Scope: `main` (main compaction summary) · `sub` (subagent compaction summary) · `manual` (the handoff skill).
 - In a summary or handoff the marker sits in the first 5 body lines after the wrapper lines are stripped, and the sentinel in the last 3 non-blank lines. Non-blank text after the sentinel is a trailer.
 - Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a `Summary:` line, and the `<summary>` / `</summary>` tags.
@@ -16,7 +16,7 @@ One source for the literals that the handoff skill, the resume skill, the compac
 Main form, in this order (a heading matches by its literal prefix at the start of a `#` line, so `## Resume here (≤5 lines)` is `## Resume here`):
 
 ```
-⟪compactinue v1 n=<nonce> s=…⟫
+⟪afk-compact v1 n=<nonce> s=…⟫
 # <ticket or topic> — <current state in ≤8 words>
 ## Resume here
 ## User constraints
@@ -33,7 +33,7 @@ Main form, in this order (a heading matches by its literal prefix at the start o
 ## Work done and findings
 ## Evidence
 ## Next steps
-⟪/compactinue n=<nonce>⟫
+⟪/afk-compact n=<nonce>⟫
 ```
 
 Subagent form, in this order: `## Task as assigned` · `## Constraints from the parent` · `## Report` · `## Done` · `## Findings` · `## Produced but not yet delivered` · `## Own background tasks` · `## Next action`.
@@ -127,9 +127,9 @@ Absolute-path lines · code blocks over 5 lines · log, warning and stack lines 
 
 ## 13. Alert texts
 
-Fixed per rule; no user content. Shown as `compactinue watcher: <text> (<alert_id>)`.
+Fixed per rule; no user content. Shown as `afk-compact watcher: <text> (<alert_id>)`.
 
-**First-run notice** (`notice`): shown once per install at the first main session start, then again only when its `id` changes (the `-1` is the notice version; it is bumped when what is logged changes in a way a user would care about). Fixed text, at most 200 characters, no user content: `compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config.`
+**First-run notice** (`notice`): shown once per install at the first main session start, then again only when its `id` changes (the `-1` is the notice version; it is bumped when what is logged changes in a way a user would care about). Fixed text, at most 200 characters, no user content: `afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config.`
 
 | Rule | Text |
 |---|---|
@@ -148,7 +148,7 @@ Fixed per rule; no user content. Shown as `compactinue watcher: <text> (<alert_i
 | A-13 | session-id canary |
 | A-14 | slow resume |
 | A-15 | version, arm or hook-surface change |
-| A-16 | compactinue: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it. |
+| A-16 | afk-compact: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it. |
 | A-17 | failed or blocked compaction |
 | A-18 | auto-continue stopped |
 | A-19 | auto-continue cap breached |
@@ -218,7 +218,7 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 | `overlap` | advisory | 30% or more of non-ledger lines shared with `previous_handoff` (ledger lines, headings, none-forms and helper-pasted Evidence lines excluded) |
 | `secret-warn` | advisory | a WARN secret hit (rule ids printed, never values) |
 | `acuity` | advisory | Resume here has no `Acuity:` (`missing`), or a rating below the measured floor (`below <floor>`) |
-| `store-path` | advisory | a body line contains `/scripts/compactinue-store` |
+| `store-path` | advisory | a body line contains `/scripts/afk-compact-store` |
 | `approval-unchecked` | advisory | the session transcript could not be read, so no quote was checked; the line is published but not listed in `approvals_checked`, and the next session treats it as context |
 
 Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kept at <path>` · `REFUSED: <other reason>`; repo-mode export lines as in the handoff skill's Step 7.
@@ -288,9 +288,9 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "## Own background tasks",
     "## Next action"
   ],
-  "marker_re": "^⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
-  "sentinel_re": "^⟪/compactinue n=([0-9a-f]{8})⟫$",
-  "instr_marker_re": "⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
+  "marker_re": "^⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
+  "sentinel_re": "^⟪/afk-compact n=([0-9a-f]{8})⟫$",
+  "instr_marker_re": "⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
   "marker_window_lines": 5,
   "sentinel_window_nonblank_lines": 3,
   "wrappers": {
@@ -517,7 +517,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   ],
   "readonly_cmd_re": "^(?![^\\n]*[<>$`*?\\[])(?![^\\n]*\\{[^}]*(,|\\.\\.))(?![^\\n]*(^|[ \\t=\\\"'])(~|/|\\.\\.(/|$|[ \\t\\\"'])))(git([ \\t]+-C[ \\t]+[^ \\t]+)?[ \\t]+((status|log|diff|show|blame|rev-parse|ls-files|ls-tree|describe|shortlog|grep|cat-file|show-ref|merge-base|rev-list|worktree[ \\t]+list|stash[ \\t]+list)(?![^\\n]*[ \\t][\\\"']?(-O|--output|--open-files-in-pager|--ext-diff|--textconv|--filters|--no-index))([ \\t]|$)|reflog(?![ \\t]+(?!show\\b)[a-z])([ \\t]|$)|(branch([ \\t]+(-a|-r|-v|-vv|--list|--all|--show-current|--contains|--merged|--no-merged))*|tag([ \\t]+(-l|--list))*|remote([ \\t]+-v)?)[ \\t]*$)|(rg|grep|egrep|fgrep)(?![^\\n]*[ \\t][\\\"']?(--pre|--pre-glob|--hostname-bin))([ \\t]|$)|sort(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z]*o|--output|--compress-program))([ \\t]|$)|tree(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z]*[oR]|--fromfile))([ \\t]|$)|uniq([ \\t]+-[A-Za-z0-9-]+)*([ \\t]+[^- \\t][^ \\t]*)?[ \\t]*$|file(?![^\\n]*[ \\t][\\\"']?-[A-Za-z]*C)([ \\t]|$)|date(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z]*s|--set))([ \\t]|$)|(ls|cat|head|tail|wc|stat|pwd|which|type|du|df|sha256sum|shasum|md5|md5sum|cut|diff|cmp|basename|dirname|realpath|readlink)([ \\t]|$))",
   "test_build_re": "^(make|rake|bundle[ \\t]+exec[ \\t]+rake|gradle|\\./gradlew|(npm|pnpm|yarn)[ \\t]+run|yarn|pnpm)[ \\t]+(?![^ \\t]*([Dd]eploy|[Rr]elease|[Pp]ublish|[Pp]ush|[Ii]nstall|[Pp]rod|[Uu]pload))(test|check|spec|lint|typecheck|build)(:[A-Za-z0-9_]+)?([ \\t]+-[A-Za-z0-9-]+)*[ \\t]*$|^(npm|pnpm)[ \\t]+test([ \\t]+-[A-Za-z0-9-]+)*[ \\t]*$|^cargo[ \\t]+(test|build|check)(?![^\\n]*[ \\t]--config\\b)([ \\t]|$)|^go[ \\t]+(test|vet|build)(?![^\\n]*[ \\t]-(exec|toolexec)\\b)([ \\t]|$)|^(pytest|python3?[ \\t]+-m[ \\t]+pytest)(?![^\\n]*[ \\t]-p[ \\t])([ \\t]|$)",
-  "notice": {"id": "watcher-1", "version": 1, "text": "compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config."},
+  "notice": {"id": "watcher-1", "version": 1, "text": "afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config."},
   "clamp": {"native_offset": 33000, "min_target": 120000, "reserve_base": 52000, "reserve_no_handoff": 100000, "window_floor": 100000, "soft_ratio": 0.8, "target_num": 2, "target_den": 3, "handoff_tokens_min": 20000, "handoff_tokens_max": 150000},
   "alert_texts": {
     "A-01": "summary copy missing",
@@ -535,7 +535,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "A-13": "session-id canary",
     "A-14": "slow resume",
     "A-15": "version, arm or hook-surface change",
-    "A-16": "compactinue: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
+    "A-16": "afk-compact: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
     "A-17": "failed or blocked compaction",
     "A-18": "auto-continue stopped",
     "A-19": "auto-continue cap breached",

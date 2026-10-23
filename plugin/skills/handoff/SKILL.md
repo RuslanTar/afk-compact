@@ -6,9 +6,9 @@ argument-hint: "[ticket-or-topic] [note for the next session]"
 
 # Handoff
 
-Write one new handoff file that a cold session resumes with `/compactinue:resume <path>`. Format and lint rules: `${CLAUDE_PLUGIN_ROOT}/skills/handoff/references/handoff-template.md` (the template; read in Step 2).
+Write one new handoff file that a cold session resumes with `/afk-compact:resume <path>`. Format and lint rules: `${CLAUDE_PLUGIN_ROOT}/skills/handoff/references/handoff-template.md` (the template; read in Step 2).
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/compactinue-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
 
 **Code measures, you judge.** The helper produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
 
@@ -110,7 +110,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 ## Step 8 — Report (≤8 lines, this order)
 
 1. The receipt, verbatim, and the export line under it when printed.
-2. `Resume with: /compactinue:resume <path>`
+2. `Resume with: /afk-compact:resume <path>`
 3. Status word and Step 1.
 4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` (Background shells survive `/clear`: `lost on session end`.) Otherwise `nothing running (checked <stamp>)` or `nothing running known (not checked)`.
 5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder).

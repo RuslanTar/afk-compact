@@ -1,4 +1,4 @@
-Note from the user's compactinue plugin: context is at 612,345 tokens.
+Note from the user's afk-compact plugin: context is at 612,345 tokens.
 After this turn the plugin asks you, in a turn of its own, to write a handoff: do not write one now.
 Take a clean checkpoint in at most 6 tool calls; a parallel batch counts as one.
 1. Finish, don't start (≤3 calls): finish the atomic step in progress unless it needs a choice from the user or acts outward; start nothing new. Never abort, reset or skip a merge, rebase or edit set to look clean: call it MID-STEP <step>, remaining <what>.

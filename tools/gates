@@ -24,9 +24,10 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                in files and in every commit message reachable from HEAD
   stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status`, `X-store`, `X:handoff skill`
                and manifest names have X equal to the brand; no other A-1 candidate
-               (`compactseam`, `wheelover`, `hold-thread`) and no `compact-handoff`, matched
-               case-insensitively anywhere in a word (`compact-handoff-research`, `compactseams`
-               and `wheelover2` count). Markers written as `\\uXXXX` escapes (the generated
+               (`compactseam`, `wheelover`, `hold-thread`), no `compact-handoff` and not the
+               name before the rename (`compactinue`, NM-2), matched case-insensitively anywhere
+               in a word (`compact-handoff-research`, `compactseams`, `wheelover2` and
+               `compactinue-store` count). Markers written as `\\uXXXX` escapes (the generated
                fixture modules, which hold foreign test markers on purpose) are not read;
                the BT-02 drill regenerates those modules under the new name instead
   npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
@@ -135,7 +136,7 @@ B = r"(?<![A-Za-z0-9_-])"
 E = r"(?![A-Za-z0-9_-])"
 ATTRIBUTION = re.compile(r"Co-Authored-By|Generated with|noreply@anthropic\.com|claude\.ai/code", re.I)
 MARKERS = re.compile(r"<!--|\{\{")
-OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff"]
+OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff", "compactinue"]
 NAME_SHAPES = [
     re.compile(r"⟪/?([^\s⟫/]+) (?:v1|n=)"),
     re.compile(B + r"/([A-Za-z0-9_{}@<>-]+):(?:handoff|resume|status)\b"),

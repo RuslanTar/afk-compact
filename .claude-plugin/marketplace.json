@@ -1,10 +1,10 @@
 {
-  "name": "compactinue",
+  "name": "afk-compact",
   "owner": { "name": "Ruslan Taranenko" },
   "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
   "plugins": [
     {
-      "name": "compactinue",
+      "name": "afk-compact",
       "source": "./plugin",
       "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
       "version": "0.1.0"

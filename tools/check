@@ -274,7 +274,8 @@ def probes(name):
     def other_names(d):
         write_text(os.path.join(d, "plugin", "README.md"),
                    "\nP5 cache at ~/.cache/compact-handoff-research and the compact-handoffs folder\n"
-                   "P6 the compactseams and wheelover2 variants, and HOLD-THREADS\n", "a")
+                   "P6 the compactseams and wheelover2 variants, and HOLD-THREADS\n"
+                   "P7 options left under the old Compactinue2 key\n", "a")
 
     def npm(d):
         write_text(os.path.join(d, "plugin", "package.json"), '{"dependencies":{"left-pad":"1.3.0"}}\n')
@@ -724,7 +725,7 @@ def probes(name):
           r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
           r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"], None),
         ("other-names", "RN-3", gates_only("stale-name"), other_names,
-         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread")], None),
+         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread", "compactinue")], None),
         ("npm", "RN-6", gates_only("npm"), npm,
          [r"^GATE npm plugin/package\.json: BT-06", r"^GATE npm plugin/node_modules/: BT-06",
           r"^GATE npm plugin/helper/package-lock\.json: BT-06"], None),

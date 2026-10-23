@@ -1,4 +1,4 @@
-Note from the user's compactinue plugin: context is at 612,345 tokens.
+Note from the user's afk-compact plugin: context is at 612,345 tokens.
 This time the plugin will not resume the work by itself (the hourly auto-continue limit is reached). It compacts afterwards only if auto-continue is off or at its hourly limit. Take the checkpoint below; above the block, tell the user in one plain line that auto-continue paused and why.
 Take a clean checkpoint in at most 6 tool calls; a parallel batch counts as one.
 1. Finish, don't start (≤3 calls): finish the atomic step in progress unless it needs a choice from the user or acts outward; start nothing new. Never abort, reset or skip a merge, rebase or edit set to look clean: call it MID-STEP <step>, remaining <what>.

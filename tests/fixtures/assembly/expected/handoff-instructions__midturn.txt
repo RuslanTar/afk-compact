@@ -1,10 +1,10 @@
-The user's compactinue plugin asks for this form, not any section list above; a user's /compact note wins.
+The user's afk-compact plugin asks for this form, not any section list above; a user's /compact note wins.
 The next window starts cold, with the repo, instruction files, memory, local agent and shell status, not this chat, workflows, teammates, monitors, schedules, task list, temp files, earlier summaries. Keep a line only if one command or file read cannot recover it, else a pointer (path#Symbol, command, id): each pasted log line pushes out a decision.
 You cannot see messages kept after this summary: write as of the last you saw; last action done, not done or [unverified]; "not started" only if seen; unseen outputs, sent replies or merges: [unverified]. Times only as messages show them; no checked or verified marks.
 This began mid-turn: the last step is [unverified] unless shown done.
 
 In order; omit empty sections lacking a None: form:
-First line inside <summary>: ⟪compactinue v1 n=1a2b3c4d s=main⟫
+First line inside <summary>: ⟪afk-compact v1 n=1a2b3c4d s=main⟫
 # <ticket or topic> — <state in ≤8 words>
 ## Resume here (≤5 lines)
 Status: active|blocked|waiting-owner|waiting-job|done · Acuity: stable|watch|unstable (unstable: broken build, half-applied step, red test mid-fix, MID-STEP; watch: jobs running, pending MR/CI/answer, deadline) · State: <ticket goal's state> (checkpoint: clean | MID-STEP <step>, remaining <what>)
@@ -21,7 +21,7 @@ Live: <N running: B-1 <runtime id>, …> | nothing running known (not checked)
 ## Work done and findings: <task>: <proposed|queued|implemented|tested|committed|pushed|in review|merged|deployed|published|installed> — <proof>; "done, blocked on X" stays blocked; Finding: <conclusion> — <pointer>; logs: conclusion + reproducer; math: result + how; code only mid-edit, ≤5 lines; top 5 changes: behaviour — path#Symbol; commit range; tests: pass/fail, count, command
 ## Evidence: cited temp paths, one Volatile: line
 ## Next steps: 1. <Step 1's command or edit> — done when <observable>; gated (gate, or no approval covers it): ask user: <action> (! <cmd>); pending answer: <in full>, unless shown sent
-Last line before </summary>: ⟪/compactinue n=1a2b3c4d⟫
+Last line before </summary>: ⟪/afk-compact n=1a2b3c4d⟫
 
 Ids: one per item, never ranges, never renumbered. Copy an earlier summary's U-, D-, X- and settled lines unchanged unless superseded (convert another format's user rules, asks, decisions and rejected options); rewrite the rest, latest value only. Keep [from <sid8>] on another session's commands. Unasked work is proposed. No secrets, even quoted or in commands; say where they live.
 Aim for 6–10K characters, 12K with many live rows; cut Work done and Evidence first, never U-, D-, X-, In flight or questions. Replace, never extend, the earlier summary.

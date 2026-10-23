@@ -1,6 +1,6 @@
-# compactinue
+# afk-compact
 
-When a Claude Code session compacts, compactinue asks Claude Code's own summarizer for a handoff instead of a plain summary. It keeps a read-only copy of every summary, checks that the summary has the expected shape, and gives the next turn a short resume block. It also adds four skills: `/compactinue:handoff`, `/compactinue:resume`, `/compactinue:status` and `/compactinue:report`.
+When a Claude Code session compacts, afk-compact asks Claude Code's own summarizer for a handoff instead of a plain summary. It keeps a read-only copy of every summary, checks that the summary has the expected shape, and gives the next turn a short resume block. It also adds four skills: `/afk-compact:handoff`, `/afk-compact:resume`, `/afk-compact:status` and `/afk-compact:report`.
 
 > [!NOTE]
 > Early version (0.x). The parts that need a live session or a managed machine have not been run yet; see [Limits](#limits). This page describes the design and reports no measurements.
@@ -17,7 +17,7 @@ When a Claude Code session compacts, compactinue asks Claude Code's own summariz
 - **Handles idle compactions.** When Claude Code compacts a long session while it sits idle, the summary is shaped the same way, and the resume block is measured again when you come back. See [Idle compaction](#idle-compaction).
 - **Re-checks lost background jobs.** A background shell that is gone after the session ended is re-checked from facts the plugin recorded. A read-only job, or one you allowlisted, may start again by itself; everything else asks. See [Lost background jobs](#lost-background-jobs).
 - **Exports to a repository, only if both sides agree.** The private store stays the default. A repository can also receive a portable copy of each published handoff. See [Handoffs in git](#handoffs-in-git-repo-mode).
-- **Watches, never acts.** A shadow watcher writes content-free rows for every compaction, nudge, continue and resume, and raises alerts in `/compactinue:status`. The rows stay on your machine; `/compactinue:report` bundles them into a zip that you can send yourself. See [Watcher](#watcher).
+- **Watches, never acts.** A shadow watcher writes content-free rows for every compaction, nudge, continue and resume, and raises alerts in `/afk-compact:status`. The rows stay on your machine; `/afk-compact:report` bundles them into a zip that you can send yourself. See [Watcher](#watcher).
 
 ## How it works
 
@@ -53,39 +53,39 @@ flowchart TD
 At the prompt of a terminal session:
 
 ```
-/plugin install compactinue --marketplace <owner>/<repo>
+/plugin install afk-compact --marketplace <owner>/<repo>
 ```
 
 From a shell:
 
 ```
-claude plugin install compactinue --marketplace <owner>/<repo>
+claude plugin install afk-compact --marketplace <owner>/<repo>
 ```
 
 In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `<owner>/<repo>`, then **Add plugin**.
 
 Answer `y` to add the marketplace, pick a scope (user scope is first), then review the settings screen. Every setting has a working default (see [Settings](#settings)).
 
-To check the install, run `/compactinue:status` in a session. It prints the effective thresholds and, after the first compaction, its verdict and the copy's path.
+To check the install, run `/afk-compact:status` in a session. It prints the effective thresholds and, after the first compaction, its verdict and the copy's path.
 
 ## Update
 
 Auto-update is off for third-party marketplaces. Update by hand, then reload open sessions (or start a new one):
 
 ```
-claude plugin update compactinue
+claude plugin update afk-compact
 ```
 
 ```
 /reload-plugins
 ```
 
-After a Claude Code update, `/compactinue:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/compactinue-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on.
+After a Claude Code update, `/afk-compact:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/afk-compact-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on.
 
 ## Uninstall
 
 ```
-claude plugin uninstall compactinue
+claude plugin uninstall afk-compact
 ```
 
 Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them.
@@ -94,26 +94,26 @@ Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evid
 
 | Skill | Use it for |
 |---|---|
-| `/compactinue:handoff [ticket-or-topic] [note]` | Write a handoff file that a fresh session can resume from: before `/clear`, before a break, or when the session is getting long. The model writes intent, decisions, findings and next steps; the helper measures git state, background work and evidence, lints the draft, scans it for secrets and publishes it. |
-| `/compactinue:resume [path or ticket] [instructions]` | Resume from a handoff or a saved compaction copy. It finds the newest fitting file, checks its claims against the live state, reports drift and restarts background work only where the handoff allows it, then continues with the next step. Right after a compaction, when you have not invoked it yourself, the model follows a light path instead: at most three tool calls before real work. |
-| `/compactinue:status` | Show the watcher state, effective thresholds, the last five compactions (trigger, verdict, copy path, how they were shaped), open escalations and alerts, auto-continue and halt state, the handoff mode of the current repository, the state of automatic relaunch and of the question queue, and the allow rule and user-run commands with the real plugin folder. It shows no summary content. |
-| `/compactinue:report [--since 7d]` | Bundle the plugin's content-free logs, version, settings and recorded probe results into a zip that you can send to the developer yourself. Nothing is uploaded. Use it only when you want to share; see [Sending a report](#sending-a-report). |
+| `/afk-compact:handoff [ticket-or-topic] [note]` | Write a handoff file that a fresh session can resume from: before `/clear`, before a break, or when the session is getting long. The model writes intent, decisions, findings and next steps; the helper measures git state, background work and evidence, lints the draft, scans it for secrets and publishes it. |
+| `/afk-compact:resume [path or ticket] [instructions]` | Resume from a handoff or a saved compaction copy. It finds the newest fitting file, checks its claims against the live state, reports drift and restarts background work only where the handoff allows it, then continues with the next step. Right after a compaction, when you have not invoked it yourself, the model follows a light path instead: at most three tool calls before real work. |
+| `/afk-compact:status` | Show the watcher state, effective thresholds, the last five compactions (trigger, verdict, copy path, how they were shaped), open escalations and alerts, auto-continue and halt state, the handoff mode of the current repository, the state of automatic relaunch and of the question queue, and the allow rule and user-run commands with the real plugin folder. It shows no summary content. |
+| `/afk-compact:report [--since 7d]` | Bundle the plugin's content-free logs, version, settings and recorded probe results into a zip that you can send to the developer yourself. Nothing is uploaded. Use it only when you want to share; see [Sending a report](#sending-a-report). |
 
-The handoff and the compaction instructions share one format, so `/compactinue:resume` reads both.
+The handoff and the compaction instructions share one format, so `/afk-compact:resume` reads both.
 
-**The helper.** The skills and the plugin call one helper, `scripts/compactinue-store` in the plugin folder, always by its full path; nothing is added to your `PATH`. Where this page shows a command for you to run, it is written `! "<plugin folder>/scripts/compactinue-store" …`, and `/compactinue:status` prints it with the real folder.
+**The helper.** The skills and the plugin call one helper, `scripts/afk-compact-store` in the plugin folder, always by its full path; nothing is added to your `PATH`. Where this page shows a command for you to run, it is written `! "<plugin folder>/scripts/afk-compact-store" …`, and `/afk-compact:status` prints it with the real folder.
 
 **After `/clear`.** After `/clear` the plugin delivers no resume block, submits no prompt and runs no skill on its own; work resumes only when you ask for it. A continue or handoff turn that was about to start when you cleared is dropped.
 
 ## Settings
 
-Set on the install screen, or later in `/config` (rows named `compactinue.<key>`). An empty value means the default.
+Set on the install screen, or later in `/config` (rows named `afk-compact.<key>`). An empty value means the default.
 
-Four keys let the plugin act without asking: `repo_roots`, `relaunch_auto`, `relaunch_allow` and `unattended_prod_reads`. A fifth, `queue_cmd`, names a program the plugin runs, so it is treated the same way. The plugin reads these five **from your settings file only**: `~/.claude/settings.json`, under the plugin's `options` in `pluginConfigs`. Flags and plugin option values are ignored for these keys, and `/compactinue:status` prints a note when it ignores one. The plugin itself never writes them. These keys are read only from `~/.claude/settings.json`. If `CLAUDE_CONFIG_DIR` names another folder, the plugin uses their safe values (no repository accepted, automatic relaunch off, no allow patterns, production reads asked, no queue) and `/compactinue:status` prints a note, so a command that sets `CLAUDE_CONFIG_DIR` cannot pick another settings file for these keys.
+Four keys let the plugin act without asking: `repo_roots`, `relaunch_auto`, `relaunch_allow` and `unattended_prod_reads`. A fifth, `queue_cmd`, names a program the plugin runs, so it is treated the same way. The plugin reads these five **from your settings file only**: `~/.claude/settings.json`, under the plugin's `options` in `pluginConfigs`. Flags and plugin option values are ignored for these keys, and `/afk-compact:status` prints a note when it ignores one. The plugin itself never writes them. These keys are read only from `~/.claude/settings.json`. If `CLAUDE_CONFIG_DIR` names another folder, the plugin uses their safe values (no repository accepted, automatic relaunch off, no allow patterns, production reads asked, no queue) and `/afk-compact:status` prints a note, so a command that sets `CLAUDE_CONFIG_DIR` cannot pick another settings file for these keys.
 
 `prod_patterns` can only make the plugin ask more. Flags and plugin option values are ignored for it too, but it is read from the settings file of the folder `CLAUDE_CONFIG_DIR` names, when one is set.
 
-Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. A `--settings` file works for every other key, but not for these six: the plugin reads them from the settings file alone. So an opt-out such as `relaunch_auto: "off"` belongs in the user settings file; in a `--settings` file it has no effect, the default stays, and `/compactinue:status` prints the note. Claude Code does not read `pluginConfigs` from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
+Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. A `--settings` file works for every other key, but not for these six: the plugin reads them from the settings file alone. So an opt-out such as `relaunch_auto: "off"` belongs in the user settings file; in a `--settings` file it has no effect, the default stays, and `/afk-compact:status` prints the note. Claude Code does not read `pluginConfigs` from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -138,7 +138,7 @@ Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.j
 | `measured_block` | `false` | Also send the measured facts block to the summarizer (mod path only). The resume block always carries a fresh measurement. |
 | `auto_evidence` | `true` | Copy the temp files a session cited into `disposable_root` after a compaction. |
 | `warn_ui` | `true` | Toasts and status-line warnings for escalations. |
-| `watcher` | `shadow` | `shadow` keeps local, content-free logs of every compaction; `off` writes no watcher rows. Nothing is sent; share them with `/compactinue:report`. Case and spaces are ignored. Any other value counts as `shadow`, with one note per session in the log and a line in `/compactinue:status`. |
+| `watcher` | `shadow` | `shadow` keeps local, content-free logs of every compaction; `off` writes no watcher rows. Nothing is sent; share them with `/afk-compact:report`. Case and spaces are ignored. Any other value counts as `shadow`, with one note per session in the log and a line in `/afk-compact:status`. |
 | `stall_min` | `60` | Minutes without progress before the watcher calls work stalled. |
 | `cache_ttl_s` | `300` | Warm/cold prompt-cache estimate used by the watcher. |
 | `otel_log_path` | empty = unused | Read only if you already write OpenTelemetry output to this file. |
@@ -158,9 +158,9 @@ The plugin keeps its own thresholds below the point where native auto-compaction
 - soft maximum = the smallest of `compact_soft_max_tokens`, that native point minus a reserve, and 80% of the window. The reserve is 52,000 plus `handoff_turn_max_tokens` (116,000 with the defaults) while `handoff_turn` is `halt`, and 100,000 when it is `off`;
 - target = the smaller of `compact_target_tokens` and two thirds of the soft maximum;
 - if the target ends up below 120,000 tokens (windows under about 329K with the defaults, 313K with `handoff_turn` off), plugin compactions and the nudge are off for that session. Native auto-compaction, shaping, copies and verdicts still run.
-- Claude Code treats windows below 100,000 as 100,000. `/compactinue:status` ends its `thresholds:` line with `min_window <N>`, the smallest window that turns plugin compactions on with your settings (`min_window 329000` with the defaults), or `min_window never` when `compact_target_tokens` or `compact_soft_max_tokens` is set too low for any window. On a window below it, the next line reads `plugin compactions off: window <W> is below <N>, the smallest for these settings`.
+- Claude Code treats windows below 100,000 as 100,000. `/afk-compact:status` ends its `thresholds:` line with `min_window <N>`, the smallest window that turns plugin compactions on with your settings (`min_window 329000` with the defaults), or `min_window never` when `compact_target_tokens` or `compact_soft_max_tokens` is set too low for any window. On a window below it, the next line reads `plugin compactions off: window <W> is below <N>, the smallest for these settings`.
 
-Every clamped value is logged, and `/compactinue:status` marks it with `(clamped from <configured>)`. It never shows a negative threshold: a window too small for plugin compactions is shown as off.
+Every clamped value is logged, and `/afk-compact:status` marks it with `(clamped from <configured>)`. It never shows a negative threshold: a window too small for plugin compactions is shown as off.
 
 </details>
 
@@ -180,8 +180,8 @@ A **last cycle** is a nudged cycle that will not be followed by an automatic con
 The nudge of a last cycle tells the model that the plugin will not resume the work by itself. It does not ask for a handoff in the middle of the task. With `handoff_turn` set to `halt` (the default), the plugin acts when the nudged turn has ended normally:
 
 1. It checks that the turn did not end on a question to you, that no native compaction ran meanwhile, and that the handoff turn would get at least 20,000 tokens. The plugin keeps a 15,000-token margin below the native trigger, so this needs at least 35,000 tokens of room there. If not, it skips the handoff turn. After a cap or auto-continue-off halt it then compacts as usual; after a halt for failed verdicts or a loop it runs no compaction.
-2. After `boundary_delay_ms` it submits one turn of its own to the same session. That turn has the full context, runs on your model and effort, and starts from a warm prompt cache. It asks the model to run `/compactinue:handoff` and to put one plain line above the report that says auto-continue paused and why. You see this turn in the chat like any other.
-3. If the handoff is published after a cap or auto-continue-off halt, the plugin runs one compaction and submits no continue. A toast says `compactinue: auto-continue paused (<reason>); handoff saved: <path>`. After a halt for failed verdicts or a loop, it runs no compaction: native auto-compaction stays the backstop, and the toast says why.
+2. After `boundary_delay_ms` it submits one turn of its own to the same session. That turn has the full context, runs on your model and effort, and starts from a warm prompt cache. It asks the model to run `/afk-compact:handoff` and to put one plain line above the report that says auto-continue paused and why. You see this turn in the chat like any other.
+3. If the handoff is published after a cap or auto-continue-off halt, the plugin runs one compaction and submits no continue. A toast says `afk-compact: auto-continue paused (<reason>); handoff saved: <path>`. After a halt for failed verdicts or a loop, it runs no compaction: native auto-compaction stays the backstop, and the toast says why.
 
 **The limits are advice.** The plugin counts tool calls and tokens in the handoff turn. It adds a note to a tool result when the budget is nearly spent, when it is spent, and when native compaction is close. Each note tells the model what to do next, for example to publish the draft now or to end the turn with the report. The plugin denies no call and stops nothing.
 
@@ -234,7 +234,7 @@ It is skipped when:
 
 Claude Code refuses a foreground command that starts with a long sleep (25 seconds or more), in the main session and in subagents. The plugin adds no such block and does not remove it. Its rules avoid the need for it.
 
-- **Main session.** Start long work with `run_in_background`. Its notification wakes the session, so the model can keep working or end the turn. To watch something the session did not start, run `"<plugin folder>/scripts/compactinue-store" wait` with `run_in_background` (see below; `<store>` below stands for `"<plugin folder>/scripts/compactinue-store"`, the full path, since the helper is not on your `PATH`). No foreground sleeps, no polling loops.
+- **Main session.** Start long work with `run_in_background`. Its notification wakes the session, so the model can keep working or end the turn. To watch something the session did not start, run `"<plugin folder>/scripts/afk-compact-store" wait` with `run_in_background` (see below; `<store>` below stands for `"<plugin folder>/scripts/afk-compact-store"`, the full path, since the helper is not on your `PATH`). No foreground sleeps, no polling loops.
 - **Subagents, workflow agents, teammates, and a main session with background tasks turned off.** Ending a turn is not a wait: a subagent that ended its turn while its own job ran was not woken by the job's notification on the version this was checked on. The model waits in the foreground with `<store> wait --for <spec> --max 270` (Bash timeout 300000), runs it again on exit code 10, then reads the output itself. The 270-second step keeps the five-minute cache of subagents warm.
 - **Monitor** is for a stream of events, not for one completion.
 
@@ -256,8 +256,8 @@ It prints one line and exits with 0 (done), 10 (still pending, run it again), 11
 Limits and tips:
 
 - The command only reads. Auto mode: nothing to add; `wait` ran without a prompt (Claude Code 2.1.306).
-- Default mode: each helper call prompts until you add the rule below. The plugin's own notes outside a skill call the helper by its full path, for example a subagent's wait after a compaction. To stop the prompt for that read-only wait, add the rule that `/compactinue:status` prints, with the real folder, as `allow rule (default mode): Bash("<plugin folder>/scripts/compactinue-store" wait *)`. The plugin folder name contains the version, so after an update the old rule stops matching. When your user or project settings still name an older folder, `/compactinue:status` says so in a line `allow rule for an older plugin folder: <old folder>; current: <plugin folder>` and prints the new rule. It only reads your settings files; it never edits them.
-- Commands you type yourself are listed in `/compactinue:status` under `user-run commands (type them yourself, with the leading !):`, one `! "<plugin folder>/scripts/compactinue-store" <command>` line each, with the real folder: `smoke`, `project init`, `project copy`, `watch prune`, `reconcile --sid <session> --orphans --full` and `report`.
+- Default mode: each helper call prompts until you add the rule below. The plugin's own notes outside a skill call the helper by its full path, for example a subagent's wait after a compaction. To stop the prompt for that read-only wait, add the rule that `/afk-compact:status` prints, with the real folder, as `allow rule (default mode): Bash("<plugin folder>/scripts/afk-compact-store" wait *)`. The plugin folder name contains the version, so after an update the old rule stops matching. When your user or project settings still name an older folder, `/afk-compact:status` says so in a line `allow rule for an older plugin folder: <old folder>; current: <plugin folder>` and prints the new rule. It only reads your settings files; it never edits them.
+- Commands you type yourself are listed in `/afk-compact:status` under `user-run commands (type them yourself, with the leading !):`, one `! "<plugin folder>/scripts/afk-compact-store" <command>` line each, with the real folder: `smoke`, `project init`, `project copy`, `watch prune`, `reconcile --sid <session> --orphans --full` and `report`.
 - Monitor is not available on Amazon Bedrock, Google Cloud Agent Platform or Microsoft Foundry, nor when `DISABLE_TELEMETRY` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set. Each Monitor watch ends after 5 minutes by default and 30 at most.
 - With `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` there is no `run_in_background` and no notification. Every wait then follows the subagent rule above.
 - In sessions run without a person (`-p`, the SDK, the cloud), background commands get 30 minutes by default and 2 hours at most. `wait` prints its pending line only after `--max` has passed, so keep `--max` a little under the limit, for example `--max 1740`. With exactly 1800 the limit can end the wait before it prints exit code 10.
@@ -265,7 +265,7 @@ Limits and tips:
 
 ## Lost background jobs
 
-Background shells survive a compaction and `/clear` (Claude Code 2.1.306). At exit they stop, unless you pick "Move to background and exit". So after `/clear` resume first checks a listed job with `<store> wait` and treats it as possibly still running; after an exit or a restart the job may be gone. `/compactinue:resume` does not trust the handoff's text for this. It uses a record the plugin wrote when the job started: the exact command, the folder, the time and the output file. The mod writes it from the tool call itself, so the model cannot edit it. A command with a hard secret hit (a provider key, a token in an auth header, a password in a URL and similar) is stored as a hash and rule ids only, and such a job is never started again by itself. A weaker hit (a `password=` or `token=` pair, a cookie, a long random-looking string) does not withhold the command: it is stored as typed, and a published handoff's restart recipe can carry it. Keep credentials out of background commands; read them from a file or the environment instead.
+Background shells survive a compaction and `/clear` (Claude Code 2.1.306). At exit they stop, unless you pick "Move to background and exit". So after `/clear` resume first checks a listed job with `<store> wait` and treats it as possibly still running; after an exit or a restart the job may be gone. `/afk-compact:resume` does not trust the handoff's text for this. It uses a record the plugin wrote when the job started: the exact command, the folder, the time and the output file. The mod writes it from the tool call itself, so the model cannot edit it. A command with a hard secret hit (a provider key, a token in an auth header, a password in a URL and similar) is stored as a hash and rule ids only, and such a job is never started again by itself. A weaker hit (a `password=` or `token=` pair, a cookie, a long random-looking string) does not withhold the command: it is stored as typed, and a published handoff's restart recipe can carry it. Keep credentials out of background commands; read them from a file or the environment instead.
 
 Resume re-checks seven facts:
 
@@ -290,7 +290,7 @@ The same production rule holds for the checks resume runs itself: with `unattend
 
 **Commands written in a handoff.** Other commands a handoff holds (Step 1, a re-check, a probe) depend on who wrote it. From your own handoff (one this plugin wrote in your private store, in this session or in one it continued after `/clear` or a resume), resume first checks the facts the command rests on, rebuilds it only if they changed, and then runs it under your permission mode. From another session's or a teammate's handoff, it runs a command without asking only when the command carries no real risk: local and read-only inside the repository, byte for byte a command the plugin recorded, or the repository's own test, lint or build target. Anything else asks first, with the command and where it came from: outside effects, network calls, writes or reads outside the repository, credentials, production, an explicit gate, or a command it cannot judge. A command that came from someone else's handoff keeps that mark in every later handoff and summary, so it never turns into your own. A restart recipe written only in a handoff, with no record of the job, still asks.
 
-**Status.** The plugin takes each job's output file from the Bash tool's result text and uses it only when it matches Claude Code's task-file layout; a job without a confirmed output file asks. `/compactinue:status` prints, with the defaults and two allowlist patterns:
+**Status.** The plugin takes each job's output file from the Bash tool's result text and uses it only when it matches Claude Code's task-file layout; a job without a confirmed output file asks. `/afk-compact:status` prints, with the defaults and two allowlist patterns:
 
 ```
 automatic relaunch: active (read-only jobs and allowlisted jobs) · relaunch_auto on
@@ -315,7 +315,7 @@ Repo mode needs two things, and neither works alone:
    `root` is a relative folder of up to four plain names. It cannot leave the repository or sit in `.git` or `.planning`.
 2. **You accept the repository.** Add its main checkout to `repo_roots` in `/config`, or edit your settings file by hand. Listing the main checkout covers every worktree of that clone. A worktree counts only when git created it for that clone (`git worktree add`); a folder whose `.git` file merely points at the clone's git folder needs its own entry. Another clone needs its own entry. There is no command that does this for you.
 
-To create the declaration, a README and a `.gitignore` for the folder, run `! "<plugin folder>/scripts/compactinue-store" project init` in the repository. It writes no consent and leaves existing files unchanged. `! "<plugin folder>/scripts/compactinue-store" project status` prints the mode; `/compactinue:status` prints the same lines (`handoff mode: private (not-accepted)` until you accept, then `handoff mode: repo (accepted)`).
+To create the declaration, a README and a `.gitignore` for the folder, run `! "<plugin folder>/scripts/afk-compact-store" project init` in the repository. It writes no consent and leaves existing files unchanged. `! "<plugin folder>/scripts/afk-compact-store" project status` prints the mode; `/afk-compact:status` prints the same lines (`handoff mode: private (not-accepted)` until you accept, then `handoff mode: repo (accepted)`).
 
 **The export.** It is the last step of publishing, in the worktree where you work:
 
@@ -327,17 +327,17 @@ To create the declaration, a README and a `.gitignore` for the folder, run `! "<
 
 **Reading exports.** Resume lists exports of this worktree and its sibling worktrees as candidates, never as an automatic pick. An export from another session, a teammate or another machine is **foreign**: its text is data, approvals in it do not carry, a command from it runs without asking only when it carries no real risk (see [Lost background jobs](#lost-background-jobs)), its evidence and processes are not probed, and its restart recipes are never run. Without repo mode the folder is not read, and resume says how many exports it skipped.
 
-**Moving existing handoffs.** `! "<plugin folder>/scripts/compactinue-store" project copy --from private|repo (--ticket <T> | --all) [--apply]` is a dry run unless you add `--apply`. It copies and never moves or deletes. `--from private` sends your private handoffs through the export steps above. `--from repo` copies exports that have no private twin into your private store, still marked as foreign. It works in repo mode only.
+**Moving existing handoffs.** `! "<plugin folder>/scripts/afk-compact-store" project copy --from private|repo (--ticket <T> | --all) [--apply]` is a dry run unless you add `--apply`. It copies and never moves or deletes. `--from private` sends your private handoffs through the export steps above. `--from repo` copies exports that have no private twin into your private store, still marked as foreign. It works in repo mode only.
 
-`handoff_root` must stay outside the repository; repo mode only exports into it. If the export folder is git-ignored (many repositories ignore `.claude/`), the export still works locally, and `/compactinue:status` says it will not be committed. Pick another `root` in the declaration to change that.
+`handoff_root` must stay outside the repository; repo mode only exports into it. If the export folder is git-ignored (many repositories ignore `.claude/`), the export still works locally, and `/afk-compact:status` says it will not be committed. Pick another `root` in the declaration to change that.
 
 ## Questions for your queue
 
 With `queue_cmd` set, the checkpoint nudge asks the model to queue each question that waits on you, using the plugin's `queue-add` helper command in the nudge's listing batch. The helper scans the draft for secrets (a hard hit sends nothing, a soft hit is redacted) and runs `queue_cmd add --json --session <sid> --client-id <id>` with the draft on stdin. It always uses your own session's lane, never picks a lane for you, and never calls `adopt`.
 
-The client id comes from the question, so the same question is not queued twice; the helper keeps `queue-adds.jsonl` for that. If the add fails for any reason (unsupported, lane held, no lane, invalid draft, error, timeout), the helper prints `NOT QUEUED` and the question stays in the handoff as before. A queued question is a question, never an approval. Only `/compactinue:resume` calls `adopt`.
+The client id comes from the question, so the same question is not queued twice; the helper keeps `queue-adds.jsonl` for that. If the add fails for any reason (unsupported, lane held, no lane, invalid draft, error, timeout), the helper prints `NOT QUEUED` and the question stays in the handoff as before. A queued question is a question, never an approval. Only `/afk-compact:resume` calls `adopt`.
 
-**Off, on and degraded.** With `queue_cmd` empty the queue is off: the plugin makes no queue call, and `/compactinue:status` says `queue: off`. With it set, the queue is on (`queue: on`) only while your tool keeps the contract below. If the path is not an executable file, or a `list` reply is not one JSON object with `"schema": "queue-stub/v1"`, the queue counts as degraded: the plugin uses nothing from the reply, the handoff gets no `Queued:` line, and `/compactinue:status` names the reason (for example `queue: degraded (untagged)`). `queue_cmd` is read from your settings file only (see [Settings](#settings)).
+**Off, on and degraded.** With `queue_cmd` empty the queue is off: the plugin makes no queue call, and `/afk-compact:status` says `queue: off`. With it set, the queue is on (`queue: on`) only while your tool keeps the contract below. If the path is not an executable file, or a `list` reply is not one JSON object with `"schema": "queue-stub/v1"`, the queue counts as degraded: the plugin uses nothing from the reply, the handoff gets no `Queued:` line, and `/afk-compact:status` names the reason (for example `queue: degraded (untagged)`). `queue_cmd` is read from your settings file only (see [Settings](#settings)).
 
 **The contract your tool keeps.**
 
@@ -361,17 +361,17 @@ The helper waits 5 seconds at most (`NOT QUEUED (timeout)`); every non-zero exit
 | Where (defaults) | What | Written by |
 |---|---|---|
 | `~/.claude/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
-| `~/.claude/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/` and refused drafts under `.staging/` | `/compactinue:handoff` |
-| `<repository>/.claude/handoffs/<topic>/` (repo mode only; the folder is the `root` of the declaration) | A portable export of each published handoff, left untracked. Also, from `project init`, `.claude/handoffs.json` and the folder's `README.md` and `.gitignore` | `/compactinue:handoff`; `project init` |
+| `~/.claude/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/` and refused drafts under `.staging/` | `/afk-compact:handoff` |
+| `<repository>/.claude/handoffs/<topic>/` (repo mode only; the folder is the `root` of the declaration) | A portable export of each published handoff, left untracked. Also, from `project init`, `.claude/handoffs.json` and the folder's `README.md` and `.gitignore` | `/afk-compact:handoff`; `project init` |
 | `~/.claude/handoffs/.sessions/` | Session pins, `/clear` lineage, and one small record per session start and end | hooks and skills |
 | `~/.claude/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |
-| `~/.claude/trash-staging/<YYYY-MM-DD>/` | Automatic evidence copies, one folder per compaction, each with a `MANIFEST.tsv`; disposable items of a handoff | evidence sweep after a compaction; `/compactinue:handoff` |
-| `~/Downloads/` (else `<log_dir>/reports/`) | `compactinue-report-<date>_<time>-<install>.zip`, only when you ask for a report | `/compactinue:report` |
+| `~/.claude/trash-staging/<YYYY-MM-DD>/` | Automatic evidence copies, one folder per compaction, each with a `MANIFEST.tsv`; disposable items of a handoff | evidence sweep after a compaction; `/afk-compact:handoff` |
+| `~/Downloads/` (else `<log_dir>/reports/`) | `afk-compact-report-<date>_<time>-<install>.zip`, only when you ask for a report | `/afk-compact:report` |
 | Claude Code's plugin store | Last seen Claude Code version and auto-continue timestamps | mod |
 
 **Subagent copies may be renamed.** When the agent of a subagent copy is not known at save time, the copy is saved as `sub-unknown`. Once a later turn-end check finds the agent in its transcript, the copy gets a new name with `-a<agent id>` (its first 8 characters) in the same folder: the text stays byte for byte the same, the frontmatter gains the agent id and the old name (`renamed_from`), and the old name is removed only after the new file has been checked. A path you noted before the rename still resolves, because both names end in the same id.
 
-**Kept mismatches.** The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/compactinue:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be proven), or later by another session's hooks, which take that session's lock first.
+**Kept mismatches.** The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/afk-compact:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be proven), or later by another session's hooks, which take that session's lock first.
 
 It registers one mod module and eight classic command hooks: `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop`, `StopFailure` and `PermissionDenied`.
 
@@ -388,12 +388,12 @@ ls -ld ~/.claude/trash-staging/*/
 With `watcher: shadow` (the default) the plugin keeps a local record of how compactions went. Nothing is sent anywhere. The first session after the install shows one notice:
 
 ```
-compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config.
+afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config.
 ```
 
-It shows again only after an update that changes what is logged in a way you would care about. When the mod does not run (for example under a managed policy), the notice cannot show, and `/compactinue:status` carries it instead, as a line `notice: ` followed by the same text, until a session has shown it.
+It shows again only after an update that changes what is logged in a way you would care about. When the mod does not run (for example under a managed policy), the notice cannot show, and `/afk-compact:status` carries it instead, as a line `notice: ` followed by the same text, until a session has shown it.
 
-The first line of `/compactinue:status` is the watcher's own: `watcher: shadow · logs <size> in <n> sessions · share: /compactinue:report · off: watcher = off in /config`.
+The first line of `/afk-compact:status` is the watcher's own: `watcher: shadow · logs <size> in <n> sessions · share: /afk-compact:report · off: watcher = off in /config`.
 
 Under `log_dir` (default `<handoff_root>/.watch/`):
 
@@ -418,15 +418,15 @@ Under `log_dir` (default `<handoff_root>/.watch/`):
 
 Rows hold ids, counts, sizes, times, classes and rule ids. The files under `pending/` and the copies under `compact/` hold summary text, the files under `checkpoint/` hold the measured git file list and project-state lines, and `jobs.jsonl` holds the command text of background shells; treat them like the summaries themselves.
 
-Alerts are listed in `/compactinue:status` with their seven-day counts. In this version they are not shown in the chat.
+Alerts are listed in `/afk-compact:status` with their seven-day counts. In this version they are not shown in the chat.
 
-**Retention.** The folder grows with use and is never pruned automatically; no hook calls prune. Prune is built and off. Running `! "<plugin folder>/scripts/compactinue-store" watch prune --days 30` in a session removes a session's watcher files, but only when every file of that session is older than 30 days. A session here means `<session>.jsonl`, `<session>.classic.jsonl`, `<session>.alerts.jsonl` and the whole `<session>/` folder, including `jobs.jsonl`, `jobs-pending.jsonl`, `queue-adds.jsonl`, `handoff-turn/`, `pending/` (kept mismatches too), `checkpoint/`, `dispatch/`, `bg/` and `offsets/`. One newer file, or a symlink anywhere in it, keeps the whole session. Prune never touches the shared files (`queue-caps.json`, `evidence-index.tsv`, `heal/`, `version.json`, `.orphans/`, `notice/`, `export-salt`, `install-id`, `reports/` and similar), the summary copies, the handoffs or the evidence.
+**Retention.** The folder grows with use and is never pruned automatically; no hook calls prune. Prune is built and off. Running `! "<plugin folder>/scripts/afk-compact-store" watch prune --days 30` in a session removes a session's watcher files, but only when every file of that session is older than 30 days. A session here means `<session>.jsonl`, `<session>.classic.jsonl`, `<session>.alerts.jsonl` and the whole `<session>/` folder, including `jobs.jsonl`, `jobs-pending.jsonl`, `queue-adds.jsonl`, `handoff-turn/`, `pending/` (kept mismatches too), `checkpoint/`, `dispatch/`, `bg/` and `offsets/`. One newer file, or a symlink anywhere in it, keeps the whole session. Prune never touches the shared files (`queue-caps.json`, `evidence-index.tsv`, `heal/`, `version.json`, `.orphans/`, `notice/`, `export-salt`, `install-id`, `reports/` and similar), the summary copies, the handoffs or the evidence.
 
-**Turning it off.** `watcher: off` stops new watcher rows, including the permission-denial and stop-failure rows. Logs already written are kept: nothing is deleted. The records that the copies, resume and status need are still written (copy checks, the background list, restart counters, rollups and liveness), and the first line of `/compactinue:status` says so: `watcher: off · existing logs kept (nothing deleted) · core files still written: …`.
+**Turning it off.** `watcher: off` stops new watcher rows, including the permission-denial and stop-failure rows. Logs already written are kept: nothing is deleted. The records that the copies, resume and status need are still written (copy checks, the background list, restart counters, rollups and liveness), and the first line of `/afk-compact:status` says so: `watcher: off · existing logs kept (nothing deleted) · core files still written: …`.
 
 ## Sending a report
 
-`/compactinue:report` bundles the watcher's content-free rows into one zip on your disk and prints its path. You send the file yourself, for example as an attachment to a message; the plugin uploads nothing. The skill runs one helper command and reads no log itself. The same command works without the model: `! "<plugin folder>/scripts/compactinue-store" report`, which `/compactinue:status` prints with the real folder.
+`/afk-compact:report` bundles the watcher's content-free rows into one zip on your disk and prints its path. You send the file yourself, for example as an attachment to a message; the plugin uploads nothing. The skill runs one helper command and reads no log itself. The same command works without the model: `! "<plugin folder>/scripts/afk-compact-store" report`, which `/afk-compact:status` prints with the real folder.
 
 - **Inside:** `README.txt` (what is in the zip and how to look inside), `manifest.json` (plugin and Claude Code versions, operating system, helper runtime, the time window, file hashes, and what was withheld or dropped), `config.json` (your effective settings: numbers and on/off values as they are, paths only as `default`, `custom` or `unset`, pattern lists only as a count), `probes.json` (capability facts the plugin already recorded; the report runs no probe), `sizes.json` (folder sizes and file counts, no names) and `rows/`, one file per session. Timestamps are included as they are.
 - **Never inside:** conversation text, summaries, handoffs, commands, file paths, repository and branch names, settings paths.
@@ -441,9 +441,9 @@ Making a report deletes nothing and leaves the existing logs as they are.
 - **Local only.** No network calls and no telemetry. The watcher reads OpenTelemetry output only from a file you already write and name in `otel_log_path`. A report is a zip on your disk; whether you send it is up to you (see [Sending a report](#sending-a-report)).
 - **Content-free logs.** Log rows never store summary or handoff text, your or the model's messages, commands, file contents, permission-denial reasons, environment values or secrets. An unknown value is logged as the class `other`. The one file with command text is the job record (`jobs.jsonl`), which the plugin needs to start a lost job again byte for byte. A command with a hard secret hit is stored as a hash and rule ids only; a command with only a weaker hit (such as `password=…`) is stored as typed and can appear in a published restart recipe. See [Lost background jobs](#lost-background-jobs).
 - **In-process reading.** Summaries, transcript rows and commands are read in memory to compute classes and counts, then dropped.
-- **Secrets.** Summary copies with a hard secret hit are saved redacted. Evidence files that look like credentials (`.env`, keys, `.netrc` and similar) are withheld; logs and JSON with a hit are copied redacted; other files with a hard hit are withheld. Only rule ids are logged, never values. `/compactinue:handoff` scans its draft before publishing.
+- **Secrets.** Summary copies with a hard secret hit are saved redacted. Evidence files that look like credentials (`.env`, keys, `.netrc` and similar) are withheld; logs and JSON with a hit are copied redacted; other files with a hard hit are withheld. Only rule ids are logged, never values. `/afk-compact:handoff` scans its draft before publishing.
 - **Private files.** `umask 077`; the private store is never inside a git work tree (unless the path is git-ignored) or a `.planning/` folder. In repo mode the only write into a repository is the scanned export, and the plugin never stages, commits or pushes it.
-- **No background actions.** Alerts never trigger an action. The plugin never stops background work. It never restarts or wakes it either: only `/compactinue:resume` can start a lost read-only or allowlisted job again, after the checks above, and everything else asks you first.
+- **No background actions.** Alerts never trigger an action. The plugin never stops background work. It never restarts or wakes it either: only `/afk-compact:resume` can start a lost read-only or allowlisted job again, after the checks above, and everything else asks you first.
 
 ## Team, Enterprise and managed machines
 
@@ -458,18 +458,18 @@ Some managed setups hold plugin hooks on compaction and prompt context for user-
 | Evidence before a compaction | before each main manual, auto or plugin compaction | only before the plugin's own; other compactions get the sweep right after |
 | Measured facts to the summarizer | when `measured_block` is on | only on the plugin's own compactions |
 
-`/compactinue:status` shows how each compaction was shaped and the policy flags it read at session start.
+`/afk-compact:status` shows how each compaction was shaped and the policy flags it read at session start.
 
-If a policy stops the mod from loading at all, the classic hooks still shape, save and resume, but plugin compactions, the nudge and auto-continue stop. If a policy allows only managed hooks, the classic hooks do not run. When the mod hook is held as well, a turn-end compaction without auto-continue has no channel left for its resume block, and `/compactinue:status` reports it as undelivered.
+If a policy stops the mod from loading at all, the classic hooks still shape, save and resume, but plugin compactions, the nudge and auto-continue stop. If a policy allows only managed hooks, the classic hooks do not run. When the mod hook is held as well, a turn-end compaction without auto-continue has no channel left for its resume block, and `/afk-compact:status` reports it as undelivered.
 
-Under a Team organization that seats Claude Code's security plugin first, Claude Code may show the model a note that this plugin's compaction hook was skipped, sometimes after a subagent compacted. That note comes from Claude Code. The plugin's classic hooks shaped and saved that compaction, and `/compactinue:status` shows it as `classic-only`.
+Under a Team organization that seats Claude Code's security plugin first, Claude Code may show the model a note that this plugin's compaction hook was skipped, sometimes after a subagent compacted. That note comes from Claude Code. The plugin's classic hooks shaped and saved that compaction, and `/afk-compact:status` shows it as `classic-only`.
 
 The seated path has been run live under a Team organization (Claude Code 2.1.306 and 2.1.307, Haiku, one background subagent), but not yet on a machine with managed settings.
 
 ## Limits
 
 - **claude.ai and Cowork** are not tested yet, so for now the plugin is for Claude Code sessions on your own machine.
-- **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/compactinue:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
+- **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/afk-compact:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
 - **Subagents** get shaped summaries and copies, but no resume block. They also get no nudge and no handoff turn.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
 - **Automatic relaunch covers read-only and allowlisted jobs only.** A production job asks unless `unattended_prod_reads` allows a read-only one, and a job whose output file could not be confirmed asks.

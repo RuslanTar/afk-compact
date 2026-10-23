@@ -5,7 +5,7 @@ description: 'Show handoff plugin status: "handoff status", "did compaction save
 
 # Status
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/compactinue-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
 
 Run `<store> status --sid "${CLAUDE_SESSION_ID}"` and relay its lines as printed, in its order:
 - `watcher:` first (its state, log size, how to share or turn it off), then `notice: <text>` while the first-run notice is unshown;
