@@ -45,8 +45,9 @@ launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP
 (owners-check), a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
 repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), an X-H runner
-that dies after a KNOWN_RED case (CR-F42) and the pre-rename name outside its one FORMER_NAMES
-line (rename order xxxxxxxx-32).
+that dies after a KNOWN_RED case (CR-F42), a `.planning/` note in the index or in a commit
+(work home xxxxxxxx-36: the planning gate fails the build) and the pre-rename name outside its
+one FORMER_NAMES line (rename order xxxxxxxx-32). The copies never hold `.planning/`.
 
 BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
@@ -88,7 +89,7 @@ DRILL_NAME = "x" * 14
 DRILL_DIR = os.path.join(REPO, "tmp", "rename")
 SELFTEST_DIR = os.path.join(REPO, "tmp", "selftest")
 RENAME_STEPS = [["tools", "build"], ["tools", "assemble", "--goldens"], ["tools", "fixtures-gen"]]   # §4.6
-COPY_SKIP_TOP = {".git", "node_modules", "tmp"}
+COPY_SKIP_TOP = {".git", "node_modules", "tmp", ".planning"}   # .planning: private notes (xxxxxxxx-36)
 COPY_SKIP = {"__pycache__", ".DS_Store", os.path.join("plugin", ".claude-plugin", "types")}
 
 
@@ -287,6 +288,16 @@ def probes(name):
             raise Fail("X-tools: other-names found no FORMER_NAMES line to plant on")
         write_text(p, t2 + "# options left under compactinue@inline\n")
 
+    def planning_track(d):
+        """xxxxxxxx-36: a commit that added a .planning/ note (since untracked again), and a nested
+        .planning/ note forced into the index past any ignore rule."""
+        write_text(os.path.join(d, ".planning", "old.md"), "old notes\n")
+        git_in(d, "add", "-f", ".planning/old.md")
+        git_in(d, "commit", "-q", "-m", "add notes")
+        git_in(d, "rm", "-q", "--cached", ".planning/old.md")
+        git_in(d, "commit", "-q", "-m", "untrack notes")
+        write_text(os.path.join(d, "plugin", ".planning", "nested.md"), "nested notes\n")
+        git_in(d, "add", "-f", "plugin/.planning/nested.md")
 
     def npm(d):
         write_text(os.path.join(d, "plugin", "package.json"), '{"dependencies":{"left-pad":"1.3.0"}}\n')
@@ -930,6 +941,10 @@ def probes(name):
          [r"^VARIANT REFUSED: build: --variant: 1 paths differ from HEAD: plugin/helper/lib/foo\.pm\.orig"], git_repo),
         ("xh-truncated", "CR-F42", xh_truncated, xh_die,
          [r"^X-H REFUSED: X-H: exit 255; the runner did not finish"], None),
+        ("planning", "xxxxxxxx-36", ["tools/gates", "plugin", "--names", os.devnull, "--brand", name, "--only", "planning"],
+         planning_track,
+         [r"^GATE planning plugin/\.planning/nested\.md: xxxxxxxx-36 tracked",
+          r"^GATE planning commit [0-9a-f]{7,}: xxxxxxxx-36 history: \.planning/old\.md was committed"], git_repo),
     ]
     if pinned:
         out += [

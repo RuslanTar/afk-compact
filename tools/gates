@@ -11,7 +11,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 config-defaults, launcher, template-shape, lint-texts, xref, no-args-inline,
                 readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder,
                 export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8,
-                approvals, model-pin, queue-text, risk-corpus, store-flags)
+                approvals, model-pin, queue-text, risk-corpus, store-flags, planning)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -130,6 +130,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   store-flags  TG-01 (REVIEW-NIGHT, NR-09): every `<store> <command> --flag` in the skills, assets
                and README is a command in helper/main.pl and a flag its parser takes (cmd/<command>.pl
                and the module functions it calls, read statically)
+  planning     work home (ruling xxxxxxxx-36): no path with a `.planning` component in the git
+               index of the repository the tool sits in, and (unless --no-git-log) none added by a
+               commit reachable from HEAD; skipped when the tree is not the top of its own work tree
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
@@ -150,6 +153,10 @@ OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff", "co
 FORMER_NAME_FILE = "/helper/lib/settings.pm"
 FORMER_NAME_DECL = re.compile(r"^our @FORMER_NAMES = \('[a-z0-9-]+'(?:, '[a-z0-9-]+')*\);$")
 FORMER_NAMES_ALLOWED = {"compactinue"}
+# Work home (ruling xxxxxxxx-36, 2026-10-23): the private work notes live in a git-ignored
+# `.planning/` folder and are never tracked; a path with that component in the index fails, and
+# so does one added by a commit reachable from HEAD (when the git log gates run).
+PLANNING_DIR = ".planning"
 NAME_SHAPES = [
     re.compile(r"⟪/?([^\s⟫/]+) (?:v1|n=)"),
     re.compile(B + r"/([A-Za-z0-9_{}@<>-]+):(?:handoff|resume|status)\b"),
@@ -2015,6 +2022,34 @@ def die(msg):
     sys.exit(2)
 
 
+def planning_hits(history):
+    """Work home (xxxxxxxx-36): (where, text) for every tracked path with a `.planning` component
+    and, with history, every such path a commit reachable from HEAD added. Nothing when REPO is not
+    the top of its own git work tree (the BT-02 copy has no repository of its own)."""
+    top = subprocess.run(["git", "-C", REPO, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if top.returncode != 0 or os.path.realpath(top.stdout.strip()) != os.path.realpath(REPO):
+        return []
+    out = []
+    r = subprocess.run(["git", "-C", REPO, "ls-files", "-z", "--cached"], capture_output=True)
+    if r.returncode != 0:
+        return [("git ls-files", "xxxxxxxx-36 unreadable: exit {}".format(r.returncode))]
+    for p in sorted(r.stdout.decode("utf-8", "replace").split("\0")):
+        if p and PLANNING_DIR in p.split("/"):
+            out.append((p, "xxxxxxxx-36 tracked: the private work notes are never tracked (keep .planning/ ignored; "
+                           "`git rm --cached` takes it out of the index)"))
+    if history:
+        r = subprocess.run(["git", "-C", REPO, "log", "--format=@%h", "--name-only", "--diff-filter=AR",
+                            "--", ":(glob)**/{}/**".format(PLANNING_DIR)], capture_output=True, text=True)
+        sha = None
+        for line in r.stdout.splitlines():
+            if line.startswith("@"):
+                sha = line[1:]
+            elif line.strip():
+                out.append(("commit " + str(sha), "xxxxxxxx-36 history: {} was committed (rewrite the "
+                                                  "branch before any push)".format(line.strip())))
+    return out
+
+
 def files_of(target):
     if os.path.isfile(target):
         yield target
@@ -2188,6 +2223,9 @@ def main(argv):
             m = ATTRIBUTION.search(line)
             if m:
                 hit("attribution", "commit " + str(sha), m.group(0))
+
+    for where, text in planning_hits(git_log):
+        hit("planning", where, text)
 
     if only:
         hits = [h for h in hits if h[0] in (only, "target")]
