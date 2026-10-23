@@ -1,0 +1,130 @@
+{
+ "id": "AT-IA-05",
+ "layer": "H",
+ "owner": "core",
+ "note": "IA-4 (idle D3, owner 2026-10-23 02:4x) and SK-7 (owner xxxxxxxx-12/-13/-14): /status says whether the plugin's own pre-idle handoff turn is on, from idle_handoff_turn and Claude Code's idle compaction in the user settings file (idleCompaction or autoCompactEnabled false: native off, the plugin's turn on; absent: native on; a file that is not JSON counts as on, O-9 provisional; off: off), and one settings line with the six 2026-10-23 keys, never the ticket pattern or a secret rule's text (REVIEW-NIGHT-2: the status SKILL already promised both lines)",
+ "now": "2026-10-23T08:30:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "native idle off (idleCompaction false): the plugin's turn is on",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"idleCompaction\": false}\n"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn is on\\)$",
+     "^settings: resume_proceed auto \\(default\\) · handoff_reuse_window_min 15 · ticket_pattern default · secret_extra_rules 0 · evidence_total_max_mb 50 · watch_quota_mb 50$"
+    ]
+   }
+  },
+  {
+   "name": "autoCompactEnabled false is native off too",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"autoCompactEnabled\": false}\n"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn is on\\)$"
+    ]
+   }
+  },
+  {
+   "name": "no idle key: native idle on, the plugin's turn off",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{}\n"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction on → off\\)$"
+    ]
+   }
+  },
+  {
+   "name": "a settings file that is not JSON counts as on (O-9)",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"idleCompaction\": fal\n"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction unreadable, counts as on → off\\)$"
+    ]
+   }
+  },
+  {
+   "name": "settings file for the last step",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"idleCompaction\": false}\n"
+    }
+   ]
+  },
+  {
+   "name": "idle_handoff_turn off; the new keys as set, content-free",
+   "setup": [],
+   "options": {
+    "idle_handoff_turn": "off",
+    "resume_proceed": "confirm",
+    "handoff_reuse_window_min": 90,
+    "ticket_pattern": "(?:^|/)([0-9]+)-",
+    "secret_extra_rules": "HARD:ACME-[0-9]{12};NAME:*.tfstate",
+    "evidence_total_max_mb": 5,
+    "watch_quota_mb": 0
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$",
+     "^settings: resume_proceed confirm \\(settings\\) · handoff_reuse_window_min 60 · ticket_pattern custom · secret_extra_rules 2 · evidence_total_max_mb 10 · watch_quota_mb 0$"
+    ],
+    "stdout_lacks": [
+     "ACME",
+     "tfstate",
+     "\\[0-9\\]"
+    ]
+   }
+  }
+ ]
+}

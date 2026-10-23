@@ -140,6 +140,7 @@ sub run {
     push @out, mode_lines($opt->{cwd});
     push @out, relaunch_lines($d);
     push @out, prod_lines();
+    push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`
     push @out, 'queue: ' . queue::mode_text();
@@ -387,6 +388,46 @@ sub prod_lines {
                                                : "  config: $i->{key} invalid, forbid used";
     }
     return @l;
+}
+
+# ---------------------------------------------------------------- pre-idle turn (IA-4) and SK-7
+# IA-4 (idle D3, owner 2026-10-23 02:4x): whether the plugin's own pre-idle handoff turn is on:
+# `idle_handoff_turn: auto` and Claude Code's idle compaction off (`idleCompaction`, or its
+# precondition `autoCompactEnabled`, false in the user settings file). A file that cannot be read
+# as JSON counts as native on (O-9, provisional: the plugin sends nothing while the user is away);
+# a missing file or key is on, as the mod reads the merged settings (deps.nativeIdle). This line
+# reads the user file only; the mod's own reading is the one that arms the turn.
+sub _json_false { my ($v) = @_; return jsonc::is_bool($v) && !$$v ? 1 : 0 }
+sub idle_lines {
+    my $r = rc::settings();
+    my $mode = lc($r->{values}{idle_handoff_turn} // 'auto');
+    return ('pre-idle handoff turn: off (idle_handoff_turn: off)') if $mode eq 'off';
+    my $file = settings::config_dir() . '/settings.json';
+    my $native = 'on';
+    if (-e util::to_bytes($file)) {
+        my $raw = util::read_file($file);
+        my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
+        if (ref $j ne 'HASH') { $native = 'unknown' }
+        elsif (_json_false($j->{idleCompaction}) || _json_false($j->{autoCompactEnabled})) { $native = 'off' }
+    }
+    return ('pre-idle handoff turn: auto (native idle compaction off → the plugin\'s turn is on)') if $native eq 'off';
+    return ('pre-idle handoff turn: auto (native idle compaction ' . ($native eq 'on' ? 'on' : 'unreadable, counts as on') . ' → off)');
+}
+
+# SK-7 (owner xxxxxxxx-12/-13/-14): the six 2026-10-23 keys as values the user can check, never
+# the ticket pattern or a secret rule's text.
+sub settings_keys_line {
+    my $r = rc::settings();
+    my $v = $r->{values} || {};
+    my $rp = ($v->{resume_proceed} // '') eq 'confirm' ? 'confirm' : 'auto';
+    my $tr = eval { settings::ticket_re($r) } || {};
+    my $tk = $tr->{invalid} ? 'invalid (default used)' : $tr->{custom} ? 'custom' : 'default';
+    my $sx = eval { settings::secret_extra($r) } || {};
+    my $nx = scalar(@{ $sx->{rules} || [] }) + scalar(@{ $sx->{names} || [] });
+    my @n = map { my ($x) = eval { settings::num_clamped($_, $r) }; defined $x ? $x : '?' }
+            qw(handoff_reuse_window_min evidence_total_max_mb watch_quota_mb);
+    return (sprintf('settings: resume_proceed %s (%s) · handoff_reuse_window_min %s · ticket_pattern %s · secret_extra_rules %d · evidence_total_max_mb %s · watch_quota_mb %s',
+                    $rp, $r->{source}{resume_proceed} // 'default', $n[0], $tk, $nx, $n[1], $n[2]));
 }
 
 # ---------------------------------------------------------------- kept stashes (C-STORE D3)
