@@ -11,7 +11,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 config-defaults, launcher, template-shape, lint-texts, xref, no-args-inline,
                 readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder,
                 export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8,
-                approvals, model-pin, queue-text, risk-corpus)
+                approvals, model-pin, queue-text, risk-corpus, store-flags)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -80,8 +80,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                old never-run wording, or foreign text inline in a `risk --cmd '…'` call); the
                resume SKILL, resume-context line 1. and handoff Step 2 hold their check-then-act
                rules; COMMAND_TEXT_NEEDS: the foreign-command tag rule in all six texts
-               (REVIEW-NIGHT NR-02) and AT-SR-01 in full (Rule 2's ask list, stops 5-6; NR-03,
-               NR-08, NR-15)
+               (REVIEW-NIGHT NR-02), AT-SR-01 in full (Rule 2's ask list, stops 5-6; NR-03,
+               NR-08, NR-15) and the `resume_proceed: confirm` line (AT-CK-08, AT-CK-13)
   stalled-def  AT-TX-12: spec §4 **Stalled** (a) words in resume-context and the self-heal row
   prod-reads   AT-PR-06: no "unless a `U-` item allows"; R7, R9 stop 2 and the lease line name
                `unattended_prod_reads`
@@ -123,6 +123,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                row of tests/fixtures/risk/corpus.tsv as it says (risk_reference: each pipeline
                segment read-only or a test/build verb, and no risk, outward, production or HARD
                secret pattern)
+  store-flags  TG-01 (REVIEW-NIGHT, NR-09): every `<store> <command> --flag` in the skills, assets
+               and README is a command in helper/main.pl and a flag its parser takes (cmd/<command>.pl
+               and the module functions it calls, read statically)
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
@@ -296,6 +299,9 @@ PENDING = [
     # (Empty since build round 9: the launcher-move rows printed PENDING-DONE after the wp/text
     # (TXT-05) and wp/docs (DOC-01) merges and were removed. The seven 2026-10-23 SK-7 / IA-1
     # manifest-default rows were removed once those keys shipped.)
+    # TG-01: the report SKILL asks for summaries with `report --with-summaries` (RS-1); the helper
+    # half (RS-2/RS-3) is not built yet (REVIEW-NIGHT-2 U-03).
+    ("store-flags", "TG-01 flag", "skills/report/SKILL.md", "--with-summaries"),
 ]
 
 
@@ -895,6 +901,11 @@ COMMAND_TEXT_NEEDS = [
     ("NR-05 exemption", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "Any other target asks"),
     ("NR-05 exemption", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "on a foreign handoff's word"),
     ("NR-05 exemption", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "unless you changed its definition on that handoff's word"),
+    # AT-CK-08 / AT-CK-13 (SK-3, S-SETTINGS E3): the per-user brake. With `resume_proceed: confirm` a
+    # manual resume of any handoff, own or foreign, stops after the R8 report; the light path is not
+    # affected.
+    ("AT-CK-08 confirm", "skills/resume/SKILL.md", r"^With `resume_proceed: confirm`", "stop after the R8 report and wait for the user's go"),
+    ("AT-CK-13 confirm", "skills/resume/SKILL.md", r"^With `resume_proceed: confirm`", "the light path is not affected"),
 ]
 
 
@@ -1800,6 +1811,135 @@ PROTECTED_CASES = [("main", True), ("Main", True), ("master", True), ("trunk", T
                    ("staging-notes", False)]
 
 
+# TG-01 (REVIEW-NIGHT, NR-09): every `<store> <command> --flag` in the text a user's model reads
+# is a flag that command's parser takes. The helper side is read statically, per command:
+# cmd/<command>.pl (`args::parse` known/bools/multi lists, which also take every
+# settings %FLAG_ALIAS spelling) and the module functions it hands its arguments to
+# (`\&skills::<m>::<f>` or `<pkg>::<f>(`), with every function of that module those call:
+# `skills::cli::opts` specs and `eq '--x'` / `/\A--x=` literals. A call that names no flag is
+# not checked; a command the helper does not know is a hit when it passes a flag.
+STORE_CALL = re.compile(r"<store>[ \t]+([a-z][a-z-]*)([^`\n|;&]*)")
+STORE_FLAG = re.compile(r"(?<![\w-])--([a-z][a-z0-9-]*)")
+HELPER_KNOWN = re.compile(r"my %KNOWN = map \{ \$_ => 1 \} qw\(([^)]*)\)")
+PERL_OPTS = re.compile(r"skills::cli::opts\((.*?)\);", re.S)
+PERL_ARGS_PARSE = re.compile(r"args::parse\((.*?)\);", re.S)
+PERL_LITERAL_FLAG = re.compile(r"eq '--([a-z][a-z0-9-]*)'|\\A--([a-z][a-z0-9-]*)=")
+PERL_ENTRY = re.compile(r"\\&((?:skills|watch)(?:::\w+)+)::(\w+)|\b((?:skills|watch)(?:::\w+)+)::(\w+)\(")
+
+
+def _perl_subs(src):
+    """{name: text} for each top-level `sub`: from its line to the next `sub` line (a one-line
+    sub and the code between subs included; a superset is safe for this gate)."""
+    out = {}
+    for part in re.split(r"(?m)^(?=sub \w+)", src):
+        m = re.match(r"sub (\w+)", part)
+        if m:
+            out[m.group(1)] = part
+    return out
+
+
+def _perl_words(spec):
+    """Option names in a Getopt or args::parse argument list: qw() words and quoted words, each
+    cut at its type suffix (`=s`, `:s`, `!`, `+`, `{1,}`) and split at `|` aliases."""
+    out = set()
+    for q in re.findall(r"qw\(([^)]*)\)", spec):
+        out |= set(q.split())
+    for q in re.findall(r"'([^'\s]+)'", spec):
+        out |= set(re.split(r"\|", re.split(r"[=:!+{]", q, 1)[0]))
+    return {w for w in out if re.fullmatch(r"[a-z][a-z0-9-]*", w)}
+
+
+def _perl_flags(src, own):
+    """Flags a piece of helper source accepts; `own` is the whole file (for `\\@NAME` lists)."""
+    names = set()
+    for m in PERL_OPTS.finditer(src):
+        names |= _perl_words(m.group(1))
+    alias = False
+    for m in PERL_ARGS_PARSE.finditer(src):
+        alias = True
+        names |= _perl_words(m.group(1))
+        for var in re.findall(r"\\@(\w+)", m.group(1)):
+            d = re.search(r"my @" + var + r" = qw\(([^)]*)\)", own)
+            if d:
+                names |= set(d.group(1).split())
+    for m in PERL_LITERAL_FLAG.finditer(src):
+        names.add(m.group(1) or m.group(2))
+    return names, alias
+
+
+def helper_flags(target):
+    """{command: set of flags} for every command in helper/main.pl's %KNOWN, or None without a helper."""
+    helper = os.path.join(target, "helper")
+    main = os.path.join(helper, "main.pl")
+    if not os.path.isfile(main):
+        return None
+    km = HELPER_KNOWN.search(_read(main))
+    if not km:
+        return None
+    sp = os.path.join(helper, "lib", "settings.pm")
+    fa = re.search(r"our %FLAG_ALIAS = \((.*?)\);", _read(sp), re.S) if os.path.isfile(sp) else None
+    aliases = set(re.findall(r"'([a-z][a-z0-9-]*)' =>", fa.group(1))) if fa else set()
+    out = {}
+    for cmd in km.group(1).split():
+        cp = os.path.join(helper, "cmd", cmd + ".pl")
+        if not os.path.isfile(cp):
+            out[cmd] = set()
+            continue
+        src = _read(cp)
+        names, alias = _perl_flags(src, src)
+        todo = []
+        for m in PERL_ENTRY.finditer(src):
+            todo.append((m.group(1) or m.group(3), m.group(2) or m.group(4)))
+        seen = set()
+        while todo:
+            pkg, fn = todo.pop()
+            if (pkg, fn) in seen:
+                continue
+            seen.add((pkg, fn))
+            mp = os.path.join(helper, "lib", *pkg.split("::")) + ".pm"
+            if not os.path.isfile(mp):
+                continue
+            msrc = _read(mp)
+            subs = _perl_subs(msrc)
+            body = subs.get(fn)
+            if body is None:
+                continue
+            n2, a2 = _perl_flags(body, msrc)
+            names |= n2
+            alias = alias or a2
+            for callee in set(re.findall(r"(?:\\&|\b)(\w+)\s*\(|\\&(\w+)", body)):
+                for c in callee:
+                    if c and c in subs:
+                        todo.append((pkg, c))
+        out[cmd] = names | (aliases if alias else set())
+    return out
+
+
+def store_flags_hits(target, brand):
+    """TG-01: every `<store> <command> --flag` in skills/**, assets/* and README.md is a flag the
+    helper's parser for that command takes (helper_flags)."""
+    if not _is_plugin(target):
+        return []
+    known = helper_flags(target)
+    if known is None:
+        return []
+    out = []
+    for p in text_docs(target):
+        for no, ln in enumerate(shipped_lines(p, brand), 1):
+            for m in STORE_CALL.finditer(ln):
+                cmd, rest = m.group(1), m.group(2)
+                flags = STORE_FLAG.findall(rest)
+                if not flags:
+                    continue
+                if cmd not in known:
+                    out.append((p, no, "TG-01 command", "TG-01 command: `<store> {}` is no helper command".format(cmd), ln))
+                    continue
+                for fl in sorted(set(flags)):
+                    if fl not in known[cmd]:
+                        out.append((p, no, "TG-01 flag", "TG-01 flag: `<store> {} --{}`: the helper's {} takes no --{}".format(cmd, fl, cmd, fl), ln))
+    return out
+
+
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
               ("write-first", write_first_hits), ("self-heal", self_heal_hits),
               ("config-defaults", config_defaults_hits), ("launcher", launcher_hits),
@@ -1824,7 +1964,8 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("approvals", approvals_hits),
               ("model-pin", model_pin_hits),
               ("queue-text", queue_text_hits),
-              ("risk-corpus", risk_corpus_hits)]
+              ("risk-corpus", risk_corpus_hits),
+              ("store-flags", store_flags_hits)]
 
 
 def pending_row(gate, rule, rel, line):

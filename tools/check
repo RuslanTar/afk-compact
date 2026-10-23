@@ -506,6 +506,8 @@ def probes(name):
         append(d, "plugin/README.md", "\nA command taken from a handoff is never run either way.\n")
         edit(d, "plugin/.claude-plugin/plugin.json", "Production writes always ask, and so do production commands copied from a handoff.",
              "Production writes and commands from a handoff always ask.")
+        # AT-CK-08: the resume_proceed confirm line no longer stops after the R8 report.
+        edit(d, "plugin/skills/resume/SKILL.md", "stop after the R8 report and wait for the user's go", "ask before Step 1")
 
     def stalled(d):
         edit(d, "plugin/skills/resume/references/self-heal.md", "(a) idle while the output it waits on has ended",
@@ -699,6 +701,13 @@ def probes(name):
         edit(d, "plugin/assets/handoff-spec.md", "(-[A-Za-z0-9]*O|--output|--op|", "(-O|--output|")
         edit(d, "plugin/assets/handoff-spec.md", "^(pytest|python3?[ \\\\t]+-m[ \\\\t]+pytest)", "^(pytest|python3?[ \\\\t]+-m[ \\\\t]+pytest)([ \\\\t].*)?$|^(pytest)")
 
+    def store_flags(d):
+        """TG-01: a flag the helper's wait does not take, a command the helper does not know, and
+        the helper's receipt no longer taking the --cmds-run the resume SKILL passes."""
+        append(d, "plugin/skills/resume/SKILL.md", "\nThen `<store> wait --for <spec> --forever`.\n")
+        append(d, "plugin/assets/resume-context.txt", "\n`<store> frobnicate --now`\n")
+        edit(d, "plugin/helper/lib/skills/session_cmds.pm", "'cmds-run=s', ", "")
+
     def stray_helper_file(d):
         write_text(os.path.join(d, "plugin", "helper", "lib", "foo.pm.orig"), "stray\n")
 
@@ -816,7 +825,8 @@ def probes(name):
           r"^GATE no-run-text plugin/assets/resume-context\.txt: R2-06 light path: .* lacks 'read-only inside the repo, no credentials'$",
           r"^GATE no-run-text plugin/skills/resume/SKILL\.md:\d+: AT-TX-08 forbidden: \"risk --cmd '\"$",
           r"^GATE no-run-text plugin/README\.md:\d+: AT-TX-08 forbidden: 'A command taken from a handoff is never run'$",
-          r"^GATE no-run-text plugin/\.claude-plugin/plugin\.json: AT-TX-08 forbidden: userConfig unattended_prod_reads says 'commands from a handoff always ask'$"], None),
+          r"^GATE no-run-text plugin/\.claude-plugin/plugin\.json: AT-TX-08 forbidden: userConfig unattended_prod_reads says 'commands from a handoff always ask'$",
+          r"^GATE no-run-text plugin/skills/resume/SKILL\.md: AT-CK-08 confirm: a line matching .* lacks \"stop after the R8 report and wait for the user's go\"$"], None),
         ("stalled-def", "AT-TX-12", gates_only("stalled-def"), stalled,
          [r"^GATE stalled-def plugin/skills/resume/references/self-heal\.md: AT-TX-12 self-heal: STALLED row lacks"], None),
         ("prod-reads", "AT-PR-06", gates_only("prod-reads"), prod_reads,
@@ -851,6 +861,10 @@ def probes(name):
           r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'git grep -nOsh TODO' carries no risk class$",
           r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'git grep --open=sh TODO' carries no risk class$",
           r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'pytest --basetemp=src' carries no risk class$"], None),
+        ("store-flags", "TG-01", gates_only("store-flags"), store_flags,
+         [r"^GATE store-flags plugin/skills/resume/SKILL\.md:\d+: TG-01 flag: `<store> wait --forever`: the helper's wait takes no --forever$",
+          r"^GATE store-flags plugin/assets/resume-context\.txt:\d+: TG-01 command: `<store> frobnicate` is no helper command$",
+          r"^GATE store-flags plugin/skills/resume/SKILL\.md:\d+: TG-01 flag: `<store> receipt --cmds-run`: the helper's receipt takes no --cmds-run$"], None),
         ("ic-desc", "AT-IC-11", gates_only("ic-desc"), ic_desc,
          [r"^GATE ic-desc plugin/skills/resume/SKILL\.md: AT-IC-11 resume: description names \['/clear', 'break'\]$"], None),
         ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,
