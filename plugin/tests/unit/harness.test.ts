@@ -82,6 +82,10 @@ export class World {
   compactGate: Promise<void> | undefined
   /** `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). */
   rateLimits: { percentUsed: number }[] = []
+  /** The turn ids `$.turn.abort` was called with (OT-2). */
+  aborts: string[] = []
+  /** `$.turn.abort` rejects (the turn is not the running one). */
+  abortThrow = false
   /** While set, a `prompt.submit` reaching the bottom is not recorded (the person's own prompts of `userTurn`). */
   private quiet = false
 
@@ -142,6 +146,11 @@ export class World {
     })
     on('session.start', (_$, e) => ({ cwd: e.cwd }))
     on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
+    on('turn.abort', (_$, e) => {
+      this.aborts.push(e.turnId)
+      if (this.abortThrow) throw new Error(`turn ${e.turnId} is not the running turn`)
+      return { value: undefined }
+    })
     on('turn.start', (_$, e) => ({ turnId: e.turnId }))
     on('turn.complete', () => ({ text: '' }))
     on('prompt.context', (_$, e) => ({ blocks: e.blocks }))

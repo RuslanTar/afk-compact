@@ -989,7 +989,65 @@ test('REG-boundary-205 (CR-F19): a native compaction that starts while the dispa
   expect(w.rowsOf('skip').length).toBe(0)
 })
 
-test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt runs after it with no nudge', { options: CAP3 }, async ($, on) => {
+/**
+ * CR-F17 (residual): the user pressed Enter as our handoff-turn prompt went in, past our hook; the
+ * user's turn starts first and ends. Returns our queued prompt's text, the closed ht and the halt
+ * row count, or undefined in a build without the handoff-turn text.
+ */
+async function orphanQueued($: Engine, w: World): Promise<{ ours: string; ht: string; haltRows: number } | undefined> {
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return undefined
+  const ours = submitText(w, 'cap') ?? ''
+  let fired = false
+  w.atSubmit = async text => {
+    if (fired || text !== ours) return
+    fired = true
+    await $.prompt.submit({ text: 'the user typed this', origin: { kind: 'composer' } } as never)
+    await w.turnStart($, 'the user typed this')
+  }
+  await w.advance(2000)
+  expect(fired).toBe(true)
+  w.tokens = 100000
+  await w.turnEnd($, 'Here you go.')
+  return { ours, ht: w.lastHt() ?? '', haltRows: w.rowsOf('halt').length }
+}
+
+// OT-1 (owner xxxxxxxx-06 "Abort the leftover turn", 2026-10-22; SPEC-DELTAS AT-OT-01, AT-OT-02).
+test('AT-OT-01: our queued handoff-turn prompt\'s turn is aborted at its start: one abort of that turn, one handoff_orphan_aborted row with the closed ht, no handoff_turn_start, no nudge', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  const q = await orphanQueued($, w)
+  if (!q) return
+  expect(w.aborts).toEqual([])
+  await w.turnStart($, q.ours)
+  expect(w.aborts.length).toBe(1)
+  expect(w.rowsOf('handoff_orphan_aborted').map(r => [r.turn_id, r.ht])).toEqual([[w.aborts[0], q.ht]])
+  expect(w.rowsOf('handoff_orphan_abort_failed').length).toBe(0)
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  expect(w.rowsOf('halt').length).toBe(q.haltRows)
+  w.tokens = 640000
+  expect((await w.tool($)).context).toBeUndefined()
+  // The next turn of ours is not aborted again.
+  await w.turnEnd($, '', 'aborted')
+  await w.userTurn($)
+  expect(w.aborts.length).toBe(1)
+})
+
+test('AT-OT-02: the abort rejects: one handoff_orphan_abort_failed row, and the turn runs as before (no handoff_turn_start, no checkpoint nudge)', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  const q = await orphanQueued($, w)
+  if (!q) return
+  w.abortThrow = true
+  await w.turnStart($, q.ours)
+  expect(w.aborts.length).toBe(1)
+  expect(w.rowsOf('handoff_orphan_abort_failed').map(r => [r.turn_id, r.ht])).toEqual([[w.aborts[0], q.ht]])
+  expect(w.rowsOf('handoff_orphan_aborted').length).toBe(0)
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  w.tokens = 640000
+  expect((await w.tool($)).context).toBeUndefined()
+})
+
+test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt\'s turn is aborted (OT-1)', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   await lastCycleTurn($, w)
@@ -1014,11 +1072,14 @@ test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went 
   w.tokens = 100000
   await w.turnEnd($, 'Here you go.')
   expect(w.rowsOf('handoff_turn_end').length).toBe(0)
-  // Our queued prompt's turn: still ours (no second halt row), not a handoff turn, no nudge.
+  // Our queued prompt's turn: still ours (no second halt row), not a handoff turn, aborted at
+  // its start (OT-1), no nudge.
   const haltRows = w.rowsOf('halt').length
   await w.turnStart($, ours)
   expect(w.rowsOf('halt').length).toBe(haltRows)
   expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  expect(w.aborts.length).toBe(1)
+  expect(w.rowsOf('handoff_orphan_aborted').length).toBe(1)
   w.tokens = 640000
   expect((await w.tool($)).context).toBeUndefined()
 })

@@ -60,6 +60,11 @@ export interface Deps {
   /** `$.session.compact`; rejects while a turn runs. */
   compact(instructions: string): Promise<SessionCompactResult>
   submit(text: string): Promise<void>
+  /**
+   * OT-2 (owner xxxxxxxx-06, 2026-10-22): `$.turn.abort({ turnId })`, ending the running main
+   * turn (its tools stopped, no interruption marker); rejects when `turnId` is not the running one.
+   */
+  abortTurn(turnId: string): Promise<void>
   /** `$.process.run` with rejections caught; `stdin` is written to the child, then closed. */
   run(argv: readonly string[], timeoutMs: number, stdin?: string): Promise<RunResult>
   /** Whole-file write; false when it failed. */
@@ -110,8 +115,10 @@ export type LoadState = {
   ourSubmitText: string | undefined
   /** Prompts of others (the user, another plugin) entering an idle session whose turn has not started yet. */
   foreignPrompts: number
-  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn gets no nudge. */
+  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn is aborted (OT-1). */
   orphanSubmit: boolean
+  /** The ht that cancelled handoff turn had (closed), for the `handoff_orphan_aborted` row; null when none. */
+  orphanHt: string | null
   /** Our handoff-turn `$.prompt.submit` call is in flight: our own `prompt.submit` hook drops it when a user prompt came first. */
   handoffSubmitting: boolean
   /** The handoff turn deferred for a prompt that entered but has not started its turn: run again if it never does (CR-F17). */
@@ -234,6 +241,7 @@ export function newState(loadId: string): LoadState {
     ourSubmitText: undefined,
     foreignPrompts: 0,
     orphanSubmit: false,
+    orphanHt: null,
     handoffSubmitting: false,
     afterForeign: undefined,
     timer: undefined,
@@ -317,6 +325,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       const r = await $.prompt.submit({ text })
       if (r.drop !== undefined) throw new Error('dropped: ' + String(r.drop))
     },
+    abortTurn: turnId => $.turn.abort({ turnId }),
     async run(argv, timeoutMs, stdin) {
       try {
         const r = await $.process.run(argv, stdin === undefined ? { timeoutMs, env } : { timeoutMs, env, stdin })
@@ -414,6 +423,7 @@ export function submitPending(s: LoadState, text: string): void {
   s.ourSubmitPending = true
   s.ourSubmitText = text
   s.orphanSubmit = false
+  s.orphanHt = null
 }
 
 /** Our submit failed, or its turn has started. */

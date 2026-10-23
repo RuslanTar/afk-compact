@@ -298,15 +298,30 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
 
 /**
  * A main `turn.start`: our submit's turn becomes the handoff turn (no checkpoint nudge in it);
- * a user's turn during the delay cancels the handoff turn (`why=user-turn`).
+ * a user's turn during the delay cancels the handoff turn (`why=user-turn`); the leftover turn of
+ * our cancelled prompt is aborted at its start (OT-1).
  */
 export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string): Promise<void> {
   const s = d.state
   const h = s.handoffTurn
   if (ours && s.orphanSubmit) {
-    // The handoff prompt a user turn cancelled (below) runs now: no checkpoint nudge in it.
+    // OT-1 (owner xxxxxxxx-06 "Abort the leftover turn", 2026-10-22): the handoff prompt a user
+    // turn cancelled (below) starts now; it is aborted before anything else, so no tool runs in
+    // it. If the abort fails, the turn runs as before, with no checkpoint nudge in it.
+    const ht = s.orphanHt
     s.orphanSubmit = false
+    s.orphanHt = null
+    s.ourSubmitPending = false
+    try {
+      await d.abortTurn(turnId)
+    } catch {
+      s.nudgedThisTurn = true
+      await log(d, sid, 'handoff_orphan_abort_failed', { turn_id: turnId, ht })
+      return
+    }
     s.nudgedThisTurn = true
+    await log(d, sid, 'handoff_orphan_aborted', { turn_id: turnId, ht })
+    return
   }
   if (!h) return
   if (h.phase === 'submitted' && ours) {
@@ -327,10 +342,11 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     s.handoffTurn = undefined
     await skipped(d, sid, 'user-turn', h.ht, h.reason)
     // CR-F17: a user prompt that entered beside our submit started first. Our prompt is still
-    // queued and runs after it as a plain turn (it is still ours: claimTurn kept it pending);
-    // its ht is closed so neither turn's `begin` binds it as a handoff turn's.
+    // queued and starts after it (it is still ours: claimTurn kept it pending), where it is
+    // aborted (OT-1); its ht is closed so neither turn's `begin` binds it as a handoff turn's.
     if (h.phase === 'submitted') {
       s.orphanSubmit = s.ourSubmitPending
+      s.orphanHt = s.orphanSubmit ? h.ht : null
       if (h.ht !== null) await handoffTurnClose(d, sid, h.ht, 'cancelled')
     }
   }
