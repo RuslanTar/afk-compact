@@ -40,6 +40,39 @@ sub bash_classes {
     return \@c;
 }
 
+# AP-9 (REVIEW-NIGHT-3 R3-15): the spec's protected_branch_re, compiled by the sweep for its run;
+# undef = no check.
+our $PROTECTED_RE;
+
+# 1 when a git push in the command names a protected destination: a refspec's destination (or
+# the ref named) matching protected_branch_re, lower-cased, or --all, --mirror, --branches. A
+# push with no refspec goes to a branch the transcript does not show: 0 (the watcher has no git
+# state). Quotes and backslashes are removed first, as the shell would.
+sub push_protected {
+    my ($cmd, $pre) = @_;
+    return 0 unless defined $pre && defined $cmd;
+    (my $c = $cmd) =~ s/\\(.)/$1/gs;
+    $c =~ tr/"'//d;
+    for my $seg (split /\|\||&&|[|;&\n]/, $c) {
+        my @w = split ' ', $seg;
+        my ($gi) = grep { lc($w[$_]) eq 'git' } 0 .. $#w;
+        next unless defined $gi;
+        my ($pi) = grep { $w[$_] eq 'push' } $gi + 1 .. $#w;
+        next unless defined $pi;
+        my @a = @w[$pi + 1 .. $#w];
+        return 1 if grep { /\A--(?:all|mirror|branches)\z/ } @a;
+        my @pos = grep { !/\A-/ } @a;
+        shift @pos;
+        for my $rs (@pos) {
+            my $d = $rs =~ /:/ ? (split /:/, $rs, 2)[1] : $rs;
+            $d =~ s/\A\+//;
+            $d =~ s{\Arefs/heads/}{};
+            return 1 if $d ne '' && lc($d) =~ $pre;
+        }
+    }
+    return 0;
+}
+
 # Facts of one decoded row. `brand` is the plugin name; `outward` the compiled
 # outward classes.
 sub classify {
@@ -141,6 +174,8 @@ sub classify {
             if ($name eq 'Bash') {
                 my $cmd = defined $in->{command} && !ref $in->{command} ? $in->{command} : '';
                 $c{outward} = bash_classes($cmd, $outward || []);
+                $c{protected} = 1 if $PROTECTED_RE && grep({ $_ eq 'push' || $_ eq 'force-push' } @{ $c{outward} })
+                                     && push_protected($cmd, $PROTECTED_RE);
                 $c{readonly} = $cmd =~ $READONLY_BASH ? 1 : 0;
                 if (defined $brand) {
                     my $store = quotemeta($brand . '-store');

@@ -345,7 +345,7 @@ sub _analyze {
                 for my $cls (@{ $call->{outward} || [] }) {
                     _ev($res, k => 'outward', line => $line, ts => $f->{ts}, class => $cls, call_no => $w->{calls},
                         win_kind => $w->{kind}, win_uuid => $w->{uuid}, win_line => $w->{line}, win_ts => $w->{ts},
-                        args => $w->{args} ? 1 : 0);
+                        args => $w->{args} ? 1 : 0, ($call->{protected} ? (protected => 1) : ()));
                 }
             }
             if ($w->{kind} eq 'boundary' && defined $call->{stop_id}) {
@@ -399,6 +399,9 @@ sub run {
     return { busy => 1 } unless $fh;
     my $state = _load_state($fh);
     my $outward = watch::spec::classes($ctx->{spec}, 'outward_classes');
+    # AP-9 (REVIEW-NIGHT-3 R3-15): a push to a protected branch is the protected-push gate.
+    my $pbr = ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{protected_branch_re} : undef;
+    local $watch::rows::PROTECTED_RE = (defined $pbr && !ref $pbr) ? eval { qr/$pbr/ } : undef;
     my @files;
     my @subs;
     my $budget = $RUN_BYTES;

@@ -661,7 +661,8 @@ sub _event_rules {
     }
     my $approved = sub {
         my ($e) = @_;
-        return 0 if !@carry || $gate{ $e->{class} // '' };
+        # A push the sweep saw going to a protected branch is the protected-push gate (R3-15).
+        return 0 if !@carry || $gate{ $e->{class} // '' } || ($e->{protected} && $gate{'protected-push'});
         # Event times are epochs (watch::rows::ts_of).
         my $t = _num($e->{ts}) // return 0;
         my $w = _num($e->{win_ts});
