@@ -26,9 +26,19 @@ package skills::approvals;
 #         request) whose words name a protected branch is protected-push;
 #   quotes (transcript::quotes_found, R3-04): whole words; a quote under 4 words is the whole
 #         message; a message holding an approval line was pasted and does not count.
+#
+# Line hashes (REVIEW-NIGHT-3 U3-01; root ruling 2026-10-23 11:56, a must-have before unattended
+# use): publish records a SHA-256 of each checked `## Approvals` line, keyed by its id, in a
+# plugin-owned record of the private store (`.sessions/approvals/<sid>.<nonce>.json`, never in
+# the handoff file, never rewritten). Before any carry (`measure <handoff>`, which resume reads,
+# and publish's own-chain carry) a checked id counts only when the file holds exactly one line
+# with that id and the line's hash equals the record: an added line, an edited quote, action,
+# target or id, a file with no record (published before the hashes) or a record without the id
+# makes the line context only (re-ask).
 use strict;
 use warnings;
 use utf8;
+use File::Basename ();
 use skills::util;
 use skills::spec;
 use skills::core;
@@ -41,6 +51,9 @@ our %NO_CARRY_REASON = map { $_ => 1 } qw(fork bg-copy);
 our $PROD_IS_GATE = 1;
 our $PUSH_UNNAMED_IS_GATE = 1;
 our $ENTRY_MAX = 160;
+our $HASH_DIR = 'approvals';                 # under <handoff_root>/.sessions/
+my $NONCE_RE = qr/\A[A-Za-z0-9_-]{1,64}\z/;
+our %HASH_WHY = (unhashed => 'no hash recorded', missing => 'not in the publish record', changed => 'changed since publish');
 # Plain words of an action, read as outward class ids when no class pattern matched the text.
 our @ACTION_WORDS = (
     [ 'force-push', qr/\bforce[- ]?push|--force\b/i ],
@@ -258,13 +271,103 @@ sub checked_ids {
 # An own-chain document for the carry check: {text, checked}; undef unless the file is own for
 # this session by own_relation (REVIEW-NIGHT-3 R3-03: a fork's or bg-copy's base, an export, an
 # imported copy or a file outside the store lends no checked approvals to the new handoff).
+# Only checked ids whose line matches the publish record carry (U3-01).
 sub chain_doc {
     my ($path, $ctx, $sid) = @_;
     return undef unless defined $path && -f $path;
     my $d = skills::store::read_doc($path) or return undef;
     my ($own) = own_relation($d, $ctx, $sid);
     return undef unless $own;
-    return { text => $d->{body} // '', checked => checked_ids($d->{fm}{approvals_checked}) };
+    my ($good) = verify_checked($ctx, $d, checked_ids($d->{fm}{approvals_checked}));
+    return { text => $d->{body} // '', checked => $good };
+}
+
+# ---- line hashes (U3-01)
+
+sub line_hash { my ($l) = @_; return skills::util::sha256_hex($l // '') }
+
+# The record's path for a handoff's session_id and nonce, or undef (no store, a bad key).
+sub hash_path {
+    my ($ctx, $fm) = @_;
+    return undef unless $ctx && defined $ctx->{root} && ref $fm eq 'HASH';
+    my ($sid, $n) = ($fm->{session_id} // '', $fm->{nonce} // '');
+    return undef unless skills::ctx::valid_sid($sid) && $n =~ $NONCE_RE;
+    return "$ctx->{root}/.sessions/$HASH_DIR/$sid.$n.json";
+}
+
+# The parsed, untagged lines of a body's `## Approvals`, each with its exact text.
+sub _section_entries {
+    my ($body) = @_;
+    my @lines = split /\n/, $body // '';
+    my $in = section_lines(\@lines);
+    my $tag_re = skills::spec::regex_at('carry.tag_re');
+    my @out;
+    for my $i (sort { $a <=> $b } keys %$in) {
+        next if $tag_re && $lines[$i] =~ $tag_re;
+        my $e = parse_line($lines[$i]) or next;
+        $e->{line} = $lines[$i];
+        push @out, $e;
+    }
+    return \@out;
+}
+
+# record_hashes(ctx, doc, \@ids) -> (n hashed, undef) | (0, why): publish, after the handoff is
+# placed and read back. Exclusive create: an existing record is never rewritten (the same
+# record again, from a retry, is fine).
+sub record_hashes {
+    my ($ctx, $d, $ids) = @_;
+    my %want = map { $_ => 1 } @{ $ids || [] };
+    return (0, undef) unless %want;
+    my $p = hash_path($ctx, $d->{fm}) or return (0, 'no-key');
+    my %h;
+    for my $e (@{ _section_entries($d->{body}) }) {
+        next unless $want{ $e->{id} };
+        return (0, 'duplicate') if exists $h{ $e->{id} };
+        $h{ $e->{id} } = line_hash($e->{line});
+    }
+    return (0, 'no-line') unless %h;
+    my $json = skills::util::json_encode({ v => 1, session_id => $d->{fm}{session_id}, nonce => $d->{fm}{nonce}, lines => \%h }) . "\n";
+    my $ok = eval {
+        skills::util::mkdir_p(File::Basename::dirname($p));
+        skills::util::write_excl($p, $json, 0600);
+    };
+    return (0, 'write') unless defined $ok;
+    return (scalar(keys %h), undef) if $ok;
+    my $have = skills::util::read_file($p, 65536);
+    return (defined $have && $have eq $json) ? (scalar(keys %h), undef) : (0, 'exists');
+}
+
+# The record of a handoff: {U-n => hex}, or undef when there is none or it does not fit the file.
+sub hashes_of {
+    my ($ctx, $d) = @_;
+    my $p = hash_path($ctx, $d->{fm}) or return undef;
+    return undef unless -f $p && !-l $p;
+    my $r = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
+    return undef unless ref $r eq 'HASH' && ($r->{v} // 0) eq '1' && ref $r->{lines} eq 'HASH'
+        && ($r->{session_id} // '') eq ($d->{fm}{session_id} // '') && ($r->{nonce} // '') eq ($d->{fm}{nonce} // '');
+    my %h;
+    for my $id (keys %{ $r->{lines} }) {
+        my $x = $r->{lines}{$id};
+        $h{$id} = $x if $id =~ /\AU-[0-9]+\z/ && defined $x && !ref $x && $x =~ /\A[0-9a-f]{64}\z/;
+    }
+    return \%h;
+}
+
+# verify_checked(ctx, doc, {U-n => 1}) -> ({U-n => 1} verified, {U-n => unhashed|missing|changed})
+# for the checked ids that have a line in `## Approvals`; an id on two lines is changed.
+sub verify_checked {
+    my ($ctx, $d, $ok) = @_;
+    my (%good, %why, %lines);
+    push @{ $lines{ $_->{id} } }, $_->{line} for @{ _section_entries($d->{body}) };
+    my $rec = hashes_of($ctx, $d);
+    for my $id (sort keys %{ $ok || {} }) {
+        my $l = $lines{$id} or next;
+        if (!$rec) { $why{$id} = 'unhashed' }
+        elsif (!defined $rec->{$id}) { $why{$id} = 'missing' }
+        elsif (@$l == 1 && line_hash($l->[0]) eq $rec->{$id}) { $good{$id} = 1 }
+        else { $why{$id} = 'changed' }
+    }
+    return (\%good, \%why);
 }
 
 # transcript_path(ctx, sid, cwd…) -> this session's transcript, or undef: <config dir>/projects/
@@ -344,11 +447,18 @@ sub handoff_lines {
         return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e;
         return ([ 'Approvals (checked): none' ], { source => 'handoff', checked => 0, gate => 0, classes => [] });
     }
-    my $ok = checked_ids($d->{fm}{approvals_checked});
+    # U3-01: a checked id carries only when its line matches the hash publish recorded.
+    my ($ok, $why) = verify_checked($ctx, $d, checked_ids($d->{fm}{approvals_checked}));
     # An id on two lines is no one's check (R3-05; publish refuses it, an edited file may not).
     my %n;
     $n{ $_->{id} }++ for @e;
-    return _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
+    my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
+    my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %$why;
+    if (@bad) {
+        push @$out, 'Approvals (context only, re-ask): ' . join(', ', map { "$_ ($HASH_WHY{ $why->{$_} })" } @bad);
+        $row->{unverified} = scalar @bad;
+    }
+    return ($out, $row);
 }
 
 # summary_lines(copy text, transcript path [, cwd, sid]) -> (lines, row): `measure --compact --copy` (AP-5).

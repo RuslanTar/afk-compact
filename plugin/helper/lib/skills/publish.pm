@@ -264,6 +264,18 @@ sub run {
     die "no free handoff name\n" unless $path;
     skills::util::write_excl("$dir/published", "$path\n", 0600);
 
+    # ---- U3-01: the checked approval lines' hashes, read from the placed file, in the store's
+    # plugin-owned record; without it every line of this handoff is context only (re-ask).
+    if (@{ $ap->{checked} || [] }) {
+        my $pd = skills::store::read_doc($path);
+        my ($n, $hwhy) = $pd ? skills::approvals::record_hashes($ctx, $pd, $ap->{checked}) : (0, q(read-back));
+        $row->{approvals}{hashed} = $n if $row->{approvals};
+        if ($hwhy) {
+            skills::cli::say("ADVISORY approval-hash-unrecorded $hwhy (the approvals of this handoff are context only)");
+            $row->{lint_rules} = [ sort(@{ $row->{lint_rules} }, 'approval-hash-unrecorded') ];
+        }
+    }
+
     # ---- pin under the TPL §6 lock
     my $wh = $g->{in_git} ? skills::gitfacts::work_hash($g->{worktree}) : undef;
     my ($ok, $err) = skills::ctx::pin_update($ctx, $s->{session_id}, sub {

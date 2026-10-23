@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "AP-4 (SPEC-DELTAS §3.1; spec §15): approval-shape for a line without targets and a new approval line outside ## Approvals; approval-quote for a short quote after an unrelated assistant message and for words found only in a tool result, a meta row or a task notification; a typed quote and a short yes after a message naming the target are checked and listed in approvals_checked; an unreadable transcript is ADVISORY approval-unchecked and lists nothing; rows hold counts and class ids, no quote text (canary). Provisional: O-3.; REVIEW-NIGHT-3: a short quote must be the whole message, a long one whole words, a pasted approval line and another session's row do not count (R3-04, R3-03), and an id on two lines is approval-shape (R3-05)",
+ "note": "AP-4 (SPEC-DELTAS §3.1; spec §15): approval-shape for a line without targets and a new approval line outside ## Approvals; approval-quote for a short quote after an unrelated assistant message and for words found only in a tool result, a meta row or a task notification; a typed quote and a short yes after a message naming the target are checked and listed in approvals_checked; an unreadable transcript is ADVISORY approval-unchecked and lists nothing; rows hold counts and class ids, no quote text (canary). Provisional: O-3.; REVIEW-NIGHT-3: a short quote must be the whole message, a long one whole words, a pasted approval line and another session's row do not count (R3-04, R3-03), and an id on two lines is approval-shape (R3-05); U3-01 (root ruling 2026-10-23 11:56): publish records the hash of each checked line; an own base edited after publish lends only the ids whose line matches its record",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -476,6 +476,143 @@
      }
     ]
    }
+  },
+  {
+   "name": "U3-01 setup: an own handoff whose U-9 line and id were added after publish (its record holds U-2 only)",
+   "setup": [
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-20-00_edited.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 1b1b1b1b\ndate: 2026-10-21T14:20:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\napprovals_checked: U-2, U-9\n---\n⟪$BRAND v1 n=1b1b1b1b s=manual⟫\n# LAB-9 — an own handoff edited after publish\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · used 2026-10-21 14:06 +0300 · given 11111111 2026-10-21 13:00 +0300\n- U-9: approval \"ship the retry fix to the beta testers\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=1b1b1b1b⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.1b1b1b1b.json",
+     "content": "{\"lines\":{\"U-2\":\"0f5b1e81d8128f4a07e775790e1aa2bda7186e55c8eefc4f71c84d9f5a32fa6d\"},\"nonce\":\"1b1b1b1b\",\"session_id\":\"$SID\",\"v\":1}"
+    }
+   ]
+  },
+  {
+   "name": "U3-01 begin: the edited file is the own base",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_handoff": "$ROOT/repo/approvals/2026-10-21_14-20-00_edited.md",
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "now": "2026-10-21T14:22:00+03:00"
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "now": "2026-10-21T14:22:00+03:00"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:22 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · used 2026-10-21 14:06 +0300 · given 11111111 2026-10-21 13:00 +0300\n- U-9: approval \"ship the retry fix to the beta testers\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:22 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:22 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "U3-01 own carry: the line matching the record carries; the added one does not (unchecked: the transcript is unreadable)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-unchecked line 11$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "approval-unchecked line 10$",
+     "approval-hash-unrecorded"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 2,
+        "checked": 1,
+        "unchecked": 1,
+        "hashed": 1
+       }
+      }
+     }
+    ]
+   },
+   "now": "2026-10-21T14:22:00+03:00",
+   "capture": {
+    "PUB4": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "U3-01 only the verified id is listed, and publish recorded its hash",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB4",
+      "has": [
+       "^approvals_checked: U-2$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "U3-01 measure on the new handoff lists U-2 as recorded",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB4"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$"
+    ],
+    "stdout_lacks": [
+     "context only",
+     "U-9 git push"
+    ]
+   },
+   "now": "2026-10-21T14:22:00+03:00"
   }
  ]
 }
