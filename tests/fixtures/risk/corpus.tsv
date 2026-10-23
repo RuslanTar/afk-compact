@@ -140,3 +140,18 @@ none	go test -v -race ./...	-	R2-01
 none	go test -count=1 -run TestX ./...	-	R2-01
 none	cargo test --release	-	R2-01
 none	cargo test retry -- --nocapture	-	R2-01
+ask	git log -"-output=src/../../x"	not-read-only	R3-01: the shell drops the quotes, so git log writes a file outside the tree
+ask	git log --o"utput"=notes.txt	not-read-only	R3-01: a quote inside the option word
+ask	git log --out\put=notes.txt	not-read-only	R3-01: a backslash inside the option word
+ask	git log "--o"utput=notes.txt	not-read-only	R3-01: a quoted part, then letters
+ask	git show "-"-output=notes.txt	not-read-only	R3-01
+ask	rg -e"pattern" src	not-read-only	R3-01: a quote right after the option letter (conservative)
+ask	grep -rS private .	not-read-only	R3-10: BSD grep -S follows every link
+ask	grep --deref private .	not-read-only	R3-10: GNU abbreviation of --dereference-recursive
+ask	sort --files0-from=src/list.txt	not-read-only	R3-10: reads every file the list names
+ask	sort --fil=src/list.txt	not-read-only	R3-10: its abbreviation
+ask	ls --deref docs-link	not-read-only	R3-10
+ask	diff --rec src docs-link	not-read-only	R3-10
+none	git log --format="%h %s" -5	-	R3-01: a value quoted after = stays read-only
+none	rg -n "foo bar" src	-	R3-01: a whole quoted word stays read-only
+none	git log --author="A B" -3	-	R3-01

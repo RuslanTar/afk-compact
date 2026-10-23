@@ -197,11 +197,35 @@ sub classify {
     return { result => 'ask', classes => \@classes, ids => \@ids, why => undef, notes => \@notes };
 }
 
-# Simple word split of one segment: double quotes group (single quotes are opaque already).
+# Word split of one segment with the shell's quote removal: double-quoted and single-quoted
+# parts and backslash escapes anywhere in a word (REVIEW-NIGHT-3 R3-01: `ma"in"` is `main`,
+# `src/../"x"` a path), so the path and destination checks see the words the shell passes on.
 sub _words {
     my ($seg) = @_;
-    my @w;
-    while ($seg =~ /\G\s*(?:"((?:[^"\\]|\\.)*)"|(\S+))/gc) { push @w, defined $1 ? $1 : $2 }
+    my (@w, $cur);
+    my $n = length $seg;
+    for (my $i = 0; $i < $n; $i++) {
+        my $c = substr($seg, $i, 1);
+        if ($c =~ /\s/) { push @w, $cur if defined $cur; undef $cur; next }
+        $cur //= '';
+        if ($c eq '\\') { $cur .= substr($seg, ++$i, 1) if $i + 1 < $n; next }
+        if ($c eq "'") {
+            my $j = index($seg, "'", $i + 1);
+            $j = $n if $j < 0;
+            $cur .= substr($seg, $i + 1, $j - $i - 1);
+            $i = $j;
+            next;
+        }
+        if ($c eq '"') {
+            for ($i++; $i < $n && substr($seg, $i, 1) ne '"'; $i++) {
+                $i++ if substr($seg, $i, 1) eq '\\' && $i + 1 < $n && substr($seg, $i + 1, 1) =~ /["\\\$`]/;
+                $cur .= substr($seg, $i, 1);
+            }
+            next;
+        }
+        $cur .= $c;
+    }
+    push @w, $cur if defined $cur;
     return @w;
 }
 
