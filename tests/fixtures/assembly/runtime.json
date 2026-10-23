@@ -14,5 +14,6 @@
   "handoff_path": "~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md",
   "draft_state": "present",
   "handoff_finish": "`\"/p/scripts/{{plugin}}-store\" publish --stage '~/.claude/handoffs/.staging/5e55a001-h1' --slug retry --status active`",
-  "idle_min": "49"
+  "idle_min": "49",
+  "idle_used_at": "2026-10-21T14:30:00+03:00"
 }

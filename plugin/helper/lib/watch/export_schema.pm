@@ -42,7 +42,8 @@ my @HT_REASON = qw(halt cap precompact idle last-cycle nonok thrash manual);
 my @HT_END = qw(published none race aborted);
 my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-failed submit-failed again
                   triggers-off small-window session-changed busy aborted small ttl-5m near-limit episode published
-                  cooldown disabled halted precompute in-flight native-on native-unknown);
+                  cooldown disabled halted precompute in-flight native-on native-unknown
+                  native-fired agents-running);
 my @IDLE_SRC = qw(mod notice return both none);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
@@ -163,8 +164,13 @@ our %SCHEMA = (
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash' },
-    # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load
-    idle_mode => { native => [enum => qw(on off unknown)], plugin_turn => [enum => qw(on off)] },
+    # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
+    # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
+    # cached (2b, a hint only, never used to decide)
+    idle_mode => { native => [enum => qw(on off unknown)], plugin_turn => [enum => qw(on check off)], served_hint => 'word' },
+    # owner xxxxxxxx-17: a break of 55.5 min or more at 200K and more with no compaction since the
+    # turn end, while the setting allowed native idle compaction (native stayed silent)
+    idle_silent => { gap_s => 'num', tokens => 'num', agents => 'int', served_hint => 'word' },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num', model => 'model' },
     handoff_turn_end => {
@@ -189,8 +195,9 @@ our %SCHEMA = (
     # ID-2 (2026-10-23): a native idle compaction no plugin dispatch shaped (A-29)
     idle_unshaped => { boundary_uuid => 'hash' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
-    # ID-3 (owner D2, 2026-10-23): the [idle-return] line was due at a person's return; sent or not
-    idle_return => { age_s => 'num', sent => 'bool' },
+    # owner xxxxxxxx-37 (replaces ID-3's [idle-return] line): the idle block went again to a
+    # person's return after a background result's turn took it; re-measured or not
+    idle_return => { nonce => 'nonce', age_s => 'num', remeasured => 'bool' },
     # RP-2 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): a resume block over its soft 6,500 chars
     resume_block_over_soft => { nonce => 'nonce', chars => 'int' },
     resume_remeasure_failed => { nonce => 'nonce', age_s => 'num' },

@@ -18,7 +18,7 @@ import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWat
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlock, claimedElsewhere, logOutcome, prodAllowed } from './resume'
+import { buildBlockWith, claimedElsewhere, logOutcome, prodAllowed } from './resume'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -56,6 +56,31 @@ export function idleGap(s: Deps['state'], trigger: string, now: number): number 
 async function dispatchPath(d: Deps, sid: string, nonce: string): Promise<string | undefined> {
   const p = await d.paths()
   return p ? `${p.watch}/${sid}/dispatch/${nonce}.json` : undefined
+}
+
+function seenKey(sid: string): string {
+  return `idle_seen:${sid}`
+}
+
+/**
+ * Owner xxxxxxxx-17: a main compaction completed (any trigger the after-step sees: not
+ * precompute), and whether it was an idle dispatch; kept in the load and in `$.store`, so the
+ * 55.5-min outcome check finds it after a reload too.
+ */
+export async function noteCompaction(d: Deps, sid: string, idle: boolean): Promise<void> {
+  const at = await d.now()
+  d.state.compactedAt = { sid, at, idle }
+  await d.storeSet(seenKey(sid), { at, idle })
+}
+
+/** The last main compaction of this sid at or after `since` (the plugin's own records), or undefined. */
+export async function compactedSince(d: Deps, sid: string, since: number): Promise<{ at: number; idle: boolean } | undefined> {
+  let c: { at: number; idle: boolean } | undefined = d.state.compactedAt?.sid === sid ? d.state.compactedAt : undefined
+  if (c === undefined) {
+    const v = (await d.storeGet(seenKey(sid))) as Record<string, unknown> | null | undefined
+    if (v && typeof v === 'object' && typeof v.at === 'number') c = { at: v.at, idle: v.idle === true }
+  }
+  return c !== undefined && c.at >= since ? c : undefined
 }
 
 /** A dispatch record with this nonce exists (the nonce redraw check). */
@@ -319,6 +344,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   const s = d.state
   const main = a.agentId === null
   const actor = a.agentId ?? 'main'
+  // Owner xxxxxxxx-17: the 55.5-min idle check reads this, first, so a later failure cannot hide it.
+  if (main) await noteCompaction(d, a.sid, a.idle === true)
   const summary = a.messages.find(m => m.role === 'user' && m.text.startsWith(SUMMARY_PREFIX))
   let verdict: Verdict = 'unshaped'
   let savedCopy: string | null = null
@@ -385,19 +412,23 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   const blockArgs: BlockArgs = {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
-    ...(a.idle === true ? { idle: true } : {}),
+    // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
+    ...(a.idle === true ? { idle: true, halt: s.halt.active } : {}),
   }
-  const block = await buildBlock(d, a.sid, blockArgs)
+  const built = await buildBlockWith(d, a.sid, blockArgs)
   // A block still pending is replaced by this one: its outcome is settled now (no channel
-  // will try it again).
+  // will try it again). So is a block held for a person's return (owner xxxxxxxx-37).
   const old = s.pending
   if (old) {
     s.pending = undefined
     await logOutcome(d, old.sid, old.nonce, old.outcome, await claimedElsewhere(d, old))
   }
+  s.idleAgain = undefined
   const pend: PendingResume = {
-    sid: a.sid, nonce: a.nonce, block, builtAt: await d.now(), args: blockArgs, resumePref: a.resumePref, turnSeq: s.turnSeq,
+    sid: a.sid, nonce: a.nonce, block: built.block, builtAt: await d.now(), args: blockArgs, resumePref: a.resumePref, turnSeq: s.turnSeq,
     outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active, ...(a.stats !== undefined ? { handoff: a.stats } : {}) },
+    ...(built.remeasure !== undefined ? { remeasure: built.remeasure } : {}),
+    measuredAt: built.measuredAt,
   }
   s.pending = pend
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)

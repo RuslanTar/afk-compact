@@ -32,8 +32,9 @@ AT-P-07, AT-TX-10), with @store@ at a 160-character root stand-in (PKG-RUNTIME A
 limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails. The
 resume protocol and the resume block total (RP-1, owner 2026-10-23) are soft targets that pass
 only with a logged reason in tools/budget-reasons.json (ADVISORY <budget> <n> > soft <s>: <reason>),
-and only up to the size that reason names; without one they fail. The [idle-return] line (ID-3)
-is checked alone and its static part counts against the protocol. AT-QA-01: with no [queue] tag
+and only up to the size that reason names; without one they fail. The idle rows cover [idle],
+its halt variant [idle-halt] and the [idle-again] note of a person's return (owner xxxxxxxx-18,
+-25, -37; the ID-3 [idle-return] line is gone). AT-QA-01: with no [queue] tag
 the main text and the nudge name no queue or lane.
 Exit 1 when a hard budget is exceeded or any check fails.
 """
@@ -93,26 +94,31 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            "draft_state": "present",
            "handoff_finish": "`<store> publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`",
            # IC-1 D5 [submit-idle]: minutes idle when the pre-idle turn fires (MOD-SPEC §9.4: 49).
-           "idle_min": "49"}
-# ID-3 [idle-return]: `measure --compact --brief` output at its cap (600 B). Only the check of
-# the [idle-return] line fills it (that line is never part of a resume block render).
-IDLE_RETURN = "i" * 600
+           "idle_min": "49",
+           # Owner xxxxxxxx-37 [idle-again]: when a background result's turn took the idle block
+           # (the @measured_at@ form).
+           "idle_used_at": "2026-10-21T04:40:00+03:00"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
 # Tags per asset, in the order DESIGN-NOTES §2 lists them (golden file names use this order).
 # BLD-04: resume-context gains [idle] (IC-1 D3) and [prod-forbid]/[prod-allow] (S-SETTINGS B);
+# 2026-10-23: [idle-halt] (owner xxxxxxxx-25, [idle] in halt mode) and [idle-again] (owner
+# xxxxxxxx-37, the block again on a person's return);
 # handoff-turn gains [submit-pre], [submit-halt] (S-SETTINGS D) and [submit-idle] (IC-1 D5).
 # Q-ADAPTER QA-3 / QA-B3 (owner xxxxxxxx-11): the main text gains [queue], kept only when
 # queue_cmd is set (both paths).
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
-        "res": ["midturn", "nonok", "idle", "handoff", "handoff-partial", "prod-forbid", "prod-allow"],
+        "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
 # active on every path; "most" = at most one. combos() skips every other combination, so the
 # goldens, the step checks and every walk over combinations see only paths that can happen.
-EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "midturn"), "most")]}
+EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "idle-halt", "midturn"), "most")]}
+# A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
+# block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
+NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt")}}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
@@ -158,7 +164,6 @@ BUDGETS = {
     "resume protocol":       ("chars", 3000, None),
     "resume block total":    ("chars", 6500, None),
     "sessionstart cutoff":   ("chars", None, 10000),
-    "idle-return line":      ("chars", None, 900),    # ID-3: the [idle-return] line alone, @idle_return@ at its 600 B cap
     "nudge":                 ("chars", 2200, None),
     "handoff turn submit":   ("chars", None, None),   # D-18 handoff-turn.txt: printed, no limit set
     "handoff turn note":     ("chars", None, None),
@@ -265,10 +270,14 @@ def static(text, tags, drop=()):
 
 
 def valid(asset, tags):
-    """XR-19: the combination keeps every EXCLUSIVE rule of the asset."""
+    """XR-19: the combination keeps every EXCLUSIVE rule of the asset, and every NEEDS_ONE_OF tag
+    in it has one of its partners."""
     for members, rule in EXCLUSIVE.get(asset, []):
         n = sum(1 for t in members if t in tags)
         if n > 1 or (rule == "one" and n != 1):
+            return False
+    for tag, partners in NEEDS_ONE_OF.get(asset, {}).items():
+        if tag in tags and not any(p in tags for p in partners):
             return False
     return True
 
@@ -541,16 +550,6 @@ def goldens_module(runtime, rows):
             "export const GOLDENS: readonly Golden[] = " + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
 
 
-def idle_return_line(text, fill):
-    """ID-3: the [idle-return] lines alone (tag removed), as the mod delivers them on its own,
-    with @idle_return@ filled; the line is never part of a resume block render (no TAGS entry)."""
-    lines = [ln[len("[idle-return] "):] for ln in text.splitlines() if ln.startswith("[idle-return] ")]
-    if not lines:
-        return ""
-    s = "\n".join(lines).strip() + "\n"
-    return re.sub(r"@([a-z_]+)@", lambda m: fill if m.group(1) == "idle_return" else RUNTIME.get(m.group(1), m.group(0)), s)
-
-
 BLOCK = "x" * BUDGETS["measured block"][2]  # worst-case measured block (header + facts)
 bad = False
 print(f"assets: {os.path.relpath(DIR, REPO)}  plugin name length: {len(NAME)}  runtime path length: {PATH_LEN}")
@@ -581,21 +580,19 @@ def res_label(tags):
     return "+".join(PROD_LABEL.get(t, t) for t in tags)
 
 
+# Owner xxxxxxxx-25 / -37: an idle block is [idle] or, in halt mode, [idle-halt]; a person's
+# return after a background result's turn took it adds [idle-again].
+IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"], ["idle", "nonok", "handoff-partial"],
+             ["idle", "idle-again", "nonok", "handoff-partial"], ["idle-halt", "nonok", "handoff-partial"],
+             ["idle-halt", "idle-again", "nonok", "handoff-partial"])
 for base in ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
-             ["midturn", "nonok", "handoff-partial"], ["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"],
-             ["idle", "nonok", "handoff-partial"]):
+             ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS:
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
-# ID-3: after an idle compaction the returning user's turn may also get the [idle-return] line
-# (its static part counts against the protocol budget; RP).
-IDLE_RETURN_STATIC = idle_return_line(res, "")
-if IDLE_RETURN_STATIC:
-    tags, s = longest("res", [["idle", "nonok", "handoff-partial", p] for p in PROD], drop=("measured_at", "remeasure"))
-    bad |= check(f"resume protocol {res_label(tags)}+idle-return", s + IDLE_RETURN_STATIC, "resume protocol")
-    bad |= check("resume [idle-return] line alone (600 B fill)", idle_return_line(res, IDLE_RETURN), "idle-return line")
 RUNTIME["remeasure"] = BLOCK
 for base in (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["idle", "nonok"],
-             ["idle", "nonok", "handoff-partial"]):
+             ["idle", "nonok", "handoff-partial"], ["idle", "idle-again", "nonok", "handoff-partial"],
+             ["idle-halt", "idle-again", "nonok", "handoff-partial"]):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")

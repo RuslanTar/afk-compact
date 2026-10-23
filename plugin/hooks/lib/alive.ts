@@ -114,7 +114,7 @@ export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
   cancelIdleTimer(d)
   s.resumeAfter = false
   s.lastCycle = null
-  s.idleReturn = undefined
+  s.idleAgain = undefined
   const h = s.handoffTurn
   s.handoffTurn = undefined
   const pend = s.pending

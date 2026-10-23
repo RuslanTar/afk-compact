@@ -10,13 +10,13 @@ import type { AssetName } from './assets.gen'
  * `submit`, `near`, `spent` and `imminent`. 2026-10-22 (MOD-SPEC §3.4, BUILD-PLAN §3.4): the
  * resume block's `prod-forbid`/`prod-allow` (exactly one) and `idle` (never with `midturn`), and
  * the handoff-turn asset's `submit-halt`, `submit-pre` and `submit-idle` (one per turn kind).
+ * 2026-10-23: the resume block's `idle-halt` (owner xxxxxxxx-25: `[idle]` in halt mode, never with
+ * `idle` or `midturn`) and `idle-again` (owner xxxxxxxx-37: the block again on a person's return).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
-  | 'prod-forbid' | 'prod-allow' | 'idle' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  /** ID-3: the resume context's line the mod delivers on its own (tagOnly), never in a block render. */
-  | 'idle-return'
+  | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
@@ -24,8 +24,8 @@ export type Runtime = Partial<Record<
   | 'halt_reason' | 'max_calls' | 'handoff_path' | 'draft_state' | 'handoff_finish'
   /** `storeWord()` of this plugin's launcher (PKG-RUNTIME A.2); the idle turn's minutes (IC-1 D5). */
   | 'store' | 'idle_min'
-  /** ID-3: one line of `measure --compact --brief`. */
-  | 'idle_return',
+  /** Owner xxxxxxxx-37: when a background result's turn took the idle block (`[idle-again]`). */
+  | 'idle_used_at',
   string
 >>
 
@@ -77,23 +77,6 @@ export function assembleIf(plugin: string, asset: string, tags: readonly Tag[], 
   if (!hasAsset(asset)) return undefined
   const s = assemble(plugin, asset, tags, runtime, drop)
   return s.trim() === '' ? undefined : s
-}
-
-/**
- * ID-3: only the asset's `[tag] ` lines (tag removed), filled: a line the mod delivers on its own
- * (`[idle-return]`), never part of a block render. Same as tools/assemble `idle_return_line`.
- * Undefined when the asset is missing or has no such line.
- */
-export function tagOnly(plugin: string, asset: string, tag: Tag, runtime: Runtime): string | undefined {
-  if (!hasAsset(asset)) return undefined
-  const head = `[${tag}] `
-  const lines = splitLines(assetText(asset, plugin)).filter(l => l.startsWith(head)).map(l => l.slice(head.length))
-  if (lines.length === 0) return undefined
-  const s = pyStrip(lines.join('\n')) + '\n'
-  return s.replace(/@([a-z_]+)@/g, (whole, name: string) => {
-    const v = (runtime as Record<string, string | undefined>)[name]
-    return v === undefined ? whole : v
-  })
 }
 
 /** BUILD-PLAN §3.4 item 5: no `[tag] ` line start, no `@…@`, no build-time brace token, no review comment. */

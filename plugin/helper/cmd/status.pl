@@ -392,12 +392,14 @@ sub prod_lines {
 }
 
 # ---------------------------------------------------------------- pre-idle turn (IA-4) and SK-7
-# IA-4 (idle D3, owner 2026-10-23 02:4x): whether the plugin's own pre-idle handoff turn is on:
-# `idle_handoff_turn: auto` and Claude Code's idle compaction off (`idleCompaction`, or its
-# precondition `autoCompactEnabled`, false in the user settings file). A file that cannot be read
-# as JSON counts as native on (O-9, provisional: the plugin sends nothing while the user is away);
-# a missing file or key is on, as the mod reads the merged settings (deps.nativeIdle). This line
-# reads the user file only; the mod's own reading is the one that arms the turn.
+# IA-4 (idle D3, owner 2026-10-23 02:4x; reworded by owner xxxxxxxx-17, "Check outcome at
+# 55.5m"): when the plugin's own pre-idle handoff turn runs. `idle_handoff_turn: auto` with Claude
+# Code's idle compaction off (`idleCompaction`, or its precondition `autoCompactEnabled`, false in
+# the user settings file): at 49 minutes. Native on, or a file that cannot be read as JSON (O-9:
+# "unreadable means check what happened"): the plugin checks at 55.5 minutes and runs its turn
+# only when native did not compact (not while agents run, owner xxxxxxxx-38). A missing file or
+# key is on, as the mod reads the merged settings (deps.nativeIdle). This line reads the user file
+# only; the mod's own reading is the one that arms the timer.
 sub _json_false { my ($v) = @_; return jsonc::is_bool($v) && !$$v ? 1 : 0 }
 sub idle_lines {
     my $r = rc::settings();
@@ -411,8 +413,9 @@ sub idle_lines {
         if (ref $j ne 'HASH') { $native = 'unknown' }
         elsif (_json_false($j->{idleCompaction}) || _json_false($j->{autoCompactEnabled})) { $native = 'off' }
     }
-    return ('pre-idle handoff turn: auto (native idle compaction off → the plugin\'s turn is on)') if $native eq 'off';
-    return ('pre-idle handoff turn: auto (native idle compaction ' . ($native eq 'on' ? 'on' : 'unreadable, counts as on') . ' → off)');
+    return ('pre-idle handoff turn: auto (native idle compaction off → the plugin\'s turn at 49 min)') if $native eq 'off';
+    return ('pre-idle handoff turn: auto (native idle compaction ' . ($native eq 'on' ? 'on' : 'unreadable')
+            . ' → the plugin checks at 55.5 min and runs its turn only if native did not compact)');
 }
 
 # SK-7 (owner xxxxxxxx-12/-13/-14): the six 2026-10-23 keys as values the user can check, never

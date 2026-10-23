@@ -30,6 +30,8 @@ export class World {
   policy: Record<string, unknown> = {}
   /** Every `$.settings.read` rejects (IA-2: native idle then reads `unknown`). */
   settingsThrow = false
+  /** `$.agent.list()` (owner xxxxxxxx-38); undefined: the call rejects. */
+  agents: { id: string; status: string }[] | undefined = []
   files = new Map<string, string>()
   writes: string[] = []
   calls: Call[] = []
@@ -115,6 +117,10 @@ export class World {
     on('settings.read', () => {
       if (this.settingsThrow) throw new Error('settings unreadable')
       return { value: this.policy }
+    })
+    on('agent.list', () => {
+      if (this.agents === undefined) throw new Error('no agent list')
+      return { value: this.agents.map(a => ({ id: a.id, description: 'job', type: 'general-purpose', status: a.status })) as never }
     })
     on('ui.toast', (_$, e) => {
       this.toasts.push(e.text)

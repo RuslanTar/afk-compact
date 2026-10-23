@@ -121,6 +121,8 @@ export type HandoffTurn = {
   stamped?: boolean
   /** MG-3: the first request's cache-read share (`turn.step` index 0); null when it had no usage. */
   firstReadShare?: number | null
+  /** `@idle_min@` of a pre-idle turn: 49, or 55 when the 55.5-min outcome check runs it (owner xxxxxxxx-17). */
+  idleMin?: string
 }
 
 /**
@@ -231,7 +233,7 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   const store = storeRuntime(d)
   const runtime: Runtime = { max_calls: String(h.maxCalls), ...store.runtime }
   if (isHalt(h.reason)) runtime.halt_reason = HALT_REASON_TEXT[h.reason]
-  if (h.reason === 'idle') runtime.idle_min = IDLE_MIN_TEXT
+  if (h.reason === 'idle') runtime.idle_min = h.idleMin ?? IDLE_MIN_TEXT
   const text = submitText(d.name, kindOf(h.reason), runtime, store.drop)
   if (text === undefined) {
     await skipped(d, sid, 'no-asset', null, h.reason)

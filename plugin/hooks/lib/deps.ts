@@ -105,10 +105,24 @@ export interface Deps {
   /**
    * IA-2 (idle D3): Claude Code's own idle compaction as the merged settings say. `off` when
    * `idleCompaction` or its precondition `autoCompactEnabled` is `false` (IC-1 F4); `unknown` when a
-   * read throws (counts as on: the plugin sends nothing while the user is away, O-9); else `on`.
-   * The server can still keep native idle off while the setting allows it (IC-1 F2).
+   * read throws; else `on`. The server can still keep native idle off while the setting allows it
+   * (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome check (owner xxxxxxxx-17, O-9:
+   * "unreadable means check what happened").
    */
   nativeIdle(): Promise<'on' | 'off' | 'unknown'>
+  /**
+   * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
+   * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
+   * logged hint only: the plugin never decides on it (an internal cache shared by all processes
+   * that flips between fetches). Undefined when it cannot be read.
+   */
+  servedHint(): Promise<string | undefined>
+  /**
+   * Owner xxxxxxxx-38 ("Measure more first"): subagents and teammates of this session that have
+   * not ended (`$.agent.list()`, any status but completed, failed or killed), by id; undefined
+   * when the list cannot be read. A workflow's agents are not listed: `agentTurns` counts them.
+   */
+  agentsAlive(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
 }
@@ -213,13 +227,29 @@ export type LoadState = {
   idleEpisode: { since: number; done: boolean } | undefined
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
   publishedSinceHuman: boolean
-  /** The `native/plugin_turn` pair of the last `idle_mode` row this load wrote (IA-3), undefined before the first. */
+  /**
+   * The `native/plugin_turn/served_hint` triple of the last `idle_mode` row this load wrote (IA-3,
+   * owner xxxxxxxx-17), undefined before the first.
+   */
   idleMode: string | undefined
   /**
-   * ID-3: a turn not of a person's (a background result) took an idle compaction's resume block
-   * at `at`; the next human-origin turn decides whether `[idle-return]` goes out.
+   * Owner xxxxxxxx-37 ("Full block again on return"): a turn not of a person's (a background
+   * result) took an idle compaction's resume block at `usedAt`; the first human-origin turn gets
+   * the full block again, re-measured, with `[idle-again]`. `remeasure` is the measure that turn's
+   * block was built with, taken at `measuredAt` (used, with that stamp, when the new measure fails).
    */
-  idleReturn: { sid: string; at: number } | undefined
+  idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
+  /**
+   * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
+   * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
+   * end it was armed for. Also kept in `$.store` (`idle_seen:<sid>`), so a reload keeps it.
+   */
+  compactedAt: { sid: string; at: number; idle: boolean } | undefined
+  /**
+   * Owner xxxxxxxx-38: agent loops (subagents, teammates, a workflow's agents) whose turn started
+   * and has not completed in this load, by agent id.
+   */
+  agentTurns: Set<string>
 }
 
 export type PendingResume = {
@@ -229,7 +259,11 @@ export type PendingResume = {
   /** When the block was built, and what it was built from: a block delivered more than 600 s later is built again with a fresh measure (IC-1 D3). */
   builtAt: number
   args: BlockArgs
-  resumePref: 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
+  /** The measure the block was built with (owner xxxxxxxx-25: a halt change rebuilds it without a new helper call). */
+  remeasure?: string
+  /** When that measure was taken (`@measured_at@` of a rebuild that takes no new one; `builtAt` when absent). */
+  measuredAt?: number
+  resumePref:'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
   /** Main turn count when it became pending (an undelivered block survives a whole turn). */
   turnSeq: number
   /** What the mod decided for this compaction, logged as `mod_outcome` once the block settles. */
@@ -310,7 +344,9 @@ export function newState(loadId: string): LoadState {
     idleEpisode: undefined,
     publishedSinceHuman: false,
     idleMode: undefined,
-    idleReturn: undefined,
+    idleAgain: undefined,
+    compactedAt: undefined,
+    agentTurns: new Set(),
   }
 }
 
@@ -421,6 +457,31 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         return 'unknown'
       }
     },
+    async servedHint() {
+      // `$.env.get` takes literal names only (the engine lists what a module reads).
+      let dir: string | undefined
+      try {
+        dir = (await $.env.get('CLAUDE_CONFIG_DIR')) || undefined
+      } catch {
+        dir = undefined
+      }
+      try {
+        dir ??= (await $.env.get('HOME')) || undefined
+        if (!dir) return undefined
+        const t = await $.fs.read(dir.replace(/\/+$/, '') + '/' + SERVED_FILE)
+        return typeof t === 'string' ? servedMode(t) : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async agentsAlive() {
+      try {
+        const list = await $.agent.list()
+        return list.filter(a => !AGENT_ENDED.includes(a.status)).map(a => a.id)
+      } catch {
+        return undefined
+      }
+    },
     paths() {
       if (!state.pathsMemo) {
         state.pathsMemo = (async () => {
@@ -449,6 +510,29 @@ export function withHelperWatch(p: Paths | undefined, id: LoadState['ident']): P
   if (w === null) return undefined
   return { root: p.root, watch: w.replace(/\/+$/, '') }
 }
+
+/** Owner xxxxxxxx-17 (2b): Claude Code's own cache file, in `CLAUDE_CONFIG_DIR` or else `HOME`. */
+export const SERVED_FILE = '.claude.json'
+/** A cache file larger than this is not read for the hint. */
+export const SERVED_MAX_CHARS = 8000000
+
+/**
+ * The served idle mode in Claude Code's cache file text (`off`, `log`, `compact`,
+ * `compact_on_return`, ...), or undefined: a short lowercase word only, nothing else of the file.
+ */
+export function servedMode(text: string): string | undefined {
+  if (text.length > SERVED_MAX_CHARS) return undefined
+  try {
+    const j = JSON.parse(text) as { cachedGrowthBookFeatures?: { tengu_sunny_locket?: { mode?: unknown } } }
+    const m = j?.cachedGrowthBookFeatures?.tengu_sunny_locket?.mode
+    return typeof m === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(m) ? m : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** `AgentStatus` values of an agent that ended (owner xxxxxxxx-38: every other status counts as running). */
+export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
 
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)

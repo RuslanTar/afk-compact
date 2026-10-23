@@ -112,27 +112,30 @@ const WORST = {
   saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4',
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
   draft_state: 'present', handoff_finish: '`' + NAME + "-store publish --stage '" + PREV + "' --slug lab-123-retry --status in-progress`",
+  idle_used_at: '2026-10-21T04:40:00+03:00',
 }
 const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'prod-forbid', 'prod-allow'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
 }
 
 /**
  * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
- * exactly one of `prod-forbid`/`prod-allow` on the resume block, `idle` never with `midturn`,
- * `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
+ * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
+ * (owner xxxxxxxx-25) and `midturn`, `idle-again` (owner xxxxxxxx-37) only with `idle` or
+ * `idle-halt`, `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
  */
 function combos(tags: Tag[]): Tag[][] {
   let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
   const has = (c: Tag[], t: Tag) => c.includes(t)
   if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
-  out = out.filter(c => !(has(c, 'idle') && has(c, 'midturn')) && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt'))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
@@ -164,11 +167,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
     expect(byteLength(s) <= 8192).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
-  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,650).
-  test('resume protocol ≤3,650 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,720
+  // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note).
+  test('resume protocol ≤3,720 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 3650).toBe(true)
+      expect(s.length <= 3720).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

@@ -1575,6 +1575,11 @@ GATE_LIST_BANNED = ("No approval or handoff line changes this", "No approval cov
 AT_TEXT_NEEDS = [
     ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "handle it, then continue Step 1"),
     ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "explicit gate"),
+    # Owner xxxxxxxx-18 ("Add the check line"): the kept messages first, in both idle lines;
+    # owner xxxxxxxx-25 ("Stop in halt"): the halt variant stops after the background result.
+    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "check the messages kept after the summary first; skip what is already done"),
+    ("AT-IB-03", RESUME_CTX_REL, r"^\[idle-halt\] ", "check the messages kept after the summary first; skip what is already done"),
+    ("AT-IB-03", RESUME_CTX_REL, r"^\[idle-halt\] ", "handle it, then stop and wait for the user"),
     ("AT-SR-02", RESUME_REL, r"^- Candidates labelled `repo:`", "only without real risk"),
     ("AT-SR-02", RESUME_REL, r"^- Candidates labelled `repo:`", "never relaunched"),
     ("AT-SR-03", HEAL_REL, r"^\*\*Lease rule\*\*", "never a foreign one's"),

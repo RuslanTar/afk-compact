@@ -1,7 +1,6 @@
 // `$.process.run` wrappers for every helper subcommand the mod calls (BUILD-PLAN §3.1). A call
 // that rejects (cannot start, timed out) or exits non-zero is a failed call; callers fall back.
 import type { Deps, RunResult } from './deps'
-import { byteLength } from './normalize'
 
 /** MOD-SPEC §2.3: 2 s for helper calls. */
 export const HELPER_MS = 2000
@@ -283,25 +282,4 @@ export async function measure(d: Deps, sid: string, nonce?: string, timeoutMs = 
   const args = ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : []), ...(copy !== undefined && copy !== '' ? ['--copy=' + copy] : [])]
   const r = await call(d, args, timeoutMs)
   return r.ok ? r.stdout.replace(/\s+$/, '') : undefined
-}
-
-/** ID-3: `measure --compact --brief` caps its line at this many bytes; the mod cuts at it too. */
-export const BRIEF_MAX = 600
-
-/** ID-3: `measure --sid --compact --brief`, one line (git and in-flight counts), or undefined. */
-export async function measureBrief(d: Deps, sid: string, timeoutMs: number): Promise<string | undefined> {
-  const r = await call(d, ['measure', '--sid', sid, '--compact', '--brief'], timeoutMs)
-  const line = r.ok ? (r.stdout.split('\n').find(l => l.trim() !== '') ?? '').trim() : ''
-  if (line === '') return undefined
-  if (byteLength(line) <= BRIEF_MAX) return line
-  // Cut at a whole code point (never half a surrogate pair).
-  let out = ''
-  let n = 0
-  for (const ch of line) {
-    const b = byteLength(ch)
-    if (n + b > BRIEF_MAX) break
-    out += ch
-    n += b
-  }
-  return out
 }
