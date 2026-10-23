@@ -248,6 +248,12 @@
       "default": 50,
       "min": 0,
       "max": 10000
+    },
+    "protected_branches": {
+      "type": "string",
+      "title": "Protected branches",
+      "description": "Extra branch names or globs, separated by ';', that count as protected beside the shipped list (the remote's default branch, main, master, trunk, develop, stable, staging, gh-pages, prod…, release…, hotfix/…): a push to one always asks again, whatever was approved before. * matches within one part of the name, ** across /, ? one character. They can only add: no entry removes a shipped branch. Read from your settings file only (flags and env are ignored). Empty = the shipped list only.",
+      "default": ""
     }
   }
 }

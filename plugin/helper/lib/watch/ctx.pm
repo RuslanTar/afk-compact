@@ -58,6 +58,9 @@ my %DEFAULTS = (
     handoff_turn_max_tokens     => 64000,
     # SK-6 (owner xxxxxxxx-14, S-SETTINGS E6): the watch folder size that raises A-24 (0 = off)
     watch_quota_mb              => 50,
+    # owner xxxxxxxx-29: the user's add-only protected branches (a protective key: _settings
+    # takes it from the resolved settings only, never from env)
+    protected_branches          => '',
 );
 
 my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
@@ -94,6 +97,12 @@ sub _settings {
     for my $k (keys %DEFAULTS) {
         my $v;
         $v = $given->{$k} if $given && exists $given->{$k};
+        if ($k eq 'protected_branches') {
+            # Protective (settings.pm %NO_FLAG): the resolved value or nothing; an env value
+            # would make the watcher's protected-push reading differ from the approvals'.
+            $s{$k} = (defined $v && !ref $v) ? $v : $DEFAULTS{$k};
+            next;
+        }
         $v = _expand($v) if defined $v && !ref $v;
         unless (defined $v) {
             $v = _expand($ENV{'CLAUDE_PLUGIN_OPTION_' . uc $k});

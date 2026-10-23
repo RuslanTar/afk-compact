@@ -8,7 +8,8 @@
 # marker is missing; the min_window sentence (P5-FOLD A3); the allow rule, the stale-rule check
 # and the user-run lines with the real plugin folder (PKG-RUNTIME A.6; read only, nothing is
 # written); relaunch_allow active (S-SETTINGS C); the unattended_prod_reads line (S-SETTINGS B);
-# the kept mismatch stashes with their paths (C-STORE D3).
+# the kept mismatch stashes with their paths (C-STORE D3). 2026-10-23 (owner xxxxxxxx-29): the
+# protected branches line with a warning per ignored protected_branches entry.
 use strict;
 use warnings;
 use utf8;
@@ -140,6 +141,7 @@ sub run {
     push @out, mode_lines($opt->{cwd});
     push @out, relaunch_lines($d);
     push @out, prod_lines();
+    push @out, protected_lines();
     push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`
@@ -388,6 +390,18 @@ sub prod_lines {
         push @l, $i->{key} eq 'prod_patterns' ? "  config: prod_patterns #$i->{index} invalid, dropped"
                                                : "  config: $i->{key} invalid, forbid used";
     }
+    return @l;
+}
+
+# ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
+# The user's add-only protected_branches entries in use beside the shipped list, and one warning
+# per ignored (invalid) entry by its position, never its text.
+sub protected_lines {
+    my $r = rc::settings();
+    my $p = eval { settings::protected($r) } || { user => 0, invalid => [] };
+    my $src = $SRC{ $r->{source}{protected_branches} // 'default' } // 'default';
+    my @l = ('protected branches: the shipped list + ' . ($p->{user} // 0) . " yours ($src)");
+    push @l, "  warning: protected_branches #$_->{index} invalid, ignored (the shipped list still applies)" for @{ $p->{invalid} || [] };
     return @l;
 }
 

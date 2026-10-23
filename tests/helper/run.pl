@@ -1618,6 +1618,23 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'settings_protected') {
+        # Owner xxxxxxxx-29: settings::protected over resolved values {values}: the user entry
+        # count, the id of the user's entry each branch name matches (null = none of the user's;
+        # the shipped list is the callers' own check), the ignored entries as key:index.
+        my $p = settings::protected({ values => $a->{values} || {} });
+        push @e, "user entries $p->{user}, want $a->{user}" if defined $a->{user} && $p->{user} != $a->{user};
+        for my $t (sort keys %{ $a->{matches} || {} }) {
+            my ($got, $want) = (settings::protected_user($t, $p), $a->{matches}{$t});
+            push @e, "'$t' matches " . ($got // 'none') . ', want ' . ($want // 'none') unless ($got // '') eq ($want // '');
+        }
+        if ($a->{invalid}) {
+            my $got = join(',', map { "$_->{key}:$_->{index}" } @{ $p->{invalid} });
+            my $want = join(',', @{ $a->{invalid} });
+            push @e, "invalid [$got], want [$want]" unless $got eq $want;
+        }
+        return @e;
+    }
     if ($name eq 'settings_export') {
         # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).
         my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };

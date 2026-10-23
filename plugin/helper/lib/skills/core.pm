@@ -43,6 +43,8 @@ package skills::core;
 #   detect::alias_scan($text, $name)   -> scan() under a former plugin name (owner xxxxxxxx-26)
 #   jobrec::record_of / read_rows / jobs_path / add_pending (Dev-1)
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
+#   settings::protected($resolved)     -> {globs => [{id, re}], user, invalid} (owner xxxxxxxx-29)
+#   settings::protected_user($name, $p) -> the id of the user's entry naming the branch | undef
 use strict;
 use warnings;
 use utf8;
@@ -525,6 +527,23 @@ sub prod {
     }
     @classes = map { { id => $_->{id}, re => qr/$_->{re}/ } } @PROD_FALLBACK unless @classes;
     return { reads => 'forbid', classes => \@classes, user => 0, invalid => [], seam => 'missing' };
+}
+
+# Protected branches (owner xxxxxxxx-29): settings::protected over the run context's resolved
+# settings: the user's add-only `protected_branches` entries {globs => [{id, re}], user => n,
+# invalid => [..]}. Without that seam (or when it fails): no entries of the user's, while the
+# callers' shipped checks (protected_branch_re, the remote default branch) stay as they are, so a
+# missing seam never removes a shipped entry.
+sub protected {
+    my $r = defined &settings::protected ? eval { settings::protected(rc::settings()) } : undef;
+    return $r if ref $r eq 'HASH' && ref $r->{globs} eq 'ARRAY';
+    return { globs => [], user => 0, invalid => [], seam => 'missing' };
+}
+
+# protected_user(name, protected) -> the id of the user's entry that names the branch, else undef.
+sub protected_user {
+    my ($name, $p) = @_;
+    return defined &settings::protected_user ? settings::protected_user($name, $p) : undef;
 }
 
 sub detect_summary {

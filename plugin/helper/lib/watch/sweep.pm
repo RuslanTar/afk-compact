@@ -402,6 +402,11 @@ sub run {
     # AP-9 (REVIEW-NIGHT-3 R3-15): a push to a protected branch is the protected-push gate.
     my $pbr = ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{protected_branch_re} : undef;
     local $watch::rows::PROTECTED_RE = (defined $pbr && !ref $pbr) ? eval { qr/$pbr/ } : undef;
+    # Owner xxxxxxxx-29: the user's protected_branches entries, compiled by core's settings::protected
+    # (one reading for the approvals, `risk` and the watcher); beside the spec's list, never instead.
+    my $pb = eval { require settings; defined &settings::protected
+                    ? settings::protected({ values => { protected_branches => $ctx->{settings}{protected_branches} } }) : undef };
+    local $watch::rows::PROTECTED_USER = (ref $pb eq 'HASH' && ref $pb->{globs} eq 'ARRAY') ? [ map { $_->{re} } @{ $pb->{globs} } ] : [];
     my @files;
     my @subs;
     my $budget = $RUN_BYTES;

@@ -28,9 +28,10 @@ package skills::risk;
 #     definition differs from HEAD (NR-23: the exemption ends once such a file changed);
 #   - gate: the explicit gate classes name the first family that matches (env-write, then
 #     infra-write, then deploy); a production class on a command that is not read-only is the
-#     prod-write gate; a push whose destination is the remote's default branch or matches
-#     protected_branch_re (or cannot be told: --all, --mirror, a detached HEAD) is
-#     protected-push; without a refspec the current branch and its upstream's branch both count.
+#     prod-write gate; a push whose destination is the remote's default branch, matches
+#     protected_branch_re or an entry of the user's add-only protected_branches setting (owner
+#     xxxxxxxx-29), or cannot be told (--all, --mirror, a detached HEAD) is protected-push;
+#     without a refspec the current branch and its upstream's branch both count.
 # Provisional readings (owner decisions open, recommended reading built): O-6 (this check in
 # code at all); $PROD_WRITE_RE (which production commands are the prod-write gate); the
 # test/build exemption refused while a $BUILD_DEF_RE file differs from HEAD (NR-23); an unknown
@@ -436,12 +437,15 @@ sub _recorded_commands {
     return \%c;
 }
 
-# protected-push: the destination branch of a git push is the remote's default branch or
-# matches protected_branch_re (lower-cased). Unknown destinations count as protected.
+# protected-push: the destination branch of a git push is the remote's default branch, matches
+# protected_branch_re (lower-cased) or names an entry of the user's protected_branches setting
+# (owner xxxxxxxx-29: added to the shipped list, never removing from it). Unknown destinations
+# count as protected.
 sub _protected_push {
     my ($cmd, $cwd, $top) = @_;
     my $pbr = skills::spec::get('protected_branch_re');
     my $pre = defined $pbr ? eval { qr/$pbr/ } : undef;
+    my $pb = skills::core::protected();
 
     for my $seg (split $SEG_SPLIT, $cmd) {
         my @w = _words($seg);
@@ -496,6 +500,7 @@ sub _protected_push {
             }
             return 1 if defined $def && $d eq $def;
             return 1 if !defined $pre || lc($d) =~ $pre;
+            return 1 if defined skills::core::protected_user($d, $pb);
         }
     }
     return 0;

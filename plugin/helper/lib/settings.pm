@@ -16,7 +16,7 @@ use strict;
 use warnings;
 use utf8;
 
-# The 38 keys of MOD-SPEC §1.2: type; fallback (used only when the manifest lacks the key:
+# The 39 keys of MOD-SPEC §1.2: type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
@@ -65,6 +65,9 @@ our @KEYS = (
     [handoff_reuse_window_min    => 'num',  15,                        'num'],
     [evidence_total_max_mb       => 'num',  50,                        'num'],
     [watch_quota_mb              => 'num',  50,                        'num'],
+    # owner xxxxxxxx-29 (2026-10-23, "add the add-only setting now"): branches added to the
+    # shipped protected list (protected() below); a protective key
+    [protected_branches          => 'str',  '',                        'list'],
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
@@ -81,7 +84,9 @@ our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unat
 # Protective keys (S-SETTINGS B, MOD-SPEC §2.6): they can only make the plugin ask or withhold
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
 # settings file, and a foreign config dir does not reset it (that would weaken protection).
-our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules);
+# protected_branches is one (owner xxxxxxxx-29): a flag or env value that replaced the file's
+# list would drop the user's own entries.
+our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_branches);
 # Tighten-only keys (S-SETTINGS E3): every source counts and the strictest value wins, so a flag
 # or env can make the plugin stricter, never looser than the settings file. Values from loose to
 # strict.
@@ -100,7 +105,7 @@ our %FLAG_ALIAS = (
     # `<key>: settings file only` (DP-3, DP-17 / E-C-6), never a usage error
     'repo-roots' => 'repo_roots', 'relaunch-auto' => 'relaunch_auto', 'relaunch-allow' => 'relaunch_allow',
     'unattended-prod-reads' => 'unattended_prod_reads', 'prod-patterns' => 'prod_patterns', 'queue-cmd' => 'queue_cmd',
-    'secret-extra-rules' => 'secret_extra_rules',
+    'secret-extra-rules' => 'secret_extra_rules', 'protected-branches' => 'protected_branches',
 );
 
 sub _unset {
@@ -487,6 +492,59 @@ sub prod_class {
     my ($text, $p) = @_;
     return undef unless defined $text;
     for my $c (@{ ($p || {})->{classes} || [] }) { return $c->{id} if $text =~ $c->{re} }
+    return undef;
+}
+
+# ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
+# protected_branches (owner xxxxxxxx-29, 2026-10-23: "add the add-only setting now"; protective,
+# %NO_FLAG): a `;` list of branch names or globs ADDED to the shipped protected list (the spec's
+# protected_branch_re and the remote's default branch, which every caller still checks first and
+# on its own), so no entry can remove a shipped one: there is no exclusion form. A glob has `*`
+# (any characters but `/`), `**` (any characters) and `?` (one character but `/`); every other
+# character stands for itself; a leading `refs/heads/` is dropped. An entry is matched against
+# the lower-cased branch name, as the shipped rule is, so it is case-insensitive. At most 32
+# entries, each at most 200 characters. An invalid entry is ignored (a `config_invalid {key,
+# index}` row and a /status warning; the rest of the list and the shipped list still apply): one
+# that starts with `!` (an exclusion is never honoured), `-` or `/`, ends with `/`, `.` or
+# `.lock`, holds `..`, `//`, `@{`, a space or control character, one of ~ ^ : [ ] \ ( ) { } | $
+# (an entry is a name or a glob, not a regular expression), or a part that starts with `.`, or
+# is `@`. Rows never carry the entry.
+# protected([resolved]) -> {globs => [{id => user-branch-<n>, re}], user => n, invalid => [{key, index}]}
+our $PROTECTED_MAX = 32;
+our $PROTECTED_LEN = 200;
+sub protected {
+    my ($r) = @_;
+    my $v = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? $r->{values}{protected_branches} : undef;
+    my (@globs, @invalid);
+    my @e = list($v);
+    for my $i (0 .. $#e) {
+        (my $g = lc $e[$i]) =~ s{\Arefs/heads/}{};
+        if ($i >= $PROTECTED_MAX || !_branch_glob_ok($g)) { push @invalid, { key => 'protected_branches', index => $i + 1 }; next }
+        my $rx = join '', map { $_ eq '**' ? '.*' : $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) }
+                          grep { $_ ne '' } split /(\*\*|\*|\?)/, $g;
+        push @globs, { id => 'user-branch-' . ($i + 1), re => qr/\A$rx\z/s };
+    }
+    return { globs => \@globs, user => scalar(@globs), invalid => \@invalid };
+}
+
+sub _branch_glob_ok {
+    my ($g) = @_;
+    return 0 if !defined $g || $g eq '' || $g eq '@' || length($g) > $PROTECTED_LEN;
+    return 0 if $g =~ m{\A[!/-]} || $g =~ m{(?:/|\.|\.lock)\z} || $g =~ m{\.\.|//|\@\{};
+    return 0 if $g =~ m{[\x00-\x20\x7f~^:\[\]\\(){}|\$]};
+    return 0 if grep { /\A\./ } split m{/}, $g;
+    return 1;
+}
+
+# protected_user(name, protected) -> the id of the first of the user's entries that names the
+# branch (lower-cased), else undef. The shipped list is the caller's own check.
+sub protected_user {
+    my ($name, $p) = @_;
+    return undef unless defined $name && !ref $name && $name ne '';
+    my $n = lc $name;
+    for my $g (@{ ref $p eq 'HASH' && ref $p->{globs} eq 'ARRAY' ? $p->{globs} : [] }) {
+        return $g->{id} if ref $g eq 'HASH' && $n =~ $g->{re};
+    }
     return undef;
 }
 
