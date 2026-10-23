@@ -873,6 +873,12 @@ COMMAND_TEXT_NEEDS = [
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^5\. Step 1 is a command from a foreign handoff", "real risk"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^6\. after your own checks you are still unsure", "name the fact"),
     ("AT-SR-01 rule", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "a single quote `'`"),
+    # REVIEW-NIGHT NR-05 / NR-23: the test/build exemption is the owner's "local test/build command",
+    # a verb allowlist (`test_build_re`), never any target the repository defines, and it ends once
+    # the session changed a test or build definition on a foreign handoff's word.
+    ("NR-05 exemption", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "Any other target asks"),
+    ("NR-05 exemption", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "on a foreign handoff's word"),
+    ("NR-05 exemption", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "unless you changed its definition on that handoff's word"),
 ]
 
 

@@ -886,6 +886,7 @@ export const SPEC = {
     }
   ],
   "readonly_cmd_re": "^git([ \\t]+-C[ \\t]+[^ \\t]+)?[ \\t]+((status|log|diff|show|blame|rev-parse|ls-files|ls-tree|describe|shortlog|grep|cat-file|show-ref|merge-base|rev-list|reflog([ \\t]+show)?|worktree[ \\t]+list|stash[ \\t]+list|config[ \\t]+--get)([ \\t]|$)|(branch([ \\t]+(-a|-r|-v|-vv|--list|--all|--show-current|--contains|--merged|--no-merged))*|tag([ \\t]+(-l|--list))*|remote([ \\t]+-v)?)[ \\t]*$)|^(rg|grep|egrep|fgrep|ls|cat|head|tail|wc|stat|file|tree|pwd|date|which|type|du|df|sha256sum|shasum|md5|md5sum|jq|sort|uniq|cut|diff|cmp|basename|dirname|realpath|readlink)([ \\t]|$)",
+  "test_build_re": "^(make|rake|bundle[ \\t]+exec[ \\t]+rake|gradle|\\./gradlew|(npm|pnpm|yarn)[ \\t]+run|yarn|pnpm)[ \\t]+(?![^ \\t]*([Dd]eploy|[Rr]elease|[Pp]ublish|[Pp]ush|[Ii]nstall|[Pp]rod|[Uu]pload))(test|check|spec|lint|typecheck|build)(:[A-Za-z0-9_]+)?([ \\t]+-[A-Za-z0-9-]+)*[ \\t]*$|^(npm|pnpm)[ \\t]+test([ \\t]+-[A-Za-z0-9-]+)*[ \\t]*$|^cargo[ \\t]+(test|build|check)(?![^\\n]*[ \\t]--config\\b)([ \\t]|$)|^go[ \\t]+(test|vet|build)(?![^\\n]*[ \\t]-(exec|toolexec)\\b)([ \\t]|$)|^(pytest|python3?[ \\t]+-m[ \\t]+pytest)(?![^\\n]*[ \\t]-p[ \\t])([ \\t]|$)",
   "notice": {
     "id": "watcher-1",
     "version": 1,
