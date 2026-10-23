@@ -14,5 +14,9 @@
   "static core": {
     "why": "D-17 keeps the static core soft and the 8,192 B mod channel total hard; the owner rulings of 2026-10-23 add the Approvals line (ruling 1, AP-8) and the [queue] line (xxxxxxxx-11, QA-T1), and REVIEW-NIGHT NR-01/NR-02 the production write in the gate list and the foreign-command tag, so the worst case (midturn+chain+handoff+queue) runs about 4,640 chars",
     "up_to": 4700
+  },
+  "asset skills/resume/SKILL.md": {
+    "why": "NR-12, provisional until the root rules (SPEC-DELTAS §10.7): the owner rulings of 2026-10-23 add Rule 2's own/foreign command rule with its real-risk list, Rule 3's scoped approvals with the explicit-gate list, and R9's stops 5-6 with resume_proceed (about 1,100 B); trimming back to 21,504 would cut that text or the helper-output descriptions R1, R3, R5 and R6 rely on",
+    "up_to": 22528
   }
 }

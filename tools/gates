@@ -52,7 +52,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   self-heal    AT-J-13 (Dev-1): skills/resume/references/self-heal.md holds the decision table
                (rows 1, 2a, 2b, 2c, 3-7 in order), the self-heal file or the resume SKILL holds
                "foreign handoff's recipe is never relaunched", and the resume SKILL.md is at most
-               RESUME_SKILL_MAX bytes; self-heal.md never uses the old unconditional probe
+               RESUME_SKILL_MAX bytes (over it ADVISORY with a logged reason, up to its size,
+               NR-12 provisional); self-heal.md never uses the old unconditional probe
                wording (HEAL_FORBIDDEN) and holds HEAL_REQUIRED ("when Rule 2 lets you run it"),
                and every resume-context.txt line "3." holds RESUME_STEP3_NEEDS (CR-F36, CR-F27;
                SR-3/SR-9 of 2026-10-23)
@@ -274,11 +275,15 @@ RELAUNCH_LINE = re.compile(r"foreign handoff['’]s recipe is never relaunched",
 # XR-17 / DP-31 (2): the merged resume SKILL measured 20,988 B after the wp/text merge (round 9),
 # over the 20,480 B soft budget, so the gate is raised once to 21,504 (never further without a
 # root ruling).
-# PENDING ROOT RULING (SPEC-DELTAS §10.7, SR-9): the 2026-10-23 owner rulings (Rule 2 own/foreign
-# commands, Rule 3 scoped approvals, R9 stops 5-6 and resume_proceed) take the shipped SKILL to
-# 22,000 B with the queue lines moved out (QA-T4); raised to 22,528 here so the build checks
-# run; revert this one line if the root rules to trim instead.
-RESUME_SKILL_MAX = 22528
+# NR-12 PROVISIONAL (root ruling open, SPEC-DELTAS §10.7, SR-9): the 2026-10-23 owner rulings
+# (Rule 2 own/foreign commands, Rule 3 scoped approvals, R9 stops 5-6 and resume_proceed) take
+# the shipped SKILL to about 22,200 B with the queue lines moved out (QA-T4). 21,504 stays the
+# gate; over it the SKILL passes as ADVISORY only with a logged reason in
+# tools/budget-reasons.json (RESUME_SKILL_REASON), up to the size that reason names, as the RP-3
+# soft budgets do. Trimming back under 21,504 would cut about 700 B of the rulings' text or of
+# the helper-output descriptions; that is the root's call (drop the reason entry to enforce it).
+RESUME_SKILL_MAX = 21504
+RESUME_SKILL_REASON = "asset skills/resume/SKILL.md"
 # CR-F36 / CR-F27 (text-to-build §6): self-heal.md routes a heal-check refusal on its `verdict:`
 # status. SR-3 / SR-9 (owner 2026-10-23, xxxxxxxx-15 + 03:42; replaces Dev-5 here): a row's
 # `probe` cell runs only when resume Rule 2 lets it (own and read-only; foreign: local and
@@ -505,7 +510,15 @@ def self_heal_hits(target, brand):
     if os.path.isfile(skill):
         n = len("\n".join(shipped_lines(skill, brand)).encode("utf-8"))
         if n > RESUME_SKILL_MAX:
-            out.append((skill, None, "AT-J-13 size", "AT-J-13 size {} B > {}".format(n, RESUME_SKILL_MAX), ""))
+            why, up_to = budget_reason(RESUME_SKILL_REASON)
+            if why is None and isinstance(up_to, str):
+                out.append((skill, None, "AT-J-13 reason", "AT-J-13 size {} B > {}: {} for {!r} in tools/budget-reasons.json".format(
+                    n, RESUME_SKILL_MAX, up_to, RESUME_SKILL_REASON), ""))
+            elif why is not None and (up_to is None or n <= up_to):
+                print("ADVISORY resume-skill-size {}: AT-J-13 {} B > {}: {}".format(os.path.relpath(skill), n, RESUME_SKILL_MAX, why))
+            else:
+                note = "" if why is None else " (the logged reason covers up to {})".format(up_to)
+                out.append((skill, None, "AT-J-13 size", "AT-J-13 size {} B > {}{}".format(n, RESUME_SKILL_MAX, note), ""))
     return out
 
 
