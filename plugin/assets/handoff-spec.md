@@ -7,7 +7,7 @@ One source for the literals that the handoff skill, the resume skill, the compac
 - Marker: `⟪afk-compact v1 n=<nonce> s=main|sub|manual⟫`. Sentinel: `⟪/afk-compact n=<nonce>⟫`. The nonce is 8 lowercase hex from code.
 - Scope: `main` (main compaction summary) · `sub` (subagent compaction summary) · `manual` (the handoff skill).
 - In a summary or handoff the marker sits in the first 5 body lines after the wrapper lines are stripped, and the sentinel in the last 3 non-blank lines. Non-blank text after the sentinel is a trailer.
-- Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a `Summary:` line, and the `<summary>` / `</summary>` tags.
+- Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a closed `<analysis>…</analysis>` block (the summarizer's scratch text, kept before `<summary>` in a PostCompact summary), a `Summary:` line, and the `<summary>` / `</summary>` tags. Claude Code's own closing lines after an installed summary (`copy_trailers`) are cut from its end.
 - In instructions (the mod's instructions, a classic `custom_instructions`) the marker sits mid-line, so that search is unanchored and the last match counts. It counts as ours only when a dispatch record holds its nonce.
 - Any other bracketed or prefixed header line is someone else's: never ours, left untouched.
 
@@ -301,7 +301,11 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "summary_open": "<summary>",
     "summary_close": "</summary>"
   },
-  "copy_trailers": [],
+  "copy_trailers": [
+    "^If you need specific details from before compaction \\(",
+    "^Continue the conversation from where it left off without asking",
+    "^The messages after this summary are the most recent messages from before compaction"
+  ],
   "verdicts": ["stale", "scope-leak", "unshaped", "truncated", "ok-trailer", "ok"],
   "ok_verdicts": ["ok", "ok-trailer"],
   "scopes": ["main", "sub", "manual"],

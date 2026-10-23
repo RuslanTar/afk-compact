@@ -56,6 +56,27 @@ describe('AT-P5-01, AT-P5-02 TS detector vs the P5 corpus', () => {
   })
 })
 
+// Idle lab runs of 2026-10-23 on Claude Code 2.1.309 (EXPERIMENT-RESULTS §5.2): the installed
+// message carries three engine trailers after the sentinel (the third is new in 2.1.309) and the
+// PostCompact compact_summary an <analysis> block before <summary>. Every form reads ok, sentinel
+// 1 from the end, marker on body line 1, and both forms of one run share the normalized body.
+describe('idle 2.1.309 summaries: TS detector vs summaries/idle', () => {
+  test('every entry gives its tuple, with the shipped trailers only', () => {
+    const g = CORPUS_GEN as unknown as Record<string, unknown>
+    const idle = g['CORPUS_IDLE'] as { file: string; text: string; verdict: string; marker_line: number | null; sentinel_from_end: number | null; nonce: string | null; normalized_sha256: string }[] | undefined
+    expect(idle?.length).toBe(6)
+    for (const c of idle ?? []) {
+      const r = detectSummary(c.text, BRAND.name, { dispatchNonce: c.nonce ?? undefined, scope: 'main' })
+      expect({ file: c.file, verdict: r.verdict, marker_line: r.marker_line, sentinel_from_end: r.sentinel_from_end, sha: r.sha256 })
+        .toEqual({ file: c.file, verdict: 'ok', marker_line: 1, sentinel_from_end: 1, sha: c.normalized_sha256 })
+      expect({ file: c.file, verdict: c.verdict }).toEqual({ file: c.file, verdict: 'ok' })
+    }
+    const byNonce = new Map<string, Set<string>>()
+    for (const c of idle ?? []) byNonce.set(c.nonce ?? '', (byNonce.get(c.nonce ?? '') ?? new Set()).add(c.normalized_sha256))
+    expect([...byNonce.values()].map(s => s.size)).toEqual([1, 1, 1])
+  })
+})
+
 describe('AT-C-03 TS detector vs expected.tsv', () => {
   test('every corpus file gives the expected tuple', () => {
     expect(CORPUS.length).toBe(41)

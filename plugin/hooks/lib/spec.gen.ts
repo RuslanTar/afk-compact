@@ -46,7 +46,11 @@ export const SPEC = {
     "summary_open": "<summary>",
     "summary_close": "</summary>"
   },
-  "copy_trailers": [],
+  "copy_trailers": [
+    "^If you need specific details from before compaction \\(",
+    "^Continue the conversation from where it left off without asking",
+    "^The messages after this summary are the most recent messages from before compaction"
+  ],
   "verdicts": [
     "stale",
     "scope-leak",

@@ -405,10 +405,23 @@ describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
     const notFirst = detectSummary(post(body(), '\nan engine line\n' + S + '\n'), NAME, { dispatchNonce: N, scope: 'main' })
     expect([notFirst.verdict, notFirst.sentinel_place]).toEqual(['truncated', null])
     expect(notFirst.normalized.includes(S)).toBe(false)
-    const listed = specStrings('copy_trailers')[0]
-    if (listed !== undefined) {
-      const r = detectSummary(installed(body(), '\n' + S + '\n\n' + listed), NAME, { dispatchNonce: N, scope: 'main' })
+    // Every shipped trailer pattern has a sample engine line here (Claude Code 2.1.309 writes all
+    // three after an installed summary); each listed one, and all of them together, are cut.
+    const samples = [
+      'If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /tmp/example-home/x.jsonl',
+      'Continue the conversation from where it left off without asking the user any further questions. Resume directly.',
+      'The messages after this summary are the most recent messages from before compaction, kept verbatim.',
+    ]
+    const listed = specStrings('copy_trailers')
+    for (const pat of listed) {
+      const line = samples.find(s => new RegExp(pat).test(s))
+      expect({ pat, sample: line !== undefined }).toEqual({ pat, sample: true })
+      const r = detectSummary(installed(body(), '\n' + S + '\n\n' + (line ?? '')), NAME, { dispatchNonce: N, scope: 'main' })
       expect([r.verdict, r.sentinel_place]).toEqual(['ok', 'after-close'])
+    }
+    if (listed.length > 0) {
+      const all = detectSummary(installed(body(), '\n' + S + '\n\n' + samples.join('\n') + '\n'), NAME, { dispatchNonce: N, scope: 'main' })
+      expect([all.verdict, all.sentinel_place, all.sentinel_from_end]).toEqual(['ok', 'after-close', 1])
     }
     const unlisted = detectSummary(post(body(), '\n' + S + '\nFixture trailer line: an engine sentence that no baseline lists.\n'), NAME, { dispatchNonce: N, scope: 'main' })
     expect([unlisted.verdict, unlisted.sentinel_place, unlisted.sentinel_from_end]).toEqual(['ok-trailer', 'after-close', 2])
@@ -417,7 +430,7 @@ describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
     // Text after the close tag never joins the body when it is not the sentinel (unchanged).
     expect(strip(post(body() + S + '\n', '\nan engine line\n'), [], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
     expect(strip(post(body(), '\n' + S + '\n'), []).body).toBe(body())
-    // A listed trailer after the moved sentinel is cut (the shipped list is empty today).
+    // A listed trailer after the moved sentinel is cut (any list, the shipped one or a given one).
     expect(strip(installed(body(), '\n' + S + '\n\nPlease go on.'), ['Please go on.'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
     // Trailers are line patterns (the helper's reading); one inside a closed summary is body.
     expect(strip(installed(body(), '\n' + S + '\nFixture listed trailer: x'), ['^Fixture listed trailer: .*$'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')

@@ -27,6 +27,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `summaries/NN-<slug>.txt`, `summaries/expected.tsv` | the 41-summary corpus | AT-C-02, C-03, C-09, M3-02, M3-17 |
 | `summaries/p5/` | the 6 P5 summaries (lab run e1-131fc3, PostCompact form; 3 with the sentinel after `</summary>`) and the AT-P5-02 after-close cases, with `copy_trailers.json` | AT-P5-01, AT-P5-02 |
 | `summaries/acuity/` | golden main summaries with `· Acuity: watch ·` and `· Acuity: unstable ·` on the Status line | AT-AC-02, AT-AC-03 |
+| `summaries/idle/` | the three idle compactions of the 2026-10-23 lab runs on Claude Code 2.1.309 (X1 `e1-9082cb`, X4 `e1-1d7d40`, U1h `e1-0be305`), each as the installed message (three engine trailers after the sentinel) and as the PostCompact `compact_summary` (an `<analysis>` block before `<summary>`); redacted: brand `{{plugin}}`, run folder `/tmp/example-repo`, transcript path and session ids synthetic | AT-ID-07, the parity unit test |
 | `watch/dispatch-<nonce>.json` | dispatch records (BUILD-PLAN §3.4), roles below | H |
 | `watch/run10/` | the ten-compaction run of AT-M3-07 / AT-S-02 (`sequence.json`, dispatches) | H |
 | `watch/*.json`, `watch/*.count` | `mod-alive.json`, `classic-alive.json`, `version.json` states, `boundaries.count` seeds, sample `log` rows | H |

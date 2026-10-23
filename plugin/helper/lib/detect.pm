@@ -3,7 +3,8 @@ package detect;
 # §5.1, §2.2). Owner: WP-core. Grammar and headings come from the spec literals.
 #
 # Normalized body: strip the head parts (a `This session is being continued…`
-# line, a <tools-used-before-summary>…</tools-used-before-summary> block, a
+# line, a <tools-used-before-summary>…</tools-used-before-summary> block, a closed
+# <analysis>…</analysis> block (a PostCompact compact_summary keeps it, 2.1.309), a
 # `Summary:` line, a `<summary>` tag, and blank lines between them), cut before
 # the first `</summary>` when present, else cut installed-message trailers
 # (spec `copy_trailers`, canary-baseline `copy_trailers`), trim trailing blank
@@ -60,6 +61,15 @@ sub normalize {
         if ($x =~ /^\s*<tools-used-before-summary>/) {
             while ($i < @l && $l[$i] !~ m{</tools-used-before-summary>}) { $i++ }
             $i++;
+            next;
+        }
+        # The summarizer's scratch block that a PostCompact compact_summary keeps before
+        # <summary> (Claude Code 2.1.309, idle lab runs 2026-10-23); an unclosed one is body.
+        if ($x =~ /^\s*<analysis>/) {
+            my $j = $i;
+            $j++ while $j < @l && $l[$j] !~ m{</analysis>};
+            last if $j >= @l;
+            $i = $j + 1;
             next;
         }
         if ($x =~ /^\s*Summary:\s*$/) { $i++; next }
