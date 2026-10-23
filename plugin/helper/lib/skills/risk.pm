@@ -30,7 +30,11 @@ package skills::risk;
 #     infra-write, then deploy); a production class on a command that is not read-only is the
 #     prod-write gate; a push whose destination is the remote's default branch or matches
 #     protected_branch_re (or cannot be told: --all, --mirror, a detached HEAD) is
-#     protected-push.
+#     protected-push; without a refspec the current branch and its upstream's branch both count.
+# Provisional readings (owner decisions open, recommended reading built): O-6 (this check in
+# code at all); $PROD_WRITE_RE (which production commands are the prod-write gate); the
+# test/build exemption refused while a $BUILD_DEF_RE file differs from HEAD (NR-23); an unknown
+# push destination counts as protected.
 # Source own (an own handoff or this session's summary, resume Rule 2): runs under the normal
 # permission rules, so only gate, outward, production and credential-value ask.
 use strict;
@@ -213,8 +217,10 @@ sub _outside {
 }
 
 # read-outside: an argument of a read-only segment that names an existing path outside the
-# work tree (a symlink out of it included). Arguments that name nothing (a search pattern) do
-# not count; home, root and parent-folder arguments never pass readonly_cmd_re.
+# work tree (a symlink out of it included), or that steps out of it with `..` (REVIEW-NIGHT-2
+# R2-04: `cat src/../../x`). An option's attached value counts as an argument (`git blame
+# --contents=<path>`, `grep -f<path>`). Arguments that name nothing (a search pattern) do not
+# count; home, root and parent-folder arguments never pass readonly_cmd_re.
 sub _read_outside {
     my ($seg, $cwd, $top) = @_;
     return 1 unless defined $top;
@@ -222,12 +228,48 @@ sub _read_outside {
     my @w = _words($seg);
     shift @w;
     for my $t (@w) {
-        next if $t =~ /\A-/ || $t eq '';
-        my $abs = $t =~ m{\A/} ? $t : "$cwd/$t";
-        next unless -e skills::util::bytes($abs) || -l skills::util::bytes($abs);
-        return 1 if _outside($t, $cwd, $top);
+        next if $t eq '';
+        for my $p (_path_parts($t)) {
+            return 1 if _steps_out($p, $cwd, $top);
+            my $abs = $p =~ m{\A/} ? $p : "$cwd/$p";
+            next unless -e skills::util::bytes($abs) || -l skills::util::bytes($abs);
+            return 1 if _outside($p, $cwd, $top);
+        }
     }
     return 0;
+}
+
+# The path-like parts of one word: a plain word itself; an option's value after `=`
+# (`--contents=<path>`); for a short option that holds a `/`, each tail after its option letters
+# (`-f<path>`, `-nf<path>`), since the code cannot tell which letter takes the value.
+sub _path_parts {
+    my ($t) = @_;
+    return ($t) unless $t =~ /\A-/;
+    return ($1) if $t =~ /\A--?[A-Za-z0-9][A-Za-z0-9_-]*=(.+)\z/s;
+    return () if $t =~ /\A--/ || index($t, '/') < 0;
+    my $slash = index($t, '/');
+    my @p;
+    for my $i (2 .. $slash) {
+        last unless substr($t, $i - 1, 1) =~ /[A-Za-z0-9]/;
+        push @p, substr($t, $i);
+    }
+    return @p;
+}
+
+# 1 when a path with a `..` step leaves the work tree once its steps are applied to $cwd as
+# written (a path that does not exist cannot be resolved; one that does is checked by _outside).
+sub _steps_out {
+    my ($p, $cwd, $top) = @_;
+    return 0 unless $p =~ m{(?:\A|/)\.\.(?:/|\z)};
+    my @c = $p =~ m{\A/} ? () : grep { $_ ne '' } split m{/}, $cwd;
+    for my $x (split m{/}, $p) {
+        next if $x eq '' || $x eq '.';
+        if ($x eq '..') { return 1 unless @c; pop @c; next }
+        push @c, $x;
+    }
+    my $n = '/' . join('/', @c);
+    return 0 if $n eq $top;
+    return index("$n/", "$top/") == 0 ? 0 : 1;
 }
 
 # write-outside: a write command or a redirect whose target is at home, the root, a parent
@@ -374,6 +416,12 @@ sub _protected_push {
             next unless @dst;
         } else {
             push @dst, 'HEAD';
+            # No refspec: push.default may send the branch to its upstream under another name
+            # (`upstream`, `tracking`), so the upstream's branch counts too (REVIEW-NIGHT-2 R2-05).
+            if (defined $top) {
+                my $u = skills::gitfacts::line(skills::gitfacts::git($cwd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'));
+                push @dst, $1 if defined $u && $u =~ m{\A[^/]+/(.+)\z};
+            }
         }
         my $def;
         if (defined $top && $remote =~ /\A[A-Za-z0-9._-]+\z/) {

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "SR-7 (O-6 provisional: duties in code), the H half of AT-SR-09 and AT-AP-07: `risk --cmd-file FILE [--source own|foreign] [--cwd DIR]` gives every row of tests/fixtures/risk/corpus.tsv its answer, plus the code-only checks the literals cannot see: recorded (byte-identical to a jobs.jsonl command in any session folder), read-outside (a real path outside the work tree, or no work tree), a test/build target the repository defines and no build definition differing from HEAD (NR-23), the first gate family (env-write before infra-write), protected-push from the destination branch, prod-write, the own-source asks (gate, outward, production, credential-value); never a command on the shell line (NR-03); one content-free risk row",
+ "note": "SR-7 (O-6 provisional: duties in code), the H half of AT-SR-09 and AT-AP-07: `risk --cmd-file FILE [--source own|foreign] [--cwd DIR]` gives every row of tests/fixtures/risk/corpus.tsv its answer, plus the code-only checks the literals cannot see: recorded (byte-identical to a jobs.jsonl command in any session folder), read-outside (a real path outside the work tree, or no work tree), a test/build target the repository defines and no build definition differing from HEAD (NR-23), the first gate family (env-write before infra-write), protected-push from the destination branch, prod-write, the own-source asks (gate, outward, production, credential-value); never a command on the shell line (NR-03); one content-free risk row; REVIEW-NIGHT-2 R2-01..R2-05: option bundles and abbreviations, follow-link options, the test/build flag allowlists, an option's attached path and `..` steps (read-outside), and a bare push to an upstream main",
  "now": "2026-10-23T08:10:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -160,6 +160,80 @@
     {
      "write": "$TMP/c/multi.txt",
      "content": "git status\nrg -n TODO src\n"
+    },
+    {
+     "write": "$TMP/c/stepout.txt",
+     "content": "cat src/../../outside/notes.txt"
+    },
+    {
+     "write": "$TMP/c/stepin.txt",
+     "content": "cat src/../README.md"
+    },
+    {
+     "write": "$TMP/c/blame.txt",
+     "content": "git blame --contents=src/../../outside/notes.txt README.md"
+    },
+    {
+     "write": "$TMP/c/attached.txt",
+     "content": "grep -fdocs-link/notes.txt README.md"
+    },
+    {
+     "write": "$TMP/c/pushbare.txt",
+     "content": "git push"
+    },
+    {
+     "repo": {
+      "branch": "feat/up",
+      "commits": [
+       {
+        "files": {
+         "README.md": "u\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/up"
+    },
+    {
+     "git": [
+      "update-ref",
+      "refs/remotes/origin/main",
+      "HEAD"
+     ],
+     "cwd": "$TMP/up"
+    },
+    {
+     "git": [
+      "config",
+      "remote.origin.url",
+      "$TMP/nowhere.git"
+     ],
+     "cwd": "$TMP/up"
+    },
+    {
+     "git": [
+      "config",
+      "remote.origin.fetch",
+      "+refs/heads/*:refs/remotes/origin/*"
+     ],
+     "cwd": "$TMP/up"
+    },
+    {
+     "git": [
+      "config",
+      "branch.feat/up.remote",
+      "origin"
+     ],
+     "cwd": "$TMP/up"
+    },
+    {
+     "git": [
+      "config",
+      "branch.feat/up.merge",
+      "refs/heads/main"
+     ],
+     "cwd": "$TMP/up"
     }
    ]
   },
@@ -612,6 +686,102 @@
     "exit": 0,
     "stdout_has": [
      "^risk: none \\(read-only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "R2-04: a .. step out of the work tree is read-outside",
+   "argv": [
+    "risk",
+    "--cmd-file",
+    "$TMP/c/stepout.txt",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^risk: ask \\(read-outside\\)$"
+    ]
+   }
+  },
+  {
+   "name": "R2-04: a .. step that stays inside is read-only",
+   "argv": [
+    "risk",
+    "--cmd-file",
+    "$TMP/c/stepin.txt",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^risk: none \\(read-only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "R2-04: an option's attached value out of the tree (--contents=)",
+   "argv": [
+    "risk",
+    "--cmd-file",
+    "$TMP/c/blame.txt",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^risk: ask \\(read-outside\\)$"
+    ]
+   }
+  },
+  {
+   "name": "R2-04: a short option's attached path through a link out of the tree (-f<path>)",
+   "argv": [
+    "risk",
+    "--cmd-file",
+    "$TMP/c/attached.txt",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^risk: ask \\(read-outside\\)$"
+    ]
+   }
+  },
+  {
+   "name": "R2-05: git push with no refspec from a branch whose upstream is main is protected-push",
+   "argv": [
+    "risk",
+    "--cmd-file",
+    "$TMP/c/pushbare.txt",
+    "--cwd",
+    "$TMP/up"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^risk: ask \\(gate, ",
+     "^classes: protected-push, push$"
     ]
    }
   },
