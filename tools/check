@@ -684,9 +684,13 @@ def probes(name):
         edit(d, "plugin/skills/handoff/SKILL.md", "assets/queue.md` (Handoff)", "assets/queue.md`")
 
     def risk_corpus(d):
-        """AT-SR-09 / NR-04 / NR-20: `jq` back on the read-only list, `staging` off the protected list."""
-        edit(d, "plugin/assets/handoff-spec.md", "|(ls|cat|head|", "|(jq|ls|cat|head|")
+        """AT-SR-09 / NR-04 / NR-20: `jq` back on the read-only list, `staging` off the protected list;
+        REVIEW-NIGHT-2 R2-03: git grep's -O only as the first letter again (a bundle and an
+        abbreviation of --open-files-in-pager pass); R2-01: pytest takes any argument again."""
+        edit(d, "plugin/assets/handoff-spec.md", "|(cat|head|", "|(jq|cat|head|")
         edit(d, "plugin/assets/handoff-spec.md", "|stable|staging|", "|stable|")
+        edit(d, "plugin/assets/handoff-spec.md", "(-[A-Za-z0-9]*O|--output|--op|", "(-O|--output|")
+        edit(d, "plugin/assets/handoff-spec.md", "^(pytest|python3?[ \\\\t]+-m[ \\\\t]+pytest)", "^(pytest|python3?[ \\\\t]+-m[ \\\\t]+pytest)([ \\\\t].*)?$|^(pytest)")
 
     def stray_helper_file(d):
         write_text(os.path.join(d, "plugin", "helper", "lib", "foo.pm.orig"), "stray\n")
@@ -832,7 +836,10 @@ def probes(name):
           r"^GATE queue-text plugin/skills/handoff/SKILL\.md: AT-QA-06 pointer"], None),
         ("risk-corpus", "AT-SR-09", gates_only("risk-corpus"), risk_corpus,
          [r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'jq -n env' carries no risk class$",
-          r"^GATE risk-corpus plugin/assets/handoff-spec\.md: AT-AP-07 branch: staging is not protected, want protected$"], None),
+          r"^GATE risk-corpus plugin/assets/handoff-spec\.md: AT-AP-07 branch: staging is not protected, want protected$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'git grep -nOsh TODO' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'git grep --open=sh TODO' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'pytest --basetemp=src' carries no risk class$"], None),
         ("ic-desc", "AT-IC-11", gates_only("ic-desc"), ic_desc,
          [r"^GATE ic-desc plugin/skills/resume/SKILL\.md: AT-IC-11 resume: description names \['/clear', 'break'\]$"], None),
         ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,

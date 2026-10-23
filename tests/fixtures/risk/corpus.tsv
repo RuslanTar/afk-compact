@@ -88,3 +88,55 @@ ask	git fetch origin	network	AT-SR-09
 ask	git status; curl https://x.example	network	a second segment
 ask	kubectl create secret generic x	gate	AT-AP-07: env-write
 ask	terraform apply	gate	AT-AP-07: infra-write
+# REVIEW-NIGHT-2 R2-01..R2-04: options that run a program, write or delete a file, load another
+# definition or follow a link out of the tree, in short-option bundles and long-option
+# abbreviations; and the flags and paths that stay allowed.
+ask	git grep -nOsh TODO	not-read-only	R2-03: -O in a short-option bundle runs a program
+ask	git grep --open=sh TODO	not-read-only	R2-03: git grep takes abbreviations of --open-files-in-pager
+ask	sort --out=README.md src/list.txt	not-read-only	R2-03: an abbreviation of --output writes a file
+ask	sort -S1 --compress-prog=sh src/list.txt	not-read-only	R2-03: --compress-program runs a program
+ask	rg -L private	not-read-only	R2-04: follows links out of the work tree
+ask	rg --follow private	not-read-only	R2-04
+ask	grep -R private .	not-read-only	R2-04: -R follows every link
+ask	tree -l src	not-read-only	R2-04
+ask	ls -LR src	not-read-only	R2-04
+ask	diff -r src docs-link	not-read-only	R2-04: diff -r follows links in the folders it compares
+ask	pytest --basetemp=/home/u/important	not-read-only	R2-01: pytest deletes its basetemp folder
+ask	pytest --basetemp=src	not-read-only	R2-01
+ask	pytest $HOME	not-read-only	R2-01: an expansion
+ask	pytest -pevil	not-read-only	R2-01: a plugin, attached
+ask	pytest -c ../x.ini	not-read-only	R2-01
+ask	pytest --rootdir=/tmp	not-read-only	R2-01
+ask	pytest -o python_files=notes.txt	not-read-only	R2-01
+ask	pytest tests --junitxml=out.xml	not-read-only	R2-01: writes a file
+ask	pytest tests/../../x	not-read-only	R2-01: a path out of the tree
+ask	go test -c -o /home/u/.zshrc ./...	not-read-only	R2-01: overwrites any file
+ask	go build -o bin/x	not-read-only	R2-01: -o names an output
+ask	go test --exec=./x.sh ./...	not-read-only	R2-01: the double-dash spelling of -exec
+ask	go test -toolexec=./x.sh ./...	not-read-only	R2-01
+ask	go test -coverprofile=/home/u/.zshrc ./...	not-read-only	R2-01
+ask	go build -ldflags=-extld=./x.sh	not-read-only	R2-01: names a linker program
+ask	go test ../other/...	not-read-only	R2-01
+ask	cargo test --manifest-path ../evil/Cargo.toml	not-read-only	R2-01: another project's build script
+ask	cargo build --target-dir /tmp/x	not-read-only	R2-01: writes outside the tree
+ask	make test -fnotes	not-read-only	R2-02: another makefile
+ask	make test -Csrc	not-read-only	R2-02
+ask	make check -j4 -fnotes	not-read-only	R2-02
+ask	rake test -rpwn	not-read-only	R2-02: requires a library
+ask	rake test -fnotes	not-read-only	R2-02
+ask	bundle exec rake test -Isrc -rpwn	not-read-only	R2-02
+ask	gradle test -psub	not-read-only	R2-02: another project folder
+ask	yarn test -fnotes	not-read-only	R2-02
+none	git grep -n TODO	-	R2-03: no program option
+none	sort -r src/list.txt	-	R2-03
+none	grep -rn foo src	-	R2-04: -r follows no link
+none	tree -L 2 src	-	R2-04: -L is a depth here
+none	make test -j4	-	R2-02: a flag that names nothing
+none	npm test -s	-	R2-02
+none	./gradlew build --info	-	R2-02
+none	pytest -q tests/test_retry.py	-	R2-01: listed flags and a relative path
+none	pytest tests/test_retry.py::test_x -x	-	R2-01
+none	go test -v -race ./...	-	R2-01
+none	go test -count=1 -run TestX ./...	-	R2-01
+none	cargo test --release	-	R2-01
+none	cargo test retry -- --nocapture	-	R2-01
