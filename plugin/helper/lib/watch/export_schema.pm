@@ -188,6 +188,8 @@ our %SCHEMA = (
     # ID-2 (2026-10-23): a native idle compaction no plugin dispatch shaped (A-29)
     idle_unshaped => { boundary_uuid => 'hash' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
+    # ID-3 (owner D2, 2026-10-23): the [idle-return] line was due at a person's return; sent or not
+    idle_return => { age_s => 'num', sent => 'bool' },
     # RP-2 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): a resume block over its soft 6,500 chars
     resume_block_over_soft => { nonce => 'nonce', chars => 'int' },
     resume_remeasure_failed => { nonce => 'nonce', age_s => 'num' },

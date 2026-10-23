@@ -347,6 +347,24 @@ test('@remeasure@: the after-step measures for this compaction\'s nonce (its own
   expect(w.flag(m[0], '--nonce')).toBe(nonce)
 })
 
+// AP-5 (D-2 replaced by scoped carry, owner 2026-10-23; SPEC-DELTAS AT-AP-05, mod half): the
+// re-measure names this compaction's saved copy, so the helper checks the summary's approvals.
+test('AT-AP-05 (mod): the after-step measure passes --copy=<the saved copy save-copy printed>; no saved copy, no --copy; the delivery re-measure passes it too', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  const copy = `~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`
+  expect(w.callsOf('measure')[0]?.args).toContain('--copy=' + copy)
+  await w.advance(601 * 1000)
+  await $.prompt.context({ blocks: [] })
+  expect(w.callsOf('measure')[1]?.args).toContain('--copy=' + copy)
+  w.saveLine = 'REFUSED: no-bucket'
+  await raiseCompact($, { trigger: 'manual' })
+  const last = w.callsOf('measure')[w.callsOf('measure').length - 1]
+  expect((last?.args ?? []).some(a => a.startsWith('--copy'))).toBe(false)
+})
+
 // C-STORE D4 (MOD-SPEC §5.8 item 4): the mod writes the orphan index marker before its stash.
 test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid> (empty) before pending/<nonce>.mod.md, main and subagent', async ($, on) => {
   const w = new World().install(on)

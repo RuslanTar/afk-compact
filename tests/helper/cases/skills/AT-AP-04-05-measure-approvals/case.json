@@ -42,6 +42,10 @@
     {
      "write": "$TMP/copy.md",
      "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"tag the release candidate\" — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"push the retry branch\" — action git push origin feat/x · targets branch feat/x; context only, not valid here; re-ask [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n"
+    },
+    {
+     "write": "$HOME/copy-home.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"tag the release candidate\" — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"push the retry branch\" — action git push origin feat/x · targets branch feat/x; context only, not valid here; re-ask [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n"
     }
    ]
   },
@@ -236,6 +240,30 @@
        ]
       }
      }
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 the copy as save-copy prints it (a leading ~/ is the home folder)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy=~/copy-home.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "copy pending"
     ]
    }
   },

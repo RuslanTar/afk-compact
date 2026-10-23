@@ -215,6 +215,11 @@ export type LoadState = {
   publishedSinceHuman: boolean
   /** The `native/plugin_turn` pair of the last `idle_mode` row this load wrote (IA-3), undefined before the first. */
   idleMode: string | undefined
+  /**
+   * ID-3: a turn not of a person's (a background result) took an idle compaction's resume block
+   * at `at`; the next human-origin turn decides whether `[idle-return]` goes out.
+   */
+  idleReturn: { sid: string; at: number } | undefined
 }
 
 export type PendingResume = {
@@ -305,6 +310,7 @@ export function newState(loadId: string): LoadState {
     idleEpisode: undefined,
     publishedSinceHuman: false,
     idleMode: undefined,
+    idleReturn: undefined,
   }
 }
 

@@ -4,7 +4,7 @@
 // `no-asset`, and those cases check that instead.
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import { assemble, hasTag } from '../../hooks/lib/assemble'
+import { assemble, hasTag, leftovers, tagOnly } from '../../hooks/lib/assemble'
 import { storeWord } from '../../hooks/lib/deps'
 import { maxCalls, submitText } from '../../hooks/lib/handoff-turn'
 import { HOME, SID_A, SID_B, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
@@ -141,6 +141,92 @@ test('AT-IC-04: a block delivered 601 s after it was built is rebuilt with one f
   expect(w.callsOf('measure').length).toBe(built + 1)
   expect(block).toContain('9e9e9e9')
   expect(w.rowsOf('resume_remeasured').map(r => [r.age_s, typeof r.ms])).toEqual([[601, 'number']])
+})
+
+// ID-3 (owner D2, 2026-10-23; SPEC-DELTAS AT-ID-03): a person coming back after a background
+// result took an idle compaction's block gets one [idle-return] line on its own.
+const BRIEF = 'git: main @ 9e9e9e9, dirty 2 · in flight: 0 running, 1 ended'
+const RETURN = hasTag('resume-context', 'idle-return')
+
+/** An idle dispatch whose block a task-notification turn takes; returns the block names it got. */
+async function idleTakenByNotification($: Engine, w: World): Promise<string[]> {
+  await w.start($)
+  await humanTurn($, w, 150000)
+  await w.advance(1600 * 1000)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.userTurn($, 'Background task finished.', 'task-notification')
+  const ctx = await $.prompt.context({ blocks: [] })
+  await w.turnEnd($, 'Handled the result.')
+  w.replies.measure = args => ({ exitCode: 0, stdout: (args.includes('--brief') ? BRIEF : w.measureBlock) + '\n' })
+  return ctx.blocks.map(b => b.name)
+}
+
+const briefCalls = (w: World) => w.callsOf('measure').filter(c => c.args.includes('--brief'))
+
+test('AT-ID-03: a composer prompt 700 s after a task-notification turn took the idle block gets one [idle-return] line (measure --compact --brief), as its own block; the next prompt none', async ($, on) => {
+  const w = new World().install(on)
+  expect(await idleTakenByNotification($, w)).toEqual([`${w.name}-resume`])
+  await w.advance(700 * 1000)
+  await w.userTurn($, 'back again')
+  let ctx = await $.prompt.context({ blocks: [] })
+  const line = tagOnly(w.name, 'resume-context', 'idle-return', { idle_return: BRIEF })
+  expect(line === undefined).toBe(!RETURN)
+  expect(briefCalls(w).length).toBe(1)
+  if (line !== undefined) {
+    expect(ctx.blocks).toEqual([{ name: `${w.name}-idle-return`, text: line }])
+    expect(line).toContain(BRIEF)
+    expect(leftovers(line)).toEqual([])
+  }
+  expect(w.rowsOf('idle_return').map(r => [r.age_s, r.sent])).toEqual([[700, line !== undefined]])
+  await w.turnEnd($)
+  await w.advance(700 * 1000)
+  await w.userTurn($, 'and again')
+  ctx = await $.prompt.context({ blocks: [] })
+  expect(ctx.blocks).toEqual([])
+  expect(briefCalls(w).length).toBe(1)
+})
+
+test('AT-ID-03: 500 s later: no [idle-return] and no brief measure; that human turn settles it (none 700 s after it either)', async ($, on) => {
+  const w = new World().install(on)
+  await idleTakenByNotification($, w)
+  await w.advance(500 * 1000)
+  await w.userTurn($, 'back soon')
+  expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
+  await w.turnEnd($)
+  await w.advance(700 * 1000)
+  await w.userTurn($, 'later')
+  expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
+  expect(briefCalls(w).length).toBe(0)
+  expect(w.rowsOf('idle_return').length).toBe(0)
+})
+
+test('AT-ID-03: the brief measure fails: no line, one idle_return row with sent false', async ($, on) => {
+  const w = new World().install(on)
+  await idleTakenByNotification($, w)
+  w.replies.measure = () => 'reject'
+  await w.advance(700 * 1000)
+  await w.userTurn($, 'back')
+  expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
+  expect(w.rowsOf('idle_return').map(r => r.sent)).toEqual([false])
+})
+
+test('AT-ID-03: a person\'s turn takes the idle block itself: no [idle-return] later; a non-idle block taken by a notification: none either', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w, 150000)
+  await w.advance(1600 * 1000)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.userTurn($, 'hello')
+  await $.prompt.context({ blocks: [] })
+  await w.turnEnd($)
+  await raiseCompact($, { trigger: 'manual' })
+  await w.userTurn($, 'Background task finished.', 'task-notification')
+  await $.prompt.context({ blocks: [] })
+  await w.turnEnd($)
+  await w.advance(700 * 1000)
+  await w.userTurn($, 'back')
+  expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
+  expect(briefCalls(w).length).toBe(0)
 })
 
 test('AT-IC-04: the re-measure fails (3 s budget) → the stored block goes out, resume_remeasure_failed; a 599 s old block makes no call', async ($, on) => {

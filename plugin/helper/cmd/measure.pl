@@ -7,7 +7,8 @@
 # session's transcript (--transcript, else <config dir>/projects/<slug of the cwd>/<sid>.jsonl) and
 # printed as `Approvals (checked)` lines; a copy that cannot be read yet prints
 # `Approvals: not checked (copy pending)`. Without --copy the block has no approvals line, so the
-# summary's approvals stay context.
+# summary's approvals stay context. A leading `~/` in either path is the home folder (the mod passes
+# the saved copy as `save-copy` printed it).
 use strict;
 use warnings;
 use utf8;
@@ -27,7 +28,7 @@ sub run {
             return 0;
         }
         my %o;
-        $o{approvals} = _approvals($sid, $cwd, $opt->{copy}, $opt->{transcript}) if defined $opt->{copy};
+        $o{approvals} = _approvals($sid, $cwd, util::expand_tilde($opt->{copy}), util::expand_tilde($opt->{transcript})) if defined $opt->{copy};
         args::out(measure::compact($sid, $cwd, $opt->{nonce}, %o));
         return 0;
     }

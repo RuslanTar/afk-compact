@@ -11,7 +11,7 @@ import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
-import { blockName, contextBlock } from './lib/resume'
+import { blockName, contextBlock, idleReturnBlock, idleReturnName } from './lib/resume'
 
 export const register: Register = (on, options) => {
   const state = newState(randomHex(8))
@@ -130,12 +130,17 @@ export const register: Register = (on, options) => {
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
   }).catch(($, e, next) => next(e))
 
+  // The resume block, and the `[idle-return]` line on its own (ID-3) when a person comes back.
   on('prompt.context', async ($, e, next) => {
     const r = await next(e)
     const d = realDeps($, options, state)
-    const block = await contextBlock(d, await prepare(d))
-    if (block === undefined) return r
+    const sid = await prepare(d)
+    const back = await idleReturnBlock(d, sid)
+    const block = await contextBlock(d, sid)
+    if (block === undefined && back === undefined) return r
     const name = blockName($.plugin.name)
-    return { ...r, blocks: [...r.blocks.filter(b => b.name !== name), { name, text: block }] }
+    const backName = idleReturnName($.plugin.name)
+    const add = [...(block !== undefined ? [{ name, text: block }] : []), ...(back !== undefined ? [{ name: backName, text: back }] : [])]
+    return { ...r, blocks: [...r.blocks.filter(b => b.name !== name && b.name !== backName), ...add] }
   }).catch(($, e, next) => next(e))
 }

@@ -2,11 +2,11 @@
 // channel whose claim wins. The mod's channels are `prompt.context` (order 2) and the continue
 // text (order 3, cont.ts); classic SessionStart (order 1) is the helper's.
 import type { Deps, Outcome, PendingResume } from './deps'
-import { storeWord } from './deps'
+import { isHuman, storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
-import { assemble } from './assemble'
+import { assemble, tagOnly } from './assemble'
 import type { RaceBlock } from './handoff-turn'
-import { channelToken, claimBy, measure } from './helper'
+import { channelToken, claimBy, measure, measureBrief } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 
 /**
@@ -71,7 +71,8 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
   if (a.idle === true && !a.midturn) tags.push('idle')
   // Exactly one of the two step-4 lines (BLD-04 exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
-  const remeasure = fresh ?? (await measure(d, sid, a.nonce))
+  // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
+  const remeasure = fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
   const measuredAt = isoLocal(await d.now(), false)
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)
@@ -130,7 +131,40 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   if (c.result === 'failed') await helperMissing(d, sid, 'claim')
   const block = await freshBlock(d, pend)
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
+  // ID-3: a background result (not a person) took an idle compaction's block.
+  if (pend.args.idle === true && !isHuman(s.turnOrigin)) s.idleReturn = { sid, at: await d.now() }
   return block
+}
+
+/** ID-3: `[idle-return]` goes to a human-origin turn more than this long after the block went out. */
+export const IDLE_RETURN_AFTER_MS = 600000
+/** ID-3: the brief measure's budget (one helper call). */
+export const IDLE_RETURN_MS = 3000
+
+/** The `prompt.context` block name of the `[idle-return]` line (`<plugin>-idle-return`). */
+export function idleReturnName(name: string): string {
+  return `${name}-idle-return`
+}
+
+/**
+ * ID-3 (owner D2 "native owns idle compaction", 2026-10-23): after a turn not of a person's took
+ * an idle compaction's resume block, the first human-origin turn gets one `[idle-return]` line
+ * (`measure --compact --brief`: git and in-flight counts) when it starts more than 600 s after
+ * that; sooner, none. Either way that turn settles it (one `idle_return` row when the line was
+ * due). Undefined when nothing goes out.
+ */
+export async function idleReturnBlock(d: Deps, sid: string): Promise<string | undefined> {
+  const s = d.state
+  const r = s.idleReturn
+  if (!r || !isHuman(s.turnOrigin)) return undefined
+  s.idleReturn = undefined
+  if (r.sid !== sid) return undefined
+  const now = await d.now()
+  if (now - r.at <= IDLE_RETURN_AFTER_MS) return undefined
+  const brief = await measureBrief(d, sid, IDLE_RETURN_MS)
+  const text = brief === undefined ? undefined : tagOnly(d.name, 'resume-context', 'idle-return', { idle_return: brief })
+  await log(d, sid, 'idle_return', { age_s: Math.round((now - r.at) / 1000), sent: text !== undefined })
+  return text
 }
 
 /**
@@ -143,7 +177,7 @@ async function freshBlock(d: Deps, pend: PendingResume): Promise<string> {
   const t0 = await d.now()
   const ageS = Math.round((t0 - pend.builtAt) / 1000)
   if (t0 - pend.builtAt <= REMEASURE_AFTER_MS) return pend.block
-  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS)
+  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS, pend.args.savedCopy ?? undefined)
   if (fresh === undefined) {
     await log(d, pend.sid, 'resume_remeasure_failed', { nonce: pend.nonce, age_s: ageS })
     return pend.block
