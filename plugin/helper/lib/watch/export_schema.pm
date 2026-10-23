@@ -177,9 +177,10 @@ our %SCHEMA = (
     handoff_race => { trigger => [enum => qw(auto)], draft => 'bool', published => 'bool', ht => 'hash' },
     handoff_user_interjected => { ht => 'hash' },
     # OT-1 / OT-4 (owner xxxxxxxx-06, 2026-10-22): the turn of a handoff-turn prompt a user turn
-    # cancelled, aborted at its start (or the abort failed and it ran with no nudge)
+    # cancelled, aborted at its start (or the abort failed and it ran with no nudge; why
+    # `rejected`, or `other-text` when the turn may carry another prompt too: REVIEW-NIGHT-3 R3-07)
     handoff_orphan_aborted => { turn_id => 'hash', ht => 'hash' },
-    handoff_orphan_abort_failed => { turn_id => 'hash', ht => 'hash' },
+    handoff_orphan_abort_failed => { turn_id => 'hash', ht => 'hash', why => [enum => qw(rejected other-text)] },
     handoff_mode => { mode => [enum => qw(private repo)], reason => 'word', declared => 'bool', accepted => 'bool' },
     idle_mismatch => { nonce => 'nonce' },
     # MG-3 / MG-5 (2026-10-23): the summarizer request's cache-read share, and a cold one (A-28)

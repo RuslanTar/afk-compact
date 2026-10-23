@@ -312,24 +312,31 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
 /**
  * A main `turn.start`: our submit's turn becomes the handoff turn (no checkpoint nudge in it);
  * a user's turn during the delay cancels the handoff turn (`why=user-turn`); the leftover turn of
- * our cancelled prompt is aborted at its start (OT-1).
+ * our cancelled prompt is aborted at its start (OT-1), unless it may carry another prompt too
+ * (`alone` false: another prompt entered beside ours and the turn's text is more than ours).
  */
-export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string): Promise<void> {
+export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string, alone = true): Promise<void> {
   const s = d.state
   const h = s.handoffTurn
   if (ours && s.orphanSubmit) {
     // OT-1 (owner xxxxxxxx-06 "Abort the leftover turn", 2026-10-22): the handoff prompt a user
     // turn cancelled (below) starts now; it is aborted before anything else, so no tool runs in
-    // it. If the abort fails, the turn runs as before, with no checkpoint nudge in it.
+    // it. If the abort fails, the turn runs as before, with no checkpoint nudge in it. A turn that
+    // may carry the user's words too is never aborted (REVIEW-NIGHT-3 R3-07): it runs as before.
     const ht = s.orphanHt
     s.orphanSubmit = false
     s.orphanHt = null
     s.ourSubmitPending = false
+    if (!alone) {
+      s.nudgedThisTurn = true
+      await log(d, sid, 'handoff_orphan_abort_failed', { turn_id: turnId, ht, why: 'other-text' })
+      return
+    }
     try {
       await d.abortTurn(turnId)
     } catch {
       s.nudgedThisTurn = true
-      await log(d, sid, 'handoff_orphan_abort_failed', { turn_id: turnId, ht })
+      await log(d, sid, 'handoff_orphan_abort_failed', { turn_id: turnId, ht, why: 'rejected' })
       return
     }
     s.nudgedThisTurn = true

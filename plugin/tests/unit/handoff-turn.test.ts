@@ -1040,11 +1040,37 @@ test('AT-OT-02: the abort rejects: one handoff_orphan_abort_failed row, and the 
   w.abortThrow = true
   await w.turnStart($, q.ours)
   expect(w.aborts.length).toBe(1)
-  expect(w.rowsOf('handoff_orphan_abort_failed').map(r => [r.turn_id, r.ht])).toEqual([[w.aborts[0], q.ht]])
+  expect(w.rowsOf('handoff_orphan_abort_failed').map(r => [r.turn_id, r.ht, r.why])).toEqual([[w.aborts[0], q.ht, 'rejected']])
   expect(w.rowsOf('handoff_orphan_aborted').length).toBe(0)
   expect(w.rowsOf('handoff_turn_start').length).toBe(0)
   w.tokens = 640000
   expect((await w.tool($)).context).toBeUndefined()
+})
+
+// REVIEW-NIGHT-3 R3-07: an abort must never cancel the user's words. With another prompt entering
+// beside ours, a turn whose text is more than ours may carry that prompt too: it is not aborted.
+test('R3-07 (OT-1): another prompt entered and the turn holds more than our prompt: no abort, handoff_orphan_abort_failed why other-text, no nudge', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  const q = await orphanQueued($, w)
+  if (!q) return
+  await $.prompt.submit({ text: 'and run the linter too', origin: { kind: 'composer' } } as never)
+  await w.turnStart($, q.ours + '\n\nand run the linter too')
+  expect(w.aborts).toEqual([])
+  expect(w.rowsOf('handoff_orphan_abort_failed').map(r => [r.ht, r.why])).toEqual([[q.ht, 'other-text']])
+  expect(w.rowsOf('handoff_orphan_aborted').length).toBe(0)
+  expect(w.rowsOf('handoff_turn_start').length).toBe(0)
+  w.tokens = 640000
+  expect((await w.tool($)).context).toBeUndefined()
+})
+
+test('R3-07 (OT-1): another prompt entered but the turn holds our prompt alone: it is aborted', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  const q = await orphanQueued($, w)
+  if (!q) return
+  await $.prompt.submit({ text: 'and run the linter too', origin: { kind: 'composer' } } as never)
+  await w.turnStart($, q.ours)
+  expect(w.aborts.length).toBe(1)
+  expect(w.rowsOf('handoff_orphan_aborted').map(r => r.ht)).toEqual([q.ht])
 })
 
 test('CR-F17 (residual): Enter reaches prompt.submit only after our prompt went past our hook, and its turn starts first: no handoff turn, halt clears, the ht is closed, our queued prompt\'s turn is aborted (OT-1)', { options: CAP3 }, async ($, on) => {
