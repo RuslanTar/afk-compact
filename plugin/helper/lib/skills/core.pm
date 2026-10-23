@@ -36,7 +36,8 @@ package skills::core;
 #   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
 #   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
 #   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
-#   transcript::quotes_found($path, [{quote, targets}]) -> [1|0|undef…] | undef (AP-4)
+#   transcript::quotes_found($path, [{quote, targets}], $sid, since => $epoch) -> [1|0|undef…] | undef (AP-4)
+#   sessions::own_since($sid)          -> epoch of the session's first per-process record | undef
 #   jobrec::record_of / read_rows / jobs_path / add_pending (Dev-1)
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
 use strict;
@@ -180,12 +181,18 @@ sub nonce {
     return $n;
 }
 
-# AP-4: the writing session's human-typed rows hold each quote (in memory; nothing logged).
-# $sid: rows stamped with another session's id do not count (REVIEW-NIGHT-3 R3-03).
+# AP-4: the writing session's human-typed rows, or the user's answers in its AskUserQuestion
+# dialogs (NR-14), hold each quote (in memory; nothing logged).
+# $sid: only rows this session wrote after it started count (owner 2026-10-23 xxxxxxxx-27
+# revised, "No: forks re-ask"; REVIEW-NIGHT-3 R3-03): another session's id, forkedFrom, or a time
+# before the session's first per-process record (sessions::own_since) is a copy. No record: undef
+# (not checked; the line is published unchecked and the next session re-asks).
 sub quotes_found {
     my ($path, $asks, $sid) = @_;
-    return undef unless defined &transcript::quotes_found;
-    my $r = transcript::quotes_found($path, $asks, $sid);
+    return undef unless defined &transcript::quotes_found && defined &sessions::own_since;
+    my $since = eval { sessions::own_since($sid) };
+    return undef unless defined $since;
+    my $r = transcript::quotes_found($path, $asks, $sid, since => $since);
     return ref $r eq 'ARRAY' ? $r : undef;
 }
 

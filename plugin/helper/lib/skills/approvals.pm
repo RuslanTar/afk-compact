@@ -8,14 +8,19 @@ package skills::approvals;
 #   summary_lines(text, path)  the same for a compaction summary's copy (`measure --compact --copy`)
 #   classes(entry)             the outward class ids an approval's action names, and its gate
 #
-# Quotes are checked in memory against the writing session's human-typed user rows
-# (transcript::quotes_found); no quote, action or target text is logged: rows carry counts and
-# class ids only.
+# Quotes are checked in memory against the writing session's human-typed user rows and the
+# user's answers in its AskUserQuestion dialogs (transcript::quotes_found; NR-14, owner
+# xxxxxxxx-23: only the chosen label, the typed Other text, a note or a free-text response, never
+# the question, an option description or any other tool output); no quote, action or target text
+# is logged: rows carry counts and class ids only.
 #
 # PROVISIONAL (owner decisions open, recommended reading built; REVIEW-NIGHT-2 §3):
 #   O-3   code checks the quote (this module at all);
 #   O-1   only the own chain carries: a foreign handoff's approvals are never listed as checked;
-#   O-12  $NO_CARRY_REASON: a predecessor reached by `fork` or `bg-copy` carries no approvals;
+#   O-12  decided (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"): approvals carry only
+#         from this session and its `clear` / `handoff-resume` predecessors (%CARRY_REASON); a
+#         `fork` or `bg-copy` link, or any other, carries none, though such a predecessor stays own
+#         for running commands (locate, heal-check);
 #   O-2   strict half only: an approval that names production is a gate (re-ask), read or write
 #         ($PROD_IS_GATE); the looser half (a production read under forbid) is not built;
 #   gates from text: $ACTION_WORDS reads a plain-words action ("push feat/x") into outward
@@ -47,7 +52,13 @@ use skills::store;
 use skills::gitfacts;
 
 our $HEADING = '## Approvals';
-our %NO_CARRY_REASON = map { $_ => 1 } qw(fork bg-copy);
+# Lineage links approvals carry over (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"):
+# a fork's or bg copy's predecessor, and a link of any other or unknown kind, carries none.
+# No code writes a `handoff-resume` link yet (sessions::write_lineage writes clear and fork only;
+# `pin --resumed-from` records no lineage). A writer that lets several sessions resume one handoff
+# would let each carry its `once` approvals, the parallel double use the fork ruling closes: such
+# a link must be claimable by one session only (exclusive create) before anything writes it.
+our %CARRY_REASON = map { $_ => 1 } qw(clear handoff-resume);
 our $PROD_IS_GATE = 1;
 our $PUSH_UNNAMED_IS_GATE = 1;
 our $ENTRY_MAX = 160;
@@ -397,11 +408,11 @@ sub _entry {
     return $t;
 }
 
-# The own relation of a handoff to this session (spec §4 Own handoff; O-1, O-12): (1, '') when
-# it is own, else (0, why). Own: a handoff in the private store (handoff_root; REVIEW-NIGHT-3
-# R3-03), not an export or an imported copy, integrity ok, written by this session or by a
-# lineage predecessor reached without a fork or bg-copy link anywhere on the way (a link of
-# that kind cuts off every session before it too).
+# The own relation of a handoff to this session for approval carry (spec §4 Approval (scoped);
+# O-1; owner xxxxxxxx-27 revised): (1, '') when it is own, else (0, why). Own: a handoff in the
+# private store (handoff_root; REVIEW-NIGHT-3 R3-03), not an export or an imported copy,
+# integrity ok, written by this session or by a lineage predecessor reached through `clear` and
+# `handoff-resume` links only (a link of any other kind cuts off every session before it too).
 sub own_relation {
     my ($d, $ctx, $sid) = @_;
     my $fm = $d->{fm} || {};
@@ -416,7 +427,9 @@ sub own_relation {
     return (0, 'foreign') unless defined $sid;
     my $cut;
     for my $c (@{ skills::ctx::chain($ctx, $sid) }) {
-        $cut //= $c->{reason} if $NO_CARRY_REASON{ $c->{reason} };
+        my $r = $c->{reason};
+        my $word = defined $r && !ref $r && $r =~ /\A[a-z][a-z-]{0,23}\z/ ? $r : 'unknown link';
+        $cut //= $word unless $CARRY_REASON{$word};
         next unless $c->{sid} eq $hs;
         return defined $cut ? (0, $cut) : (1, '');
     }

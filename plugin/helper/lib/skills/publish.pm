@@ -109,7 +109,8 @@ sub run {
     my $pk = $s->{previous_kind} // '';
     my $own_path = ($pk eq 'own' || $pk eq 'chain') ? $s->{previous_handoff} : $pk eq 'foreign' ? $s->{own_previous_handoff} : undef;
     # Only a file that is own by spec §4 lends its checked ids (REVIEW-NIGHT-3 R3-03: not a fork's
-    # or bg-copy's base, O-12 interim; not an export, an imported copy or a file outside the store).
+    # or bg-copy's base, owner xxxxxxxx-27 revised; not an export, an imported copy or a file
+    # outside the store).
     my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
     my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
     my $res = eval { skills::lint::lint({

@@ -1,0 +1,644 @@
+{
+ "id": "AT-AP-13 (own rows, fork and bg copies)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Owner 2026-10-23 xxxxxxxx-27 revised (\"No: forks re-ask\"): the quote check counts only rows this session wrote after it started (its first per-process record, stamped in milliseconds; an older stamp without a fraction is rounded up to the next second). Claude Code 2.1.309 writes the rows a --fork-session resume or a background copy (sessionKind bg) carries over with the new session's id, the parent's uuids and times and no marker, so they are told apart by time; a /branch copy also has forkedFrom. Not counted: a copied typed row, a yes after a copied question, a copied dialog (ask and answer), a bg copy's carried row, a row 5 ms before the record, a row from a fraction-less record's own second, an own yes that answers a copied question, an own answer to a copied dialog, an own row without a timestamp, a forkedFrom row; a session with no record is not checked (unchecked, never a miss). Counted: a launch prompt 50 ms after the record, the bg session's own typed words, an own yes after an own question, an own dialog. Carry: a clear or handoff-resume predecessor's checked approval carries; a fork, bg-copy, none, missing or unknown link carries none; fork and bg-copy predecessors stay own for commands (locate relation successor).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"fork\", \"ts\": \"2026-10-21T13:00:00.200+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"e1\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}, \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T13:00:00.195+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"e2\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push branch rel/14 to origin now\"}, \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T13:00:00.250+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"c1\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push the release branch rel/2 to origin tonight\"}, \"timestamp\": \"2026-10-21T12:30:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"assistant\", \"uuid\": \"c2\", \"timestamp\": \"2026-10-21T12:31:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"MR !22 passed CI. Merge MR !22 now?\"}]}, \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"c3\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes\"}, \"timestamp\": \"2026-10-21T12:32:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"assistant\", \"uuid\": \"c4\", \"timestamp\": \"2026-10-21T12:33:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_c4\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Push branch rel/4 to origin now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"push branch rel/4 to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}, \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"c5\", \"timestamp\": \"2026-10-21T12:34:00+03:00\", \"sourceToolAssistantUUID\": \"c4\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_c4\", \"content\": \"Your questions have been answered: \\\"Push branch rel/4 to origin now?\\\"=\\\"push branch rel/4 to origin now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Push branch rel/4 to origin now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"push branch rel/4 to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Push branch rel/4 to origin now?\": \"push branch rel/4 to origin now\"}}, \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"b1\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag build 55 as the release candidate\"}, \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T12:40:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"assistant\", \"uuid\": \"c6\", \"timestamp\": \"2026-10-21T12:58:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_c7\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Close MR !77 without merging?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"close MR !77 without merging\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n{\"type\": \"assistant\", \"uuid\": \"c7\", \"timestamp\": \"2026-10-21T12:59:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Delete the merged branch old/q now?\"}]}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"o1\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes\"}, \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"o2\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"sourceToolAssistantUUID\": \"c6\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_c7\", \"content\": \"Your questions have been answered: \\\"Close MR !77 without merging?\\\"=\\\"close MR !77 without merging\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Close MR !77 without merging?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"close MR !77 without merging\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Close MR !77 without merging?\": \"close MR !77 without merging\"}}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"o3\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"archive the old-tools repo today\"}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"o4\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push branch rel/10 to origin now\"}, \"forkedFrom\": {\"sessionId\": \"22222222-2222-4222-8222-222222222222\", \"messageUuid\": \"p10\"}, \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"g1\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}, \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"assistant\", \"uuid\": \"g2\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"MR !12 passed CI. Merge MR !12 now?\"}]}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"g3\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes\"}, \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"sessionId\": \"$SID\"}\n{\"type\": \"assistant\", \"uuid\": \"g4\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g4\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Delete branch old/a now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n{\"type\": \"user\", \"uuid\": \"g5\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"sourceToolAssistantUUID\": \"g4\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g4\", \"content\": \"Your questions have been answered: \\\"Delete branch old/a now?\\\"=\\\"Yes\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Delete branch old/a now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Delete branch old/a now?\": \"Yes\"}}, \"sessionKind\": \"bg\", \"sessionId\": \"$SID\"}\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/dddddddd-1111-4222-8333-444444444444.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"n1\", \"sessionId\": \"dddddddd-1111-4222-8333-444444444444\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push the release branch rel/2 to origin\" — action git push origin rel/2 · targets branch rel/2 @ 2a2a2a2 · once · not yet used; U-11 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$TMP/copy-norec.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: dddddddd-1111-4222-8333-444444444444\n---\n## Approvals: U-2 approval \"push the release branch rel/2 to origin\" — action git push origin rel/2 · targets branch rel/2 @ 2a2a2a2 · once · not yet used; U-11 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194001-1072915200.live-eeeeeeee.json",
+     "content": "{\"pid\": 4194001, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"eeeeeeee-1111-4222-8333-444444444444\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/eeeeeeee-1111-4222-8333-444444444444.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"l1\", \"sessionId\": \"eeeeeeee-1111-4222-8333-444444444444\", \"timestamp\": \"2026-10-21T13:00:00.500+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n{\"type\": \"user\", \"uuid\": \"l2\", \"sessionId\": \"eeeeeeee-1111-4222-8333-444444444444\", \"timestamp\": \"2026-10-21T13:00:01.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-legacy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: eeeeeeee-1111-4222-8333-444444444444\n---\n## Approvals: U-6 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used; U-11 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "begin, no earlier handoff",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "own-rows"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push the release branch rel/2 to origin\" — action git push origin rel/2 · targets branch rel/2 @ 2a2a2a2 · once · not yet used\n- U-3: approval \"yes\" — action merge MR !22 · targets MR !22 @ head 2b2b2b2 · once · not yet used\n- U-4: approval \"push branch rel/4 to origin now\" — action git push origin rel/4 · targets branch rel/4 @ 4a4a4a4 · once · not yet used\n- U-5: approval \"tag build 55 as the release candidate\" — action git tag rc55 · targets commit 5a5a5a5 @ 5a5a5a5 · once · not yet used\n- U-6: approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n- U-7: approval \"yes\" — action delete branch old/q · targets branch old/q @ 7a7a7a7 · once · not yet used\n- U-8: approval \"close MR !77 without merging\" — action close MR !77 · targets MR !77 @ head 7b7b7b7 · once · not yet used\n- U-9: approval \"archive the old-tools repo today\" — action archive repo old-tools · targets repo old-tools @ 1b1b1b1 · once · not yet used\n- U-10: approval \"push branch rel/10 to origin now\" — action git push origin rel/10 · targets branch rel/10 @ 1c1c1c1 · once · not yet used\n- U-11: approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-12: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-13: approval \"Yes\" — action delete branch old/a · targets branch old/a @ 5e5e5e5 · once · not yet used\n- U-14: approval \"push branch rel/14 to origin now\" — action git push origin rel/14 · targets branch rel/14 @ 1d1d1d1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "xxxxxxxx-27 revised approval-quote: a --fork-session copy (typed, a yes after a copied question, a dialog), a bg copy's row, the record's own second, an own yes or answer to a copied question or dialog, no timestamp, forkedFrom",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "own-rows",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^LINT approval-quote line 11$",
+     "^LINT approval-quote line 12$",
+     "^LINT approval-quote line 13$",
+     "^LINT approval-quote line 14$",
+     "^LINT approval-quote line 15$",
+     "^LINT approval-quote line 16$",
+     "^LINT approval-quote line 17$",
+     "^LINT approval-quote line 18$",
+     "^REFUSED: lint \\(9 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-quote line 19$",
+     "approval-quote line 20$",
+     "approval-quote line 21$",
+     "approval-quote line 22$",
+     "approval-shape",
+     "approval-unchecked"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-11: approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-12: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-13: approval \"Yes\" — action delete branch old/a · targets branch old/a @ 5e5e5e5 · once · not yet used\n- U-14: approval \"push branch rel/14 to origin now\" — action git push origin rel/14 · targets branch rel/14 @ 1d1d1d1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "xxxxxxxx-27 revised checked: the bg session's own typed words, an own yes after an own question, an own dialog",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "own-rows",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 4,
+        "checked": 4,
+        "unchecked": 0
+       }
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB1": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised frontmatter lists the own ids only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB1",
+      "has": [
+       "^approvals_checked: U-11, U-12, U-13, U-14$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised measure --compact --copy: an own quote is checked, a copied one is not",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-11 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a session with no per-process record is not checked (never a miss)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "dddddddd-1111-4222-8333-444444444444",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-norec.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/dddddddd-1111-4222-8333-444444444444.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(unchecked\\): U-2, U-11$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a record stamp without a fraction is rounded up (a row from its second is not own, one at the next second is)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "eeeeeeee-1111-4222-8333-444444444444",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-legacy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/eeeeeeee-1111-4222-8333-444444444444.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-11 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-6$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 2a2a2a2a\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\napprovals_checked: U-2\n---\n⟪$BRAND v1 n=2a2a2a2a s=manual⟫\n# LAB-9 — the parent\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=2a2a2a2a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/22222222-2222-4222-8222-222222222222.2a2a2a2a.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"},\"nonce\":\"2a2a2a2a\",\"session_id\":\"22222222-2222-4222-8222-222222222222\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/.sessions/a1a1a1a1-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/a2a2a2a2-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\", \"lineage_reason\": \"handoff-resume\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/a3a3a3a3-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\", \"lineage_reason\": \"fork\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/a4a4a4a4-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\", \"lineage_reason\": \"bg-copy\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/a5a5a5a5-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\", \"lineage_reason\": \"none\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/a6a6a6a6-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/a7a7a7a7-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"22222222-2222-4222-8222-222222222222\", \"lineage_reason\": \"Fork!\"}"
+    }
+   ]
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a clear predecessor's checked approval carries",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a1a1a1a1-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a handoff-resume predecessor's checked approval carries",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a2a2a2a2-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a fork predecessor's approvals are context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a3a3a3a3-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(fork: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a bg copy's predecessor's approvals are context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a4a4a4a4-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(bg-copy: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a link named none carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a5a5a5a5-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(none: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a link with no reason carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a6a6a6a6-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(none: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a link of an unknown kind carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a7a7a7a7-1111-4222-8333-444444444444",
+    "$ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(unknown link: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a fork predecessor's handoff stays own for commands (relation successor)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "a3a3a3a3-1111-4222-8333-444444444444",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md\\nrelation: successor\\n"
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: a bg copy's predecessor's handoff stays own for commands (relation successor)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "a4a4a4a4-1111-4222-8333-444444444444",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $ROOT/repo/parent/2026-10-21_12-00-00_22222222_parent.md\\nrelation: successor\\n"
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194002-1072915200.live-a3a3a3a3.json",
+     "content": "{\"pid\": 4194002, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a3a3a3a3-1111-4222-8333-444444444444\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"fork\", \"ts\": \"2026-10-21T13:30:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a3a3a3a3-1111-4222-8333-444444444444.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p1\", \"sessionId\": \"a3a3a3a3-1111-4222-8333-444444444444\", \"timestamp\": \"2026-10-21T11:59:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "xxxxxxxx-27 revised: begin under the fork successor (the parent's bucket)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "a3a3a3a3-1111-4222-8333-444444444444",
+    "--topic",
+    "parent"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_F": "json:stage"
+   }
+  },
+  {
+   "name": "stamp, fork successor",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_F"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_F/body.md",
+   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "xxxxxxxx-27 revised: publish under the fork successor, the parent's checked line repeated",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_F",
+    "--slug",
+    "own-rows",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-unchecked"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: begin under the clear successor (the parent's bucket)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "a1a1a1a1-1111-4222-8333-444444444444",
+    "--topic",
+    "parent"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_C": "json:stage"
+   }
+  },
+  {
+   "name": "stamp, clear successor",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_C"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_C/body.md",
+   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "xxxxxxxx-27 revised: publish under the clear successor, the parent's checked line repeated",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_C",
+    "--slug",
+    "own-rows",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB_C": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "xxxxxxxx-27 revised: the clear successor's handoff lists the carried id",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "a1a1a1a1-1111-4222-8333-444444444444"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB_C",
+      "has": [
+       "^approvals_checked: U-2$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "canary: no quote text in any watch row",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status"
+   ],
+   "expect": {
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "release candidate"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "old-tools"
+     }
+    ]
+   }
+  }
+ ]
+}
