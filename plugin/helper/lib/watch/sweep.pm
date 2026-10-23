@@ -250,7 +250,7 @@ sub _analyze {
             $c->{prev_b} = { prompts_at => $c->{prompts}, post => $f->{post}, uuid => $uuid };
             $c->{last_main_b} = { uuid => $uuid, nudged => ($b{nudge_driven} && ${ $b{nudge_driven} }) ? 1 : 0 };
         }
-        $c->{win} = { kind => 'boundary', uuid => $uuid, line => $line, calls => 0, consent => 0 };
+        $c->{win} = { kind => 'boundary', uuid => $uuid, line => $line, ts => $f->{ts}, calls => 0, consent => 0 };
         $c->{prog} = { uuid => $uuid, batches => 0, done => 0 } if $is_main;
         $c->{last_nudge} = undef;
         return;
@@ -287,7 +287,7 @@ sub _analyze {
         if ($c->{prog} && !$c->{prog}{done}) { $c->{prog}{done} = 1 }
         if ($k eq 'prompt') {
             if ($f->{resume_invocation}) {
-                $c->{win} = { kind => 'resume', uuid => $f->{uuid}, line => $line, calls => 0, consent => 0,
+                $c->{win} = { kind => 'resume', uuid => $f->{uuid}, line => $line, ts => $f->{ts}, calls => 0, consent => 0,
                               args => $f->{resume_args} ? 1 : 0 };
                 _ev($res, k => 'resume_invocation', line => $line, ts => $f->{ts}, uuid => $f->{uuid});
             } elsif ($c->{win}) {
@@ -344,8 +344,8 @@ sub _analyze {
             if (!$w->{consent}) {
                 for my $cls (@{ $call->{outward} || [] }) {
                     _ev($res, k => 'outward', line => $line, ts => $f->{ts}, class => $cls, call_no => $w->{calls},
-                        win_kind => $w->{kind}, win_uuid => $w->{uuid}, win_line => $w->{line},
-                        args => $w->{args} ? 1 : 0);
+                        win_kind => $w->{kind}, win_uuid => $w->{uuid}, win_line => $w->{line}, win_ts => $w->{ts},
+                        args => $w->{args} ? 1 : 0, ($call->{protected} ? (protected => 1) : ()));
                 }
             }
             if ($w->{kind} eq 'boundary' && defined $call->{stop_id}) {
@@ -399,6 +399,14 @@ sub run {
     return { busy => 1 } unless $fh;
     my $state = _load_state($fh);
     my $outward = watch::spec::classes($ctx->{spec}, 'outward_classes');
+    # AP-9 (REVIEW-NIGHT-3 R3-15): a push to a protected branch is the protected-push gate.
+    my $pbr = ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{protected_branch_re} : undef;
+    local $watch::rows::PROTECTED_RE = (defined $pbr && !ref $pbr) ? eval { qr/$pbr/ } : undef;
+    # Owner xxxxxxxx-29: the user's protected_branches entries, compiled by core's settings::protected
+    # (one reading for the approvals, `risk` and the watcher); beside the spec's list, never instead.
+    my $pb = eval { require settings; defined &settings::protected
+                    ? settings::protected({ values => { protected_branches => $ctx->{settings}{protected_branches} } }) : undef };
+    local $watch::rows::PROTECTED_USER = (ref $pb eq 'HASH' && ref $pb->{globs} eq 'ARRAY') ? [ map { $_->{re} } @{ $pb->{globs} } ] : [];
     my @files;
     my @subs;
     my $budget = $RUN_BYTES;

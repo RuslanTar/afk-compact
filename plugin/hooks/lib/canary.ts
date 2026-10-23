@@ -49,9 +49,19 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
 export const TRIGGERS = ['manual', 'auto', 'plugin', 'precompute'] as const
 export type Trigger = (typeof TRIGGERS)[number]
 
+/**
+ * ID-1 (owner D2 "native owns idle compaction", 2026-10-23): a trigger Claude Code is expected to
+ * add (`idle`, upstream #101070) is handled exactly like the one it refines, wherever that one is
+ * tested (checkpoint, the idle predicate, the after-step), with no `trigger_unknown` row. Nothing
+ * keys on the "Compacted while idle" notice text.
+ */
+export const TRIGGER_ALIASES: Readonly<Record<string, Trigger>> = { idle: 'auto' }
+
 /** C7: an unknown trigger logs `trigger_unknown` and is shaped as main `auto`. */
 export async function triggerCanary(d: Deps, sid: string, trigger: string): Promise<Trigger> {
   if ((TRIGGERS as readonly string[]).includes(trigger)) return trigger as Trigger
+  const alias = Object.prototype.hasOwnProperty.call(TRIGGER_ALIASES, trigger) ? TRIGGER_ALIASES[trigger] : undefined
+  if (alias !== undefined) return alias
   await log(d, sid, 'trigger_unknown', { trigger: trigger.slice(0, 32) })
   escalate(d, 'trigger-unknown')
   return 'auto'

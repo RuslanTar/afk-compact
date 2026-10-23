@@ -3,7 +3,8 @@ package detect;
 # §5.1, §2.2). Owner: WP-core. Grammar and headings come from the spec literals.
 #
 # Normalized body: strip the head parts (a `This session is being continued…`
-# line, a <tools-used-before-summary>…</tools-used-before-summary> block, a
+# line, a <tools-used-before-summary>…</tools-used-before-summary> block, a closed
+# <analysis>…</analysis> block (a PostCompact compact_summary keeps it, 2.1.309), a
 # `Summary:` line, a `<summary>` tag, and blank lines between them), cut before
 # the first `</summary>` when present, else cut installed-message trailers
 # (spec `copy_trailers`, canary-baseline `copy_trailers`), trim trailing blank
@@ -62,6 +63,15 @@ sub normalize {
             $i++;
             next;
         }
+        # The summarizer's scratch block that a PostCompact compact_summary keeps before
+        # <summary> (Claude Code 2.1.309, idle lab runs 2026-10-23); an unclosed one is body.
+        if ($x =~ /^\s*<analysis>/) {
+            my $j = $i;
+            $j++ while $j < @l && $l[$j] !~ m{</analysis>};
+            last if $j >= @l;
+            $i = $j + 1;
+            next;
+        }
         if ($x =~ /^\s*Summary:\s*$/) { $i++; next }
         if ($x =~ /^\s*<summary>(.*)$/) {
             my $rest = $1;
@@ -114,10 +124,10 @@ sub _rstrip { my $s = $_[0]; $s =~ s/\s+$//; return $s }
 #   sentinel_from_end, sentinel_nonce, sentinel_place (inside | after-close | undef),
 #   has_main_heading, chars}
 sub scan {
-    my ($text) = @_;
+    my ($text, %o) = @_;
     my ($b, $norm, $moved) = normalize($text);
-    my $mre = spec::re('marker_re');
-    my $sre = spec::re('sentinel_re');
+    my $mre = $o{mre} // spec::re('marker_re');
+    my $sre = $o{sre} // spec::re('sentinel_re');
     my %r = (lines => $b, normalized => $norm, chars => length($norm));
     my $n = @$b < 5 ? scalar @$b : 5;
     for my $j (0 .. $n - 1) {
@@ -144,6 +154,27 @@ sub scan {
         $r{has_main_heading} = (grep { index($_, $first) == 0 } @$b) ? 1 : 0;
     }
     return \%r;
+}
+
+# alias_scan(text, name) -> scan() with the marker and sentinel grammar written under a former
+# plugin name (owner 2026-10-23 xxxxxxxx-26, "Read-only alias"): the spec's marker_re and
+# sentinel_re with the plugin name replaced by `name`. undef when the name is not a plain lower-case
+# word or the grammar does not hold the plugin name. Read-only: nothing writes this grammar.
+sub alias_scan {
+    my ($text, $name) = @_;
+    return undef unless defined $name && !ref $name && $name =~ /\A[a-z0-9][a-z0-9-]{0,63}\z/;
+    my $brand = ctx::brand();
+    return undef unless defined $brand && $brand ne '' && $brand ne $name;
+    my %re;
+    for my $k (qw(marker_re sentinel_re)) {
+        my $src = spec::get($k);
+        return undef if ref $src;
+        my $i = index($src, $brand);
+        return undef if $i < 0;
+        substr($src, $i, length $brand) = quotemeta $name;
+        $re{$k} = eval { qr/$src/ } or return undef;
+    }
+    return scan($text, mre => $re{marker_re}, sre => $re{sentinel_re});
 }
 
 # acuity(scan) -> the Acuity word of a shaped summary (spec acuity_re, T-TEXT E6), or -

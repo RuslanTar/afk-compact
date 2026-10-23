@@ -10,18 +10,22 @@ import type { AssetName } from './assets.gen'
  * `submit`, `near`, `spent` and `imminent`. 2026-10-22 (MOD-SPEC §3.4, BUILD-PLAN §3.4): the
  * resume block's `prod-forbid`/`prod-allow` (exactly one) and `idle` (never with `midturn`), and
  * the handoff-turn asset's `submit-halt`, `submit-pre` and `submit-idle` (one per turn kind).
+ * 2026-10-23: the resume block's `idle-halt` (owner xxxxxxxx-25: `[idle]` in halt mode, never with
+ * `idle` or `midturn`) and `idle-again` (owner xxxxxxxx-37: the block again on a person's return).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
-  | 'prod-forbid' | 'prod-allow' | 'idle' | 'submit-halt' | 'submit-pre' | 'submit-idle'
+  | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
   | 'nonce' | 'previous_copy' | 'measured_at' | 'measured_facts' | 'session_id' | 'saved_copy' | 'remeasure' | 'tokens' | 'queue_add'
   | 'halt_reason' | 'max_calls' | 'handoff_path' | 'draft_state' | 'handoff_finish'
   /** `storeWord()` of this plugin's launcher (PKG-RUNTIME A.2); the idle turn's minutes (IC-1 D5). */
-  | 'store' | 'idle_min',
+  | 'store' | 'idle_min'
+  /** Owner xxxxxxxx-37: when a background result's turn took the idle block (`[idle-again]`). */
+  | 'idle_used_at',
   string
 >>
 

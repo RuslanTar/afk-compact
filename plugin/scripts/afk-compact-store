@@ -1,5 +1,5 @@
 #!/bin/sh
-# compactinue-store: launcher for the plugin helper (POSIX sh; dash, ash,
+# afk-compact-store: launcher for the plugin helper (POSIX sh; dash, ash,
 # bash 3.2 and Git Bash). It finds perl 5.28+ and runs helper/main.pl.
 # Without a usable perl or a readable main.pl it takes the fallback path: a
 # hook prints nothing and exits 0 after one content-free row; any other

@@ -3,7 +3,8 @@
 # (32 bytes, 0600) and the install id (0600). Default out folder: ~/Downloads when it is a
 # writable folder outside a git work tree; inside a work tree, or missing, the fallback is
 # <watch>/reports/. An --out folder that does not exist: exit 73, nothing written. Usage
-# errors (an unknown flag, `--with-summaries`, a bad --since) exit 64.
+# errors (an unknown flag, a value given to the bare `--with-summaries` flag (RS-2: the user's yes
+# in that run is the only way on), a bad --since) exit 64.
 my %got;
 {
     allow_canary => 1,
@@ -22,7 +23,7 @@ my %got;
         { call => 'cli', at => 3603, argv => [ 'report', '--out', '$TMP/nope' ], env => { STORE_TEST_NO_GIT => '1' },
           exit => 73, stdout_re => qr/\AREFUSED: output folder not writable$/ },
         { call => 'cli', argv => [ 'report', '--bogus' ], exit => 64, any_stdout => 1 },
-        { call => 'cli', argv => [ 'report', '--with-summaries' ], exit => 64, any_stdout => 1 },
+        { call => 'cli', argv => [ 'report', '--with-summaries=yes' ], exit => 64, any_stdout => 1 },
         { call => 'cli', argv => [ 'report', '--since', 'yesterday' ], exit => 64, any_stdout => 1 },
         { call => 'code', code => sub {
               my ($v) = @_;

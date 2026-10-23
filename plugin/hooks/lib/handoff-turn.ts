@@ -6,8 +6,8 @@
 //
 // The limits are context text only (DP-5, Q-R-2): no tool call is ever denied here, and the
 // texts say what the model should do, never that the plugin stops anything (DP-14 (7)).
-import type { Deps } from './deps'
-import { submitPending, submitSettled } from './deps'
+import type { Deps, RequestUsage } from './deps'
+import { readShare, submitPending, submitSettled } from './deps'
 import type { Effective } from './config'
 import type { Runtime, Tag } from './assemble'
 import { assembleIf, hasAsset, hasTag } from './assemble'
@@ -119,6 +119,21 @@ export type HandoffTurn = {
   race: { nonce: string; trigger: string } | null
   /** The hourly-cap stamp is written: a deferred-then-rerun turn counts once (DP-30 (2)). */
   stamped?: boolean
+  /** MG-3: the first request's cache-read share (`turn.step` index 0); null when it had no usage. */
+  firstReadShare?: number | null
+  /** `@idle_min@` of a pre-idle turn: 49, or 55 when the 55.5-min outcome check runs it (owner xxxxxxxx-17). */
+  idleMin?: string
+}
+
+/**
+ * MG-3 (ratify R4 guard, owner xxxxxxxx-18): a main `turn.step` result. The running handoff
+ * turn's first request (index 0) gives its cache-read share for `handoff_turn_end`. Synchronous,
+ * no await: it only reads the result the step already has.
+ */
+export function onStep(d: Deps, turnId: string, index: number, usage: RequestUsage | null | undefined): void {
+  const h = d.state.handoffTurn
+  if (!h || h.phase !== 'running' || h.turnId !== turnId || index !== 0 || h.firstReadShare !== undefined) return
+  h.firstReadShare = readShare(usage)
 }
 
 /** A handoff published by a handoff turn, until the next main turn or compaction. */
@@ -218,7 +233,7 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   const store = storeRuntime(d)
   const runtime: Runtime = { max_calls: String(h.maxCalls), ...store.runtime }
   if (isHalt(h.reason)) runtime.halt_reason = HALT_REASON_TEXT[h.reason]
-  if (h.reason === 'idle') runtime.idle_min = IDLE_MIN_TEXT
+  if (h.reason === 'idle') runtime.idle_min = h.idleMin ?? IDLE_MIN_TEXT
   const text = submitText(d.name, kindOf(h.reason), runtime, store.drop)
   if (text === undefined) {
     await skipped(d, sid, 'no-asset', null, h.reason)
@@ -298,15 +313,37 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
 
 /**
  * A main `turn.start`: our submit's turn becomes the handoff turn (no checkpoint nudge in it);
- * a user's turn during the delay cancels the handoff turn (`why=user-turn`).
+ * a user's turn during the delay cancels the handoff turn (`why=user-turn`); the leftover turn of
+ * our cancelled prompt is aborted at its start (OT-1), unless it may carry another prompt too
+ * (`alone` false: another prompt entered beside ours and the turn's text is more than ours).
  */
-export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string): Promise<void> {
+export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string, alone = true): Promise<void> {
   const s = d.state
   const h = s.handoffTurn
   if (ours && s.orphanSubmit) {
-    // The handoff prompt a user turn cancelled (below) runs now: no checkpoint nudge in it.
+    // OT-1 (owner xxxxxxxx-06 "Abort the leftover turn", 2026-10-22): the handoff prompt a user
+    // turn cancelled (below) starts now; it is aborted before anything else, so no tool runs in
+    // it. If the abort fails, the turn runs as before, with no checkpoint nudge in it. A turn that
+    // may carry the user's words too is never aborted (REVIEW-NIGHT-3 R3-07): it runs as before.
+    const ht = s.orphanHt
     s.orphanSubmit = false
+    s.orphanHt = null
+    s.ourSubmitPending = false
+    if (!alone) {
+      s.nudgedThisTurn = true
+      await log(d, sid, 'handoff_orphan_abort_failed', { turn_id: turnId, ht, why: 'other-text' })
+      return
+    }
+    try {
+      await d.abortTurn(turnId)
+    } catch {
+      s.nudgedThisTurn = true
+      await log(d, sid, 'handoff_orphan_abort_failed', { turn_id: turnId, ht, why: 'rejected' })
+      return
+    }
     s.nudgedThisTurn = true
+    await log(d, sid, 'handoff_orphan_aborted', { turn_id: turnId, ht })
+    return
   }
   if (!h) return
   if (h.phase === 'submitted' && ours) {
@@ -320,6 +357,8 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     await log(d, sid, 'handoff_turn_start', {
       ht: h.ht, reason: h.reason, turn_id: turnId, t0: h.t0, max_calls: h.maxCalls, max_tokens: h.allowance,
       ...(h.reason === 'idle' ? { gap_s: await gapSeconds(d) } : {}),
+      // MG-4: the session's model this turn runs on (recorded only; the submit names none).
+      model: (await d.model()) ?? null,
     })
     return
   }
@@ -327,10 +366,11 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     s.handoffTurn = undefined
     await skipped(d, sid, 'user-turn', h.ht, h.reason)
     // CR-F17: a user prompt that entered beside our submit started first. Our prompt is still
-    // queued and runs after it as a plain turn (it is still ours: claimTurn kept it pending);
-    // its ht is closed so neither turn's `begin` binds it as a handoff turn's.
+    // queued and starts after it (it is still ours: claimTurn kept it pending), where it is
+    // aborted (OT-1); its ht is closed so neither turn's `begin` binds it as a handoff turn's.
     if (h.phase === 'submitted') {
       s.orphanSubmit = s.ourSubmitPending
+      s.orphanHt = s.orphanSubmit ? h.ht : null
       if (h.ht !== null) await handoffTurnClose(d, sid, h.ht, 'cancelled')
     }
   }
@@ -450,11 +490,11 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   // when published, else the full text); §9.4: a pre-idle turn never is.
   const follows = halt !== undefined ? compactsAfter(haltWins(d, halt)) : h.reason === 'precompact'
   const compact = reason === 'answer' && h.race === null && !h.interjected && follows
-  // §9.4 `cache_read_share`: the first request's cache-read share is not in `$.session.usage()`;
-  // null until a source exists (P-IC-6 measures it from the transcript).
+  // §9.4 and MG-3 `cache_read_share`, every reason: the first request's share as its
+  // `turn.step` result reported it (onStep); null when no step result carried usage.
   await log(d, sid, 'handoff_turn_end', {
     ...stats, reason: h.reason, turn_id: h.turnId, interjected: h.interjected, compaction: compact,
-    ...(h.reason === 'idle' ? { cache_read_share: null } : {}),
+    cache_read_share: h.firstReadShare ?? null,
   })
   // The user took the turn over: halt clears at its end as for any user turn (§9.1).
   if (h.interjected) {

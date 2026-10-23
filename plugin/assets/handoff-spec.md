@@ -1,13 +1,13 @@
-# compactinue handoff spec v1 (shared literals)
+# afk-compact handoff spec v2 (shared literals)
 
 One source for the literals that the handoff skill, the resume skill, the compaction texts, the mod, the helper, the publish lint and the watcher share. The handoff template mirrors this file; where they differ, this file wins. Code reads only the `json spec-literals` block at the end and hard-codes no heading, vocabulary or pattern.
 
 ## 1. Marker and sentinel
 
-- Marker: `⟪compactinue v1 n=<nonce> s=main|sub|manual⟫`. Sentinel: `⟪/compactinue n=<nonce>⟫`. The nonce is 8 lowercase hex from code.
+- Marker: `⟪afk-compact v1 n=<nonce> s=main|sub|manual⟫`. Sentinel: `⟪/afk-compact n=<nonce>⟫`. The nonce is 8 lowercase hex from code.
 - Scope: `main` (main compaction summary) · `sub` (subagent compaction summary) · `manual` (the handoff skill).
 - In a summary or handoff the marker sits in the first 5 body lines after the wrapper lines are stripped, and the sentinel in the last 3 non-blank lines. Non-blank text after the sentinel is a trailer.
-- Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a `Summary:` line, and the `<summary>` / `</summary>` tags.
+- Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a closed `<analysis>…</analysis>` block (the summarizer's scratch text, kept before `<summary>` in a PostCompact summary), a `Summary:` line, and the `<summary>` / `</summary>` tags. Claude Code's own closing lines after an installed summary (`copy_trailers`) are cut from its end.
 - In instructions (the mod's instructions, a classic `custom_instructions`) the marker sits mid-line, so that search is unanchored and the last match counts. It counts as ours only when a dispatch record holds its nonce.
 - Any other bracketed or prefixed header line is someone else's: never ours, left untouched.
 
@@ -16,10 +16,11 @@ One source for the literals that the handoff skill, the resume skill, the compac
 Main form, in this order (a heading matches by its literal prefix at the start of a `#` line, so `## Resume here (≤5 lines)` is `## Resume here`):
 
 ```
-⟪compactinue v1 n=<nonce> s=…⟫
+⟪afk-compact v1 n=<nonce> s=…⟫
 # <ticket or topic> — <current state in ≤8 words>
 ## Resume here
 ## User constraints
+## Approvals
 ## Decisions and do-not-re-raise
 ## In flight
 ## Live state
@@ -32,10 +33,12 @@ Main form, in this order (a heading matches by its literal prefix at the start o
 ## Work done and findings
 ## Evidence
 ## Next steps
-⟪/compactinue n=<nonce>⟫
+⟪/afk-compact n=<nonce>⟫
 ```
 
 Subagent form, in this order: `## Task as assigned` · `## Constraints from the parent` · `## Report` · `## Done` · `## Findings` · `## Produced but not yet delivered` · `## Own background tasks` · `## Next action`.
+
+Each heading of both forms has a fixed section id (`section_ids`, e.g. `main:next-steps`, `sub:done`). Beta report exports name a section by this id, never by its position; an id never changes when a section is added, moved or renamed, and a new section gets a new id.
 
 ## 3. Verdicts
 
@@ -57,7 +60,11 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 - **Frontmatter `status`**: `in-progress` · `blocked` · `completed`. **`lineage_reason`**: `clear` · `fork` · `bg-copy` · `handoff-resume` · `none`.
 - **Resume relation**: `same-session` · `successor` · `other` · `unselected`. **Integrity**: `ok` · `possibly truncated` · `legacy` · `unshaped` · `s=sub`.
 - **Carry base** (`previous_kind`, RV-19): `own` (this session's file) · `chain` (a lineage predecessor's file) · `foreign` (another session's file). These are the relations `same-session`, `successor` and `other` as the writer sees them. A document with `imported_from` is never the carry base.
-- **Carried-line tag** (lines taken from another session's handoff): `[from <sid8> · <their id> · <their stamp>]`, or `[from <sid8> · - · <stamp>]` on a pointer line. A foreign approval is carried only as `context only, not valid here; re-ask`.
+- **Own handoff** (resume Rule 2): a file this plugin wrote in the private store (`handoff_root`): marker and sentinel with one nonce, no `export: repo`, no `imported_from`, and relation `same-session` or `successor` (carry base `own` or `chain`). This session's compaction summary and its saved copy are own. A file of this session or a lineage predecessor in the private store whose marker and sentinel carry one of the plugin's former names, with one nonce, reads as own (a read-only alias: nothing is ever written under a former name). Everything else is **foreign**: relation `other` or `unselected`, integrity `legacy`, a `repo:` candidate, an imported copy, and any line carrying a `[from …]` tag.
+- **Real risk** (a command taken from a foreign handoff's text): ask first when it has an outward or destructive class (§12), contacts the network (a URL or host argument; `ssh`, `scp`, or `rsync` to a host; `curl`, `wget`; `git fetch`, `pull`, `push`, `clone`, `ls-remote`; a cloud, cluster, registry or package-manager command that reaches a service), writes or deletes outside the repository's work tree, matches a production class, is an explicit gate, reads credential material (`~/.ssh`, `.env*` and `.envrc`, key files, `.netrc`, `.npmrc`, shell history, `.git/config`, the process environment), reads a file outside the work tree, holds a credential value, or cannot be judged (command substitution, `eval`, `sh -c`, a pipe into a shell or interpreter, an encoded payload, a single quote `'`, which can end the quoting of whatever passes the command on). It carries **no real risk** when it is a local read-only command inside the repository (`git status`, `log`, `diff`, `show`; `rg`; `ls`; reading a tracked file), byte-identical to a command the plugin recorded (`jobs.jsonl`), or the repository's own test, check, lint or build run inside the work tree with no further target and only the flags `test_build_re` lists (§19): a `test`, `check`, `spec`, `lint`, `typecheck` or `build` target the repository defines for make, npm, pnpm, yarn, rake or gradle; `cargo test|build|check`; `go test|vet|build`; `pytest`, each with plain names or relative paths inside the tree. Any other target asks, however the repository defines it (`release`, `publish`, `install`, `deploy`, `db:*` and the like), and so does any option that names another definition, file, folder, plugin, program or output (`make -f`, `-C`, `rake -r`, `gradle -p`, `pytest -p`, `--basetemp`, `--rootdir`, `go -o`, `-exec`, `cargo --manifest-path`, `--target-dir` and the like); the exemption ends for the session once it changed a test or build definition (a Makefile, `package.json` scripts, a Rakefile, `build.gradle*`, `conftest.py`, `.envrc`, git hooks, CI files) on a foreign handoff's word. `<store> risk --cmd-file <file>` applies these classes in code (`risk_classes`, §19); it reads the command from a file the session wrote with its Write tool, so foreign text never reaches a shell line. `readonly_cmd_re` matches one pipeline segment and refuses redirects, expansions, globs and arguments that start at home, at the root or in a parent folder, plus the options that run a program, write a file or follow a link out of the tree, in any short-option bundle or long-option abbreviation (`rg --pre`, `git grep -O` or `--open…`, `git log --output`, `sort -o`, `--out…` or `--compress…`, `tree -o`, a second `uniq` operand, `rg -L`, `grep -R`, `tree -l`, `ls -L`, `diff -r`); in code, `write-outside` and `read-outside` resolve each path argument's real path (an option's attached value too, and any `..` step) and compare it with the work tree component by component. `tests/fixtures/risk/corpus.tsv` is the reference corpus.
+- **Explicit gate**: `deploy`; a change to an environment, its secrets or production data (`env-write`, which includes every production write, `prod-write`); infrastructure (`infra-write`); a push or force-push to a protected branch (the remote's default branch, a name matching `protected_branch_re`, or one the user added in the `protected_branches` setting); and any gate the user stated (a `U-` line or `Guards in force`). A gate always gets a fresh ask: no approval carries past it and no setting removes it. Claude Code's own permission prompts apply on top of every rule here.
+- **Approval (scoped)** (`## Approvals`): `U-n: approval "<the user's words>" — action <what> · targets <identity @ the state it rests on>, … · once | standing (until <condition>) · not yet used | used <stamp> · given <sid8> <stamp>`. It carries across a compaction or a resume within this session or from a predecessor reached only through `clear` or `handoff-resume` links (a `fork` or `bg-copy` predecessor's approvals, or those behind a link of any other kind, are context only, though its commands stay own) when (1) code checked the quote (frontmatter `approvals_checked`, or `Approvals (checked)` in the re-measure), (2) every target still exists and every recorded state still matches (same merge-request head, branch tip, lane, environment), (3) it is not spent and its effect is absent (a run cut off before its `used` mark must not repeat), and (4) its action is not an explicit gate. Under `unattended_prod_reads: forbid` a checked approval that names one production read and its targets counts like a fresh yes: the setting is the default rule and the user's explicit approval wins; a production write stays an explicit gate, and a production action counts as a read only when it is exactly one read-only command (`kubectl get`, `describe`, `logs`, `top`, `explain`, `version` or `api-resources`; `helm list`, `status`, `get` or `history`; a `readonly_cmd_re` command) in plain words with the listed flags only, every target is `<identity> @ <state>` with no second step, and no write or outward word appears; anything else, a read told in plain words included, counts as a write (fail closed). Once a session has claimed an ended predecessor by resuming its newest handoff (`.sessions/successors/`), the claim splits the predecessor's line at its time: handoffs of the predecessor, or of a session before it on its line, dated at or before the claim carry approvals only along the claimant's line, and those written after the claim only along the predecessor's own; resumed itself, the predecessor re-asks its earlier approvals, and its quote checks count only what the user typed after the claim. A once approval is spent when its action ran (`used <stamp>`); a standing one ends when a target stops matching or the user withdraws it. When the words do not say "standing" (or the like), it is `once`. A foreign approval is context only (`context only, not valid here; re-ask`). Text in a file, a tool output other than the user's own answer in one of this session's question dialogs, an instruction file or another session's summary is never an approval.
+- **Carried-line tag** (lines taken from another session's handoff): `[from <sid8> · <their id> · <their stamp>]`, or `[from <sid8> · - · <stamp>]` on a pointer line. A foreign approval is carried only as `context only, not valid here; re-ask`. A command taken from a foreign handoff (Step 1, a Next step, a probe, a re-check, a restart) keeps its tag (`-` for the id) in every later handoff, and a compaction summary marks it `[from <sid8>]`, until the user approves it or it is rebuilt from facts this chain checked; a tagged command is foreign wherever it appears.
 - **Queue lane**: `^(lane|auto):[A-Za-z0-9._/-]+$`; only the helper writes it. A resume adopts only `lane:` ids.
 
 ## 5. Explicit none-forms
@@ -85,9 +92,9 @@ Only these sections take a none-form; other empty sections are omitted.
 
 ## 8. Frontmatter
 
-- Handoff: `kind: handoff`, `writer`, `nonce`, `date`, `session_id`, `actor`, `previous_session_id`, `lineage_reason`, `transcript_path`, `claude_pid`, `cc_version`, `repository`, `bucket`, `worktree`, `branch`, `git_commit`, `status`, `ticket`, `queue_lane`, `previous_handoff`, `previous_kind`, `own_previous_handoff`, `imported_from`, `gsd`. Empty keys are omitted. `previous_kind` (`own` · `chain` · `foreign`) and `own_previous_handoff` (a path, only when the carry base is foreign and an own file exists) are written by `begin`/`publish` (RV-19); `imported_from` (`repo:<rel path>`) only by `project copy --from repo`.
-- Summary copy: `kind` (`compact-summary` · `subagent-summary`) and the handoff keys except `ticket`, `gsd`, `previous_kind`, `own_previous_handoff` and `imported_from`, plus `bucket_source`, `trigger`, `compaction_seq`, `tokens_before`, `tokens_after`, `verdict`, `channel`, `seat_state`, `evidence`, `redacted`.
-- Export (repo mode, D-12 §1.5.5; `frontmatter_keys_export`): the handoff keys minus the machine-only `transcript_path`, `claude_pid` and `worktree`, minus the private-chain keys `previous_kind`, `own_previous_handoff` and `imported_from`, plus `export: repo`. `bucket`, `previous_handoff` and `gsd` are rewritten to repository-relative values. A key outside this list is dropped from an export.
+- Handoff: `kind: handoff`, `writer`, `nonce`, `date`, `session_id`, `actor`, `previous_session_id`, `lineage_reason`, `transcript_path`, `claude_pid`, `cc_version`, `repository`, `bucket`, `worktree`, `branch`, `git_commit`, `status`, `ticket`, `queue_lane`, `previous_handoff`, `previous_kind`, `own_previous_handoff`, `imported_from`, `approvals_checked`, `gsd`. Empty keys are omitted. `previous_kind` (`own` · `chain` · `foreign`) and `own_previous_handoff` (a path, only when the carry base is foreign and an own file exists) are written by `begin`/`publish` (RV-19); `imported_from` (`repo:<rel path>`) only by `project copy --from repo`; `approvals_checked` (a comma list of the `U-` ids of `## Approvals` lines whose quote passed `approval-quote`, or that were carried from an own-chain file that listed them) only by `publish`, which also records the SHA-256 of each listed line in the store (`.sessions/approvals/<sid>.<nonce>.json`, never in the file); a listed line that no longer matches its hash, has none, or sits in a file without a record is context only (re-ask).
+- Summary copy: `kind` (`compact-summary` · `subagent-summary`) and the handoff keys except `ticket`, `gsd`, `previous_kind`, `own_previous_handoff`, `imported_from` and `approvals_checked`, plus `bucket_source`, `trigger`, `compaction_seq`, `tokens_before`, `tokens_after`, `verdict`, `channel`, `seat_state`, `evidence`, `redacted`.
+- Export (repo mode, D-12 §1.5.5; `frontmatter_keys_export`): the handoff keys minus the machine-only `transcript_path`, `claude_pid` and `worktree`, minus the private-chain keys `previous_kind`, `own_previous_handoff`, `imported_from` and `approvals_checked`, plus `export: repo`. `bucket`, `previous_handoff` and `gsd` are rewritten to repository-relative values. A key outside this list is dropped from an export.
 - `writer`: `handoff` · `mod` · `postcompact-fallback`. Code writes frontmatter, marker and sentinel; a model never types them.
 
 ## 9. Locations
@@ -95,7 +102,7 @@ Only these sections take a none-form; other empty sections are omitted.
 - Bucket `<handoff_root>/<repo>/<ticket-or-topic>/` (default root `~/.claude/handoffs`). Handoffs at its top level, named `YYYY-MM-DD_HH-MM-SS_<sid8>_<slug>.md`; readers order by frontmatter `date`.
 - Copies: `compact/`, `compact/subagents/`, `compact/unattributed/`, names ending `-<id6>.md`.
 - Evidence: `evidence/<stem>/` with `MANIFEST.tsv`. Disposable: `<disposable_root>/<YYYY-MM-DD>/<stem>-evidence/`.
-- Sessions: pins `.sessions/<sid>.json`; lineage `.sessions/<sid>.lineage.json`; per-process records `.sessions/by-pid/<pid>-<lstart>.live-<sid8>.json` and `.ended-<sid8>.json`.
+- Sessions: pins `.sessions/<sid>.json`; lineage `.sessions/<sid>.lineage.json`; per-process records `.sessions/by-pid/<pid>-<lstart>.live-<sid8>.json` and `.ended-<sid8>.json`; approval-line hashes `.sessions/approvals/<sid>.<nonce>.json` (written once by `publish`); successor claims `.sessions/successors/<sid>.json` (written once by `pin`).
 - Watch tree `<log_dir>` (default `<root>/.watch`): `<sid>.jsonl`, `<sid>/events/`, `<sid>.classic.jsonl`, `<sid>.alerts.jsonl`, `<sid>/compactions.jsonl`, `<sid>/mod-alive.json`, `<sid>/bg/slot-<k>.json`, `heal/<origin sid>/<item>.count`.
 
 ## 10. Secret rule set
@@ -116,15 +123,15 @@ Absolute-path lines · code blocks over 5 lines · log, warning and stack lines 
 
 ## 12. Outward and destructive classes
 
-`push` · `force-push` · `mr-write` · `http-write` · `deploy` · `publish` · `history-rewrite` · `recursive-delete` · `mcp-write`. A command in one of these classes needs a fresh ask; a handoff or summary never grants it.
+`env-write` · `infra-write` · `push` · `force-push` · `mr-write` · `http-write` · `deploy` · `publish` · `history-rewrite` · `recursive-delete` · `mcp-write`. A command in one of these classes needs a fresh ask unless an own-chain approval covers it (§4 **Approval (scoped)**). `deploy`, `env-write`, `infra-write`, `prod-write` and `protected-push` are explicit gates: always a fresh ask. `env-write` (a change to an environment's settings or secrets) is checked before `infra-write` (infrastructure), and both before `deploy`: the first of the three that matches names the command. `protected-push` is a `push` or `force-push` whose destination branch (the explicit refspec, else the current branch) is the remote's default branch or, lower-cased, matches `protected_branch_re` (`main`, `master`, `trunk`, `develop`, `stable`, `staging`, `gh-pages`, `prod`/`production` and their `-`, `_` or `/` children, `release`/`releases` and theirs, `hotfix/*`), or matches an entry of the user's `protected_branches` setting (names or globs, lower-cased; the setting only adds to this list, never removes from it).
 
 **Production classes** (`prod_classes`, helper only): `prod-token` matches a `prod`, `production` or `prd` token (`--context=prod-eu`, `db.prod.example.com`, `AWS_PROFILE=production`, `--profile prd`; not `product` or `produce`). The user's `prod_patterns` add to it, never replace it. A production match that is read-only is `prod-read`, any other is `prod-write`; a production match always outranks an allowlist match. A false hit costs one question, the safe direction.
 
 ## 13. Alert texts
 
-Fixed per rule; no user content. Shown as `compactinue watcher: <text> (<alert_id>)`.
+Fixed per rule; no user content. Shown as `afk-compact watcher: <text> (<alert_id>)`.
 
-**First-run notice** (`notice`): shown once per install at the first main session start, then again only when its `id` changes (the `-1` is the notice version; it is bumped when what is logged changes in a way a user would care about). Fixed text, at most 200 characters, no user content: `compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config.`
+**First-run notice** (`notice`): shown once per install at the first main session start, then again only when its `id` changes (the `-1` is the notice version; it is bumped when what is logged changes in a way a user would care about). Fixed text, at most 200 characters, no user content: `afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config.`
 
 | Rule | Text |
 |---|---|
@@ -143,7 +150,7 @@ Fixed per rule; no user content. Shown as `compactinue watcher: <text> (<alert_i
 | A-13 | session-id canary |
 | A-14 | slow resume |
 | A-15 | version, arm or hook-surface change |
-| A-16 | compactinue: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it. |
+| A-16 | afk-compact: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it. |
 | A-17 | failed or blocked compaction |
 | A-18 | auto-continue stopped |
 | A-19 | auto-continue cap breached |
@@ -155,6 +162,8 @@ Fixed per rule; no user content. Shown as `compactinue watcher: <text> (<alert_i
 | A-25 | watcher unhealthy |
 | A-26 | plugin layers not running |
 | A-27 | auto-continue without a nudge |
+| A-28 | compaction or handoff turn read cold |
+| A-29 | idle compaction not shaped |
 
 ## 14. Wait specs (Dev-7 D2, D3; DP-1, DP-14)
 
@@ -167,7 +176,7 @@ Fixed per rule; no user content. Shown as `compactinue watcher: <text> (<alert_i
 - `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) or the runtime trailer `[exited with code <n>]` prints `rc=<n>`. The trailer `[killed]` (a TaskStop, or the tasks stopped at exit) prints `killed`: the job was killed, never finished; a killed job is asked about, never relaunched by itself.
 - **End marker (DP-1):** a job you will wait on is started with `; echo "__exit $?"` at the end of its command. A relaunch replays the recorded command byte for byte, so it carries the suffix when the original did; restart text never adds it.
 - **Regex limits:** a `marker` pattern longer than 200 characters, or holding `(?{`, `(??{` or `(*`, is refused with exit 64. An overrun past `--max` plus 5 seconds ends with exit 70. Core Perl code never runs from a pattern.
-- **Quoting (Dev-5):** resume passes a handoff's spec only inside single quotes. A spec containing `'` is reported, never run.
+- **Quoting:** resume passes a handoff's spec only inside single quotes. A spec containing `'` is reported, never run.
 - **One output line.** Matched text is cut to 120 characters, never the whole line.
 
 | Exit | Meaning |
@@ -200,6 +209,8 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 | `id-range` | blocking | an id range |
 | `carry-provenance` | blocking | a line from a foreign base without its `[from …]` tag |
 | `carry-approval` | blocking | a tagged approval without `context only, not valid here; re-ask`, or with `used`/`not yet used` |
+| `approval-shape` | blocking | a `## Approvals` line without quoted words, `action`, `targets`, `once`/`standing`, or a state word (`not yet used` · `used <stamp>`; a tagged foreign line: `context only, not valid here; re-ask`); or a new approval line outside `## Approvals` |
+| `approval-quote` | blocking, own lines | the quoted words are not in a human-typed user message of this session or in the user's answer in one of its question dialogs, the line is not carried from an own-chain file that listed it in `approvals_checked`, or a quote under 4 words does not answer an assistant message naming one of its targets |
 | `private-path` | blocking, repo mode | a machine-private path left after the export rewrite (`~/.claude/projects/`, a `.jsonl` under `~/.claude/`, another user's home, a `claude-*` temp path) |
 | `recipe-placeholder` · `recipe-script` · `recipe-spawn` | blocking | a recipe with a placeholder; a script not in the manifest; an agent spawn without model and effort |
 | `secret-hard` | blocking | a HARD secret hit in the draft or recipes |
@@ -211,13 +222,15 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 | `overlap` | advisory | 30% or more of non-ledger lines shared with `previous_handoff` (ledger lines, headings, none-forms and helper-pasted Evidence lines excluded) |
 | `secret-warn` | advisory | a WARN secret hit (rule ids printed, never values) |
 | `acuity` | advisory | Resume here has no `Acuity:` (`missing`), or a rating below the measured floor (`below <floor>`) |
-| `store-path` | advisory | a body line contains `/scripts/compactinue-store` |
+| `store-path` | advisory | a body line contains `/scripts/afk-compact-store` |
+| `approval-unchecked` | advisory | the session transcript could not be read or the session's start is not on record, so no quote was checked; the line is published but not listed in `approvals_checked`, and the next session treats it as context |
 
 Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kept at <path>` · `REFUSED: <other reason>`; repo-mode export lines as in the handoff skill's Step 7.
 
 - `time-format`: `checked` or `[verified` followed by a time that is not a full stamp, outside carried lines.
 - Carried lines, which `unprinted-time` and `time-format` skip: a line byte-identical to a line of the base or of the own chain's file, and a line with a carried-line tag whose ledger content (bullet, id and carried-line tags removed) equals that of a foreign-base line. So a foreign line keeps its `checked` and `verified` times when it is carried.
 - `carry-provenance`: a `U-`, `D-` or `X-` line whose content occurs in the foreign base and not in the own base, with no carried-line tag. `carry-approval`: a tagged approval line without `context only, not valid here; re-ask`, or with `used` / `not yet used` on it.
+- `approval-quote` and `approval-unchecked` (own, untagged `## Approvals` lines): the quote is matched against this session's human-typed user rows and the user's answers in its question dialogs only (not another tool result, a meta row, a compaction summary, a task notification or a plugin's prompt), with white space folded, in memory; no quote text is written anywhere. A dialog answer is the result of an `AskUserQuestion` call of the main session (not a subagent's), read from the answer record Claude Code keeps beside it: the chosen option label (each label of a multi-select answer), the typed Other text, a note the user wrote or their free-text response; never the question, its header, an option's description or preview, a dismissed dialog, a selection left when the dialog timed out, or a round where the user asked for more questions; nor an answer that a hook, a rule or a classifier gave (a recorded permission decision whose source is not the user), nor a dialog whose call already held answers. Only rows this session wrote after it started count, for a typed quote, the assistant message a short one answers, and a dialog's question and answer: not a row with another session's id or `forkedFrom`, one without a time, or one timed before the session's first per-process record (a fork, a `--fork-session` resume and a background copy write the rows they copy with the new id and the parent's times); with no record the line is `approval-unchecked`. A line counts as carried when an own-chain file (`previous_handoff` with `previous_kind` `own` or `chain`, or `own_previous_handoff`, whose approvals carry by §4) has a line with the same id, words, action, targets and `once`/`standing` and lists the id in `approvals_checked`; its state may go from `not yet used` to `used <stamp>`, never back. A quote under 4 words counts only when the last assistant message before it names one of the approval's targets; in a dialog, only when it is a whole answer and that answer's question names one of them. An approval line outside `## Approvals` that is byte-identical to a line of the own chain's file is an older carried line: it is context, never carried as an approval, and not flagged.
 - `private-path` (repo mode only, fix or report): a line that still holds a machine-private path after the export rewrite of D-12 §1.5.5 (the user's home is already `~/`): `~/.claude/projects/`, a `.jsonl` file under `~/.claude/`, another user's home, or an in-flight probe path (`/private/tmp/claude-*`, `/tmp/claude-*`, `$TMPDIR/claude-*`). It may fire on the same line as `ephemeral-path`: that rule accepts a durable copy or a `Volatile:` line, this one never does, because the path would reach git.
 
 ## 16. Caps
@@ -229,7 +242,7 @@ Receipts: `Wrote handoff to: <path>` · `REFUSED: lint (<n> blocking); draft kep
 ## 17. Evidence rules (helper)
 
 Moved from the template §5 (PR-4). The helper enforces all of it, and the template keeps the evidence-choice rules.
-- **Caps.** Copy files ≤10 MB, ≤50 MB per handoff; the rest are `ref-only` (bytes, sha256, mtime, regeneration command, ≤40 head/tail lines of text). Dedupe by sha256 across buckets (`dup`); a bucket whose `evidence/` and `compact/` folders together exceed `evidence_quota_mb` gets a warning.
+- **Caps.** Copy files ≤10 MB; bigger ones are `ref-only` (bytes, sha256, mtime, regeneration command, ≤40 head/tail lines of text). At most `evidence_total_max_mb` (default 50 MB) per handoff or sweep; a file past it is `withheld` (`rules: over-total`) and stays where it is. Dedupe by sha256 across buckets (`dup`); a bucket whose `evidence/` and `compact/` folders together exceed `evidence_quota_mb` gets a warning.
 - **Where.** Needed later → `<handoff root>/<repo>/<bucket>/evidence/<stem>/`. Disposable → `<disposable root>/<YYYY-MM-DD>/<stem>-evidence/`, today's folder only, with a retention note from `disposable_keep_days` ("kept until you remove it" when unset). Defaults `~/.claude/handoffs` and `~/.claude/trash-staging`. Never in a git repository, `.planning/` or a temp folder.
 - **Copy-time secret gate**: §10, applied before each copy. Modes: umask 077; folders 0700, files 0600.
 - **Manifest** `MANIFEST.tsv`: the `manifest_columns` and `manifest_scan` literals; recipes, `ledger.md` and `inflight.md` included. Order: copy, re-hash, manifest, publish by exclusive create, receipt.
@@ -237,7 +250,7 @@ Moved from the template §5 (PR-4). The helper enforces all of it, and the templ
 ## 18. Identity, file name and lock (helper)
 
 Moved from the template §6 (PR-4).
-- **Identity** = full `session_id` + actor, from the plugin's per-process session record, cross-checked against the id the skill passes (mismatch → `begin` prints `identity: degraded (<reason>)` and the writer copies it under Ownership (template §6); none → random token, never a shared name). Compaction and `--resume` keep it; `/clear`, fork and background copies get a new one, linked by `previous_session_id` and `lineage_reason`. `transcript_path` locates, never keys.
+- **Identity** = full `session_id` + actor, from the plugin's per-process session record, cross-checked against the id the skill passes (mismatch → `begin` prints `identity: degraded (<reason>)` and the writer copies it under Ownership (template §6); none → random token, never a shared name). Compaction and `--resume` keep it; `/clear`, fork and background copies get a new one, linked by `previous_session_id` and `lineage_reason`. A new session that resumes another session's handoff is linked `handoff-resume` by `pin` (resume R4) only when it started fresh (startup or resume) with no link yet, the handoff is the predecessor's newest in the private store, the predecessor has ended and not by `/clear`, and no other session claimed that predecessor (`.sessions/successors/<sid>.json`, exclusive create); otherwise it stays `other`. `transcript_path` locates, never keys.
 - **Name** `YYYY-MM-DD_HH-MM-SS_<sid8>_<slug>.md`, local time; readers order by frontmatter `date`, never by name or mtime; `-2` on a clash; `-a<agent8>` only with an agent id known to code. Only the main session writes (template §8).
 - **Lock.** Publishing is an exclusive create with no lock; a published file is never rewritten. The one lock guards the helper's read-modify-write of `.sessions/<sid>.json` (bucket, lane, worktree): owner = sid + actor + pid + process start time + host; stale only when that pid is gone or its start time differs (then taken over and logged); a live lock is never broken.
 - **Ownership** is checked before the first write to anything shared (foreign commits, a newer foreign handoff, a lane held elsewhere, another live session on the checkout): read-only there, recorded under Ownership. Never edit or delete another session's files.
@@ -248,11 +261,12 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
 
 ```json spec-literals
 {
-  "spec_version": 1,
+  "spec_version": 2,
   "title_prefix": "# ",
   "sections_main": [
     "## Resume here",
     "## User constraints",
+    "## Approvals",
     "## Decisions and do-not-re-raise",
     "## In flight",
     "## Live state",
@@ -278,9 +292,30 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "## Own background tasks",
     "## Next action"
   ],
-  "marker_re": "^⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
-  "sentinel_re": "^⟪/compactinue n=([0-9a-f]{8})⟫$",
-  "instr_marker_re": "⟪compactinue v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
+  "section_ids": {
+    "## Resume here": "main:resume-here",
+    "## User constraints": "main:user-constraints",
+    "## Approvals": "main:approvals",
+    "## Decisions and do-not-re-raise": "main:decisions",
+    "## In flight": "main:in-flight",
+    "## Live state": "main:live-state",
+    "## Open questions": "main:open-questions",
+    "## Location": "main:location",
+    "## Work done and findings": "main:work-done",
+    "## Evidence": "main:evidence",
+    "## Next steps": "main:next-steps",
+    "## Task as assigned": "sub:task",
+    "## Constraints from the parent": "sub:parent-constraints",
+    "## Report": "sub:report",
+    "## Done": "sub:done",
+    "## Findings": "sub:findings",
+    "## Produced but not yet delivered": "sub:undelivered",
+    "## Own background tasks": "sub:background-tasks",
+    "## Next action": "sub:next-action"
+  },
+  "marker_re": "^⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
+  "sentinel_re": "^⟪/afk-compact n=([0-9a-f]{8})⟫$",
+  "instr_marker_re": "⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub)⟫",
   "marker_window_lines": 5,
   "sentinel_window_nonblank_lines": 3,
   "wrappers": {
@@ -291,7 +326,11 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "summary_open": "<summary>",
     "summary_close": "</summary>"
   },
-  "copy_trailers": [],
+  "copy_trailers": [
+    "^If you need specific details from before compaction \\(",
+    "^Continue the conversation from where it left off without asking",
+    "^The messages after this summary are the most recent messages from before compaction"
+  ],
   "verdicts": ["stale", "scope-leak", "unshaped", "truncated", "ok-trailer", "ok"],
   "ok_verdicts": ["ok", "ok-trailer"],
   "scopes": ["main", "sub", "manual"],
@@ -342,7 +381,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "more_compaction_re": "\\+[0-9]+ more: B-[0-9]+(, B-[0-9]+)*",
   "recipe_path": "<bucket>/evidence/<stem>/restart/<B-n>.md",
   "fold_line_re": "^(- )?([DX]-[0-9]+(, [DX]-[0-9]+)*) settled; full text in (\\S+)$",
-  "frontmatter_keys_handoff": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "transcript_path", "claude_pid", "cc_version", "repository", "bucket", "worktree", "branch", "git_commit", "status", "ticket", "queue_lane", "previous_handoff", "previous_kind", "own_previous_handoff", "imported_from", "gsd"],
+  "frontmatter_keys_handoff": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "transcript_path", "claude_pid", "cc_version", "repository", "bucket", "worktree", "branch", "git_commit", "status", "ticket", "queue_lane", "previous_handoff", "previous_kind", "own_previous_handoff", "imported_from", "approvals_checked", "gsd"],
   "frontmatter_keys_copy": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "transcript_path", "claude_pid", "cc_version", "repository", "bucket", "bucket_source", "worktree", "branch", "git_commit", "status", "queue_lane", "previous_handoff", "trigger", "compaction_seq", "tokens_before", "tokens_after", "verdict", "channel", "seat_state", "evidence", "redacted"],
   "frontmatter_keys_export": ["kind", "writer", "nonce", "date", "session_id", "actor", "previous_session_id", "lineage_reason", "cc_version", "repository", "bucket", "branch", "git_commit", "status", "ticket", "queue_lane", "previous_handoff", "gsd", "export"],
   "export_value": "repo",
@@ -353,7 +392,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   },
   "call_cap": 25,
   "recipe_cap": 8,
-  "section_caps": {"## Resume here": 1500, "## User constraints": 1500, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1200, "## Open questions": 2000, "## Location": 1000, "## Work done and findings": 1800, "## Evidence": 600, "## Next steps": 1000},
+  "section_caps": {"## Resume here": 1500, "## User constraints": 1500, "## Approvals": 1000, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1200, "## Open questions": 2000, "## Location": 1000, "## Work done and findings": 1800, "## Evidence": 600, "## Next steps": 1000},
   "lint_texts": {
     "headings": {"why": "readers find sections by their literal heading, in this order", "fix": "use the template §4 headings unchanged and in order; omit only an empty section without a none-form"},
     "meta-in-draft": {"why": "frontmatter, marker and sentinel come from code; typed ones break detection", "fix": "delete them from body.md; start at the # title"},
@@ -367,7 +406,9 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "time-format": {"why": "readers compare stamps; a partial time is ambiguous", "fix": "write the whole stamp YYYY-MM-DD HH:MM +hhmm as printed"},
     "id-range": {"why": "a range hides which ids exist, so carried ids get lost", "fix": "list each id"},
     "carry-provenance": {"why": "another session's line is not this session's word", "fix": "add [from <sid8> · <their id> · <their stamp>] with the values from begin"},
-    "carry-approval": {"why": "approvals never carry across sessions", "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"},
+    "carry-approval": {"why": "an approval carries only along your own chain, where its use is tracked; another session's approval is context", "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"},
+    "approval-shape": {"why": "the next session can act on an approval only when it can check its scope", "fix": "write the user's words, the action, each target with its state, once or standing, and not yet used or used <stamp>"},
+    "approval-quote": {"why": "only the user's own words can approve an action", "fix": "quote the user exactly, or move the item to Open questions as ask user"},
     "private-path": {"why": "in repo mode the path would reach git", "fix": "use a durable bucket path or a pointer; Volatile: does not help here"},
     "recipe-placeholder": {"why": "a recipe with <…> cannot run as written", "fix": "write the literal value, or class the row ask"},
     "recipe-script": {"why": "a restart runs only a script whose sha256 is in the manifest", "fix": "evidence --keep <script> and cite the durable path"},
@@ -385,11 +426,12 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "recipe-mismatch": {"why": "a recorded job is relaunched only byte for byte", "fix": "copy command: from the job record, or class the row ask"},
     "secret-warn": {"why": "a value that looks secret may leak", "fix": "take it out and say where it lives, or report the rule ids"},
     "acuity": {"why": "the next session sets its check depth from Acuity; a rating below the measured facts under-checks", "fix": "add Acuity: to the Status line, at least the floor shown (merge or rebase in progress: unstable; a running job: watch)"},
-    "store-path": {"why": "the helper path changes with each plugin update and names your home folder", "fix": "write <store> instead of the path"}
+    "store-path": {"why": "the helper path changes with each plugin update and names your home folder", "fix": "write <store> instead of the path"},
+    "approval-unchecked": {"why": "an unchecked approval cannot carry", "fix": "nothing to do; the next session re-asks"}
   },
   "lint_ids": {
-    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard", "queue-off"],
-    "advisory": ["size", "section-cap", "code-block", "log-lines", "hash-lines", "must-read", "changes", "overlap", "recipe-mismatch", "secret-warn", "acuity", "store-path"],
+    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard", "queue-off", "approval-shape", "approval-quote"],
+    "advisory": ["size", "section-cap", "code-block", "log-lines", "hash-lines", "must-read", "changes", "overlap", "recipe-mismatch", "secret-warn", "acuity", "store-path", "approval-unchecked"],
     "repo_mode_only": ["private-path"]
   },
   "private_path_classes": [
@@ -472,6 +514,8 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     {"id": "tmp-path", "re": "(^|[\\s'\"(=:`])(/tmp/|/private/tmp/|/var/folders/|/private/var/folders/|\\$TMPDIR/|\\$\\{TMPDIR\\}/|[^\\s'\"`]*/scratchpad/|[^\\s'\"`]*/tasks/[^/\\s'\"`]+\\.output)"}
   ],
   "outward_classes": [
+    {"id": "env-write", "re": "\\b(gh|glab)[ \\t]+(secret|variable)[ \\t]+(set|delete|remove)\\b|\\bheroku[ \\t]+config:(set|unset)\\b|\\bvercel[ \\t]+env[ \\t]+(add|rm)\\b|\\bfly(ctl)?[ \\t]+secrets[ \\t]+(set|unset|import)\\b|\\bkubectl[ \\t]+(create|delete)[ \\t]+(secret|configmap)\\b|\\baws[ \\t]+(ssm[ \\t]+(put|delete)-parameter|secretsmanager[ \\t]+(create|put|update|delete)-secret(-value)?)\\b"},
+    {"id": "infra-write", "re": "\\b(terraform|tofu)[ \\t]+(apply|destroy|import|state[ \\t]+(rm|mv|push))\\b|\\bpulumi[ \\t]+(up|destroy)\\b|\\bkubectl[ \\t]+(apply|create|delete|patch|replace|scale|rollout|set|edit|drain|cordon|uncordon|taint)\\b|\\bhelm[ \\t]+(install|upgrade|uninstall|rollback)\\b|\\baws[ \\t]+cloudformation[ \\t]+(deploy|create-stack|update-stack|delete-stack)\\b"},
     {"id": "push", "re": "\\bgit\\b.*\\bpush\\b"},
     {"id": "force-push", "re": "\\bgit\\b.*\\bpush\\b.*(--force|--force-with-lease|[ \\t]-[A-Za-z]*f\\b|[ \\t]\\+[^ \\t]+)"},
     {"id": "mr-write", "re": "\\b(gh[ \\t]+(pr|issue)[ \\t]+(create|merge|close|reopen|comment|edit|review|ready)|glab[ \\t]+(mr|issue)[ \\t]+(create|merge|close|reopen|note|update|approve))\\b"},
@@ -485,7 +529,24 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "prod_classes": [
     {"id": "prod-token", "re": "(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)"}
   ],
-  "notice": {"id": "watcher-1", "version": 1, "text": "compactinue: local compaction logs are on (content-free; nothing is sent). To share them: /compactinue:report. To turn them off: set watcher to off in /config."},
+  "explicit_gate_classes": ["deploy", "env-write", "infra-write", "prod-write", "protected-push"],
+  "protected_branch_re": "^(main|master|trunk|develop|development|stable|staging|gh-pages|prod|production|(prod|production)[/_-].+|releases?([/_-].+)?|hotfix/.+)$",
+  "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
+  "risk_classes": [
+    {"id": "gate", "from": "explicit_gate_classes"},
+    {"id": "outward", "from": "outward_classes"},
+    {"id": "production", "from": "prod_classes"},
+    {"id": "credential-value", "from": "secret_rules"},
+    {"id": "credential-read", "re": "(~|\\$HOME|\\$\\{HOME\\})/\\.(ssh|aws|kube|docker|gnupg|config/gh)(/|\\b)|(^|[\\s/'\\\"=])\\.env(?!\\.(example|sample|template|dist)\\b)[A-Za-z0-9_.-]*($|[\\s'\\\";|&)])|\\.(netrc|npmrc|pypirc|pgpass|git-credentials)\\b|\\b(id_rsa|id_dsa|id_ecdsa|id_ed25519)\\b|\\.(pem|key|p12|pfx|keystore|jks|p8|ppk)($|[\\s'\\\";|&)])|\\bcredentials(\\.json)?\\b|(^|[\\s/'\\\"=])\\.?[A-Za-z_]*_history\\b|\\bhistory\\.jsonl\\b|/proc/|\\.git/config\\b|\\b(security[ \\t]+find-(generic|internet)-password|op[ \\t]+(read|item[ \\t]+get)|pass[ \\t]+show)\\b"},
+    {"id": "network", "re": "[A-Za-z][A-Za-z0-9+.-]*://|(^|[;&|(][ \\t]*)(sudo[ \\t]+)?([A-Za-z_][A-Za-z0-9_]*=[^ \\t]*[ \\t]+)*(curl|wget|ssh|scp|sftp|ftp|telnet|nc|ncat|socat|aws|gcloud|gsutil|az|kubectl|helm|terraform|tofu|pulumi|gh|glab|heroku|vercel|fly|flyctl|doctl|npx)\\b|\\brsync\\b[^|;&]*[ \\t][^ \\t:/]+:|\\bgit\\b[^|;&]*[ \\t](fetch|pull|push|clone|ls-remote|submodule[ \\t]+update|remote[ \\t]+update)\\b|\\bdocker[ \\t]+(pull|push|login|run|build|compose[ \\t]+(pull|up|build))\\b|\\b(npm|pnpm)[ \\t]+(install|i|ci|add|update|publish|view|info|audit|outdated)\\b|\\byarn([ \\t]+(install|add|upgrade|publish|info|audit)\\b|[ \\t]*$)|\\bpip[0-9.]*[ \\t]+(install|download)\\b|\\b(gem|bundle|bundler)[ \\t]+(install|update|push|fetch|outdated)\\b|\\bcargo[ \\t]+(install|update|publish|fetch|search)\\b|\\bgo[ \\t]+(get|install|mod[ \\t]+download)\\b|\\bbrew[ \\t]+(install|upgrade|update|fetch)\\b"},
+    {"id": "opaque", "re": "'|\\$\\(|`|<\\(|>\\(|(^|[;&|(][ \\t]*)(eval|source|exec|\\.)[ \\t]|\\b(sh|bash|zsh|dash|ksh|fish)[ \\t]+-[a-z]*[cs]\\b|\\|[ \\t]*(sudo[ \\t]+)?(env[ \\t]+)?(sh|bash|zsh|dash|ksh|fish|python[0-9.]*|perl|ruby|node|php|osascript|xargs)\\b|\\bbase64[ \\t]+(-d|--decode|-D)\\b|\\bxxd[ \\t]+-r\\b|\\b(python[0-9.]*|perl|ruby|node|php)[ \\t]+-[a-zA-Z]*[ce]\\b"},
+    {"id": "write-outside", "from": "code"},
+    {"id": "read-outside", "from": "code"},
+    {"id": "not-read-only", "from": "code"}
+  ],
+  "readonly_cmd_re": "^(?![^\\n]*[<>$`*?\\[])(?![^\\n]*(\\\\|[^ \\t\\n=]\\\"[^ \\t\\n]|\\\"-))(?![^\\n]*\\{[^}]*(,|\\.\\.))(?![^\\n]*(^|[ \\t=\\\"'])(~|/|\\.\\.(/|$|[ \\t\\\"'])))(git([ \\t]+-C[ \\t]+[^ \\t]+)?[ \\t]+((status|log|diff|show|blame|rev-parse|ls-files|ls-tree|describe|shortlog|grep|cat-file|show-ref|merge-base|rev-list|worktree[ \\t]+list|stash[ \\t]+list)(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z0-9]*O|--output|--op|--ext-diff|--textconv|--filters|--no-index))([ \\t]|$)|reflog(?![ \\t]+(?!show\\b)[a-z])([ \\t]|$)|(branch([ \\t]+(-a|-r|-v|-vv|--list|--all|--show-current|--contains|--merged|--no-merged))*|tag([ \\t]+(-l|--list))*|remote([ \\t]+-v)?)[ \\t]*$)|(rg|grep|egrep|fgrep)(?![^\\n]*[ \\t][\\\"']?(--pre|--hostname-bin|--follow|--der|-[A-Za-z0-9]*[LRS]))([ \\t]|$)|sort(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z]*o|--o|--co|--fil))([ \\t]|$)|tree(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z]*[oRl]|--fromfile))([ \\t]|$)|uniq([ \\t]+-[A-Za-z0-9-]+)*([ \\t]+[^- \\t][^ \\t]*)?[ \\t]*$|file(?![^\\n]*[ \\t][\\\"']?-[A-Za-z]*C)([ \\t]|$)|date(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z]*s|--s))([ \\t]|$)|(ls|du)(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z0-9]*L|--der))([ \\t]|$)|diff(?![^\\n]*[ \\t][\\\"']?(-[A-Za-z0-9]*r|--rec))([ \\t]|$)|(cat|head|tail|wc|stat|pwd|which|type|df|sha256sum|shasum|md5|md5sum|cut|cmp|basename|dirname|realpath|readlink)([ \\t]|$))",
+  "test_build_re": "^(make|rake|bundle[ \\t]+exec[ \\t]+rake|gradle|\\./gradlew|(npm|pnpm|yarn)[ \\t]+run|yarn|pnpm)[ \\t]+(?![^ \\t]*([Dd]eploy|[Rr]elease|[Pp]ublish|[Pp]ush|[Ii]nstall|[Pp]rod|[Uu]pload))(test|check|spec|lint|typecheck|build)(:[A-Za-z0-9_]+)?([ \\t]+(-j[0-9]*|-[kqsv]+|--(keep-going|silent|quiet|verbose|trace|info|stacktrace|offline|no-daemon|continue)))*[ \\t]*$|^(npm|pnpm)[ \\t]+test([ \\t]+(-j[0-9]*|-[kqsv]+|--(keep-going|silent|quiet|verbose|trace|info|stacktrace|offline|no-daemon|continue)))*[ \\t]*$|^cargo[ \\t]+(test|build|check)(?![^\\n]*(^|[ \\t=/])\\.\\.(/|[ \\t]|$))([ \\t]+(-q|-v|-vv|--(quiet|verbose|release|all-targets|workspace|all|lib|bins|tests|locked|offline|frozen|no-fail-fast|all-features|no-default-features)|(-p|--package|--features|-F|--test|--bin|--example)[ \\t=]+[A-Za-z0-9_][A-Za-z0-9_,-]*|(-j|--jobs)[ \\t=]*[0-9]+|[A-Za-z0-9_][A-Za-z0-9_:]*))*([ \\t]+--([ \\t]+(--(nocapture|ignored|include-ignored|exact|quiet|show-output)|--test-threads=[0-9]+|-q|[A-Za-z0-9_][A-Za-z0-9_:]*))*)?[ \\t]*$|^go[ \\t]+(test|vet|build)(?![^\\n]*(^|[ \\t=/])\\.\\.(/|[ \\t]|$))([ \\t]+(--?(v|race|short|cover|failfast|json|x|n|a)|--?(count|timeout|parallel|cpu|p)[ \\t=]+[0-9][0-9a-z.,]*|--?(run|skip|bench)[ \\t=]+[A-Za-z0-9_^/.-]+|--?tags[ \\t=]+[A-Za-z0-9_,.]+|\\./\\.\\.\\.|(\\./)?[A-Za-z0-9_][A-Za-z0-9_./-]*))*[ \\t]*$|^(pytest|python3?[ \\t]+-m[ \\t]+pytest)(?![^\\n]*(^|[ \\t=/])\\.\\.(/|[ \\t]|$))([ \\t]+(-[qvxsl]+|-r[A-Za-z]+|--(lf|ff|nf|sw|last-failed|failed-first|new-first|stepwise|exitfirst|quiet|verbose|showlocals|no-header|strict-markers|collect-only|co)|--(tb|maxfail|durations)=[A-Za-z0-9]+|-n[ \\t]*([0-9]+|auto)|-[km][ \\t]+([A-Za-z0-9_]+|\\\"[A-Za-z0-9_ ]*\\\")|[A-Za-z0-9_.][A-Za-z0-9_./-]*(::[A-Za-z0-9_.\\[\\]-]+)*))*[ \\t]*$",
+  "notice": {"id": "watcher-1", "version": 1, "text": "afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config."},
   "clamp": {"native_offset": 33000, "min_target": 120000, "reserve_base": 52000, "reserve_no_handoff": 100000, "window_floor": 100000, "soft_ratio": 0.8, "target_num": 2, "target_den": 3, "handoff_tokens_min": 20000, "handoff_tokens_max": 150000},
   "alert_texts": {
     "A-01": "summary copy missing",
@@ -503,7 +564,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "A-13": "session-id canary",
     "A-14": "slow resume",
     "A-15": "version, arm or hook-surface change",
-    "A-16": "compactinue: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
+    "A-16": "afk-compact: the plugin's compaction hook was skipped by a managed plugin (possibly in a subagent); the classic hooks shaped and saved it.",
     "A-17": "failed or blocked compaction",
     "A-18": "auto-continue stopped",
     "A-19": "auto-continue cap breached",
@@ -514,7 +575,9 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "A-24": "storage growth",
     "A-25": "watcher unhealthy",
     "A-26": "plugin layers not running",
-    "A-27": "auto-continue without a nudge"
+    "A-27": "auto-continue without a nudge",
+    "A-28": "compaction or handoff turn read cold",
+    "A-29": "idle compaction not shaped"
   }
 }
 ```

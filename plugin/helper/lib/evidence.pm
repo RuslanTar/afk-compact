@@ -1,7 +1,8 @@
 package evidence;
 # lib/evidence.pm: one automatic evidence copy (MOD-SPEC §10; S-6, S-9, S-10).
-# Owner: WP-core. Caps 10 MB per file and 50 MB per compaction (bigger -> ref-only
-# with bytes, sha256, mtime and <= 40 head/tail lines of text, redacted); dedupe by
+# Owner: WP-core. Caps 10 MB per file (bigger -> ref-only with bytes, sha256, mtime and
+# <= 40 head/tail lines of text, redacted) and evidence_total_max_mb per compaction (a file
+# past it -> withheld, rules over-total, SK-5); dedupe by
 # sha256 across buckets through <watch>/evidence-index.tsv (O_APPEND rows); the
 # secret gate decides copy / redacted copy / withheld; agent output in tasks/*.output is
 # always withheld (BD-4); a shell or monitor job's tasks/*.output -> a redacted
@@ -11,7 +12,9 @@ use warnings;
 use utf8;
 
 our $FILE_MAX = 10 * 1024 * 1024;
-our $TOTAL_MAX = 50 * 1024 * 1024;
+our $TOTAL_MAX = 50 * 1024 * 1024;    # the evidence_total_max_mb fallback (SK-5)
+# SK-5 (owner xxxxxxxx-14, S-SETTINGS E5): the total from evidence_total_max_mb, clamped 10-500 MB.
+sub total_max { my ($mb) = eval { settings::num_clamped("evidence_total_max_mb") }; return defined $mb ? $mb * 1024 * 1024 : $TOTAL_MAX }
 
 sub _index_lookup {
     my ($index, $sha) = @_;
@@ -69,7 +72,7 @@ sub copy {
     $caps ||= {};
     my $used = $caps->{used} || \(my $u = 0);
     my $fmax = $caps->{file_max} // $FILE_MAX;
-    my $tmax = $caps->{total_max} // $TOTAL_MAX;
+    my $tmax = $caps->{total_max} // total_max();
     # caps.manifest => 0: no MANIFEST.tsv rows in dest_dir (the handoff skill writes its own at
     # publish); caps.ref_file => 0: an over-cap file stays a ref-only row with no excerpt file.
     my $mf = !(exists $caps->{manifest} && !$caps->{manifest});
@@ -96,7 +99,14 @@ sub copy {
     util::mkdir_p($dest_dir);
     my $base = util::basename($src);
     my $is_task = $src =~ m{/tasks/[^/]+\.output$} ? 1 : 0;
-    if (!$is_task && ($row{bytes} > $fmax || $$used + $row{bytes} > $tmax)) {
+    # SK-5 (S-SETTINGS E5): a file within the per-file cap that would take this run past the
+    # total (evidence_total_max_mb) is withheld, rules over-total: no copy and no excerpt; the
+    # row keeps bytes, sha256 and mtime, and the file stays where it is.
+    if (!$is_task && $row{bytes} <= $fmax && $$used + $row{bytes} > $tmax) {
+        _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'over the total cap') if $mf;
+        return { %row, status => 'withheld', rules => ['over-total'] };
+    }
+    if (!$is_task && $row{bytes} > $fmax) {
         return { %row, status => 'ref-only' } unless $rf;
         my $head = util::read_file($src, 64 * 1024) // '';
         my $txt = "origin: $src\nbytes: $row{bytes}\nsha256: " . ($sha // 'unavailable') . "\nmtime: $row{mtime}\n";

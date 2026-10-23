@@ -665,6 +665,11 @@ sub _idle {
     my ($idle, $src, $gap, $mism) = rollup::idle_facts($drec, $bd->{ni});
     my $key = 'idle_mismatch:' . ($nonce // $bd->{u} // '');
     if ($mism && !$logged->{$key}++) { rc::emit('idle_mismatch', [nonce => $nonce]) }
+    # ID-2 (2026-10-23): a "Compacted while idle" boundary that no plugin dispatch shaped
+    # (native idle compaction ran on its own); the watcher raises A-29 from it.
+    if (defined $bd->{ni} && !$drec && defined $bd->{u} && !$logged->{ 'idle_unshaped:' . $bd->{u} }++) {
+        rc::emit('idle_unshaped', [boundary_uuid => $bd->{u}]);
+    }
     return (idle => $idle, idle_source => $src, idle_gap_s => $gap);
 }
 

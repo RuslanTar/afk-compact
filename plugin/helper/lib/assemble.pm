@@ -80,13 +80,15 @@ sub leftovers {
     return @bad;
 }
 
-# Classic fallback (MOD-SPEC §3.2): main (+[auto], +[chain], never [measured])
-# followed directly by the subagent text with [fallback].
+# Classic fallback (MOD-SPEC §3.2): main (+[auto], +[chain], +[queue] when queue_cmd is set,
+# never [measured]) followed directly by the subagent text with [fallback]. QA-B3 (owner
+# xxxxxxxx-11): the queue lines ride on the setting, as on the mod path; no queue call here.
 sub classic_fallback {
     my (%a) = @_;
     my @tags;
     push @tags, 'auto' if $a{auto};
     push @tags, 'chain' if defined $a{previous_copy};
+    push @tags, 'queue' if $a{queue};
     my %rt = (nonce => $a{nonce});
     $rt{previous_copy} = $a{previous_copy} if defined $a{previous_copy};
     return asset('main', \@tags, \%rt, ['measured']) . asset('sub', ['fallback'], { nonce => $a{nonce} });

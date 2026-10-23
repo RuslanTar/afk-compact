@@ -8,7 +8,8 @@
 # marker is missing; the min_window sentence (P5-FOLD A3); the allow rule, the stale-rule check
 # and the user-run lines with the real plugin folder (PKG-RUNTIME A.6; read only, nothing is
 # written); relaunch_allow active (S-SETTINGS C); the unattended_prod_reads line (S-SETTINGS B);
-# the kept mismatch stashes with their paths (C-STORE D3).
+# the kept mismatch stashes with their paths (C-STORE D3). 2026-10-23 (owner xxxxxxxx-29): the
+# protected branches line with a warning per ignored protected_branches entry.
 use strict;
 use warnings;
 use utf8;
@@ -140,10 +141,13 @@ sub run {
     push @out, mode_lines($opt->{cwd});
     push @out, relaunch_lines($d);
     push @out, prod_lines();
+    push @out, protected_lines();
+    push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`
     push @out, 'queue: ' . queue::mode_text();
     push @out, kept_lines($sid);
+    push @out, former_name_lines();
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
 
     my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
@@ -387,6 +391,74 @@ sub prod_lines {
                                                : "  config: $i->{key} invalid, forbid used";
     }
     return @l;
+}
+
+# ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
+# The user's add-only protected_branches entries in use beside the shipped list, and one warning
+# per ignored (invalid) entry by its position, never its text.
+sub protected_lines {
+    my $r = rc::settings();
+    my $p = eval { settings::protected($r) } || { user => 0, invalid => [] };
+    my $src = $SRC{ $r->{source}{protected_branches} // 'default' } // 'default';
+    my @l = ('protected branches: the shipped list + ' . ($p->{user} // 0) . " yours ($src)");
+    push @l, "  warning: protected_branches #$_->{index} invalid, ignored (the shipped list still applies)" for @{ $p->{invalid} || [] };
+    return @l;
+}
+
+# ---------------------------------------------------------------- pre-idle turn (IA-4) and SK-7
+# IA-4 (idle D3, owner 2026-10-23 02:4x; reworded by owner xxxxxxxx-17, "Check outcome at
+# 55.5m"): when the plugin's own pre-idle handoff turn runs. `idle_handoff_turn: auto` with Claude
+# Code's idle compaction off (`idleCompaction`, or its precondition `autoCompactEnabled`, false in
+# the user settings file): at 49 minutes. Native on, or a file that cannot be read as JSON (O-9:
+# "unreadable means check what happened"): the plugin checks at 55.5 minutes and runs its turn
+# only when native did not compact (not while agents run, owner xxxxxxxx-38). A missing file or
+# key is on, as the mod reads the merged settings (deps.nativeIdle). This line reads the user file
+# only; the mod's own reading is the one that arms the timer.
+sub _json_false { my ($v) = @_; return jsonc::is_bool($v) && !$$v ? 1 : 0 }
+sub idle_lines {
+    my $r = rc::settings();
+    my $mode = lc($r->{values}{idle_handoff_turn} // 'auto');
+    return ('pre-idle handoff turn: off (idle_handoff_turn: off)') if $mode eq 'off';
+    my $file = settings::config_dir() . '/settings.json';
+    my $native = 'on';
+    if (-e util::to_bytes($file)) {
+        my $raw = util::read_file($file);
+        my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
+        if (ref $j ne 'HASH') { $native = 'unknown' }
+        elsif (_json_false($j->{idleCompaction}) || _json_false($j->{autoCompactEnabled})) { $native = 'off' }
+    }
+    return ('pre-idle handoff turn: auto (native idle compaction off → the plugin\'s turn at 49 min)') if $native eq 'off';
+    return ('pre-idle handoff turn: auto (native idle compaction ' . ($native eq 'on' ? 'on' : 'unreadable')
+            . ' → the plugin checks at 55.5 min and runs its turn only if native did not compact)');
+}
+
+# SK-7 (owner xxxxxxxx-12/-13/-14): the six 2026-10-23 keys as values the user can check, never
+# the ticket pattern or a secret rule's text.
+sub settings_keys_line {
+    my $r = rc::settings();
+    my $v = $r->{values} || {};
+    my $rp = ($v->{resume_proceed} // '') eq 'confirm' ? 'confirm' : 'auto';
+    my $tr = eval { settings::ticket_re($r) } || {};
+    my $tk = $tr->{invalid} ? 'invalid (default used)' : $tr->{custom} ? 'custom' : 'default';
+    my $sx = eval { settings::secret_extra($r) } || {};
+    my $nx = scalar(@{ $sx->{rules} || [] }) + scalar(@{ $sx->{names} || [] });
+    my @n = map { my ($x) = eval { settings::num_clamped($_, $r) }; defined $x ? $x : '?' }
+            qw(handoff_reuse_window_min evidence_total_max_mb watch_quota_mb);
+    return (sprintf('settings: resume_proceed %s (%s) · handoff_reuse_window_min %s · ticket_pattern %s · secret_extra_rules %d · evidence_total_max_mb %s · watch_quota_mb %s',
+                    $rp, $r->{source}{resume_proceed} // 'default', $n[0], $tk, $nx, $n[1], $n[2]));
+}
+
+# Rename order (ruling xxxxxxxx-32, 2026-10-23): options saved in the settings file under the
+# plugin's former name are not read. One line per such key, with its option count and the key
+# to move them to (the key this plugin reads now, else `<name>@…`); read-only, never a value.
+sub former_name_lines {
+    my $r = rc::settings();
+    my $now = defined $r->{config_key} && $r->{config_key} ne 'ambiguous' ? $r->{config_key} : ctx::brand() . '@…';
+    return map {
+        my ($k, $n) = @$_;
+        sprintf('warning: %d plugin %s saved under the old name "%s" %s not read; move %s to "%s" in /config',
+                $n, ($n == 1 ? ('option', util::text($k), 'is', 'it') : ('options', util::text($k), 'are', 'them')), util::text($now));
+    } eval { settings::former_name_keys() };
 }
 
 # ---------------------------------------------------------------- kept stashes (C-STORE D3)

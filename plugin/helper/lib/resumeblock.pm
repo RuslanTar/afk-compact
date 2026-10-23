@@ -1,15 +1,18 @@
 package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
 # resume-context.txt with [midturn]/[nonok] and exactly one of [prod-forbid]/[prod-allow],
-# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total <= 6,500 chars
-# (compaction-rem-6, T-TEXT E3: a 3,000-char protocol and a 3,000-byte measured block fit
-# untrimmed), never over the 10,000-char SessionStart cutoff; no transcript path.
+# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total soft
+# 6,500 chars (compaction-rem-6; soft since the owner overturned ratify xxxxxxxx#R3 on 2026-10-23,
+# SPEC-DELTAS RP-2): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
+# 9,500 chars, under the 10,000-char SessionStart cutoff: over it the measured block is cut first,
+# at a line boundary. No transcript path.
 # Owner: WP-core.
 use strict;
 use warnings;
 use utf8;
 
-our $MAX_CHARS = 6500;
+our $MAX_CHARS = 9500;
+our $SOFT_CHARS = 6500;
 
 sub build {
     my (%a) = @_;
@@ -38,6 +41,7 @@ sub build {
         last if $max < 200;
         $re = measure::cap([split /\n/, $re], $max);
     }
+    rc::emit('resume_block_over_soft', [nonce => $a{nonce}, chars => length($text)]) if length($text) > $SOFT_CHARS;
     return $text;
 }
 

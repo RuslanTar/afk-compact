@@ -1,0 +1,92 @@
+{
+ "id": "AT-ID-02 (notice-no-dispatch)",
+ "needs": [
+  "fixture:transcripts/idle-cases.json"
+ ],
+ "note": "ID-2 (SPEC-DELTAS §3.14; WATCHER-SPEC idle_unshaped, A-29): the notice-mod-idle transcript with no plugin dispatch record: native idle compaction ran with no plugin dispatch. The next Stop reads the native idle row after the main boundary and writes one idle_unshaped {boundary_uuid} row (content-free; the uuid only); a second Stop adds none. Skipped until the WP-fix fixtures are merged.",
+ "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "transcript, no dispatch record",
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "copy": "transcripts/idle-notice/main.jsonl",
+     "subst": true,
+     "to": "$TMP/projects/-tmp-example-repo/$SID.jsonl"
+    }
+   ]
+  },
+  {
+   "name": "PostCompact (idle unknown until reconcile)",
+   "now": "2026-10-21T14:05:30.200+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin": "payloads/PostCompact/idle-main.json",
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "the next Stop decides idle",
+   "now": "2026-10-21T14:20:00+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "idle_unshaped",
+      "count": 1
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "Compacted while idle"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a second Stop adds no row",
+   "now": "2026-10-21T14:25:00+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/projects/-tmp-example-repo/$SID.jsonl",
+    "cwd": "$TMP/example-repo",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "idle_unshaped",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

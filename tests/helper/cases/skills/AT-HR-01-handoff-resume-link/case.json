@@ -1,0 +1,1359 @@
+{
+ "id": "AT-HR-01 (handoff-resume link, review of bcdaca6)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Review of bcdaca6: approvals carry through clear and handoff-resume links (owner 2026-10-23 xxxxxxxx-27 revised), but nothing wrote a handoff-resume link. `pin --resumed-from` now writes it, fail closed, for a fresh session (records startup/resume only, no link yet) resuming the newest handoff of an ended predecessor that has no /clear successor, after claiming the predecessor by exclusive create. Checked: a fresh session resuming its predecessor's published handoff carries the checked approval (pin and measure print it; HEAD is still the target's commit), locate then reads it as successor, and the session's own next handoff publishes with the carried id; a fork and a background copy (no lineage file, started as fork) pin the same file and carry nothing, and both are refused at publish; a second fresh session finds the predecessor claimed; a live predecessor, an older handoff, a /clear-ended predecessor and a session with no record are never linked. Root reading 2026-10-23 (fail closed, the owner to confirm): when P is resumed after S claimed it, P's handoff dated before the claim is context only for approvals on P's line (P and its /clear successor), while S and S's /clear successor still carry it; a handoff P writes after the claim is P's own and carries on P's line only, not on S's (slice A review: S and S's /clear successor read it as `written after the claim`; S repeating its line is refused). The resumed P's quote checks count only rows after the claim (owner 21:47 \"1. OK\"), so P repeating its pre-claim line is refused at publish and a compaction summary's copy lists it unchecked. The claim is checked for every session from the reader up to the writer, so a handoff of P's /clear predecessor P0 dated before the claim carries on S's line and not on P's.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "-C",
+      "$TMP/repo",
+      "rev-parse",
+      "--short=7",
+      "HEAD"
+     ],
+     "var": "HEADSHA"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194200-1072915200.live-51515151.json",
+     "content": "{\"pid\": 4194200, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"51515151-5151-4515-8515-515151515151\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/51515151-5151-4515-8515-515151515151.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p1\", \"sessionId\": \"51515151-5151-4515-8515-515151515151\", \"timestamp\": \"2026-10-21T12:10:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin once the suite passes\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "P: begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_P": "json:stage"
+   }
+  },
+  {
+   "name": "P: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_P"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_P/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "P: publish, the quote is P's own typed words",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_P",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB_P": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "P: approvals_checked lists U-2",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB_P",
+      "has": [
+       "^approvals_checked: U-2$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194200-1072915200.ended-51515151.json",
+     "content": "{\"session_id\": \"51515151-5151-4515-8515-515151515151\", \"reason\": \"prompt_input_exit\", \"ts\": \"2026-10-21T12:30:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194201-1072915200.live-52525252.json",
+     "content": "{\"pid\": 4194201, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"52525252-5252-4525-8525-525252525252\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194202-1072915200.live-53535353.json",
+     "content": "{\"pid\": 4194202, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"53535353-5353-4535-8535-535353535353\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"fork\", \"ts\": \"2026-10-21T13:01:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/53535353-5353-4535-8535-535353535353.lineage.json",
+     "content": "{\"previous_session_id\": \"51515151-5151-4515-8515-515151515151\", \"lineage_reason\": \"fork\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/53535353-5353-4535-8535-535353535353.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p1\", \"sessionId\": \"53535353-5353-4535-8535-535353535353\", \"timestamp\": \"2026-10-21T12:10:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin once the suite passes\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194203-1072915200.live-54545454.json",
+     "content": "{\"pid\": 4194203, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"54545454-5454-4545-8545-545454545454\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"fork\", \"ts\": \"2026-10-21T13:02:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/54545454-5454-4545-8545-545454545454.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p1\", \"sessionId\": \"54545454-5454-4545-8545-545454545454\", \"sessionKind\": \"bg\", \"timestamp\": \"2026-10-21T12:10:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin once the suite passes\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194204-1072915200.live-55555555.json",
+     "content": "{\"pid\": 4194204, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"55555555-5555-4555-8555-555555555555\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:03:00.000+03:00\"}"
+    }
+   ]
+  },
+  {
+   "name": "S before the pin: locate reads P's file as another session's (tier 1, other)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 1\\npick: $PUB_P\\nrelation: other\\n",
+     "^integrity: ok$"
+    ]
+   }
+  },
+  {
+   "name": "S before the pin: P's approval is context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(foreign: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6: S pins P's newest handoff: the handoff-resume link is written and the checked approval carries",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned repo/hr$",
+     "^relation: successor \\(handoff-resume\\)$",
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ $HEADSHA$"
+    ]
+   }
+  },
+  {
+   "name": "the link and the claim are on disk (write-once)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$ROOT/.sessions/52525252-5252-4525-8525-525252525252.lineage.json",
+      "contains": [
+       "\"previous_session_id\":\"51515151-5151-4515-8515-515151515151\"",
+       "\"lineage_reason\":\"handoff-resume\""
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/successors/51515151-5151-4515-8515-515151515151.json",
+      "contains": [
+       "\"session_id\":\"52525252-5252-4525-8525-525252525252\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "S after the pin: measure carries U-2; HEAD is still the target's commit",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ $HEADSHA$",
+     "\\b$HEADSHA\\b"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "S after the pin: locate finds P's file by lineage (tier 4, successor)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $PUB_P\\nrelation: successor\\n"
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "name": "a second pin by S: already linked, nothing new printed",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned repo/hr$"
+    ],
+    "stdout_lacks": [
+     "^relation:",
+     "^Approvals"
+    ]
+   }
+  },
+  {
+   "name": "S: begin in P's bucket (pinned)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "chain"
+    }
+   },
+   "capture": {
+    "STAGE_S": "json:stage"
+   }
+  },
+  {
+   "name": "S: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_S"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_S/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 52525252\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish-time carry: the handoff-resume successor repeats P's checked line unchanged and publishes",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_S",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB_S": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "S's handoff lists the carried id and its lineage",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB_S",
+      "has": [
+       "^approvals_checked: U-2$",
+       "^previous_session_id: 51515151-5151-4515-8515-515151515151$",
+       "^lineage_reason: handoff-resume$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a fork of P pins P's handoff: its fork link stays, nothing is linked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "53535353-5353-4535-8535-535353535353",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned repo/hr$"
+    ],
+    "stdout_lacks": [
+     "^relation: successor \\(handoff-resume\\)",
+     "^Approvals \\(checked\\): U-2"
+    ]
+   }
+  },
+  {
+   "name": "the fork still carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "53535353-5353-4535-8535-535353535353",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(fork: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "a background copy with no lineage file (started as fork) is never linked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "54545454-5454-4545-8545-545454545454",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned repo/hr$",
+     "^relation: other \\(not linked: started as fork\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals"
+    ]
+   }
+  },
+  {
+   "name": "the background copy carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "54545454-5454-4545-8545-545454545454",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(foreign: context only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "no lineage file was written for the background copy",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "54545454-5454-4545-8545-545454545454"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$ROOT/.sessions/54545454-5454-4545-8545-545454545454.lineage.json",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "fork: begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "53535353-5353-4535-8535-535353535353",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_F": "json:stage"
+   }
+  },
+  {
+   "name": "fork: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_F"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_F/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 53535353\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish-time carry: the fork repeats P's checked line and is refused (its copy of the quote predates it)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_F",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^REFUSED: lint \\([0-9]+ blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-unchecked"
+    ]
+   }
+  },
+  {
+   "name": "background copy: begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "54545454-5454-4545-8545-545454545454",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_B": "json:stage"
+   }
+  },
+  {
+   "name": "background copy: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_B"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_B/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 54545454\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish-time carry: the background copy repeats P's checked line and is refused (its copy of the quote predates it)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_B",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^REFUSED: lint \\([0-9]+ blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-unchecked"
+    ]
+   }
+  },
+  {
+   "name": "a second fresh session resumes the same handoff: P is claimed by S, no second link",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^relation: other \\(not linked: claimed by another session\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals"
+    ]
+   }
+  },
+  {
+   "name": "the second session carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(foreign: context only\\)$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194205-1072915200.live-56565656.json",
+     "content": "{\"pid\": 4194205, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"56565656-5656-4565-8565-565656565656\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T11:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/repo/hr/2026-10-21_11-30-00_56565656_live.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6a6a6a6a\ndate: 2026-10-21T11:30:00+03:00\nsession_id: 56565656-5656-4565-8565-565656565656\nactor: main\n---\n⟪$BRAND v1 n=6a6a6a6a s=manual⟫\n# LAB-9 — live predecessor\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=6a6a6a6a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194206-1072915200.live-57575757.json",
+     "content": "{\"pid\": 4194206, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"57575757-5757-4575-8575-575757575757\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:10:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194207-1072915200.live-58585858.json",
+     "content": "{\"pid\": 4194207, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"58585858-5858-4585-8585-585858585858\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T10:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194207-1072915200.ended-58585858.json",
+     "content": "{\"session_id\": \"58585858-5858-4585-8585-585858585858\", \"reason\": \"prompt_input_exit\", \"ts\": \"2026-10-21T11:00:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/repo/hr/2026-10-21_10-10-00_58585858_old.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6b6b6b6b\ndate: 2026-10-21T10:10:00+03:00\nsession_id: 58585858-5858-4585-8585-585858585858\nactor: main\n---\n⟪$BRAND v1 n=6b6b6b6b s=manual⟫\n# LAB-9 — older\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=6b6b6b6b⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/other/2026-10-21_10-40-00_58585858_new.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6c6c6c6c\ndate: 2026-10-21T10:40:00+03:00\nsession_id: 58585858-5858-4585-8585-585858585858\nactor: main\n---\n⟪$BRAND v1 n=6c6c6c6c s=manual⟫\n# LAB-9 — newer, another bucket\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=6c6c6c6c⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194208-1072915200.live-59595959.json",
+     "content": "{\"pid\": 4194208, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"59595959-5959-4595-8595-595959595959\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:11:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194209-1072915200.live-5a5a5a5a.json",
+     "content": "{\"pid\": 4194209, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"5a5a5a5a-5a5a-45a5-85a5-5a5a5a5a5a5a\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T09:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194209-1072915200.ended-5a5a5a5a.json",
+     "content": "{\"session_id\": \"5a5a5a5a-5a5a-45a5-85a5-5a5a5a5a5a5a\", \"reason\": \"clear\", \"ts\": \"2026-10-21T09:30:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/repo/hr/2026-10-21_09-20-00_5a5a5a5a_cleared.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6d6d6d6d\ndate: 2026-10-21T09:20:00+03:00\nsession_id: 5a5a5a5a-5a5a-45a5-85a5-5a5a5a5a5a5a\nactor: main\n---\n⟪$BRAND v1 n=6d6d6d6d s=manual⟫\n# LAB-9 — cleared\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=6d6d6d6d⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194210-1072915200.live-5b5b5b5b.json",
+     "content": "{\"pid\": 4194210, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"5b5b5b5b-5b5b-45b5-85b5-5b5b5b5b5b5b\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:12:00.000+03:00\"}"
+    }
+   ]
+  },
+  {
+   "name": "a predecessor that is still live is never linked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "57575757-5757-4575-8575-575757575757",
+    "--resumed-from",
+    "$ROOT/repo/hr/2026-10-21_11-30-00_56565656_live.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^relation: other \\(not linked: predecessor not ended\\)$"
+    ]
+   }
+  },
+  {
+   "name": "an older handoff of the predecessor is never linked (a newer one is in another bucket)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "59595959-5959-4595-8595-595959595959",
+    "--resumed-from",
+    "$ROOT/repo/hr/2026-10-21_10-10-00_58585858_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^relation: other \\(not linked: not the newest\\)$"
+    ]
+   }
+  },
+  {
+   "name": "a predecessor that ended by /clear already has a successor",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "5b5b5b5b-5b5b-45b5-85b5-5b5b5b5b5b5b",
+    "--resumed-from",
+    "$ROOT/repo/hr/2026-10-21_09-20-00_5a5a5a5a_cleared.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^relation: other \\(not linked: predecessor cleared\\)$"
+    ]
+   }
+  },
+  {
+   "name": "a session with no per-process record is never linked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "5c5c5c5c-5c5c-45c5-85c5-5c5c5c5c5c5c",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^relation: other \\(not linked: no start record\\)$"
+    ]
+   }
+  },
+  {
+   "name": "no refused session got a lineage file",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$ROOT/.sessions/55555555-5555-4555-8555-555555555555.lineage.json",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/57575757-5757-4575-8575-575757575757.lineage.json",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/59595959-5959-4595-8595-595959595959.lineage.json",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/5b5b5b5b-5b5b-45b5-85b5-5b5b5b5b5b5b.lineage.json",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/5c5c5c5c-5c5c-45c5-85c5-5c5c5c5c5c5c.lineage.json",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194211-1072915200.live-51515151.json",
+     "content": "{\"pid\": 4194211, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"51515151-5151-4515-8515-515151515151\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"resume\", \"ts\": \"2026-10-21T14:10:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/51515151-5151-4515-8515-515151515151.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p1\", \"sessionId\": \"51515151-5151-4515-8515-515151515151\", \"timestamp\": \"2026-10-21T12:10:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin once the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"p2\", \"sessionId\": \"51515151-5151-4515-8515-515151515151\", \"timestamp\": \"2026-10-21T14:20:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"restart the retry worker on feat/x after the claim\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194212-1072915200.live-5d5d5d5d.json",
+     "content": "{\"pid\": 4194212, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"5d5d5d5d-5d5d-45d5-85d5-5d5d5d5d5d5d\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"clear\", \"ts\": \"2026-10-21T14:11:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/5d5d5d5d-5d5d-45d5-85d5-5d5d5d5d5d5d.lineage.json",
+     "content": "{\"previous_session_id\": \"52525252-5252-4525-8525-525252525252\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194213-1072915200.live-5e5e5e5e.json",
+     "content": "{\"pid\": 4194213, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"5e5e5e5e-5e5e-45e5-85e5-5e5e5e5e5e5e\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"clear\", \"ts\": \"2026-10-21T14:12:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/5e5e5e5e-5e5e-45e5-85e5-5e5e5e5e5e5e.lineage.json",
+     "content": "{\"previous_session_id\": \"51515151-5151-4515-8515-515151515151\", \"lineage_reason\": \"clear\"}"
+    }
+   ]
+  },
+  {
+   "name": "root reading: P resumed after S's claim: its handoff dated before the claim is context only for approvals",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(claimed by a successor: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "root reading: a /clear successor of the resumed P carries nothing from that handoff either",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "5e5e5e5e-5e5e-45e5-85e5-5e5e5e5e5e5e",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(claimed by a successor: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "root reading: the claimant S still carries U-2",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "root reading: S's /clear successor carries it through S (S comes right after P)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "5d5d5d5d-5d5d-45d5-85d5-5d5d5d5d5d5d",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "P (resumed): begin after the claim",
+   "now": "2026-10-21T14:30:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_P3": "json:stage"
+   }
+  },
+  {
+   "name": "P (resumed): stamp",
+   "now": "2026-10-21T14:30:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_P3"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_P3/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-3: approval \"restart the retry worker on feat/x after the claim\" — action bin/restart retry · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "P (resumed): publish a handoff after the claim, with a new approval typed after the resume",
+   "now": "2026-10-21T14:30:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_P3",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB_P3": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "root reading: P's handoff dated after the claim is P's own (its approval carries)",
+   "now": "2026-10-21T14:31:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "$PUB_P3"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 bin/restart retry → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "slice A review (both directions): a handoff P wrote after S's claim is P's line's only: S carries nothing from it",
+   "now": "2026-10-21T14:32:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "$PUB_P3"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(written after the claim: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-3 bin/restart"
+    ]
+   }
+  },
+  {
+   "name": "slice A review: S's /clear successor carries nothing from it either",
+   "now": "2026-10-21T14:32:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "5d5d5d5d-5d5d-45d5-85d5-5d5d5d5d5d5d",
+    "$PUB_P3"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(written after the claim: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-3 bin/restart"
+    ]
+   }
+  },
+  {
+   "name": "slice A review: P's /clear successor (P's line) carries it",
+   "now": "2026-10-21T14:32:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "5e5e5e5e-5e5e-45e5-85e5-5e5e5e5e5e5e",
+    "$PUB_P3"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 bin/restart retry → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/52525252-5252-4525-8525-525252525252.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"s1\", \"sessionId\": \"52525252-5252-4525-8525-525252525252\", \"timestamp\": \"2026-10-21T14:33:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"keep going with the retry fix\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "slice A review: S begins after P3 exists",
+   "now": "2026-10-21T14:35:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_S2": "json:stage"
+   }
+  },
+  {
+   "name": "S: stamp",
+   "now": "2026-10-21T14:35:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_S2"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_S2/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-3: approval \"restart the retry worker on feat/x after the claim\" — action bin/restart retry · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "slice A review: S repeats P3's U-3 line unchanged: no carry from P's later handoff, and the quote is not S's: refused",
+   "now": "2026-10-21T14:36:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_S2",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^REFUSED: lint \\([0-9]+ blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-unchecked",
+     "^Wrote handoff"
+    ]
+   }
+  },
+  {
+   "name": "slice A review: P (resumed) begins again",
+   "now": "2026-10-21T14:40:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_P4": "json:stage"
+   }
+  },
+  {
+   "name": "P (resumed): stamp",
+   "now": "2026-10-21T14:40:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_P4"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_P4/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "slice A review: P (resumed) repeats its pre-claim U-2 line: its typed rows before the claim no longer count (quote_floor): refused",
+   "now": "2026-10-21T14:41:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_P4",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^REFUSED: lint \\([0-9]+ blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-unchecked",
+     "^Wrote handoff"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/copy-p.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: 51515151-5151-4515-8515-515151515151\n---\n## Approvals: U-2 approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used; U-3 approval \"restart the retry worker on feat/x after the claim\" — action bin/restart retry · targets branch feat/x @ $HEADSHA · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "slice A review: P's compaction summary: the pre-claim U-2 is unchecked, U-3 (typed after the claim) is checked",
+   "now": "2026-10-21T14:42:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-p.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/51515151-5151-4515-8515-515151515151.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 bin/restart retry → branch feat/x @ $HEADSHA$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194214-1072915200.live-50505050.json",
+     "content": "{\"pid\": 4194214, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"50505050-5050-4505-8505-505050505050\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T11:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/50505050-5050-4505-8505-505050505050.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"q1\", \"sessionId\": \"50505050-5050-4505-8505-505050505050\", \"timestamp\": \"2026-10-21T11:10:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the retry suite on feat/x before lunch\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "slice A review: P0, a session P continued after /clear, wrote a handoff before the claim",
+   "now": "2026-10-21T11:30:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "50505050-5050-4505-8505-505050505050",
+    "--topic",
+    "hr0"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_P0": "json:stage"
+   }
+  },
+  {
+   "name": "P0: stamp",
+   "now": "2026-10-21T11:30:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_P0"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_P0/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 11:30 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-2: approval \"rerun the retry suite on feat/x before lunch\" — action bin/test retry · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 11:30 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 11:30 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "P0: publish",
+   "now": "2026-10-21T11:30:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_P0",
+    "--slug",
+    "hr0",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB_P0": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/51515151-5151-4515-8515-515151515151.lineage.json",
+     "content": "{\"previous_session_id\": \"50505050-5050-4505-8505-505050505050\", \"lineage_reason\": \"clear\"}"
+    }
+   ]
+  },
+  {
+   "name": "slice A review: the claim splits the line above P too: S carries P0's handoff (dated before the claim)",
+   "now": "2026-10-21T14:45:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "$PUB_P0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 bin/test retry → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "slice A review: S's /clear successor carries it through S",
+   "now": "2026-10-21T14:45:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "5d5d5d5d-5d5d-45d5-85d5-5d5d5d5d5d5d",
+    "$PUB_P0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 bin/test retry → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "slice A review: P (resumed) carries nothing from P0's pre-claim handoff",
+   "now": "2026-10-21T14:45:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "$PUB_P0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(claimed by a successor: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 bin/test"
+    ]
+   }
+  },
+  {
+   "name": "slice A review: P's /clear successor carries nothing from it either",
+   "now": "2026-10-21T14:45:00+03:00",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "5e5e5e5e-5e5e-45e5-85e5-5e5e5e5e5e5e",
+    "$PUB_P0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(claimed by a successor: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 bin/test"
+    ]
+   }
+  }
+ ]
+}

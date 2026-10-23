@@ -36,8 +36,15 @@ package skills::core;
 #   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
 #   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
 #   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
+#   transcript::quotes_found($path, [{quote, targets}], $sid, since => $epoch) -> [1|0|undef…] | undef (AP-4)
+#   sessions::own_start($sid)          -> {since, until, coarse} from the session's per-process
+#                                        records | undef (review of bcdaca6: coarse = no milliseconds)
+#   sessions::ended($sid)              -> 1 when no per-process record of sid is live (handoff-resume link)
+#   detect::alias_scan($text, $name)   -> scan() under a former plugin name (owner xxxxxxxx-26)
 #   jobrec::record_of / read_rows / jobs_path / add_pending (Dev-1)
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
+#   settings::protected($resolved)     -> {globs => [{id, re}], user, invalid} (owner xxxxxxxx-29)
+#   settings::protected_user($name, $p) -> the id of the user's entry naming the branch | undef
 use strict;
 use warnings;
 use utf8;
@@ -177,6 +184,62 @@ sub nonce {
     my $n = nonce::draw($sid);
     die "nonce: bad value\n" unless defined $n && $n =~ /\A[0-9a-f]{8}\z/;
     return $n;
+}
+
+# AP-4: the writing session's human-typed rows, or the user's answers in its AskUserQuestion
+# dialogs (NR-14), hold each quote (in memory; nothing logged).
+# $sid: only rows this session wrote after it started count (owner 2026-10-23 xxxxxxxx-27
+# revised, "No: forks re-ask"; REVIEW-NIGHT-3 R3-03): another session's id, forkedFrom, or a time
+# before the session's first per-process record (sessions::own_start) is a copy; a record without
+# milliseconds leaves its own second to the row-order rule (transcript.pm "Coarse start"). No
+# record: undef (not checked; the line is published unchecked and the next session re-asks).
+# after => epoch: a later floor (a successor's claim on this session, root reading 2026-10-23).
+sub quotes_found {
+    my ($path, $asks, $sid, %o) = @_;
+    return undef unless defined &transcript::quotes_found && defined &sessions::own_start;
+    my $s = eval { sessions::own_start($sid) };
+    return undef unless ref $s eq 'HASH' && defined $s->{since};
+    my %w = (since => $s->{since}, ($s->{coarse} ? (coarse => 1, until => $s->{until}) : ()));
+    # `after` (skills::approvals::quote_floor, a successor's claim on this session): only rows at
+    # or after it count, and a coarse start's order-only window ends there too (fail closed).
+    if (defined $o{after} && $o{after} > $s->{since}) {
+        my $f = $s->{coarse} && $s->{until} > $o{after} ? $s->{until} : $o{after};
+        %w = (since => $f);
+    }
+    my $r = transcript::quotes_found($path, $asks, $sid, %w);
+    return ref $r eq 'ARRAY' ? $r : undef;
+}
+
+# The plugin's former names (settings.pm @FORMER_NAMES, the current brand excluded): a marker
+# under one of them is the read-only alias of owner ruling xxxxxxxx-26.
+sub former_names {
+    my $brand = eval { ctx::brand() } // '';
+    return grep { defined && !ref && /\A[a-z0-9][a-z0-9-]{0,63}\z/ && $_ ne $brand } @settings::FORMER_NAMES;
+}
+
+# detect_former(text) -> {name, marker_line, sentinel_from_end, nonce, sentinel_nonce, scope} |
+# undef: the first former name whose marker (first 5 body lines) and sentinel (last 3) both
+# match with one nonce (detect::alias_scan).
+sub detect_former {
+    my ($text) = @_;
+    return undef unless defined &detect::alias_scan;
+    for my $n (former_names()) {
+        my $s = eval { detect::alias_scan($text, $n) };
+        next unless ref $s eq 'HASH' && defined $s->{nonce} && defined $s->{sentinel_nonce} && $s->{sentinel_nonce} eq $s->{nonce};
+        return skills::util::text_deep({ name => $n, marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end},
+                                         nonce => $s->{nonce}, sentinel_nonce => $s->{sentinel_nonce}, scope => $s->{scope} });
+    }
+    return undef;
+}
+
+# session_ended(sid) -> 1 when every per-process record of sid has ended (sessions::ended: an
+# ended- twin, or on this host a pid that is gone or runs with another start time); 0 when one is
+# live, the session has no record, or the seam fails (fail closed).
+sub session_ended {
+    my ($sid) = @_;
+    return 0 unless defined &sessions::ended;
+    my $r = eval { sessions::ended($sid) };
+    return $r ? 1 : 0;
 }
 
 sub secrets_scan {
@@ -464,6 +527,23 @@ sub prod {
     }
     @classes = map { { id => $_->{id}, re => qr/$_->{re}/ } } @PROD_FALLBACK unless @classes;
     return { reads => 'forbid', classes => \@classes, user => 0, invalid => [], seam => 'missing' };
+}
+
+# Protected branches (owner xxxxxxxx-29): settings::protected over the run context's resolved
+# settings: the user's add-only `protected_branches` entries {globs => [{id, re}], user => n,
+# invalid => [..]}. Without that seam (or when it fails): no entries of the user's, while the
+# callers' shipped checks (protected_branch_re, the remote default branch) stay as they are, so a
+# missing seam never removes a shipped entry.
+sub protected {
+    my $r = defined &settings::protected ? eval { settings::protected(rc::settings()) } : undef;
+    return $r if ref $r eq 'HASH' && ref $r->{globs} eq 'ARRAY';
+    return { globs => [], user => 0, invalid => [], seam => 'missing' };
+}
+
+# protected_user(name, protected) -> the id of the user's entry that names the branch, else undef.
+sub protected_user {
+    my ($name, $p) = @_;
+    return defined &settings::protected_user ? settings::protected_user($name, $p) : undef;
 }
 
 sub detect_summary {

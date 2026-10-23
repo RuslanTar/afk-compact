@@ -120,8 +120,13 @@ sub run {
         my %seen;
         my @src;
         push @src, grep { my $m = $_->{bucket}; grep { $_ eq $m } @matching } @pool;
-        my $tk = skills::gitfacts::ticket($w->{in_git} ? (skills::gitfacts::facts($cwd)->{branch} // '') : '');
+        my $br = $w->{in_git} ? (skills::gitfacts::facts($cwd)->{branch} // '') : '';
+        my $tk = skills::gitfacts::ticket($br);
         push @src, grep { $tk && File::Basename::basename($_->{bucket}) eq $tk } @pool;
+        # SK-1 (S-SETTINGS E1): the shipped default pattern too, so buckets made before a
+        # ticket_pattern change stay found (pins still win above).
+        my $tk0 = settings::ticket($br, undef, 1);
+        push @src, grep { defined $tk0 && (!defined $tk || $tk ne $tk0) && File::Basename::basename($_->{bucket}) eq $tk0 } @pool;
         push @src, @xdocs;
         push @src, @pool;
         for my $d (@src) {
@@ -138,11 +143,16 @@ sub run {
     if ($pick) {
         my $ps = $sid_of->($pick);
         my $rel = $rel_of{$ps} // (($tier == 1 || $tier == 2 || $tier == 5) ? 'other' : 'unselected');
-        my $int = skills::store::integrity($pick);
+        # Owner xxxxxxxx-26 (read-only alias): this session's or a predecessor's file in the store
+        # may carry its marker under the plugin's former name.
+        my $alias = $rel_of{$ps} && !skills::store::is_export($pick) && !skills::store::imported($pick)
+            && _in_store($pick->{path}, $ctx->{root}) ? 1 : 0;
+        my $int = skills::store::integrity($pick, alias => $alias);
         my $age_s = defined $pick->{epoch} ? $now - $pick->{epoch} : undef;
         skills::cli::say("relation: $rel");
         skills::cli::say('age: ' . _age($age_s));
         skills::cli::say("integrity: $int->{integrity}");
+        skills::cli::say("marker: former name $int->{former} (read as own)") if defined $int->{former};
         skills::cli::say('date: ' . ($pick->{fm}{date} // 'unknown'));
         skills::cli::say('session: ' . skills::ctx::sid8($ps));
         my $t = skills::store::title_of($pick);
@@ -154,6 +164,15 @@ sub run {
             skills::cli::say('foreign: from session ' . skills::ctx::sid8($ps));
             skills::cli::say('evidence: not on this machine');
             skills::cli::say('in-flight: other machine: not probed');
+        } elsif ($rel_of{$ps}) {
+            # Spec §4 Own handoff (REVIEW-NIGHT-3 R3-08): this session's or a predecessor's file
+            # is own only in the private store, as written there; an export (anyone with push
+            # access can edit it), an imported copy or a file given by a path outside the store
+            # is foreign whatever its session id.
+            my $why = skills::store::is_export($pick) ? 'a repository export'
+                    : skills::store::imported($pick) ? 'an imported copy'
+                    : !_in_store($pick->{path}, $ctx->{root}) ? 'a file outside your private store' : undef;
+            skills::cli::say("foreign: $why, not an own handoff (commands only without real risk; approvals context only)") if defined $why;
         }
         if ($int->{integrity} eq 's=sub') {
             my ($parent) = grep { $sid_of->($_) eq $ps && !_is_sub($_) } @pool;
@@ -182,6 +201,14 @@ sub run {
     # Q-ADAPTER QA-1: the queue mode the resume follows (queue::mode: the setting, the file and
     # this session's last list outcome); locate never runs the queue tool (E-S-R9-8, provisional).
     skills::cli::say('queue: ' . skills::core::queue_mode_text(skills::core::queue_mode_now($ctx->{settings}{queue_cmd})));
+    # SK-3 (owner xxxxxxxx-13, S-SETTINGS E3): the resume's per-user brake, the stricter value of
+    # the settings file, a flag, env and the default, with where it came from (resume R9).
+    {
+        my $r = eval { rc::settings() };
+        my $v = ref $r eq 'HASH' ? $r->{values}{resume_proceed} : undef;
+        my $s = ref $r eq 'HASH' ? $r->{source}{resume_proceed} : undef;
+        skills::cli::say('resume_proceed: ' . (($v // '') eq 'confirm' ? 'confirm' : 'auto') . ' (' . ($s // 'default') . ')');
+    }
     if ($w->{in_git}) {
         my $top = $w->{worktree};
         my @sf;
@@ -205,6 +232,17 @@ sub _is_sub {
     my ($d) = @_;
     return 1 if $d->{path} =~ m{/compact/subagents/};
     return 0;
+}
+
+# 1 when the file's real path lies under the store root.
+sub _in_store {
+    my ($path, $root) = @_;
+    return 0 unless defined $path && defined $root;
+    my $p = skills::util::abs_path($path);
+    my $r = skills::util::abs_path($root);
+    return 0 unless defined $p && defined $r;
+    $r =~ s{/+\z}{};
+    return index($p, "$r/") == 0 ? 1 : 0;
 }
 
 sub _age {

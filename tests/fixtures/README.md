@@ -27,6 +27,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `summaries/NN-<slug>.txt`, `summaries/expected.tsv` | the 41-summary corpus | AT-C-02, C-03, C-09, M3-02, M3-17 |
 | `summaries/p5/` | the 6 P5 summaries (lab run e1-131fc3, PostCompact form; 3 with the sentinel after `</summary>`) and the AT-P5-02 after-close cases, with `copy_trailers.json` | AT-P5-01, AT-P5-02 |
 | `summaries/acuity/` | golden main summaries with `· Acuity: watch ·` and `· Acuity: unstable ·` on the Status line | AT-AC-02, AT-AC-03 |
+| `summaries/idle/` | the three idle compactions of the 2026-10-23 lab runs on Claude Code 2.1.309 (X1 `e1-9082cb`, X4 `e1-1d7d40`, U1h `e1-0be305`), each as the installed message (three engine trailers after the sentinel) and as the PostCompact `compact_summary` (an `<analysis>` block before `<summary>`); redacted: brand `{{plugin}}`, run folder `/tmp/example-repo`, transcript path and session ids synthetic | AT-ID-07, the parity unit test |
 | `watch/dispatch-<nonce>.json` | dispatch records (BUILD-PLAN §3.4), roles below | H |
 | `watch/run10/` | the ten-compaction run of AT-M3-07 / AT-S-02 (`sequence.json`, dispatches) | H |
 | `watch/*.json`, `watch/*.count` | `mod-alive.json`, `classic-alive.json`, `version.json` states, `boundaries.count` seeds, sample `log` rows | H |
@@ -43,6 +44,7 @@ A file holding `$SECRET{` is never copied into a generated module.
 | `watcher/T-NN/` | `input.json` (seeds, ordered hook steps), `payloads/`, `seed/`, `expected.json` | WATCH §9 T-01..T-25 |
 | `sequences/<id>/`, `transcripts/<id>/` | ordered hook steps with the main transcript's state per step: `S-21-classic`, `S-21-mod` (the live S-21 event order; `S-21-mod` step 6 is a second reconcile for AT-WD-11), `S-21-bd3` (BD-3 timing to the millisecond: one P3-proven and one unproven compaction), `S-21-mod-conflict` (a non-null rollup size that disagrees with the matched boundary), `S-21-pd`, `S-21-pd-512k`, `S-21-pd-stale`, `S-21-pd-noboundary`, `S-21-pd-sub` (RR-pd: a PermissionDenied after a deferred PostCompact, the 512 KB budget case, and its three negatives) | F2-1 regression, AT-C-08, AT-M4-03, AT-BD-01, AT-WD-10, AT-WD-11 |
 | `secrets/corpus.json` | secret values as fragments (with per-line and per-value parts), file-name deny-list cases, sweep files; BD-2 pins | AT-E-04, E-06, S-10, AT-ST-12 |
+| `risk/corpus.tsv` | commands from a foreign handoff with the answer the spec's risk literals must give (`none` or `ask`, plus classes that must hit): read-only and test/build shapes, the REVIEW-NIGHT NR-03/NR-04/NR-05 escapes (`rg --pre`, `git log --output`, `sort -o`, `jq -n env`, a `'` that ends the quoting, `rake release`) | AT-SR-09 (F half: `tools/gates risk-corpus`; H half: the `risk` command, SR-7) |
 | `tempfiles/<case>.json` | large or many-line files the runner creates at run time | AT-E-02, E-05, E-07, E-08 |
 | `repos/<case>.json` | git repo recipes the runner materialises as `$TMP/<dir>` | AT-M5-02, E-01, E-09, HT-B-02, D-12 |
 | `bin/git-slow`, `bin/queue-stub`, `bin/xcode-select-fail`, `bin/git-noexclude`, `bin/hostname-canary` | PATH stubs | AT-E-01, AT-E-10, HT-LA-01, AT-P-14, AT-Q, AT-ST-11, AT-WB-02 |

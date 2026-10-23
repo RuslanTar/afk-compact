@@ -1,0 +1,247 @@
+{
+ "id": "AT-AP-14 (production read under scoped carry, owner xxxxxxxx-28)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Owner 2026-10-23 xxxxxxxx-28 (\"Named read carries. forbit setting is default rule, but user explicit ask/approval always wins\"): a checked approval that names one production read and its targets carries like a fresh yes, also under unattended_prod_reads: forbid (the default here); a production write stays the prod-write gate. Fail closed, an allow list (re-review of the PR-28 build): a production approval is a read only when its action is exactly one command of the read grammar (kubectl get/describe/logs/top/explain/version/api-resources, helm list/status/get/history, or a readonly_cmd_re command; U-2, U-18..U-22) in plain ASCII words with listed flags only, its targets are `<identity> @ <state>` with no clause word, and no outward class, plain outward word or write word appears in its action or targets. Anything else is a gate: a read told in plain words (U-3), a root path (U-9), a second step or chain (U-14..U-17), an unlisted separator (U-23..U-25), no separator (U-26, U-27), a line break (U-28, U-29), a look-alike character (U-30..U-32), an unlisted flag (U-33), a second step in a target (U-34, U-35, U-41), a subcommand outside the read lists (U-36, U-37), a write or outward word in a target (U-38..U-40), an unclear production action (\"run the migration on prod\"). A kubectl read outside production is no infrastructure gate either (U-8), but only when the whole action is one read command of the grammar (slice A review: a hyphenated subcommand, U-42..U-44, or a plain-words second step, U-45, stays the infra-write gate; U-46, U-47 carry). The setting does not change what measure lists; the resume text (R7, R9 stop 2, resume-context step 4) lets a carried read run under forbid.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes, check the prod pod list for MR !12\"}}\n{\"type\": \"user\", \"uuid\": \"u1\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"look at the prod error rate on the dashboard\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"restart the prod workers after the fix lands\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"go ahead and run the migration on prod\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"roll the api pods on prod once more\"}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods and delete the stuck one\"}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"list the staging pods for me please\"}}\n{\"type\": \"user\", \"uuid\": \"u7\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"list the prod-eu release folder for me\"}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"count the prod orders with an update query\"}}\n{\"type\": \"user\", \"uuid\": \"u9\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod config and fix the typo\"}}\n{\"type\": \"user\", \"uuid\": \"u10\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"please take care of the prod queue backlog\"}}\n{\"type\": \"user\", \"uuid\": \"u11\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show the prod error report and publish it on the wiki\"}}\n{\"type\": \"user\", \"uuid\": \"u12\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod queue and retry the failed jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u13\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"look up the prod user and resend the invite email\"}}\n{\"type\": \"user\", \"uuid\": \"u14\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"list the prod-eu folder and hand it to nobody\"}}\n{\"type\": \"user\", \"uuid\": \"u15\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:15:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"copy the prod x file over y\"}}\n{\"type\": \"user\", \"uuid\": \"u16\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:16:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show me the api-7 logs on prod please\"}}\n{\"type\": \"user\", \"uuid\": \"u17\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:17:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the helm status of api on prod\"}}\n{\"type\": \"user\", \"uuid\": \"u18\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:18:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"read the prod config file for me\"}}\n{\"type\": \"user\", \"uuid\": \"u19\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:19:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"describe the api-7 pod on prod for me\"}}\n{\"type\": \"user\", \"uuid\": \"u20\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:20:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"list the prod pods with wide output\"}}\n{\"type\": \"user\", \"uuid\": \"u21\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:21:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods then requeue the stuck jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u22\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:22:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods, then requeue stuck jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u23\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:23:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods: requeue the stuck ones\"}}\n{\"type\": \"user\", \"uuid\": \"u24\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:24:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods and requeue stuck jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u25\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:25:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"read the prod config then requeue stuck jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u26\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:26:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods, next line requeue\"}}\n{\"type\": \"user\", \"uuid\": \"u27\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:27:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods, another line requeue\"}}\n{\"type\": \"user\", \"uuid\": \"u28\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:28:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods in that namespace\"}}\n{\"type\": \"user\", \"uuid\": \"u29\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:29:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods and the stuck jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u30\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:30:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods with a wide space\"}}\n{\"type\": \"user\", \"uuid\": \"u31\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:31:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"watch the prod pods for a while\"}}\n{\"type\": \"user\", \"uuid\": \"u32\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:32:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods for the queue\"}}\n{\"type\": \"user\", \"uuid\": \"u33\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:33:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod pods for the jobs\"}}\n{\"type\": \"user\", \"uuid\": \"u34\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:34:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show the prod cluster info for me\"}}\n{\"type\": \"user\", \"uuid\": \"u35\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:35:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"search the prod charts repo for me\"}}\n{\"type\": \"user\", \"uuid\": \"u36\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:36:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod worker pods for me\"}}\n{\"type\": \"user\", \"uuid\": \"u37\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:37:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show the prod config history for me\"}}\n{\"type\": \"user\", \"uuid\": \"u38\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:38:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod node pods for me\"}}\n{\"type\": \"user\", \"uuid\": \"u39\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:39:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"check the prod queue pods for me\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/cccccccc-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2: approval \"yes, check the prod pod list for MR !12\" — action kubectl get pods -n prod · targets namespace prod @ MR !12 head 9f8e7d6 · once · not yet used; U-3: approval \"look at the prod error rate on the dashboard\" — action check the prod error rate · targets dashboard api-errors @ prod · once · not yet used; U-4: approval \"restart the prod workers after the fix lands\" — action restart the prod workers · targets deployment workers @ prod · once · not yet used; U-5: approval \"go ahead and run the migration on prod\" — action run the migration on prod · targets database orders @ prod · once · not yet used; U-6: approval \"roll the api pods on prod once more\" — action kubectl rollout restart deployment/api -n prod · targets deployment api @ prod · once · not yet used; U-7: approval \"check the prod pods and delete the stuck one\" — action check the prod pods and delete pod api-7 · targets pod api-7 @ prod · once · not yet used; U-8: approval \"list the staging pods for me please\" — action kubectl get pods -n staging · targets namespace staging @ 9f8e7d6 · once · not yet used; U-9: approval \"list the prod-eu release folder for me\" — action ls -la /srv/prod-eu · targets folder /srv/prod-eu @ 2026-10-21 · once · not yet used; U-10: approval \"count the prod orders with an update query\" — action count the prod orders with an update query · targets database orders @ prod · once · not yet used; U-11: approval \"check the prod config and fix the typo\" — action check the prod config and fix the typo · targets file config/app.yml @ prod · once · not yet used; U-12: approval \"please take care of the prod queue backlog\" — action take care of the prod queue backlog · targets queue jobs @ prod · once · not yet used; U-13: approval \"show the prod error report and publish it on the wiki\" — action show the prod error report and publish it on the wiki · targets report api-errors @ prod · once · not yet used; U-14: approval \"check the prod queue and retry the failed jobs\" — action check the prod queue and retry the failed jobs · targets queue jobs @ prod · once · not yet used; U-15: approval \"look up the prod user and resend the invite email\" — action look up the prod user and resend the invite email · targets user 42 @ prod · once · not yet used; U-16: approval \"list the prod-eu folder and hand it to nobody\" — action ls /srv/prod-eu && chown -R nobody /srv/prod-eu · targets folder /srv/prod-eu @ 2026-10-21 · once · not yet used; U-17: approval \"copy the prod x file over y\" — action cat /srv/prod/x > /srv/prod/y · targets folder /srv/prod @ 2026-10-21 · once · not yet used; U-18: approval \"show me the api-7 logs on prod please\" — action kubectl logs pod/api-7 -n prod --tail=200 · targets pod api-7 @ prod · once · not yet used; U-19: approval \"check the helm status of api on prod\" — action helm status api -n prod · targets app api @ prod revision 7 · once · not yet used; U-20: approval \"read the prod config file for me\" — action cat config/prod.yml · targets file config/prod.yml @ 9f8e7d6 · once · not yet used; U-21: approval \"describe the api-7 pod on prod for me\" — action `kubectl describe pod api-7 -n prod` · targets pod api-7 @ prod · once · not yet used; U-22: approval \"list the prod pods with wide output\" — action kubectl get pods --namespace=prod -o wide -l app=api,tier=web · targets namespace prod @ 2026-10-21 14:05 +0300 · once · not yet used; U-23: approval \"check the prod pods then requeue the stuck jobs\" — action kubectl get pods -n prod — requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used; U-24: approval \"check the prod pods, then requeue stuck jobs\" — action kubectl get pods -n prod. requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used; U-25: approval \"check the prod pods: requeue the stuck ones\" — action kubectl get pods -n prod: requeue · targets namespace prod @ 9f8e7d6 · once · not yet used; U-26: approval \"check the prod pods and requeue stuck jobs\" — action kubectl get pods -n prod requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used; U-27: approval \"read the prod config then requeue stuck jobs\" — action cat config/prod.yml then requeue stuck jobs · targets file config/prod.yml @ 9f8e7d6 · once · not yet used; U-28: approval \"check the prod pods, next line requeue\" — action kubectl get pods -n prod\u2028requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used; U-29: approval \"check the prod pods, another line requeue\" — action kubectl get pods -n prodrequeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used; U-30: approval \"check the prod pods in that namespace\" — action kubectl get pods -n prоd · targets namespace prod @ 9f8e7d6 · once · not yet used; U-31: approval \"check the prod pods and the stuck jobs\" — action kubectl get pods -n prod; requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used; U-32: approval \"check the prod pods with a wide space\" — action kubectl get pods -n prod · targets namespace prod @ 9f8e7d6 · once · not yet used; U-33: approval \"watch the prod pods for a while\" — action kubectl get pods -n prod -w · targets namespace prod @ 9f8e7d6 · once · not yet used; U-34: approval \"check the prod pods for the queue\" — action kubectl get pods -n prod · targets queue @ prod and retry the failed jobs · once · not yet used; U-35: approval \"check the prod pods for the jobs\" — action kubectl get pods -n prod · targets queue @ prod, retry the failed jobs · once · not yet used; U-36: approval \"show the prod cluster info for me\" — action kubectl cluster-info -n prod · targets cluster prod @ 2026-10-21 · once · not yet used; U-37: approval \"search the prod charts repo for me\" — action helm search prod-charts · targets repo prod-charts @ 2026-10-21 · once · not yet used; U-38: approval \"check the prod worker pods for me\" — action kubectl get pods -n prod · targets workers @ prod restart · once · not yet used; U-39: approval \"show the prod config history for me\" — action git log --oneline -n 5 -- config/prod.yml · targets file config/prod.yml @ 9f8e7d6 rebase · once · not yet used; U-40: approval \"check the prod node pods for me\" — action kubectl get pods -n prod · targets node-1 @ prod drain · once · not yet used; U-41: approval \"check the prod queue pods for me\" — action kubectl get pods -n prod · targets queue @ prod then requeue · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "prod"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — production approvals\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes, check the prod pod list for MR !12\" — action kubectl get pods -n prod · targets namespace prod @ MR !12 head 9f8e7d6 · once · not yet used\n- U-3: approval \"look at the prod error rate on the dashboard\" — action check the prod error rate · targets dashboard api-errors @ prod · once · not yet used\n- U-4: approval \"restart the prod workers after the fix lands\" — action restart the prod workers · targets deployment workers @ prod · once · not yet used\n- U-5: approval \"go ahead and run the migration on prod\" — action run the migration on prod · targets database orders @ prod · once · not yet used\n- U-6: approval \"roll the api pods on prod once more\" — action kubectl rollout restart deployment/api -n prod · targets deployment api @ prod · once · not yet used\n- U-7: approval \"check the prod pods and delete the stuck one\" — action check the prod pods and delete pod api-7 · targets pod api-7 @ prod · once · not yet used\n- U-8: approval \"list the staging pods for me please\" — action kubectl get pods -n staging · targets namespace staging @ 9f8e7d6 · once · not yet used\n- U-9: approval \"list the prod-eu release folder for me\" — action ls -la /srv/prod-eu · targets folder /srv/prod-eu @ 2026-10-21 · once · not yet used\n- U-10: approval \"count the prod orders with an update query\" — action count the prod orders with an update query · targets database orders @ prod · once · not yet used\n- U-11: approval \"check the prod config and fix the typo\" — action check the prod config and fix the typo · targets file config/app.yml @ prod · once · not yet used\n- U-12: approval \"please take care of the prod queue backlog\" — action take care of the prod queue backlog · targets queue jobs @ prod · once · not yet used\n- U-13: approval \"show the prod error report and publish it on the wiki\" — action show the prod error report and publish it on the wiki · targets report api-errors @ prod · once · not yet used\n- U-14: approval \"check the prod queue and retry the failed jobs\" — action check the prod queue and retry the failed jobs · targets queue jobs @ prod · once · not yet used\n- U-15: approval \"look up the prod user and resend the invite email\" — action look up the prod user and resend the invite email · targets user 42 @ prod · once · not yet used\n- U-16: approval \"list the prod-eu folder and hand it to nobody\" — action ls /srv/prod-eu && chown -R nobody /srv/prod-eu · targets folder /srv/prod-eu @ 2026-10-21 · once · not yet used\n- U-17: approval \"copy the prod x file over y\" — action cat /srv/prod/x > /srv/prod/y · targets folder /srv/prod @ 2026-10-21 · once · not yet used\n- U-18: approval \"show me the api-7 logs on prod please\" — action kubectl logs pod/api-7 -n prod --tail=200 · targets pod api-7 @ prod · once · not yet used\n- U-19: approval \"check the helm status of api on prod\" — action helm status api -n prod · targets app api @ prod revision 7 · once · not yet used\n- U-20: approval \"read the prod config file for me\" — action cat config/prod.yml · targets file config/prod.yml @ 9f8e7d6 · once · not yet used\n- U-21: approval \"describe the api-7 pod on prod for me\" — action `kubectl describe pod api-7 -n prod` · targets pod api-7 @ prod · once · not yet used\n- U-22: approval \"list the prod pods with wide output\" — action kubectl get pods --namespace=prod -o wide -l app=api,tier=web · targets namespace prod @ 2026-10-21 14:05 +0300 · once · not yet used\n- U-23: approval \"check the prod pods then requeue the stuck jobs\" — action kubectl get pods -n prod — requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-24: approval \"check the prod pods, then requeue stuck jobs\" — action kubectl get pods -n prod. requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-25: approval \"check the prod pods: requeue the stuck ones\" — action kubectl get pods -n prod: requeue · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-26: approval \"check the prod pods and requeue stuck jobs\" — action kubectl get pods -n prod requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-27: approval \"read the prod config then requeue stuck jobs\" — action cat config/prod.yml then requeue stuck jobs · targets file config/prod.yml @ 9f8e7d6 · once · not yet used\n- U-28: approval \"check the prod pods, next line requeue\" — action kubectl get pods -n prod\u2028requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-29: approval \"check the prod pods, another line requeue\" — action kubectl get pods -n prodrequeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-30: approval \"check the prod pods in that namespace\" — action kubectl get pods -n prоd · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-31: approval \"check the prod pods and the stuck jobs\" — action kubectl get pods -n prod; requeue stuck jobs · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-32: approval \"check the prod pods with a wide space\" — action kubectl get pods -n prod · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-33: approval \"watch the prod pods for a while\" — action kubectl get pods -n prod -w · targets namespace prod @ 9f8e7d6 · once · not yet used\n- U-34: approval \"check the prod pods for the queue\" — action kubectl get pods -n prod · targets queue @ prod and retry the failed jobs · once · not yet used\n- U-35: approval \"check the prod pods for the jobs\" — action kubectl get pods -n prod · targets queue @ prod, retry the failed jobs · once · not yet used\n- U-36: approval \"show the prod cluster info for me\" — action kubectl cluster-info -n prod · targets cluster prod @ 2026-10-21 · once · not yet used\n- U-37: approval \"search the prod charts repo for me\" — action helm search prod-charts · targets repo prod-charts @ 2026-10-21 · once · not yet used\n- U-38: approval \"check the prod worker pods for me\" — action kubectl get pods -n prod · targets workers @ prod restart · once · not yet used\n- U-39: approval \"show the prod config history for me\" — action git log --oneline -n 5 -- config/prod.yml · targets file config/prod.yml @ 9f8e7d6 rebase · once · not yet used\n- U-40: approval \"check the prod node pods for me\" — action kubectl get pods -n prod · targets node-1 @ prod drain · once · not yet used\n- U-41: approval \"check the prod queue pods for me\" — action kubectl get pods -n prod · targets queue @ prod then requeue · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish: every quote is the user's",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "prod",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "locate: the default production setting is forbid",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^production: forbid · "
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-28: under forbid a named production read carries when it is one command of the read grammar (kubectl, helm, a read-only command); a production write, a read told in plain words, any other action, a write word or an outward word is a gate",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 kubectl get pods -n prod → namespace prod @ MR !12 head 9f8e7d6; U-8 kubectl get pods -n staging → namespace staging @ 9f8e7d6; U-18 kubectl logs pod\\/api-7 -n prod --tail=200 → pod api-7 @ prod; U-19 helm status api -n prod → app api @ prod revision 7; U-20 cat config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6; U-21 `kubectl describe pod api-7 -n prod` → pod api-7 @ prod; U-22 kubectl get pods --namespace=prod -o wide -l app=api,tier=web → namespace prod @ 2026-10-21 14:05 \\+0300$",
+     "^Approvals \\(gate, re-ask\\): U-3 check the prod error rate → dashboard api-errors @ prod; U-4 restart the prod workers → deployment workers @ prod; U-5 run the migration on prod → database orders @ prod; U-6 kubectl rollout restart deployment\\/api -n prod → deployment api @ prod; U-7 check the prod pods and delete pod api-7 → pod api-7 @ prod; U-9 ls -la \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-10 count the prod orders with an update query → database orders @ prod; U-11 check the prod config and fix the typo → file config\\/app\\.yml @ prod; U-12 take care of the prod queue backlog → queue jobs @ prod; U-13 show the prod error report and publish it on the wiki → report api-errors @ prod; U-14 check the prod queue and retry the failed jobs → queue jobs @ prod; U-15 look up the prod user and resend the invite email → user 42 @ prod; U-16 ls \\/srv\\/prod-eu && chown -R nobody \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-17 cat \\/srv\\/prod\\/x > \\/srv\\/prod\\/y → folder \\/srv\\/prod @ 2026-10-21; U-23 kubectl get pods -n prod — requeue stuck jobs → namespace prod @ 9f8e7d6; U-24 kubectl get pods -n prod\\. requeue stuck jobs → namespace prod @ 9f8e7d6; U-25 kubectl get pods -n prod: requeue → namespace prod @ 9f8e7d6; U-26 kubectl get pods -n prod requeue stuck jobs → namespace prod @ 9f8e7d6; U-27 cat config\\/prod\\.yml then requeue stuck jobs → file config\\/prod\\.yml @ 9f8e7d6; U-28 kubectl get pods -n prod\u2028requeue stuck jobs → namespace prod @ 9f8e7d6; U-29 kubectl get pods -n prodrequeue stuck jobs → namespace prod @ 9f8e7d6; U-30 kubectl get pods -n prоd → namespace prod @ 9f8e7d6; U-31 kubectl get pods -n prod; requeue stuck jobs → namespace prod @ 9f8e7d6; U-32 kubectl get pods -n prod → namespace prod @ 9f8e7d6; U-33 kubectl get pods -n prod -w → namespace prod @ 9f8e7d6; U-34 kubectl get pods -n prod → queue @ prod and retry the failed jobs; U-35 kubectl get pods -n prod → queue @ prod, retry the failed jobs; U-36 kubectl cluster-info -n prod → cluster prod @ 2026-10-21; U-37 helm search prod-charts → repo prod-charts @ 2026-10-21; U-38 kubectl get pods -n prod → workers @ prod restart; U-39 git log --oneline -n 5 -- config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6 rebase; U-40 kubectl get pods -n prod → node-1 @ prod drain; U-41 kubectl get pods -n prod → queue @ prod then requeue$"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 7,
+       "gate": 33
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-28: a /clear successor carries the same production read",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "cccccccc-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 kubectl get pods -n prod → namespace prod @ MR !12 head 9f8e7d6; U-8 kubectl get pods -n staging → namespace staging @ 9f8e7d6; U-18 kubectl logs pod\\/api-7 -n prod --tail=200 → pod api-7 @ prod; U-19 helm status api -n prod → app api @ prod revision 7; U-20 cat config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6; U-21 `kubectl describe pod api-7 -n prod` → pod api-7 @ prod; U-22 kubectl get pods --namespace=prod -o wide -l app=api,tier=web → namespace prod @ 2026-10-21 14:05 \\+0300$",
+     "^Approvals \\(gate, re-ask\\): U-3 check the prod error rate → dashboard api-errors @ prod; U-4 restart the prod workers → deployment workers @ prod; U-5 run the migration on prod → database orders @ prod; U-6 kubectl rollout restart deployment\\/api -n prod → deployment api @ prod; U-7 check the prod pods and delete pod api-7 → pod api-7 @ prod; U-9 ls -la \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-10 count the prod orders with an update query → database orders @ prod; U-11 check the prod config and fix the typo → file config\\/app\\.yml @ prod; U-12 take care of the prod queue backlog → queue jobs @ prod; U-13 show the prod error report and publish it on the wiki → report api-errors @ prod; U-14 check the prod queue and retry the failed jobs → queue jobs @ prod; U-15 look up the prod user and resend the invite email → user 42 @ prod; U-16 ls \\/srv\\/prod-eu && chown -R nobody \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-17 cat \\/srv\\/prod\\/x > \\/srv\\/prod\\/y → folder \\/srv\\/prod @ 2026-10-21; U-23 kubectl get pods -n prod — requeue stuck jobs → namespace prod @ 9f8e7d6; U-24 kubectl get pods -n prod\\. requeue stuck jobs → namespace prod @ 9f8e7d6; U-25 kubectl get pods -n prod: requeue → namespace prod @ 9f8e7d6; U-26 kubectl get pods -n prod requeue stuck jobs → namespace prod @ 9f8e7d6; U-27 cat config\\/prod\\.yml then requeue stuck jobs → file config\\/prod\\.yml @ 9f8e7d6; U-28 kubectl get pods -n prod\u2028requeue stuck jobs → namespace prod @ 9f8e7d6; U-29 kubectl get pods -n prodrequeue stuck jobs → namespace prod @ 9f8e7d6; U-30 kubectl get pods -n prоd → namespace prod @ 9f8e7d6; U-31 kubectl get pods -n prod; requeue stuck jobs → namespace prod @ 9f8e7d6; U-32 kubectl get pods -n prod → namespace prod @ 9f8e7d6; U-33 kubectl get pods -n prod -w → namespace prod @ 9f8e7d6; U-34 kubectl get pods -n prod → queue @ prod and retry the failed jobs; U-35 kubectl get pods -n prod → queue @ prod, retry the failed jobs; U-36 kubectl cluster-info -n prod → cluster prod @ 2026-10-21; U-37 helm search prod-charts → repo prod-charts @ 2026-10-21; U-38 kubectl get pods -n prod → workers @ prod restart; U-39 git log --oneline -n 5 -- config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6 rebase; U-40 kubectl get pods -n prod → node-1 @ prod drain; U-41 kubectl get pods -n prod → queue @ prod then requeue$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-28: a compaction summary's approvals read the same way (measure --compact --copy)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 kubectl get pods -n prod → namespace prod @ MR !12 head 9f8e7d6; U-8 kubectl get pods -n staging → namespace staging @ 9f8e7d6; U-18 kubectl logs pod\\/api-7 -n prod --tail=200 → pod api-7 @ prod; U-19 helm status api -n prod → app api @ prod revision 7; U-20 cat config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6; U-21 `kubectl describe pod api-7 -n prod` → pod api-7 @ prod; U-22 kubectl get pods --namespace=prod -o wide -l app=api,tier=web → namespace prod @ 2026-10-21 14:05 \\+0300$",
+     "^Approvals \\(gate, re-ask\\): U-3 check the prod error rate → dashboard api-errors @ prod; U-4 restart the prod workers → deployment workers @ prod; U-5 run the migration on prod → database orders @ prod; U-6 kubectl rollout restart deployment\\/api -n prod → deployment api @ prod; U-7 check the prod pods and delete pod api-7 → pod api-7 @ prod; U-9 ls -la \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-10 count the prod orders with an update query → database orders @ prod; U-11 check the prod config and fix the typo → file config\\/app\\.yml @ prod; U-12 take care of the prod queue backlog → queue jobs @ prod; U-13 show the prod error report and publish it on the wiki → report api-errors @ prod; U-14 check the prod queue and retry the failed jobs → queue jobs @ prod; U-15 look up the prod user and resend the invite email → user 42 @ prod; U-16 ls \\/srv\\/prod-eu && chown -R nobody \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-17 cat \\/srv\\/prod\\/x > \\/srv\\/prod\\/y → folder \\/srv\\/prod @ 2026-10-21; U-23 kubectl get pods -n prod — requeue stuck jobs → namespace prod @ 9f8e7d6; U-24 kubectl get pods -n prod\\. requeue stuck jobs → namespace prod @ 9f8e7d6; U-25 kubectl get pods -n prod: requeue → namespace prod @ 9f8e7d6; U-26 kubectl get pods -n prod requeue stuck jobs → namespace prod @ 9f8e7d6; U-27 cat config\\/prod\\.yml then requeue stuck jobs → file config\\/prod\\.yml @ 9f8e7d6; U-28 kubectl get pods -n prod\u2028requeue stuck jobs → namespace prod @ 9f8e7d6; U-29 kubectl get pods -n prodrequeue stuck jobs → namespace prod @ 9f8e7d6; U-30 kubectl get pods -n prоd → namespace prod @ 9f8e7d6; U-31 kubectl get pods -n prod; requeue stuck jobs → namespace prod @ 9f8e7d6; U-32 kubectl get pods -n prod → namespace prod @ 9f8e7d6; U-33 kubectl get pods -n prod -w → namespace prod @ 9f8e7d6; U-34 kubectl get pods -n prod → queue @ prod and retry the failed jobs; U-35 kubectl get pods -n prod → queue @ prod, retry the failed jobs; U-36 kubectl cluster-info -n prod → cluster prod @ 2026-10-21; U-37 helm search prod-charts → repo prod-charts @ 2026-10-21; U-38 kubectl get pods -n prod → workers @ prod restart; U-39 git log --oneline -n 5 -- config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6 rebase; U-40 kubectl get pods -n prod → node-1 @ prod drain; U-41 kubectl get pods -n prod → queue @ prod then requeue$"
+    ],
+    "stdout_lacks": [
+     "Approvals \\(unchecked\\)"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-28: the setting does not change the reading (allow in the settings file)",
+   "options": {
+    "unattended_prod_reads": "allow"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 kubectl get pods -n prod → namespace prod @ MR !12 head 9f8e7d6; U-8 kubectl get pods -n staging → namespace staging @ 9f8e7d6; U-18 kubectl logs pod\\/api-7 -n prod --tail=200 → pod api-7 @ prod; U-19 helm status api -n prod → app api @ prod revision 7; U-20 cat config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6; U-21 `kubectl describe pod api-7 -n prod` → pod api-7 @ prod; U-22 kubectl get pods --namespace=prod -o wide -l app=api,tier=web → namespace prod @ 2026-10-21 14:05 \\+0300$",
+     "^Approvals \\(gate, re-ask\\): U-3 check the prod error rate → dashboard api-errors @ prod; U-4 restart the prod workers → deployment workers @ prod; U-5 run the migration on prod → database orders @ prod; U-6 kubectl rollout restart deployment\\/api -n prod → deployment api @ prod; U-7 check the prod pods and delete pod api-7 → pod api-7 @ prod; U-9 ls -la \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-10 count the prod orders with an update query → database orders @ prod; U-11 check the prod config and fix the typo → file config\\/app\\.yml @ prod; U-12 take care of the prod queue backlog → queue jobs @ prod; U-13 show the prod error report and publish it on the wiki → report api-errors @ prod; U-14 check the prod queue and retry the failed jobs → queue jobs @ prod; U-15 look up the prod user and resend the invite email → user 42 @ prod; U-16 ls \\/srv\\/prod-eu && chown -R nobody \\/srv\\/prod-eu → folder \\/srv\\/prod-eu @ 2026-10-21; U-17 cat \\/srv\\/prod\\/x > \\/srv\\/prod\\/y → folder \\/srv\\/prod @ 2026-10-21; U-23 kubectl get pods -n prod — requeue stuck jobs → namespace prod @ 9f8e7d6; U-24 kubectl get pods -n prod\\. requeue stuck jobs → namespace prod @ 9f8e7d6; U-25 kubectl get pods -n prod: requeue → namespace prod @ 9f8e7d6; U-26 kubectl get pods -n prod requeue stuck jobs → namespace prod @ 9f8e7d6; U-27 cat config\\/prod\\.yml then requeue stuck jobs → file config\\/prod\\.yml @ 9f8e7d6; U-28 kubectl get pods -n prod\u2028requeue stuck jobs → namespace prod @ 9f8e7d6; U-29 kubectl get pods -n prodrequeue stuck jobs → namespace prod @ 9f8e7d6; U-30 kubectl get pods -n prоd → namespace prod @ 9f8e7d6; U-31 kubectl get pods -n prod; requeue stuck jobs → namespace prod @ 9f8e7d6; U-32 kubectl get pods -n prod → namespace prod @ 9f8e7d6; U-33 kubectl get pods -n prod -w → namespace prod @ 9f8e7d6; U-34 kubectl get pods -n prod → queue @ prod and retry the failed jobs; U-35 kubectl get pods -n prod → queue @ prod, retry the failed jobs; U-36 kubectl cluster-info -n prod → cluster prod @ 2026-10-21; U-37 helm search prod-charts → repo prod-charts @ 2026-10-21; U-38 kubectl get pods -n prod → workers @ prod restart; U-39 git log --oneline -n 5 -- config\\/prod\\.yml → file config\\/prod\\.yml @ 9f8e7d6 rebase; U-40 kubectl get pods -n prod → node-1 @ prod drain; U-41 kubectl get pods -n prod → queue @ prod then requeue$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/copy-infra.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-42 approval \"list the staging pods with the new tool\" — action kubectl get-foo -n staging · targets namespace staging @ 9f8e7d6 · once · not yet used; U-43 approval \"read the staging api logs and drain the node\" — action kubectl logs-and-drain -n staging · targets namespace staging @ 9f8e7d6 · once · not yet used; U-44 approval \"show the staging api chart state for me\" — action helm status-reset api · targets app api @ staging · once · not yet used; U-45 approval \"list the staging pods and scale api down\" — action kubectl get pods -n staging and scale api to 0 · targets namespace staging @ 9f8e7d6 · once · not yet used; U-46 approval \"show the staging pod list for me\" — action kubectl get pods -n staging · targets namespace staging @ 9f8e7d6 · once · not yet used; U-47 approval \"show the staging api chart status please\" — action helm status api -n staging · targets app api @ staging · once · not yet used\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/infra.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"k0\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:40:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"list the staging pods with the new tool\"}}\n{\"type\": \"user\", \"uuid\": \"k1\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:41:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"read the staging api logs and drain the node\"}}\n{\"type\": \"user\", \"uuid\": \"k2\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:42:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show the staging api chart state for me\"}}\n{\"type\": \"user\", \"uuid\": \"k3\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:43:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"list the staging pods and scale api down\"}}\n{\"type\": \"user\", \"uuid\": \"k4\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:44:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show the staging pod list for me\"}}\n{\"type\": \"user\", \"uuid\": \"k5\", \"sessionId\": \"$SID\", \"timestamp\": \"2026-10-21T13:45:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"show the staging api chart status please\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "slice A review: outside production a kubectl or helm action is no infra-write gate only when it is exactly one read command (a hyphenated subcommand or a plain-words second step is the gate, as at bcdaca6)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-infra.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/infra.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-46 kubectl get pods -n staging → namespace staging @ 9f8e7d6; U-47 helm status api -n staging → app api @ staging$",
+     "^Approvals \\(gate, re-ask\\): U-42 kubectl get-foo -n staging → namespace staging @ 9f8e7d6; U-43 kubectl logs-and-drain -n staging → namespace staging @ 9f8e7d6; U-44 helm status-reset api → app api @ staging; U-45 kubectl get pods -n staging and scale api to 0 → namespace staging @ 9f8e7d6$"
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,725 @@
+{
+ "id": "AT-AP-04, AT-AP-05 (helper), ID-3 brief",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-3, O-12.; REVIEW-NIGHT-3: gates named in words beside a class hit, src:dst refspecs, a local merge into a protected branch and the remote default branch (R3-02); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01 (root ruling 2026-10-23 11:56): a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge MR !12 once the pipeline is green\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 77 to staging today\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may always rerun the flaky suite\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/cccccccc-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/ffffffff-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"fork\"}"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"tag the release candidate\" — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"push the retry branch\" — action git push origin feat/x · targets branch feat/x; context only, not valid here; re-ask [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n"
+    },
+    {
+     "write": "$HOME/copy-home.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"tag the release candidate\" — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"push the retry branch\" — action git push origin feat/x · targets branch feat/x; context only, not valid here; re-ask [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n"
+    }
+   ]
+  },
+  {
+   "name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"merge MR !12 once the pipeline is green\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · used 2026-10-21 13:30 +0300\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · used 2026-10-21 13:40 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish: every quote is the user's",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "AT-AP-04 same session: checked and unused or standing listed; a used once approval is spent; a deploy is a gate",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-4 deploy build 77 → env staging @ build 77$"
+    ],
+    "stdout_lacks": [
+     "U-3",
+     "Approvals \\(unchecked\\)"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 2,
+       "gate": 1,
+       "classes": [
+        "push"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-04 a /clear successor carries (own chain)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "cccccccc-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-4 deploy build 77 → env staging @ build 77$"
+    ]
+   }
+  },
+  {
+   "name": "O-12 interim: a fork successor carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "ffffffff-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(fork: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push",
+     "gate, re-ask"
+    ]
+   }
+  },
+  {
+   "name": "O-1: another session's handoff carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "99999999-aaaa-4bbb-8ccc-dddddddddddd",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(foreign: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push",
+     "gate, re-ask"
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 --copy: a typed quote is checked, a missing one unchecked, a deploy a gate, a tagged line ignored",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3000,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-4 deploy build 77 → env staging @ build 77$",
+     "^Approvals \\(unchecked\\): U-3$"
+    ],
+    "stdout_lacks": [
+     "U-6"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "summary",
+       "checked": 1,
+       "gate": 1,
+       "unchecked": 1,
+       "classes": [
+        "push"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 the copy as save-copy prints it (a leading ~/ is the home folder)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy=~/copy-home.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "copy pending"
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 the copy is not saved yet",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/not-yet.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals: not checked \\(copy pending\\)$"
+    ],
+    "stdout_lacks": [
+     "Approvals \\(checked\\)"
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 no --copy: no approvals line (the summary's stay context)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^Approvals"
+    ]
+   }
+  },
+  {
+   "name": "ID-3 --brief: one line, no sidecar",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--brief"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 600,
+    "stdout_has": [
+     "\\Agit: feat/x @ [0-9a-f]{7,}, dirty 0 · in flight: not listed\\n?\\z"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/bg/slot-0.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 7, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r1\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"r2\", \"type\": \"shell\", \"status\": \"completed\"}], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/repo/new.txt",
+     "content": "x\n"
+    }
+   ]
+  },
+  {
+   "name": "ID-3 --brief: running and ended tasks, a dirty file",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--brief"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 600,
+    "stdout_has": [
+     "\\Agit: feat/x @ [0-9a-f]{7,}, dirty 1 · in flight: 1 running, 1 ended\\n?\\z"
+    ]
+   }
+  },
+  {
+   "name": "REVIEW-NIGHT-3 setup",
+   "setup": [
+    {
+     "git": [
+      "update-ref",
+      "refs/remotes/origin/dev",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo"
+    },
+    {
+     "git": [
+      "symbolic-ref",
+      "refs/remotes/origin/HEAD",
+      "refs/remotes/origin/dev"
+     ],
+     "cwd": "$TMP/repo"
+    },
+    {
+     "write": "$TMP/copy-gates.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-7 approval \"push feat/x to origin\" — action git push origin feat/x and deploy · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-8 approval \"push feat/x to origin\" — action git push origin feat/x:main · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-9 approval \"merge MR !12 once the pipeline is green\" — action merge feat/x into main locally · targets branch main @ 1a2b3c4 · once · not yet used; U-10 approval \"push feat/x to origin\" — action push feat/x to dev · targets branch dev @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/aaaaaaaa-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"bbbbbbbb-1111-4222-8333-444444444444\", \"lineage_reason\": \"fork\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/bbbbbbbb-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "copy": "$PUB",
+     "to": "$TMP/outside/copied.md"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-20-00_dup.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e0e\ndate: 2026-10-21T14:20:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=0e0e0e0e s=manual⟫\n# LAB-9 — an edited file\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-2: approval \"push feat/x to origin\" — action git push origin main · targets branch main @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=0e0e0e0e⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.0e0e0e0e.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"0e0e0e0e\",\"session_id\":\"$SID\",\"v\":1}"
+    }
+   ]
+  },
+  {
+   "name": "R3-02: a gate named in words beside a push, a src:dst refspec to main, a local merge into main, the remote default branch",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-gates.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(gate, re-ask\\): U-7 git push origin feat/x and deploy → branch feat/x @ 1a2b3c4; U-8 git push origin feat/x:main → branch feat/x @ 1a2b3c4; U-9 merge feat/x into main locally → branch main @ 1a2b3c4; U-10 push feat/x to dev → branch dev @ 1a2b3c4$"
+    ]
+   }
+  },
+  {
+   "name": "R3-03: a predecessor behind a fork link carries nothing (O-12 over every hop)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "aaaaaaaa-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(fork: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push",
+     "gate, re-ask"
+    ]
+   }
+  },
+  {
+   "name": "R3-03: an own handoff copied outside the store carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$TMP/outside/copied.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(outside the store: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "R3-05: an id on two lines is no one's check",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-20-00_dup.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(changed since publish\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals \\(checked\\):.*U-2"
+    ]
+   }
+  },
+  {
+   "name": "U3-01 setup: own handoffs with a publish record of their checked lines, then edited",
+   "setup": [
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-21-00_hashed.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 1a1a1a1a\ndate: 2026-10-21T14:21:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=1a1a1a1a s=manual⟫\n# LAB-9 — hashed\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=1a1a1a1a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.1a1a1a1a.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"1a1a1a1a\",\"session_id\":\"$SID\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-22-00_added.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 2b2b2b2b\ndate: 2026-10-21T14:22:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5, U-6\n---\n⟪$BRAND v1 n=2b2b2b2b s=manual⟫\n# LAB-9 — a line added after publish\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n- U-6: approval \"push feat/x to origin\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=2b2b2b2b⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.2b2b2b2b.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"2b2b2b2b\",\"session_id\":\"$SID\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-23-00_targets.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 3c3c3c3c\ndate: 2026-10-21T14:23:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=3c3c3c3c s=manual⟫\n# LAB-9 — targets edited\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=3c3c3c3c⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.3c3c3c3c.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"3c3c3c3c\",\"session_id\":\"$SID\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-24-00_quote.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 4d4d4d4d\ndate: 2026-10-21T14:24:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=4d4d4d4d s=manual⟫\n# LAB-9 — quote edited\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun every suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=4d4d4d4d⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.4d4d4d4d.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"4d4d4d4d\",\"session_id\":\"$SID\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-25-00_id.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 5e5e5e5e\ndate: 2026-10-21T14:25:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-7, U-5\n---\n⟪$BRAND v1 n=5e5e5e5e s=manual⟫\n# LAB-9 — id edited\n## Approvals\n- U-7: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=5e5e5e5e⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.5e5e5e5e.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"5e5e5e5e\",\"session_id\":\"$SID\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-26-00_unhashed.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6f6f6f6f\ndate: 2026-10-21T14:26:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=6f6f6f6f s=manual⟫\n# LAB-9 — published before the hashes\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=6f6f6f6f⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-27-00_otherrec.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7a7a7a7a\ndate: 2026-10-21T14:27:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7a7a7a7a s=manual⟫\n# LAB-9 — a record of another file\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=7a7a7a7a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7a7a7a7a.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"1a1a1a1a\",\"session_id\":\"$SID\",\"v\":1}"
+    }
+   ]
+  },
+  {
+   "name": "U3-01 lines that match the publish record carry",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-21-00_hashed.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "U3-01 tamper: an added line with its id in approvals_checked is context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-22-00_added.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(context only, re-ask\\): U-6 \\(not in the publish record\\)$"
+    ],
+    "stdout_lacks": [
+     "U-6 git push",
+     "feat/y"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 2,
+       "unverified": 1
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "U3-01 tamper: edited targets",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-23-00_targets.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(changed since publish\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push",
+     "feat/y"
+    ]
+   }
+  },
+  {
+   "name": "U3-01 tamper: an edited quote",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-24-00_quote.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(context only, re-ask\\): U-5 \\(changed since publish\\)$"
+    ],
+    "stdout_lacks": [
+     "U-5 rerun",
+     "every suite"
+    ]
+   }
+  },
+  {
+   "name": "U3-01 tamper: an edited id",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-25-00_id.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(context only, re-ask\\): U-7 \\(not in the publish record\\)$"
+    ],
+    "stdout_lacks": [
+     "U-7 git push",
+     "U-2"
+    ]
+   }
+  },
+  {
+   "name": "U3-01 a handoff without a record (published before the hashes) is context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-26-00_unhashed.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(no hash recorded\\), U-5 \\(no hash recorded\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "U3-01 a record naming another nonce does not count",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-27-00_otherrec.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(no hash recorded\\), U-5 \\(no hash recorded\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "canary: no quote, action or target text in any watch row",
+   "argv": [
+    "status"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "push feat/x to origin"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "deploy build 77"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "tag the release candidate"
+     }
+    ]
+   }
+  }
+ ]
+}

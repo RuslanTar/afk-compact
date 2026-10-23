@@ -1,8 +1,11 @@
 // The resume block (MOD-SPEC §3.4): built after a main compaction, delivered once by the first
 // channel whose claim wins. The mod's channels are `prompt.context` (order 2) and the continue
-// text (order 3, cont.ts); classic SessionStart (order 1) is the helper's.
+// text (order 3, cont.ts); classic SessionStart (order 1) is the helper's. One exception (owner
+// xxxxxxxx-37, "Full block again on return"): when a background result's turn took an idle
+// compaction's block, the first human-origin prompt gets the full block again, re-measured, with
+// `[idle-again]` noting the earlier use.
 import type { Deps, Outcome, PendingResume } from './deps'
-import { storeWord } from './deps'
+import { isHuman, storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
@@ -10,10 +13,13 @@ import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 
 /**
- * MOD-SPEC §3.4: total ≤6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
- * a 3,000-byte measured block; never >10,000, the SessionStart cutoff).
+ * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
+ * a 3,000-byte measured block); soft since the owner overturned ratify xxxxxxxx#R3 (2026-10-23,
+ * SPEC-DELTAS RP-2/RP-4): a block over it logs `resume_block_over_soft`. The hard cap is 9,500,
+ * under the 10,000-char SessionStart cutoff: over it whole re-measure lines are cut first.
  */
-export const BLOCK_MAX = 6500
+export const BLOCK_MAX = 9500
+export const BLOCK_SOFT = 6500
 
 /** `@handoff_finish@` when a raced draft has no safe finish command (its line says draft absent). */
 export const NO_FINISH = '(none)'
@@ -32,6 +38,10 @@ export type BlockArgs = {
   prodAllow?: boolean
   /** An idle compaction: `[idle]` (IC-1 D3), never with `[midturn]`. */
   idle?: boolean
+  /** Owner xxxxxxxx-25 ("Stop in halt"): halt mode is on, so an idle block gets `[idle-halt]` instead of `[idle]`. */
+  halt?: boolean
+  /** Owner xxxxxxxx-37: a background result's turn took this idle block at this time; `[idle-again]` says so. */
+  again?: number
 }
 
 /** IC-1 D3: a block delivered later than this after it was built is built again. */
@@ -62,17 +72,33 @@ export function storeRuntime(d: Deps): { runtime: Runtime; drop: string[] } {
 
 /** The resume block; `fresh` is a measure already taken (the delivery-time re-measure), else one is taken now. */
 export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: string): Promise<string> {
+  return (await buildBlockWith(d, sid, a, fresh)).block
+}
+
+/**
+ * `buildBlock`, with the measure it was built from (undefined when the measure failed) and when
+ * that measure was taken. `fresh` null: no measure is taken (a rebuild whose stored measure is
+ * missing renders without one). `at`: when a stored measure was taken, so a rebuild that takes no
+ * new one keeps its `@measured_at@` (IC-1 D3: the stamp shows the facts' age); else now.
+ */
+export async function buildBlockWith(
+  d: Deps, sid: string, a: BlockArgs, fresh?: string | null, at?: number,
+): Promise<{ block: string; remeasure: string | undefined; measuredAt: number }> {
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
-  if (a.idle === true && !a.midturn) tags.push('idle')
+  // Owner xxxxxxxx-25: in halt mode the idle line stops after the background result.
+  if (a.idle === true && !a.midturn) tags.push(a.halt === true ? 'idle-halt' : 'idle')
+  if (a.idle === true && !a.midturn && a.again !== undefined) tags.push('idle-again')
   // Exactly one of the two step-4 lines (BLD-04 exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
-  const remeasure = fresh ?? (await measure(d, sid, a.nonce))
-  const measuredAt = isoLocal(await d.now(), false)
+  // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
+  const remeasure = fresh === null ? undefined : fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
+  const measuredAt = at ?? (await d.now())
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)
-  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: measuredAt, ...store.runtime }
+  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: isoLocal(measuredAt, false), ...store.runtime }
+  if (a.again !== undefined) runtime.idle_used_at = isoLocal(a.again, false)
   const h = a.handoff
   if (h && 'published' in h) {
     tags.push('handoff')
@@ -84,8 +110,11 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
     runtime.draft_state = present ? 'present' : 'absent'
     runtime.handoff_finish = present ? '`' + (h.finish ?? '') + '`' : NO_FINISH
   }
-  if (remeasure === undefined) return assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
-  return fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
+  const block = remeasure === undefined
+    ? assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
+    : fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
+  if (block.length > BLOCK_SOFT) await log(d, sid, 'resume_block_over_soft', { nonce: a.nonce ?? null, chars: block.length })
+  return { block, remeasure, measuredAt }
 }
 
 /**
@@ -113,6 +142,8 @@ export function blockName(name: string): string {
 export async function contextBlock(d: Deps, sid: string): Promise<string | undefined> {
   const s = d.state
   s.ctxSeen = true
+  const again = await againBlock(d, sid)
+  if (again !== undefined) return again
   const pend = s.pending
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
   const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
@@ -122,29 +153,69 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     return undefined
   }
   if (c.result === 'failed') await helperMissing(d, sid, 'claim')
-  const block = await freshBlock(d, pend)
+  const args = haltNow(d, pend.args)
+  const out = await freshBlock(d, pend, args)
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
-  return block
+  // Owner xxxxxxxx-37: a background result (not a person) took an idle compaction's block; the
+  // first human-origin prompt gets it again.
+  if (pend.args.idle === true && !isHuman(s.turnOrigin)) {
+    s.idleAgain = { sid, pend: { ...pend, args }, usedAt: await d.now(), remeasure: out.remeasure, measuredAt: out.measuredAt }
+  }
+  return out.block
+}
+
+/** Owner xxxxxxxx-25 ("Stop in halt"): an idle block's halt variant follows halt mode at delivery. */
+function haltNow(d: Deps, a: BlockArgs): BlockArgs {
+  return a.idle === true ? { ...a, halt: d.state.halt.active } : a
+}
+
+/**
+ * Owner xxxxxxxx-37 ("Full block again on return", replaces the ID-3 `[idle-return]` line): after
+ * a turn not of a person's took an idle compaction's resume block, the first human-origin turn
+ * gets the full block again, always re-measured (3 s budget; when that fails, with the measure the
+ * earlier delivery had and its stamp), with `[idle-again]` naming when it went out first. One
+ * `idle_return {nonce, age_s, remeasured}` row. A turn not of a person's leaves it held; a newer
+ * main compaction (afterStep) or the session's end drops it.
+ */
+async function againBlock(d: Deps, sid: string): Promise<string | undefined> {
+  const s = d.state
+  const r = s.idleAgain
+  if (!r || !isHuman(s.turnOrigin)) return undefined
+  s.idleAgain = undefined
+  if (r.sid !== sid) return undefined
+  const out = await freshBlock(d, { ...r.pend, remeasure: r.remeasure, measuredAt: r.measuredAt }, { ...haltNow(d, r.pend.args), again: r.usedAt }, true)
+  await log(d, sid, 'idle_return', { nonce: r.pend.nonce, age_s: Math.round(((await d.now()) - r.usedAt) / 1000), remeasured: out.remeasured })
+  return out.block
 }
 
 /**
  * IC-1 D3 delivery rule: a block built more than 600 s ago (an idle block is read hours later)
  * is built again with a fresh `measure --compact` (3 s budget): `resume_remeasured`; on a
  * timeout or failure the stored block goes out: `resume_remeasure_failed`. Its
- * `@measured_at@` stamp shows the age either way.
+ * `@measured_at@` stamp shows the age either way. `force` re-measures at any age (owner
+ * xxxxxxxx-37). When `args` differ from what the block was built with (owner xxxxxxxx-25: halt
+ * came or went; xxxxxxxx-37: the `[idle-again]` note), it is built again in any case, with the
+ * stored measure and its own stamp when no fresh one is taken or the fresh one fails.
  */
-async function freshBlock(d: Deps, pend: PendingResume): Promise<string> {
+async function freshBlock(
+  d: Deps, pend: PendingResume, args: BlockArgs, force = false,
+): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; remeasured: boolean }> {
   const t0 = await d.now()
   const ageS = Math.round((t0 - pend.builtAt) / 1000)
-  if (t0 - pend.builtAt <= REMEASURE_AFTER_MS) return pend.block
-  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS)
+  const changed = (args.halt === true) !== (pend.args.halt === true) || args.again !== pend.args.again
+  const at = pend.measuredAt ?? pend.builtAt
+  const stored = async () => changed
+    ? { ...(await buildBlockWith(d, pend.sid, args, pend.remeasure ?? null, at)), remeasured: false }
+    : { block: pend.block, remeasure: pend.remeasure, measuredAt: at, remeasured: false }
+  if (!force && t0 - pend.builtAt <= REMEASURE_AFTER_MS) return stored()
+  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS, args.savedCopy ?? undefined)
   if (fresh === undefined) {
     await log(d, pend.sid, 'resume_remeasure_failed', { nonce: pend.nonce, age_s: ageS })
-    return pend.block
+    return stored()
   }
-  const block = await buildBlock(d, pend.sid, pend.args, fresh)
+  const built = await buildBlockWith(d, pend.sid, args, fresh)
   await log(d, pend.sid, 'resume_remeasured', { nonce: pend.nonce, age_s: ageS, ms: (await d.now()) - t0 })
-  return block
+  return { ...built, remeasured: true }
 }
 
 /**

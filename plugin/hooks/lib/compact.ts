@@ -1,7 +1,8 @@
 // The `session.compact` handler, steps 0–5 (MOD-SPEC §3.1), the dispatch record (§2.3) and the
 // after-step (§5.2), shared with the boundary self-call path (§4).
 import type { SessionCompactInput, SessionCompactResult, SessionMessage } from 'claude-code'
-import type { Deps, PendingResume } from './deps'
+import type { Deps, PendingResume, RequestUsage } from './deps'
+import { readShare } from './deps'
 import type { Tag } from './assemble'
 import type { Trigger } from './canary'
 import type { Verdict } from './detect'
@@ -17,7 +18,7 @@ import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWat
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlock, claimedElsewhere, logOutcome, prodAllowed } from './resume'
+import { buildBlockWith, claimedElsewhere, logOutcome, prodAllowed } from './resume'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -43,7 +44,8 @@ export const IDLE_GAP_MS = 1500000
 /**
  * IC-1 D1 (MOD-SPEC §2.5 idle rule): a main `auto` dispatch is idle when no main turn runs, no
  * prompt is entering (CR-F17 counter), no plugin compaction is in flight, and the last main turn
- * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`.
+ * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`. `trigger` is the one
+ * triggerCanary returned: a future `idle` trigger arrives here as `auto` (ID-1).
  */
 export function idleGap(s: Deps['state'], trigger: string, now: number): number | undefined {
   if (trigger !== 'auto' || s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.lastTurnEndAt === undefined) return undefined
@@ -54,6 +56,31 @@ export function idleGap(s: Deps['state'], trigger: string, now: number): number 
 async function dispatchPath(d: Deps, sid: string, nonce: string): Promise<string | undefined> {
   const p = await d.paths()
   return p ? `${p.watch}/${sid}/dispatch/${nonce}.json` : undefined
+}
+
+function seenKey(sid: string): string {
+  return `idle_seen:${sid}`
+}
+
+/**
+ * Owner xxxxxxxx-17: a main compaction completed (any trigger the after-step sees: not
+ * precompute), and whether it was an idle dispatch; kept in the load and in `$.store`, so the
+ * 55.5-min outcome check finds it after a reload too.
+ */
+export async function noteCompaction(d: Deps, sid: string, idle: boolean): Promise<void> {
+  const at = await d.now()
+  d.state.compactedAt = { sid, at, idle }
+  await d.storeSet(seenKey(sid), { at, idle })
+}
+
+/** The last main compaction of this sid at or after `since` (the plugin's own records), or undefined. */
+export async function compactedSince(d: Deps, sid: string, since: number): Promise<{ at: number; idle: boolean } | undefined> {
+  let c: { at: number; idle: boolean } | undefined = d.state.compactedAt?.sid === sid ? d.state.compactedAt : undefined
+  if (c === undefined) {
+    const v = (await d.storeGet(seenKey(sid))) as Record<string, unknown> | null | undefined
+    if (v && typeof v === 'object' && typeof v.at === 'number') c = { at: v.at, idle: v.idle === true }
+  }
+  return c !== undefined && c.at >= since ? c : undefined
 }
 
 /** A dispatch record with this nonce exists (the nonce redraw check). */
@@ -77,16 +104,43 @@ export async function isSelfDispatch(d: Deps, sid: string, nonce: string): Promi
   }
 }
 
+/**
+ * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5, provisional until the lab's
+ * AT-MG-05 cells measure warm reads): a main compaction from this many tokens up whose
+ * summarizer request read under this share of its input from the cache is `compaction_cold`.
+ */
+export const COLD_SHARE = 0.5
+export const COLD_MIN_TOKENS = 100000
+
+/**
+ * MG-3: `compaction_cache {nonce, read_share}` for a compaction whose result carries the
+ * summarizer's usage, and `compaction_cold` for a cold main one (see COLD_SHARE). A different
+ * model than the session's cannot read the session's cache, so this is the runtime sign of one.
+ */
+export async function cacheRows(
+  d: Deps, sid: string, nonce: string, r: { usage?: RequestUsage; tokensBefore?: number }, main: boolean, actor: string,
+): Promise<void> {
+  if (r.usage === undefined) return
+  const share = readShare(r.usage)
+  await log(d, sid, 'compaction_cache', { nonce, read_share: share }, actor)
+  if (main && share !== null && share < COLD_SHARE && (r.tokensBefore ?? 0) >= COLD_MIN_TOKENS) {
+    await log(d, sid, 'compaction_cold', { nonce, read_share: share }, actor)
+  }
+}
+
 /** Writes the dispatch record through the helper, else the same JSON with `$.fs.write`. */
 export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
   const s = d.state
   const instrSha8 = sha8(r.text)
   const instrBytes = byteLength(r.text)
+  // MG-4: the session's model as the record of what this compaction runs on (never passed on).
+  const model = await d.model()
   const res = await dispatch(d, {
     sid: r.sid, nonce: r.nonce, actor: r.agentId ?? 'main', trigger: r.trigger, channel: r.channel,
     resumePref: r.resumePref, tags: r.tags, midturn: r.midturn, instrSha8, instrBytes, ccVersion: s.ccVersion, loadId: s.loadId,
     ...(r.handoffHt !== undefined ? { handoffHt: r.handoffHt } : {}),
     ...(r.idle !== undefined ? { idle: r.idle } : {}),
+    ...(model !== undefined ? { model } : {}),
   })
   if (res.ok) return
   const path = await dispatchPath(d, r.sid, r.nonce)
@@ -102,13 +156,14 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
       cc_version: s.ccVersion, cc_version_src: s.ccVersion !== null && s.ccVersion !== '' ? 'mod' : null,
       load_id: s.loadId, pid: s.ident?.pid ?? null, pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
       ...(r.handoffHt !== undefined ? { handoff_ht: r.handoffHt } : {}),
+      ...(model !== undefined ? { model } : {}),
     }
     await d.write(path, JSON.stringify(rec) + '\n')
   }
   await helperMissing(d, r.sid, 'dispatch')
   await log(d, r.sid, 'dispatch', {
     nonce: r.nonce, trigger: r.trigger, agent_id: r.agentId, channel: r.channel, instructions_bytes: instrBytes,
-    fallback: true, error_class: failClass(res),
+    fallback: true, error_class: failClass(res), model: model ?? null,
   }, r.agentId ?? 'main')
 }
 
@@ -117,7 +172,8 @@ export type MainText = { text: string; tags: Tag[] }
 /**
  * The main text for a dispatch: `[midturn]` when asked, `[chain]` when `prev-copy` returns a
  * path, `[measured]` when the checkpoint returned a measured block, `[handoff]` with its path
- * when a handoff turn published one just before (MOD-SPEC §9.1; mod path only).
+ * when a handoff turn published one just before (MOD-SPEC §9.1; mod path only), `[queue]` when
+ * `queue_cmd` is set (QA-B3, owner xxxxxxxx-11 "setting-driven, one text"; D-10 as the nudge).
  */
 export async function mainText(
   d: Deps, nonce: string, midturn: boolean, prev: string | undefined, measured: string | null, handoffPath?: string,
@@ -127,6 +183,7 @@ export async function mainText(
   if (prev !== undefined) tags.push('chain')
   if (handoffPath !== undefined) tags.push('handoff')
   if (measured !== null) tags.push('measured')
+  if (d.cfg.queue_cmd !== '') tags.push('queue')
   const runtime = {
     nonce, previous_copy: prev, measured_at: isoLocal(await d.now(), false), measured_facts: measured ?? undefined, handoff_path: handoffPath,
   }
@@ -228,6 +285,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
     usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...(handoffHt !== undefined ? { handoff_ht: handoffHt } : {}),
   }, actor)
+  await cacheRows(d, sid, nonce, r, main, actor)
   // §9.1: a compaction after the nudge already shrank the context the handoff turn would use.
   if (main && s.mainTurnRunning && s.nudgedThisTurn) s.compactedInTurn = s.turnSeq
   let block: RaceBlock | undefined
@@ -286,6 +344,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   const s = d.state
   const main = a.agentId === null
   const actor = a.agentId ?? 'main'
+  // Owner xxxxxxxx-17: the 55.5-min idle check reads this, first, so a later failure cannot hide it.
+  if (main) await noteCompaction(d, a.sid, a.idle === true)
   const summary = a.messages.find(m => m.role === 'user' && m.text.startsWith(SUMMARY_PREFIX))
   let verdict: Verdict = 'unshaped'
   let savedCopy: string | null = null
@@ -352,19 +412,23 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   const blockArgs: BlockArgs = {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
-    ...(a.idle === true ? { idle: true } : {}),
+    // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
+    ...(a.idle === true ? { idle: true, halt: s.halt.active } : {}),
   }
-  const block = await buildBlock(d, a.sid, blockArgs)
+  const built = await buildBlockWith(d, a.sid, blockArgs)
   // A block still pending is replaced by this one: its outcome is settled now (no channel
-  // will try it again).
+  // will try it again). So is a block held for a person's return (owner xxxxxxxx-37).
   const old = s.pending
   if (old) {
     s.pending = undefined
     await logOutcome(d, old.sid, old.nonce, old.outcome, await claimedElsewhere(d, old))
   }
+  s.idleAgain = undefined
   const pend: PendingResume = {
-    sid: a.sid, nonce: a.nonce, block, builtAt: await d.now(), args: blockArgs, resumePref: a.resumePref, turnSeq: s.turnSeq,
+    sid: a.sid, nonce: a.nonce, block: built.block, builtAt: await d.now(), args: blockArgs, resumePref: a.resumePref, turnSeq: s.turnSeq,
     outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active, ...(a.stats !== undefined ? { handoff: a.stats } : {}) },
+    ...(built.remeasure !== undefined ? { remeasure: built.remeasure } : {}),
+    measuredAt: built.measuredAt,
   }
   s.pending = pend
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)

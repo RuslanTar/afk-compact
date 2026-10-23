@@ -54,24 +54,33 @@ our %NAME = (V1 => 'record', V2 => 'owner-ended', V3 => 'in-flight', V4 => 'no-c
 my %BUILTIN = map { $_ => 1 } qw(cd export source . test [ echo exec set true false : printf eval command env);
 
 # verify(ctx, origin => sid, task => id, recipe => {text…} | undef, relaunch => settings::relaunch,
-#        cwd => this helper call's cwd, current => {sid, pid, lstart})
+#        cwd => this helper call's cwd, current => {sid, pid, lstart},
+#        recipe_run => {command, cwd, v1 => [state, detail], effects} | undef)
 #   -> {record, signals => {V1 => [state, detail]…}, status, confidence, effects, marker_rc,
-#       owner_end, run_line, command, cwd, output}
+#       owner_end, run_line, command, cwd, output, run_source}
+# recipe_run (HC-1, ratify R24 overturned): with no job record, an own handoff's recipe stands in
+# for it. V1 is the recipe check the caller made (in MANIFEST, class auto: `recipe`); V2 comes
+# from the origin session's process records; V4/V5 read the output path the origin's newest
+# sidecar slot lists for the task; V6 takes the origin session's first process record as the
+# earliest launch (an output written since then fails it); V7 the recipe's cwd. Effects are the
+# caller's (risk classifier). Confidence high needs every signal but V3.
 sub verify {
     my ($ctx, %a) = @_;
     my $watch = skills::core::watch_dir() // $ctx->{watch};
     my $odir = "$watch/$a{origin}";
     my $rec = skills::core::job_record($odir, $a{task});
+    my $rr = (!$rec && ref $a{recipe_run} eq 'HASH') ? $a{recipe_run} : undef;
     my @rows = @{ skills::core::job_rows($odir) };
     my $stopped = grep { ($_->{ev} // '') eq 'stop' && ($_->{task_id} // '') eq $a{task} } @rows;
     my %sig;
-    my %r = (record => $rec, signals => \%sig);
-    my $cmd = $rec ? $rec->{command} : undef;
+    my %r = (record => $rec, signals => \%sig, run_source => ($rr ? 'handoff' : 'recorded'));
+    my $cmd = $rec ? $rec->{command} : $rr ? $rr->{command} : undef;
     $r{command} = $cmd;
-    $r{cwd} = $rec ? $rec->{cwd} : undef;
+    $r{cwd} = $rec ? $rec->{cwd} : $rr ? $rr->{cwd} : undef;
 
     # V1
-    if (!$rec) { $sig{V1} = ['unmeasured', 'no job record'] }
+    if ($rr) { $sig{V1} = [ @{ $rr->{v1} }[0, 1], 'recipe' ] }
+    elsif (!$rec) { $sig{V1} = ['unmeasured', 'no job record'] }
     elsif (defined $cmd && skills::util::sha256_hex($cmd) ne ($rec->{command_sha256} // '')) { $sig{V1} = ['fail', 'command sha differs from its record'] }
     else {
         my $tp = transcript_of($ctx, $a{origin}, $rec);
@@ -110,6 +119,7 @@ sub verify {
 
     # V4, V5
     my $out = $rec ? $rec->{output_path} : undef;
+    if ($rr) { my $st = _sidecar_task($odir, $a{task}); $out = ref $st eq 'HASH' ? $st->{output_path} : undef }
     $r{output} = $out;
     if (!defined $out || $out eq '') {
         $sig{V4} = ['unmeasured', 'no output path (source ' . skills::core::job_output_source() . ')'];
@@ -131,16 +141,16 @@ sub verify {
     }
 
     # V6
-    my $launched = $rec ? skills::util::iso_to_epoch($rec->{launched_at}) : undef;
+    my $launched = $rec ? skills::util::iso_to_epoch($rec->{launched_at}) : $rr ? _origin_start($ctx, $a{origin}) : undef;
     my $outs = $a{recipe} ? expected_outputs($a{recipe}{text}) : undef;
-    if (!$rec || !defined $launched) { $sig{V6} = ['unmeasured', 'launch time unknown'] }
+    if ((!$rec && !$rr) || !defined $launched) { $sig{V6} = ['unmeasured', 'launch time unknown'] }
     elsif ($outs) {
         my @newer = grep { my @st = stat $_; @st && $st[9] >= $launched } @$outs;
         $sig{V6} = @newer ? ['fail', scalar(@newer) . ' expected output(s) written since the launch'] : ['pass', 'no expected output newer than the launch'];
     } else { $sig{V6} = ['pending-class', 'no recipe'] }
 
     # V7
-    if (!$rec) { $sig{V7} = ['unmeasured', 'no job record'] }
+    if (!$rec && !$rr) { $sig{V7} = ['unmeasured', 'no job record'] }
     elsif (!defined $cmd) { $sig{V7} = ['unmeasured', 'command withheld'] }
     elsif (!defined $r{cwd} || !-d $r{cwd}) { $sig{V7} = ['fail', 'cwd missing'] }
     else { $sig{V7} = runnable($cmd, $r{cwd}) ? ['pass', 'cwd and command found'] : ['fail', 'command not found'] }
@@ -148,14 +158,15 @@ sub verify {
     # Effects class (and the production class id, for the content-free heal row)
     my $prod = $a{prod} // skills::core::prod();
     $r{prod} = $prod;
-    $r{effects} = effects($rec, $a{recipe}, $a{relaunch}, $prod);
-    $r{prod_class} = ($r{effects} =~ /\Aprod-/) ? prod_class($rec->{command}, $prod) : undef;
+    $r{effects} = $rr ? ($rr->{effects} // 'unknown') : effects($rec, $a{recipe}, $a{relaunch}, $prod);
+    $r{prod_class} = ($r{effects} =~ /\Aprod-/) ? prod_class($cmd, $prod) : undef;
     if ($sig{V6}[0] eq 'pending-class') {
         # A read-only job (class none, or prod-read) has no effect to check.
-        $sig{V6} = ($r{effects} eq 'none' || $r{effects} eq 'prod-read') ? ['pass', "class $r{effects}, no recipe"] : ['unmeasured', 'no recipe and not read-only'];
+        my $what = $rr ? 'no expected outputs' : 'no recipe';
+        $sig{V6} = ($r{effects} eq 'none' || $r{effects} eq 'prod-read') ? ['pass', "class $r{effects}, $what"] : ['unmeasured', "$what and not read-only"];
     }
 
-    my $all = !grep { $sig{$_}[0] ne 'pass' } @SIGNALS;
+    my $all = !grep { $sig{$_}[0] ne 'pass' } ($rr ? grep { $_ ne 'V3' } @SIGNALS : @SIGNALS);
     $r{confidence} = $all ? 'high' : 'low';
     my $failed = grep { $sig{$_}[0] eq 'fail' } @SIGNALS;
 
@@ -186,8 +197,9 @@ sub verify {
     return \%r;
 }
 
-# signal_line(V, [state, detail]) -> "signal: V1 record pass (detail)"
-sub signal_line { my ($v, $s) = @_; return "signal: $v $NAME{$v} $s->[0]" . (defined $s->[1] ? " ($s->[1])" : '') }
+# signal_line(V, [state, detail, name]) -> "signal: V1 record pass (detail)"; name (HC-1: `recipe`)
+# replaces the signal's own name
+sub signal_line { my ($v, $s) = @_; return "signal: $v " . ($s->[2] // $NAME{$v}) . " $s->[0]" . (defined $s->[1] ? " ($s->[1])" : '') }
 
 sub states { my ($r) = @_; return { map { $_ => $r->{signals}{$_}[0] } @SIGNALS } }
 
@@ -354,6 +366,45 @@ sub owner_state {
     return { state => 'unverified', end => undef } if $ps eq 'unverified';
     my $this = defined $cur->{pid} && "$cur->{pid}" eq "$pid" && _same_ls($cur->{lstart}, $lstart);
     return { state => ($this && ($cur->{sid} // '') eq $origin) ? 'this' : ($this ? 'cleared' : 'elsewhere') };
+}
+
+# HC-1: the earliest time a job of the origin session can have started, the ts of its oldest
+# process record (a /clear successor's record starts that session), or undef.
+sub _origin_start {
+    my ($ctx, $origin) = @_;
+    my @t = sort { $a <=> $b } grep { defined } map { skills::util::iso_to_epoch($_->{data}{ts}) }
+            grep { ($_->{data}{session_id} // '') eq $origin } @{ skills::ctx::records($ctx) };
+    return $t[0];
+}
+
+# recipe_effects(command, recipe, relaunch settings, cwd, watch) -> effects class of an own
+# handoff's recipe command with no job record (HC-1): the risk classifier (SR-7) as `own` says
+# outward (a gate, an outward class or a credential value), prod-write or prod-read; else
+# `none` only when it is read-only as `foreign` too (readonly_cmd_re: no isReadOnly mark
+# without a record), `local` when an allowlisted single command with expected outputs, else
+# `unknown`.
+sub recipe_effects {
+    my ($cmd, $recipe, $rl, $cwd, $watch) = @_;
+    return 'unknown' unless defined $cmd && $cmd =~ /\S/;
+    # The wait end suffix (`; echo "__exit $?"`) is the plugin's own marker, not part of the job.
+    my $w = eval { skills::spec::get('wait') } // {};
+    my $suffix = ref $w eq 'HASH' ? $w->{end_suffix} : undef;
+    $cmd = substr($cmd, 0, length($cmd) - length($suffix))
+        if defined $suffix && $suffix ne '' && length($cmd) > length($suffix) && substr($cmd, -length $suffix) eq $suffix;
+    require skills::risk;
+    my $own = skills::risk::classify($cmd, source => 'own', cwd => $cwd, watch => $watch);
+    if ($own->{result} eq 'ask') {
+        my %c = map { $_ => 1 } @{ $own->{classes} };
+        return 'prod-write' if grep { $_ eq 'prod-write' } @{ $own->{ids} };
+        return 'outward' if $c{gate} || $c{outward} || $c{'credential-value'};
+        return 'prod-read' if $c{production};
+        return 'unknown';
+    }
+    my $f = skills::risk::classify($cmd, source => 'foreign', cwd => $cwd, watch => $watch);
+    return 'none' if $f->{result} eq 'none' && ($f->{why} // '') eq 'read-only';
+    my $outs = $recipe ? expected_outputs($recipe->{text}) : undef;
+    return 'local' if $outs && @$outs && !chained($cmd) && grep { $cmd =~ $_ } @{ $rl->{allow} || [] };
+    return 'unknown';
 }
 
 # The origin's process after a /clear: undef when it is gone; `cleared` when it is this

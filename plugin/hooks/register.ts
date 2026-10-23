@@ -6,7 +6,7 @@ import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
 import { isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
-import { countCall, limitText, onInterjection } from './lib/handoff-turn'
+import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
@@ -30,19 +30,40 @@ export const register: Register = (on, options) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // Owner xxxxxxxx-38: an agent loop's turn (a subagent, a teammate, a workflow's agent) counts as
+  // a running agent for the idle check from its start to its end.
   on('turn.start', async ($, e, next) => {
-    if (e.agentId !== undefined) return next(e)
+    if (e.agentId !== undefined) {
+      state.agentTurns.add(e.agentId)
+      return next(e)
+    }
     await onTurnStart(realDeps($, options, state), e.turnId, e.text)
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('turn.complete', async ($, e, next) => {
+    if (e.agentId !== undefined) state.agentTurns.delete(e.agentId)
     const r = await next(e)
     if (e.agentId !== undefined) return r
     const d = realDeps($, options, state)
     await onTurnComplete(d, await prepare(d), { reason: e.reason, answer: e.answer })
     return r
   }).catch(($, e, next) => next(e))
+
+  // MG-3 (ratify R4 guard): the handoff turn's first request reports its cache-read share. The
+  // step passes through unchanged (model, effort and all); only its result is read, after it.
+  // Nothing after the stream may throw: a failure there would hand the step to `.catch`.
+  on('turn.step', async function* ($, e, next) {
+    const r = yield* next(e)
+    try {
+      if (e.agentId === undefined) onStep(realDeps($, options, state), e.turnId, e.index, r.usage)
+    } catch {
+      // no share for this turn (handoff_turn_end logs null)
+    }
+    return r
+  }).catch(async function* ($, e, next) {
+    return yield* next(e)
+  })
 
   // A user's prompt delivered into the running handoff turn lifts its limits text (MOD-SPEC §9.1).
   // One the user asked to wait its turn (`wait`, ctrl+x enter) is not delivered into it.
@@ -115,10 +136,13 @@ export const register: Register = (on, options) => {
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
   }).catch(($, e, next) => next(e))
 
+  // The resume block, and the same idle block again when a person comes back after a background
+  // result's turn took it (owner xxxxxxxx-37).
   on('prompt.context', async ($, e, next) => {
     const r = await next(e)
     const d = realDeps($, options, state)
-    const block = await contextBlock(d, await prepare(d))
+    const sid = await prepare(d)
+    const block = await contextBlock(d, sid)
     if (block === undefined) return r
     const name = blockName($.plugin.name)
     return { ...r, blocks: [...r.blocks.filter(b => b.name !== name), { name, text: block }] }

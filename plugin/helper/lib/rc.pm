@@ -195,8 +195,10 @@ sub preamble {
     }
     # S-SETTINGS B: an invalid unattended_prod_reads value (forbid used) or a dropped
     # prod_patterns entry, once per session each; the row names the position, never the pattern.
+    # Owner xxxxxxxx-29: a protected_branches entry that is ignored (invalid), the same way.
     my $p = eval { settings::prod($R{settings}) };
-    for my $x (@{ $p ? $p->{invalid} : [] }) {
+    my $pb = eval { settings::protected($R{settings}) };
+    for my $x (@{ $p ? $p->{invalid} : [] }, @{ $pb ? $pb->{invalid} : [] }) {
         my $tag = defined $x->{index} ? "$x->{key}.$x->{index}" : $x->{key};
         emit('config_invalid', [key => $x->{key}, (defined $x->{index} ? (index => $x->{index}) : ())]) if once("config_invalid.$tag");
     }

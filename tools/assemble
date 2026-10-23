@@ -29,7 +29,13 @@ subcommand), and one that writes `<store>` defines it as the @store@ word (AT-PK
 that file exists. Exclusive tag groups (EXCLUSIVE, XR-19) limit every walk over combinations.
 Budgets: the BUDGETS table (D-17 of the 2026-10-21 rulings, compaction-rem-6 of 2026-10-22;
 AT-P-07, AT-TX-10), with @store@ at a 160-character root stand-in (PKG-RUNTIME A.2). Above a soft
-limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails.
+limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails. The
+resume protocol and the resume block total (RP-1, owner 2026-10-23) are soft targets that pass
+only with a logged reason in tools/budget-reasons.json (ADVISORY <budget> <n> > soft <s>: <reason>),
+and only up to the size that reason names; without one they fail. The idle rows cover [idle],
+its halt variant [idle-halt] and the [idle-again] note of a person's return (owner xxxxxxxx-18,
+-25, -37; the ID-3 [idle-return] line is gone). AT-QA-01: with no [queue] tag
+the main text and the nudge name no queue or lane.
 Exit 1 when a hard budget is exceeded or any check fails.
 """
 import itertools, json, os, re, sys
@@ -88,21 +94,31 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            "draft_state": "present",
            "handoff_finish": "`<store> publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`",
            # IC-1 D5 [submit-idle]: minutes idle when the pre-idle turn fires (MOD-SPEC §9.4: 49).
-           "idle_min": "49"}
+           "idle_min": "49",
+           # Owner xxxxxxxx-37 [idle-again]: when a background result's turn took the idle block
+           # (the @measured_at@ form).
+           "idle_used_at": "2026-10-21T04:40:00+03:00"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
 # Tags per asset, in the order DESIGN-NOTES §2 lists them (golden file names use this order).
 # BLD-04: resume-context gains [idle] (IC-1 D3) and [prod-forbid]/[prod-allow] (S-SETTINGS B);
+# 2026-10-23: [idle-halt] (owner xxxxxxxx-25, [idle] in halt mode) and [idle-again] (owner
+# xxxxxxxx-37, the block again on a person's return);
 # handoff-turn gains [submit-pre], [submit-halt] (S-SETTINGS D) and [submit-idle] (IC-1 D5).
-TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff"], "sub": ["fallback"],
-        "res": ["midturn", "nonok", "idle", "handoff", "handoff-partial", "prod-forbid", "prod-allow"],
+# Q-ADAPTER QA-3 / QA-B3 (owner xxxxxxxx-11): the main text gains [queue], kept only when
+# queue_cmd is set (both paths).
+TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
+        "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
 # active on every path; "most" = at most one. combos() skips every other combination, so the
 # goldens, the step checks and every walk over combinations see only paths that can happen.
-EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "midturn"), "most")]}
+EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "idle-halt", "midturn"), "most")]}
+# A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
+# block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
+NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt")}}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
@@ -134,8 +150,10 @@ def assemble(text, tags, drop=()):
 # One row per budget: (unit, soft, hard); None = no limit of that kind. Soft = ADVISORY only.
 # D-17 (root DP-8): the static core has a soft target and no hard cap; the mod channel total
 # stays the hard guard on what reaches the summarizer. compaction-rem-6 (2026-10-22, supersedes
-# DP-8): resume protocol soft 2,500 / hard 3,000, resume block total 6,500, and never over the
-# 10,000-char SessionStart cutoff.
+# DP-8): resume block total 6,500, and never over the 10,000-char SessionStart cutoff.
+# Ratify xxxxxxxx#R3 overturned (owner 2026-10-23, SPEC-DELTAS RP-1): the resume protocol's
+# 3,000 and the block total's 6,500 are SOFT targets that may be exceeded only with a logged
+# reason (REASON_REQUIRED, tools/budget-reasons.json); the 10,000 cutoff stays hard.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
     "mod channel total":     ("bytes", None, 8192),
@@ -143,8 +161,8 @@ BUDGETS = {
     "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
     "subagent mod":          ("chars", 900, None),
     "subagent classic":      ("chars", 1100, None),
-    "resume protocol":       ("chars", 2500, 3000),
-    "resume block total":    ("chars", None, 6500),
+    "resume protocol":       ("chars", 3000, None),
+    "resume block total":    ("chars", 6500, None),
     "sessionstart cutoff":   ("chars", None, 10000),
     "nudge":                 ("chars", 2200, None),
     "handoff turn submit":   ("chars", None, None),   # D-18 handoff-turn.txt: printed, no limit set
@@ -153,12 +171,79 @@ BUDGETS = {
 }
 
 
+# RP-1: soft budgets that may be exceeded only with a logged reason. tools/budget-reasons.json
+# maps a budget name to its reason: a string, or {"why": …, "up_to": N}, where up_to (chars or
+# bytes, as the budget counts) is the size the reason was written for; above it the reason no
+# longer covers the overrun and the check fails until the reason is reviewed (so a reason never
+# becomes a blank cheque, and the compaction-rem-6 probe still catches a text that grows).
+# REVIEW-NIGHT NR-17: the main static core (D-17 soft target; the mod channel total is its hard
+# guard) went over 4,500 on this branch with the 2026-10-23 Approvals and [queue] lines, so its
+# overrun needs a logged reason too. (The nudge and subagent overruns predate these rulings.)
+REASON_REQUIRED = {"resume protocol", "resume block total", "static core"}
+REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
+
+
+def reason_entry(k, v):
+    """(why, up_to) for one tools/budget-reasons.json entry, or a string naming what is wrong.
+    REVIEW-NIGHT NR-19: a malformed entry (an `up_to` that is not a positive whole number, an
+    empty reason, an unknown field) is an error, never a reason without a limit."""
+    if isinstance(v, str):
+        return (v, None) if v.strip() else "{}: an empty reason".format(k)
+    if not isinstance(v, dict):
+        return "{}: want a reason string or {{\"why\": …, \"up_to\": N}}".format(k)
+    extra = sorted(set(v) - {"why", "up_to"})
+    if extra:
+        return "{}: unknown field {}".format(k, ", ".join(extra))
+    if not isinstance(v.get("why"), str) or not v["why"].strip():
+        return "{}: no \"why\"".format(k)
+    up = v.get("up_to")
+    if "up_to" in v and (not isinstance(up, int) or isinstance(up, bool) or up <= 0):
+        return "{}: up_to {!r} is not a positive whole number".format(k, up)
+    return (v["why"], up)
+
+
+def load_reasons(path=REASONS_FILE):
+    """({budget: (why, up_to)}, [errors]). A key is a REASON_REQUIRED budget, or an `asset <file>`
+    key that tools/gates reads (AT-W-02); anything else is an error too."""
+    if not os.path.exists(path):
+        return {}, []
+    try:
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+    except ValueError as e:
+        return {}, ["not JSON ({})".format(e)]
+    if not isinstance(doc, dict):
+        return {}, ["not a JSON object"]
+    out, errors = {}, []
+    for k, v in doc.items():
+        if k not in REASON_REQUIRED and not k.startswith("asset "):
+            errors.append("{}: no soft budget of that name needs a reason".format(k))
+            continue
+        e = reason_entry(k, v)
+        if isinstance(e, str):
+            errors.append(e)
+        else:
+            out[k] = e
+    return out, errors
+
+
+REASONS, REASON_ERRORS = load_reasons()
+
+
 def check(label, s, budget):
     unit, soft, hard = BUDGETS[budget]
     n = len(s) if unit == "chars" else len(s.encode())
     leftovers = re.findall(r"^\[[a-z-]+\] |@[a-z_]+@|\{\{[^}]*\}\}|<!--", s, flags=re.M)
     over = hard is not None and n > hard
     flag = "OVER" if over else "ADVISORY (over soft)" if soft is not None and n > soft else "ok"
+    if not over and soft is not None and n > soft and budget in REASON_REQUIRED:
+        why, up_to = REASONS.get(budget, (None, None))
+        if why is None:
+            flag, over = "OVER (soft; no reason for it in tools/budget-reasons.json)", True
+        elif up_to is not None and n > up_to:
+            flag, over = "OVER (soft; the logged reason covers up to {})".format(up_to), True
+        else:
+            flag = "ADVISORY {} {} > soft {}: {}".format(budget, n, soft, why)
     print(f"{label:44} {n:6} {unit:5} soft={soft if soft else '-':>5} hard={hard if hard else '-':>5}  {flag}"
           + (f"  LEFTOVER {leftovers}" if leftovers else ""))
     return over or bool(leftovers)
@@ -185,10 +270,14 @@ def static(text, tags, drop=()):
 
 
 def valid(asset, tags):
-    """XR-19: the combination keeps every EXCLUSIVE rule of the asset."""
+    """XR-19: the combination keeps every EXCLUSIVE rule of the asset, and every NEEDS_ONE_OF tag
+    in it has one of its partners."""
     for members, rule in EXCLUSIVE.get(asset, []):
         n = sum(1 for t in members if t in tags)
         if n > 1 or (rule == "one" and n != 1):
+            return False
+    for tag, partners in NEEDS_ONE_OF.get(asset, {}).items():
+        if tag in tags and not any(p in tags for p in partners):
             return False
     return True
 
@@ -321,6 +410,28 @@ def halt_checks():
     return bad
 
 
+# AT-QA-01 (Q-ADAPTER QA-3, owner xxxxxxxx-11 "setting-driven, one text"): with queue_cmd empty
+# the [queue] tag is never active, and then no render of the main text (mod and classic paths)
+# or the nudge names a queue, a queued question or a lane.
+QUEUE_WORDS = re.compile(r"\bqueue[a-z_-]*|\bQueued\b|\blanes?\b", re.I)
+
+
+def queue_checks():
+    bad = False
+    for asset in ("main", "nudge"):
+        for tags in combos(asset):
+            if "queue" in tags:
+                continue
+            # The work-state ladder's `queued` (spec §4) is a work state, not the question queue.
+            s = assemble(TEXT[asset], tags).replace("|queued|", "|")
+            m = QUEUE_WORDS.search(s)
+            if m:
+                print(f"queue check {asset} {'+'.join(tags) or 'base':27} FAIL off-mode text names {m.group(0)!r}")
+                bad = True
+    print("AT-QA-01 (queue off: no queue or lane text)  " + ("FAIL" if bad else "ok"))
+    return bad
+
+
 def heading_checks():
     spec_md = os.path.join(DIR, "handoff-spec.md")
     if not os.path.exists(spec_md):
@@ -443,17 +554,20 @@ BLOCK = "x" * BUDGETS["measured block"][2]  # worst-case measured block (header 
 bad = False
 print(f"assets: {os.path.relpath(DIR, REPO)}  plugin name length: {len(NAME)}  runtime path length: {PATH_LEN}")
 budget_table()
-for tags in ([], ["midturn"], ["chain"], ["midturn", "chain"], ["midturn", "chain", "handoff"]):
+for tags in ([], ["midturn"], ["chain"], ["midturn", "chain"], ["midturn", "chain", "handoff"],
+             ["midturn", "chain", "handoff", "queue"]):
     bad |= check(f"main mod static core {'+'.join(tags) or 'base'}", static(main, tags, drop=("measured",)), "static core")
-for tags in (["auto"], ["auto", "chain"]):
+for tags in (["auto"], ["auto", "chain"], ["auto", "chain", "queue"]):
     bad |= check(f"main classic static core {'+'.join(tags)}", static(main, tags, drop=("measured",)), "static core")
 RUNTIME["measured_facts"] = BLOCK
-for tags in (["midturn", "chain", "measured"], ["chain", "measured"], ["midturn", "chain", "measured", "handoff"]):
+# AT-AP-10, AT-QA-01: the worst case keeps the Approvals line and, with queue_cmd set, [queue].
+for tags in (["midturn", "chain", "measured"], ["chain", "measured"], ["midturn", "chain", "measured", "handoff"],
+             ["midturn", "chain", "measured", "queue"], ["midturn", "chain", "measured", "handoff", "queue"]):
     bad |= check(f"mod channel total {'+'.join(tags)} (B)", assemble(main, tags), "mod channel total")
 RUNTIME["measured_facts"] = ""
 bad |= check("subagent mod", assemble(sub, []), "subagent mod")
 bad |= check("subagent classic +fallback", assemble(sub, ["fallback"]), "subagent classic")
-classic_total = assemble(main, ["auto", "chain"], drop=("measured",)) + assemble(sub, ["fallback"])
+classic_total = assemble(main, ["auto", "chain", "queue"], drop=("measured",)) + assemble(sub, ["fallback"])
 bad |= check("classic channel total main+sub (B)", classic_total, "classic channel total")
 # Resume block: every row is checked with both [prod-forbid] and [prod-allow] (exactly one is
 # always active, XR-19) and prints the longer one (AT-PR-05); [idle] stands in for [midturn] on
@@ -466,14 +580,19 @@ def res_label(tags):
     return "+".join(PROD_LABEL.get(t, t) for t in tags)
 
 
+# Owner xxxxxxxx-25 / -37: an idle block is [idle] or, in halt mode, [idle-halt]; a person's
+# return after a background result's turn took it adds [idle-again].
+IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"], ["idle", "nonok", "handoff-partial"],
+             ["idle", "idle-again", "nonok", "handoff-partial"], ["idle-halt", "nonok", "handoff-partial"],
+             ["idle-halt", "idle-again", "nonok", "handoff-partial"])
 for base in ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
-             ["midturn", "nonok", "handoff-partial"], ["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"],
-             ["idle", "nonok", "handoff-partial"]):
+             ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS:
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
 for base in (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["idle", "nonok"],
-             ["idle", "nonok", "handoff-partial"]):
+             ["idle", "nonok", "handoff-partial"], ["idle", "idle-again", "nonok", "handoff-partial"],
+             ["idle-halt", "idle-again", "nonok", "handoff-partial"]):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")
@@ -503,10 +622,14 @@ bad |= step_checks()
 bad |= halt_checks()
 bad |= submit_checks()
 bad |= store_checks()
+bad |= queue_checks()
 bad |= heading_checks()
 if GOLDENS:
     write_goldens()
 if CHECK:
     bad |= check_goldens()
+for e in REASON_ERRORS:
+    print("budget reasons (tools/budget-reasons.json): {}  FAIL".format(e))
+    bad = True
 print("RESULT:", "FAIL" if bad else "PASS")
 sys.exit(1 if bad else 0)

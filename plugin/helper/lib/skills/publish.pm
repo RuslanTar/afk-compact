@@ -13,6 +13,10 @@ package skills::publish;
 # stage, CR-F9); shell recipes of a recorded job carry `job:` and the recorded
 # command (Dev-1 D2); in repo mode the handoff is then exported (D-12 §1.5.5,
 # skills/export.pm) and one receipt line says what happened to the export.
+# 2026-10-23 (AP-4): the lint checks `## Approvals` (skills/approvals.pm) against the own
+# chain's file and this session's transcript; the ids that passed go to frontmatter
+# `approvals_checked`, and the row gains `approvals {lines, checked, unchecked}` and
+# `approval_classes` (counts and class ids only).
 use strict;
 use warnings;
 use utf8;
@@ -28,6 +32,7 @@ use skills::spec;
 use skills::lint;
 use skills::gitfacts;
 use skills::export;
+use skills::approvals;
 
 my %STATUS = map { $_ => 1 } qw(in-progress blocked completed);
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
@@ -100,13 +105,22 @@ sub run {
     my $xplan = $repo ? skills::export::plan($m, "$s->{bucket}/$s->{stem}.md") : undef;
     my $jobs = _jobs($s);
     my $ev = skills::stage::evidence_rows($dir);
+    # AP-4: the own chain's file (its approvals_checked ids carry) and this session's transcript.
+    my $pk = $s->{previous_kind} // '';
+    my $own_path = ($pk eq 'own' || $pk eq 'chain') ? $s->{previous_handoff} : $pk eq 'foreign' ? $s->{own_previous_handoff} : undef;
+    # Only a file that is own by spec §4 lends its checked ids (REVIEW-NIGHT-3 R3-03: not a fork's
+    # or bg-copy's base, owner xxxxxxxx-27 revised; not an export, an imported copy or a file
+    # outside the store).
+    my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
+    my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
     my $res = eval { skills::lint::lint({
         body => $body, recipes => \%recipes, extra => \%extra, previous => $prev_text,
         previous_kind => $s->{previous_kind}, own_previous => $own_text,
         repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
         jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
         brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
-        queue_mode => $s->{queue_mode},
+        queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
+        quote_floor => [ skills::approvals::quote_floor($ctx, $s->{session_id}) ],
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
     $row->{bytes} = skills::util::blen($body);
@@ -117,6 +131,12 @@ sub run {
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
+    # AP-4: counts and outward class ids only, never a quote, action or target.
+    my $ap = $res->{approvals} || {};
+    if ($ap->{lines}) {
+        $row->{approvals} = { lines => $ap->{lines}, checked => scalar(@{ $ap->{checked} || [] }), unchecked => $ap->{unchecked} // 0 };
+        $row->{approval_classes} = $ap->{classes} || [];
+    }
     # T-TEXT E7: under the first line of each id in this run, its `  why: … · fix: …` line from
     # the spec's lint_texts (an id without one is a build failure, AT-TX-03; a spec without
     # lint_texts at all, older than T-TEXT E2, prints the first lines only).
@@ -205,6 +225,7 @@ sub run {
         previous_handoff => $s->{previous_handoff}, gsd => $s->{gsd_state},
         previous_kind => $s->{previous_kind},
         own_previous_handoff => (($s->{previous_kind} // '') eq 'foreign' ? $s->{own_previous_handoff} : undef),
+        approvals_checked => (@{ $ap->{checked} || [] } ? join(', ', @{ $ap->{checked} }) : undef),
     );
     my $fm = "---\n" . join('', map { "$_: $fm{$_}\n" } grep { defined $fm{$_} && $fm{$_} ne '' }
                                @{ skills::spec::frontmatter_keys('handoff') }) . "---\n";
@@ -244,6 +265,18 @@ sub run {
     }
     die "no free handoff name\n" unless $path;
     skills::util::write_excl("$dir/published", "$path\n", 0600);
+
+    # ---- U3-01: the checked approval lines' hashes, read from the placed file, in the store's
+    # plugin-owned record; without it every line of this handoff is context only (re-ask).
+    if (@{ $ap->{checked} || [] }) {
+        my $pd = skills::store::read_doc($path);
+        my ($n, $hwhy) = $pd ? skills::approvals::record_hashes($ctx, $pd, $ap->{checked}) : (0, q(read-back));
+        $row->{approvals}{hashed} = $n if $row->{approvals};
+        if ($hwhy) {
+            skills::cli::say("ADVISORY approval-hash-unrecorded $hwhy (the approvals of this handoff are context only)");
+            $row->{lint_rules} = [ sort(@{ $row->{lint_rules} }, 'approval-hash-unrecorded') ];
+        }
+    }
 
     # ---- pin under the TPL §6 lock
     my $wh = $g->{in_git} ? skills::gitfacts::work_hash($g->{worktree}) : undef;

@@ -134,6 +134,7 @@ sub worktrees {
     return [ map { /\Aworktree (.+)\z/ ? $1 : () } split /\n/, $r->{out} ];
 }
 
-sub ticket { my ($s) = @_; return (defined $s && $s =~ /([A-Z][A-Z0-9]+-[0-9]+)/) ? $1 : undef }
+# SK-1 (S-SETTINGS E1): the ticket id of a branch or name under the ticket_pattern setting.
+sub ticket { my ($s) = @_; return settings::ticket($s) }
 
 1;

@@ -152,8 +152,11 @@ sub beta_install {
         row('precompact', 2, writer => 'classic', trigger => 'auto', ci_bytes => 3994, ci_has_nonce => \1,
             ci_nonce => 'f0f00001', ci_foreign_header => \0, keyset_hash => '62a951d7'),
         row('postcompact', 31, writer => 'classic', trigger => 'auto', nonce_found => 'f0f00001', scope_found => 'main',
-            verdict => 'ok', summary_chars => 9000, section_chars => { resume => 300, '## Task as assigned' => 20,
-            'CANARY-TEXT heading' => 5 }, secret_hits => ['jwt'], measured_stamp => '2026-10-21 14:00 +0300',
+            # section_chars keys as watch::shape writes them (slugs, `preamble`), a heading literal and
+            # an unknown heading (owner xxxxxxxx-34: exported as fixed section ids, else `other`)
+            verdict => 'ok', summary_chars => 9000, section_chars => { resume_here => 300, decisions_and_do => 40,
+            preamble => 7, '## Task as assigned' => 20, 'CANARY-TEXT heading' => 5, canary_slug => 3 },
+            secret_hits => ['jwt'], measured_stamp => '2026-10-21 14:00 +0300',
             ledger => { lost_U => 0, lost_D => 1, ledger_src => 'copy', excerpt => 'CANARY-TEXT-ledger' }),
         row('copy', 32, writer => 'classic', nonce => 'f0f00001', id6 => 'f0f000', result => 'saved', slot => 'main',
             rel_path => $rel),

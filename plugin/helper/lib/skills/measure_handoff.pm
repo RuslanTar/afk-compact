@@ -2,8 +2,10 @@ package skills::measure_handoff;
 # lib/skills/measure_handoff.pm: the `measure <handoff>` form (RDN helper
 # table, resume R3; D-2, D-21, D-22 resume remaining 4). Called by
 # cmd/measure.pl (WP-core), which prints the returned lines.
-# It measures and never runs a command taken from the handoff. It prints no
-# `Approvals (verified)` section (D-2). Commits are "ours" only when the
+# It measures and never runs a command taken from the handoff. Approvals (AP-5, D-2
+# replaced by scoped carry): `Approvals (checked)` lists the own handoff's approvals whose ids
+# publish wrote to approvals_checked, unused and not a gate; `Approvals (gate, re-ask)` the gate
+# ones (skills/approvals.pm); one content-free approvals_carry row. Commits are "ours" only when the
 # chain names the hash or the commit lies between two git_commit values the
 # chain recorded; every other commit is one "foreign" line (D-21).
 # Re-check commands in Live state and In flight are linted against the
@@ -19,6 +21,7 @@ use skills::core;
 use skills::store;
 use skills::spec;
 use skills::gitfacts;
+use skills::approvals;
 
 # run(handoff, settings) → [lines]. $settings is accepted for the seam and
 # not needed: the context resolves the same settings order itself.
@@ -92,6 +95,9 @@ sub run {
             push @out, "handoff session live in another process: pid $r->{pid}" if skills::ctx::record_live($ctx, $r, $all);
         }
     }
+    my ($al, $arow) = skills::approvals::handoff_lines($d, $ctx, $id->{sid});
+    push @out, @$al;
+    $ctx->log('approvals_carry', $arow) if $arow;
     push @out, @{ needs_ask($d) };
     return \@out;
 }

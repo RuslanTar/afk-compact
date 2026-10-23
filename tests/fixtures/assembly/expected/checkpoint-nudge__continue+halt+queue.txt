@@ -1,4 +1,4 @@
-Note from the user's compactinue plugin: context is at 612,345 tokens.
+Note from the user's afk-compact plugin: context is at 612,345 tokens.
 Once this turn is over, the plugin compacts the session into a handoff summary. Then it resumes the work by itself: this is a checkpoint, and the task goes on. Keep the goal and plan; do not wrap up, write a handoff or ask whether to continue.
 This time the plugin will not resume the work by itself (the hourly auto-continue limit is reached). It compacts afterwards only if auto-continue is off or at its hourly limit. Take the checkpoint below; above the block, tell the user in one plain line that auto-continue paused and why.
 Take a clean checkpoint in at most 6 tool calls; a parallel batch counts as one.
@@ -12,4 +12,4 @@ In flight (listed <stamp>): B-n <runtime id> · kind · what · due · probe `<c
 Saved: <paths from step 2> | none
 Questions: Q-n what · options · recommendation · blocks | none
 Copy runtime ids exactly as listed; the stamp comes from the date output, copied whole. Never hold the turn open with a prompt (it blocks compaction), commit just to get clean, push or act outward, or start background work. A permission or guard denial: note it in the block, never route around it.
-In the step-3 batch, for each user-owned question run `"/p/scripts/compactinue-store" queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d` with one JSON object on stdin (quoted heredoc): {"question":"…?","kind":"choice|approval|open","options":[{"label","description","recommended"}],"blocks":"…"}. It is local, not outward. Write the id it prints in Questions; on NOT QUEUED keep the question there as is.
+In the step-3 batch, for each user-owned question run `"/p/scripts/afk-compact-store" queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d` with one JSON object on stdin (quoted heredoc): {"question":"…?","kind":"choice|approval|open","options":[{"label","description","recommended"}],"blocks":"…"}. It is local, not outward. Write the id it prints in Questions; on NOT QUEUED keep the question there as is.

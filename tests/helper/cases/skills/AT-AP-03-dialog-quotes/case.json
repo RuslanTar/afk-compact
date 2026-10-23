@@ -1,0 +1,225 @@
+{
+ "id": "AT-AP-03 (dialog answers)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "NR-14 (owner xxxxxxxx-23 \"Dialogs count\", xxxxxxxx-20): the user's answer in an AskUserQuestion dialog of the main session counts as their words for the quote check (publish approval-quote, and measure --compact --copy): a chosen label (a short one only when its question names a target), one label of a multiSelect answer (joined string or array), the typed Other text and the user's note. Never: the question text, a header, an option description, an option not chosen, another tool's result shaped like an answer, a tool named mcp__..__AskUserQuestion, a subagent's (isSidechain) dialog, a dismissed dialog, or a selection left when the dialog timed out. Review fixes: a typed row, an ask or a result a fork copied (forkedFrom; owner 2026-10-23 14:3x \"No: forks re-ask\"), an answer a hook gave (permissionDecision source not the user; user_temporary counts), a call the model pre-filled with answers, an error result, a followUp round, an approval line pasted into the Other text, a result row of another session, two results in one row, an id another call reuses, a result naming another asking row, and a short label whose question names MR !12 for a target MR !1 (whole-token target ids).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"please get the release ready\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"A few decisions before I go on.\"}, {\"type\": \"tool_use\", \"id\": \"toolu_q1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"MR !12 passed CI. Merge MR !12 into feat/x now?\", \"header\": \"Merge\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes\", \"description\": \"merge it now and tag release rc1 tonight\"}, {\"label\": \"Not yet\", \"description\": \"wait for the review\"}]}, {\"question\": \"Push feat/x and feat/y to origin? Pick the branches.\", \"header\": \"Branches\", \"multiSelect\": true, \"options\": [{\"label\": \"feat/x\", \"description\": \"the retry fix\"}, {\"label\": \"feat/y\", \"description\": \"the docs\"}, {\"label\": \"docs/z\", \"description\": \"the drafts\"}]}, {\"question\": \"How should the hotfix ship?\", \"header\": \"Hotfix\", \"multiSelect\": false, \"options\": [{\"label\": \"Ship via canary\", \"description\": \"roll out to one pod first\"}, {\"label\": \"Hold it\", \"description\": \"keep it for Monday\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"sourceToolAssistantUUID\": \"a1\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_q1\", \"content\": \"Your questions have been answered: \\\"MR !12 passed CI. Merge MR !12 into feat/x now?\\\"=\\\"Yes\\\" notes: also delete the stale preview branch old/p, \\\"Push feat/x and feat/y to origin? Pick the branches.\\\"=\\\"feat/x, feat/y\\\", \\\"How should the hotfix ship?\\\"=\\\"ship the hotfix to the beta ring after lunch\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"MR !12 passed CI. Merge MR !12 into feat/x now?\", \"header\": \"Merge\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes\", \"description\": \"merge it now and tag release rc1 tonight\"}, {\"label\": \"Not yet\", \"description\": \"wait for the review\"}]}, {\"question\": \"Push feat/x and feat/y to origin? Pick the branches.\", \"header\": \"Branches\", \"multiSelect\": true, \"options\": [{\"label\": \"feat/x\", \"description\": \"the retry fix\"}, {\"label\": \"feat/y\", \"description\": \"the docs\"}, {\"label\": \"docs/z\", \"description\": \"the drafts\"}]}, {\"question\": \"How should the hotfix ship?\", \"header\": \"Hotfix\", \"multiSelect\": false, \"options\": [{\"label\": \"Ship via canary\", \"description\": \"roll out to one pod first\"}, {\"label\": \"Hold it\", \"description\": \"keep it for Monday\"}]}], \"answers\": {\"MR !12 passed CI. Merge MR !12 into feat/x now?\": \"Yes\", \"Push feat/x and feat/y to origin? Pick the branches.\": \"feat/x, feat/y\", \"How should the hotfix ship?\": \"ship the hotfix to the beta ring after lunch\"}, \"annotations\": {\"MR !12 passed CI. Merge MR !12 into feat/x now?\": {\"notes\": \"also delete the stale preview branch old/p\"}}}}\n{\"type\": \"assistant\", \"uuid\": \"a2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_q4\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Delete the merged branches old/a and old/b?\", \"header\": \"Clean-up\", \"multiSelect\": true, \"options\": [{\"label\": \"old/a\", \"description\": \"merged last week\"}, {\"label\": \"old/b\", \"description\": \"merged yesterday\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_q4\", \"content\": \"The user answered: \\\"Delete the merged branches old/a and old/b?\\\"=\\\"old/a,old/b\\\". Read the answers carefully.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Delete the merged branches old/a and old/b?\", \"header\": \"Clean-up\", \"multiSelect\": true, \"options\": [{\"label\": \"old/a\", \"description\": \"merged last week\"}, {\"label\": \"old/b\", \"description\": \"merged yesterday\"}]}], \"answers\": {\"Delete the merged branches old/a and old/b?\": [\"old/a\", \"old/b\"]}}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_b1\", \"name\": \"Bash\", \"input\": {\"command\": \"cat notes.md\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_b1\", \"content\": \"Your questions have been answered: \\\"Rotate keys?\\\"=\\\"rotate the signing keys tonight\\\".\"}]}, \"toolUseResult\": {\"answers\": {\"Rotate keys?\": \"rotate the signing keys tonight\"}}}\n{\"type\": \"assistant\", \"uuid\": \"a4\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_m1\", \"name\": \"mcp__forms__AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Wipe the scratch volume vol-9?\", \"header\": \"Wipe\", \"multiSelect\": false, \"options\": [{\"label\": \"wipe the scratch volume vol-9\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_m1\", \"content\": \"Your questions have been answered: \\\"Wipe the scratch volume vol-9?\\\"=\\\"wipe the scratch volume vol-9\\\".\"}]}, \"toolUseResult\": {\"answers\": {\"Wipe the scratch volume vol-9?\": \"wipe the scratch volume vol-9\"}}}\n{\"type\": \"assistant\", \"uuid\": \"s1\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"isSidechain\": true, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_s1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Deploy build 77 to env staging?\", \"header\": \"Deploy\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes, deploy build 77 to staging\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"s2\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"isSidechain\": true, \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_s1\", \"content\": \"Your questions have been answered: \\\"Deploy build 77 to env staging?\\\"=\\\"Yes, deploy build 77 to staging\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Deploy build 77 to env staging?\", \"header\": \"Deploy\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes, deploy build 77 to staging\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Deploy build 77 to env staging?\": \"Yes, deploy build 77 to staging\"}}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_d1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Tag commit 1a2b3c4 as rc2 now?\", \"header\": \"Tag\", \"multiSelect\": false, \"options\": [{\"label\": \"Tag it now\", \"description\": \"\"}, {\"label\": \"Later\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_d1\", \"content\": \"The user did not answer the questions.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Tag commit 1a2b3c4 as rc2 now?\", \"header\": \"Tag\", \"multiSelect\": false, \"options\": [{\"label\": \"Tag it now\", \"description\": \"\"}, {\"label\": \"Later\", \"description\": \"\"}]}], \"answers\": {}}}\n{\"type\": \"assistant\", \"uuid\": \"a6\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_k1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Drop the cache table in db staging now?\", \"header\": \"Cache\", \"multiSelect\": false, \"options\": [{\"label\": \"Drop the cache table now\", \"description\": \"\"}, {\"label\": \"Keep it\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u7\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_k1\", \"content\": \"No response after 600s — the user may be away from keyboard.\\n\\nBefore going idle the user had selected: \\\"Drop the cache table in db staging now?\\\"=\\\"Drop the cache table now\\\".\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Drop the cache table in db staging now?\", \"header\": \"Cache\", \"multiSelect\": false, \"options\": [{\"label\": \"Drop the cache table now\", \"description\": \"\"}, {\"label\": \"Keep it\", \"description\": \"\"}]}], \"answers\": {\"Drop the cache table in db staging now?\": \"Drop the cache table now\"}, \"afkTimeoutMs\": 600000}}\n{\"type\": \"user\", \"uuid\": \"f1\", \"timestamp\": \"2026-10-21T13:16:00+03:00\", \"sessionId\": \"$SID\", \"forkedFrom\": {\"sessionId\": \"22222222-2222-4222-8222-222222222222\", \"messageUuid\": \"p1\"}, \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push the release branch rel/9 to origin tonight\"}}\n{\"type\": \"assistant\", \"uuid\": \"f2\", \"timestamp\": \"2026-10-21T13:17:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f2\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Push branch rel/8 to origin now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"push branch rel/8 to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}, \"sessionId\": \"$SID\", \"forkedFrom\": {\"sessionId\": \"22222222-2222-4222-8222-222222222222\", \"messageUuid\": \"p1\"}}\n{\"type\": \"user\", \"uuid\": \"f3\", \"timestamp\": \"2026-10-21T13:18:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f2\", \"content\": \"Your questions have been answered: \\\"Push branch rel/8 to origin now?\\\"=\\\"push branch rel/8 to origin now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Push branch rel/8 to origin now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"push branch rel/8 to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Push branch rel/8 to origin now?\": \"push branch rel/8 to origin now\"}}, \"sourceToolAssistantUUID\": \"f2\"}\n{\"type\": \"assistant\", \"uuid\": \"f4\", \"timestamp\": \"2026-10-21T13:19:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f4\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Push branch rel/5 to origin now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"push branch rel/5 to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"f5\", \"timestamp\": \"2026-10-21T13:20:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f4\", \"content\": \"Your questions have been answered: \\\"Push branch rel/5 to origin now?\\\"=\\\"push branch rel/5 to origin now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Push branch rel/5 to origin now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"push branch rel/5 to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Push branch rel/5 to origin now?\": \"push branch rel/5 to origin now\"}}, \"sourceToolAssistantUUID\": \"f4\", \"sessionId\": \"$SID\", \"forkedFrom\": {\"sessionId\": \"22222222-2222-4222-8222-222222222222\", \"messageUuid\": \"p1\"}}\n{\"type\": \"assistant\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:21:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Close MR !30 without merging?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"close MR !30 without merging\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:22:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h1\", \"content\": \"Your questions have been answered: \\\"Close MR !30 without merging?\\\"=\\\"close MR !30 without merging\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Close MR !30 without merging?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"close MR !30 without merging\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Close MR !30 without merging?\": \"close MR !30 without merging\"}}, \"sourceToolAssistantUUID\": \"h1\", \"permissionDecision\": {\"decision\": \"accept\", \"source\": \"hook\", \"reasonType\": \"hook\"}}\n{\"type\": \"assistant\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:23:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h3\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Rebase feat/q onto main now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"rebase feat/q onto main now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:24:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h3\", \"content\": \"Your questions have been answered: \\\"Rebase feat/q onto main now?\\\"=\\\"rebase feat/q onto main now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Rebase feat/q onto main now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"rebase feat/q onto main now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Rebase feat/q onto main now?\": \"rebase feat/q onto main now\"}}, \"sourceToolAssistantUUID\": \"h3\", \"permissionDecision\": {\"decision\": \"accept\", \"source\": \"user_temporary\"}}\n{\"type\": \"assistant\", \"uuid\": \"p1a\", \"timestamp\": \"2026-10-21T13:25:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_p1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Revert commit 8e8e8e8 on feat/x?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"revert commit 8e8e8e8 right now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Revert commit 8e8e8e8 on feat/x?\": \"revert commit 8e8e8e8 right now\"}}}]}}\n{\"type\": \"user\", \"uuid\": \"p1b\", \"timestamp\": \"2026-10-21T13:26:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_p1\", \"content\": \"Your questions have been answered: \\\"Revert commit 8e8e8e8 on feat/x?\\\"=\\\"revert commit 8e8e8e8 right now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Revert commit 8e8e8e8 on feat/x?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"revert commit 8e8e8e8 right now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Revert commit 8e8e8e8 on feat/x?\": \"revert commit 8e8e8e8 right now\"}}, \"sourceToolAssistantUUID\": \"p1a\"}\n{\"type\": \"assistant\", \"uuid\": \"e1\", \"timestamp\": \"2026-10-21T13:27:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_e1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Force-push feat/w now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"force-push feat/w to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"e2\", \"timestamp\": \"2026-10-21T13:28:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_e1\", \"is_error\": true, \"content\": \"Your questions have been answered: \\\"Force-push feat/w now?\\\"=\\\"force-push feat/w to origin now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Force-push feat/w now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"force-push feat/w to origin now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Force-push feat/w now?\": \"force-push feat/w to origin now\"}}, \"sourceToolAssistantUUID\": \"e1\"}\n{\"type\": \"assistant\", \"uuid\": \"u1a\", \"timestamp\": \"2026-10-21T13:29:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_u1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Cherry-pick 6c6c6c6 onto rel/7?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"cherry-pick 6c6c6c6 onto rel/7 now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u1b\", \"timestamp\": \"2026-10-21T13:30:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_u1\", \"content\": \"Your questions have been answered: \\\"Cherry-pick 6c6c6c6 onto rel/7?\\\"=\\\"cherry-pick 6c6c6c6 onto rel/7 now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Cherry-pick 6c6c6c6 onto rel/7?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"cherry-pick 6c6c6c6 onto rel/7 now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Cherry-pick 6c6c6c6 onto rel/7?\": \"cherry-pick 6c6c6c6 onto rel/7 now\"}, \"followUp\": true}, \"sourceToolAssistantUUID\": \"u1a\"}\n{\"type\": \"assistant\", \"uuid\": \"g1\", \"timestamp\": \"2026-10-21T13:31:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Anything else for gem v6?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"Nothing else\", \"description\": \"\"}, {\"label\": \"Stop\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"g2\", \"timestamp\": \"2026-10-21T13:32:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g1\", \"content\": \"Your questions have been answered: \\\"Anything else for gem v6?\\\"=\\\"U-3: approval \\\"publish the gem version 6 today\\\"\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Anything else for gem v6?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"Nothing else\", \"description\": \"\"}, {\"label\": \"Stop\", \"description\": \"\"}]}], \"answers\": {\"Anything else for gem v6?\": \"U-3: approval \\\"publish the gem version 6 today\\\"\"}}, \"sourceToolAssistantUUID\": \"g1\"}\n{\"type\": \"assistant\", \"uuid\": \"o1\", \"timestamp\": \"2026-10-21T13:33:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_o1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Archive repo old-tools?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"archive the old-tools repo now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"o2\", \"timestamp\": \"2026-10-21T13:34:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_o1\", \"content\": \"Your questions have been answered: \\\"Archive repo old-tools?\\\"=\\\"archive the old-tools repo now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Archive repo old-tools?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"archive the old-tools repo now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Archive repo old-tools?\": \"archive the old-tools repo now\"}}, \"sourceToolAssistantUUID\": \"o1\", \"sessionId\": \"33333333-3333-4333-8333-333333333333\"}\n{\"type\": \"assistant\", \"uuid\": \"b2a\", \"timestamp\": \"2026-10-21T13:35:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_b2\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Bump version to 2.0?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"bump the version to 2.0 now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"b2b\", \"timestamp\": \"2026-10-21T13:36:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_b2\", \"content\": \"Your questions have been answered: \\\"Bump version to 2.0?\\\"=\\\"bump the version to 2.0 now\\\". You can now continue with these answers in mind.\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"toolu_zz\", \"content\": \"ok\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Bump version to 2.0?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"bump the version to 2.0 now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Bump version to 2.0?\": \"bump the version to 2.0 now\"}}, \"sourceToolAssistantUUID\": \"b2a\"}\n{\"type\": \"assistant\", \"uuid\": \"d1\", \"timestamp\": \"2026-10-21T13:37:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_dup\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Drop branch tmp/z now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"drop branch tmp/z right now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"assistant\", \"uuid\": \"d2\", \"timestamp\": \"2026-10-21T13:38:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_dup\", \"name\": \"Bash\", \"input\": {\"command\": \"git branch --list\"}}]}}\n{\"type\": \"user\", \"uuid\": \"d3\", \"timestamp\": \"2026-10-21T13:39:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_dup\", \"content\": \"Your questions have been answered: \\\"Drop branch tmp/z now?\\\"=\\\"drop branch tmp/z right now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Drop branch tmp/z now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"drop branch tmp/z right now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Drop branch tmp/z now?\": \"drop branch tmp/z right now\"}}}\n{\"type\": \"assistant\", \"uuid\": \"s9a\", \"timestamp\": \"2026-10-21T13:40:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_s9\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Delete tag v0-beta now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"delete tag v0-beta right now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"s9b\", \"timestamp\": \"2026-10-21T13:41:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_s9\", \"content\": \"Your questions have been answered: \\\"Delete tag v0-beta now?\\\"=\\\"delete tag v0-beta right now\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Delete tag v0-beta now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"delete tag v0-beta right now\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Delete tag v0-beta now?\": \"delete tag v0-beta right now\"}}, \"sourceToolAssistantUUID\": \"zz-other-row\"}\n"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"Yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used; U-7 approval \"Merge MR !12 into feat/x now\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-12: approval \"rotate the signing keys tonight\" — action rotate keys · targets keyring main @ v3 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "begin, no earlier handoff",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "dialogs"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals from dialogs\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"Yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-3: approval \"feat/y\" — action git push origin feat/y · targets branch feat/y @ 2b2b2b2 · once · not yet used\n- U-4: approval \"ship the hotfix to the beta ring\" — action git push origin hotfix/beta · targets branch hotfix/beta @ 3c3c3c3 · once · not yet used\n- U-5: approval \"also delete the stale preview branch\" — action delete branch old/p · targets branch old/p @ 4d4d4d4 · once · not yet used\n- U-6: approval \"old/b\" — action delete branch old/b · targets branch old/b @ 5e5e5e5 · once · not yet used\n- U-18: approval \"rebase feat/q onto main now\" — action rebase feat/q onto main · targets branch feat/q @ 8b8b8b8 · once · not yet used\n- U-7: approval \"Merge MR !12 into feat/x now\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-8: approval \"merge it now and tag release rc1\" — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-9: approval \"Merge\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-10: approval \"Not yet\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-11: approval \"Yes\" — action merge MR !40 · targets MR !40 @ head 6f6f6f6 · once · not yet used\n- U-12: approval \"rotate the signing keys tonight\" — action rotate keys · targets keyring main @ v3 · once · not yet used\n- U-13: approval \"wipe the scratch volume vol-9\" — action wipe vol-9 · targets volume vol-9 @ now · once · not yet used\n- U-14: approval \"Yes, deploy build 77 to staging\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-15: approval \"Tag it now\" — action git tag rc2 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-16: approval \"Drop the cache table now\" — action drop cache table · targets db staging @ snap 4 · once · not yet used\n- U-17: approval \"docs/z\" — action git push origin docs/z · targets branch docs/z @ 7a7a7a7 · once · not yet used\n- U-19: approval \"push the release branch rel/9 to origin\" — action git push origin rel/9 · targets branch rel/9 @ 9a9a9a9 · once · not yet used\n- U-20: approval \"push branch rel/8 to origin now\" — action git push origin rel/8 · targets branch rel/8 @ 8a8a8a8 · once · not yet used\n- U-21: approval \"push branch rel/5 to origin now\" — action git push origin rel/5 · targets branch rel/5 @ 5a5a5a5 · once · not yet used\n- U-22: approval \"close MR !30 without merging\" — action close MR !30 · targets MR !30 @ head 3a3a3a3 · once · not yet used\n- U-23: approval \"revert commit 8e8e8e8 right now\" — action git revert 8e8e8e8 · targets commit 8e8e8e8 @ 8e8e8e8 · once · not yet used\n- U-24: approval \"force-push feat/w to origin now\" — action push feat/w · targets branch feat/w @ 4a4a4a4 · once · not yet used\n- U-25: approval \"cherry-pick 6c6c6c6 onto rel/7 now\" — action git cherry-pick 6c6c6c6 · targets branch rel/7 @ 7b7b7b7 · once · not yet used\n- U-26: approval \"publish the gem version 6 today\" — action gem push v6 · targets gem v6 @ 6.0.0 · once · not yet used\n- U-27: approval \"archive the old-tools repo now\" — action archive repo old-tools · targets repo old-tools @ 1b1b1b1 · once · not yet used\n- U-28: approval \"bump the version to 2.0 now\" — action git tag v2.0 · targets commit 2c2c2c2 @ 2c2c2c2 · once · not yet used\n- U-29: approval \"drop branch tmp/z right now\" — action delete branch tmp/z · targets branch tmp/z @ 2d2d2d2 · once · not yet used\n- U-30: approval \"delete tag v0-beta right now\" — action delete tag v0-beta · targets tag v0-beta @ 3e3e3e3 · once · not yet used\n- U-31: approval \"Yes\" — action merge MR !1 · targets MR !1 @ head 1212121 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "NR-14 approval-quote: question text, header, option description, an option not chosen, a short label under another target, another tool, an mcp tool, a subagent's dialog, a dismissed dialog, a timed-out selection; fork copies (typed, ask, result), a hook's answer, a pre-filled call, an error, followUp, a pasted line, another session's row, two results, a reused id, another asking row, MR !1 inside MR !12",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "dialogs",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 16$",
+     "^LINT approval-quote line 17$",
+     "^LINT approval-quote line 18$",
+     "^LINT approval-quote line 19$",
+     "^LINT approval-quote line 20$",
+     "^LINT approval-quote line 21$",
+     "^LINT approval-quote line 22$",
+     "^LINT approval-quote line 23$",
+     "^LINT approval-quote line 24$",
+     "^LINT approval-quote line 25$",
+     "^LINT approval-quote line 26$",
+     "^LINT approval-quote line 27$",
+     "^LINT approval-quote line 28$",
+     "^LINT approval-quote line 29$",
+     "^LINT approval-quote line 30$",
+     "^LINT approval-quote line 31$",
+     "^LINT approval-quote line 32$",
+     "^LINT approval-quote line 33$",
+     "^LINT approval-quote line 34$",
+     "^LINT approval-quote line 35$",
+     "^LINT approval-quote line 36$",
+     "^LINT approval-quote line 37$",
+     "^LINT approval-quote line 38$",
+     "^LINT approval-quote line 39$",
+     "^REFUSED: lint \\(24 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-quote line 10$",
+     "approval-quote line 11$",
+     "approval-quote line 12$",
+     "approval-quote line 13$",
+     "approval-quote line 14$",
+     "approval-quote line 15$",
+     "approval-shape",
+     "approval-unchecked"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals from dialogs\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"Yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-3: approval \"feat/y\" — action git push origin feat/y · targets branch feat/y @ 2b2b2b2 · once · not yet used\n- U-4: approval \"ship the hotfix to the beta ring\" — action git push origin hotfix/beta · targets branch hotfix/beta @ 3c3c3c3 · once · not yet used\n- U-5: approval \"also delete the stale preview branch\" — action delete branch old/p · targets branch old/p @ 4d4d4d4 · once · not yet used\n- U-6: approval \"old/b\" — action delete branch old/b · targets branch old/b @ 5e5e5e5 · once · not yet used\n- U-18: approval \"rebase feat/q onto main now\" — action rebase feat/q onto main · targets branch feat/q @ 8b8b8b8 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "NR-14 checked: a chosen label, a multiSelect label (string and array), the Other text, the user's note, a label the user chose under permissionDecision user_temporary",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "dialogs",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 6,
+        "checked": 6,
+        "unchecked": 0
+       }
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB1": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "NR-14 frontmatter lists the dialog ids; canary: no answer text in any watch row",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB1",
+      "has": [
+       "^approvals_checked: U-2, U-3, U-4, U-5, U-6, U-18$"
+      ]
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "beta ring"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "stale preview"
+     }
+    ]
+   }
+  },
+  {
+   "name": "NR-14 measure --compact --copy: a dialog label is checked; the question text and another tool's output are not",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 merge MR !12 → MR !12 @ head 9f8e7d6$",
+     "^Approvals \\(unchecked\\): U-7, U-12$"
+    ]
+   }
+  }
+ ]
+}

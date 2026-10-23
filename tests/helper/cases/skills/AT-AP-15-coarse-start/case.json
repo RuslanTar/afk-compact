@@ -1,0 +1,442 @@
+{
+ "id": "AT-AP-15 (start records without milliseconds, review of bcdaca6)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Review of bcdaca6: start records carry milliseconds only when Time::HiRes loads. A record without them names only the second the session started in (sessions::own_start coarse): rows from a later second are own by time; a row from that second is own only when it is a typed user row that follows one of this session's SessionStart hook rows (stamped in or after that second) with no older row between, so a copied row never counts and the launch prompt is not missed when the hook rows are there. Negatives: a typed row before the hook rows, an older row after the hook row, a SessionStart row from an earlier second, another hook's row, a sidechain's SessionStart row, a forkedFrom row; a millisecond record in the same second ends the window. The hook-driven pair writes the record through SessionStart with the no-milliseconds stamp forced (STORE_TEST_NO_HIRES) and with whatever the perl has: the answers are the same.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194401-1072915200.live-a1a1a1a1.json",
+     "content": "{\"pid\": 4194401, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a1a1a1a1-0000-4000-8000-000000000001\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a1a1a1a1-0000-4000-8000-000000000001.jsonl",
+     "content": "{\"type\": \"permission-mode\", \"permissionMode\": \"default\", \"sessionId\": \"a1a1a1a1-0000-4000-8000-000000000001\"}\n{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a1a1a1a1-0000-4000-8000-000000000001\", \"timestamp\": \"2026-10-21T13:00:00.300+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a1a1a1a1-0000-4000-8000-000000000001\", \"timestamp\": \"2026-10-21T13:00:00.500+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a1a1a1a1-0000-4000-8000-000000000001\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a1.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a1a1a1a1-0000-4000-8000-000000000001\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194402-1072915200.live-a2a2a2a2.json",
+     "content": "{\"pid\": 4194402, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a2a2a2a2-0000-4000-8000-000000000002\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a2a2a2a2-0000-4000-8000-000000000002.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a2a2a2a2-0000-4000-8000-000000000002\", \"timestamp\": \"2026-10-21T13:00:00.200+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a2a2a2a2-0000-4000-8000-000000000002\", \"timestamp\": \"2026-10-21T13:00:00.300+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a2a2a2a2-0000-4000-8000-000000000002\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a2.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a2a2a2a2-0000-4000-8000-000000000002\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194403-1072915200.live-a3a3a3a3.json",
+     "content": "{\"pid\": 4194403, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a3a3a3a3-0000-4000-8000-000000000003\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a3a3a3a3-0000-4000-8000-000000000003.jsonl",
+     "content": "{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a3a3a3a3-0000-4000-8000-000000000003\", \"timestamp\": \"2026-10-21T13:00:00.300+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t0\", \"sessionId\": \"a3a3a3a3-0000-4000-8000-000000000003\", \"timestamp\": \"2026-10-21T12:59:50.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"older row\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a3a3a3a3-0000-4000-8000-000000000003\", \"timestamp\": \"2026-10-21T13:00:00.700+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a3a3a3a3-0000-4000-8000-000000000003\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a3.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a3a3a3a3-0000-4000-8000-000000000003\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194404-1072915200.live-a4a4a4a4.json",
+     "content": "{\"pid\": 4194404, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a4a4a4a4-0000-4000-8000-000000000004\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a4a4a4a4-0000-4000-8000-000000000004.jsonl",
+     "content": "{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a4a4a4a4-0000-4000-8000-000000000004\", \"timestamp\": \"2026-10-21T12:59:59.900+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a4a4a4a4-0000-4000-8000-000000000004\", \"timestamp\": \"2026-10-21T13:00:00.500+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a4a4a4a4-0000-4000-8000-000000000004\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a4.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a4a4a4a4-0000-4000-8000-000000000004\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194405-1072915200.live-a5a5a5a5.json",
+     "content": "{\"pid\": 4194405, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a5a5a5a5-0000-4000-8000-000000000005\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a5a5a5a5-0000-4000-8000-000000000005.jsonl",
+     "content": "{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a5a5a5a5-0000-4000-8000-000000000005\", \"timestamp\": \"2026-10-21T13:00:00.300+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"UserPromptSubmit:startup\", \"hookEvent\": \"UserPromptSubmit\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a5a5a5a5-0000-4000-8000-000000000005\", \"timestamp\": \"2026-10-21T13:00:00.500+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a5a5a5a5-0000-4000-8000-000000000005\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a5.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a5a5a5a5-0000-4000-8000-000000000005\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194406-1072915200.live-a6a6a6a6.json",
+     "content": "{\"pid\": 4194406, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a6a6a6a6-0000-4000-8000-000000000006\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a6a6a6a6-0000-4000-8000-000000000006.jsonl",
+     "content": "{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a6a6a6a6-0000-4000-8000-000000000006\", \"timestamp\": \"2026-10-21T13:00:00.300+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}, \"isSidechain\": true}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a6a6a6a6-0000-4000-8000-000000000006\", \"timestamp\": \"2026-10-21T13:00:00.500+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a6a6a6a6-0000-4000-8000-000000000006\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a6.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a6a6a6a6-0000-4000-8000-000000000006\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194407-1072915200.live-a7a7a7a7.json",
+     "content": "{\"pid\": 4194407, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a7a7a7a7-0000-4000-8000-000000000007\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194408-1072915200.live-a7a7a7a7.json",
+     "content": "{\"pid\": 4194408, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a7a7a7a7-0000-4000-8000-000000000007\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00.400+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a7a7a7a7-0000-4000-8000-000000000007.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"t0\", \"sessionId\": \"a7a7a7a7-0000-4000-8000-000000000007\", \"timestamp\": \"2026-10-21T13:00:00.200+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a7a7a7a7-0000-4000-8000-000000000007\", \"timestamp\": \"2026-10-21T13:00:00.600+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a7.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a7a7a7a7-0000-4000-8000-000000000007\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194409-1072915200.live-a8a8a8a8.json",
+     "content": "{\"pid\": 4194409, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"a8a8a8a8-0000-4000-8000-000000000008\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/a8a8a8a8-0000-4000-8000-000000000008.jsonl",
+     "content": "{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"a8a8a8a8-0000-4000-8000-000000000008\", \"timestamp\": \"2026-10-21T13:00:00.300+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"a8a8a8a8-0000-4000-8000-000000000008\", \"timestamp\": \"2026-10-21T13:00:00.500+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}, \"forkedFrom\": {\"sessionId\": \"x\"}}\n{\"type\": \"user\", \"uuid\": \"c9\", \"sessionId\": \"a8a8a8a8-0000-4000-8000-000000000008\", \"timestamp\": \"2026-10-21T13:00:05.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-a8.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: a8a8a8a8-0000-4000-8000-000000000008\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "review of bcdaca6, coarse start: the launch prompt in the record's own second, after this session's SessionStart hook row, is own",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a1a1a1a1-0000-4000-8000-000000000001",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a1.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a1a1a1a1-0000-4000-8000-000000000001.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: a typed row of that second before the hook rows (a copy) is not own",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a2a2a2a2-0000-4000-8000-000000000002",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a2.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a2a2a2a2-0000-4000-8000-000000000002.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: an older row after the hook row breaks the order: the next row of that second is not own",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a3a3a3a3-0000-4000-8000-000000000003",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a3.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a3a3a3a3-0000-4000-8000-000000000003.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: a SessionStart row from an earlier second (the parent's, copied) is no anchor",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a4a4a4a4-0000-4000-8000-000000000004",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a4.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a4a4a4a4-0000-4000-8000-000000000004.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: another hook's row is no anchor",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a5a5a5a5-0000-4000-8000-000000000005",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a5.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a5a5a5a5-0000-4000-8000-000000000005.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: a sidechain's SessionStart row is no anchor",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a6a6a6a6-0000-4000-8000-000000000006",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a6.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a6a6a6a6-0000-4000-8000-000000000006.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: a millisecond record in the same second ends the window: a row after it is own by time, a row before it is not",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a7a7a7a7-0000-4000-8000-000000000007",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a7.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a7a7a7a7-0000-4000-8000-000000000007.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "review of bcdaca6, coarse start: a forkedFrom row is never own, anchor or not",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "a8a8a8a8-0000-4000-8000-000000000008",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-a8.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/a8a8a8a8-0000-4000-8000-000000000008.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "SessionStart writes the start record without Time::HiRes (forced)",
+   "now": "2026-10-21T13:00:00.400+03:00",
+   "env": {
+    "STORE_TEST_NO_HIRES": "1",
+    "STORE_TEST_CLAUDE_PID": "4194410:Thu Jan  1 00:00:00 2004"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b1b1b1b1-0000-4000-8000-0000000000b1",
+    "transcript_path": "$HOME/.claude/projects/-x/b1b1b1b1-0000-4000-8000-0000000000b1.jsonl",
+    "cwd": "/x",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/4194410-*.live-b1b1b1b1.json",
+      "contains": [
+       "\"session_id\":\"b1b1b1b1-0000-4000-8000-0000000000b1\"",
+       "\"ts\":\"2026-10-21T13:00:00+03:00\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/b1b1b1b1-0000-4000-8000-0000000000b1.jsonl",
+     "content": "{\"type\": \"permission-mode\", \"permissionMode\": \"default\", \"sessionId\": \"b1b1b1b1-0000-4000-8000-0000000000b1\"}\n{\"type\": \"user\", \"uuid\": \"t0\", \"sessionId\": \"b1b1b1b1-0000-4000-8000-0000000000b1\", \"timestamp\": \"2026-10-21T13:00:00.100+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"b1b1b1b1-0000-4000-8000-0000000000b1\", \"timestamp\": \"2026-10-21T13:00:00.450+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"b1b1b1b1-0000-4000-8000-0000000000b1\", \"timestamp\": \"2026-10-21T13:00:00.600+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-b1b1b1b1.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: b1b1b1b1-0000-4000-8000-0000000000b1\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "review of bcdaca6: the launch prompt is own and the copied row is not, without Time::HiRes (forced)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "b1b1b1b1-0000-4000-8000-0000000000b1",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-b1b1b1b1.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/b1b1b1b1-0000-4000-8000-0000000000b1.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  },
+  {
+   "name": "SessionStart writes the start record with whatever this perl has",
+   "now": "2026-10-21T13:00:00.400+03:00",
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "4194411:Thu Jan  1 00:00:00 2004"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b2b2b2b2-0000-4000-8000-0000000000b2",
+    "transcript_path": "$HOME/.claude/projects/-x/b2b2b2b2-0000-4000-8000-0000000000b2.jsonl",
+    "cwd": "/x",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/4194411-*.live-b2b2b2b2.json",
+      "contains": [
+       "\"session_id\":\"b2b2b2b2-0000-4000-8000-0000000000b2\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/b2b2b2b2-0000-4000-8000-0000000000b2.jsonl",
+     "content": "{\"type\": \"permission-mode\", \"permissionMode\": \"default\", \"sessionId\": \"b2b2b2b2-0000-4000-8000-0000000000b2\"}\n{\"type\": \"user\", \"uuid\": \"t0\", \"sessionId\": \"b2b2b2b2-0000-4000-8000-0000000000b2\", \"timestamp\": \"2026-10-21T13:00:00.100+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin when the suite passes\"}}\n{\"type\": \"attachment\", \"uuid\": \"h1\", \"sessionId\": \"b2b2b2b2-0000-4000-8000-0000000000b2\", \"timestamp\": \"2026-10-21T13:00:00.450+03:00\", \"attachment\": {\"type\": \"hook_success\", \"hookName\": \"SessionStart:startup\", \"hookEvent\": \"SessionStart\", \"content\": \"\"}}\n{\"type\": \"user\", \"uuid\": \"t1\", \"sessionId\": \"b2b2b2b2-0000-4000-8000-0000000000b2\", \"timestamp\": \"2026-10-21T13:00:00.600+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rerun the flaky suite tests/flaky twice\"}}\n"
+    },
+    {
+     "write": "$TMP/copy-b2b2b2b2.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: b2b2b2b2-0000-4000-8000-0000000000b2\n---\n## Approvals: U-2 approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "review of bcdaca6: the launch prompt is own and the copied row is not, with whatever this perl has",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "b2b2b2b2-0000-4000-8000-0000000000b2",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy-b2b2b2b2.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/b2b2b2b2-0000-4000-8000-0000000000b2.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun tests/flaky → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(unchecked\\): U-2$"
+    ]
+   }
+  }
+ ]
+}

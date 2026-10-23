@@ -1,9 +1,8 @@
 {
  "id": "AT-CF-02, AT-CF-03, AT-CF-06",
- "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "begin carry base by relation: a lineage predecessor's newest file is chain with no notice (next_ids from it); an empty bucket gives all carry keys null and next_ids 1; with a foreign base, newer_foreign lists up to 2 other newer files (never the base) with their In flight line, a document with imported_from is never the base (DP-6) but is listed, and the JSON stays within 3,072 B",
+ "note": "begin carry base by relation: a lineage predecessor's newest file is chain with no notice (next_ids from it); an empty bucket gives all carry keys null and next_ids 1; with a foreign base, newer_foreign lists up to 2 other newer files (never the base) with their In flight line, a document with imported_from is never the base (DP-6) but is listed, and the JSON stays within 3,072 B. The case runs in the system temp folder, not the repository's tmp/: begin prints about ten absolute store paths, so under tmp/ the 3,072 B check depended on the checkout's path length (it failed in the BT-02 rename drill copy of a worktree, 11 characters deeper)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -40,6 +40,44 @@ sub bash_classes {
     return \@c;
 }
 
+# AP-9 (REVIEW-NIGHT-3 R3-15): the spec's protected_branch_re, compiled by the sweep for its run;
+# undef = no check. $PROTECTED_USER (owner xxxxxxxx-29): the compiled entries of the user's
+# add-only protected_branches setting, matched the same way, beside the spec's list.
+our $PROTECTED_RE;
+our $PROTECTED_USER = [];
+
+# 1 when a git push in the command names a protected destination: a refspec's destination (or
+# the ref named) matching protected_branch_re or one of the user's entries, lower-cased, or
+# --all, --mirror, --branches. A push with no refspec goes to a branch the transcript does not
+# show: 0 (the watcher has no git state). Quotes and backslashes are removed first, as the shell
+# would.
+sub push_protected {
+    my ($cmd, $pre, $user) = @_;
+    my @user = grep { ref $_ eq 'Regexp' } @{ ref $user eq 'ARRAY' ? $user : [] };
+    return 0 unless (defined $pre || @user) && defined $cmd;
+    (my $c = $cmd) =~ s/\\(.)/$1/gs;
+    $c =~ tr/"'//d;
+    for my $seg (split /\|\||&&|[|;&\n]/, $c) {
+        my @w = split ' ', $seg;
+        my ($gi) = grep { lc($w[$_]) eq 'git' } 0 .. $#w;
+        next unless defined $gi;
+        my ($pi) = grep { $w[$_] eq 'push' } $gi + 1 .. $#w;
+        next unless defined $pi;
+        my @a = @w[$pi + 1 .. $#w];
+        return 1 if grep { /\A--(?:all|mirror|branches)\z/ } @a;
+        my @pos = grep { !/\A-/ } @a;
+        shift @pos;
+        for my $rs (@pos) {
+            my $d = $rs =~ /:/ ? (split /:/, $rs, 2)[1] : $rs;
+            $d =~ s/\A\+//;
+            $d =~ s{\Arefs/heads/}{};
+            next if $d eq '';
+            return 1 if (defined $pre && lc($d) =~ $pre) || grep { lc($d) =~ $_ } @user;
+        }
+    }
+    return 0;
+}
+
 # Facts of one decoded row. `brand` is the plugin name; `outward` the compiled
 # outward classes.
 sub classify {
@@ -141,6 +179,9 @@ sub classify {
             if ($name eq 'Bash') {
                 my $cmd = defined $in->{command} && !ref $in->{command} ? $in->{command} : '';
                 $c{outward} = bash_classes($cmd, $outward || []);
+                $c{protected} = 1 if ($PROTECTED_RE || @{ $PROTECTED_USER || [] })
+                                     && grep({ $_ eq 'push' || $_ eq 'force-push' } @{ $c{outward} })
+                                     && push_protected($cmd, $PROTECTED_RE, $PROTECTED_USER);
                 $c{readonly} = $cmd =~ $READONLY_BASH ? 1 : 0;
                 if (defined $brand) {
                     my $store = quotemeta($brand . '-store');

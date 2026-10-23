@@ -55,6 +55,9 @@ my %RX = (
     ts      => qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:?[0-9]{2})\z/,
     version => qr/\A[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:-[0-9A-Za-z.]{1,20})?\z/,
     word    => qr/\A[a-z][a-z0-9_-]{0,31}\z/,
+    # MG-4: a plain model id only; no `:` or `/`, so a cloud ARN or profile path (an account id)
+    # is dropped, never exported
+    model   => qr{\A[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?\z},
     rule    => qr/\A[A-Z]-[0-9]{2}\z/,
 );
 
@@ -151,7 +154,7 @@ sub xvalue {
     }
     if ($class eq 'heading') {
         return (0) if ref $v;
-        return (1, $v) if $v =~ /\A[a-z][a-z_]{0,31}\z/;
+        return (1, $v) if grep { $_ eq $v } @watch::export_schema::SECTION_KEEP;
         my $id = $X->{headings}{$v};
         return (1, defined $id ? $id : 'other');
     }
@@ -202,16 +205,35 @@ sub transform_row {
     return \%o;
 }
 
-# Spec headings -> template ids (`main:<n>`, `sub:<n>`), for the `heading` class.
+# Spec headings -> fixed section ids, for the `heading` class (owner xxxxxxxx-34, "Stable section
+# ids"; was `main:<n>`/`sub:<n>` by position, spec_version 1). From spec_version 2 the spec's
+# `section_ids` gives each heading literal of sections_main / sections_subagent its id
+# (`main:<role>` / `sub:<role>`). Keys: the literal, the slug a section_chars row holds
+# (watch::shape::_slug, its producer) and the id itself. A heading without a well-formed id of its
+# form, or a slug two headings share, maps to nothing (`other`). An older spec maps nothing, so a
+# bundle's ids always follow the spec_version its manifest states.
 sub heading_ids {
     my ($spec) = @_;
     my %h;
+    my $t = ref $spec eq 'HASH' ? $spec->{section_ids} : undef;
+    my $sv = _spec_version($spec);
+    return \%h unless ref $t eq 'HASH' && defined $sv && $sv >= 2;
+    require watch::shape;
+    my %slug;
     for my $k (qw(sections_main sections_subagent)) {
-        my $i = 0;
-        for my $t (watch::spec::list($spec || {}, $k)) {
-            $i++;
-            $h{$t} = ($k eq 'sections_main' ? 'main:' : 'sub:') . $i if defined $t && !ref $t;
+        my $form = $k eq 'sections_main' ? 'main' : 'sub';
+        for my $lit (watch::spec::list($spec, $k)) {
+            next unless defined $lit && !ref $lit;
+            my $id = $t->{$lit};
+            next unless defined $id && !ref $id && $id =~ $watch::export_schema::SECTION_ID_RE && $id =~ /\A\Q$form\E:/;
+            $h{$lit} = $h{$id} = $id;
+            push @{ $slug{ watch::shape::_slug($lit) } }, $id;
         }
+    }
+    for my $s (keys %slug) {
+        next if exists $h{$s};
+        my %u = map { $_ => 1 } @{ $slug{$s} };
+        $h{$s} = $slug{$s}[0] if keys %u == 1;
     }
     return \%h;
 }
@@ -349,9 +371,101 @@ sub identity_list {
     push @c, @{ $o{extra} || [] };
     push @c, _git_remotes(\@roots, watch::io::mono() + $GIT_BUDGET_S) unless $o{no_git};
     my %seen;
-    my $vocab = vocabulary($ctx->{brand} // 'plugin');
+    # The vocabulary exemption holds for the class-checked files only; free text (a summary,
+    # RS-2, or a handoff, RS-5) is scanned against every identity string (`all => 1`).
+    my $vocab = $o{all} ? {} : vocabulary($ctx->{brand} // 'plugin', $ctx->{spec});
     return [ grep { length($_) >= $IDENTITY_MIN && !$vocab->{ lc $_ } && !$seen{ lc $_ }++ }
              map { my $x = $_; utf8::encode($x) if utf8::is_utf8($x); $x } grep { defined && !ref } @c ];
+}
+
+# --- summaries (RS-2) and handoffs (RS-5) ---------------------------------------
+
+# RS-2 (owner xxxxxxxx-19, 2026-10-23): the summaries a report may add when the user says yes in
+# that run: the saved main compaction copies, <root>/<repo>/<bucket>/compact/*.md (not subagent
+# or unattributed copies). RS-5 (owner xxxxxxxx-33, "Also handoffs", which settles O-8): the
+# published handoffs, a second and separate yes: the top-level <root>/<repo>/<bucket>/*.md files
+# whose frontmatter says `kind: handoff` and `writer: handoff` (what `publish` writes), not an
+# imported copy of a repository export (`imported_from`: a teammate's text) and not an export.
+# Both: plain files (no link), modified at or after --since; a file over $SUMMARY_MAX_BYTES is
+# not offered.
+our $SUMMARY_MAX_BYTES = 1 << 20;
+
+sub _bucket_dirs {
+    my ($root) = @_;
+    my @out;
+    return @out unless defined $root && -d $root && !-l $root;
+    for my $repo (watch::io::list_dir($root)) {
+        next if $repo =~ /\A\./;
+        my $rd = "$root/$repo";
+        next if -l $rd || !-d $rd;
+        for my $b (watch::io::list_dir($rd)) {
+            next if $b =~ /\A\./ || -l "$rd/$b" || !-d "$rd/$b";
+            push @out, "$rd/$b";
+        }
+    }
+    return @out;
+}
+
+sub _md_files {
+    my ($dir, $since) = @_;
+    my @out;
+    return @out if -l $dir || !-d $dir;
+    for my $f (watch::io::list_dir($dir)) {
+        next if $f =~ /\A\./ || $f !~ /\.md\z/;
+        my $p = "$dir/$f";
+        next if -l $p || !-f $p;
+        my @st = stat $p;
+        next if !@st || $st[7] > $SUMMARY_MAX_BYTES;
+        next if defined $since && $st[9] < $since;
+        push @out, { path => $p, bytes => $st[7], mtime => $st[9] };
+    }
+    return @out;
+}
+
+sub summary_files {
+    my ($root, $since) = @_;
+    return [ map { _md_files("$_/compact", $since) } _bucket_dirs($root) ];
+}
+
+# The frontmatter keys of a file the plugin wrote (`---` first line, `key: value` lines, `---`);
+# undef when it has none.
+sub _frontmatter {
+    my ($path) = @_;
+    my $head = watch::io::slurp($path, 16384);
+    return undef unless defined $head && $head =~ /\A---\r?\n(.*?)\r?\n---\r?\n/s;
+    my %fm;
+    for my $l (split /\r?\n/, $1) {
+        $fm{$1} = $2 if $l =~ /\A([A-Za-z0-9_]+):[ \t]*(.*?)[ \t]*\z/;
+    }
+    return \%fm;
+}
+
+sub handoff_files {
+    my ($root, $since) = @_;
+    my @out;
+    for my $b (_bucket_dirs($root)) {
+        for my $f (_md_files($b, $since)) {
+            my $fm = _frontmatter($f->{path}) or next;
+            next unless ($fm->{kind} // '') eq 'handoff' && ($fm->{writer} // '') eq 'handoff';
+            next if length($fm->{imported_from} // '') || exists $fm->{export};
+            push @out, $f;
+        }
+    }
+    return \@out;
+}
+
+# The staged files of one kind: [zip name, bytes, source path], the name a keyed hash of the path.
+my %ZIP_DIR = (summaries => [ 'summaries', 'summary' ], handoffs => [ 'handoffs', 'handoff' ]);
+sub _content_entries {
+    my ($kind, $files, $X) = @_;
+    my ($dir, $salt) = @{ $ZIP_DIR{$kind} };
+    my @e;
+    for my $s (@$files) {
+        my $data = watch::io::slurp($s->{path}, $SUMMARY_MAX_BYTES);
+        next unless defined $data;
+        push @e, [ "$dir/" . $X->{hash}->("$salt:" . $s->{path}) . '.md', $data, $s->{path} ];
+    }
+    return \@e;
 }
 
 # E-W-1 (provisional; needs/watch-escalations.md): the bundle's own vocabulary. The transform
@@ -360,7 +474,7 @@ sub identity_list {
 # no leak and is left off the list; otherwise a repo folder named like the plugin, `main` or
 # `shadow` would withhold every file.
 sub vocabulary {
-    my ($brand) = @_;
+    my ($brand, $spec) = @_;
     my %v;
     my $add = sub { for my $w (@_) { $v{ lc $w } = 1 if defined $w && !ref $w && length $w } };
     my $walk;
@@ -403,6 +517,17 @@ sub vocabulary {
     my @u = POSIX::uname();
     $add->($u[0], $u[4]);
     $add->(_readme($brand) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
+    # RS-2, RS-5: the manifest keys and README words of a bundle with summaries, handoffs or both
+    for my $k (@watch::export_schema::CONTENT_KINDS) {
+        $add->($watch::export_schema::CONTENT{$k}{flag}, $k, "${k}_n", "${k}_withheld");
+    }
+    for my $w ({ summaries => 1 }, { handoffs => 1 }, { summaries => 1, handoffs => 1 }) {
+        $add->(_readme($brand, $w) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
+    }
+    # xxxxxxxx-34: the manifest's spec_version and the fixed section ids the rows hold (each id
+    # and its role word), so a repo or bucket folder named like a section is no identity hit
+    $add->('spec_version', @watch::export_schema::SECTION_KEEP);
+    $add->($_, (split /:/, $_, 2)[1]) for grep { $_ =~ $watch::export_schema::SECTION_ID_RE } values %{ heading_ids($spec) };
     return \%v;
 }
 
@@ -464,7 +589,30 @@ sub secret_hits {
 # --- the staged files -------------------------------------------------------
 
 sub _readme {
-    my ($brand) = @_;
+    my ($brand, $with) = @_;
+    $with = {} unless ref $with eq 'HASH';
+    # RS-2, RS-5: a bundle the user chose to add summaries or handoffs to says so, and that
+    # business content in them is not masked; without them the content-free promise stands as it
+    # was.
+    my ($s, $h) = ($with->{summaries} ? 1 : 0, $with->{handoffs} ? 1 : 0);
+    my @never;
+    if ($s || $h) {
+        push @never, 'summaries/ holds compaction summaries you chose to add when you made this file.' if $s;
+        push @never, 'handoffs/ holds handoffs you chose to add when you made this file.' if $h;
+        my $dirs = join(' and ', ($s ? 'summaries/' : ()), ($h ? 'handoffs/' : ()));
+        push @never,
+            'They hold your sessions\' text. Secrets and your names, paths and hosts were scanned and any',
+            'file with a hit was left out, but business content is not masked.',
+            '',
+            "Outside $dirs, never inside: conversation text, " . ($s ? '' : 'summaries, ') . ($h ? '' : 'handoffs, ')
+                . 'commands, file or folder paths,',
+            'repo, branch or bucket names, settings paths, secrets. Session, agent and task ids are replaced',
+            'by keyed hashes that only your machine can make.';
+    } else {
+        @never = ('Never inside: conversation text, summaries, handoffs, commands, file or folder paths, repo,',
+                  'branch or bucket names, settings paths, secrets. Session, agent and task ids are replaced by',
+                  'keyed hashes that only your machine can make.');
+    }
     return join("\n",
         "$brand report",
         '',
@@ -476,9 +624,7 @@ sub _readme {
         'probes.json (capability checks already recorded), sizes.json (log sizes per file kind) and',
         'rows/ (one file per session: event rows with ids, counts, enum values and times).',
         '',
-        'Never inside: conversation text, summaries, handoffs, commands, file or folder paths, repo,',
-        'branch or bucket names, settings paths, secrets. Session, agent and task ids are replaced by',
-        'keyed hashes that only your machine can make.',
+        @never,
         '',
         'Times are included as they were logged (date, time and time zone offset), so rows can be',
         'lined up with release dates.',
@@ -754,12 +900,17 @@ sub _canon { return watch::json::encode($_[0]) . "\n" }
 sub _ts_date { my $t = shift; return defined $t ? watch::io::local_date($t) : undef }
 
 # build(ctx, %o) -> {entries => [[name, bytes]], manifest, withheld, rows_n, sessions_n, from, to, truncated}
-# %o: since (epoch), max_bytes, salt, install_id, identity (list), now.
+# %o: since (epoch), max_bytes, salt, install_id, identity (list), now; with --with-summaries
+# also summaries (summary_files), with --with-handoffs handoffs (handoff_files), and with either
+# identity_all (the list without the vocabulary exemption).
 sub build {
     my ($ctx, %o) = @_;
     my $w = $ctx->{watch};
     my $brand = $ctx->{brand} // 'plugin';
     my $X = { hash => hasher($o{salt}, $ctx->{sha256}), dropped => {}, headings => heading_ids($ctx->{spec}) };
+    for my $k (@watch::export_schema::CONTENT_KINDS) {
+        $o{content}{$k} = _content_entries($k, $o{$k}, $X) if $o{$k};
+    }
     my $S = -d $w ? sessions($w) : {};
     my (@all_raw, %per);
     my %cc;
@@ -799,8 +950,9 @@ sub _assemble {
         $from = $k->[1] if $k->[1] && (!defined $from || $k->[1] < $from);
         $to = $k->[1] if $k->[1] && (!defined $to || $k->[1] > $to);
     }
+    my %with = map { ($_ => 1) } grep { $o->{content}{$_} } @watch::export_schema::CONTENT_KINDS;
     my @staged = (
-        [ 'README.txt', _readme($brand) ],
+        [ 'README.txt', _readme($brand, \%with) ],
         [ 'config.json', _canon(_config($ctx)) ],
         [ 'probes.json', _canon(_probes($ctx, $all_raw)) ],
         [ 'sizes.json', _canon(_sizes($ctx->{watch})) ],
@@ -808,12 +960,18 @@ sub _assemble {
     for my $h (sort keys %rows) {
         push @staged, [ "rows/$h.jsonl", join('', map { _canon($_) } @{ $rows{$h} }) ];
     }
+    # RS-2, RS-5: each summary and each handoff passes the same two scans; its identity scan uses
+    # every identity string (identity_all), since it is free text. A file with any hit is withheld.
+    for my $k (@watch::export_schema::CONTENT_KINDS) {
+        push @staged, map { [ $_->[0], $_->[1] ] } @{ $o->{content}{$k} || [] };
+    }
     my (@ok, @withheld);
     my $id_list = $o->{identity} || [];
+    my $id_all = $o->{identity_all} || $id_list;
     for my $s (@staged) {
         my ($name, $data) = @$s;
         utf8::encode($data) if utf8::is_utf8($data);
-        if (my $n = identity_hits($data, $id_list)) {
+        if (my $n = identity_hits($data, watch::export_schema::content_kind($name) ? $id_all : $id_list)) {
             push @withheld, { file => $name, reason => 'identity', count => $n };
             next;
         }
@@ -847,7 +1005,15 @@ sub _assemble {
         scan => { secret_rules_version => (ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{spec_version} : undef),
                   identity_list_size => scalar(@$id_list) },
         export_schema => $watch::export_schema::VERSION,
+        # xxxxxxxx-34: the spec version the section ids follow (2 and up: fixed ids, heading_ids)
+        spec_version => _spec_version($ctx->{spec}),
         ms => int((watch::io::mono() - ($o->{t0} // watch::io::mono())) * 1000),
+        # RS-2/RS-3, RS-5: only in a bundle the user added that kind to
+        (map { my $k = $_;
+               ($watch::export_schema::CONTENT{$k}{flag} => \1,
+                "${k}_n" => scalar(grep { (watch::export_schema::content_kind($_->[0]) // '') eq $k } @ok),
+                "${k}_withheld" => scalar(grep { (watch::export_schema::content_kind($_->{file}) // '') eq $k } @withheld))
+             } grep { $with{$_} } @watch::export_schema::CONTENT_KINDS),
     };
     my $mtext = _canon($manifest);
     die "report: identity in the manifest\n" if identity_hits($mtext, $id_list);
@@ -858,7 +1024,15 @@ sub _assemble {
     my $zip = watch::bundle::zip(\@entries, $o->{now});
     return { zip => $zip, entries => \@entries, manifest => $manifest, withheld => \@withheld,
              rows_n => scalar(@$keep), sessions_n => scalar(keys %rows), from => $from, to => $to,
-             truncated => $truncated };
+             truncated => $truncated, with => \%with,
+             content_src => { map { ($_->[0] => $_->[2]) } map { @{ $o->{content}{$_} || [] } } @watch::export_schema::CONTENT_KINDS } };
+}
+
+# The spec's spec_version as a number, else undef (an older or missing spec).
+sub _spec_version {
+    my ($spec) = @_;
+    my $v = ref $spec eq 'HASH' ? $spec->{spec_version} : undef;
+    return (defined $v && !ref $v && $v =~ /\A[0-9]{1,4}\z/) ? 0 + $v : undef;
 }
 
 # The first-run notice marker id (W-BETA A): the spec's `notice.id` (`watcher-1`), else that.
@@ -914,6 +1088,17 @@ sub out_dir {
     return ("$ctx->{watch}/reports", 'fallback');
 }
 
+# A path for the screen with the home folder as `~` ('?' when unknown).
+sub util_abbrev {
+    my ($p) = @_;
+    return '?' unless defined $p;
+    my $h = $ENV{HOME} // '';
+    $h =~ s{/+\z}{};
+    return $p if $h eq '';
+    $p =~ s{\A\Q$h\E(?=/|\z)}{~};
+    return $p;
+}
+
 sub _human {
     my ($n) = @_;
     return "$n B" if $n < 1024;
@@ -924,10 +1109,23 @@ sub _human {
 # --- the command ------------------------------------------------------------------
 
 sub _usage {
-    print STDERR "usage: report [--dry-run] [--since <N>d|<YYYY-MM-DD>] [--out DIR] [--max-mb N]\n"
+    print STDERR "usage: report [--dry-run] [--since <N>d|<YYYY-MM-DD>] [--out DIR] [--max-mb N] [--with-summaries]\n"
+               . "              [--with-handoffs]\n"
                . "       report verify --zip FILE\n";
     return 64;
 }
+
+# RS-2, RS-5: `summaries: <n> available (<KB>)` and `handoffs: <n> available (<KB>)`, the dry
+# run's lines the report skill asks on (one yes per kind).
+sub _available_line {
+    my ($kind, $files) = @_;
+    my $b = 0;
+    $b += $_->{bytes} for @$files;
+    return sprintf("%s: %d available (%d KB)\n", $kind, scalar @$files, int(($b + 1023) / 1024));
+}
+
+# The output word of one content file and its kind's closing line.
+my %CONTENT_OUT = (summaries => [ 'SUMMARY', 'SUMMARIES' ], handoffs => [ 'HANDOFF', 'HANDOFFS' ]);
 
 # cli(\@argv, \%ctx_seed) -> exit code; prints the B.7 lines.
 sub cli {
@@ -944,6 +1142,10 @@ sub cli {
         elsif ($x =~ /\A--out=(.+)\z/) { $o{out} = $1 }
         elsif ($x eq '--max-mb') { $o{max_mb} = shift @a; return _usage() unless defined $o{max_mb} && $o{max_mb} =~ /\A[1-9][0-9]{0,3}\z/ }
         elsif ($x =~ /\A--max-mb=([1-9][0-9]{0,3})\z/) { $o{max_mb} = $1 }
+        # RS-2, RS-5: only on the command line, each after the user's own yes to that kind in this
+        # run (the report skill); no setting turns either on
+        elsif ($x eq '--with-summaries') { $o{summaries} = 1 }
+        elsif ($x eq '--with-handoffs') { $o{handoffs} = 1 }
         else { return _usage() }
     }
     my $t0 = watch::io::mono();
@@ -955,10 +1157,14 @@ sub cli {
     my ($salt, $iid) = keys_for($ctx->{watch}, $o{dry});
     my $rr = defined &settings::repo_roots ? eval { settings::repo_roots(settings::resolve({})) } : undef;
     $ctx->{settings}{repo_roots_list} = ref $rr eq 'HASH' ? $rr->{roots} : [];
-    my $ids = identity_list($ctx, no_git => (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_GIT} // '') eq '1'),
-                            extra => $seed->{identity_extra});
+    my $no_git = (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_GIT} // '') eq '1');
+    my $ids = identity_list($ctx, no_git => $no_git, extra => $seed->{identity_extra});
+    my %avail = (summaries => summary_files($ctx->{root}, $since), handoffs => handoff_files($ctx->{root}, $since));
+    my @kinds = grep { $o{$_} } @watch::export_schema::CONTENT_KINDS;
+    my %with = map { ($_ => $avail{$_}) } @kinds;
+    $with{identity_all} = identity_list($ctx, no_git => $no_git, extra => $seed->{identity_extra}, all => 1) if @kinds;
     my $res = build($ctx, since => $since, max_bytes => $o{max_mb} * 1024 * 1024, salt => $salt,
-                    install_id => $iid, identity => $ids, now => $ctx->{now}, t0 => $t0);
+                    install_id => $iid, identity => $ids, now => $ctx->{now}, t0 => $t0, %with);
     my $stamp = POSIX::strftime('%Y-%m-%d_%H-%M-%S', localtime(int $ctx->{now}));
     my $name = sprintf('%s-report-%s-%s.zip', $ctx->{brand} // 'plugin', $stamp, substr($iid // 'dryrun00', 0, 8));
     my $path = "$dir/$name";
@@ -972,16 +1178,46 @@ sub cli {
     }
     my $n = scalar @{ $res->{entries} };
     my @rowfiles = grep { $_->[0] =~ m{\Arows/} } @{ $res->{entries} };
-    my @fixed = grep { $_->[0] !~ m{\Arows/} } @{ $res->{entries} };
-    print 'REPORT ' . $path . ' ' . _human(length $res->{zip}) . ($o{dry} ? ' (dry run: nothing written)' : '') . "\n";
-    printf "FILES %d: %s%s\n", $n, join(', ', map { $_->[0] } @fixed),
-        (@rowfiles ? sprintf(', rows/ (%d sessions, %d rows, %s..%s)', scalar @rowfiles, $res->{rows_n},
-                             _ts_date($res->{from}) // '?', _ts_date($res->{to}) // '?') : '');
-    print "TRUNCATED: over --max-mb, the newest rows are kept (from " . (_ts_date($res->{from}) // '?') . ")\n" if $res->{truncated};
-    for my $wh (@{ $res->{withheld} }) {
-        print "WITHHELD $wh->{file} (" . ($wh->{reason} eq 'identity' ? 'identity; please tell the developer' : "secret: " . join(',', @{ $wh->{rules} || [] })) . ")\n";
+    my %cfiles;
+    for my $e (@{ $res->{entries} }) {
+        my $k = watch::export_schema::content_kind($e->[0]);
+        push @{ $cfiles{$k} }, $e if defined $k;
     }
-    print "NOT INCLUDED: conversation text, summaries, handoffs, commands, file paths, repo and branch names, settings paths\n";
+    my @fixed = grep { $_->[0] !~ m{\Arows/} && !defined watch::export_schema::content_kind($_->[0]) } @{ $res->{entries} };
+    print 'REPORT ' . $path . ' ' . _human(length $res->{zip}) . ($o{dry} ? ' (dry run: nothing written)' : '') . "\n";
+    printf "FILES %d: %s%s%s\n", $n, join(', ', map { $_->[0] } @fixed),
+        (@rowfiles ? sprintf(', rows/ (%d sessions, %d rows, %s..%s)', scalar @rowfiles, $res->{rows_n},
+                             _ts_date($res->{from}) // '?', _ts_date($res->{to}) // '?') : ''),
+        join('', map { $cfiles{$_} ? sprintf(', %s/ (%d files)', $_, scalar @{ $cfiles{$_} }) : '' } @watch::export_schema::CONTENT_KINDS);
+    print "TRUNCATED: over --max-mb, the newest rows are kept (from " . (_ts_date($res->{from}) // '?') . ")\n" if $res->{truncated};
+    # RS-2, RS-5: the dry run says what could be added, per kind; a run with summaries or
+    # handoffs lists each one (the source path is shown here, on your screen, never in the zip).
+    if ($o{dry}) { print _available_line($_, $avail{$_}) for @watch::export_schema::CONTENT_KINDS }
+    my $src = $res->{content_src} || {};
+    for my $k (@watch::export_schema::CONTENT_KINDS) {
+        for my $e (@{ $cfiles{$k} || [] }) {
+            print "$CONTENT_OUT{$k}[0] $e->[0] " . _human(length $e->[1]) . ' from ' . util_abbrev($src->{ $e->[0] }) . "\n";
+        }
+    }
+    for my $wh (@{ $res->{withheld} }) {
+        my $s = defined watch::export_schema::content_kind($wh->{file});
+        print "WITHHELD $wh->{file} ("
+            . ($wh->{reason} eq 'identity' ? ($s ? 'identity: your names, paths or hosts' : 'identity; please tell the developer')
+                                           : "secret: " . join(',', @{ $wh->{rules} || [] }))
+            . ')' . ($s ? ' from ' . util_abbrev($src->{ $wh->{file} }) : '') . "\n";
+    }
+    my %w = %{ $res->{with} || {} };
+    for my $k (grep { $w{$_} } @watch::export_schema::CONTENT_KINDS) {
+        print "$CONTENT_OUT{$k}[1]: added at your request; secrets and your names, paths and hosts were scanned, but business content is not masked\n";
+    }
+    if (!$w{summaries} && !$w{handoffs}) {
+        print "NOT INCLUDED: conversation text, summaries, handoffs, commands, file paths, repo and branch names, settings paths\n";
+    } else {
+        my @in = grep { $w{$_} } @watch::export_schema::CONTENT_KINDS;
+        my @out = grep { !$w{$_} } @watch::export_schema::CONTENT_KINDS;
+        print 'NOT INCLUDED: ' . join(', ', @out, 'settings paths') . '; outside ' . join(' and ', map { "$_/" } @in)
+            . " also conversation text, commands, file paths, repo and branch names\n";
+    }
     print "SEND: attach this file to a message to the developer. Nothing was uploaded.\n";
     unless ($o{dry}) {
         if (($^O // '') eq 'darwin') {
@@ -997,6 +1233,8 @@ sub cli {
 sub _file_kind {
     my ($f) = @_;
     return 'rows' if $f =~ m{\Arows/};
+    my $c = watch::export_schema::content_kind($f);
+    return $c if defined $c;
     (my $k = $f) =~ s/\.[a-z]+\z//;
     return $k;
 }
@@ -1035,9 +1273,12 @@ sub verify_zip {
     return ("unreadable: $u->{error}") if $u->{error} && !$u->{entries};
     push @p, "unreadable: $u->{error}" if $u->{error};
     my %data;
+    my %content;
     for my $e (@{ $u->{entries} || [] }) {
         my $n = $e->{name};
-        push @p, "name: $n" unless watch::bundle::safe_name($n) && ($NAME_OK{$n} || $n =~ m{\Arows/[0-9a-f]{12}\.jsonl\z});
+        my $k = watch::export_schema::content_kind($n);
+        push @{ $content{$k} }, $n if defined $k;
+        push @p, "name: $n" unless watch::bundle::safe_name($n) && ($NAME_OK{$n} || defined $k || $n =~ m{\Arows/[0-9a-f]{12}\.jsonl\z});
         push @p, "symlink: $n" if $e->{symlink};
         push @p, "encrypted: $n" if $e->{encrypted};
         push @p, "entry $n: $e->{error}" if $e->{error};
@@ -1046,6 +1287,18 @@ sub verify_zip {
     }
     my $m = defined $data{'manifest.json'} ? eval { watch::json::decode($data{'manifest.json'}) } : undef;
     if (ref $m ne 'HASH') { push @p, 'manifest: missing or not JSON'; return @p }
+    # RS-3, RS-5: summaries/ only with manifest with_summaries true, handoffs/ only with
+    # with_handoffs true (each kind its own yes), and as many as <kind>_n says
+    my %with;
+    for my $k (@watch::export_schema::CONTENT_KINDS) {
+        my $flag = $watch::export_schema::CONTENT{$k}{flag};
+        my @have = @{ $content{$k} || [] };
+        $with{$k} = watch::export_schema::content_allowed($m, $k);
+        push @p, "$k without $flag: $_" for ($with{$k} ? () : @have);
+        my $cnt = $m->{"${k}_n"};
+        push @p, "manifest: ${k}_n" if $with{$k} && !(defined $cnt && !ref $cnt && $cnt =~ /\A[0-9]{1,6}\z/ && $cnt == @have);
+    }
+    push @p, _section_id_problems($m, \%data);
     push @p, 'manifest: schema' unless defined $m->{schema} && !ref $m->{schema} && $m->{schema} =~ /\A[a-z0-9][a-z0-9-]{0,40}-report\/1\z/
         && defined $m->{plugin} && $m->{schema} eq $m->{plugin} . $SCHEMA_NAME_SUFFIX;
     my %listed;
@@ -1063,9 +1316,46 @@ sub verify_zip {
     }
     for my $n (sort keys %data) {
         my $d = $data{$n};
-        for my $c (@PATTERN_CLASSES) { push @p, "pattern $c->[0]: $n" if $d =~ $c->[1] }
+        # A summary or handoff the user added holds session text (URLs, paths); the secret scan
+        # still applies.
+        my $opted = $with{ watch::export_schema::content_kind($n) // '' };
+        for my $c ($opted ? () : @PATTERN_CLASSES) { push @p, "pattern $c->[0]: $n" if $d =~ $c->[1] }
         my $sh = secret_hits($ctx, scan_text($n, $d));
         push @p, 'secret ' . join(',', @$sh) . ": $n" if @$sh;
+    }
+    return @p;
+}
+
+# xxxxxxxx-34: the section ids in a bundle's rows follow its manifest's spec_version: none or 1,
+# ids by position (`main:3`) or the older slugs, never a fixed id; 2 and up, fixed ids
+# (`main:next-steps`) only. `preamble` and `other` are fine in both. A bundle never mixes the two.
+sub _section_id_problems {
+    my ($m, $data) = @_;
+    my $sv = $m->{spec_version};
+    my $fixed = !defined $sv ? 0
+              : (!ref $sv && $sv =~ /\A[0-9]{1,4}\z/ && $sv >= 1) ? ($sv >= 2 ? 1 : 0) : undef;
+    return ('manifest: spec_version') unless defined $fixed;
+    my $hf = watch::export_schema::heading_fields();
+    my %keep = map { $_ => 1 } @watch::export_schema::SECTION_KEEP;
+    my @p;
+    for my $n (sort grep { m{\Arows/} } keys %$data) {
+        my $bad = 0;
+        for my $line (split /\n/, $data->{$n}) {
+            next unless $line =~ /\S/;
+            my $r = eval { watch::json::decode($line) };
+            next unless ref $r eq 'HASH' && defined $r->{ev} && !ref $r->{ev};
+            for my $f (@{ $hf->{ $r->{ev} } || [] }) {
+                my ($field, $how) = @$f;
+                my $v = $r->{$field};
+                my @ids = $how eq 'key' ? (ref $v eq 'HASH' ? keys %$v : ())
+                        : ref $v eq 'ARRAY' ? @$v : (defined $v && !ref $v) ? ($v) : ();
+                for my $id (grep { defined && !ref && !$keep{$_} } @ids) {
+                    $bad = 1 if ($id =~ $watch::export_schema::SECTION_ID_RE ? 1 : 0) != $fixed;
+                }
+            }
+        }
+        push @p, "section ids: $n " . ($fixed ? 'holds an id that is not a fixed section id' : 'holds a fixed section id')
+            . ' (manifest spec_version ' . ($sv // 'none') . ')' if $bad;
     }
     return @p;
 }

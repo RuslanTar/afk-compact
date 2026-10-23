@@ -1,0 +1,216 @@
+{
+ "id": "AT-CK-01-04-07-11",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "SK-1..SK-4 (owner xxxxxxxx-12/-13, S-SETTINGS E1-E4; REVIEW-NIGHT-2 test gap): ticket_pattern names the bucket from a numeric branch ticket (AT-CK-01); a secret_extra_rules HARD regex feeds the secret scan as user-hard-1, seen through risk's credential-value class (AT-CK-04, its scan half); resume_proceed is tighten-only: settings confirm, env confirm over a file auto, env auto never loosens a file confirm, default auto (AT-CK-07/08, locate's line); handoff_reuse_window_min 90 is clamped to 60 and 0 stays 0 (AT-CK-11)",
+ "now": "2026-10-23T08:10:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/123-retry",
+      "commits": [
+       {
+        "files": {
+         "README.md": "seed\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-23T08:00:00+03:00\"}"
+    },
+    {
+     "write": "$TMP/c/secret.txt",
+     "content": "echo ACME-123456789012"
+    }
+   ]
+  },
+  {
+   "name": "resume_proceed default",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^resume_proceed: auto \\(default\\)$"
+    ]
+   }
+  },
+  {
+   "name": "resume_proceed confirm in the settings file",
+   "options": {
+    "resume_proceed": "confirm"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^resume_proceed: confirm \\(settings\\)$"
+    ]
+   }
+  },
+  {
+   "name": "resume_proceed confirm from env wins over a file auto",
+   "options": {
+    "resume_proceed": "auto"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1",
+    "CLAUDE_PLUGIN_OPTION_RESUME_PROCEED": "confirm"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^resume_proceed: confirm \\(env\\)$"
+    ]
+   }
+  },
+  {
+   "name": "resume_proceed: env auto cannot loosen a file confirm",
+   "options": {
+    "resume_proceed": "confirm"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1",
+    "CLAUDE_PLUGIN_OPTION_RESUME_PROCEED": "auto"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^resume_proceed: confirm \\(settings\\)$"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-04 (scan half): a secret_extra_rules HARD regex is a credential value (user-hard-1)",
+   "options": {
+    "secret_extra_rules": "HARD:ACME-[0-9]{12}"
+   },
+   "argv": [
+    "risk",
+    "--cmd-file",
+    "$TMP/c/secret.txt",
+    "--cwd",
+    "$TMP/repo",
+    "--source",
+    "own"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^risk: ask \\(credential-value\\)$",
+     "^classes: user-hard-1$"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-01: ticket_pattern (?:^|/)([0-9]+)- puts feature/123-retry in bucket 123",
+   "options": {
+    "ticket_pattern": "(?:^|/)([0-9]+)-"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "/repo/123/"
+    ]
+   }
+  },
+  {
+   "name": "reuse window clamped to 60",
+   "options": {
+    "handoff_reuse_window_min": 90
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\"reuse_window_min\":60"
+    ]
+   }
+  },
+  {
+   "name": "reuse window 0",
+   "options": {
+    "handoff_reuse_window_min": 0
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\"reuse_window_min\":0"
+    ]
+   }
+  }
+ ]
+}

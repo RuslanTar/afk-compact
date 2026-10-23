@@ -101,7 +101,10 @@ EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
 # </summary>; the 6 P5 summaries and the AT-P5-02 cases), apart so AT-C-03 stays green until
 # CORE-05 and MOD-05 build the rule; p5/copy_trailers.json lists extra trailers for that table only.
 # acuity: T-TEXT E6 golden summaries with the Acuity field (AT-AC-02, AT-AC-03).
-SUB_TABLES = ("p5", "acuity")
+# idle: the three idle compactions of the 2026-10-23 lab runs on Claude Code 2.1.309 (X1, X4, U1h),
+# each as the installed message (3 engine trailers after the sentinel) and as the PostCompact
+# compact_summary (an <analysis> block before <summary>); both forms of one run share one body.
+SUB_TABLES = ("p5", "acuity", "idle")
 PAYLOADS = os.path.join(FIX, "payloads")
 SEQUENCES = os.path.join(FIX, "sequences")
 SECRET_MARK = "$SECRET{"
@@ -188,7 +191,7 @@ def normalize(text, name=None, trailers=()):
 
     Head (repeated until none applies, blank lines between parts dropped): a line starting
     `This session is being continued`; a `<tools-used-before-summary>` block through its closing
-    tag; a `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
+    tag; a closed `<analysis>` block (the PostCompact form keeps it, 2.1.309); a `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
     Tail: the body ends before the first line holding `</summary>` (text before the tag on that
     line is body). Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1; needs `name`): when
     the first non-blank text after `</summary>` (the rest of that line, else the next non-blank
@@ -212,6 +215,15 @@ def normalize(text, name=None, trailers=()):
             while i < len(lines) and "</tools-used-before-summary>" not in lines[i]:
                 i += 1
             i += 1
+        elif s.startswith("<analysis>"):
+            # the summarizer's scratch block a PostCompact compact_summary keeps (2.1.309);
+            # an unclosed one is body
+            j = i
+            while j < len(lines) and "</analysis>" not in lines[j]:
+                j += 1
+            if j >= len(lines):
+                break
+            i = j + 1
         elif s == "Summary:":
             i += 1
         elif lines[i].startswith("<summary>"):

@@ -1,0 +1,7 @@
+file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatch	sentinel_place
+01-x1-opus-installed.txt	ok	1	1	c514f0df	main	446fe75a452be60aa22c73caea03525524a423f6f84a382427f1fb811d21e6dd		inside
+02-x4-opus-399k-installed.txt	ok	1	1	8832234d	main	a2225b52d25e45aaefc231a53b19dffdba3682a725c210276e4dd6e06c60339b		inside
+03-u1h-haiku-installed.txt	ok	1	1	3017f669	main	887939915967cedfcbc84a237a5e2fdec79d7d734afaca0bc4c48a6538a58bdb		inside
+04-x1-opus-postcompact.txt	ok	1	1	c514f0df	main	446fe75a452be60aa22c73caea03525524a423f6f84a382427f1fb811d21e6dd		inside
+05-x4-opus-399k-postcompact.txt	ok	1	1	8832234d	main	a2225b52d25e45aaefc231a53b19dffdba3682a725c210276e4dd6e06c60339b		inside
+06-u1h-haiku-postcompact.txt	ok	1	1	3017f669	main	887939915967cedfcbc84a237a5e2fdec79d7d734afaca0bc4c48a6538a58bdb		inside

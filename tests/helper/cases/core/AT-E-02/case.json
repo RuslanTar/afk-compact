@@ -1,6 +1,6 @@
 {
  "id": "AT-E-02",
- "note": "MOD-SPEC §10 AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (ref-only by the 50 MB cap, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB",
+ "note": "MOD-SPEC §10 AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (withheld, rules over-total, by the 50 MB evidence_total_max_mb default since SK-5, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -132,7 +132,7 @@
     "exit": 0,
     "stdout_has": [
      "^copied\\t\\S+/cap/part-1\\.bin\\t",
-     "^(ref-only|referenced-budget)\\t\\S+/cap/part-6\\.bin\\t"
+     "^(withheld|referenced-budget)\\t\\S+/cap/part-6\\.bin\\t-\\t"
     ],
     "stdout_lacks": [
      "^copied\\t\\S+/cap/part-6\\.bin\\t"

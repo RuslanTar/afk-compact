@@ -10,8 +10,9 @@ use watch::spec;
 use watch::io;
 
 # Main section roles, by position in spec `sections_main` (the CONSISTENCY §1
-# section order). Used only when the spec lists exactly this many sections.
-my @MAIN_ROLES = qw(resume_here user_constraints decisions in_flight live_state
+# section order; `## Approvals` after User constraints since the 2026-10-23 scoped-approval
+# ruling, AP-3). Used only when the spec lists exactly this many sections.
+my @MAIN_ROLES = qw(resume_here user_constraints approvals decisions in_flight live_state
                     open_questions location work_done evidence next_steps);
 my %NONE_ROLES = map { $_ => 1 } qw(user_constraints in_flight live_state open_questions);
 

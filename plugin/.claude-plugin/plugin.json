@@ -1,5 +1,5 @@
 {
-  "name": "compactinue",
+  "name": "afk-compact",
   "version": "0.1.0",
   "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
   "author": { "name": "Ruslan Taranenko" },
@@ -128,7 +128,7 @@
     "watcher": {
       "type": "string",
       "title": "Watcher",
-      "description": "Local content-free compaction logs (shadow) or off. Nothing is sent; share with /compactinue:report.",
+      "description": "Local content-free compaction logs (shadow) or off. Nothing is sent; share with /afk-compact:report.",
       "default": "shadow"
     },
     "stall_min": {
@@ -184,7 +184,7 @@
     "unattended_prod_reads": {
       "type": "string",
       "title": "Unattended production reads",
-      "description": "forbid = a resumed session asks before any production step; allow = a read-only production check the session builds itself may run without asking. Production writes and commands from a handoff always ask. Read from your settings file only (flags and env are ignored).",
+      "description": "forbid = a resumed session asks before any production step, unless an approval you gave names that read command; allow = a read-only production check the session builds itself may run without asking. Production writes always ask, and so do production commands copied from a handoff unless an approval you gave names that read command. Read from your settings file only (flags and env are ignored).",
       "default": "forbid"
     },
     "prod_patterns": {
@@ -196,8 +196,8 @@
     "idle_handoff_turn": {
       "type": "string",
       "title": "Pre-idle handoff turn",
-      "description": "on = when the session has been idle for about 49 minutes, the model gets one turn to write a handoff before the prompt cache expires; off = none. Any other value counts as off.",
-      "default": "off"
+      "description": "auto = when Claude Code's own idle compaction is off, the model gets one turn to write a handoff about 49 minutes into an idle period, before the prompt cache expires; when it is on (or its setting cannot be read), the plugin checks about 55.5 minutes in and runs that turn only if Claude Code did not compact the session and no agents run. off = never. The old value on, and any other value, counts as auto.",
+      "default": "auto"
     },
     "idle_handoff_min_tokens": {
       "type": "number",
@@ -206,6 +206,54 @@
       "default": 200000,
       "min": 100000,
       "max": 1000000
+    },
+    "ticket_pattern": {
+      "type": "string",
+      "title": "Ticket pattern",
+      "description": "Regular expression that finds the ticket id in a branch name, for the handoff folder (group 1 if it has one, else the whole match). The id must be letters, digits, '.', '_' or '-'. An invalid pattern counts as the default. Folders made under the default are still found after a change.",
+      "default": "[A-Z][A-Z0-9]+-[0-9]+"
+    },
+    "secret_extra_rules": {
+      "type": "string",
+      "title": "Extra secret rules",
+      "description": "Your own secret rules beside the shipped ones, separated by ';': HARD:<regex> blocks a handoff and withholds a file, WARN:<regex> warns and redacts, NAME:<glob> withholds a file by name. They can only withhold more. Read from your settings file only (flags and env are ignored).",
+      "default": ""
+    },
+    "resume_proceed": {
+      "type": "string",
+      "title": "Resume: go on or confirm",
+      "description": "auto = a resume you start goes on with Step 1 after its report; confirm = it stops after the report and waits for your go. The resume after a compaction is not affected. The stricter value of your settings, a flag or env wins.",
+      "default": "auto"
+    },
+    "handoff_reuse_window_min": {
+      "type": "number",
+      "title": "Handoff reuse window (minutes)",
+      "description": "A handoff written less than this many minutes ago, with nothing changed since, is reused instead of written again. 0 = never reuse.",
+      "default": 15,
+      "min": 0,
+      "max": 60
+    },
+    "evidence_total_max_mb": {
+      "type": "number",
+      "title": "Evidence total (MB)",
+      "description": "Most evidence one sweep or handoff copies in full; a file beyond it is not copied (listed as withheld: over-total) and stays where it is. Nothing is deleted.",
+      "default": 50,
+      "min": 10,
+      "max": 500
+    },
+    "watch_quota_mb": {
+      "type": "number",
+      "title": "Log size warning (MB)",
+      "description": "Size of the local compaction logs that raises a storage warning; warn only, nothing is deleted. 0 = no warning.",
+      "default": 50,
+      "min": 0,
+      "max": 10000
+    },
+    "protected_branches": {
+      "type": "string",
+      "title": "Protected branches",
+      "description": "Extra branch names or globs, separated by ';', that count as protected beside the shipped list (the remote's default branch, main, master, trunk, develop, stable, staging, gh-pages, prod…, release…, hotfix/…): a push to one always asks again, whatever was approved before. * matches within one part of the name, ** across /, ? one character. They can only add: no entry removes a shipped branch. Read from your settings file only (flags and env are ignored). Empty = the shipped list only.",
+      "default": ""
     }
   }
 }

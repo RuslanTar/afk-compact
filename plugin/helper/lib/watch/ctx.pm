@@ -56,6 +56,11 @@ my %DEFAULTS = (
     deny_class_patterns         => '',
     handoff_turn                => 'halt',
     handoff_turn_max_tokens     => 64000,
+    # SK-6 (owner xxxxxxxx-14, S-SETTINGS E6): the watch folder size that raises A-24 (0 = off)
+    watch_quota_mb              => 50,
+    # owner xxxxxxxx-29: the user's add-only protected branches (a protective key: _settings
+    # takes it from the resolved settings only, never from env)
+    protected_branches          => '',
 );
 
 my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
@@ -92,6 +97,12 @@ sub _settings {
     for my $k (keys %DEFAULTS) {
         my $v;
         $v = $given->{$k} if $given && exists $given->{$k};
+        if ($k eq 'protected_branches') {
+            # Protective (settings.pm %NO_FLAG): the resolved value or nothing; an env value
+            # would make the watcher's protected-push reading differ from the approvals'.
+            $s{$k} = (defined $v && !ref $v) ? $v : $DEFAULTS{$k};
+            next;
+        }
         $v = _expand($v) if defined $v && !ref $v;
         unless (defined $v) {
             $v = _expand($ENV{'CLAUDE_PLUGIN_OPTION_' . uc $k});
@@ -102,7 +113,7 @@ sub _settings {
     $s{handoff_root} = _expand($s{handoff_root}) || _expand($DEFAULTS{handoff_root});
     for my $k (qw(stall_min cache_ttl_s compact_target_tokens compact_soft_max_tokens
                   native_window_tokens max_auto_continues_per_hour evidence_quota_mb
-                  handoff_turn_max_tokens)) {
+                  handoff_turn_max_tokens watch_quota_mb)) {
         $s{$k} = $DEFAULTS{$k} unless defined $s{$k} && $s{$k} =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         $s{$k} = 0 + $s{$k};
     }

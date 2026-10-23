@@ -1,11 +1,13 @@
 # cmd/dispatch.pl: write a dispatch record (MOD-SPEC §2.3; BUILD-PLAN §3.1, §3.4). Owner: WP-core.
 # dispatch --sid S --nonce N --actor main|<agentId> --trigger T --channel mod-hook|mod-self|classic
 #   --resume-pref P --tags a,b --midturn true|false --instr-sha8 H --instr-bytes B
-#   --cc-version V --load-id L [--handoff-ht H] [--idle[=true|false] --idle-gap-s N]
+#   --cc-version V --load-id L [--handoff-ht H] [--idle[=true|false] --idle-gap-s N] [--model M]
 # -> `ok`; an existing record -> exit 3 `REFUSED: nonce-exists`. Row `dispatch`.
 # --handoff-ht (D-18 B3): the handoff turn this dispatch follows or interrupts.
 # --idle / --idle-gap-s (IC-1 D1): the mod passes them (the `=` form) only on an idle main auto
 # dispatch; absent means `idle: false` on a mod record (null on a classic one).
+# --model (MG-4, ratify R4 guard): the session's model as the mod read it (`$.session.model()`);
+# recorded on the record and the row only. A value that is not a plain model id is left out.
 use strict;
 use warnings;
 use utf8;
@@ -15,7 +17,7 @@ package cmd_dispatch;
 sub run {
     my ($opt) = args::parse(\@_, bools => ['idle'],
                             known => [qw(sid nonce actor trigger channel resume-pref tags midturn instr-sha8
-                                         instr-bytes cc-version load-id handoff-ht idle-gap-s root log-dir)]);
+                                         instr-bytes cc-version load-id handoff-ht idle-gap-s model root log-dir)]);
     my $sid = args::init_sid($opt);
     args::need($opt, qw(nonce actor trigger channel));
     die "usage: --nonce is 8 lowercase hex\n" unless nonce::valid($opt->{nonce});
@@ -24,7 +26,7 @@ sub run {
     my $pref = $opt->{'resume-pref'} // ($opt->{actor} eq 'main' ? 'prompt.context' : 'none');
     die "usage: --resume-pref prompt.context|sessionstart|prompt.submit|none\n" unless $dispatch::PREFS{$pref};
     my @tags = grep { $_ ne '' } split /,/, ($opt->{tags} // '');
-    for my $t (@tags) { die "usage: --tags from midturn,auto,chain,measured,handoff\n" unless $dispatch::TAGS{$t} }
+    for my $t (@tags) { die "usage: --tags from midturn,auto,chain,measured,handoff,queue\n" unless $dispatch::TAGS{$t} }
     die "usage: --handoff-ht is 8 lowercase hex\n" if defined $opt->{'handoff-ht'} && !handoff_turn::valid_ht($opt->{'handoff-ht'});
     my $mid = $opt->{midturn} // 'false';
     die "usage: --midturn true|false\n" unless $mid =~ /^(true|false)$/;
@@ -34,6 +36,8 @@ sub run {
     $idle = $idle eq '1' ? 'true' : $idle eq '0' ? 'false' : $idle if defined $idle;
     die "usage: --idle true|false\n" if defined $idle && $idle !~ /^(true|false)$/;
     die "usage: --idle-gap-s is a number\n" if defined $opt->{'idle-gap-s'} && $opt->{'idle-gap-s'} !~ /^\d+$/;
+    my $model = $opt->{model};
+    $model = undef if defined $model && !dispatch::valid_model($model);
     my $mod = $opt->{channel} =~ /^mod-/ ? 1 : 0;
     my $trigger = $opt->{trigger};
     my $unknown_trigger = !$dispatch::TRIGGERS{$trigger};
@@ -46,7 +50,7 @@ sub run {
         idle => (defined $idle ? ($idle eq 'true' ? 1 : 0) : ($mod ? 0 : undef)), idle_gap_s => $opt->{'idle-gap-s'},
         instructions_sha8 => $opt->{'instr-sha8'}, instructions_bytes => $opt->{'instr-bytes'},
         cc_version => $opt->{'cc-version'}, cc_version_src => (defined $opt->{'cc-version'} && $opt->{'cc-version'} ne '' ? 'mod' : undef), load_id => $opt->{'load-id'}, pid => $c->{pid}, pid_lstart => $c->{lstart},
-        handoff_ht => $opt->{'handoff-ht'},
+        handoff_ht => $opt->{'handoff-ht'}, model => $model,
     );
     my $ok = dispatch::write($w, $sid, $rec);
     if (!$ok) { args::out('REFUSED: nonce-exists'); return 3 }
@@ -55,7 +59,8 @@ sub run {
                           channel => $h{channel}, resume_pref => $h{resume_pref}, midturn => $h{midturn}, idle => $h{idle},
                           idle_gap_s => $h{idle_gap_s}, tags => $h{tags},
                           instructions_bytes => $h{instructions_bytes},
-                          (defined $h{handoff_ht} ? (handoff_ht => $h{handoff_ht}) : ())],
+                          (defined $h{handoff_ht} ? (handoff_ht => $h{handoff_ht}) : ()),
+                          (defined $h{model} ? (model => $h{model}) : ())],
              actor => ($h{actor} eq 'main' ? 'main' : $h{actor}));
     args::out('ok');
     return 0;

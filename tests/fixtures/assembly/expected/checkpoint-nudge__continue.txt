@@ -1,4 +1,4 @@
-Note from the user's compactinue plugin: context is at 612,345 tokens.
+Note from the user's afk-compact plugin: context is at 612,345 tokens.
 Once this turn is over, the plugin compacts the session into a handoff summary. Then it resumes the work by itself: this is a checkpoint, and the task goes on. Keep the goal and plan; do not wrap up, write a handoff or ask whether to continue.
 Take a clean checkpoint in at most 6 tool calls; a parallel batch counts as one.
 1. Finish, don't start (≤3 calls): finish the atomic step in progress unless it needs a choice from the user or acts outward; start nothing new. Never abort, reset or skip a merge, rebase or edit set to look clean: call it MID-STEP <step>, remaining <what>.

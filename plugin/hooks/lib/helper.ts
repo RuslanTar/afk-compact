@@ -67,10 +67,12 @@ export type DispatchArgs = {
   handoffHt?: string
   /** IC-1 D1: an idle dispatch, with the seconds since the last main turn end. */
   idle?: { gapS: number }
+  /** MG-4: the session's model (`$.session.model()`), recorded only. */
+  model?: string
 }
 
 /**
- * `dispatch … [--handoff-ht H] [--idle=true --idle-gap-s=N]` → `ok`; exit 3 `REFUSED: nonce-exists`.
+ * `dispatch … [--handoff-ht H] [--idle=true --idle-gap-s=N] [--model M]` → `ok`; exit 3 `REFUSED: nonce-exists`.
  * `--idle` is given only for an idle dispatch (absent = false), in the `=` form, which the
  * helper's parser reads alike for a value flag and a boolean one (CORE-14).
  */
@@ -82,6 +84,7 @@ export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
     '--cc-version', a.ccVersion ?? '', '--load-id', a.loadId,
     ...(a.handoffHt !== undefined ? ['--handoff-ht', a.handoffHt] : []),
     ...(a.idle !== undefined ? ['--idle=true', '--idle-gap-s=' + String(a.idle.gapS)] : []),
+    ...(a.model !== undefined ? ['--model=' + a.model] : []),
   ])
 }
 
@@ -271,8 +274,12 @@ export function channelToken(v: string | undefined): string | null {
 /**
  * The re-measure block (`measure --sid --compact --nonce N`), or undefined. The nonce makes the
  * evidence map this compaction's (its checkpoint, else its own sweep), never a newer one's.
+ * `copy` (AP-5): the saved copy of this compaction's summary, whose `## Approvals` lines the
+ * helper checks against this session's transcript (`Approvals (checked)` lines); without it the
+ * block has no approvals line, so no approval in the summary counts as checked.
  */
-export async function measure(d: Deps, sid: string, nonce?: string, timeoutMs = CHECKPOINT_MS): Promise<string | undefined> {
-  const r = await call(d, ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : [])], timeoutMs)
+export async function measure(d: Deps, sid: string, nonce?: string, timeoutMs = CHECKPOINT_MS, copy?: string): Promise<string | undefined> {
+  const args = ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : []), ...(copy !== undefined && copy !== '' ? ['--copy=' + copy] : [])]
+  const r = await call(d, args, timeoutMs)
   return r.ok ? r.stdout.replace(/\s+$/, '') : undefined
 }

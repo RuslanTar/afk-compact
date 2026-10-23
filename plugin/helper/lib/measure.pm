@@ -3,7 +3,8 @@ package measure;
 # measured block). Order: git; in-flight inventory (every listed id); evidence map
 # (<= 8 rows from this compaction's checkpoint or sweep); GSD (own worktree, <= 8
 # lines); the Queued: line when queue_cmd is set. <= 3,000 B, cut at a line
-# boundary with `(+N lines)`. No `Approvals (verified)` section in v1 (D-2). Times are
+# boundary with `(+N lines)`. With `--copy` (AP-5) the approvals lines of the summary follow
+# the git lines (cmd/measure.pl checks them); without it there is none. Times are
 # stamps (`In flight (sidecar 2026-10-21 14:05 +0300)`, RV-24).
 # Owner: WP-core.
 use strict;
@@ -132,6 +133,7 @@ sub compact {
     my $sid_dir = rc::sid_dir();
     my $g = $o{git} || ($left->(2000) >= 200 ? git::measure($cwd, $left->(2000)) : { status => 'timeout' });
     my @l = git_lines($g);
+    push @l, @{ $o{approvals} } if ref $o{approvals} eq 'ARRAY';
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);
     push @l, evidence_lines($o{evidence_rows} || (defined $sid_dir ? _evidence_rows($sid_dir, $nonce) : []));
     my $wt = $o{worktree} // $g->{toplevel};
@@ -146,6 +148,37 @@ sub compact {
     my $bytes = do { my $c = $text; utf8::encode($c) if utf8::is_utf8($c); length $c };
     rc::emit('measure', [bytes => $bytes, ms => util::clock_ms() - $t0]) unless $o{quiet};
     return $text;
+}
+
+# brief(sid, cwd, %o{git => result}) -> one line <= $BRIEF_MAX bytes for ID-3's `[idle-return]`
+# context line: `git: <branch> @ <head>, dirty <n> · in flight: <n> running, <n> ended`. One git
+# call (2 s at most) and the newest sidecar slot; nothing else.
+our $BRIEF_MAX = 600;
+
+sub brief {
+    my ($sid, $cwd, %o) = @_;
+    my $t0 = util::clock_ms();
+    my $g = $o{git} || git::measure($cwd, 2000);
+    my $st = $g->{status} // 'unavailable';
+    my $gl = $st eq 'ok' ? sprintf('git: %s @ %s, dirty %d', $g->{branch} // '(detached)', $g->{head} // '-', $g->{count} // 0)
+           : $st eq 'timeout' ? 'git: not measured (timeout)'
+           : $st eq 'not-git' ? 'git: not a repository' : 'git: unavailable';
+    my $sid_dir = rc::sid_dir();
+    my $slot = defined $sid_dir ? sidecar::newest($sid_dir) : undef;
+    my $fl = 'in flight: not listed';
+    if ($slot) {
+        my @t = @{ $slot->{tasks} || [] };
+        my $run = grep { ($_->{status} // '') =~ /\A(?:running|pending)\z/i } @t;
+        $fl = sprintf('in flight: %d running, %d ended', $run, @t - $run);
+    }
+    my $line = "$gl · $fl";
+    my $bytes = do { my $c = $line; utf8::encode($c) if utf8::is_utf8($c); length $c };
+    if ($bytes > $BRIEF_MAX) {
+        $line = 'git: branch name too long · ' . $fl;
+        $bytes = do { my $c = $line; utf8::encode($c) if utf8::is_utf8($c); length $c };
+    }
+    rc::emit('measure', [bytes => $bytes, ms => util::clock_ms() - $t0, brief => jsonc::true()]) unless $o{quiet};
+    return $line;
 }
 
 1;

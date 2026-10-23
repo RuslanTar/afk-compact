@@ -18,6 +18,14 @@ sub _hires {
 
 sub test_mode { return (($ENV{STORE_TEST_MODE} // '') eq '1') ? 1 : 0 }
 
+# stamp_ms() -> 1 when a record stamp may carry milliseconds (Time::HiRes loads). In test mode
+# STORE_TEST_NO_HIRES=1 answers 0, so a case can write the stamp a perl without Time::HiRes
+# writes on any machine (review of bcdaca6: the start-record tests must not depend on it).
+sub stamp_ms {
+    return 0 if test_mode() && ($ENV{STORE_TEST_NO_HIRES} // '') eq '1';
+    return _hires();
+}
+
 # Wall clock as epoch seconds (fractional when Time::HiRes loads).
 # STORE_TEST_NOW fixes it in test mode.
 sub now {

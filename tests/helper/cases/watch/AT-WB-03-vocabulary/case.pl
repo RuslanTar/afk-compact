@@ -6,7 +6,7 @@
 # (`"key":"soft_max"`) is no WARN key-value hit, and the bundle still verifies.
 my $files = T::beta_install();
 push @$files,
-    { path => '$ROOT/compactinue/general/x.md', text => "x\n" },
+    { path => '$ROOT/' . $T::BRAND . '/general/x.md', text => "x\n" },
     { path => '$ROOT/shadow/main/x.md', text => "x\n" },
     { path => '$WATCH/0e0e0e0e-1111-4111-8111-111111111111.jsonl',
       jsonl => [ T::row('config_clamped', 60, key => 'soft_max', configured => 600000, effective => 180000),

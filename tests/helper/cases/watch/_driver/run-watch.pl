@@ -72,12 +72,25 @@ sub spec_for_tests {
     my $c = "\xe2\x9f\xab";
     my $b = quotemeta $T::BRAND;
     return {
-        sections_main => ['## Resume here', '## User constraints', '## Decisions and do-not-re-raise', '## In flight',
+        # `## Approvals` since the 2026-10-23 scoped-approval ruling (spec §2, AP-3).
+        sections_main => ['## Resume here', '## User constraints', '## Approvals', '## Decisions and do-not-re-raise', '## In flight',
                           '## Live state', '## Open questions', '## Location', '## Work done and findings',
                           '## Evidence', '## Next steps'],
         sections_subagent => ['## Task as assigned', '## Constraints from the parent', '## Report', '## Done',
                               '## Findings', '## Produced but not yet delivered', '## Own background tasks',
                               '## Next action'],
+        # owner xxxxxxxx-34 ("Stable section ids"): spec_version 2 and the fixed section ids, as shipped
+        spec_version => 2,
+        section_ids => { '## Resume here' => 'main:resume-here', '## User constraints' => 'main:user-constraints',
+                         '## Approvals' => 'main:approvals', '## Decisions and do-not-re-raise' => 'main:decisions',
+                         '## In flight' => 'main:in-flight', '## Live state' => 'main:live-state',
+                         '## Open questions' => 'main:open-questions', '## Location' => 'main:location',
+                         '## Work done and findings' => 'main:work-done', '## Evidence' => 'main:evidence',
+                         '## Next steps' => 'main:next-steps', '## Task as assigned' => 'sub:task',
+                         '## Constraints from the parent' => 'sub:parent-constraints', '## Report' => 'sub:report',
+                         '## Done' => 'sub:done', '## Findings' => 'sub:findings',
+                         '## Produced but not yet delivered' => 'sub:undelivered',
+                         '## Own background tasks' => 'sub:background-tasks', '## Next action' => 'sub:next-action' },
         time_re => "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}",
         time_legacy_re => "([0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}",
         marker_re => "^$o$b v1 n=([0-9a-f]{8}) s=(main|sub|manual)$c\$",
@@ -92,7 +105,7 @@ sub spec_for_tests {
                              'mcp-write' => '\Amcp__[A-Za-z0-9_-]+__(?:create|update|delete|send)' },
         secret_rules => [ { id => 'jwt', class => 'HARD', re => 'eyJ[A-Za-z0-9_-]{8,}' },
                           { id => 'kv', class => 'WARN', re => '(?:pass|secret|token|key)\s*[=:]\s*\S{6,}' } ],
-        alert_texts => { map { sprintf('A-%02d', $_) => sprintf('test text %02d', $_) } 1 .. 27 },
+        alert_texts => { map { sprintf('A-%02d', $_) => sprintf('test text %02d', $_) } 1 .. 29 },
     };
 }
 

@@ -22,7 +22,7 @@ test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce 
   expect(w.flag(d[0], '--midturn')).toBe('true')
   expect(instr.startsWith('keep the SQL\n\nThe user\'s ')).toBe(true)
   expect(instr).toContain('This began mid-turn: the last step is [unverified] unless shown done.')
-  expect(instr.endsWith('Replace the earlier summary; do not extend it.\n')).toBe(true)
+  expect(instr.endsWith('Replace, never extend, the earlier summary.\n')).toBe(true)
   expect(w.callsOf('checkpoint').length).toBe(1)
 })
 
@@ -234,8 +234,9 @@ test('helper down: dispatch record written with $.fs.write, helper_missing in a 
   await raiseCompact($, { trigger: 'manual' })
   const nonce = markerNonce(w, w.compacts[0]?.instructions) ?? ''
   const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/dispatch/${nonce}.json`) ?? '{}') as Record<string, unknown>
-  // The helper's record keys in its order (core-to-mod §17, dispatch.pm record): idle and idle_gap_s always.
-  expect(Object.keys(rec)).toEqual(['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'idle', 'idle_gap_s', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'cc_version_src', 'load_id', 'pid', 'pid_lstart', 'ts'])
+  // The helper's record keys in its order (core-to-mod §17, dispatch.pm record): idle and idle_gap_s always;
+  // `model` last, when the session's model was read (MG-4).
+  expect(Object.keys(rec)).toEqual(['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'idle', 'idle_gap_s', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'cc_version_src', 'load_id', 'pid', 'pid_lstart', 'ts', 'model'])
   expect([rec.agent_id, rec.idle, rec.idle_gap_s]).toEqual([null, false, null])
   expect(rec.cc_version_src).toBe(typeof rec.cc_version === 'string' && rec.cc_version !== '' ? 'mod' : null)
   expect(rec.channel).toBe('mod-hook')
@@ -346,6 +347,24 @@ test('@remeasure@: the after-step measures for this compaction\'s nonce (its own
   expect(w.flag(m[0], '--nonce')).toBe(nonce)
 })
 
+// AP-5 (D-2 replaced by scoped carry, owner 2026-10-23; SPEC-DELTAS AT-AP-05, mod half): the
+// re-measure names this compaction's saved copy, so the helper checks the summary's approvals.
+test('AT-AP-05 (mod): the after-step measure passes --copy=<the saved copy save-copy printed>; no saved copy, no --copy; the delivery re-measure passes it too', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  const copy = `~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`
+  expect(w.callsOf('measure')[0]?.args).toContain('--copy=' + copy)
+  await w.advance(601 * 1000)
+  await $.prompt.context({ blocks: [] })
+  expect(w.callsOf('measure')[1]?.args).toContain('--copy=' + copy)
+  w.saveLine = 'REFUSED: no-bucket'
+  await raiseCompact($, { trigger: 'manual' })
+  const last = w.callsOf('measure')[w.callsOf('measure').length - 1]
+  expect((last?.args ?? []).some(a => a.startsWith('--copy'))).toBe(false)
+})
+
 // C-STORE D4 (MOD-SPEC §5.8 item 4): the mod writes the orphan index marker before its stash.
 test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid> (empty) before pending/<nonce>.mod.md, main and subagent', async ($, on) => {
   const w = new World().install(on)
@@ -367,4 +386,27 @@ test('MOD-06: no vetted watch folder (ident refused every log folder): no marker
   await w.start($)
   await raiseCompact($, { trigger: 'manual' })
   expect(w.writes.filter(p => p.includes('/.orphans/') || p.endsWith('.mod.md'))).toEqual([])
+})
+
+// QA-B3 (owner xxxxxxxx-11 "setting-driven, one text"; REVIEW-NIGHT NR-10): the [queue] lines of
+// the compaction text ride on queue_cmd, as the nudge's do (D-10); unset, they are dropped.
+const QUEUE_LINE = 'A queued question (Questions shows its id)'
+test('QA-B3 (mod part): queue_cmd set: the main compaction text keeps the [queue] lines and the dispatch tags name queue', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compacts[0]?.instructions ?? '').toContain(QUEUE_LINE)
+  expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).toContain('queue')
+  // The subagent text never carries it.
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  expect(w.compacts[1]?.instructions ?? '').not.toContain(QUEUE_LINE)
+  expect(w.callsOf('queue-add').length).toBe(0)
+})
+
+test('QA-B3 (mod part): queue_cmd unset: no [queue] line and no queue tag', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compacts[0]?.instructions ?? '').not.toContain(QUEUE_LINE)
+  expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).not.toContain('queue')
 })

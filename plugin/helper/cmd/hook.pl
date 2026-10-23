@@ -125,8 +125,10 @@ sub on_PreCompact {
     my $nonce = nonce::draw($sid);
     my $prev = rc::root_ok('handoff_root') ? copies::prev_copy($sid, undef) : undef;
     my $prev_abbrev = defined $prev ? util::abbrev($prev) : undef;
-    my $text = assemble::classic_fallback(nonce => $nonce, auto => ($trigger eq 'auto'), previous_copy => $prev_abbrev);
-    my @tags = (($trigger eq 'auto' ? ('auto') : ()), (defined $prev ? ('chain') : ()));
+    my $qc = rc::val('queue_cmd');
+    my $queue = (defined $qc && !ref $qc && $qc ne '') ? 1 : 0;
+    my $text = assemble::classic_fallback(nonce => $nonce, auto => ($trigger eq 'auto'), previous_copy => $prev_abbrev, queue => $queue);
+    my @tags = (($trigger eq 'auto' ? ('auto') : ()), (defined $prev ? ('chain') : ()), ($queue ? ('queue') : ()));
     my $bytes = do { my $c = $text; utf8::encode($c); length $c };
     if (defined(my $w = rc::watch())) {
         # A record that cannot be written (an unwritable root or watch dir) must not cost
@@ -230,7 +232,7 @@ sub session_compact {
     } else {
         return ('', {});
     }
-    my $block = resumeblock::build(sid => $sid, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
+    my $block = resumeblock::build(sid => $sid, nonce => $nonce, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
                                    measured_at => util::iso($now),
                                    remeasure => measure::compact($sid, $p->{cwd}, $nonce,
                                                                  budget_ms => $SESSION_COMPACT_MS - (util::clock_ms() - ($T0 // util::clock_ms()))));

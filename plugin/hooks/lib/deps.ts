@@ -18,6 +18,23 @@ export type RunResult = {
 }
 
 export type Usage = { tokens: number | undefined; window: number; rateLimits: { percentUsed: number }[] }
+
+/** The four token counts of one model request (`ModelUsage`), as far as this module reads them. */
+export type RequestUsage = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
+
+/**
+ * MG-3: the share of a request's input the prompt cache served, `cache_read_input_tokens` over
+ * all input tokens (uncached + read + written), to 3 places; null with no usage or no input. A
+ * request on another model than the session's cannot read the session's cache, so a low share
+ * at a large context is the observable sign of one.
+ */
+export function readShare(u: RequestUsage | null | undefined): number | null {
+  if (!u) return null
+  const n = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
+  const read = n(u.cache_read_input_tokens)
+  const total = n(u.input_tokens) + read + n(u.cache_creation_input_tokens)
+  return total > 0 ? Math.round((read / total) * 1000) / 1000 : null
+}
 export type Version = { version: string; base?: string; builtAt?: string }
 
 /** The launcher's folder under the plugin root (PKG-RUNTIME A.1): this spelling lives here only. */
@@ -57,9 +74,20 @@ export interface Deps {
   home(): Promise<string | undefined>
   usage(): Promise<Usage>
   version(): Promise<Version>
+  /**
+   * MG-4 (ratify R4 kept with a tested guard, owner xxxxxxxx-18): `$.session.model()`, the main
+   * loop's model as `/model` shows it, for the `dispatch` and `handoff_turn_start` rows;
+   * undefined when it cannot be read. Read only to record it: no call of the mod names a model.
+   */
+  model(): Promise<string | undefined>
   /** `$.session.compact`; rejects while a turn runs. */
   compact(instructions: string): Promise<SessionCompactResult>
   submit(text: string): Promise<void>
+  /**
+   * OT-2 (owner xxxxxxxx-06, 2026-10-22): `$.turn.abort({ turnId })`, ending the running main
+   * turn (its tools stopped, no interruption marker); rejects when `turnId` is not the running one.
+   */
+  abortTurn(turnId: string): Promise<void>
   /** `$.process.run` with rejections caught; `stdin` is written to the child, then closed. */
   run(argv: readonly string[], timeoutMs: number, stdin?: string): Promise<RunResult>
   /** Whole-file write; false when it failed. */
@@ -74,6 +102,27 @@ export interface Deps {
   /** `$.ui.toast` for the one-time notice: shown whatever `warn_ui` says (W-BETA A). */
   notice(text: string, timeoutMs: number): void
   policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
+  /**
+   * IA-2 (idle D3): Claude Code's own idle compaction as the merged settings say. `off` when
+   * `idleCompaction` or its precondition `autoCompactEnabled` is `false` (IC-1 F4); `unknown` when a
+   * read throws; else `on`. The server can still keep native idle off while the setting allows it
+   * (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome check (owner xxxxxxxx-17, O-9:
+   * "unreadable means check what happened").
+   */
+  nativeIdle(): Promise<'on' | 'off' | 'unknown'>
+  /**
+   * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
+   * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
+   * logged hint only: the plugin never decides on it (an internal cache shared by all processes
+   * that flips between fetches). Undefined when it cannot be read.
+   */
+  servedHint(): Promise<string | undefined>
+  /**
+   * Owner xxxxxxxx-38 ("Measure more first"): subagents and teammates of this session that have
+   * not ended (`$.agent.list()`, any status but completed, failed or killed), by id; undefined
+   * when the list cannot be read. A workflow's agents are not listed: `agentTurns` counts them.
+   */
+  agentsAlive(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
 }
@@ -103,8 +152,10 @@ export type LoadState = {
   ourSubmitText: string | undefined
   /** Prompts of others (the user, another plugin) entering an idle session whose turn has not started yet. */
   foreignPrompts: number
-  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn gets no nudge. */
+  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn is aborted (OT-1). */
   orphanSubmit: boolean
+  /** The ht that cancelled handoff turn had (closed), for the `handoff_orphan_aborted` row; null when none. */
+  orphanHt: string | null
   /** Our handoff-turn `$.prompt.submit` call is in flight: our own `prompt.submit` hook drops it when a user prompt came first. */
   handoffSubmitting: boolean
   /** The handoff turn deferred for a prompt that entered but has not started its turn: run again if it never does (CR-F17). */
@@ -176,6 +227,29 @@ export type LoadState = {
   idleEpisode: { since: number; done: boolean } | undefined
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
   publishedSinceHuman: boolean
+  /**
+   * The `native/plugin_turn/served_hint` triple of the last `idle_mode` row this load wrote (IA-3,
+   * owner xxxxxxxx-17), undefined before the first.
+   */
+  idleMode: string | undefined
+  /**
+   * Owner xxxxxxxx-37 ("Full block again on return"): a turn not of a person's (a background
+   * result) took an idle compaction's resume block at `usedAt`; the first human-origin turn gets
+   * the full block again, re-measured, with `[idle-again]`. `remeasure` is the measure that turn's
+   * block was built with, taken at `measuredAt` (used, with that stamp, when the new measure fails).
+   */
+  idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
+  /**
+   * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
+   * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
+   * end it was armed for. Also kept in `$.store` (`idle_seen:<sid>`), so a reload keeps it.
+   */
+  compactedAt: { sid: string; at: number; idle: boolean } | undefined
+  /**
+   * Owner xxxxxxxx-38: agent loops (subagents, teammates, a workflow's agents) whose turn started
+   * and has not completed in this load, by agent id.
+   */
+  agentTurns: Set<string>
 }
 
 export type PendingResume = {
@@ -185,7 +259,11 @@ export type PendingResume = {
   /** When the block was built, and what it was built from: a block delivered more than 600 s later is built again with a fresh measure (IC-1 D3). */
   builtAt: number
   args: BlockArgs
-  resumePref: 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
+  /** The measure the block was built with (owner xxxxxxxx-25: a halt change rebuilds it without a new helper call). */
+  remeasure?: string
+  /** When that measure was taken (`@measured_at@` of a rebuild that takes no new one; `builtAt` when absent). */
+  measuredAt?: number
+  resumePref:'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
   /** Main turn count when it became pending (an undelivered block survives a whole turn). */
   turnSeq: number
   /** What the mod decided for this compaction, logged as `mod_outcome` once the block settles. */
@@ -225,6 +303,7 @@ export function newState(loadId: string): LoadState {
     ourSubmitText: undefined,
     foreignPrompts: 0,
     orphanSubmit: false,
+    orphanHt: null,
     handoffSubmitting: false,
     afterForeign: undefined,
     timer: undefined,
@@ -264,6 +343,10 @@ export function newState(loadId: string): LoadState {
     idleDueSid: undefined,
     idleEpisode: undefined,
     publishedSinceHuman: false,
+    idleMode: undefined,
+    idleAgain: undefined,
+    compactedAt: undefined,
+    agentTurns: new Set(),
   }
 }
 
@@ -300,6 +383,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       const v = await $.session.version()
       return { version: v.version, base: v.base, builtAt: v.builtAt }
     },
+    async model() {
+      try {
+        const m = await $.session.model()
+        return typeof m === 'string' && m !== '' ? m : undefined
+      } catch {
+        return undefined
+      }
+    },
     compact: instructions => $.session.compact({ instructions }),
     async submit(text) {
       // A hook or the engine refuses a submit with a resolved `{ drop }`: that is a failed
@@ -307,6 +398,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       const r = await $.prompt.submit({ text })
       if (r.drop !== undefined) throw new Error('dropped: ' + String(r.drop))
     },
+    abortTurn: turnId => $.turn.abort({ turnId }),
     async run(argv, timeoutMs, stdin) {
       try {
         const r = await $.process.run(argv, stdin === undefined ? { timeoutMs, env } : { timeoutMs, env, stdin })
@@ -356,6 +448,40 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         return { mods_managed_only: false, hooks_managed_only: false }
       }
     },
+    async nativeIdle() {
+      try {
+        const idle = await $.settings.read({ key: 'idleCompaction' })
+        const auto = await $.settings.read({ key: 'autoCompactEnabled' })
+        return idle === false || auto === false ? 'off' : 'on'
+      } catch {
+        return 'unknown'
+      }
+    },
+    async servedHint() {
+      // `$.env.get` takes literal names only (the engine lists what a module reads).
+      let dir: string | undefined
+      try {
+        dir = (await $.env.get('CLAUDE_CONFIG_DIR')) || undefined
+      } catch {
+        dir = undefined
+      }
+      try {
+        dir ??= (await $.env.get('HOME')) || undefined
+        if (!dir) return undefined
+        const t = await $.fs.read(dir.replace(/\/+$/, '') + '/' + SERVED_FILE)
+        return typeof t === 'string' ? servedMode(t) : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async agentsAlive() {
+      try {
+        const list = await $.agent.list()
+        return list.filter(a => !AGENT_ENDED.includes(a.status)).map(a => a.id)
+      } catch {
+        return undefined
+      }
+    },
     paths() {
       if (!state.pathsMemo) {
         state.pathsMemo = (async () => {
@@ -385,6 +511,29 @@ export function withHelperWatch(p: Paths | undefined, id: LoadState['ident']): P
   return { root: p.root, watch: w.replace(/\/+$/, '') }
 }
 
+/** Owner xxxxxxxx-17 (2b): Claude Code's own cache file, in `CLAUDE_CONFIG_DIR` or else `HOME`. */
+export const SERVED_FILE = '.claude.json'
+/** A cache file larger than this is not read for the hint. */
+export const SERVED_MAX_CHARS = 8000000
+
+/**
+ * The served idle mode in Claude Code's cache file text (`off`, `log`, `compact`,
+ * `compact_on_return`, ...), or undefined: a short lowercase word only, nothing else of the file.
+ */
+export function servedMode(text: string): string | undefined {
+  if (text.length > SERVED_MAX_CHARS) return undefined
+  try {
+    const j = JSON.parse(text) as { cachedGrowthBookFeatures?: { tengu_sunny_locket?: { mode?: unknown } } }
+    const m = j?.cachedGrowthBookFeatures?.tengu_sunny_locket?.mode
+    return typeof m === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(m) ? m : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** `AgentStatus` values of an agent that ended (owner xxxxxxxx-38: every other status counts as running). */
+export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
+
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)
   return String(err).slice(0, 120)
@@ -395,6 +544,7 @@ export function submitPending(s: LoadState, text: string): void {
   s.ourSubmitPending = true
   s.ourSubmitText = text
   s.orphanSubmit = false
+  s.orphanHt = null
 }
 
 /** Our submit failed, or its turn has started. */

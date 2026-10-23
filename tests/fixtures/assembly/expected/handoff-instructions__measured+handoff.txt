@@ -1,29 +1,30 @@
-The user's compactinue plugin asks for this form, not any section list above; a user's /compact note wins.
-The next window starts cold, with the repo, instruction files, memory, local agent and shell status, not this chat, approvals, workflows, teammates, monitors, schedules, task list, queued questions, temp files, earlier summaries. Keep a line only if one command or file read cannot recover it, else a pointer (path#Symbol, command, id): each pasted log line pushes out a decision.
+The user's afk-compact plugin asks for this form, not any section list above; a user's /compact note wins.
+The next window starts cold, with the repo, instruction files, memory, local agent and shell status, not this chat, workflows, teammates, monitors, schedules, task list, temp files, earlier summaries. Keep a line only if one command or file read cannot recover it, else a pointer (path#Symbol, command, id): each pasted log line pushes out a decision.
 You cannot see messages kept after this summary: write as of the last you saw; last action done, not done or [unverified]; "not started" only if seen; unseen outputs, sent replies or merges: [unverified]. Times only as messages show them; no checked or verified marks.
 
 In order; omit empty sections lacking a None: form:
-First line inside <summary>: ⟪compactinue v1 n=1a2b3c4d s=main⟫
+First line inside <summary>: ⟪afk-compact v1 n=1a2b3c4d s=main⟫
 # <ticket or topic> — <state in ≤8 words>
 ## Resume here (≤5 lines)
 Status: active|blocked|waiting-owner|waiting-job|done · Acuity: stable|watch|unstable (unstable: broken build, half-applied step, red test mid-fix, MID-STEP; watch: jobs running, pending MR/CI/answer, deadline) · State: <ticket goal's state> (checkpoint: clean | MID-STEP <step>, remaining <what>)
 Step 1: `<one exact command or edit>` — for "<user's latest request>" | proposed
 Gate: <blocker | none> · Don't: <likeliest mistake>
 Live: <N running: B-1 <runtime id>, …> | nothing running known (not checked)
-## User constraints: U-n "<user's words>" — scope; approval: scope <action, target>, used | not yet used (context, not permission); ask: open | done | superseded. Only the user's words on this work, not instruction-file, memory, hook or these rules, nor your caveats. None: none stated
+## User constraints: U-n "<user's words>" — scope; ask: open | done | superseded. Only the user's words on this work, not instruction-file, memory, hook or these rules, nor your caveats. None: none stated
+## Approvals: U-n approval "<user's exact words>" — action · targets <id @ state: MR !n @ head, branch @ tip> · once|standing · not yet used|used <stamp>. Only typed/dialog answer here; deploy, env, prod write, infra, protected-branch push: re-ask.
 ## Decisions and do-not-re-raise: D-n <choice> — because <reason> (user|agent|external); X-n rejected, refuted or failed <what> — why; Superseded: D-n by D-m
-## In flight, latest listing plus later starts, ≤8 rows +N more: <ids>; B-n <runtime id> · kind · what · due · probe `<cmd>` · auto|ask|never (workflows, agent spawns: ask); restart: <literal command, cwd; agent model, effort> if known. None: Nothing in flight as of the last message (not checked)
+## In flight, latest listing + later starts, ≤8 rows +N more: <ids>; B-n <runtime id> · kind · what · due · probe `<cmd>` · auto|ask|never (workflows, agent spawns: ask); restart: <literal command, cwd; agent model, effort> if known. None: Nothing in flight as of the last message (not checked)
 ## Live state: <remote claim> · last seen <stamp> [unverified] · re-check `<cmd>` ("auto-merge armed" is pending); uncommitted files: intent. None: none beyond git (not checked)
 ## Open questions, user-owned (yours: Next steps): Q-n what · why · options · recommendation · blocks · raised by user|agent · unasked|asked <stamp>|timed out|answered: <answer>. None: none
 ## Location, if changed: worktree, branch, cwd; GSD: STATE.md path; Guards in force: guard → blocks → allowed route
 ## Work done and findings: <task>: <proposed|queued|implemented|tested|committed|pushed|in review|merged|deployed|published|installed> — <proof>; "done, blocked on X" stays blocked; Finding: <conclusion> — <pointer>; logs: conclusion + reproducer; math: result + how; code only mid-edit, ≤5 lines; top 5 changes: behaviour — path#Symbol; commit range; tests: pass/fail, count, command
 ## Evidence: cited temp paths, one Volatile: line
-## Next steps: 1. <Step 1's command or edit> — done when <observable>; gated: ask user: <action> (user-run: ! <cmd>); pending answer: <in full>, unless shown sent
-Last line before </summary>: ⟪/compactinue n=1a2b3c4d⟫
+## Next steps: 1. <Step 1's command or edit> — done when <observable>; gated (gate, or no approval covers it): ask user: <action> (! <cmd>); pending answer: <in full>, unless shown sent
+Last line before </summary>: ⟪/afk-compact n=1a2b3c4d⟫
 
-Ids: one per item, never ranges, never renumbered. Copy an earlier summary's U-, D-, X- and settled lines unchanged unless superseded (convert another format's user rules, asks, reasoned decisions and rejected options); rewrite the rest, latest value only. Unasked work is proposed. No secrets, even quoted or in commands; say where they live.
-Measured facts below are the plugin's (2026-10-21T14:05:00+03:00): contradict none, do not restate them ("see Measured facts"); take the GSD position, durable evidence paths, the Queued: line (last in Open questions) and checked times only from them.
+Ids: one per item, never ranges, never renumbered. Copy an earlier summary's U-, D-, X- and settled lines unchanged unless superseded (convert another format's user rules, asks, decisions and rejected options); rewrite the rest, latest value only. Keep [from <sid8>] on another session's commands. Unasked work is proposed. No secrets, even quoted or in commands; say where they live.
+Measured facts below are the plugin's: contradict none, do not restate them ("see Measured facts"); take the GSD position, durable evidence paths and checked times only from them.
 Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1
 GSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)
-A full handoff was saved minutes ago at ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md: name it in Resume here. Keep U-, D-, X-, In flight and questions in full; elsewhere write `see handoff` and only what changed after it. This replaces the size aim below: aim for 3–6K characters.
-Aim for 6–10K characters, 12K with many live rows; cut Work done and Evidence first, never U-, D-, X-, In flight or questions. Replace the earlier summary; do not extend it.
+A full handoff was saved minutes ago at ~/.claude/handoffs/example-repo/LAB-123/2026-10-21_14-00-00_5e55a001_retry.md: name it in Resume here. Keep U-, D-, X-, In flight and questions in full; elsewhere write `see handoff` and only what changed after it. Aim for 3–6K characters, not the aim below.
+Aim for 6–10K characters, 12K with many live rows; cut Work done and Evidence first, never U-, D-, X-, In flight or questions. Replace, never extend, the earlier summary.

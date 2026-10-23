@@ -1,6 +1,6 @@
-Note from the user's compactinue plugin: the context reached the planned compaction point, so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.
-Note from the user's compactinue plugin: the session has been idle for 49 minutes and the prompt cache expires soon, so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.
+Note from the user's afk-compact plugin: the context reached the planned compaction point, so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.
+Note from the user's afk-compact plugin: the session has been idle for 49 minutes and the prompt cache expires soon, so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open.
 End with the skill's report. Do not continue the task after it; the user's next message leads.
 Launch no agents or workflows; a background result arriving now: note it in the handoff only. End with the skill's report, then repeat unchanged any question your previous reply asked the user.
-Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `"/p/scripts/compactinue-store" publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
-Note from the user's compactinue plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.
+Note from the user's afk-compact plugin: the handoff budget is spent. Make no call except `"/p/scripts/afk-compact-store" publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
+Note from the user's afk-compact plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.

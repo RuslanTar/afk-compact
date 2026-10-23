@@ -16,7 +16,7 @@ use strict;
 use warnings;
 use utf8;
 
-# The 32 keys of MOD-SPEC §1.2: type; fallback (used only when the manifest lacks the key:
+# The 39 keys of MOD-SPEC §1.2: type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
@@ -49,18 +49,32 @@ our @KEYS = (
     [relaunch_auto               => 'str',  'on',                      'enum'],
     [relaunch_allow              => 'str',  '',                        'list'],
     [relaunch_quiet_s            => 'num',  120,                       'num'],
-    # 2026-10-22: S-SETTINGS B (helper), D (mod; the default is OD-4 provisional, BLD-08), IC-1 (mod)
+    # 2026-10-22: S-SETTINGS B (helper), D (mod; the default `model` is the owner's xxxxxxxx-18,
+    # 2026-10-23 01:48, E-1 checks it; PT-1), IC-1 (mod)
     [unattended_prod_reads       => 'str',  'forbid',                  'enum'],
     [prod_patterns               => 'str',  '',                        'list'],
     [precompact_turn             => 'str',  'model',                   'enum'],
-    [idle_handoff_turn           => 'str',  'off',                     'enum'],
+    # idle D3 (owner 2026-10-23 02:4x, IA-1): `auto` = the plugin's pre-idle turn only while
+    # Claude Code's own idle compaction is off; `off` = never (the old `on` reads as auto)
+    [idle_handoff_turn           => 'str',  'auto',                    'enum'],
     [idle_handoff_min_tokens     => 'num',  200000,                    'num'],
+    # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
+    [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
+    [secret_extra_rules          => 'str',  '',                        'list'],
+    [resume_proceed              => 'str',  'auto',                    'enum'],
+    [handoff_reuse_window_min    => 'num',  15,                        'num'],
+    [evidence_total_max_mb       => 'num',  50,                        'num'],
+    [watch_quota_mb              => 'num',  50,                        'num'],
+    # owner xxxxxxxx-29 (2026-10-23, "add the add-only setting now"): branches added to the
+    # shipped protected list (protected() below); a protective key
+    [protected_branches          => 'str',  '',                        'list'],
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 # The values an enum key exports as is (W-BETA D); any other value exports as `other`.
 our %ENUM = (watcher => [qw(shadow off)], handoff_turn => [qw(halt off)], relaunch_auto => [qw(on shadow off)],
-             unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(off on)]);
+             unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)],
+             resume_proceed => [qw(auto confirm)]);
 
 # DP-3: keys that let the plugin act without asking. Read from the settings file only, and
 # given their %SAFE value when the settings folder is not the account's ~/.claude (CR-F34).
@@ -70,7 +84,18 @@ our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unat
 # Protective keys (S-SETTINGS B, MOD-SPEC §2.6): they can only make the plugin ask or withhold
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
 # settings file, and a foreign config dir does not reset it (that would weaken protection).
-our %NO_FLAG = map { $_ => 1 } qw(prod_patterns);
+# protected_branches is one (owner xxxxxxxx-29): a flag or env value that replaced the file's
+# list would drop the user's own entries.
+our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_branches);
+# Tighten-only keys (S-SETTINGS E3): every source counts and the strictest value wins, so a flag
+# or env can make the plugin stricter, never looser than the settings file. Values from loose to
+# strict.
+our %TIGHTEN = (resume_proceed => [qw(auto confirm)]);
+# PROVISIONAL (SPEC-DELTAS IA-1 / AT-IA-01, a reading of this build, not an owner ruling): an
+# idle_handoff_turn value other than auto, off or the old on reads as this; the other keys fall
+# back to the value with no extra plugin action, which `off` would be here. One value with
+# config.ts IDLE_INVALID_READS_AS.
+our $IDLE_INVALID = 'auto';
 
 # Flag spellings: --<key with dashes>, plus the short forms the skills pass.
 our %FLAG_ALIAS = (
@@ -80,6 +105,7 @@ our %FLAG_ALIAS = (
     # `<key>: settings file only` (DP-3, DP-17 / E-C-6), never a usage error
     'repo-roots' => 'repo_roots', 'relaunch-auto' => 'relaunch_auto', 'relaunch-allow' => 'relaunch_allow',
     'unattended-prod-reads' => 'unattended_prod_reads', 'prod-patterns' => 'prod_patterns', 'queue-cmd' => 'queue_cmd',
+    'secret-extra-rules' => 'secret_extra_rules', 'protected-branches' => 'protected_branches',
 );
 
 sub _unset {
@@ -137,6 +163,31 @@ sub config_dir_foreign {
     my @b = stat $home;
     return 0 if @a && @b && $a[0] == $b[0] && $a[1] == $b[1];
     return 1;
+}
+
+# The plugin's names before its rename (NM-2; rename-order ruling xxxxxxxx-32, 2026-10-23): a
+# `pluginConfigs` key `<former name>@<marketplace>` holds options this plugin never reads, and
+# /status says so. The stale-name gate allows a former name on this declaration line only.
+our @FORMER_NAMES = ('compactinue');
+
+# former_name_keys() -> ([key, option count]…): the settings file's pluginConfigs keys that start
+# `<former name>@` (the current name excluded), sorted. Read-only; key names and counts, no value.
+sub former_name_keys {
+    my $brand = ctx::brand() // '';
+    my @names = grep { $_ ne $brand } @FORMER_NAMES;
+    return () unless @names;
+    my $raw = util::read_file(config_dir() . '/settings.json');
+    return () unless defined $raw;
+    my $s = eval { jsonc::decode($raw) };
+    return () unless ref $s eq 'HASH' && ref $s->{pluginConfigs} eq 'HASH';
+    my $pc = $s->{pluginConfigs};
+    my @out;
+    for my $k (sort keys %$pc) {
+        next unless grep { index($k, "$_\@") == 0 } @names;
+        my $o = ref $pc->{$k} eq 'HASH' ? $pc->{$k}{options} : undef;
+        push @out, [ $k, scalar(keys %$o) ] if ref $o eq 'HASH' && %$o;
+    }
+    return @out;
 }
 
 # Returns (options hashref or undef, note) from the user's settings file.
@@ -201,8 +252,127 @@ sub resolve {
         $val{$key} = $c;
         $src{$key} = $s;
     }
+    # Tighten-only keys (S-SETTINGS E3): the strictest valid value of flag, env, settings file
+    # and default wins; an invalid value counts as unset (with a note).
+    for my $key (sort keys %TIGHTEN) {
+        my @order = @{ $TIGHTEN{$key} };
+        my %rank = map { $order[$_] => $_ } 0 .. $#order;
+        my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
+        my $uck = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : undef;
+        my ($best, $bsrc);
+        for my $cand (['settings', (!$ambiguous && ref $opts eq 'HASH') ? $opts->{$key} : undef], ['flag', $flags->{$key}],
+                      ['env', $env], ['default', $uck // (grep { $_->[0] eq $key } @KEYS)[0]->[2]]) {
+            my ($s, $v) = @$cand;
+            next if _unset($v) || ref $v;
+            (my $x = lc $v) =~ s/^\s+|\s+$//g;
+            if (!exists $rank{$x}) { push @notes, "$key: '$s' value is not " . join(' or ', @order) . ', ignored' if $s ne 'default'; next }
+            ($best, $bsrc) = ($x, $s) if !defined $best || $rank{$x} > $rank{$best};
+        }
+        $best //= $order[0];
+        push @notes, "$key: the stricter $best ($bsrc) is used" if defined $bsrc && $bsrc ne ($src{$key} // '') && $src{$key} ne 'default';
+        ($val{$key}, $src{$key}) = ($best, $bsrc // 'default');
+    }
+    # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; the old value `on` reads as
+    # `auto` with a note; any other value but `off` is $IDLE_INVALID (PROVISIONAL, below) with a note.
+    {
+        (my $x = lc($val{idle_handoff_turn} // 'auto')) =~ s/^\s+|\s+$//g;
+        if ($x eq 'on') { push @notes, 'idle_handoff_turn: on reads as auto'; $x = 'auto' }
+        elsif ($x ne 'auto' && $x ne 'off') { push @notes, "idle_handoff_turn: not auto or off, $IDLE_INVALID used"; $x = $IDLE_INVALID }
+        $val{idle_handoff_turn} = $x;
+    }
+    # SK-1 / SK-2: an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
+    my $tr = ticket_re({ values => \%val });
+    push @notes, 'ticket_pattern: invalid, the default is used' if $tr->{invalid};
+    my $sx = secret_extra({ values => \%val });
+    push @notes, "secret_extra_rules: entry $_ dropped (invalid)" for @{ $sx->{invalid} };
     return { values => \%val, source => \%src, notes => \@notes, ambiguous => $ambiguous,
              config_key => ($ambiguous ? undef : $ckey) };
+}
+
+# ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
+# num_clamped(key[, resolved]) -> (value, clamped 0|1): a number key within the manifest's
+# min/max (S-SETTINGS E4-E6: handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
+# watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback.
+sub num_clamped {
+    my ($key, $r) = @_;
+    $r //= _current();
+    my $v = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? $r->{values}{$key} : undef;
+    my ($row) = grep { $_->[0] eq $key } @KEYS;
+    my $fb = $row ? $row->[2] : undef;
+    my $uc = eval { ctx::user_config()->{$key} };
+    $fb = $uc->{default} if ref $uc eq 'HASH' && defined $uc->{default} && !ref $uc->{default};
+    $v = $fb unless defined $v && !ref $v && "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/;
+    return (undef, 0) unless defined $v;
+    my ($lo, $hi) = eval { limits($key) };
+    my $used = (defined $lo && $v < $lo) ? $lo : (defined $hi && $v > $hi) ? $hi : 0 + $v;
+    return ($used, $used == $v ? 0 : 1);
+}
+
+# The resolved settings of this run (rc), else a fresh resolve.
+sub _current {
+    my $r = eval { rc::settings() };
+    return $r if ref $r eq 'HASH';
+    return eval { resolve({}) } // { values => {} };
+}
+
+# ticket_pattern (SK-1, S-SETTINGS E1): one ticket rule for the bucket (bucket.pm), the skills
+# (gitfacts::ticket) and the queue lane slug. ticket_re([resolved]) -> {re, custom 0|1, invalid
+# 0|1}: the user's pattern when it is at most 200 characters, compiles and keeps the Dev-7
+# limits (no `(?{`, `(??{`, `(*`), else the shipped default (invalid 1). ticket(text[, resolved,
+# default_only]) -> the id (group 1 when the pattern has one, else the whole match) when it
+# matches \A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z, else undef (no `..` or `/` in a bucket path).
+# The subject is cut to 256 characters (a branch name); a Perl regex cannot be interrupted by
+# an alarm, so the length caps are the guard.
+our $TICKET_DEFAULT = '[A-Z][A-Z0-9]+-[0-9]+';
+our $TICKET_ID = qr/\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/;
+sub ticket_re {
+    my ($r) = @_;
+    $r //= _current();
+    my $p = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? $r->{values}{ticket_pattern} : undef;
+    return { re => qr/$TICKET_DEFAULT/, custom => 0, invalid => 0 } if _unset($p) || ref $p || $p eq $TICKET_DEFAULT;
+    my $re = pattern_ok($p, 200);
+    return $re ? { re => $re, custom => 1, invalid => 0 } : { re => qr/$TICKET_DEFAULT/, custom => 0, invalid => 1 };
+}
+sub ticket {
+    my ($s, $r, $default_only) = @_;
+    return undef unless defined $s && !ref $s && $s ne '';
+    $s = substr($s, 0, 256);
+    my $re = $default_only ? qr/$TICKET_DEFAULT/ : ticket_re($r)->{re};
+    return undef unless $s =~ $re;
+    my $id = (@- > 1 && defined $-[1]) ? substr($s, $-[1], $+[1] - $-[1]) : substr($s, $-[0], $+[0] - $-[0]);
+    return $id =~ $TICKET_ID ? $id : undef;
+}
+
+# secret_extra_rules (SK-2, S-SETTINGS E2): `;` list of HARD:<re>, WARN:<re>, NAME:<glob>
+# (`\x3b` for a literal `;` in a glob; a regex reads it as `;` itself). At most 32 entries; a
+# regex at most 200 characters, compiling, within the Dev-7 limits; a glob one name with * and ?.
+# Additive only: the shipped rules and their exceptions always apply, so a user rule can only
+# withhold more. Ids user-hard-<n>, user-warn-<n>, user-name-<n> (n = 1-based position); rows
+# never carry the pattern. secret_extra([resolved]) -> {rules => [{id, class, re}],
+# names => [{id, re}], invalid => [n…]}.
+our $EXTRA_MAX = 32;
+sub secret_extra {
+    my ($r) = @_;
+    $r //= _current();
+    my $v = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? $r->{values}{secret_extra_rules} : undef;
+    my (@rules, @names, @invalid);
+    my @e = list($v);
+    for my $i (0 .. $#e) {
+        my $n = $i + 1;
+        my ($kind, $body) = $e[$i] =~ /\A(HARD|WARN|NAME):(.+)\z/s;
+        if ($i >= $EXTRA_MAX || !defined $kind) { push @invalid, $n; next }
+        if ($kind eq 'NAME') {
+            (my $g = $body) =~ s/\\x3b/;/gi;
+            if ($g =~ m{/} || length($g) > 200) { push @invalid, $n; next }
+            my $rx = join '', map { $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) } split /([*?])/, $g;
+            push @names, { id => "user-name-$n", re => qr/\A$rx\z/ };
+            next;
+        }
+        my $re = pattern_ok($body, 200);
+        if (!$re) { push @invalid, $n; next }
+        push @rules, { id => 'user-' . lc($kind) . "-$n", class => $kind, re => $re };
+    }
+    return { rules => \@rules, names => \@names, invalid => \@invalid };
 }
 
 # list(value) -> entries of a `;`-separated list key (REVIEW B-5, escalation E-B-1:
@@ -322,6 +492,59 @@ sub prod_class {
     my ($text, $p) = @_;
     return undef unless defined $text;
     for my $c (@{ ($p || {})->{classes} || [] }) { return $c->{id} if $text =~ $c->{re} }
+    return undef;
+}
+
+# ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
+# protected_branches (owner xxxxxxxx-29, 2026-10-23: "add the add-only setting now"; protective,
+# %NO_FLAG): a `;` list of branch names or globs ADDED to the shipped protected list (the spec's
+# protected_branch_re and the remote's default branch, which every caller still checks first and
+# on its own), so no entry can remove a shipped one: there is no exclusion form. A glob has `*`
+# (any characters but `/`), `**` (any characters) and `?` (one character but `/`); every other
+# character stands for itself; a leading `refs/heads/` is dropped. An entry is matched against
+# the lower-cased branch name, as the shipped rule is, so it is case-insensitive. At most 32
+# entries, each at most 200 characters. An invalid entry is ignored (a `config_invalid {key,
+# index}` row and a /status warning; the rest of the list and the shipped list still apply): one
+# that starts with `!` (an exclusion is never honoured), `-` or `/`, ends with `/`, `.` or
+# `.lock`, holds `..`, `//`, `@{`, a space or control character, one of ~ ^ : [ ] \ ( ) { } | $
+# (an entry is a name or a glob, not a regular expression), or a part that starts with `.`, or
+# is `@`. Rows never carry the entry.
+# protected([resolved]) -> {globs => [{id => user-branch-<n>, re}], user => n, invalid => [{key, index}]}
+our $PROTECTED_MAX = 32;
+our $PROTECTED_LEN = 200;
+sub protected {
+    my ($r) = @_;
+    my $v = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? $r->{values}{protected_branches} : undef;
+    my (@globs, @invalid);
+    my @e = list($v);
+    for my $i (0 .. $#e) {
+        (my $g = lc $e[$i]) =~ s{\Arefs/heads/}{};
+        if ($i >= $PROTECTED_MAX || !_branch_glob_ok($g)) { push @invalid, { key => 'protected_branches', index => $i + 1 }; next }
+        my $rx = join '', map { $_ eq '**' ? '.*' : $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) }
+                          grep { $_ ne '' } split /(\*\*|\*|\?)/, $g;
+        push @globs, { id => 'user-branch-' . ($i + 1), re => qr/\A$rx\z/s };
+    }
+    return { globs => \@globs, user => scalar(@globs), invalid => \@invalid };
+}
+
+sub _branch_glob_ok {
+    my ($g) = @_;
+    return 0 if !defined $g || $g eq '' || $g eq '@' || length($g) > $PROTECTED_LEN;
+    return 0 if $g =~ m{\A[!/-]} || $g =~ m{(?:/|\.|\.lock)\z} || $g =~ m{\.\.|//|\@\{};
+    return 0 if $g =~ m{[\x00-\x20\x7f~^:\[\]\\(){}|\$]};
+    return 0 if grep { /\A\./ } split m{/}, $g;
+    return 1;
+}
+
+# protected_user(name, protected) -> the id of the first of the user's entries that names the
+# branch (lower-cased), else undef. The shipped list is the caller's own check.
+sub protected_user {
+    my ($name, $p) = @_;
+    return undef unless defined $name && !ref $name && $name ne '';
+    my $n = lc $name;
+    for my $g (@{ ref $p eq 'HASH' && ref $p->{globs} eq 'ARRAY' ? $p->{globs} : [] }) {
+        return $g->{id} if ref $g eq 'HASH' && $n =~ $g->{re};
+    }
     return undef;
 }
 

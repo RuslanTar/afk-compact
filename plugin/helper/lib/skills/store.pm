@@ -51,17 +51,32 @@ sub read_doc {
 
 # Integrity of one document (resume R1): ok | possibly truncated | legacy |
 # unshaped | s=sub, plus marker facts.
+# alias => 1 (owner 2026-10-23 xxxxxxxx-26, "Read-only alias"): the caller has shown the file is
+# in the private store, not an export or an imported copy, and this session's or a lineage
+# predecessor's (own chain); the one exception is skills::session_cmds::link_resume, which reads
+# an ended candidate predecessor's handoff in the private store this way before it links that
+# session into the chain (owner xxxxxxxx-26: resume tomorrow from a handoff written under the old
+# name). Then a `kind: handoff` file with no marker under the current name
+# whose marker and sentinel under a former name (settings.pm @FORMER_NAMES) share one nonce reads
+# as that marker (`former` names it). Without the flag, or with any other mix, such a file stays
+# what the current grammar says (legacy). Files are only read this way, never written.
 sub integrity {
-    my ($d) = @_;
+    my ($d, %o) = @_;
     my $det = skills::core::detect_summary($d->{body});
     my $fm = $d->{fm};
     my $writer = $fm->{writer} // '';
-    my ($marker, $sentinel, $scope, $nonce) = (0, 0, undef, undef);
+    my ($marker, $sentinel, $scope, $nonce, $former) = (0, 0, undef, undef, undef);
     if ($det) {
         $marker = defined $det->{marker_line} && $det->{marker_line} ne '-' ? 1 : 0;
         $sentinel = defined $det->{sentinel_from_end} && $det->{sentinel_from_end} ne '-' ? 1 : 0;
         $scope = $det->{scope};
         $nonce = $det->{nonce};
+    }
+    if ($o{alias} && !$marker && !$sentinel && ($fm->{kind} // '') eq 'handoff' && $writer !~ /\A(?:mod|postcompact-fallback)\z/) {
+        my $f = skills::core::detect_former($d->{body});
+        if ($f && (!defined $fm->{nonce} || $fm->{nonce} eq $f->{nonce})) {
+            ($marker, $sentinel, $scope, $nonce, $former) = (1, 1, $f->{scope}, $f->{nonce}, $f->{name});
+        }
     }
     my $res;
     if ($scope && $scope eq 'sub') {
@@ -81,7 +96,7 @@ sub integrity {
         $res = 'possibly truncated';
     }
     return { integrity => $res, marker => $marker, sentinel => $sentinel, scope => $scope, nonce => $nonce,
-             verdict => ($det ? $det->{verdict} : undef) };
+             verdict => ($det ? $det->{verdict} : undef), former => $former };
 }
 
 # Bucket directories under <root>/<repo>/ (dot names skipped).

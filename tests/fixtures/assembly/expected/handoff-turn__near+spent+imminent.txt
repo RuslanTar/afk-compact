@@ -1,3 +1,3 @@
-Note from the user's compactinue plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6–7).
-Note from the user's compactinue plugin: the handoff budget is spent. Make no call except `"/p/scripts/compactinue-store" publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
-Note from the user's compactinue plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.
+Note from the user's afk-compact plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6–7).
+Note from the user's afk-compact plugin: the handoff budget is spent. Make no call except `"/p/scripts/afk-compact-store" publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
+Note from the user's afk-compact plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.

@@ -244,7 +244,7 @@ sub run {
         inflight_measured => $inflight,
         tmp_candidates    => $tmp,
         config            => \%config,
-        reuse_window_min  => $REUSE_WINDOW_MIN,
+        reuse_window_min  => ((eval { settings::num_clamped("handoff_reuse_window_min") })[0] // $REUSE_WINDOW_MIN),    # SK-4
         mode              => \%mode,
         export_target     => $export_target,
     );

@@ -72,7 +72,12 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   cancelBoundary(d)
   cancelIdleTimer(d)
   s.mainTurnRunning = true
+  // OT-1 (REVIEW-NIGHT-3 R3-07): with another prompt entering beside ours, a turn whose text is
+  // more than ours may carry that prompt too; such a turn is never aborted.
+  const otherEntering = s.foreignPrompts > 0
+  const sent = s.ourSubmitText
   const ours = claimTurn(s, text)
+  const alone = ours && (!otherEntering || text.trim() === (sent ?? '').trim())
   const human = !ours && isHuman(s.turnOrigin)
   await ensureIdent(d, await d.sessionId())
   const sid = await prepare(d)
@@ -93,7 +98,7 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
     s.idleEpisode = undefined
     s.publishedSinceHuman = false
   }
-  await onHandoffTurnStart(d, sid, ours, turnId)
+  await onHandoffTurnStart(d, sid, ours, turnId, alone)
   await writeAlive(d, sid, turnId)
 }
 
@@ -109,6 +114,7 @@ export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
   cancelIdleTimer(d)
   s.resumeAfter = false
   s.lastCycle = null
+  s.idleAgain = undefined
   const h = s.handoffTurn
   s.handoffTurn = undefined
   const pend = s.pending

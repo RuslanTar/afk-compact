@@ -36,7 +36,7 @@ tsconfig.json	build
 src/plugin.json	build
 src/marketplace.json	build
 src/hooks.json	build
-tools/{build,assemble,gates,owners-check,typecheck,check,matrix}	build
+tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json}	build
 src/assets/**	text
 src/skills/**	text
 tests/fixtures/**	fix
@@ -56,7 +56,7 @@ plugin/helper/lib/{repomode,handoff_turn}.pm	core
 plugin/helper/lib/**	core
 plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke,notice}.*	core
 plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
-plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt}.*	skills
+plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt,risk}.*	skills
 plugin/helper/cmd/{wait,project}.*	skills
 plugin/helper/cmd/{watch,report}.*	watch
 tests/helper/run.*	core

@@ -13,7 +13,7 @@ import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
-import { BLOCK_MAX, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { BLOCK_MAX, BLOCK_SOFT, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -112,27 +112,30 @@ const WORST = {
   saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4',
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
   draft_state: 'present', handoff_finish: '`' + NAME + "-store publish --stage '" + PREV + "' --slug lab-123-retry --status in-progress`",
+  idle_used_at: '2026-10-21T04:40:00+03:00',
 }
 const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'prod-forbid', 'prod-allow'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
 }
 
 /**
  * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
- * exactly one of `prod-forbid`/`prod-allow` on the resume block, `idle` never with `midturn`,
- * `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
+ * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
+ * (owner xxxxxxxx-25) and `midturn`, `idle-again` (owner xxxxxxxx-37) only with `idle` or
+ * `idle-halt`, `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
  */
 function combos(tags: Tag[]): Tag[][] {
   let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
   const has = (c: Tag[], t: Tag) => c.includes(t)
   if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
-  out = out.filter(c => !(has(c, 'idle') && has(c, 'midturn')) && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt'))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
@@ -163,22 +166,32 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('resume protocol ≤3,000 chars (compaction-rem-6 hard; soft 2,500) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,720
+  // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note).
+  test('resume protocol ≤3,720 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 3000).toBe(true)
+      expect(s.length <= 3720).toBe(true)
     }
   })
-  test('AT-TX-11 (U half): a 3,000-char protocol and a 3,000-byte measured block go out untrimmed (≤6,500, BLOCK_MAX)', () => {
-    const protocol = 'p'.repeat(2999) + '\n'
+  // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
+  test('AT-TX-11 (U half): every shipped resume protocol beside a 3,000-byte measured block goes out untrimmed (≤BLOCK_MAX 9,500; soft 6,500)', () => {
     const measured = Array.from({ length: 30 }, (_, i) => 'm'.repeat(98) + String(i % 10)).join('\n').slice(0, 3000)
-    const render = (m: string) => protocol + 'Measured facts (2026-10-22T05:00:00+03:00; saved copy of this summary: ' + PREV + '):\n' + m + '\n'
-    const block = fitBlock(render, measured)
-    expect(block).toBe(render(measured))
-    expect(block.length <= BLOCK_MAX && BLOCK_MAX === 6500).toBe(true)
-    // Over the total, whole re-measure lines go first, with a note.
-    const big = fitBlock(render, measured + '\n' + 'z'.repeat(600))
-    expect(big.length <= 6500 && big.includes('(+')).toBe(true)
+    let worst: Tag[] = []
+    let worstLen = 0
+    for (const tags of combos(TAGS['resume-context'] ?? [])) {
+      const render = (m: string) => assembleText(text('resume-context'), tags, { ...WORST, remeasure: m })
+      const block = fitBlock(render, measured)
+      expect(block).toBe(render(measured))
+      expect(block.length <= BLOCK_MAX).toBe(true)
+      if (block.length > worstLen) [worst, worstLen] = [tags, block.length]
+    }
+    expect(BLOCK_MAX === 9500 && BLOCK_SOFT === 6500 && BLOCK_MAX < 10000).toBe(true)
+    // Over the hard cap, whole re-measure lines go first, with a note.
+    const render = (m: string) => assembleText(text('resume-context'), worst, { ...WORST, remeasure: m })
+    const big = fitBlock(render, measured + '\n' + 'z'.repeat(4000))
+    expect(big.length <= BLOCK_MAX && big.includes('(+')).toBe(true)
   })
   test('the queue tag is applied when given (D-10: the mod gives it only with queue_cmd set)', () => {
     const t = text('checkpoint-nudge')
@@ -347,20 +360,24 @@ test('clamp: target = floor(soft x target_num / target_den) in integers, never a
 // S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.
 test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
   expect(DEFAULTS.max_auto_continues_per_hour).toBe(6)
-  // BLD-08 / OD-4 provisional: the same default as src/plugin.json (`model`).
+  // Owner xxxxxxxx-18: the same default as src/plugin.json (`model`).
   expect(DEFAULTS.precompact_turn).toBe('model')
   expect(parseOptions({}).max_auto_continues_per_hour).toBe(6)
+  // AT-IA-01 (idle D3): default `auto`; the old `on` reads as `auto` with a config_note; `off` is off;
+  // any other value is `auto` plus config_invalid (there is no forced on).
+  expect(DEFAULTS.idle_handoff_turn).toBe('auto')
   const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
-  expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'on', 100000])
-  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }] })
+  expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'auto', 100000])
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }], noted: [{ key: 'idle_handoff_turn', note: 'legacy-on' }] })
   // AT-PC-04: any other value is `code` (the no-extra-cost path), whatever the default.
   const b = parseOptions({ precompact_turn: 'sometimes', unattended_prod_reads: 'yes', idle_handoff_turn: 'maybe', idle_handoff_min_tokens: '2000000' })
-  expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'off', 1000000])
+  expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'auto', 1000000])
   expect(b.notes.invalid).toEqual(['precompact_turn', 'unattended_prod_reads', 'idle_handoff_turn'])
   const c = parseOptions({ precompact_turn: '${user_config.precompact_turn}', unattended_prod_reads: '', idle_handoff_turn: '  ' })
   expect([c.precompact_turn, c.unattended_prod_reads, c.idle_handoff_turn, c.idle_handoff_min_tokens, c.notes])
-    .toEqual([DEFAULTS.precompact_turn, 'forbid', 'off', 200000, { invalid: [], clamped: [] }])
+    .toEqual([DEFAULTS.precompact_turn, 'forbid', 'auto', 200000, { invalid: [], clamped: [] }])
   expect(parseOptions({ precompact_turn: 'CODE' }).precompact_turn).toBe('code')
+  expect(parseOptions({ idle_handoff_turn: ' OFF ' }).idle_handoff_turn).toBe('off')
 })
 
 // P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.
@@ -396,10 +413,23 @@ describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
     const notFirst = detectSummary(post(body(), '\nan engine line\n' + S + '\n'), NAME, { dispatchNonce: N, scope: 'main' })
     expect([notFirst.verdict, notFirst.sentinel_place]).toEqual(['truncated', null])
     expect(notFirst.normalized.includes(S)).toBe(false)
-    const listed = specStrings('copy_trailers')[0]
-    if (listed !== undefined) {
-      const r = detectSummary(installed(body(), '\n' + S + '\n\n' + listed), NAME, { dispatchNonce: N, scope: 'main' })
+    // Every shipped trailer pattern has a sample engine line here (Claude Code 2.1.309 writes all
+    // three after an installed summary); each listed one, and all of them together, are cut.
+    const samples = [
+      'If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /tmp/example-home/x.jsonl',
+      'Continue the conversation from where it left off without asking the user any further questions. Resume directly.',
+      'The messages after this summary are the most recent messages from before compaction, kept verbatim.',
+    ]
+    const listed = specStrings('copy_trailers')
+    for (const pat of listed) {
+      const line = samples.find(s => new RegExp(pat).test(s))
+      expect({ pat, sample: line !== undefined }).toEqual({ pat, sample: true })
+      const r = detectSummary(installed(body(), '\n' + S + '\n\n' + (line ?? '')), NAME, { dispatchNonce: N, scope: 'main' })
       expect([r.verdict, r.sentinel_place]).toEqual(['ok', 'after-close'])
+    }
+    if (listed.length > 0) {
+      const all = detectSummary(installed(body(), '\n' + S + '\n\n' + samples.join('\n') + '\n'), NAME, { dispatchNonce: N, scope: 'main' })
+      expect([all.verdict, all.sentinel_place, all.sentinel_from_end]).toEqual(['ok', 'after-close', 1])
     }
     const unlisted = detectSummary(post(body(), '\n' + S + '\nFixture trailer line: an engine sentence that no baseline lists.\n'), NAME, { dispatchNonce: N, scope: 'main' })
     expect([unlisted.verdict, unlisted.sentinel_place, unlisted.sentinel_from_end]).toEqual(['ok-trailer', 'after-close', 2])
@@ -408,7 +438,7 @@ describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
     // Text after the close tag never joins the body when it is not the sentinel (unchanged).
     expect(strip(post(body() + S + '\n', '\nan engine line\n'), [], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
     expect(strip(post(body(), '\n' + S + '\n'), []).body).toBe(body())
-    // A listed trailer after the moved sentinel is cut (the shipped list is empty today).
+    // A listed trailer after the moved sentinel is cut (any list, the shipped one or a given one).
     expect(strip(installed(body(), '\n' + S + '\n\nPlease go on.'), ['Please go on.'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
     // Trailers are line patterns (the helper's reading); one inside a closed summary is body.
     expect(strip(installed(body(), '\n' + S + '\nFixture listed trailer: x'), ['^Fixture listed trailer: .*$'], grammar(NAME).sentinel).body).toBe(body() + S + '\n')
