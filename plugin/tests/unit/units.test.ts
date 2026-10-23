@@ -13,7 +13,7 @@ import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
-import { BLOCK_MAX, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { BLOCK_MAX, BLOCK_SOFT, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -171,16 +171,23 @@ describe('AT-P-07 assembler (14-character name)', () => {
       expect(s.length <= 3650).toBe(true)
     }
   })
-  test('AT-TX-11 (U half): a 3,000-char protocol and a 3,000-byte measured block go out untrimmed (≤6,500, BLOCK_MAX)', () => {
-    const protocol = 'p'.repeat(2999) + '\n'
+  // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
+  test('AT-TX-11 (U half): every shipped resume protocol beside a 3,000-byte measured block goes out untrimmed (≤BLOCK_MAX 9,500; soft 6,500)', () => {
     const measured = Array.from({ length: 30 }, (_, i) => 'm'.repeat(98) + String(i % 10)).join('\n').slice(0, 3000)
-    const render = (m: string) => protocol + 'Measured facts (2026-10-22T05:00:00+03:00; saved copy of this summary: ' + PREV + '):\n' + m + '\n'
-    const block = fitBlock(render, measured)
-    expect(block).toBe(render(measured))
-    expect(block.length <= BLOCK_MAX && BLOCK_MAX === 6500).toBe(true)
-    // Over the total, whole re-measure lines go first, with a note.
-    const big = fitBlock(render, measured + '\n' + 'z'.repeat(600))
-    expect(big.length <= 6500 && big.includes('(+')).toBe(true)
+    let worst: Tag[] = []
+    let worstLen = 0
+    for (const tags of combos(TAGS['resume-context'] ?? [])) {
+      const render = (m: string) => assembleText(text('resume-context'), tags, { ...WORST, remeasure: m })
+      const block = fitBlock(render, measured)
+      expect(block).toBe(render(measured))
+      expect(block.length <= BLOCK_MAX).toBe(true)
+      if (block.length > worstLen) [worst, worstLen] = [tags, block.length]
+    }
+    expect(BLOCK_MAX === 9500 && BLOCK_SOFT === 6500 && BLOCK_MAX < 10000).toBe(true)
+    // Over the hard cap, whole re-measure lines go first, with a note.
+    const render = (m: string) => assembleText(text('resume-context'), worst, { ...WORST, remeasure: m })
+    const big = fitBlock(render, measured + '\n' + 'z'.repeat(4000))
+    expect(big.length <= BLOCK_MAX && big.includes('(+')).toBe(true)
   })
   test('the queue tag is applied when given (D-10: the mod gives it only with queue_cmd set)', () => {
     const t = text('checkpoint-nudge')

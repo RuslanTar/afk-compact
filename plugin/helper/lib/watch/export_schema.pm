@@ -173,6 +173,8 @@ our %SCHEMA = (
     handoff_mode => { mode => [enum => qw(private repo)], reason => 'word', declared => 'bool', accepted => 'bool' },
     idle_mismatch => { nonce => 'nonce' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
+    # RP-2 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): a resume block over its soft 6,500 chars
+    resume_block_over_soft => { nonce => 'nonce', chars => 'int' },
     resume_remeasure_failed => { nonce => 'nonce', age_s => 'num' },
     submit_dropped => { why => [enum => qw(session-changed)], site => [enum => qw(continue handoff-turn)] },
     queue_contract => { why => [enum => qw(untagged schema not-json exit timeout)] },

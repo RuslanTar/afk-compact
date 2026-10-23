@@ -230,7 +230,7 @@ sub session_compact {
     } else {
         return ('', {});
     }
-    my $block = resumeblock::build(sid => $sid, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
+    my $block = resumeblock::build(sid => $sid, nonce => $nonce, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
                                    measured_at => util::iso($now),
                                    remeasure => measure::compact($sid, $p->{cwd}, $nonce,
                                                                  budget_ms => $SESSION_COMPACT_MS - (util::clock_ms() - ($T0 // util::clock_ms()))));

@@ -10,10 +10,13 @@ import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
 
 /**
- * MOD-SPEC §3.4: total ≤6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
- * a 3,000-byte measured block; never >10,000, the SessionStart cutoff).
+ * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
+ * a 3,000-byte measured block); soft since the owner overturned ratify xxxxxxxx#R3 (2026-10-23,
+ * SPEC-DELTAS RP-2/RP-4): a block over it logs `resume_block_over_soft`. The hard cap is 9,500,
+ * under the 10,000-char SessionStart cutoff: over it whole re-measure lines are cut first.
  */
-export const BLOCK_MAX = 6500
+export const BLOCK_MAX = 9500
+export const BLOCK_SOFT = 6500
 
 /** `@handoff_finish@` when a raced draft has no safe finish command (its line says draft absent). */
 export const NO_FINISH = '(none)'
@@ -84,8 +87,11 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
     runtime.draft_state = present ? 'present' : 'absent'
     runtime.handoff_finish = present ? '`' + (h.finish ?? '') + '`' : NO_FINISH
   }
-  if (remeasure === undefined) return assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
-  return fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
+  const block = remeasure === undefined
+    ? assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
+    : fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
+  if (block.length > BLOCK_SOFT) await log(d, sid, 'resume_block_over_soft', { nonce: a.nonce ?? null, chars: block.length })
+  return block
 }
 
 /**
