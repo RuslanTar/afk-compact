@@ -194,7 +194,9 @@ our %SCHEMA = (
                         cmds_run => 'int', approvals_carried => 'int', approvals_used => 'int', approvals_asked => 'int' },
     heal => { origin_sid => 'hash', item => 'hash', result => [pre => [qw(ok)], [qw(ok REFUSED)]], bumped => 'bool', count => 'int',
               verdict => 'word', confidence => 'word', effects => 'word', signals => [counts => 'word'],
-              mode => 'word', new_task_id => 'hash', prod_class => 'word' },
+              mode => 'word', new_task_id => 'hash', prod_class => 'word',
+              # HC-1 (2026-10-23): a recorded job, or an own handoff's recipe
+              run_source => [enum => qw(recorded handoff)] },
     alert => { alert_id => 'word', rule => 'rule', severity => [enum => @SEVERITY],
                key => [obj => { session_id => 'hash', actor => 'actor', compaction_seq => 'int', nonce => 'nonce' }],
                evidence => [obj => {

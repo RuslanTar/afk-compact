@@ -1,12 +1,22 @@
 package skills::heal;
 # lib/skills/heal.pm: `heal-check --origin SID --item ID [--bump]` (resume R5
 # restart gate; TPL §4.4; S-11; MOD §7 heal counters). Prints `ok <recipe>|job:<id>`
-# and `run:` only for a job the plugin recorded, else `REFUSED: <reason>`. At most
+# and `run:` for a job the plugin recorded, or for an own handoff's recipe whose command
+# passes the same checks (`run-source: handoff`), else `REFUSED: <reason>`. At most
 # 1 restart per resume and 2 per chain; the recipe script's sha256 must equal its
 # MANIFEST row. --bump counts the restart before it starts (locked read-modify-write).
 #
-# Every item (CR-F13, DP-27: Dev-5 wins over the old same-session restart gate, so no
-# recipe that came only from handoff text is ever `ok`): `signal:` lines V1-V7
+# HC-1 (owner 2026-10-23, ratify R24 overturned: heal-check may offer handoff-text commands
+# within the real-risk reading; DP-27's "no recipe from handoff text is ever ok" is replaced):
+# with no job record, an own handoff's recipe (relation same-session or successor; never an
+# export, an imported copy or another session's) with a `command:` stands in for the record
+# (V1 `recipe`: in MANIFEST with its sha, class auto); its effects come from the risk
+# classifier (`none` only when read-only, `local` only allowlisted, `prod-read` only with
+# unattended_prod_reads allow); `ok` adds `run-source: handoff`, and the heal row has
+# `run_source: handoff` (else `recorded`). A recipe that differs from a record is still
+# recipe-mismatch: the record wins.
+#
+# Every item (CR-F13): `signal:` lines V1-V7
 # (skills/jobs.pm), then
 #   verdict: <status> · confidence <high|low> · effects <class>[ · would-relaunch]
 # then `ok <recipe|job:<id>>` and `run: <line>` (the recorded command byte for byte,
@@ -103,10 +113,10 @@ sub run {
     };
     $refuse->('recipe-not-local') if !$recipe && not_local($ctx, $origin, $docs);
 
-    # CR-F13 (DP-27, Dev-5): every item goes through the Dev-1 re-verification. `ok` needs a
-    # job the plugin recorded, so a command found only in the handoff (no record: mod off,
-    # a subagent's shell, a refused record, a row in inflight.md, a mistyped kind) is never
-    # handed back as runnable; it is refused with `ask-source: handoff`.
+    # CR-F13: every item goes through the Dev-1 re-verification. `ok` needs a job the plugin
+    # recorded or, with no record (mod off, a subagent's shell, a refused record), an own
+    # handoff's recipe that passes the same checks (HC-1); anything else is refused, a
+    # handoff command with `ask-source: handoff`.
     my $task = $recipe ? ($recipe->{rid} // $item) : $item;
     return shell($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse);
 }
@@ -118,8 +128,11 @@ sub shell {
     my $rl = skills::core::relaunch();
     my $cwd = skills::util::cwd();
     my $rel = relation($ctx, $id, $origin);
+    my $rr = _recipe_run($ctx, $origin, $task, $recipe, $edir, $rl, $rel);
     my $v = skills::jobs::verify($ctx, origin => $origin, task => $task, recipe => $recipe, relaunch => $rl, cwd => $cwd,
-                                 current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} });
+                                 current => { sid => ($id->{degraded} ? undef : $id->{sid}), pid => $id->{pid}, lstart => $id->{lstart} },
+                                 recipe_run => $rr);
+    $row->{run_source} = $v->{run_source};
     my $rec = $v->{record};
     # A consent or protective value given as a flag or env, or under a foreign config dir, did
     # not count (DP-3, CR-F34): say so, so the question can name the settings file.
@@ -168,7 +181,30 @@ sub shell {
     $ctx->log('heal', $row);
     skills::cli::say('ok ' . ($recipe ? $recipe->{path} : "job:$task"));
     skills::cli::say("run: $v->{run_line}");
+    skills::cli::say('run-source: handoff') if $v->{run_source} eq 'handoff';
     return 0;
+}
+
+# HC-1 (ratify R24 overturned, within the 03:42 real-risk reading): with no job record, an own
+# handoff's recipe whose `command:` is given stands in for the record. Own: the relation is
+# same-session or successor (the relation gate refuses every other), and find_recipe never reads
+# an imported copy. V1' (`recipe`) passes when the recipe is in MANIFEST with its sha and is
+# class auto. Effects come from the risk classifier on the recipe command (jobs::recipe_effects).
+sub _recipe_run {
+    my ($ctx, $origin, $task, $recipe, $edir, $rl, $rel) = @_;
+    return undef unless $recipe && ($rel eq 'same-session' || $rel eq 'successor');
+    my $watch = skills::core::watch_dir() // $ctx->{watch};
+    return undef if skills::core::job_record("$watch/$origin", $task);
+    my ($cmd) = $recipe->{text} =~ /^\s*command:[ \t]*(.*?)[ \t]*$/m;
+    return undef unless defined $cmd && $cmd ne '' && $cmd !~ /\A\(withheld\b/;
+    my ($rcwd) = $recipe->{text} =~ /^\s*cwd:[ \t]*(\S.*?)[ \t]*$/m;
+    my $st = recipe_state($recipe, $edir);
+    my $v1 = $st ne 'match' ? ['fail', $st eq 'missing' ? 'recipe not in MANIFEST' : 'recipe differs from its MANIFEST sha']
+           : ($recipe->{class} // 'ask') ne 'auto' ? ['fail', 'recipe class ' . ($recipe->{class} // 'ask')]
+           : ['pass', 'no job record; the own handoff\'s recipe is in MANIFEST, class auto'];
+    my $cwd = (defined $rcwd && $rcwd =~ m{\A/}) ? $rcwd : undef;
+    return { command => $cmd, cwd => $cwd, v1 => $v1,
+             effects => skills::jobs::recipe_effects($cmd, $recipe, $rl, $cwd // skills::util::cwd(), $watch) };
 }
 
 # The first failed gate after relation and mode (REVIEW B-11 order: recipe-mismatch, then
@@ -191,7 +227,7 @@ sub _gate {
     } else {
         return 'not-lost';
     }
-    return 'command-withheld' unless $rec && defined $rec->{command};
+    return 'command-withheld' unless ($rec && defined $rec->{command}) || ($v->{run_source} // '') eq 'handoff';
     # S-SETTINGS B: a production read relaunches by itself only with unattended_prod_reads
     # `allow` (a consent key, read from the settings file only); a production write never does.
     if ($v->{effects} eq 'local') { return 'effects-local' unless $rl->{allow_active} }

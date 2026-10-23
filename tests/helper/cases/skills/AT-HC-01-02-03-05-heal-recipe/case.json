@@ -1,0 +1,421 @@
+{
+ "id": "AT-HC-01, AT-HC-02, AT-HC-03 (relation), AT-HC-05",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "HC-1 (ratify R24 overturned, within the real-risk reading): with no job record, an own handoff's recipe (relation successor via /clear) whose command is read-only, in MANIFEST, class auto, origin ended and output quiet is ok with run-source: handoff and heal row run_source handoff; a not-read-only, not-allowlisted recipe command is effects-unknown and asks with ask-source handoff; another session's recipe is refused (relation); a recipe that differs from a later job record is recipe-mismatch (record wins); counters still cap a resume at one restart. recipe-not-local for an imported copy is AT-RM-11 (unchanged).",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         "src/a.rb": "# TODO a\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "relaunch_auto": "on"
+        }
+       }
+      }
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-0a0a0a0a.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"0a0a0a0a-1111-4222-8333-444444444444\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:00:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194001-1072915200.live-0b0b0b0b.json",
+     "content": "{\"pid\": 4194001, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"0b0b0b0b-1111-4222-8333-444444444444\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:00:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-$SID8.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:50:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/$SID.lineage.json",
+     "content": "{\"previous_session_id\": \"0a0a0a0a-1111-4222-8333-444444444444\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$WATCH/0a0a0a0a-1111-4222-8333-444444444444/bg/slot-0.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r1\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r1.output\"}, {\"id\": \"r2\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r2.output\"}, {\"id\": \"r3\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r3.output\"}], \"crons\": []}"
+    },
+    {
+     "write": "$WATCH/0b0b0b0b-1111-4222-8333-444444444444/bg/slot-0.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r9\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r9.output\"}], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/out/r1.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r1.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/r2.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r2.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/r3.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r3.output",
+     "minutes": 60
+    },
+    {
+     "write": "$TMP/out/r9.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r9.output",
+     "minutes": 60
+    }
+   ]
+  },
+  {
+   "name": "begin as origin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "0a0a0a0a-1111-4222-8333-444444444444",
+    "--topic",
+    "checks-origin"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup": [
+    {
+     "write": "$STAGE/body.md",
+     "content": "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    },
+    {
+     "write": "$STAGE/restart/B-1.md",
+     "content": "item: B-1 · runtime id r1 · class auto\nscript: none\ncommand: ls -la src; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n"
+    },
+    {
+     "write": "$STAGE/restart/B-2.md",
+     "content": "item: B-2 · runtime id r2 · class auto\nscript: none\ncommand: make migrate; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n"
+    },
+    {
+     "write": "$STAGE/restart/B-3.md",
+     "content": "item: B-3 · runtime id r3 · class auto\nscript: none\ncommand: ls -la app; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n"
+    }
+   ]
+  },
+  {
+   "name": "publish as origin: the recipes are not recorded",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "checks-origin",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ]
+   },
+   "capture": {
+    "PUB_ORIGIN": "re:^Wrote handoff to: (.+)$"
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "name": "begin as other",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "0b0b0b0b-1111-4222-8333-444444444444",
+    "--topic",
+    "checks-other"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup": [
+    {
+     "write": "$STAGE/body.md",
+     "content": "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    },
+    {
+     "write": "$STAGE/restart/B-1.md",
+     "content": "item: B-1 · runtime id r9 · class auto\nscript: none\ncommand: ls -la src; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n"
+    }
+   ]
+  },
+  {
+   "name": "publish as other: the recipes are not recorded",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "checks-other",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ]
+   },
+   "capture": {
+    "PUB_OTHER": "re:^Wrote handoff to: (.+)$"
+   },
+   "now": "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/0a0a0a0a-1111-4222-8333-444444444444/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"0a0a0a0a-1111-4222-8333-444444444444\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"r3\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 4194000, \"lstart\": \"Thu Jan  1 00:00:00 2004\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la lib; echo \\\"__exit $?\\\"\", \"command_sha256\": \"9f75fc6b9e15290ea1fc2fa75f7605acb43190976edb272494f226acbcb649f7\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/r3.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
+    }
+   ]
+  },
+  {
+   "name": "AT-HC-01 own recipe, no record, read-only, origin ended, output quiet: ok, run-source handoff",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "0a0a0a0a-1111-4222-8333-444444444444",
+    "--item",
+    "r1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^signal: V1 recipe pass \\(no job record; the own handoff's recipe is in MANIFEST, class auto\\)$",
+     "^signal: V2 owner-ended pass ",
+     "^verdict: LOST · confidence high · effects none$",
+     "\\nok [^\\n]*/evidence/[^\\n]*/restart/B-1\\.md\\nrun: ls -la src; echo \"__exit \\$\\?\"\\nrun-source: handoff\\n\\z"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "heal",
+      "fields": {
+       "result": "ok",
+       "run_source": "handoff",
+       "effects": "none"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-HC-01 --bump counts the restart",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "0a0a0a0a-1111-4222-8333-444444444444",
+    "--item",
+    "r1",
+    "--bump"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^run-source: handoff$"
+    ]
+   }
+  },
+  {
+   "name": "AT-HC-05 counters: a second restart in this resume is refused",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "0a0a0a0a-1111-4222-8333-444444444444",
+    "--item",
+    "r1"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: counter$",
+     "^ask-command: ls -la src; echo \"__exit \\$\\?\"$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^run: "
+    ]
+   }
+  },
+  {
+   "name": "AT-HC-02 own recipe, not read-only, not allowlisted: effects unknown, ask with the handoff as source",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "0a0a0a0a-1111-4222-8333-444444444444",
+    "--item",
+    "r2"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^verdict: LOST · confidence high · effects unknown$",
+     "^REFUSED: effects-unknown$",
+     "^ask-command: make migrate; echo \"__exit \\$\\?\"$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok "
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "heal",
+      "fields": {
+       "result": "REFUSED:effects-unknown",
+       "run_source": "handoff"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-HC-05 a recipe that differs from the job record: recipe-mismatch, the record wins",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "0a0a0a0a-1111-4222-8333-444444444444",
+    "--item",
+    "r3"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: recipe-mismatch$",
+     "^ask-command: ls -la lib; echo \"__exit \\$\\?\"$",
+     "^ask-source: recorded$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok ",
+     "run-source"
+    ]
+   }
+  },
+  {
+   "name": "AT-HC-03 another session's recipe: relation, never run",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "0b0b0b0b-1111-4222-8333-444444444444",
+    "--item",
+    "r9"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: relation$",
+     "^ask-source: handoff \\(written in the handoff, not recorded by the plugin\\)$"
+    ],
+    "stdout_lacks": [
+     "^run: ",
+     "^ok ",
+     "run-source"
+    ]
+   }
+  }
+ ]
+}
