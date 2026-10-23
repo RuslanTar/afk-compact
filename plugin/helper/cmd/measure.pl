@@ -49,7 +49,7 @@ sub _approvals {
     return ['Approvals: not checked (copy pending)'] unless defined $raw;
     require "skills/approvals.pm";
     my $tp = (defined $transcript && $transcript ne '') ? $transcript : skills::approvals::transcript_path(undef, $sid, $cwd);
-    my ($lines, $row) = eval { skills::approvals::summary_lines(util::text($raw), $tp) };
+    my ($lines, $row) = eval { skills::approvals::summary_lines(util::text($raw), $tp, $cwd, $sid) };
     return ['Approvals: not checked (spec)'] unless $lines;
     rc::emit('approvals_carry', [map { ($_ => $row->{$_}) } sort keys %$row]) if $row;
     return $lines;

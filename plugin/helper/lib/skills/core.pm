@@ -181,10 +181,11 @@ sub nonce {
 }
 
 # AP-4: the writing session's human-typed rows hold each quote (in memory; nothing logged).
+# $sid: rows stamped with another session's id do not count (REVIEW-NIGHT-3 R3-03).
 sub quotes_found {
-    my ($path, $asks) = @_;
+    my ($path, $asks, $sid) = @_;
     return undef unless defined &transcript::quotes_found;
-    my $r = transcript::quotes_found($path, $asks);
+    my $r = transcript::quotes_found($path, $asks, $sid);
     return ref $r eq 'ARRAY' ? $r : undef;
 }
 

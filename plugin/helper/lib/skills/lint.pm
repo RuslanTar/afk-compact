@@ -16,9 +16,10 @@ package skills::lint;
 #      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2);
 #      2026-10-22 (T-TEXT E6): acuity_floor (the stage meta's) for the acuity advisory;
 #      (Q-ADAPTER QA-4) queue_mode (the stage meta's: off|on|degraded) for queue-off;
-#      2026-10-23 (AP-4): approval_chain [{text, checked}] (the own chain's file) and
-#        transcript (the writing session's transcript path, undef when not found) for the
-#        approval checks (skills::approvals).
+#      2026-10-23 (AP-4): approval_chain [{text, checked}] (the own chain's file),
+#        transcript (the writing session's transcript path, undef when not found) and
+#        session_id (rows of another session do not count) for the approval checks
+#        (skills::approvals).
 # The result also carries `acuity`: the rating found in Resume here, or undef; and
 # `approvals`: {checked => [U-n…], lines, unchecked, classes} for the frontmatter and row.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
@@ -256,7 +257,8 @@ sub lint {
     # session's human-typed rows), approval-unchecked (transcript unreadable). On with a spec
     # that has the section and the three ids.
     my $approvals = skills::approvals::lint(\@lines, prev_lines => \%prev_lines, tag_re => $tag_re, note => $note,
-                                            chain => $in->{approval_chain}, transcript => $in->{transcript});
+                                            chain => $in->{approval_chain}, transcript => $in->{transcript},
+                                            sid => $in->{session_id});
     push @block, @{ $approvals->{blocking} };
     push @adv, @{ $approvals->{advisory} };
 

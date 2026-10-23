@@ -20,7 +20,12 @@ package skills::approvals;
 #         ($PROD_IS_GATE); the looser half (a production read under forbid) is not built;
 #   gates from text: $ACTION_WORDS reads a plain-words action ("push feat/x") into outward
 #         class ids, and a push that names no branch, or a protected one, is protected-push
-#         ($PUSH_UNNAMED_IS_GATE), as `risk` counts an unknown push destination.
+#         ($PUSH_UNNAMED_IS_GATE), as `risk` counts an unknown push destination;
+#         REVIEW-NIGHT-3 R3-02: a gate named in plain words counts beside a class pattern's hit,
+#         the remote default branch is protected as in `risk`, and a local merge (not a merge
+#         request) whose words name a protected branch is protected-push;
+#   quotes (transcript::quotes_found, R3-04): whole words; a quote under 4 words is the whole
+#         message; a message holding an approval line was pasted and does not count.
 use strict;
 use warnings;
 use utf8;
@@ -29,6 +34,7 @@ use skills::spec;
 use skills::core;
 use skills::ctx;
 use skills::store;
+use skills::gitfacts;
 
 our $HEADING = '## Approvals';
 our %NO_CARRY_REASON = map { $_ => 1 } qw(fork bg-copy);
@@ -93,20 +99,29 @@ sub section_lines {
     return \%in;
 }
 
-# classes(entry) -> {outward => [class ids], gate => gate id | undef}
+# classes(entry [, cwd]) -> {outward => [class ids], gate => gate id | undef}
+# The outward ids are the class patterns' hits on the action and targets, else the plain
+# words' ($ACTION_WORDS). The gate is read from both (REVIEW-NIGHT-3 R3-02: "git push origin
+# feat/x and deploy" names a deploy although a class pattern matched the push). A push, or a
+# local merge (not a merge request), whose words name a protected branch is protected-push:
+# protected_branch_re or the remote default branch of origin or upstream in cwd, each side of a
+# `src:dst` refspec and a name after its remote prefix (`fork/main`) counted.
 sub classes {
-    my ($e) = @_;
+    my ($e, $cwd) = @_;
     my $text = "$e->{action} · $e->{targets_text}";
-    my (@ids, %seen);
+    my (@ids, %seen, %word);
     for my $c (@{ (eval { skills::spec::outward_classes() }) || [] }) {
         push @ids, $c->{class} if $text =~ $c->{re} && !$seen{ $c->{class} }++;
     }
+    for my $w (@ACTION_WORDS) { $word{ $w->[0] } = 1 if $e->{action} =~ $w->[1] }
     if (!@ids) {
-        for my $w (@ACTION_WORDS) { push @ids, $w->[0] if $e->{action} =~ $w->[1] && !$seen{ $w->[0] }++ }
+        for my $w (@ACTION_WORDS) { push @ids, $w->[0] if $word{ $w->[0] } && !$seen{ $w->[0] }++ }
     }
     push @ids, 'push' if $seen{'force-push'} && !$seen{push}++;
+    my %any = (%seen, %word);
+    $any{push} = 1 if $any{'force-push'};
     my %gates = map { $_ => 1 } @{ (eval { skills::spec::get(q(explicit_gate_classes)) }) || [] };
-    my ($gate) = grep { $gates{$_} } @ids;
+    my ($gate) = grep { $gates{$_} } @ids, (grep { $word{$_} } map { $_->[0] } @ACTION_WORDS);
     if (!defined $gate && $PROD_IS_GATE) {
         my $prod = skills::core::prod();
         for my $c (@{ ref $prod->{classes} eq 'ARRAY' ? $prod->{classes} : [] }) {
@@ -114,23 +129,47 @@ sub classes {
             if ($text =~ $c->{re}) { $gate = 'prod-write'; last }
         }
     }
-    if (!defined $gate && $seen{push}) {
+    my $merge = $e->{action} =~ /\bmerge\b/i && !$any{'mr-write'};
+    if (!defined $gate && ($any{push} || $merge)) {
         my $pre = skills::spec::regex_at('protected_branch_re');
+        my %def = map { $_ => 1 } _default_branches($cwd);
         my ($named, $protected) = (0, 0);
         for my $t (@{ $e->{targets} }, $e->{action}) {
             my $id = $t =~ s/\s+@\s.*\z//sr;
             for my $w (split /[\s`'"]+/, $id) {
-                $w =~ s/[.,;:)]+\z//;
+                $w =~ s/[.,;)]+\z//;
                 next if $w eq '';
-                my $b = $w =~ s{\A(?:refs/heads/|[A-Za-z0-9._-]+:)}{}r;
-                $b =~ s{\A(?:origin|upstream)/}{};
-                $protected = 1 if $pre && $b =~ $pre;
+                for my $part (split /:/, $w) {
+                    my $b = $part =~ s{\A\+}{}r;
+                    $b =~ s{\Arefs/(?:heads|remotes)/}{};
+                    for my $n ($b, ($b =~ m{\A[^/]+/(.+)\z} ? $1 : ())) {
+                        $protected = 1 if ($pre && lc($n) =~ $pre) || $def{$n};
+                    }
+                }
             }
             $named = 1 if $id =~ /\bbranch[ \t]+\S/i || $id =~ m{[A-Za-z0-9._-]/[A-Za-z0-9._/-]};
         }
-        $gate = 'protected-push' if $protected || (!$named && $PUSH_UNNAMED_IS_GATE);
+        $gate = 'protected-push' if $protected || ($any{push} && !$named && $PUSH_UNNAMED_IS_GATE);
     }
     return { outward => \@ids, gate => $gate };
+}
+
+# The default branches of the remotes origin and upstream in cwd (refs/remotes/<r>/HEAD), the
+# spec's "the remote's default branch" of protected-push; () outside git.
+my %DEFAULT_BRANCHES;
+sub _default_branches {
+    my ($cwd) = @_;
+    $cwd //= skills::util::cwd();
+    return () unless defined $cwd;
+    $DEFAULT_BRANCHES{$cwd} //= do {
+        my @b;
+        for my $r (qw(origin upstream)) {
+            my $x = eval { skills::gitfacts::line(skills::gitfacts::git($cwd, 'symbolic-ref', '--short', '-q', "refs/remotes/$r/HEAD")) };
+            push @b, $1 if defined $x && $x =~ m{\A\Q$r\E/(.+)\z};
+        }
+        \@b;
+    };
+    return @{ $DEFAULT_BRANCHES{$cwd} };
 }
 
 # lint(\@lines, prev_lines => {line => 1}, tag_re => qr, note => text,
@@ -162,6 +201,9 @@ sub lint {
         }
         my $e = parse_line($l);
         if (!$e) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+        # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
+        # with a checked line's id would ride on its check.
+        if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
         $e->{where} = $where;
         push @own, $e;
     }
@@ -172,7 +214,7 @@ sub lint {
     }
     if (@ask) {
         my $res = defined $a{transcript}
-            ? skills::core::quotes_found($a{transcript}, [ map { { quote => $_->{quote}, targets => $_->{targets} } } @ask ])
+            ? skills::core::quotes_found($a{transcript}, [ map { { quote => $_->{quote}, targets => $_->{targets} } } @ask ], $a{sid})
             : undef;
         for my $k (0 .. $#ask) {
             my $v = $res ? $res->[$k] : undef;
@@ -213,11 +255,15 @@ sub checked_ids {
     return { map { $_ => 1 } grep { /\AU-[0-9]+\z/ } split /\s*,\s*/, $v };
 }
 
-# An own-chain document for the carry check: {text, checked}.
+# An own-chain document for the carry check: {text, checked}; undef unless the file is own for
+# this session by own_relation (REVIEW-NIGHT-3 R3-03: a fork's or bg-copy's base, an export, an
+# imported copy or a file outside the store lends no checked approvals to the new handoff).
 sub chain_doc {
-    my ($path) = @_;
+    my ($path, $ctx, $sid) = @_;
     return undef unless defined $path && -f $path;
     my $d = skills::store::read_doc($path) or return undef;
+    my ($own) = own_relation($d, $ctx, $sid);
+    return undef unless $own;
     return { text => $d->{body} // '', checked => checked_ids($d->{fm}{approvals_checked}) };
 }
 
@@ -248,23 +294,41 @@ sub _entry {
     return $t;
 }
 
-# The own relation of a handoff to this session (O-1, O-12): (1, '') when it is own, else
-# (0, why).
+# The own relation of a handoff to this session (spec §4 Own handoff; O-1, O-12): (1, '') when
+# it is own, else (0, why). Own: a handoff in the private store (handoff_root; REVIEW-NIGHT-3
+# R3-03), not an export or an imported copy, integrity ok, written by this session or by a
+# lineage predecessor reached without a fork or bg-copy link anywhere on the way (a link of
+# that kind cuts off every session before it too).
 sub own_relation {
     my ($d, $ctx, $sid) = @_;
     my $fm = $d->{fm} || {};
     return (0, 'export') if defined $fm->{export};
     return (0, 'imported') if defined $fm->{imported_from};
     return (0, 'not a handoff') unless ($fm->{kind} // '') eq 'handoff';
+    return (0, 'outside the store') unless _in_store($d->{path}, $ctx);
     my $int = skills::store::integrity($d)->{integrity} // '';
     return (0, $int eq '' ? 'integrity unknown' : $int) unless $int eq 'ok';
     my $hs = $fm->{session_id} // '';
     return (1, '') if $hs ne '' && defined $sid && $hs eq $sid;
+    return (0, 'foreign') unless defined $sid;
+    my $cut;
     for my $c (@{ skills::ctx::chain($ctx, $sid) }) {
+        $cut //= $c->{reason} if $NO_CARRY_REASON{ $c->{reason} };
         next unless $c->{sid} eq $hs;
-        return $NO_CARRY_REASON{ $c->{reason} } ? (0, $c->{reason}) : (1, '');
+        return defined $cut ? (0, $cut) : (1, '');
     }
     return (0, 'foreign');
+}
+
+# 1 when the file's real path lies under the store root (handoff_root), component by component.
+sub _in_store {
+    my ($path, $ctx) = @_;
+    return 0 unless defined $path && $ctx && defined $ctx->{root};
+    my $p = skills::util::abs_path($path);
+    my $r = skills::util::abs_path($ctx->{root});
+    return 0 unless defined $p && defined $r;
+    $r =~ s{/+\z}{};
+    return index($p, "$r/") == 0 ? 1 : 0;
 }
 
 # handoff_lines(doc, ctx, sid) -> (lines, row): `measure <handoff>` (AP-5).
@@ -273,19 +337,23 @@ sub handoff_lines {
     return ([], undef) unless enabled();
     my @lines = split /\n/, $d->{body} // '';
     my $in = section_lines(\@lines);
-    my @e = grep { defined } map { parse_line($lines[$_]) } sort { $a <=> $b } keys %$in;
+    my $tag_re = skills::spec::regex_at('carry.tag_re');
+    my @e = grep { defined } map { parse_line($lines[$_]) } grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
     my ($own, $why) = own_relation($d, $ctx, $sid);
     if (!$own) {
         return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e;
         return ([ 'Approvals (checked): none' ], { source => 'handoff', checked => 0, gate => 0, classes => [] });
     }
     my $ok = checked_ids($d->{fm}{approvals_checked});
-    return _report([ grep { $ok->{ $_->{id} } } @e ], [], 'handoff');
+    # An id on two lines is no one's check (R3-05; publish refuses it, an edited file may not).
+    my %n;
+    $n{ $_->{id} }++ for @e;
+    return _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
 }
 
-# summary_lines(copy text, transcript path) -> (lines, row): `measure --compact --copy` (AP-5).
+# summary_lines(copy text, transcript path [, cwd, sid]) -> (lines, row): `measure --compact --copy` (AP-5).
 sub summary_lines {
-    my ($text, $transcript) = @_;
+    my ($text, $transcript, $cwd, $sid) = @_;
     return ([], undef) unless enabled();
     my $tag_re = skills::spec::regex_at('carry.tag_re');
     my (@e, %seen);
@@ -299,17 +367,17 @@ sub summary_lines {
         }
     }
     return ([ 'Approvals (checked): none' ], { source => 'summary', checked => 0, gate => 0, classes => [] }) unless @e;
-    my $res = defined $transcript ? skills::core::quotes_found($transcript, [ map { { quote => $_->{quote}, targets => $_->{targets} } } @e ]) : undef;
+    my $res = defined $transcript ? skills::core::quotes_found($transcript, [ map { { quote => $_->{quote}, targets => $_->{targets} } } @e ], $sid) : undef;
     my (@ok, @no);
     for my $k (0 .. $#e) { if ($res && $res->[$k]) { push @ok, $e[$k] } else { push @no, $e[$k] } }
-    return _report(\@ok, \@no, 'summary');
+    return _report(\@ok, \@no, 'summary', $cwd);
 }
 
 sub _report {
-    my ($ok, $no, $source) = @_;
+    my ($ok, $no, $source, $cwd) = @_;
     my (@carry, @gate, %cls);
     for my $e (@$ok) {
-        my $c = classes($e);
+        my $c = classes($e, $cwd);
         if (defined $c->{gate}) { push @gate, $e; next }
         next if $e->{used} && !$e->{standing};
         push @carry, $e;

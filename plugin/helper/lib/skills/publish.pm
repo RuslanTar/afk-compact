@@ -108,7 +108,9 @@ sub run {
     # AP-4: the own chain's file (its approvals_checked ids carry) and this session's transcript.
     my $pk = $s->{previous_kind} // '';
     my $own_path = ($pk eq 'own' || $pk eq 'chain') ? $s->{previous_handoff} : $pk eq 'foreign' ? $s->{own_previous_handoff} : undef;
-    my @achain = grep { defined } skills::approvals::chain_doc($own_path);
+    # Only a file that is own by spec §4 lends its checked ids (REVIEW-NIGHT-3 R3-03: not a fork's
+    # or bg-copy's base, O-12 interim; not an export, an imported copy or a file outside the store).
+    my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
     my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
     my $res = eval { skills::lint::lint({
         body => $body, recipes => \%recipes, extra => \%extra, previous => $prev_text,
@@ -116,7 +118,7 @@ sub run {
         repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
         jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
         brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
-        queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript,
+        queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
     $row->{bytes} = skills::util::blen($body);
