@@ -2,3 +2,6 @@ node_modules/
 .types/
 plugin/.claude-plugin/types/
 tmp/
+
+# private design notes, never tracked (owner ruling 2026-10-23, work home)
+.planning/
