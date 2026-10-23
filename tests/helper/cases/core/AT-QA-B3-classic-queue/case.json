@@ -1,0 +1,67 @@
+{
+ "id": "AT-QA-B3 (classic)",
+ "note": "QA-B3 (owner xxxxxxxx-11 setting-driven, one text; REVIEW-NIGHT NR-10): with queue_cmd set, the classic PreCompact fallback keeps the [queue] lines of the main text (the golden with +queue) and the dispatch record names the queue tag; the helper makes no queue call here (S-04)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "manual"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_absent": [
+     "[auto] ",
+     "[queue] ",
+     "[fallback] ",
+     "@nonce@",
+     "<!--",
+     "{{"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/dispatch/*.json",
+      "count": 1,
+      "json": {
+       "trigger": "manual",
+       "tags": [
+        "queue"
+       ]
+      }
+     }
+    ],
+    "stdout_golden": {
+     "files": [
+      "$FIX/assembly/expected/handoff-instructions__queue.txt",
+      "$FIX/assembly/expected/subagent-instructions__fallback.txt"
+     ]
+    },
+    "stdout_has": [
+     "A queued question \\(Questions shows its id\\)"
+    ]
+   }
+  },
+  {
+   "name": "mod path: dispatch accepts the queue tag the mod now passes",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "1a2b3c4d", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook",
+            "--resume-pref", "prompt.context", "--tags", "chain,queue", "--midturn", "false", "--instr-sha8", "9f2c01ab",
+            "--instr-bytes", "4200"],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n",
+    "files": [{"path": "$WATCH/$SID/dispatch/1a2b3c4d.json", "json": {"tags": ["chain", "queue"]}}]
+   }
+  }
+ ],
+ "options": {
+  "queue_cmd": "/q/bin/queue"
+ }
+}

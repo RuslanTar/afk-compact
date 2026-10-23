@@ -24,7 +24,7 @@ sub run {
     my $pref = $opt->{'resume-pref'} // ($opt->{actor} eq 'main' ? 'prompt.context' : 'none');
     die "usage: --resume-pref prompt.context|sessionstart|prompt.submit|none\n" unless $dispatch::PREFS{$pref};
     my @tags = grep { $_ ne '' } split /,/, ($opt->{tags} // '');
-    for my $t (@tags) { die "usage: --tags from midturn,auto,chain,measured,handoff\n" unless $dispatch::TAGS{$t} }
+    for my $t (@tags) { die "usage: --tags from midturn,auto,chain,measured,handoff,queue\n" unless $dispatch::TAGS{$t} }
     die "usage: --handoff-ht is 8 lowercase hex\n" if defined $opt->{'handoff-ht'} && !handoff_turn::valid_ht($opt->{'handoff-ht'});
     my $mid = $opt->{midturn} // 'false';
     die "usage: --midturn true|false\n" unless $mid =~ /^(true|false)$/;

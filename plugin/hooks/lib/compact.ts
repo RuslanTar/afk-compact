@@ -117,7 +117,8 @@ export type MainText = { text: string; tags: Tag[] }
 /**
  * The main text for a dispatch: `[midturn]` when asked, `[chain]` when `prev-copy` returns a
  * path, `[measured]` when the checkpoint returned a measured block, `[handoff]` with its path
- * when a handoff turn published one just before (MOD-SPEC §9.1; mod path only).
+ * when a handoff turn published one just before (MOD-SPEC §9.1; mod path only), `[queue]` when
+ * `queue_cmd` is set (QA-B3, owner xxxxxxxx-11 "setting-driven, one text"; D-10 as the nudge).
  */
 export async function mainText(
   d: Deps, nonce: string, midturn: boolean, prev: string | undefined, measured: string | null, handoffPath?: string,
@@ -127,6 +128,7 @@ export async function mainText(
   if (prev !== undefined) tags.push('chain')
   if (handoffPath !== undefined) tags.push('handoff')
   if (measured !== null) tags.push('measured')
+  if (d.cfg.queue_cmd !== '') tags.push('queue')
   const runtime = {
     nonce, previous_copy: prev, measured_at: isoLocal(await d.now(), false), measured_facts: measured ?? undefined, handoff_path: handoffPath,
   }

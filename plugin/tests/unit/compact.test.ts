@@ -368,3 +368,26 @@ test('MOD-06: no vetted watch folder (ident refused every log folder): no marker
   await raiseCompact($, { trigger: 'manual' })
   expect(w.writes.filter(p => p.includes('/.orphans/') || p.endsWith('.mod.md'))).toEqual([])
 })
+
+// QA-B3 (owner xxxxxxxx-11 "setting-driven, one text"; REVIEW-NIGHT NR-10): the [queue] lines of
+// the compaction text ride on queue_cmd, as the nudge's do (D-10); unset, they are dropped.
+const QUEUE_LINE = 'A queued question (Questions shows its id)'
+test('QA-B3 (mod part): queue_cmd set: the main compaction text keeps the [queue] lines and the dispatch tags name queue', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compacts[0]?.instructions ?? '').toContain(QUEUE_LINE)
+  expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).toContain('queue')
+  // The subagent text never carries it.
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  expect(w.compacts[1]?.instructions ?? '').not.toContain(QUEUE_LINE)
+  expect(w.callsOf('queue-add').length).toBe(0)
+})
+
+test('QA-B3 (mod part): queue_cmd unset: no [queue] line and no queue tag', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compacts[0]?.instructions ?? '').not.toContain(QUEUE_LINE)
+  expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).not.toContain('queue')
+})

@@ -15,7 +15,7 @@ our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref mid
 our %TRIGGERS = map { $_ => 1 } qw(manual auto plugin precompute unknown);
 our %CHANNELS = map { $_ => 1 } qw(mod-hook mod-self classic);
 our %PREFS = map { $_ => 1 } qw(prompt.context sessionstart prompt.submit none);
-our %TAGS = map { $_ => 1 } qw(midturn auto chain measured handoff);
+our %TAGS = map { $_ => 1 } qw(midturn auto chain measured handoff queue);    # queue: QA-B3 (2026-10-23)
 
 sub path { my ($watch, $sid, $nonce) = @_; return "$watch/$sid/dispatch/$nonce.json" }
 
