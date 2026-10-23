@@ -72,7 +72,8 @@ sub spec_for_tests {
     my $c = "\xe2\x9f\xab";
     my $b = quotemeta $T::BRAND;
     return {
-        sections_main => ['## Resume here', '## User constraints', '## Decisions and do-not-re-raise', '## In flight',
+        # `## Approvals` since the 2026-10-23 scoped-approval ruling (spec §2, AP-3).
+        sections_main => ['## Resume here', '## User constraints', '## Approvals', '## Decisions and do-not-re-raise', '## In flight',
                           '## Live state', '## Open questions', '## Location', '## Work done and findings',
                           '## Evidence', '## Next steps'],
         sections_subagent => ['## Task as assigned', '## Constraints from the parent', '## Report', '## Done',
