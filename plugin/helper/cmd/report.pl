@@ -1,8 +1,11 @@
 # cmd/report.pl: `report` subcommand (WATCHER-SPEC §8.1, W-BETA B; BUILD-PLAN §3.1).
 # Owner: WP-watch. The work is in lib/watch/export.pm.
 #   report [--dry-run] [--since <N>d|<YYYY-MM-DD>] [--out DIR] [--max-mb N] [--with-summaries]
-#   (--dry-run also prints `summaries: <n> available (<KB>)`; --with-summaries adds the saved
-#   compaction copies under summaries/, each through the identity and secret scans: RS-2)
+#          [--with-handoffs]
+#   (--dry-run also prints `summaries: <n> available (<KB>)` and `handoffs: <n> available (<KB>)`;
+#   --with-summaries adds the saved compaction copies under summaries/ (RS-2), --with-handoffs
+#   the published handoffs under handoffs/ (RS-5, owner xxxxxxxx-33: its own yes), each file
+#   through the identity and secret scans)
 #   report verify --zip FILE
 # Exit: 0 written (also when files were withheld) or verified, 1 verify found a problem,
 # 64 usage, 70 internal error, 73 output folder not writable. No network, no deletion.

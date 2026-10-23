@@ -1,4 +1,4 @@
-# afk-compact handoff spec v1 (shared literals)
+# afk-compact handoff spec v2 (shared literals)
 
 One source for the literals that the handoff skill, the resume skill, the compaction texts, the mod, the helper, the publish lint and the watcher share. The handoff template mirrors this file; where they differ, this file wins. Code reads only the `json spec-literals` block at the end and hard-codes no heading, vocabulary or pattern.
 
@@ -37,6 +37,8 @@ Main form, in this order (a heading matches by its literal prefix at the start o
 ```
 
 Subagent form, in this order: `## Task as assigned` · `## Constraints from the parent` · `## Report` · `## Done` · `## Findings` · `## Produced but not yet delivered` · `## Own background tasks` · `## Next action`.
+
+Each heading of both forms has a fixed section id (`section_ids`, e.g. `main:next-steps`, `sub:done`). Beta report exports name a section by this id, never by its position; an id never changes when a section is added, moved or renamed, and a new section gets a new id.
 
 ## 3. Verdicts
 
@@ -259,7 +261,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
 
 ```json spec-literals
 {
-  "spec_version": 1,
+  "spec_version": 2,
   "title_prefix": "# ",
   "sections_main": [
     "## Resume here",
@@ -290,6 +292,27 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "## Own background tasks",
     "## Next action"
   ],
+  "section_ids": {
+    "## Resume here": "main:resume-here",
+    "## User constraints": "main:user-constraints",
+    "## Approvals": "main:approvals",
+    "## Decisions and do-not-re-raise": "main:decisions",
+    "## In flight": "main:in-flight",
+    "## Live state": "main:live-state",
+    "## Open questions": "main:open-questions",
+    "## Location": "main:location",
+    "## Work done and findings": "main:work-done",
+    "## Evidence": "main:evidence",
+    "## Next steps": "main:next-steps",
+    "## Task as assigned": "sub:task",
+    "## Constraints from the parent": "sub:parent-constraints",
+    "## Report": "sub:report",
+    "## Done": "sub:done",
+    "## Findings": "sub:findings",
+    "## Produced but not yet delivered": "sub:undelivered",
+    "## Own background tasks": "sub:background-tasks",
+    "## Next action": "sub:next-action"
+  },
   "marker_re": "^⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
   "sentinel_re": "^⟪/afk-compact n=([0-9a-f]{8})⟫$",
   "instr_marker_re": "⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub)⟫",

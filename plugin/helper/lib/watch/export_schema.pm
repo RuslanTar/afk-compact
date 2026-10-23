@@ -22,7 +22,10 @@ package watch::export_schema;
 #   [list => CLASS]     an array; each item through CLASS (items that fail are dropped)
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
 #   [obj => {...}]      a nested object with its own field classes
-#   heading             a spec section heading becomes its template id (`main:<n>`/`sub:<n>`)
+#   heading             a spec section heading (its literal, or the slug a section_chars row
+#                       holds) becomes its fixed section id from the spec's `section_ids`
+#                       (`main:<role>`/`sub:<role>`, spec_version 2; owner xxxxxxxx-34), else
+#                       `other`; `preamble` and `other` stay as they are
 #   [or => CLASS, @words]  one of the listed words as it is, else the value through CLASS
 #                       (idle: a bool or `unknown`; min_window: a number or `never`)
 #   drop                never exported (listed so the gate knows it was looked at)
@@ -301,18 +304,55 @@ our %SCHEMA = (
 
 sub schema { return \%SCHEMA }
 
-# RS-3 (owner xxxxxxxx-19, 2026-10-23: summaries opt-in per report, asked each time): the one
-# file kind that holds session text. A `summaries/<12 hex>.md` entry is allowed only in a bundle
-# whose manifest says `with_summaries: true` (the user said yes to `report --with-summaries` in
-# that run); `report verify` fails any other bundle that has one.
-our $SUMMARY_FILE_RE = qr{\Asummaries/[0-9a-f]{12}\.md\z};
-sub summary_file { my ($name) = @_; return (defined $name && !ref $name && $name =~ $SUMMARY_FILE_RE) ? 1 : 0 }
-# A manifest as built (\1) or as decoded (watch::json: 1).
-sub summaries_allowed {
-    my ($m) = @_;
-    my $v = ref $m eq 'HASH' ? $m->{with_summaries} : undef;
+# RS-3 (owner xxxxxxxx-19, 2026-10-23: summaries opt-in per report, asked each time) and RS-5
+# (owner xxxxxxxx-33, "Also handoffs": a second, separate yes): the file kinds that hold session
+# text. A `summaries/<12 hex>.md` entry is allowed only in a bundle whose manifest says
+# `with_summaries: true`, a `handoffs/<12 hex>.md` entry only with `with_handoffs: true` (the user
+# said yes to that kind, `report --with-summaries` / `--with-handoffs`, in that run); `report
+# verify` fails any other bundle that has one.
+our @CONTENT_KINDS = qw(summaries handoffs);
+our %CONTENT = (
+    summaries => { re => qr{\Asummaries/[0-9a-f]{12}\.md\z}, flag => 'with_summaries' },
+    handoffs  => { re => qr{\Ahandoffs/[0-9a-f]{12}\.md\z}, flag => 'with_handoffs' },
+);
+# content_kind(zip name) -> `summaries`, `handoffs` or undef.
+sub content_kind {
+    my ($name) = @_;
+    return undef unless defined $name && !ref $name;
+    for my $k (@CONTENT_KINDS) { return $k if $name =~ $CONTENT{$k}{re} }
+    return undef;
+}
+# content_allowed(manifest, kind): the manifest flag of that kind is true, in a manifest as built
+# (\1) or as decoded (watch::json: 1).
+sub content_allowed {
+    my ($m, $kind) = @_;
+    my $f = $CONTENT{ $kind // '' } or return 0;
+    my $v = ref $m eq 'HASH' ? $m->{ $f->{flag} } : undef;
     return 0 unless defined $v;
     return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : (!ref $v && $v eq '1') ? 1 : 0;
+}
+
+# Owner xxxxxxxx-34 ("Stable section ids", 2026-10-23): from spec_version 2 a handoff section is
+# exported by its fixed id (`main:next-steps`), from the spec's `section_ids`, never by its
+# position (`main:3`, spec_version 1), so a section added, moved or renamed never shifts another
+# one's id. The manifest says `spec_version`; `report verify` refuses a bundle whose rows hold
+# the other form (the two never mix).
+our $SECTION_ID_RE = qr/\A(?:main|sub):[a-z][a-z-]{0,31}\z/;
+our @SECTION_KEEP = qw(preamble other);
+# The fields of the `heading` class: {ev => [[field, how]]}, how `key` (a counts object's keys)
+# or `value` (the value, or each item of a list).
+sub heading_fields {
+    my %o;
+    for my $ev (sort keys %SCHEMA) {
+        for my $f (sort keys %{ $SCHEMA{$ev} }) {
+            my $c = $SCHEMA{$ev}{$f};
+            if (!ref $c) { push @{ $o{$ev} }, [ $f, 'value' ] if $c eq 'heading'; next }
+            next unless ref $c eq 'ARRAY' && defined $c->[1] && !ref $c->[1] && $c->[1] eq 'heading';
+            push @{ $o{$ev} }, [ $f, 'key' ] if $c->[0] eq 'counts';
+            push @{ $o{$ev} }, [ $f, 'value' ] if $c->[0] eq 'list';
+        }
+    }
+    return \%o;
 }
 
 1;

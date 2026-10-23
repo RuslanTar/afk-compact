@@ -78,8 +78,11 @@ my %got;
         $E->ok(($al->{key}{actor} =~ /\A[0-9a-f]{12}\z/ ? 1 : 0), 'an agent id is hashed');
         $E->is($al->{key}{session_id}, $al->{sid}, 'one sid hashes to one value');
         my ($pc) = grep { $_->{ev} eq 'postcompact' } @r;
-        $E->is($pc->{section_chars}{resume}, 300, 'a section role is kept');
-        $E->is($pc->{section_chars}{other}, 5, 'a heading that is not the spec`s becomes other');
+        # owner xxxxxxxx-34: fixed section ids (spec_version 2), never a position or a slug
+        $E->is(join(',', map { "$_=$pc->{section_chars}{$_}" } sort keys %{ $pc->{section_chars} || {} }),
+               'main:decisions=40,main:resume-here=300,other=8,preamble=7,sub:task=20',
+               'section_chars: slugs and literals become fixed section ids, an unknown heading or slug other');
+        $E->is($m->{spec_version}, 2, 'manifest spec_version 2');
         $E->ok((!exists $pc->{ledger}{excerpt} ? 1 : 0), 'an unknown nested field is dropped');
         my ($roll) = grep { $_->{ev} eq 'compaction' } @r;
         $E->is($roll->{copy_path}, 'main', 'rollup copy path becomes its slot');

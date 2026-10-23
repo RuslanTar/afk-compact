@@ -2,7 +2,7 @@
 export const SPEC_PRESENT = true as const
 
 export const SPEC = {
-  "spec_version": 1,
+  "spec_version": 2,
   "title_prefix": "# ",
   "sections_main": [
     "## Resume here",
@@ -33,6 +33,27 @@ export const SPEC = {
     "## Own background tasks",
     "## Next action"
   ],
+  "section_ids": {
+    "## Resume here": "main:resume-here",
+    "## User constraints": "main:user-constraints",
+    "## Approvals": "main:approvals",
+    "## Decisions and do-not-re-raise": "main:decisions",
+    "## In flight": "main:in-flight",
+    "## Live state": "main:live-state",
+    "## Open questions": "main:open-questions",
+    "## Location": "main:location",
+    "## Work done and findings": "main:work-done",
+    "## Evidence": "main:evidence",
+    "## Next steps": "main:next-steps",
+    "## Task as assigned": "sub:task",
+    "## Constraints from the parent": "sub:parent-constraints",
+    "## Report": "sub:report",
+    "## Done": "sub:done",
+    "## Findings": "sub:findings",
+    "## Produced but not yet delivered": "sub:undelivered",
+    "## Own background tasks": "sub:background-tasks",
+    "## Next action": "sub:next-action"
+  },
   "marker_re": "^⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub|manual)⟫$",
   "sentinel_re": "^⟪/afk-compact n=([0-9a-f]{8})⟫$",
   "instr_marker_re": "⟪afk-compact v1 n=([0-9a-f]{8}) s=(main|sub)⟫",

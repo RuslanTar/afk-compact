@@ -108,7 +108,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                watch/export_schema.pm entry (the WATCHER §6.3 list half is a watch case)
   report-skill AT-WB-15: description "Only when the user asks", only `<store> report` calls, no
                `$ARGUMENTS`, no bare launcher, no log reads, REVEAL/COPY lines not run; AT-RS-01:
-               the dry run, the one question and the summaries-only-after-a-yes rule
+               the dry run, the one dialog (a separate yes for summaries and for handoffs, RS-5)
+               and the each-kind-only-after-its-yes rule
   no-age-rule  AT-ST-06: no file-time test in reconcile.pm, copies.pm, postcompact.pm
   perl-utf8    AT-P5-06: a helper .pm/.pl with non-ASCII on a code line needs `use utf8`
   Gates of the 2026-10-23 owner rulings:
@@ -1390,14 +1391,17 @@ NEGATED_LOG_READ = re.compile(r"\b(?:Do not|Never|never|don't)\b[^.]*\b(?:read|o
 
 
 REPORT_RS1 = ("<store> report --dry-run", "<store> report --with-summaries",
-              "Never pass `--with-summaries` without a yes in this run", "business content is not masked",
-              "No, logs only")
+              "Never pass `--with-summaries` or `--with-handoffs` without its own yes in this run",
+              "business content is not masked", "No, logs only",
+              # RS-5 (owner xxxxxxxx-33, "Also handoffs"): a second, separate yes in the same dialog
+              "--with-handoffs` after a yes to handoffs", "one question per such kind in the same dialog")
 
 
 def report_skill_hits(target, brand):
     """AT-WB-15 (W-BETA C, XR-04, XR-21): the report SKILL description starts "Only when the
     user asks"; every helper call is `<store> report …` (RS-1, owner xxxxxxxx-19: a dry run, one
-    question, then the report, with summaries only after a yes, REPORT_RS1 / AT-RS-01); no
+    question, then the report, with summaries only after a yes; RS-5, owner xxxxxxxx-33: the
+    same dialog asks a separate yes for handoffs; REPORT_RS1 / AT-RS-01); no
     `$ARGUMENTS`, no bare `<brand>-store`; no instruction to read or grep logs; the REVEAL and
     COPY lines are named as not to be run. (`disable-model-invocation: true` waits for PR-2
     P-156; the call-form gate refuses it until then.)"""
