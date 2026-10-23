@@ -13,6 +13,7 @@
     "plugin/assets/handoff-spec.json",
     "plugin/assets/handoff-spec.md",
     "plugin/assets/handoff-turn.txt",
+    "plugin/assets/queue.md",
     "plugin/assets/resume-context.txt",
     "plugin/assets/subagent-instructions.txt",
     "plugin/hooks/hooks.json",

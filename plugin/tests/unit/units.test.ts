@@ -163,10 +163,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('resume protocol ≤3,000 chars (compaction-rem-6 hard; soft 2,500) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,600).
+  test('resume protocol ≤3,600 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 3000).toBe(true)
+      expect(s.length <= 3600).toBe(true)
     }
   })
   test('AT-TX-11 (U half): a 3,000-char protocol and a 3,000-byte measured block go out untrimmed (≤6,500, BLOCK_MAX)', () => {

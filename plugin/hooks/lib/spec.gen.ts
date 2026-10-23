@@ -7,6 +7,7 @@ export const SPEC = {
   "sections_main": [
     "## Resume here",
     "## User constraints",
+    "## Approvals",
     "## Decisions and do-not-re-raise",
     "## In flight",
     "## Live state",
@@ -238,6 +239,7 @@ export const SPEC = {
     "previous_kind",
     "own_previous_handoff",
     "imported_from",
+    "approvals_checked",
     "gsd"
   ],
   "frontmatter_keys_copy": [
@@ -307,6 +309,7 @@ export const SPEC = {
   "section_caps": {
     "## Resume here": 1500,
     "## User constraints": 1500,
+    "## Approvals": 1000,
     "## Decisions and do-not-re-raise": 2200,
     "## In flight": 2000,
     "## Live state": 1200,
@@ -366,8 +369,16 @@ export const SPEC = {
       "fix": "add [from <sid8> · <their id> · <their stamp>] with the values from begin"
     },
     "carry-approval": {
-      "why": "approvals never carry across sessions",
+      "why": "an approval carries only along your own chain, where its use is tracked; another session's approval is context",
       "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"
+    },
+    "approval-shape": {
+      "why": "the next session can act on an approval only when it can check its scope",
+      "fix": "write the user's words, the action, each target with its state, once or standing, and not yet used or used <stamp>"
+    },
+    "approval-quote": {
+      "why": "only the user's own words can approve an action",
+      "fix": "quote the user exactly, or move the item to Open questions as ask user"
     },
     "private-path": {
       "why": "in repo mode the path would reach git",
@@ -440,6 +451,10 @@ export const SPEC = {
     "store-path": {
       "why": "the helper path changes with each plugin update and names your home folder",
       "fix": "write <store> instead of the path"
+    },
+    "approval-unchecked": {
+      "why": "an unchecked approval cannot carry",
+      "fix": "nothing to do; the next session re-asks"
     }
   },
   "lint_ids": {
@@ -462,7 +477,9 @@ export const SPEC = {
       "recipe-script",
       "recipe-spawn",
       "secret-hard",
-      "queue-off"
+      "queue-off",
+      "approval-shape",
+      "approval-quote"
     ],
     "advisory": [
       "size",
@@ -476,7 +493,8 @@ export const SPEC = {
       "recipe-mismatch",
       "secret-warn",
       "acuity",
-      "store-path"
+      "store-path",
+      "approval-unchecked"
     ],
     "repo_mode_only": [
       "private-path"
@@ -770,6 +788,14 @@ export const SPEC = {
   ],
   "outward_classes": [
     {
+      "id": "env-write",
+      "re": "\\b(gh|glab)[ \\t]+(secret|variable)[ \\t]+(set|delete|remove)\\b|\\bheroku[ \\t]+config:(set|unset)\\b|\\bvercel[ \\t]+env[ \\t]+(add|rm)\\b|\\bfly(ctl)?[ \\t]+secrets[ \\t]+(set|unset|import)\\b|\\bkubectl[ \\t]+(create|delete)[ \\t]+(secret|configmap)\\b|\\baws[ \\t]+(ssm[ \\t]+(put|delete)-parameter|secretsmanager[ \\t]+(create|put|update|delete)-secret(-value)?)\\b"
+    },
+    {
+      "id": "infra-write",
+      "re": "\\b(terraform|tofu)[ \\t]+(apply|destroy|import|state[ \\t]+(rm|mv|push))\\b|\\bpulumi[ \\t]+(up|destroy)\\b|\\bkubectl[ \\t]+(apply|create|delete|patch|replace|scale|rollout|set|edit|drain|cordon|uncordon|taint)\\b|\\bhelm[ \\t]+(install|upgrade|uninstall|rollback)\\b|\\baws[ \\t]+cloudformation[ \\t]+(deploy|create-stack|update-stack|delete-stack)\\b"
+    },
+    {
       "id": "push",
       "re": "\\bgit\\b.*\\bpush\\b"
     },
@@ -812,6 +838,54 @@ export const SPEC = {
       "re": "(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)"
     }
   ],
+  "explicit_gate_classes": [
+    "deploy",
+    "env-write",
+    "infra-write",
+    "prod-write",
+    "protected-push"
+  ],
+  "protected_branch_re": "^(main|master|trunk|develop|development|prod|production|release([/-].+)?|hotfix/.+)$",
+  "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
+  "risk_classes": [
+    {
+      "id": "gate",
+      "from": "explicit_gate_classes"
+    },
+    {
+      "id": "outward",
+      "from": "outward_classes"
+    },
+    {
+      "id": "production",
+      "from": "prod_classes"
+    },
+    {
+      "id": "credential-value",
+      "from": "secret_rules"
+    },
+    {
+      "id": "credential-read",
+      "re": "(~|\\$HOME|\\$\\{HOME\\})/\\.(ssh|aws|kube|docker|gnupg|config/gh)(/|\\b)|(^|[\\s/'\\\"=])\\.env(?!\\.(example|sample|template|dist)\\b)(\\.[A-Za-z0-9_-]+)*($|[\\s'\\\";|&)])|\\.(netrc|npmrc|pypirc|pgpass|git-credentials)\\b|\\b(id_rsa|id_dsa|id_ecdsa|id_ed25519)\\b|\\.(pem|key|p12|pfx|keystore|jks)($|[\\s'\\\";|&)])|\\bcredentials(\\.json)?\\b|\\b(security[ \\t]+find-(generic|internet)-password|op[ \\t]+(read|item[ \\t]+get)|pass[ \\t]+show)\\b"
+    },
+    {
+      "id": "network",
+      "re": "[A-Za-z][A-Za-z0-9+.-]*://|(^|[;&|(][ \\t]*)(sudo[ \\t]+)?([A-Za-z_][A-Za-z0-9_]*=[^ \\t]*[ \\t]+)*(curl|wget|ssh|scp|sftp|ftp|telnet|nc|ncat|socat|aws|gcloud|gsutil|az|kubectl|helm|terraform|tofu|pulumi|gh|glab|heroku|vercel|fly|flyctl|doctl|npx)\\b|\\brsync\\b[^|;&]*[ \\t][^ \\t:/]+:|\\bgit\\b[^|;&]*[ \\t](fetch|pull|push|clone|ls-remote|submodule[ \\t]+update|remote[ \\t]+update)\\b|\\bdocker[ \\t]+(pull|push|login|run|build|compose[ \\t]+(pull|up|build))\\b|\\b(npm|pnpm)[ \\t]+(install|i|ci|add|update|publish|view|info|audit|outdated)\\b|\\byarn([ \\t]+(install|add|upgrade|publish|info|audit)\\b|[ \\t]*$)|\\bpip[0-9.]*[ \\t]+(install|download)\\b|\\b(gem|bundle|bundler)[ \\t]+(install|update|push|fetch|outdated)\\b|\\bcargo[ \\t]+(install|update|publish|fetch|search)\\b|\\bgo[ \\t]+(get|install|mod[ \\t]+download)\\b|\\bbrew[ \\t]+(install|upgrade|update|fetch)\\b"
+    },
+    {
+      "id": "opaque",
+      "re": "\\$\\(|`|<\\(|>\\(|(^|[;&|(][ \\t]*)(eval|source|exec|\\.)[ \\t]|\\b(sh|bash|zsh|dash|ksh|fish)[ \\t]+-[a-z]*[cs]\\b|\\|[ \\t]*(sudo[ \\t]+)?(env[ \\t]+)?(sh|bash|zsh|dash|ksh|fish|python[0-9.]*|perl|ruby|node|php|osascript|xargs)\\b|\\bbase64[ \\t]+(-d|--decode|-D)\\b|\\bxxd[ \\t]+-r\\b|\\b(python[0-9.]*|perl|ruby|node|php)[ \\t]+-[a-zA-Z]*[ce]\\b"
+    },
+    {
+      "id": "write-outside",
+      "from": "code"
+    },
+    {
+      "id": "not-read-only",
+      "from": "code"
+    }
+  ],
+  "readonly_cmd_re": "^git([ \\t]+-C[ \\t]+[^ \\t]+)?[ \\t]+((status|log|diff|show|blame|rev-parse|ls-files|ls-tree|describe|shortlog|grep|cat-file|show-ref|merge-base|rev-list|reflog([ \\t]+show)?|worktree[ \\t]+list|stash[ \\t]+list|config[ \\t]+--get)([ \\t]|$)|(branch([ \\t]+(-a|-r|-v|-vv|--list|--all|--show-current|--contains|--merged|--no-merged))*|tag([ \\t]+(-l|--list))*|remote([ \\t]+-v)?)[ \\t]*$)|^(rg|grep|egrep|fgrep|ls|cat|head|tail|wc|stat|file|tree|pwd|date|which|type|du|df|sha256sum|shasum|md5|md5sum|jq|sort|uniq|cut|diff|cmp|basename|dirname|realpath|readlink)([ \\t]|$)",
   "notice": {
     "id": "watcher-1",
     "version": 1,
