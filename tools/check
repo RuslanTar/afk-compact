@@ -642,6 +642,10 @@ def probes(name):
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "## User constraints\n## Approvals\n", "## User constraints\n")
         append(d, "plugin/skills/resume/SKILL.md", "\nApprovals never carry across sessions; see Approvals (verified).\n")
         edit(d, "plugin/assets/resume-context.txt", "only if Measured facts list it as checked", "only if it looks right")
+        # REVIEW-NIGHT NR-01 / NR-06: a gate list without the production write, and the looser
+        # O-2 reading (a carried approval as a yes for a forbidden production read) back.
+        edit(d, "plugin/skills/handoff/references/handoff-template.md", "(any production write)", "")
+        append(d, "plugin/skills/resume/SKILL.md", "\nA carried approval that names this production read counts like a fresh yes.\n")
 
     def model_pin(d):
         """MG-1 / AT-MG-01: a compact call that pins a model, and a userConfig key named for one."""
@@ -784,7 +788,9 @@ def probes(name):
          [r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AP-11 skeleton",
           r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 banned: 'Approvals never carry'",
           r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 banned: 'Approvals \(verified\)'",
-          r"^GATE approvals plugin/assets/resume-context\.txt: AP-11 step4"], None),
+          r"^GATE approvals plugin/assets/resume-context\.txt: AP-11 step4",
+          r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AP-11 gate-list: .* lacks 'any production write'$",
+          r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 gate-list banned: 'counts like a fresh yes'$"], None),
         ("model-pin", "MG-1", gates_only("model-pin"), model_pin,
          [r"^GATE model-pin plugin/hooks/lib/deps\.ts:\d+: AT-MG-01 key: \$session\.compact\(…\) passes 'model'",
           r"^GATE model-pin plugin/\.claude-plugin/plugin\.json: AT-MG-01 config: userConfig key compact_model names a model"], None),

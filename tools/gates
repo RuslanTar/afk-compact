@@ -1430,6 +1430,51 @@ def approvals_hits(target, brand):
         for no, ln in enumerate(shipped_lines(path, brand), 1):
             for m in APPROVALS_BANNED.finditer(ln):
                 out.append((path, no, "AP-11 banned", "AP-11 banned: {!r}".format(m.group(0)), ln))
+    out += gate_list_hits(target, brand)
+    return out
+
+
+# REVIEW-NIGHT NR-01 / NR-06 / NR-21 (2026-10-23): one explicit-gate list in every text, with a
+# production write in it (spec §4 Explicit gate); no approval covers a gate, nor a production read
+# under `unattended_prod_reads: forbid` until the owner answers O-2; an approval acts only while its
+# effect is absent. Each row: (path, line selector, phrase the selected line must hold).
+MAIN_REL = "assets/handoff-instructions.txt"
+GATE_LIST_NEEDS = [
+    (RESUME_REL, r"^3\. \*\*Approvals", "any production write"),
+    (RESUME_REL, r"^3\. \*\*Approvals", "its effect is absent"),
+    (RESUME_REL, r"^2\. Step 1 is an explicit gate", "`unattended_prod_reads: forbid` (R7): always;"),
+    (RESUME_REL, r"^- Every re-check is", "a production write is an explicit gate"),
+    (RESUME_CTX_REL, r"^\[prod-forbid\] 4\. ", "always ask at any production step"),
+    (RESUME_CTX_REL, r"^\[prod-allow\] 4\. ", "always ask at any production write"),
+    (RESUME_CTX_REL, r"^(?:\[[a-z-]+\] )?4\. ", "its effect is absent"),
+    (TEMPLATE_REL, r"^An approval is the user's own words", "any production write"),
+    (TEMPLATE_REL, r"^An explicit gate ", "always, approval or not"),
+    (MAIN_REL, r"^## Approvals: ", "prod write"),
+    (MAIN_REL, r"^## Next steps: ", "gated (gate, or no approval covers it)"),
+    (SPEC_REL, r"^- \*\*Explicit gate\*\*", "`prod-write`"),
+    (SPEC_REL, r"^- \*\*Approval \(scoped\)\*\*", "No approval covers a production read under `unattended_prod_reads: forbid`"),
+]
+# The looser O-2 half (a carried approval as a yes for one production read) stays out until ruled.
+GATE_LIST_BANNED = ("counts like a fresh yes",)
+
+
+def gate_list_hits(target, brand):
+    """NR-01 / NR-06 / NR-21 (part of the approvals gate): every GATE_LIST_NEEDS line exists and
+    holds its phrase; no shipped skill or asset says GATE_LIST_BANNED."""
+    out = []
+    for rel, sel, phrase in GATE_LIST_NEEDS:
+        path, lines = _shipped(target, rel, brand)
+        if lines is None:
+            out.append(_missing(path, "AP-11 gate-list"))
+            continue
+        hits = [ln for ln in lines if re.match(sel, ln)]
+        if not hits or not all(phrase in ln for ln in hits):
+            out.append((path, None, "AP-11 gate-list", "AP-11 gate-list: a line matching {!r} lacks {!r}".format(sel, phrase), ""))
+    for path in text_docs(target):
+        for no, ln in enumerate(shipped_lines(path, brand), 1):
+            for s in GATE_LIST_BANNED:
+                if s in ln:
+                    out.append((path, no, "AP-11 gate-list", "AP-11 gate-list banned: {!r}".format(s), ln))
     return out
 
 
