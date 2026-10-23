@@ -237,18 +237,27 @@ REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
 
 
 def budget_reason(key):
-    """(why, up_to or None) for a soft budget in tools/budget-reasons.json, or (None, None)."""
+    """(why, up_to or None) for a soft budget in tools/budget-reasons.json, (None, None) when it has
+    none, or (None, "<what is wrong>") for a malformed entry (REVIEW-NIGHT NR-19: an `up_to` that
+    is not a positive whole number, an empty reason or an unknown field never means "no limit")."""
     try:
         with open(REASONS_FILE, encoding="utf-8") as f:
-            v = json.load(f).get(key)
-    except (OSError, ValueError):
+            doc = json.load(f)
+    except OSError:
         return None, None
-    if isinstance(v, str) and v.strip():
-        return v, None
-    if isinstance(v, dict) and isinstance(v.get("why"), str) and v["why"].strip():
-        up = v.get("up_to")
-        return v["why"], (up if isinstance(up, int) and not isinstance(up, bool) else None)
-    return None, None
+    except ValueError:
+        return None, "tools/budget-reasons.json is not JSON"
+    v = doc.get(key) if isinstance(doc, dict) else None
+    if v is None:
+        return None, None
+    if isinstance(v, str):
+        return (v, None) if v.strip() else (None, "an empty reason")
+    if not isinstance(v, dict) or set(v) - {"why", "up_to"} or not isinstance(v.get("why"), str) or not v["why"].strip():
+        return None, "a malformed reason entry"
+    up = v.get("up_to")
+    if "up_to" in v and (not isinstance(up, int) or isinstance(up, bool) or up <= 0):
+        return None, "up_to {!r} is not a positive whole number".format(up)
+    return v["why"], up
 EDIT_PER_LINT = re.compile(r"one Edit per LINT line", re.I)
 SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S | re.M)
 HEAL_HEADER = re.compile(r"^\|\s*#\s*\|\s*Finding \(first matching row wins\)\s*\|")
@@ -375,6 +384,10 @@ def asset_bytes_hits(target, brand):
             continue
         if name in ASSET_SOFT:
             why, up_to = budget_reason(ASSET_SOFT[name])
+            if why is None and isinstance(up_to, str):
+                out.append((path, None, "AT-W-02 reason", "AT-W-02 {} B > soft {}: {} for {!r} in tools/budget-reasons.json".format(
+                    n, limit, up_to, ASSET_SOFT[name]), ""))
+                continue
             if why is not None and (up_to is None or n <= up_to):
                 print("ADVISORY asset-bytes {}: AT-W-02 {} B > soft {}: {}".format(os.path.relpath(path), n, limit, why))
                 continue

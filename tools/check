@@ -36,7 +36,10 @@ AT-WB-08 a bad export class, AT-WB-11 a network module on the report path, AT-WB
 `ev`, AT-WB-15 a second helper call, a log read and a REVEAL line to run, AT-ST-06 a file-time test,
 AT-P5-06 a code-line `·` without `use utf8`), the gates of the 2026-10-23 rulings (AP-11
 scoped approvals, MG-1 model pin, AT-QA-06 queue text; RP-1/RP-3 soft budgets over their logged
-reason, AT-SR-10 the old never-run rule back),
+reason, AT-SR-10 the old never-run rule back; REVIEW-NIGHT fixes: a gate list without the
+production write, a dropped [from …] tag, foreign text inline in a risk call, the old
+README promise, a queue line in the resume SKILL, a malformed budget reason, the AT-SR-09 risk
+corpus against loosened literals),
 the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
@@ -395,6 +398,10 @@ def probes(name):
 
     def resume_hard(d):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
+
+    def reason_malformed(d):
+        """REVIEW-NIGHT NR-19: an `up_to` that is not a whole number is an error, not "no limit"."""
+        edit(d, "tools/budget-reasons.json", '"up_to": 3650', '"up_to": "3650"')
 
     def prod_exclusive(d):
         """XR-19 (BLD-04): step 4 only as a [prod-forbid] line (the [prod-allow] step-4 line
@@ -847,6 +854,9 @@ def probes(name):
          [r"^GATE perl-utf8 plugin/helper/lib/selftest_moji\.pm:2: AT-P5-06 perl-utf8"], utf8_prep),
         ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER \(soft; the logged reason covers up to \d+\)$", r"^RESULT: FAIL$"], None),
+        ("reason-malformed", "NR-19", ["tools/assemble"], reason_malformed,
+         [r"^budget reasons \(tools/budget-reasons\.json\): resume protocol: up_to '3650' is not a positive whole number  FAIL$",
+          r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
          [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",
           r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),

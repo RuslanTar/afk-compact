@@ -175,22 +175,51 @@ REASON_REQUIRED = {"resume protocol", "resume block total"}
 REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
 
 
+def reason_entry(k, v):
+    """(why, up_to) for one tools/budget-reasons.json entry, or a string naming what is wrong.
+    REVIEW-NIGHT NR-19: a malformed entry (an `up_to` that is not a positive whole number, an
+    empty reason, an unknown field) is an error, never a reason without a limit."""
+    if isinstance(v, str):
+        return (v, None) if v.strip() else "{}: an empty reason".format(k)
+    if not isinstance(v, dict):
+        return "{}: want a reason string or {{\"why\": …, \"up_to\": N}}".format(k)
+    extra = sorted(set(v) - {"why", "up_to"})
+    if extra:
+        return "{}: unknown field {}".format(k, ", ".join(extra))
+    if not isinstance(v.get("why"), str) or not v["why"].strip():
+        return "{}: no \"why\"".format(k)
+    up = v.get("up_to")
+    if "up_to" in v and (not isinstance(up, int) or isinstance(up, bool) or up <= 0):
+        return "{}: up_to {!r} is not a positive whole number".format(k, up)
+    return (v["why"], up)
+
+
 def load_reasons(path=REASONS_FILE):
+    """({budget: (why, up_to)}, [errors]). A key is a REASON_REQUIRED budget, or an `asset <file>`
+    key that tools/gates reads (AT-W-02); anything else is an error too."""
     if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        doc = json.load(f)
-    out = {}
+        return {}, []
+    try:
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+    except ValueError as e:
+        return {}, ["not JSON ({})".format(e)]
+    if not isinstance(doc, dict):
+        return {}, ["not a JSON object"]
+    out, errors = {}, []
     for k, v in doc.items():
-        if isinstance(v, str):
-            out[k] = (v, None)
-        elif isinstance(v, dict) and isinstance(v.get("why"), str) and v["why"].strip():
-            up = v.get("up_to")
-            out[k] = (v["why"], up if isinstance(up, int) and not isinstance(up, bool) else None)
-    return out
+        if k not in REASON_REQUIRED and not k.startswith("asset "):
+            errors.append("{}: no soft budget of that name needs a reason".format(k))
+            continue
+        e = reason_entry(k, v)
+        if isinstance(e, str):
+            errors.append(e)
+        else:
+            out[k] = e
+    return out, errors
 
 
-REASONS = load_reasons()
+REASONS, REASON_ERRORS = load_reasons()
 
 
 def check(label, s, budget):
@@ -599,5 +628,8 @@ if GOLDENS:
     write_goldens()
 if CHECK:
     bad |= check_goldens()
+for e in REASON_ERRORS:
+    print("budget reasons (tools/budget-reasons.json): {}  FAIL".format(e))
+    bad = True
 print("RESULT:", "FAIL" if bad else "PASS")
 sys.exit(1 if bad else 0)

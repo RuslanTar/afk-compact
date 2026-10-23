@@ -8,7 +8,7 @@
     "up_to": 6800
   },
   "asset resume-context.txt": {
-    "why": "AT-W-02 counts every tag line of the resume context, so it grows with the resume protocol above (same owner ruling)",
-    "up_to": 4600
+    "why": "AT-W-02 counts every tag line of the resume context, so it grows with the resume protocol above (same owner ruling, and the same REVIEW-NIGHT NR-01/NR-02/NR-06/NR-21 lines); both step-4 lines count here, so it runs about 200 B over the protocol",
+    "up_to": 3900
   }
 }
