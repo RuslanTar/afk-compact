@@ -171,7 +171,10 @@ BUDGETS = {
 # bytes, as the budget counts) is the size the reason was written for; above it the reason no
 # longer covers the overrun and the check fails until the reason is reviewed (so a reason never
 # becomes a blank cheque, and the compaction-rem-6 probe still catches a text that grows).
-REASON_REQUIRED = {"resume protocol", "resume block total"}
+# REVIEW-NIGHT NR-17: the main static core (D-17 soft target; the mod channel total is its hard
+# guard) went over 4,500 on this branch with the 2026-10-23 Approvals and [queue] lines, so its
+# overrun needs a logged reason too. (The nudge and subagent overruns predate these rulings.)
+REASON_REQUIRED = {"resume protocol", "resume block total", "static core"}
 REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
 
 

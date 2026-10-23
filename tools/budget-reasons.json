@@ -10,5 +10,9 @@
   "asset resume-context.txt": {
     "why": "AT-W-02 counts every tag line of the resume context, so it grows with the resume protocol above (same owner ruling, and the same REVIEW-NIGHT NR-01/NR-02/NR-06/NR-21 lines); both step-4 lines count here, so it runs about 200 B over the protocol",
     "up_to": 3900
+  },
+  "static core": {
+    "why": "D-17 keeps the static core soft and the 8,192 B mod channel total hard; the owner rulings of 2026-10-23 add the Approvals line (ruling 1, AP-8) and the [queue] line (xxxxxxxx-11, QA-T1), and REVIEW-NIGHT NR-01/NR-02 the production write in the gate list and the foreign-command tag, so the worst case (midturn+chain+handoff+queue) runs about 4,640 chars",
+    "up_to": 4700
   }
 }
