@@ -1,0 +1,359 @@
+{
+ "id": "AT-AP-04, AT-AP-05 (helper), ID-3 brief",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-3, O-12.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge MR !12 once the pipeline is green\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 77 to staging today\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may always rerun the flaky suite\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/cccccccc-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/ffffffff-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"fork\"}"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"tag the release candidate\" — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"push the retry branch\" — action git push origin feat/x · targets branch feat/x; context only, not valid here; re-ask [from 99999999 · U-4 · 2026-10-21 12:00 +0300]\n"
+    }
+   ]
+  },
+  {
+   "name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"merge MR !12 once the pipeline is green\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · used 2026-10-21 13:30 +0300\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · used 2026-10-21 13:40 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish: every quote is the user's",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "AT-AP-04 same session: checked and unused or standing listed; a used once approval is spent; a deploy is a gate",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-4 deploy build 77 → env staging @ build 77$"
+    ],
+    "stdout_lacks": [
+     "U-3",
+     "Approvals \\(unchecked\\)"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 2,
+       "gate": 1,
+       "classes": [
+        "push"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-04 a /clear successor carries (own chain)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "cccccccc-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-5 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-4 deploy build 77 → env staging @ build 77$"
+    ]
+   }
+  },
+  {
+   "name": "O-12 interim: a fork successor carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "ffffffff-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(fork: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push",
+     "gate, re-ask"
+    ]
+   }
+  },
+  {
+   "name": "O-1: another session's handoff carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "99999999-aaaa-4bbb-8ccc-dddddddddddd",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(foreign: context only\\)$"
+    ],
+    "stdout_lacks": [
+     "U-2 git push",
+     "gate, re-ask"
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 --copy: a typed quote is checked, a missing one unchecked, a deploy a gate, a tagged line ignored",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3000,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-4 deploy build 77 → env staging @ build 77$",
+     "^Approvals \\(unchecked\\): U-3$"
+    ],
+    "stdout_lacks": [
+     "U-6"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "summary",
+       "checked": 1,
+       "gate": 1,
+       "unchecked": 1,
+       "classes": [
+        "push"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 the copy is not saved yet",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/not-yet.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals: not checked \\(copy pending\\)$"
+    ],
+    "stdout_lacks": [
+     "Approvals \\(checked\\)"
+    ]
+   }
+  },
+  {
+   "name": "AT-AP-05 no --copy: no approvals line (the summary's stay context)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^Approvals"
+    ]
+   }
+  },
+  {
+   "name": "ID-3 --brief: one line, no sidecar",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--brief"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 600,
+    "stdout_has": [
+     "\\Agit: feat/x @ [0-9a-f]{7,}, dirty 0 · in flight: not listed\\n?\\z"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/bg/slot-0.json",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 7, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r1\", \"type\": \"shell\", \"status\": \"running\"}, {\"id\": \"r2\", \"type\": \"shell\", \"status\": \"completed\"}], \"crons\": []}"
+    },
+    {
+     "write": "$TMP/repo/new.txt",
+     "content": "x\n"
+    }
+   ]
+  },
+  {
+   "name": "ID-3 --brief: running and ended tasks, a dirty file",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--brief"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 600,
+    "stdout_has": [
+     "\\Agit: feat/x @ [0-9a-f]{7,}, dirty 1 · in flight: 1 running, 1 ended\\n?\\z"
+    ]
+   }
+  },
+  {
+   "name": "canary: no quote, action or target text in any watch row",
+   "argv": [
+    "status"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "push feat/x to origin"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "deploy build 77"
+     },
+     {
+      "dir": "$WATCH",
+      "text": "tag the release candidate"
+     }
+    ]
+   }
+  }
+ ]
+}

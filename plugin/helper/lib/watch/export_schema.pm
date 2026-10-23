@@ -235,7 +235,9 @@ our %SCHEMA = (
     lane_unknown => { why => 'word' },
     layers_missing => { id6 => 'id6', trigger => [enum => @TRIGGER] },
     lock_stale => { lock => 'word', reason => 'word' },
-    measure => { bytes => 'int', ms => 'num' },
+    measure => { bytes => 'int', ms => 'num', brief => 'bool' },
+    # AP-5 (2026-10-23): approvals a measure found checked (handoff or summary); counts and class ids only
+    approvals_carry => { source => [enum => qw(handoff summary)], checked => 'int', gate => 'int', unchecked => 'int', classes => [list => 'word'] },
     mod_outcome => { nonce => 'nonce', nudged => 'bool', continued => 'bool', halt => 'word', resume => 'word' },
     order_anomaly => { id6 => 'id6', nonce => 'nonce', uuid => 'hash', kind => 'word' },
     policy => { mods_managed_only => 'bool', hooks_managed_only => 'bool' },
