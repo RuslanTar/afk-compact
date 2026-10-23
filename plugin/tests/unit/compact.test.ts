@@ -234,8 +234,9 @@ test('helper down: dispatch record written with $.fs.write, helper_missing in a 
   await raiseCompact($, { trigger: 'manual' })
   const nonce = markerNonce(w, w.compacts[0]?.instructions) ?? ''
   const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/dispatch/${nonce}.json`) ?? '{}') as Record<string, unknown>
-  // The helper's record keys in its order (core-to-mod §17, dispatch.pm record): idle and idle_gap_s always.
-  expect(Object.keys(rec)).toEqual(['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'idle', 'idle_gap_s', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'cc_version_src', 'load_id', 'pid', 'pid_lstart', 'ts'])
+  // The helper's record keys in its order (core-to-mod §17, dispatch.pm record): idle and idle_gap_s always;
+  // `model` last, when the session's model was read (MG-4).
+  expect(Object.keys(rec)).toEqual(['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'idle', 'idle_gap_s', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'cc_version_src', 'load_id', 'pid', 'pid_lstart', 'ts', 'model'])
   expect([rec.agent_id, rec.idle, rec.idle_gap_s]).toEqual([null, false, null])
   expect(rec.cc_version_src).toBe(typeof rec.cc_version === 'string' && rec.cc_version !== '' ? 'mod' : null)
   expect(rec.channel).toBe('mod-hook')

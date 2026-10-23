@@ -5,6 +5,7 @@ package dispatch;
 # when the dispatch follows or interrupts a handoff turn. `idle` (IC-1 D1): the mod's idle
 # predicate, true|false on a mod record (absent flag = false), null on a classic record;
 # `idle_gap_s`: the dispatch ts minus the last main turn end, from the mod, else null.
+# Optional `model` (MG-4): the session's model the mod read, last, only when given.
 # Owner: WP-core.
 use strict;
 use warnings;
@@ -46,7 +47,15 @@ sub record {
         pid_lstart         => $f{pid_lstart},
         ts                 => $f{ts} // util::iso(util::now()),
         (defined $f{handoff_ht} ? (handoff_ht => $f{handoff_ht}) : ()),
+        (defined $f{model} ? (model => $f{model}) : ()),
     );
+}
+
+# MG-4 (ratify R4 guard, 2026-10-23): a model id as `$.session.model()` gives it
+# (`claude-opus-4-1`, `claude-sonnet-4-5[1m]`); anything else is not recorded.
+sub valid_model {
+    my ($m) = @_;
+    return (defined $m && !ref $m && $m =~ m{\A[A-Za-z0-9][A-Za-z0-9._:/\@-]{0,79}(?:\[[0-9A-Za-z]{1,8}\])?\z}) ? 1 : 0;
 }
 
 # write(watch, sid, record) -> 1 created, 0 exists

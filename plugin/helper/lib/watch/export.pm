@@ -55,6 +55,9 @@ my %RX = (
     ts      => qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:?[0-9]{2})\z/,
     version => qr/\A[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:-[0-9A-Za-z.]{1,20})?\z/,
     word    => qr/\A[a-z][a-z0-9_-]{0,31}\z/,
+    # MG-4: a plain model id only; no `:` or `/`, so a cloud ARN or profile path (an account id)
+    # is dropped, never exported
+    model   => qr{\A[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?\z},
     rule    => qr/\A[A-Z]-[0-9]{2}\z/,
 );
 

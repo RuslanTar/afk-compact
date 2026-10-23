@@ -18,6 +18,23 @@ export type RunResult = {
 }
 
 export type Usage = { tokens: number | undefined; window: number; rateLimits: { percentUsed: number }[] }
+
+/** The four token counts of one model request (`ModelUsage`), as far as this module reads them. */
+export type RequestUsage = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
+
+/**
+ * MG-3: the share of a request's input the prompt cache served, `cache_read_input_tokens` over
+ * all input tokens (uncached + read + written), to 3 places; null with no usage or no input. A
+ * request on another model than the session's cannot read the session's cache, so a low share
+ * at a large context is the observable sign of one.
+ */
+export function readShare(u: RequestUsage | null | undefined): number | null {
+  if (!u) return null
+  const n = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
+  const read = n(u.cache_read_input_tokens)
+  const total = n(u.input_tokens) + read + n(u.cache_creation_input_tokens)
+  return total > 0 ? Math.round((read / total) * 1000) / 1000 : null
+}
 export type Version = { version: string; base?: string; builtAt?: string }
 
 /** The launcher's folder under the plugin root (PKG-RUNTIME A.1): this spelling lives here only. */
@@ -57,6 +74,12 @@ export interface Deps {
   home(): Promise<string | undefined>
   usage(): Promise<Usage>
   version(): Promise<Version>
+  /**
+   * MG-4 (ratify R4 kept with a tested guard, owner xxxxxxxx-18): `$.session.model()`, the main
+   * loop's model as `/model` shows it, for the `dispatch` and `handoff_turn_start` rows;
+   * undefined when it cannot be read. Read only to record it: no call of the mod names a model.
+   */
+  model(): Promise<string | undefined>
   /** `$.session.compact`; rejects while a turn runs. */
   compact(instructions: string): Promise<SessionCompactResult>
   submit(text: string): Promise<void>
@@ -317,6 +340,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     async version() {
       const v = await $.session.version()
       return { version: v.version, base: v.base, builtAt: v.builtAt }
+    },
+    async model() {
+      try {
+        const m = await $.session.model()
+        return typeof m === 'string' && m !== '' ? m : undefined
+      } catch {
+        return undefined
+      }
     },
     compact: instructions => $.session.compact({ instructions }),
     async submit(text) {

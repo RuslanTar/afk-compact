@@ -67,10 +67,12 @@ export type DispatchArgs = {
   handoffHt?: string
   /** IC-1 D1: an idle dispatch, with the seconds since the last main turn end. */
   idle?: { gapS: number }
+  /** MG-4: the session's model (`$.session.model()`), recorded only. */
+  model?: string
 }
 
 /**
- * `dispatch … [--handoff-ht H] [--idle=true --idle-gap-s=N]` → `ok`; exit 3 `REFUSED: nonce-exists`.
+ * `dispatch … [--handoff-ht H] [--idle=true --idle-gap-s=N] [--model M]` → `ok`; exit 3 `REFUSED: nonce-exists`.
  * `--idle` is given only for an idle dispatch (absent = false), in the `=` form, which the
  * helper's parser reads alike for a value flag and a boolean one (CORE-14).
  */
@@ -82,6 +84,7 @@ export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
     '--cc-version', a.ccVersion ?? '', '--load-id', a.loadId,
     ...(a.handoffHt !== undefined ? ['--handoff-ht', a.handoffHt] : []),
     ...(a.idle !== undefined ? ['--idle=true', '--idle-gap-s=' + String(a.idle.gapS)] : []),
+    ...(a.model !== undefined ? ['--model=' + a.model] : []),
   ])
 }
 

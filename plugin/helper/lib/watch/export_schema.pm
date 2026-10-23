@@ -7,6 +7,7 @@ package watch::export_schema;
 # row (`dropped{"ev"}`). No value passes as free text. Classes:
 #   num, int, bool      numbers and booleans as they are (anything else: dropped)
 #   nonce, id6, hex8, hex12, stamp, ts, version   checked against their pattern (else dropped)
+#   model               a model id as Claude Code names it (MG-4; a public product id), else dropped
 #   hash                HMAC-SHA256 under the local salt, first 12 hex (sid, agent, task, ht, ...)
 #   actor               main/unknown/sub/sub-unknown/unattributed kept, any other value hashed
 #   slot                a path becomes main, subagents or unattributed (else other)
@@ -94,6 +95,7 @@ our %SCHEMA = (
         instr_version => 'word', tokens_before => 'num', checkpoint_ms => [counts => 'word'], full_checkpoint => 'bool',
         timeouts => [list => 'word'], evidence => [counts => 'word'], approvals_checked => [list => 'word'],
         fallback => 'bool', error_class => 'word', idle => 'bool', idle_gap_s => 'num', midturn => 'bool',
+        model => 'model',
     },
     precompact => {
         trigger => [enum => qw(auto manual)], ci_bytes => 'int', ci_has_nonce => 'bool', ci_nonce => 'nonce',
@@ -164,7 +166,7 @@ our %SCHEMA = (
     # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load
     idle_mode => { native => [enum => qw(on off unknown)], plugin_turn => [enum => qw(on off)] },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
-                            max_calls => 'int', max_tokens => 'num' },
+                            max_calls => 'int', max_tokens => 'num', model => 'model' },
     handoff_turn_end => {
         handoff_turn => [pre => [@HT_END], [qw(failed)]], handoff_ht => 'hash', handoff_tokens => 'num',
         handoff_calls => 'int', handoff_result_chars => 'int', handoff_ms => 'num', handoff_headroom => 'num',

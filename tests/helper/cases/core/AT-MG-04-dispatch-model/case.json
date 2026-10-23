@@ -1,0 +1,23 @@
+{
+ "id": "MG-4 (dispatch --model)",
+ "note": "SPEC-DELTAS MG-4 (ratify R4 kept with a tested guard, owner xxxxxxxx-18, 2026-10-23): the mod passes the session's model ($.session.model()) as --model=<id>; the record and the dispatch row carry it last; a value that is not a plain model id is left out, never a usage error; no flag, no key",
+ "now": "2026-10-23T10:04:36+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "model recorded",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "4d6a0001", "--actor", "main", "--trigger", "manual", "--channel", "mod-hook",
+            "--midturn", "false", "--model=claude-opus-5-5[1m]", "--cc-version", "2.1.309"],
+   "expect": {"exit": 0, "stdout": "ok\n", "stderr_empty": true,
+    "files": [{"path": "$WATCH/$SID/dispatch/4d6a0001.json", "keys": ["model"], "json": {"nonce": "4d6a0001", "model": "claude-opus-5-5[1m]"}}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "dispatch", "count": 1, "fields": {"nonce": "4d6a0001", "model": "claude-opus-5-5[1m]"}}]}},
+  {"name": "not a model id: left out",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "4d6a0002", "--actor", "main", "--trigger", "auto", "--channel", "mod-hook",
+            "--midturn", "false", "--model=two words"],
+   "expect": {"exit": 0, "stdout": "ok\n",
+    "files": [{"path": "$WATCH/$SID/dispatch/4d6a0002.json", "keys_absent": ["model"], "json": {"nonce": "4d6a0002"}}]}},
+  {"name": "no flag: no key",
+   "argv": ["dispatch", "--sid", "$SID", "--nonce", "4d6a0003", "--actor", "unknown", "--trigger", "auto", "--channel", "classic"],
+   "expect": {"exit": 0, "stdout": "ok\n",
+    "files": [{"path": "$WATCH/$SID/dispatch/4d6a0003.json", "keys_absent": ["model"], "json": {"nonce": "4d6a0003"}}]}}
+ ]
+}

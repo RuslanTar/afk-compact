@@ -3,7 +3,7 @@
 // hook for our `$.session.compact`, so everything happens at the call site.
 import type { Deps } from './deps'
 import type { ResumePref } from './compact'
-import { afterStep, dispatchExists, guarded, mainText, writeDispatch } from './compact'
+import { afterStep, cacheRows, dispatchExists, guarded, mainText, writeDispatch } from './compact'
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
 import type { HandoffTurn } from './handoff-turn'
@@ -317,6 +317,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
       usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...ht,
     })
+    await cacheRows(d, sid, nonce, r, true, 'main')
     s.lastPluginCompactAt = await d.now()
     s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
     const msgs = r.messages

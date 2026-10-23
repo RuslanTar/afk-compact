@@ -82,6 +82,15 @@ export class World {
   compactGate: Promise<void> | undefined
   /** `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). */
   rateLimits: { percentUsed: number }[] = []
+  /** `$.session.model()` (MG-4); undefined: the call rejects. */
+  model: string | undefined = 'claude-test-model'
+  /** MG-2 spy: the argument keys of every `session.compact` and `prompt.submit` reaching the bottom. */
+  compactKeys: string[][] = []
+  submitKeys: string[][] = []
+  /** The summarizer usage a compaction result carries (MG-3); undefined: none. */
+  compactUsage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number } | undefined
+  /** The usage a `turn.step` result carries (MG-3); null: none. */
+  stepUsage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; model: string } | null = null
   /** The turn ids `$.turn.abort` was called with (OT-2). */
   aborts: string[] = []
   /** `$.turn.abort` rejects (the turn is not the running one). */
@@ -95,6 +104,7 @@ export class World {
 
   /** Registers every engine-side hook; call before the first `$` call of the test. */
   install(on: On, store: Record<string, unknown> = {}): this {
+    const world = this
     this.clock = mock.clock(on, { now: T0 })
     mock.store(on, store)
     mock.env(on, { HOME })
@@ -126,8 +136,16 @@ export class World {
       if (r === 'reject') return { deny: 'cannot start' }
       return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
+    on('session.model', () => {
+      if (this.model === undefined) throw new Error('no model')
+      return { value: this.model }
+    })
+    on('turn.step', async function* (this: void, _$, e) {
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: world.stepUsage }
+    })
     on('prompt.submit', async (_$, e) => {
       if (this.quiet) return { text: e.text }
+      this.submitKeys.push(Object.keys(e).sort())
       this.submitOrigins.push(e.origin)
       if (this.submitDrop !== undefined) return { drop: this.submitDrop }
       this.submits.push(e.text)
@@ -138,11 +156,15 @@ export class World {
     })
     on('session.compact', async (_$, e) => {
       this.compacts.push({ instructions: e.instructions, trigger: e.trigger, agentId: e.agentId })
+      this.compactKeys.push(Object.keys(e).sort())
       this.atCompact?.()
       if (this.compactGate) await this.compactGate
       if (this.compactMode === 'reject') throw new Error('a turn is running')
       if (typeof this.compactMode === 'object') return { skip: this.compactMode.skip }
-      return { messages: this.summaryMessages(e.instructions), tokensBefore: this.tokens ?? 0, tokensAfter: 40000 }
+      return {
+        messages: this.summaryMessages(e.instructions), tokensBefore: this.tokens ?? 0, tokensAfter: 40000,
+        ...(this.compactUsage !== undefined ? { usage: this.compactUsage } : {}),
+      }
     })
     on('session.start', (_$, e) => ({ cwd: e.cwd }))
     on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
@@ -193,6 +215,13 @@ export class World {
 
   async turnEnd($: Engine, answer = 'Done with that step.', reason: 'answer' | 'aborted' = 'answer'): Promise<void> {
     await $.turn.complete({ answer, durationMs: 1000, isAborted: reason === 'aborted', turnId: 't' + String(this.turnNo), reason })
+  }
+
+  /** One model request (`turn.step`) of the current main turn, at `index`; its result usage is `stepUsage`. */
+  async step($: Engine, index = 0): Promise<void> {
+    const s = $.turn.step({ turnId: 't' + String(this.turnNo), index, model: this.model ?? 'x', messageCount: 1 } as never)
+    for await (const _ of s) void _
+    await s.result
   }
 
   /** One main tool call; returns its result as the model would read it. */

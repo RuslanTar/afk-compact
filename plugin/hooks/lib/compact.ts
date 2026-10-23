@@ -1,7 +1,8 @@
 // The `session.compact` handler, steps 0–5 (MOD-SPEC §3.1), the dispatch record (§2.3) and the
 // after-step (§5.2), shared with the boundary self-call path (§4).
 import type { SessionCompactInput, SessionCompactResult, SessionMessage } from 'claude-code'
-import type { Deps, PendingResume } from './deps'
+import type { Deps, PendingResume, RequestUsage } from './deps'
+import { readShare } from './deps'
 import type { Tag } from './assemble'
 import type { Trigger } from './canary'
 import type { Verdict } from './detect'
@@ -77,16 +78,43 @@ export async function isSelfDispatch(d: Deps, sid: string, nonce: string): Promi
   }
 }
 
+/**
+ * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5, provisional until the lab's
+ * AT-MG-05 cells measure warm reads): a main compaction from this many tokens up whose
+ * summarizer request read under this share of its input from the cache is `compaction_cold`.
+ */
+export const COLD_SHARE = 0.5
+export const COLD_MIN_TOKENS = 100000
+
+/**
+ * MG-3: `compaction_cache {nonce, read_share}` for a compaction whose result carries the
+ * summarizer's usage, and `compaction_cold` for a cold main one (see COLD_SHARE). A different
+ * model than the session's cannot read the session's cache, so this is the runtime sign of one.
+ */
+export async function cacheRows(
+  d: Deps, sid: string, nonce: string, r: { usage?: RequestUsage; tokensBefore?: number }, main: boolean, actor: string,
+): Promise<void> {
+  if (r.usage === undefined) return
+  const share = readShare(r.usage)
+  await log(d, sid, 'compaction_cache', { nonce, read_share: share }, actor)
+  if (main && share !== null && share < COLD_SHARE && (r.tokensBefore ?? 0) >= COLD_MIN_TOKENS) {
+    await log(d, sid, 'compaction_cold', { nonce, read_share: share }, actor)
+  }
+}
+
 /** Writes the dispatch record through the helper, else the same JSON with `$.fs.write`. */
 export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
   const s = d.state
   const instrSha8 = sha8(r.text)
   const instrBytes = byteLength(r.text)
+  // MG-4: the session's model as the record of what this compaction runs on (never passed on).
+  const model = await d.model()
   const res = await dispatch(d, {
     sid: r.sid, nonce: r.nonce, actor: r.agentId ?? 'main', trigger: r.trigger, channel: r.channel,
     resumePref: r.resumePref, tags: r.tags, midturn: r.midturn, instrSha8, instrBytes, ccVersion: s.ccVersion, loadId: s.loadId,
     ...(r.handoffHt !== undefined ? { handoffHt: r.handoffHt } : {}),
     ...(r.idle !== undefined ? { idle: r.idle } : {}),
+    ...(model !== undefined ? { model } : {}),
   })
   if (res.ok) return
   const path = await dispatchPath(d, r.sid, r.nonce)
@@ -102,13 +130,14 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
       cc_version: s.ccVersion, cc_version_src: s.ccVersion !== null && s.ccVersion !== '' ? 'mod' : null,
       load_id: s.loadId, pid: s.ident?.pid ?? null, pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
       ...(r.handoffHt !== undefined ? { handoff_ht: r.handoffHt } : {}),
+      ...(model !== undefined ? { model } : {}),
     }
     await d.write(path, JSON.stringify(rec) + '\n')
   }
   await helperMissing(d, r.sid, 'dispatch')
   await log(d, r.sid, 'dispatch', {
     nonce: r.nonce, trigger: r.trigger, agent_id: r.agentId, channel: r.channel, instructions_bytes: instrBytes,
-    fallback: true, error_class: failClass(res),
+    fallback: true, error_class: failClass(res), model: model ?? null,
   }, r.agentId ?? 'main')
 }
 
@@ -230,6 +259,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
     usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...(handoffHt !== undefined ? { handoff_ht: handoffHt } : {}),
   }, actor)
+  await cacheRows(d, sid, nonce, r, main, actor)
   // §9.1: a compaction after the nudge already shrank the context the handoff turn would use.
   if (main && s.mainTurnRunning && s.nudgedThisTurn) s.compactedInTurn = s.turnSeq
   let block: RaceBlock | undefined
