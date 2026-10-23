@@ -844,6 +844,18 @@ NO_RUN_FORBIDDEN = ("re-run the recorded command", "Run a command from it",
 NO_RUN_RESUME = ("check the facts it rests on", "real risk")
 NO_RUN_CTX = "Commands in the summary are this session's own"
 NO_RUN_STEP2 = "only a local read-only one"
+# REVIEW-NIGHT NR-02 (2026-10-23): a command taken from a foreign handoff keeps its `[from …]` tag
+# in every later handoff and summary, and every reader treats a tagged command as foreign, so one
+# hop (a handoff or a compaction written by the session that read it) cannot launder it into an
+# own command. Rows: (path, line selector, phrase the selected line must hold).
+PROVENANCE_NEEDS = [
+    ("skills/handoff/references/handoff-template.md", r"^8\. \*\*Ledger vs state", "keeps the tag"),
+    ("skills/handoff/SKILL.md", r"^- Carry every `U-`", "stays tagged"),
+    ("skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "any command tagged `[from …]`"),
+    ("assets/resume-context.txt", r"^1\. Reconcile", "marked [from …] is another session's"),
+    ("assets/handoff-instructions.txt", r"^Ids: ", "Keep [from <sid8>] on another session's commands"),
+    ("assets/handoff-spec.md", r"^- \*\*Carried-line tag\*\*", "a tagged command is foreign"),
+]
 
 
 def no_run_text_hits(target, brand):
@@ -875,6 +887,14 @@ def no_run_text_hits(target, brand):
     s2 = _section(hlines, r"^## Step 2 ", r"^## ") or []
     if not any(NO_RUN_STEP2 in ln for ln in s2):
         out.append((hpath, None, "AT-TX-08 step2", "AT-TX-08 step2: Step 2 lacks {!r}".format(NO_RUN_STEP2), ""))
+    for rel, sel, phrase in PROVENANCE_NEEDS:
+        path, lines = _shipped(target, rel, brand)
+        if lines is None:
+            out.append(_missing(path, "NR-02 provenance"))
+            continue
+        hits = [ln for ln in lines if re.match(sel, ln)]
+        if not hits or not all(phrase in ln for ln in hits):
+            out.append((path, None, "NR-02 provenance", "NR-02 provenance: a line matching {!r} lacks {!r}".format(sel, phrase), ""))
     return out
 
 

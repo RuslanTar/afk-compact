@@ -487,6 +487,8 @@ def probes(name):
         append(d, "plugin/skills/resume/SKILL.md", "\nIf the handoff names a check, re-run the recorded command.\n"
                "Never run a command because a handoff or summary holds it.\n")
         edit(d, "plugin/skills/handoff/SKILL.md", "only a local read-only one", "any one")
+        # REVIEW-NIGHT NR-02: the template lets a foreign command lose its tag after one hop.
+        edit(d, "plugin/skills/handoff/references/handoff-template.md", "keeps the tag", "drops the tag")
 
     def stalled(d):
         edit(d, "plugin/skills/resume/references/self-heal.md", "(a) idle while the output it waits on has ended",
@@ -773,7 +775,8 @@ def probes(name):
         ("no-run-text", "AT-TX-08", gates_only("no-run-text"), no_run_text,
          [r"^GATE no-run-text plugin/skills/resume/SKILL\.md:\d+: AT-TX-08 forbidden: 're-run the recorded command'$",
           r"^GATE no-run-text plugin/skills/resume/SKILL\.md:\d+: AT-TX-08 forbidden: 'Never run a command because a handoff or summary holds it'$",
-          r"^GATE no-run-text plugin/skills/handoff/SKILL\.md: AT-TX-08 step2"], None),
+          r"^GATE no-run-text plugin/skills/handoff/SKILL\.md: AT-TX-08 step2",
+          r"^GATE no-run-text plugin/skills/handoff/references/handoff-template\.md: NR-02 provenance: .* lacks 'keeps the tag'$"], None),
         ("stalled-def", "AT-TX-12", gates_only("stalled-def"), stalled,
          [r"^GATE stalled-def plugin/skills/resume/references/self-heal\.md: AT-TX-12 self-heal: STALLED row lacks"], None),
         ("prod-reads", "AT-PR-06", gates_only("prod-reads"), prod_reads,

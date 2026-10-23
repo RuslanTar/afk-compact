@@ -1,7 +1,7 @@
 {
   "resume protocol": {
-    "why": "owner 2026-10-23 (ratify xxxxxxxx#R3 overturned): scoped approvals in step 4, the run-own-commands rule of step 1, the background-result [idle] rule and the [idle-return] line need about 3,500 chars; the 10,000 cutoff stays hard",
-    "up_to": 3600
+    "why": "owner 2026-10-23 (ratify xxxxxxxx#R3 overturned): scoped approvals in step 4 (with the explicit-gate list, the forbid rule and the effect-absent check of REVIEW-NIGHT NR-01/NR-06/NR-21), the run-own-commands rule of step 1 (with the foreign-tag rule of NR-02), the background-result [idle] rule and the [idle-return] line need about 3,600 chars; the 10,000 cutoff stays hard",
+    "up_to": 3650
   },
   "resume block total": {
     "why": "the larger protocol beside the 3,000 B measured block; the runtime cap is 9,500 chars (resumeblock.pm, resume.ts BLOCK_MAX), under the hard 10,000 SessionStart cutoff",

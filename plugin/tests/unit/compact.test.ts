@@ -22,7 +22,7 @@ test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce 
   expect(w.flag(d[0], '--midturn')).toBe('true')
   expect(instr.startsWith('keep the SQL\n\nThe user\'s ')).toBe(true)
   expect(instr).toContain('This began mid-turn: the last step is [unverified] unless shown done.')
-  expect(instr.endsWith('Replace the earlier summary; do not extend it.\n')).toBe(true)
+  expect(instr.endsWith('Replace, never extend, the earlier summary.\n')).toBe(true)
   expect(w.callsOf('checkpoint').length).toBe(1)
 })
 
