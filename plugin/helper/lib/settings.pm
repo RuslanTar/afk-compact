@@ -160,6 +160,31 @@ sub config_dir_foreign {
     return 1;
 }
 
+# The plugin's names before its rename (NM-2; rename-order ruling xxxxxxxx-32, 2026-10-23): a
+# `pluginConfigs` key `<former name>@<marketplace>` holds options this plugin never reads, and
+# /status says so. The stale-name gate allows a former name on this declaration line only.
+our @FORMER_NAMES = ('compactinue');
+
+# former_name_keys() -> ([key, option count]…): the settings file's pluginConfigs keys that start
+# `<former name>@` (the current name excluded), sorted. Read-only; key names and counts, no value.
+sub former_name_keys {
+    my $brand = ctx::brand() // '';
+    my @names = grep { $_ ne $brand } @FORMER_NAMES;
+    return () unless @names;
+    my $raw = util::read_file(config_dir() . '/settings.json');
+    return () unless defined $raw;
+    my $s = eval { jsonc::decode($raw) };
+    return () unless ref $s eq 'HASH' && ref $s->{pluginConfigs} eq 'HASH';
+    my $pc = $s->{pluginConfigs};
+    my @out;
+    for my $k (sort keys %$pc) {
+        next unless grep { index($k, "$_\@") == 0 } @names;
+        my $o = ref $pc->{$k} eq 'HASH' ? $pc->{$k}{options} : undef;
+        push @out, [ $k, scalar(keys %$o) ] if ref $o eq 'HASH' && %$o;
+    }
+    return @out;
+}
+
 # Returns (options hashref or undef, note) from the user's settings file.
 sub _settings_file_options {
     my $brand = ctx::brand();

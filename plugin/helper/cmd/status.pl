@@ -145,6 +145,7 @@ sub run {
     # session's last list outcome); /status is the only place that says `queue: off`
     push @out, 'queue: ' . queue::mode_text();
     push @out, kept_lines($sid);
+    push @out, former_name_lines();
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
 
     my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
@@ -428,6 +429,19 @@ sub settings_keys_line {
             qw(handoff_reuse_window_min evidence_total_max_mb watch_quota_mb);
     return (sprintf('settings: resume_proceed %s (%s) · handoff_reuse_window_min %s · ticket_pattern %s · secret_extra_rules %d · evidence_total_max_mb %s · watch_quota_mb %s',
                     $rp, $r->{source}{resume_proceed} // 'default', $n[0], $tk, $nx, $n[1], $n[2]));
+}
+
+# Rename order (ruling xxxxxxxx-32, 2026-10-23): options saved in the settings file under the
+# plugin's former name are not read. One line per such key, with its option count and the key
+# to move them to (the key this plugin reads now, else `<name>@…`); read-only, never a value.
+sub former_name_lines {
+    my $r = rc::settings();
+    my $now = defined $r->{config_key} && $r->{config_key} ne 'ambiguous' ? $r->{config_key} : ctx::brand() . '@…';
+    return map {
+        my ($k, $n) = @$_;
+        sprintf('warning: %d plugin %s saved under the old name "%s" %s not read; move %s to "%s" in /config',
+                $n, ($n == 1 ? ('option', util::text($k), 'is', 'it') : ('options', util::text($k), 'are', 'them')), util::text($now));
+    } eval { settings::former_name_keys() };
 }
 
 # ---------------------------------------------------------------- kept stashes (C-STORE D3)

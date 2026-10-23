@@ -44,8 +44,9 @@ the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scri
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
-repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), and an X-H runner
-that dies after a KNOWN_RED case (CR-F42).
+repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), an X-H runner
+that dies after a KNOWN_RED case (CR-F42) and the pre-rename name outside its one FORMER_NAMES
+line (rename order xxxxxxxx-32).
 
 BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
@@ -276,6 +277,16 @@ def probes(name):
                    "\nP5 cache at ~/.cache/compact-handoff-research and the compact-handoffs folder\n"
                    "P6 the compactseams and wheelover2 variants, and HOLD-THREADS\n"
                    "P7 options left under the old Compactinue2 key\n", "a")
+        # xxxxxxxx-32: the former name is allowed on the FORMER_NAMES line only, not on another
+        # line of the same file, and not for another candidate name on that line.
+        p = os.path.join(d, "plugin", "helper", "lib", "settings.pm")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t2 = t.replace("our @FORMER_NAMES = ('compactinue');", "our @FORMER_NAMES = ('compactinue', 'wheelover');", 1)
+        if t2 == t:
+            raise Fail("X-tools: other-names found no FORMER_NAMES line to plant on")
+        write_text(p, t2 + "# options left under compactinue@inline\n")
+
 
     def npm(d):
         write_text(os.path.join(d, "plugin", "package.json"), '{"dependencies":{"left-pad":"1.3.0"}}\n')
@@ -745,7 +756,9 @@ def probes(name):
           r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
           r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"], None),
         ("other-names", "RN-3", gates_only("stale-name"), other_names,
-         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread", "compactinue")], None),
+         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread", "compactinue")]
+         + [r"^GATE stale-name plugin/helper/lib/settings\.pm:\d+: wheelover$",
+            r"^GATE stale-name plugin/helper/lib/settings\.pm:\d+: compactinue$"], None),
         ("npm", "RN-6", gates_only("npm"), npm,
          [r"^GATE npm plugin/package\.json: BT-06", r"^GATE npm plugin/node_modules/: BT-06",
           r"^GATE npm plugin/helper/package-lock\.json: BT-06"], None),

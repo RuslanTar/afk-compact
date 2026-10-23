@@ -29,7 +29,10 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                in a word (`compact-handoff-research`, `compactseams`, `wheelover2` and
                `compactinue-store` count). Markers written as `\\uXXXX` escapes (the generated
                fixture modules, which hold foreign test markers on purpose) are not read;
-               the BT-02 drill regenerates those modules under the new name instead
+               the BT-02 drill regenerates those modules under the new name instead. The
+               pre-rename name on the `our @FORMER_NAMES = (…);` line of a folder target's
+               helper/lib/settings.pm is not a hit (rename order xxxxxxxx-32: /status warns
+               about options saved under it); anywhere else it is
   npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
                `yarn.lock`, `pnpm-lock.yaml` or `node_modules/` anywhere inside a folder target
                (an npm manifest in a plugin makes Claude Code run npm install on users' machines)
@@ -141,6 +144,12 @@ E = r"(?![A-Za-z0-9_-])"
 ATTRIBUTION = re.compile(r"Co-Authored-By|Generated with|noreply@anthropic\.com|claude\.ai/code", re.I)
 MARKERS = re.compile(r"<!--|\{\{")
 OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff", "compactinue"]
+# Rename order (ruling xxxxxxxx-32, 2026-10-23): /status warns about options saved under the name
+# before the rename, so the helper declares that name once. Only the pre-rename name, only on the
+# declaration line of helper/lib/settings.pm inside a folder target, is not a stale-name hit.
+FORMER_NAME_FILE = "/helper/lib/settings.pm"
+FORMER_NAME_DECL = re.compile(r"^our @FORMER_NAMES = \('[a-z0-9-]+'(?:, '[a-z0-9-]+')*\);$")
+FORMER_NAMES_ALLOWED = {"compactinue"}
 NAME_SHAPES = [
     re.compile(r"⟪/?([^\s⟫/]+) (?:v1|n=)"),
     re.compile(B + r"/([A-Za-z0-9_{}@<>-]+):(?:handoff|resume|status)\b"),
@@ -2115,6 +2124,7 @@ def main(argv):
                 continue
             count += 1
             rel = os.path.relpath(path)
+            former_decl = os.path.isdir(target) and os.path.abspath(path) == os.path.abspath(target) + FORMER_NAME_FILE
             for no, line in enumerate(text.splitlines(), 1):
                 where = "{}:{}".format(rel, no)
                 for n, rx in name_res:
@@ -2133,7 +2143,7 @@ def main(argv):
                         if m.group(1) != brand:
                             hit("stale-name", where, m.group(0))
                 for n, rx in other_res:
-                    if rx.search(line):
+                    if rx.search(line) and not (former_decl and n in FORMER_NAMES_ALLOWED and FORMER_NAME_DECL.match(line)):
                         hit("stale-name", where, n)
             base = os.path.basename(path)
             if base in ("plugin.json", "marketplace.json") and os.path.basename(os.path.dirname(path)) == ".claude-plugin":
