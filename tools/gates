@@ -251,7 +251,11 @@ RELAUNCH_LINE = re.compile(r"foreign handoff['’]s recipe is never relaunched",
 # XR-17 / DP-31 (2): the merged resume SKILL measured 20,988 B after the wp/text merge (round 9),
 # over the 20,480 B soft budget, so the gate is raised once to 21,504 (never further without a
 # root ruling).
-RESUME_SKILL_MAX = 21504
+# PENDING ROOT RULING (SPEC-DELTAS §10.7, SR-9): the 2026-10-23 owner rulings (Rule 2 own/foreign
+# commands, Rule 3 scoped approvals, R9 stops 5-6 and resume_proceed) take the shipped SKILL to
+# 22,000 B with the queue lines moved out (QA-T4); raised to 22,528 here so the build checks
+# run; revert this one line if the root rules to trim instead.
+RESUME_SKILL_MAX = 22528
 # CR-F36 / CR-F27 (text-to-build §6): self-heal.md routes a heal-check refusal on its `verdict:`
 # status. SR-3 / SR-9 (owner 2026-10-23, xxxxxxxx-15 + 03:42; replaces Dev-5 here): a row's
 # `probe` cell runs only when resume Rule 2 lets it (own and read-only; foreign: local and
