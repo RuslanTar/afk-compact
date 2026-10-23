@@ -35,7 +35,7 @@ my %KNOWN = map { $_ => 1 } qw(
     hook ident dispatch prev-copy checkpoint save-copy sweep claim measure log
     reconcile status smoke handoff-turn handoff-state queue-add
     begin stamp evidence publish locate inventory heal-check verify
-    restore-evidence stash lane pin receipt wait project
+    restore-evidence stash lane pin receipt risk wait project
     watch report notice
 );
 

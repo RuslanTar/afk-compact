@@ -482,6 +482,12 @@ sub run_case {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; return @errs }
         }
+        if ($st->{risk_corpus}) {
+            my @le = eval { risk_corpus($st, $case, \%V, $cdir, $i) };
+            push @le, "risk_corpus error: $@" if $@;
+            push @errs, map { "$label: $_" } @le;
+            next;
+        }
         if ($st->{lib}) {
             my @le = eval { builtin($st->{lib}, subst_deep($st->{args} || {}, \%V), $cdir) };
             push @le, "builtin error: $@" if $@;
@@ -601,6 +607,48 @@ sub git_run {
     my $r = util::run([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
     die "git @a failed in $dir\n" unless $r->{exit} == 0;
     return $r->{out};
+}
+
+# Step "risk_corpus": {"tsv": "<file in the case dir or tests/fixtures>", "cwd": "<dir>",
+# "source": "own|foreign"?, "want": {"<row command>": "none|ask"}?} (AT-SR-09, the H half of
+# tools/gates risk-corpus; SR-7): every row of the corpus (expect<TAB>command<TAB>classes) is
+# written to a file and classified by `risk --cmd-file <file> --cwd <cwd>`; exit 0, `risk: none (…)`
+# for a none row, `risk: ask (…)` holding every listed class for an ask row. "want" overrides a
+# row's expected answer for this run (a code-only check the literals cannot see).
+sub risk_corpus {
+    my ($st, $case, $V, $cdir, $i) = @_;
+    my $a = subst_deep($st->{risk_corpus}, $V);
+    my $tsv = src_file($a->{tsv}, $cdir);
+    open(my $fh, '<:raw', $tsv) or return ("cannot read $tsv");
+    my (@e, $n);
+    while (my $l = <$fh>) {
+        chomp $l;
+        next if $l =~ /^\s*(#|$)/;
+        my ($want, $cmd, $need) = split /\t/, $l;
+        next unless defined $cmd;
+        $want = $a->{want}{$cmd} if ref $a->{want} eq 'HASH' && defined $a->{want}{$cmd};
+        $n++;
+        my $f = "$V->{TMP}/risk-cmd-$n.txt";
+        write_text($f, $cmd);
+        my @argv = ('risk', '--cmd-file', $f, '--cwd', $a->{cwd});
+        push @argv, '--source', $a->{source} if defined $a->{source};
+        my $res = invoke({ argv => \@argv, env => $st->{env} }, $case, $V, $cdir, "$i-risk$n");
+        my $out = $res->[0]{out} // '';
+        if ($res->[0]{exit} != 0) { push @e, "row $n '$cmd': exit $res->[0]{exit}"; next }
+        my ($line) = $out =~ /^(risk: [^\n]*)$/m;
+        $line //= '(no risk line)';
+        if ($want eq 'none') {
+            push @e, "row $n '$cmd': $line, want none" unless $line =~ /^risk: none \(/;
+            next;
+        }
+        my ($got) = $line =~ /^risk: ask \(([^)]*)\)$/;
+        if (!defined $got) { push @e, "row $n '$cmd': $line, want ask"; next }
+        my %g = map { $_ => 1 } split /, /, $got;
+        my @miss = grep { $_ ne '-' && $_ ne '' && !$g{$_} } split /,/, ($need // '-');
+        push @e, "row $n '$cmd': ask ($got), missing " . join(',', @miss) if @miss && ($a->{source} // 'foreign') eq 'foreign';
+    }
+    push @e, "no corpus rows in $tsv" unless $n;
+    return @e;
 }
 
 # Inline repo recipe (WP-skills cases): {base, branch, commits: [{files, msg}], ignored, dirty, untracked} at <dir>

@@ -181,6 +181,8 @@ our %SCHEMA = (
     handoff_export => { result => 'word', reason => 'word', bytes => 'int', rules => [list => 'word'] },
     relaunch_unmatched => { task_id => 'hash', origin_sid => 'hash', sha8 => 'drop' },
     jobs_caller_refused => { reason => 'word' },
+    # SR-7 (2026-10-23): one `risk` call; the class ids only, never the command
+    risk => { source => [enum => qw(own foreign)], result => [enum => qw(none ask)], classes => [list => 'word'] },
     queue_add => { result => 'word', exit => 'int', ms => 'num' },
     resume_receipt => { relation => 'word', tier => 'word', calls => 'int', drift => [list => 'word'],
                         bg => [counts => 'word'], questions => 'int', adopt => 'word', cmds_asked => 'int',
