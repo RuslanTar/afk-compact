@@ -36,6 +36,7 @@ package skills::core;
 #   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
 #   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
 #   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
+#   transcript::quotes_found($path, [{quote, targets}]) -> [1|0|undef…] | undef (AP-4)
 #   jobrec::record_of / read_rows / jobs_path / add_pending (Dev-1)
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
 use strict;
@@ -177,6 +178,14 @@ sub nonce {
     my $n = nonce::draw($sid);
     die "nonce: bad value\n" unless defined $n && $n =~ /\A[0-9a-f]{8}\z/;
     return $n;
+}
+
+# AP-4: the writing session's human-typed rows hold each quote (in memory; nothing logged).
+sub quotes_found {
+    my ($path, $asks) = @_;
+    return undef unless defined &transcript::quotes_found;
+    my $r = transcript::quotes_found($path, $asks);
+    return ref $r eq 'ARRAY' ? $r : undef;
 }
 
 sub secrets_scan {

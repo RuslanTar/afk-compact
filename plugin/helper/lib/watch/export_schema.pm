@@ -155,7 +155,9 @@ our %SCHEMA = (
                            turn_kind => [enum => qw(post-compaction resume nudge other)], caused_by => [enum => qw(plugin session)] },
     handoff_publish => { result => [pre => [qw(wrote)], [qw(REFUSED)]], bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
                          kind => 'word', writer => 'word', ht => 'hash',
-                         attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY] },
+                         attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY],
+                         # AP-4 (2026-10-23): counts and outward class ids of the checked approvals, never a quote
+                         approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int' }], approval_classes => [list => 'word'] },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash' },

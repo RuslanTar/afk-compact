@@ -130,6 +130,109 @@ sub last_prompt_epoch {
     return $best;
 }
 
+# AP-4 (spec §15 approval-quote, SPEC-DELTAS §3.1 (c); provisional on owner decision O-3: code
+# checks the quote). quotes_found(path, [{quote, targets => [identity…]}…]) -> [1|0…] in the
+# order given, or undef when the transcript cannot be read (no file, unreadable). One pass, in
+# memory; no text is stored, logged or returned. A quote counts when it occurs, white space
+# folded, in a human-typed user row: type user, not isMeta / isCompactSummary / isSidechain, no
+# tool result, origin kind absent or a person's (@HUMAN_ORIGINS), and not a notification,
+# command-output or reminder text. A quote under $SHORT_WORDS words counts only when the
+# assistant text since the previous human row names one of its targets (the identity before
+# ` @ `, or that identity's last word). Only the last $QUOTE_SCAN_MAX bytes are read; a quote
+# not found in a longer file is undef for that quote (not checked, never a miss).
+our @HUMAN_ORIGINS = qw(human composer bridge sdk);
+our $SHORT_WORDS = 4;
+our $QUOTE_SCAN_MAX = 256 * 1024 * 1024;
+our $ASSISTANT_KEEP = 64 * 1024;
+my $NOT_TYPED = qr/\A\s*<(?:task-notification|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr|system-reminder|local-command-caveat)\b/;
+
+sub _chars {
+    my ($s) = @_;
+    return '' unless defined $s;
+    return $s if utf8::is_utf8($s) || $s !~ /[^\x00-\x7f]/;
+    my $c = $s;
+    return utf8::decode($c) ? $c : $s;
+}
+
+sub _fold { my ($s) = @_; $s = _chars($s); $s =~ s/\s+/ /g; $s =~ s/\A | \z//g; return $s }
+
+# The text blocks of a row's message content (a string, or text items of an array).
+sub _row_text {
+    my ($j) = @_;
+    my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+    return $c if defined $c && !ref $c;
+    return '' unless ref $c eq 'ARRAY';
+    return join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c);
+}
+
+sub quotes_found {
+    my ($path, $asks) = @_;
+    return undef unless defined $path && -f $path && -r _;
+    my @q = map { { quote => _fold($_->{quote}), short => 0, ids => [] } } @$asks;
+    for my $i (0 .. $#q) {
+        my @w = split / /, $q[$i]{quote};
+        $q[$i]{short} = @w < $SHORT_WORDS ? 1 : 0;
+        my @ids;
+        for my $t (@{ $asks->[$i]{targets} || [] }) {
+            my $id = _chars($t);
+            $id =~ s/\s+@\s.*\z//s;
+            $id =~ s/\A\s+|\s+\z//g;
+            next if $id eq '';
+            push @ids, $id;
+            my ($last) = $id =~ /(\S+)\z/;
+            push @ids, $last if defined $last && $last ne $id && length($last) >= 2;
+        }
+        $q[$i]{ids} = \@ids;
+    }
+    my @found = map { $_->{quote} eq '' ? 0 : undef } @q;
+    my $need_asst = grep { $_->{short} } @q;
+    my $size = -s $path;
+    open(my $fh, '<:raw', $path) or return undef;
+    my $partial = defined $size && $size > $QUOTE_SCAN_MAX;
+    if ($partial) { seek($fh, $size - $QUOTE_SCAN_MAX, 0); my $skip = <$fh> }
+    my %human = map { $_ => 1 } @HUMAN_ORIGINS;
+    my $asst = '';
+    while (my $line = <$fh>) {
+        if ($need_asst && index($line, '"assistant"') >= 0) {
+            my $j = eval { jsonc::decode($line) };
+            if (ref $j eq 'HASH' && ($j->{type} // '') eq 'assistant' && !$j->{isSidechain}) {
+                $asst .= "\n" . _chars(_row_text($j));
+                $asst = substr($asst, -$ASSISTANT_KEEP) if length($asst) > $ASSISTANT_KEEP;
+            }
+            next;
+        }
+        next unless index($line, '"user"') >= 0;
+        next if index($line, '"tool_use_id"') >= 0;
+        my $j = eval { jsonc::decode($line) };
+        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user';
+        next if $j->{isMeta} || $j->{isCompactSummary} || $j->{isSidechain} || $j->{isVisibleInTranscriptOnly};
+        my $o = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
+        next if defined $o && !$human{$o};
+        my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+        next if ref $c eq 'ARRAY' && grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c;
+        my $t = _chars(_row_text($j));
+        if ($t =~ $NOT_TYPED) { next }
+        my $ft = _fold($t);
+        for my $i (0 .. $#q) {
+            next if $found[$i] || $q[$i]{quote} eq '';
+            next unless index($ft, $q[$i]{quote}) >= 0;
+            next if $q[$i]{short} && !grep { index($asst, $_) >= 0 } @{ $q[$i]{ids} };
+            $found[$i] = 1;
+        }
+        $asst = '';
+    }
+    close $fh;
+    return [ map { $found[$_] ? 1 : $partial ? undef : 0 } 0 .. $#q ];
+}
+
+# user_quote_found(path, quote, [target…]) -> 1 | 0 | undef (unreadable, or not found in the
+# scanned tail of a longer file): the one-quote form of quotes_found.
+sub user_quote_found {
+    my ($path, $quote, $targets) = @_;
+    my $r = quotes_found($path, [{ quote => $quote, targets => $targets }]) or return undef;
+    return $r->[0];
+}
+
 # subagent_files(main transcript path, sid) -> [{path, agent_id}]
 sub subagent_files {
     my ($path, $sid) = @_;
