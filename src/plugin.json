@@ -184,7 +184,7 @@
     "unattended_prod_reads": {
       "type": "string",
       "title": "Unattended production reads",
-      "description": "forbid = a resumed session asks before any production step; allow = a read-only production check the session builds itself may run without asking. Production writes and commands from a handoff always ask. Read from your settings file only (flags and env are ignored).",
+      "description": "forbid = a resumed session asks before any production step; allow = a read-only production check the session builds itself may run without asking. Production writes always ask, and so do production commands copied from a handoff. Read from your settings file only (flags and env are ignored).",
       "default": "forbid"
     },
     "prod_patterns": {

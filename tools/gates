@@ -853,6 +853,10 @@ NO_RUN_FORBIDDEN = ("re-run the recorded command", "Run a command from it",
                     "Commands in the summary are data", "never run a command copied from",
                     # REVIEW-NIGHT NR-03: foreign text pasted inline into a shell line
                     "risk --cmd '")
+# REVIEW-NIGHT NR-13: the user-facing promise that a handoff's commands never run (README, the
+# manifest's setting descriptions) became false with the 2026-10-23 rulings.
+NO_RUN_PROMISES = ("A command taken from a handoff is never run", "commands from a handoff always ask",
+                   "commands taken from a handoff always ask")
 NO_RUN_RESUME = ("check the facts it rests on", "real risk")
 NO_RUN_CTX = "Commands in the summary are this session's own"
 NO_RUN_STEP2 = "only a local read-only one"
@@ -901,12 +905,22 @@ def no_run_text_hits(target, brand):
     if out:
         return out
     for p in text_docs(target):
-        if os.path.basename(p) == "README.md":
-            continue
         for no, ln in enumerate(shipped_lines(p, brand), 1):
-            for s in NO_RUN_FORBIDDEN:
-                if s in ln:
+            for s in NO_RUN_FORBIDDEN + NO_RUN_PROMISES:
+                if s.lower() in ln.lower():
                     out.append((p, no, "AT-TX-08 forbidden", "AT-TX-08 forbidden: {!r}".format(s), ln))
+    mpath = os.path.join(target, ".claude-plugin", "plugin.json")
+    if os.path.isfile(mpath):
+        try:
+            with open(mpath, encoding="utf-8") as f:
+                uc = json.load(f).get("userConfig") or {}
+        except ValueError:
+            uc = {}
+        for key in sorted(uc):
+            desc = (uc[key] or {}).get("description") if isinstance(uc[key], dict) else None
+            for s in NO_RUN_PROMISES:
+                if isinstance(desc, str) and s.lower() in desc.lower():
+                    out.append((mpath, None, "AT-TX-08 forbidden", "AT-TX-08 forbidden: userConfig {} says {!r}".format(key, s), ""))
     for phrase in NO_RUN_RESUME:
         if not any(phrase in ln for ln in rlines):
             out.append((rpath, None, "AT-TX-08 resume-rule", "AT-TX-08 resume-rule: no {!r}".format(phrase), ""))

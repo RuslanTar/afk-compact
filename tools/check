@@ -492,6 +492,10 @@ def probes(name):
         # NR-03 / NR-08: foreign text back on a shell line, and the credential reads out of Rule 2.
         edit(d, "plugin/skills/resume/SKILL.md", "reads credentials or files outside it, ", "")
         append(d, "plugin/skills/resume/SKILL.md", "\nWhen unsure, `<store> risk --cmd '<command>'` classifies it.\n")
+        # NR-13: the old user-facing promise back in the README and a setting description.
+        append(d, "plugin/README.md", "\nA command taken from a handoff is never run either way.\n")
+        edit(d, "plugin/.claude-plugin/plugin.json", "Production writes always ask, and so do production commands copied from a handoff.",
+             "Production writes and commands from a handoff always ask.")
 
     def stalled(d):
         edit(d, "plugin/skills/resume/references/self-heal.md", "(a) idle while the output it waits on has ended",
@@ -788,7 +792,9 @@ def probes(name):
           r"^GATE no-run-text plugin/skills/handoff/SKILL\.md: AT-TX-08 step2",
           r"^GATE no-run-text plugin/skills/handoff/references/handoff-template\.md: NR-02 provenance: .* lacks 'keeps the tag'$",
           r"^GATE no-run-text plugin/skills/resume/SKILL\.md: AT-SR-01 rule: .* lacks 'reads credentials or files outside it'$",
-          r"^GATE no-run-text plugin/skills/resume/SKILL\.md:\d+: AT-TX-08 forbidden: \"risk --cmd '\"$"], None),
+          r"^GATE no-run-text plugin/skills/resume/SKILL\.md:\d+: AT-TX-08 forbidden: \"risk --cmd '\"$",
+          r"^GATE no-run-text plugin/README\.md:\d+: AT-TX-08 forbidden: 'A command taken from a handoff is never run'$",
+          r"^GATE no-run-text plugin/\.claude-plugin/plugin\.json: AT-TX-08 forbidden: userConfig unattended_prod_reads says 'commands from a handoff always ask'$"], None),
         ("stalled-def", "AT-TX-12", gates_only("stalled-def"), stalled,
          [r"^GATE stalled-def plugin/skills/resume/references/self-heal\.md: AT-TX-12 self-heal: STALLED row lacks"], None),
         ("prod-reads", "AT-PR-06", gates_only("prod-reads"), prod_reads,
