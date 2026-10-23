@@ -666,7 +666,9 @@ def probes(name):
     def model_pin(d):
         """MG-1 / AT-MG-01: a compact call that pins a model, and a userConfig key named for one."""
         append(d, "plugin/hooks/lib/deps.ts",
-               "\nexport const selftestPin = ($: any) => $.session.compact({ instructions: '', model: 'x' })\n")
+               "\nexport const selftestPin = ($: any) => $.session.compact({ instructions: '', model: 'x' })\n"
+               # REVIEW-NIGHT NR-22: a variable argument hides its keys.
+               "export const selftestOpts = ($: any, opts: any) => $.prompt.submit(opts)\n")
         p = os.path.join(d, "plugin", ".claude-plugin", "plugin.json")
         with open(p, encoding="utf-8") as f:
             doc = json.load(f)
@@ -821,6 +823,7 @@ def probes(name):
           r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 gate-list banned: 'counts like a fresh yes'$"], None),
         ("model-pin", "MG-1", gates_only("model-pin"), model_pin,
          [r"^GATE model-pin plugin/hooks/lib/deps\.ts:\d+: AT-MG-01 key: \$session\.compact\(…\) passes 'model'",
+          r"^GATE model-pin plugin/hooks/lib/deps\.ts:\d+: AT-MG-01 literal: \$prompt\.submit\(…\) argument is not an object literal$",
           r"^GATE model-pin plugin/\.claude-plugin/plugin\.json: AT-MG-01 config: userConfig key compact_model names a model"], None),
         ("queue-text", "AT-QA-06", gates_only("queue-text"), queue_text,
          [r"^GATE queue-text plugin/skills/resume/SKILL\.md:\d+: AT-QA-06 moved",

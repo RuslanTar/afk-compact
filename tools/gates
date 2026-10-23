@@ -1559,6 +1559,7 @@ def gate_list_hits(target, brand):
 # effort, fallback model or agent; no userConfig key is named for a model.
 MODEL_PIN_CALL = re.compile(r"\$\.(session\.compact|prompt\.submit|command\.run)\s*\(")
 MODEL_PIN_KEY = re.compile(r"(?<![\w$.])(model|effort|fallbackModel|agent)\s*:|\.\.\.")
+OBJECT_LITERAL_ARG = re.compile(r"^\s*\{.*\}\s*$", re.S)
 
 
 def _call_args(src, start):
@@ -1583,8 +1584,9 @@ def _call_args(src, start):
 
 def model_pin_hits(target, brand):
     """MG-1 / AT-MG-01 over a built plugin folder: every `$.session.compact(…)`,
-    `$.prompt.submit(…)` and `$.command.run(…)` under hooks/ (not *.gen.ts) has no `model`,
-    `effort`, `fallbackModel` or `agent` key and no spread; no userConfig key contains `model`."""
+    `$.prompt.submit(…)` and `$.command.run(…)` under hooks/ (not *.gen.ts) passes one object
+    literal (REVIEW-NIGHT NR-22) with no `model`, `effort`, `fallbackModel` or `agent` key and no
+    spread; no userConfig key contains `model`."""
     if not _is_plugin(target):
         return []
     out = []
@@ -1602,6 +1604,11 @@ def model_pin_hits(target, brand):
                 no = src.count("\n", 0, m.start()) + 1
                 if args is None:
                     out.append((p, no, "AT-MG-01 parse", "AT-MG-01 parse: cannot read the arguments of ${}".format(m.group(1)), ""))
+                    continue
+                # REVIEW-NIGHT NR-22: only an object literal can be read for its keys; a variable or
+                # a call result (`$.session.compact(opts)`) could carry a model the gate never sees.
+                if not OBJECT_LITERAL_ARG.match(args):
+                    out.append((p, no, "AT-MG-01 literal", "AT-MG-01 literal: ${}(…) argument is not an object literal".format(m.group(1)), ""))
                     continue
                 k = MODEL_PIN_KEY.search(args)
                 if k:
