@@ -58,7 +58,10 @@ our %OWN_ASKS = map { $_ => 1 } qw(gate outward production credential-value);
 # The gate families, first match names the gate (AT-AP-07: kubectl create secret is env-write).
 our @GATE_FAMILY = qw(env-write infra-write deploy);
 # Test and build definitions (spec §4 NR-23): a change to one ends the test/build exemption.
-our $BUILD_DEF_RE = qr{(?:\A|/)(?:GNUmakefile|[Mm]akefile|[^/]*\.mk|package\.json|[Rr]akefile(?:\.rb)?|[^/]*\.rake|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?|gradlew|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Cargo\.toml|go\.mod|\.envrc|\.gitlab-ci\.yml|\.husky/.*|\.github/workflows/.*|\.circleci/.*)\z};
+# REVIEW-NIGHT-3 R3-11: also the files that decide what such a run executes besides its target
+# (Gemfile for `bundle exec`, .npmrc script-shell, .yarnrc.yml yarnPath, a JS test or build
+# config, .cargo/config runner and rustc-wrapper, build.rs, the Gradle wrapper and *.gradle).
+our $BUILD_DEF_RE = qr{(?:\A|/)(?:GNUmakefile|[Mm]akefile(?:\.[^/]*)?|[^/]*\.mk|package\.json|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.c?js|[^/]*\.config\.[cm]?[jt]s|\.babelrc(?:\.[^/]*)?|[Rr]akefile(?:\.rb)?|[^/]*\.rake|Gemfile|gems\.rb|\.bundle/config|[^/]*\.gradle(?:\.kts)?|gradle\.properties|gradle-wrapper\.properties|gradlew|buildSrc/.*|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Cargo\.toml|build\.rs|\.cargo/config(?:\.toml)?|rust-toolchain(?:\.toml)?|go\.mod|go\.work|\.envrc|\.gitlab-ci\.yml|\.husky/.*|\.github/workflows/.*|\.circleci/.*)\z};
 our %WRITE_CMD = map { $_ => 1 } qw(cp mv ln tee install touch mkdir rsync dd truncate);
 # Write verbs that make a production command the prod-write gate (SQL, HTTP, migrations, files).
 our $PROD_WRITE_RE = qr/\b(?:insert|update|delete|drop|alter|truncate|create|grant|revoke|merge|upsert|replace|put|post|patch|apply|scale|restart|rollout|migrate|seed|reset|destroy|rm|mv|cp|write|exec)\b/i;
@@ -114,28 +117,35 @@ sub classify {
     my $id = sub { my ($i) = @_; push @ids, $i unless $id_seen{$i}++ };
 
     # Whole-command classes from the literals: outward (gates named), production, HARD secrets,
-    # and the risk_classes that carry their own pattern.
+    # and the risk_classes that carry their own pattern. Each is matched against the command as
+    # written and as the shell reads it (_forms: quotes and backslashes removed, command words in
+    # lower case; REVIEW-NIGHT-3 R3-06: `git pu"sh"`, `Git push` on a case-insensitive disk).
+    my @forms = _forms($cmd);
+    my $any = sub { my ($re) = @_; return scalar grep { $_ =~ $re } @forms };
     my %gates = map { $_ => 1 } @{ skills::spec::get('explicit_gate_classes') || [] };
     my (@gate_hits, @out_hits);
     for my $c (@{ skills::spec::get('outward_classes') || [] }) {
         next unless ref $c eq 'HASH' && defined $c->{re} && defined $c->{id};
         my $re = eval { qr/$c->{re}/ } or next;
-        next unless $cmd =~ $re;
+        next unless $any->($re);
         if ($gates{ $c->{id} }) { push @gate_hits, $c->{id} } else { push @out_hits, $c->{id} }
     }
     my $prod = skills::core::prod();
     my $prod_id;
     for my $c (@{ $prod->{classes} || [] }) {
         next unless ref $c eq 'HASH' && defined $c->{re};
-        if ($cmd =~ $c->{re}) { $prod_id = $c->{id} // 'prod'; last }
+        if ($any->($c->{re})) { $prod_id = $c->{id} // 'prod'; last }
     }
     $hit{production} = 1 if defined $prod_id;
-    my @hard = grep { $_->{class} eq 'HARD' } @{ skills::core::secrets_scan($cmd) };
+    my (@hard, %hard_seen);
+    for my $f (@forms) {
+        push @hard, grep { $_->{class} eq 'HARD' && !$hard_seen{ $_->{rule} }++ } @{ skills::core::secrets_scan($f) };
+    }
     $hit{'credential-value'} = 1 if @hard;
     for my $c (@{ skills::spec::get('risk_classes') || [] }) {
         next unless ref $c eq 'HASH' && defined $c->{re} && !ref $c->{re};
         my $re = eval { qr/$c->{re}/ } or next;
-        $hit{ $c->{id} } = 1 if $cmd =~ $re;
+        $hit{ $c->{id} } = 1 if $any->($re);
     }
 
     # Per segment: read-only, a defined test/build target, or recorded; else not-read-only.
@@ -163,7 +173,13 @@ sub classify {
             else { $why{'test-build'} = 1; next }
         }
         if (!$jobs_read) { $recorded = _recorded_commands($a{watch}); $jobs_read = 1 }
-        if ($recorded->{$seg} || $recorded->{$cmd}) { $why{recorded} = 1; next }
+        if ($recorded->{$seg} || $recorded->{$cmd}) {
+            # A recorded command lifts only not-read-only: a write outside the tree still asks
+            # (REVIEW-NIGHT-3 R3-09).
+            $why{recorded} = 1;
+            $hit{'write-outside'} = 1 if _write_outside($seg, $cwd, $top);
+            next;
+        }
         $hit{'not-read-only'} = 1;
         $hit{'write-outside'} = 1 if _write_outside($seg, $cwd, $top);
     }
@@ -178,7 +194,7 @@ sub classify {
     # also matched or it holds a write verb; otherwise it stays `production` (a read the user's
     # setting or a scoped approval may cover, O-2). Without the job record's read-only mark the
     # code cannot know more; either way it asks.
-    if (defined $prod_id && (@out_hits || @gate_hits || $cmd =~ $PROD_WRITE_RE)) { $hit{gate} = 1; $id->('prod-write') }
+    if (defined $prod_id && (@out_hits || @gate_hits || $any->($PROD_WRITE_RE))) { $hit{gate} = 1; $id->('prod-write') }
     if (grep { $_ eq 'push' || $_ eq 'force-push' } @out_hits) {
         if (_protected_push($cmd, $cwd, $top)) { $hit{gate} = 1; $id->('protected-push') }
     }
@@ -227,6 +243,24 @@ sub _words {
     }
     push @w, $cur if defined $cur;
     return @w;
+}
+
+# The forms of a command the class patterns are matched against (REVIEW-NIGHT-3 R3-06): as
+# written; with quotes and backslash escapes removed (what the shell runs: `git pu"sh"` is a
+# push); and that with the first two words of each segment in lower case (`Git push`, `RM -rf`:
+# a case-insensitive disk finds the program anyway).
+sub _forms {
+    my ($cmd) = @_;
+    (my $dq = $cmd) =~ s/\\(.)/$1/gs;
+    $dq =~ tr/"'//d;
+    my @p = split /(\|\||&&|[|;&\n])/, $dq;
+    for my $x (@p) {
+        next if $x =~ /\A(?:\|\||&&|[|;&\n])\z/;
+        $x =~ s/\A(\s*)(\S+)((?:\s+\S+)?)/$1 . lc($2) . lc($3)/e;
+    }
+    my $lc = join '', @p;
+    my %seen;
+    return grep { !$seen{$_}++ } ($cmd, $dq, $lc);
 }
 
 # 1 when the real path of $p (relative to $cwd) is outside $top, component by component.
@@ -411,7 +445,7 @@ sub _protected_push {
 
     for my $seg (split $SEG_SPLIT, $cmd) {
         my @w = _words($seg);
-        my ($gi) = grep { $w[$_] eq 'git' } 0 .. $#w;
+        my ($gi) = grep { lc($w[$_]) eq 'git' } 0 .. $#w;
         next unless defined $gi;
         my $pi;
         for my $i ($gi + 1 .. $#w) {
