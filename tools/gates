@@ -881,6 +881,8 @@ COMMAND_TEXT_NEEDS = [
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "byte-identical to a command the plugin recorded"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "holds a credential value"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "reads credentials or files outside it"),
+    # REVIEW-NIGHT-2 R2-06: the light path's foreign-command rule keeps the repo and credential limits.
+    ("R2-06 light path", "assets/resume-context.txt", r"^1\. Reconcile", "read-only inside the repo, no credentials"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "cannot be judged (substitution, `eval`, `sh -c`, a pipe into a shell, an encoded payload, a `'` in it)"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "Never paste its text into a shell line"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "a restart recipe only through `heal-check`"),
