@@ -105,7 +105,7 @@ my %RELATION = map { $_ => 1 } qw(same-session successor other unselected);
 sub receipt {
     my ($argv) = @_;
     my $o = skills::cli::opts($argv, 'handoff=s', 'relation=s', 'tier=s', 'calls=s', 'drift=s', 'bg=s',
-        'questions=s', 'adopt=s', 'cmds-asked=s');
+        'questions=s', 'adopt=s', 'cmds-asked=s', 'cmds-run=s', 'approvals=s');
     die skills::cli::usage('unexpected argument ' . $argv->[0]) if @$argv;
     die skills::cli::usage('--relation same-session|successor|other|unselected') unless defined $o->{relation} && $RELATION{ $o->{relation} };
     die skills::cli::usage('--tier T1|T2|T3') unless defined $o->{tier} && $o->{tier} =~ /\AT[123]\z/;
@@ -114,6 +114,21 @@ sub receipt {
     }
     # T-TEXT E7: handoff commands shown and asked under Rule 2 (optional; absent = not counted)
     die skills::cli::usage('--cmds-asked N') if defined $o->{'cmds-asked'} && $o->{'cmds-asked'} !~ /\A\d{1,4}\z/;
+    # SR-8 (owner xxxxxxxx-15 + 03:42): handoff commands run without asking (optional, as --cmds-asked)
+    die skills::cli::usage('--cmds-run N') if defined $o->{'cmds-run'} && $o->{'cmds-run'} !~ /\A\d{1,4}\z/;
+    # SR-8 / AP-6 (D-2 replaced by scoped carry, owner 2026-10-23 01:5x): approvals carried, used and
+    # asked again, as counts only. Absent = not counted (null fields).
+    my %ap;
+    if (defined $o->{approvals} && $o->{approvals} !~ /\A(?:none|-)?\z/) {
+        for my $kv (split /,/, $o->{approvals}) {
+            die skills::cli::usage('--approvals carried=n,used=n,asked=n')
+                unless $kv =~ /\A(carried|used|asked)=(\d{1,4})\z/ && !exists $ap{$1};
+            $ap{$1} = 0 + $2;
+        }
+    }
+    elsif (defined $o->{approvals}) {
+        %ap = (carried => 0, used => 0, asked => 0);
+    }
     my @drift = _tokens($o->{drift});
     my %bg;
     for my $kv (split /,/, ($o->{bg} // '')) {
@@ -135,6 +150,10 @@ sub receipt {
         handoff => $hrel, relation => $o->{relation}, tier => $o->{tier}, calls => 0 + $o->{calls},
         drift => \@drift, bg => \%bg, questions => 0 + $o->{questions}, adopt => $adopt // 'none',
         cmds_asked => (defined $o->{'cmds-asked'} ? 0 + $o->{'cmds-asked'} : undef),
+        cmds_run => (defined $o->{'cmds-run'} ? 0 + $o->{'cmds-run'} : undef),
+        approvals_carried => (defined $o->{approvals} ? $ap{carried} // 0 : undef),
+        approvals_used => (defined $o->{approvals} ? $ap{used} // 0 : undef),
+        approvals_asked => (defined $o->{approvals} ? $ap{asked} // 0 : undef),
     });
     return 0;
 }

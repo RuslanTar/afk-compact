@@ -183,7 +183,9 @@ our %SCHEMA = (
     jobs_caller_refused => { reason => 'word' },
     queue_add => { result => 'word', exit => 'int', ms => 'num' },
     resume_receipt => { relation => 'word', tier => 'word', calls => 'int', drift => [list => 'word'],
-                        bg => [counts => 'word'], questions => 'int', adopt => 'word', cmds_asked => 'int' },
+                        bg => [counts => 'word'], questions => 'int', adopt => 'word', cmds_asked => 'int',
+                        # SR-8 (2026-10-23): handoff commands run unasked; scoped approvals carried / used / asked
+                        cmds_run => 'int', approvals_carried => 'int', approvals_used => 'int', approvals_asked => 'int' },
     heal => { origin_sid => 'hash', item => 'hash', result => [pre => [qw(ok)], [qw(ok REFUSED)]], bumped => 'bool', count => 'int',
               verdict => 'word', confidence => 'word', effects => 'word', signals => [counts => 'word'],
               mode => 'word', new_task_id => 'hash', prod_class => 'word' },
