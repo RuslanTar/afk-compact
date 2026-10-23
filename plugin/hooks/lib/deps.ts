@@ -74,6 +74,13 @@ export interface Deps {
   /** `$.ui.toast` for the one-time notice: shown whatever `warn_ui` says (W-BETA A). */
   notice(text: string, timeoutMs: number): void
   policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
+  /**
+   * IA-2 (idle D3): Claude Code's own idle compaction as the merged settings say. `off` when
+   * `idleCompaction` or its precondition `autoCompactEnabled` is `false` (IC-1 F4); `unknown` when a
+   * read throws (counts as on: the plugin sends nothing while the user is away, O-9); else `on`.
+   * The server can still keep native idle off while the setting allows it (IC-1 F2).
+   */
+  nativeIdle(): Promise<'on' | 'off' | 'unknown'>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
 }
@@ -176,6 +183,8 @@ export type LoadState = {
   idleEpisode: { since: number; done: boolean } | undefined
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
   publishedSinceHuman: boolean
+  /** The `native/plugin_turn` pair of the last `idle_mode` row this load wrote (IA-3), undefined before the first. */
+  idleMode: string | undefined
 }
 
 export type PendingResume = {
@@ -264,6 +273,7 @@ export function newState(loadId: string): LoadState {
     idleDueSid: undefined,
     idleEpisode: undefined,
     publishedSinceHuman: false,
+    idleMode: undefined,
   }
 }
 
@@ -354,6 +364,15 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         return { mods_managed_only: p['allowManagedModsOnly'] === true, hooks_managed_only: p['allowManagedHooksOnly'] === true }
       } catch {
         return { mods_managed_only: false, hooks_managed_only: false }
+      }
+    },
+    async nativeIdle() {
+      try {
+        const idle = await $.settings.read({ key: 'idleCompaction' })
+        const auto = await $.settings.read({ key: 'autoCompactEnabled' })
+        return idle === false || auto === false ? 'off' : 'on'
+      } catch {
+        return 'unknown'
       }
     },
     paths() {

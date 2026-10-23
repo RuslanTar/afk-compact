@@ -356,20 +356,24 @@ test('clamp: target = floor(soft x target_num / target_den) in integers, never a
 // S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.
 test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
   expect(DEFAULTS.max_auto_continues_per_hour).toBe(6)
-  // BLD-08 / OD-4 provisional: the same default as src/plugin.json (`model`).
+  // Owner xxxxxxxx-18: the same default as src/plugin.json (`model`).
   expect(DEFAULTS.precompact_turn).toBe('model')
   expect(parseOptions({}).max_auto_continues_per_hour).toBe(6)
+  // AT-IA-01 (idle D3): default `auto`; the old `on` reads as `auto` with a config_note; `off` is off;
+  // any other value is `auto` plus config_invalid (there is no forced on).
+  expect(DEFAULTS.idle_handoff_turn).toBe('auto')
   const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
-  expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'on', 100000])
-  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }] })
+  expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'auto', 100000])
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }], noted: [{ key: 'idle_handoff_turn', note: 'legacy-on' }] })
   // AT-PC-04: any other value is `code` (the no-extra-cost path), whatever the default.
   const b = parseOptions({ precompact_turn: 'sometimes', unattended_prod_reads: 'yes', idle_handoff_turn: 'maybe', idle_handoff_min_tokens: '2000000' })
-  expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'off', 1000000])
+  expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'auto', 1000000])
   expect(b.notes.invalid).toEqual(['precompact_turn', 'unattended_prod_reads', 'idle_handoff_turn'])
   const c = parseOptions({ precompact_turn: '${user_config.precompact_turn}', unattended_prod_reads: '', idle_handoff_turn: '  ' })
   expect([c.precompact_turn, c.unattended_prod_reads, c.idle_handoff_turn, c.idle_handoff_min_tokens, c.notes])
-    .toEqual([DEFAULTS.precompact_turn, 'forbid', 'off', 200000, { invalid: [], clamped: [] }])
+    .toEqual([DEFAULTS.precompact_turn, 'forbid', 'auto', 200000, { invalid: [], clamped: [] }])
   expect(parseOptions({ precompact_turn: 'CODE' }).precompact_turn).toBe('code')
+  expect(parseOptions({ idle_handoff_turn: ' OFF ' }).idle_handoff_turn).toBe('off')
 })
 
 // P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.

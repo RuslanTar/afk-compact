@@ -60,7 +60,7 @@ sub run {
         } else {
             skills::util::mkdir_p($dest);
             $r = skills::core::evidence_copy($src, $dest,
-                { file_max => $FILE_MAX, total_max => $TOTAL_MAX, used => $used }, $index);
+                { file_max => $FILE_MAX, total_max => evidence::total_max(), used => $used }, $index);
         }
         $used += $r->{bytes} // 0 if $r->{status} =~ /\A(copied|redacted)\z/;
         my %row = (status => $r->{status}, copy => $r->{copy}, origin => $origin_label // $src // $path, src => $src,
@@ -285,7 +285,7 @@ sub _gate_patch {
     my $sha = skills::util::sha256_hex($bytes);
     my %r = (copy => undef, bytes => length $bytes, sha256 => $sha,
              mtime => skills::util::iso_local(skills::util::now()), rules => []);
-    if (length($bytes) > $FILE_MAX || $used + length($bytes) > $TOTAL_MAX) {
+    if (length($bytes) > $FILE_MAX || $used + length($bytes) > evidence::total_max()) {
         return { %r, status => 'ref-only', scan => 'ref-only' };
     }
     my $paths = $pt->{paths};

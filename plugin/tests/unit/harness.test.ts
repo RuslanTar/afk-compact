@@ -28,6 +28,8 @@ export class World {
   window = 1000000
   version: { version: string; base?: string } = { version: '2.1.306' }
   policy: Record<string, unknown> = {}
+  /** Every `$.settings.read` rejects (IA-2: native idle then reads `unknown`). */
+  settingsThrow = false
   files = new Map<string, string>()
   writes: string[] = []
   calls: Call[] = []
@@ -96,7 +98,10 @@ export class World {
     on('session.usage', () => ({ value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window } } }))
     on('session.version', () => ({ value: this.version }))
     on('session.cwd', () => ({ value: this.cwd }))
-    on('settings.read', () => ({ value: this.policy }))
+    on('settings.read', () => {
+      if (this.settingsThrow) throw new Error('settings unreadable')
+      return { value: this.policy }
+    })
     on('ui.toast', (_$, e) => {
       this.toasts.push(e.text)
       return { value: undefined }

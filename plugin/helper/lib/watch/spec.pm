@@ -74,6 +74,9 @@ sub secret_classes {
             $c{$e->{id}} = uc($e->{class} // '');
         }
     }
+    # SK-2 (S-SETTINGS E2): the user's secret_extra_rules ids (user-hard-<n>, user-warn-<n>).
+    my $x = eval { settings::secret_extra() };
+    if (ref $x eq 'HASH') { $c{ $_->{id} } = $_->{class} for @{ $x->{rules} || [] } }
     return \%c;
 }
 

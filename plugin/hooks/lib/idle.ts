@@ -1,4 +1,10 @@
-// The pre-idle handoff turn (MOD-SPEC §9.4, IC-1 D5; setting `idle_handoff_turn`, default off).
+// The pre-idle handoff turn (MOD-SPEC §9.4, IC-1 D5; setting `idle_handoff_turn`, default auto).
+// Idle D3 (owner 2026-10-23 02:4x, IA-1..3): "keep on if idle compaction is off, and OFF the
+// plugin's idle when native idle setting is ON". With `auto` the timer is armed only while
+// Claude Code's own idle compaction is off (deps.nativeIdle: `idleCompaction` or
+// `autoCompactEnabled` false); the fire checks it again (`native-on`, `native-unknown`: a failed
+// read counts as on, O-9 provisional). `off` arms nothing. One `idle_mode {native, plugin_turn}`
+// row whenever the pair changes in a load, so a `/config` change shows at the next turn end.
 // At every main turn end the mod (re)arms one timer for 49 minutes later (the measured native
 // idle-compaction time of 54 minutes less a 5-minute lead). When it fires and every check
 // passes, one plugin-submitted handoff turn runs on the D-18 machinery (handoff-turn.ts), so a
@@ -62,9 +68,30 @@ function schedule(d: Deps, sid: string, at: number, now: number): void {
   })
 }
 
-/** Main `turn.complete` (any origin): (re)arms the timer for `endAt + 49 min`; `off` arms nothing. */
+/**
+ * IA-3: whether the plugin's pre-idle turn is on now (`auto` and native idle off), with one
+ * `idle_mode` row when the pair differs from the last one this load wrote.
+ */
+async function pluginTurnOn(d: Deps, sid: string): Promise<{ on: boolean; native: 'on' | 'off' | 'unknown' }> {
+  const native = await d.nativeIdle()
+  const on = d.cfg.idle_handoff_turn === 'auto' && native === 'off'
+  const pair = native + '/' + (on ? 'on' : 'off')
+  if (d.state.idleMode !== pair) {
+    d.state.idleMode = pair
+    await log(d, sid, 'idle_mode', { native, plugin_turn: on ? 'on' : 'off' })
+  }
+  return { on, native }
+}
+
+/**
+ * Main `turn.complete` (any origin): (re)arms the timer for `endAt + 49 min` while the plugin's
+ * turn is on; `off`, or native idle on (or unknown), arms nothing and drops a timer armed before.
+ */
 export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void> {
-  if (d.cfg.idle_handoff_turn !== 'on') return
+  if (!(await pluginTurnOn(d, sid)).on) {
+    if (d.state.idleTimer !== undefined || d.state.idleDueSid !== undefined) await cancelIdle(d, sid)
+    return
+  }
   const due = endAt + IDLE_FIRE_MS
   const rec: Due = { due, sid, episode: d.state.idleEpisode ?? null }
   await d.storeSet(dueKey(sid), rec)
@@ -74,7 +101,7 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
 
 /** Once per load (AT-IC-14): a persisted due still in the future for this sid is armed again. */
 export async function loadIdle(d: Deps, sid: string): Promise<void> {
-  if (d.cfg.idle_handoff_turn !== 'on') return
+  if (!(await pluginTurnOn(d, sid)).on) return
   const rec = readDue(await d.storeGet(dueKey(sid)))
   if (!rec || rec.sid !== sid) return
   const now = await d.now()
@@ -88,6 +115,11 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
 async function blocked(d: Deps, sid: string): Promise<string | { tokens: number; allowance: number; native: number; calls: number } > {
   const s = d.state
   if (!d.cfg.triggers) return 'triggers-off'
+  // IA-3: native idle may have been switched on (or become unreadable) since the timer was armed.
+  const mode = await pluginTurnOn(d, sid)
+  if (mode.native === 'on') return 'native-on'
+  if (mode.native === 'unknown') return 'native-unknown'
+  if (!mode.on) return 'disabled'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'
   if ((await d.sessionId()) !== sid) return 'session-changed'

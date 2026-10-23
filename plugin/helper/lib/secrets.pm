@@ -35,12 +35,27 @@ sub _matches {
     return @spans;
 }
 
+# SK-2 (owner xxxxxxxx-12, S-SETTINGS E2): the shipped rules, then the user's secret_extra_rules
+# (HARD/WARN regexes as user-hard-<n>/user-warn-<n>; NAME globs in _denied_base). Additive only:
+# a user rule can withhold more, never less. Read once per value of the setting.
+my %EXTRA;
+sub _extra {
+    my $r = eval { settings::_current() };
+    my $v = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? ($r->{values}{secret_extra_rules} // '') : '';
+    $EXTRA{$v} //= eval { settings::secret_extra({ values => { secret_extra_rules => $v } }) } || { rules => [], names => [], invalid => [] };
+    return $EXTRA{$v};
+}
+sub rules {
+    my @x = map { { id => $_->{id}, class => $_->{class}, re => $_->{re}, min_entropy => undef, lead => 0, trail => 0 } } @{ _extra()->{rules} };
+    return [ @{ spec::secret_rules() }, @x ];
+}
+
 # scan(text) -> [{rule, class, count}] (no values)
 sub scan {
     my ($text) = @_;
     return [] unless defined $text && $text ne '';
     my @hits;
-    for my $r (@{ spec::secret_rules() }) {
+    for my $r (@{ rules() }) {
         my @s = _matches($text, $r);
         push @hits, { rule => $r->{id}, class => $r->{class}, count => scalar @s } if @s;
     }
@@ -61,7 +76,7 @@ sub redact {
     my %only = map { $_ => 1 } @{ $only || [] };
     my (@hits, @spans);
     my $rank = 0;
-    for my $r (@{ spec::secret_rules() }) {
+    for my $r (@{ rules() }) {
         $rank++;
         next if %only && !$only{ $r->{class} };
         my @s = _matches($text, $r);
@@ -111,6 +126,8 @@ sub _denied_base {
     my ($path) = @_;
     my $b = util::basename($path);
     my $deny = spec::deny_names();
+    # SK-2: a user NAME glob withholds whatever the shipped exceptions say (it can only add).
+    return 1 if grep { $b =~ $_->{re} } @{ _extra()->{names} };
     return 0 if grep { $b =~ $_ } @{ spec::deny_except() || [] };
     return (grep { $b =~ $_ } @$deny) ? 1 : 0;
 }

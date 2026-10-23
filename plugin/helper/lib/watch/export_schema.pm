@@ -41,7 +41,7 @@ my @HT_REASON = qw(halt cap precompact idle last-cycle nonok thrash manual);
 my @HT_END = qw(published none race aborted);
 my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-failed submit-failed again
                   triggers-off small-window session-changed busy aborted small ttl-5m near-limit episode published
-                  cooldown disabled halted precompute in-flight);
+                  cooldown disabled halted precompute in-flight native-on native-unknown);
 my @IDLE_SRC = qw(mod notice return both none);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
@@ -159,6 +159,8 @@ our %SCHEMA = (
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash' },
+    # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load
+    idle_mode => { native => [enum => qw(on off unknown)], plugin_turn => [enum => qw(on off)] },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num' },
     handoff_turn_end => {

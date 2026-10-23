@@ -11,7 +11,9 @@ use warnings;
 use utf8;
 
 our $FILE_MAX = 10 * 1024 * 1024;
-our $TOTAL_MAX = 50 * 1024 * 1024;
+our $TOTAL_MAX = 50 * 1024 * 1024;    # the evidence_total_max_mb fallback (SK-5)
+# SK-5 (owner xxxxxxxx-14, S-SETTINGS E5): the total from evidence_total_max_mb, clamped 10-500 MB.
+sub total_max { my ($mb) = eval { settings::num_clamped("evidence_total_max_mb") }; return defined $mb ? $mb * 1024 * 1024 : $TOTAL_MAX }
 
 sub _index_lookup {
     my ($index, $sha) = @_;
@@ -69,7 +71,7 @@ sub copy {
     $caps ||= {};
     my $used = $caps->{used} || \(my $u = 0);
     my $fmax = $caps->{file_max} // $FILE_MAX;
-    my $tmax = $caps->{total_max} // $TOTAL_MAX;
+    my $tmax = $caps->{total_max} // total_max();
     # caps.manifest => 0: no MANIFEST.tsv rows in dest_dir (the handoff skill writes its own at
     # publish); caps.ref_file => 0: an over-cap file stays a ref-only row with no excerpt file.
     my $mf = !(exists $caps->{manifest} && !$caps->{manifest});

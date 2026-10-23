@@ -56,6 +56,8 @@ my %DEFAULTS = (
     deny_class_patterns         => '',
     handoff_turn                => 'halt',
     handoff_turn_max_tokens     => 64000,
+    # SK-6 (owner xxxxxxxx-14, S-SETTINGS E6): the watch folder size that raises A-24 (0 = off)
+    watch_quota_mb              => 50,
 );
 
 my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
@@ -102,7 +104,7 @@ sub _settings {
     $s{handoff_root} = _expand($s{handoff_root}) || _expand($DEFAULTS{handoff_root});
     for my $k (qw(stall_min cache_ttl_s compact_target_tokens compact_soft_max_tokens
                   native_window_tokens max_auto_continues_per_hour evidence_quota_mb
-                  handoff_turn_max_tokens)) {
+                  handoff_turn_max_tokens watch_quota_mb)) {
         $s{$k} = $DEFAULTS{$k} unless defined $s{$k} && $s{$k} =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         $s{$k} = 0 + $s{$k};
     }

@@ -10,7 +10,10 @@ import { maxCalls, submitText } from '../../hooks/lib/handoff-turn'
 import { HOME, SID_A, SID_B, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
-const ON = { idle_handoff_turn: 'on', precompact_turn: 'code' }
+// IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` arms the pre-idle turn only while Claude
+// Code's own idle compaction is off, read from the settings (`idleCompaction`, `autoCompactEnabled`).
+const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code' }
+const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
 const LIMITS = [{ percentUsed: 12 }, { percentUsed: 30 }]
 const PUBLISHED = HOME + '/.claude/handoffs/r/LAB-42/2026-10-21_15-00-00_5e55a001_handoff.md'
@@ -140,6 +143,7 @@ test('AT-IC-04: the re-measure fails (3 s budget) → the stored block goes out,
 
 test('AT-IC-05: on, a turn ends answer at 260K with rate limits → due at 49 min; at fire: handoff-turn open --reason idle and one [submit-idle] submit; at its end no compaction, no continue', { options: ON }, async ($, on) => {
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   await humanTurn($, w)
@@ -165,6 +169,7 @@ test('AT-IC-05: on, a turn ends answer at 260K with rate limits → due at 49 mi
 
 test('AT-IC-05: a main turn.start before the due cancels the timer', { options: ON }, async ($, on) => {
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   await humanTurn($, w)
@@ -196,6 +201,7 @@ const SKIPS: { why: string; options?: Record<string, unknown>; world?: Partial<{
 for (const c of SKIPS) {
   test(`AT-IC-06 (${c.why}): one handoff_skipped {why: ${c.why}, reason: idle}, no submit`, { options: { ...ON, ...(c.options ?? {}) } }, async ($, on) => {
     const w = new World(c.world ?? {}).install(on, c.store ?? {})
+    w.policy = NATIVE_OFF
     w.rateLimits = LIMITS
     await w.start($)
     await w.userTurn($)
@@ -211,6 +217,7 @@ for (const c of SKIPS) {
 
 test('AT-IC-06 (busy): a plugin compaction in flight at the due: busy', { options: ON }, async ($, on) => {
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   let release!: () => void
@@ -226,6 +233,7 @@ test('AT-IC-06 (busy): a plugin compaction in flight at the due: busy', { option
 
 test('AT-IC-06 (episode), AT-IC-07: no human turn ended since the last pre-idle turn: episode; a task-notification turn neither ends nor starts one; a composer turn starts a new one', { options: ON }, async ($, on) => {
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   await humanTurn($, w)
@@ -251,6 +259,7 @@ test('AT-IC-06 (episode), AT-IC-07: no human turn ended since the last pre-idle 
 
 test('AT-IC-06 (published): a handoff published since the last human-origin turn: published', { options: { ...ON, max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   // A last cycle (continue-off): its handoff turn publishes, the compaction follows.
@@ -368,6 +377,7 @@ test('AT-IC-09 (pending): session.end drops a pending block: mod_outcome resume 
 
 test('AT-IC-13: after a published pre-idle handoff and no main turn, a native auto (idle) dispatch gets [handoff] with the path', { options: ON }, async ($, on) => {
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   await humanTurn($, w)
@@ -389,6 +399,7 @@ test('AT-IC-14: a persisted idle_due in the future re-arms at load; one in the p
   const w = new World().install(on, {
     ['idle_due:' + SID_A]: { due: T0 + 10 * MIN, sid: SID_A, episode: { since: T0 - 39 * MIN, done: false } },
   })
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   w.tokens = 260000
   await w.start($)
@@ -401,6 +412,7 @@ test('AT-IC-14: a past due and another sid\'s due arm nothing', { options: ON },
     ['idle_due:' + SID_A]: { due: T0 - MIN, sid: SID_A, episode: null },
     ['idle_due:' + SID_B]: { due: T0 + 10 * MIN, sid: SID_B, episode: null },
   })
+  w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
   await w.start($)
   await w.advance(120 * MIN)
@@ -423,6 +435,7 @@ function watchDue(on: Parameters<World['install']>[0]): () => unknown {
 test('AT-IC-14: a main turn.start forgets the persisted idle_due', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   await w.start($)
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
@@ -433,6 +446,7 @@ test('AT-IC-14: a main turn.start forgets the persisted idle_due', { options: ON
 test('AT-IC-14: a prompt entering forgets the persisted idle_due', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   await w.start($)
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
@@ -443,9 +457,103 @@ test('AT-IC-14: a prompt entering forgets the persisted idle_due', { options: ON
 test('AT-IC-14: session.end forgets the persisted idle_due', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
+  w.policy = NATIVE_OFF
   await w.start($)
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
   await $.session.end(CLEAR as never)
   expect(dueOf()).toBe(null)
+})
+
+// ---- IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` = the plugin's pre-idle turn only while
+// Claude Code's own idle compaction is off; a failed settings read counts as on (O-9 provisional).
+const idleModes = (w: World) => w.rowsOf('idle_mode').map(r => `${String(r.native)}/${String(r.plugin_turn)}`)
+
+test('AT-IA-02: auto with idleCompaction false arms the timer; idle_mode off/on', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(49 * MIN)
+  expect(w.submits.length + idleSkips(w).length).toBe(1)
+  expect(idleModes(w)).toEqual(['off/on'])
+})
+
+test('AT-IA-02: auto with autoCompactEnabled false: native off (idle never fires without auto-compact), armed', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = { autoCompactEnabled: false }
+  w.rateLimits = LIMITS
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(49 * MIN)
+  expect(w.submits.length + idleSkips(w).length).toBe(1)
+  expect(idleModes(w)).toEqual(['off/on'])
+})
+
+for (const c of [{ name: 'idleCompaction true', policy: { idleCompaction: true } }, { name: 'the key absent', policy: {} }]) {
+  test(`AT-IA-02: auto with ${c.name}: native on, no timer, idle_mode on/off`, { options: ON }, async ($, on) => {
+    const w = new World().install(on)
+    w.policy = c.policy
+    w.rateLimits = LIMITS
+    await w.start($)
+    await humanTurn($, w)
+    await w.advance(120 * MIN)
+    expect([w.submits.length, idleSkips(w).length]).toEqual([0, 0])
+    expect(idleModes(w)).toEqual(['on/off'])
+  })
+}
+
+test('AT-IA-02: the settings read throws: native unknown, no timer (counts as on)', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.settingsThrow = true
+  w.rateLimits = LIMITS
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(120 * MIN)
+  expect([w.submits.length, idleSkips(w).length]).toEqual([0, 0])
+  expect(idleModes(w)).toEqual(['unknown/off'])
+})
+
+test('AT-IA-03: armed while native off; native idle switched on before the fire: handoff_skipped {native-on, idle}, no submit', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(30 * MIN)
+  w.policy = { idleCompaction: true }
+  await w.advance(19 * MIN)
+  expect(idleSkips(w)).toEqual(['native-on'])
+  expect(w.submits.length).toBe(0)
+  expect(idleModes(w)).toEqual(['off/on', 'on/off'])
+})
+
+test('AT-IA-04: idle_mode is written once per change, not per turn; off reads native and arms nothing', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  await w.start($)
+  await humanTurn($, w)
+  await humanTurn($, w)
+  await humanTurn($, w)
+  expect(idleModes(w)).toEqual(['off/on'])
+  w.policy = {}
+  await humanTurn($, w)
+  await humanTurn($, w)
+  expect(idleModes(w)).toEqual(['off/on', 'on/off'])
+  // The timer armed by the earlier turn ends was dropped when native idle came on.
+  await w.advance(120 * MIN)
+  expect([w.submits.length, idleSkips(w).length]).toEqual([0, 0])
+})
+
+test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(120 * MIN)
+  expect([w.submits.length, idleSkips(w).length]).toEqual([0, 0])
+  expect(idleModes(w)).toEqual(['off/off'])
 })

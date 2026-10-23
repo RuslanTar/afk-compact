@@ -28,14 +28,21 @@ export type Config = {
   precompact_turn: 'model' | 'code'
   /** `allow` keeps the resume block's `[prod-allow]` line when the checkpoint agrees (text tag only, §3.4). */
   unattended_prod_reads: 'forbid' | 'allow'
-  /** `on`: a handoff turn about 49 min into an idle episode (MOD-SPEC §9.4); `off`: none. */
-  idle_handoff_turn: 'off' | 'on'
+  /**
+   * `auto`: a handoff turn about 49 min into an idle episode (MOD-SPEC §9.4) while Claude Code's own
+   * idle compaction is off (IA-1..3, idle D3: owner 2026-10-23 02:4x); `off`: none.
+   */
+  idle_handoff_turn: 'auto' | 'off'
   /** No pre-idle handoff turn below this context size. */
   idle_handoff_min_tokens: number
   /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
   watcher_off: boolean
-  /** Values replaced while parsing: `config_invalid` keys and `config_clamped` rows (logged once per load). */
-  notes: { invalid: string[]; clamped: { key: string; configured: number; effective: number }[] }
+  /**
+   * Values replaced while parsing: `config_invalid` keys and `config_clamped` rows (logged once per
+   * load); `noted` (present only when not empty): `config_note` rows for a value read another way
+   * (IA-1: the old `idle_handoff_turn: on` reads as `auto`).
+   */
+  notes: { invalid: string[]; clamped: { key: string; configured: number; effective: number }[]; noted?: { key: string; note: string }[] }
 }
 
 export const DEFAULTS: Config = {
@@ -55,10 +62,10 @@ export const DEFAULTS: Config = {
   handoff_turn: 'halt',
   handoff_turn_max_tokens: 64000,
   queue_cmd: '',
-  // OD-4 provisional (DP-31 (6), card xxxxxxxx-18): the root-provisional `model`; one value with the manifest.
+  // Owner xxxxxxxx-18 (2026-10-23 01:48): `model`, E-1 checks it (PT-1); one value with the manifest.
   precompact_turn: 'model',
   unattended_prod_reads: 'forbid',
-  idle_handoff_turn: 'off',
+  idle_handoff_turn: 'auto',
   idle_handoff_min_tokens: 200000,
   watcher_off: false,
   notes: { invalid: [], clamped: [] },
@@ -138,6 +145,24 @@ function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
   return floor
 }
 
+/**
+ * `idle_handoff_turn` (IA-1): `auto` or `off`, trimmed and case-folded; the old value `on` reads as
+ * `auto` with a `config_note`; any other value is `auto` plus `config_invalid` (the owner's words
+ * switch the plugin turn off only when native idle is on, which idle.ts checks; there is no forced on).
+ */
+function idleTurn(o: PluginOptions, notes: Config['notes']): Config['idle_handoff_turn'] {
+  const v = o['idle_handoff_turn']
+  if (unset(v)) return DEFAULTS.idle_handoff_turn
+  const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  if (t === 'auto' || t === 'off') return t
+  if (t === 'on') {
+    notes.noted = [...(notes.noted ?? []), { key: 'idle_handoff_turn', note: 'legacy-on' }]
+    return 'auto'
+  }
+  notes.invalid.push('idle_handoff_turn')
+  return 'auto'
+}
+
 function handoffTokens(o: PluginOptions, notes: Config['notes']): number {
   const n = Math.floor(num(o, 'handoff_turn_max_tokens', DEFAULTS.handoff_turn_max_tokens))
   const c = Math.max(HANDOFF_TOKENS_MIN, Math.min(HANDOFF_TOKENS_MAX, n))
@@ -167,7 +192,7 @@ export function parseOptions(o: PluginOptions): Config {
     // Any other value is `code`, the as-built path with no extra turn (S-SETTINGS D).
     precompact_turn: choice(o, 'precompact_turn', ['model', 'code'] as const, DEFAULTS.precompact_turn, 'code', notes),
     unattended_prod_reads: choice(o, 'unattended_prod_reads', ['forbid', 'allow'] as const, 'forbid', 'forbid', notes),
-    idle_handoff_turn: choice(o, 'idle_handoff_turn', ['off', 'on'] as const, 'off', 'off', notes),
+    idle_handoff_turn: idleTurn(o, notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
     watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
@@ -352,6 +377,7 @@ export async function effective(d: Deps, sid: string): Promise<Effective> {
   })
   for (const c of [...d.cfg.notes.clamped, ...eff.clamped]) await log(d, sid, 'config_clamped', { key: c.key, configured: c.configured, effective: c.effective })
   for (const key of d.cfg.notes.invalid) await log(d, sid, 'config_invalid', { key })
+  for (const n of d.cfg.notes.noted ?? []) await log(d, sid, 'config_note', { key: n.key, note: n.note })
   if (eff.disabled === 'triggers-off') await log(d, sid, 'triggers_off', {})
   if (eff.disabled === 'trigger-disabled-small-window') await log(d, sid, 'trigger_disabled_small_window', { target: eff.target, window: eff.window })
   return eff

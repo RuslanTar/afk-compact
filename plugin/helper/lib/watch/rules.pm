@@ -847,13 +847,15 @@ sub _session_rules {
         }
     }
     tick($ctx);
-    # A-24: quota warnings from the sweep; the watch dir over 50 MB.
+    # A-24: quota warnings from the sweep; the watch dir over watch_quota_mb (SK-6, default 50; 0 = off).
     for my $r (rows_of($S, 'warn_quota')) {
         $R->(rule => 'A-24', severity => 'warn', id_parts => ['quota', $r->{ts}], evidence => { mb => $r->{mb} });
     }
     unless (grep { ($_->{rule} // '') eq 'A-24' && ref $_->{evidence} eq 'HASH' && $_->{evidence}{watch_dir} } @{ $ex->{rows} }) {
         my $mb = _dir_mb($ctx->{watch}, 20000, $ctx);
-        if (defined $mb && $mb > 50) {
+        my $quota = $ctx->{settings}{watch_quota_mb} // 50;
+        $quota = 10000 if $quota > 10000;
+        if (defined $mb && $quota > 0 && $mb > $quota) {
             $R->(rule => 'A-24', severity => 'warn', id_parts => ['watch-size'], evidence => { watch_dir => \1, mb => int $mb });
         }
     }
