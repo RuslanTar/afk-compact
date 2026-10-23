@@ -44,7 +44,8 @@ export const IDLE_GAP_MS = 1500000
 /**
  * IC-1 D1 (MOD-SPEC §2.5 idle rule): a main `auto` dispatch is idle when no main turn runs, no
  * prompt is entering (CR-F17 counter), no plugin compaction is in flight, and the last main turn
- * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`.
+ * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`. `trigger` is the one
+ * triggerCanary returned: a future `idle` trigger arrives here as `auto` (ID-1).
  */
 export function idleGap(s: Deps['state'], trigger: string, now: number): number | undefined {
   if (trigger !== 'auto' || s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.lastTurnEndAt === undefined) return undefined

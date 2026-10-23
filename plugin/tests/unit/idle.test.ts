@@ -72,6 +72,31 @@ test('AT-IC-01: a prompt entering, a running turn (midturn), and manual / plugin
   expect(dispatchFlag(w, 4, '--midturn')).toBe('true')
 })
 
+// ID-1 (owner D2, 2026-10-23; SPEC-DELTAS AT-ID-01): Claude Code's future `idle` trigger.
+test('AT-ID-01: a dispatch with trigger idle is handled like auto: no trigger_unknown, dispatch --trigger auto, the idle predicate, checkpoint and after-step; mid-turn like auto', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w, 150000)
+  await w.advance(1600 * 1000)
+  await raiseCompact($, { trigger: 'idle' })
+  expect(w.rowsOf('trigger_unknown').length).toBe(0)
+  expect(w.toasts.filter(t => t.includes('trigger'))).toEqual([])
+  expect([dispatchFlag(w, 0, '--trigger'), hasIdleFlag(w, 0), dispatchFlag(w, 0, '--midturn')]).toEqual(['auto', true, 'false'])
+  expect(w.callsOf('checkpoint').length).toBe(1)
+  expect(w.callsOf('save-copy').length).toBe(1)
+  expect(w.rowsOf('compacted').length).toBe(1)
+  // Not idle by the predicate (gap 1,400 s): not an idle dispatch, as for auto.
+  await humanTurn($, w, 150000)
+  await w.advance(1400 * 1000)
+  await raiseCompact($, { trigger: 'idle' })
+  expect(hasIdleFlag(w, 1)).toBe(false)
+  // During a running main turn: [midturn], as for auto.
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'idle' })
+  expect(dispatchFlag(w, 2, '--midturn')).toBe('true')
+  expect(w.callsOf('checkpoint').length).toBe(3)
+})
+
 test('AT-IC-01 (core-to-mod §17): helper down, the fs fallback record of an idle dispatch has idle true and idle_gap_s', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
