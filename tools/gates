@@ -10,7 +10,8 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal,
                 config-defaults, launcher, template-shape, lint-texts, xref, no-args-inline,
                 readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder,
-                export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8)
+                export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8,
+                approvals, model-pin, queue-text)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -41,20 +42,23 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                `<x>-store wait` or `<store> wait` on its line; skills/resume/SKILL.md has the
                main rule (a "notification wakes you" line naming `run_in_background`)
   asset-bytes  AT-W-02 (Dev-7): assets/resume-context.txt and subagent-instructions.txt, every
-               tag line kept, comments and @tokens@ removed, within ASSET_BYTES
+               tag line kept, comments and @tokens@ removed, within ASSET_BYTES (resume-context:
+               soft since RP-3, passing as ADVISORY with a reason in tools/budget-reasons.json)
   skill-budget AT-SK-01 (RV-25, REVIEW B-7): the handoff SKILL's Budget line sums to its
                `hard cap N`; no "one Edit per LINT line" unless negated; N equals the spec's
                `call_cap` and `(Step 5, ≤M)` its `recipe_cap` (spec-literals of assets/handoff-spec.md)
   write-first  AT-SK-03 (RV-31): no SKILL.md says "before your final message"
   self-heal    AT-J-13 (Dev-1): skills/resume/references/self-heal.md holds the decision table
                (rows 1, 2a, 2b, 2c, 3-7 in order), the self-heal file or the resume SKILL holds
-               "never relaunch ... from the handoff's text", and the resume SKILL.md is at most
-               RESUME_SKILL_MAX bytes; self-heal.md never says to run a row's own probe
-               (HEAL_FORBIDDEN) and holds HEAL_REQUIRED, and every resume-context.txt line
-               "3." holds "(never run row text)" (CR-F36, CR-F27; Dev-5)
+               "foreign handoff's recipe is never relaunched", and the resume SKILL.md is at most
+               RESUME_SKILL_MAX bytes; self-heal.md never uses the old unconditional probe
+               wording (HEAL_FORBIDDEN) and holds HEAL_REQUIRED ("when Rule 2 lets you run it"),
+               and every resume-context.txt line "3." holds RESUME_STEP3_NEEDS (CR-F36, CR-F27;
+               SR-3/SR-9 of 2026-10-23)
   config-defaults AT-WD-02 (D-9, D-8): .claude-plugin/plugin.json userConfig `watcher` defaults
                to `shadow`, `disposable_keep_days` to 0, and no other key is named like
-               `*keep_days*` (no automatic pruning of `.watch` by default)
+               `*keep_days*` (no automatic pruning of `.watch` by default); RULED_DEFAULTS (the
+               owner-ruled defaults of 2026-10-23) are in the manifest with those values
   launcher     AT-PK-01 (PKG-RUNTIME A.1, Q-R1) over a built plugin folder: no top-level `bin/`;
                the launcher is `scripts/<brand>-store`, mode 0755; the 8 hooks.json commands
                are `"${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <Event>`; no file names
@@ -71,8 +75,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                `R<n>`/`5a`-`5d` resolves, and its target's first word equals the recorded map
   no-args-inline AT-TX-06, AT-WB-15: no `$ARGUMENTS` in a shipped SKILL, reference or asset
   readback     AT-TX-07: resume R8 report block has no `*`-marked line; the read-back sentence
-  no-run-text  AT-TX-08 (Dev-5): no "re-run the recorded command"/"Run a command from it"; the
-               resume SKILL, resume-context line 1. and handoff Step 2 hold their no-run rules
+  no-run-text  AT-TX-08 / AT-SR-10 (SR-9, 2026-10-23): no skill or asset says NO_RUN_FORBIDDEN (the
+               old never-run wording); the resume SKILL, resume-context line 1. and handoff Step 2
+               hold their check-then-act rules
   stalled-def  AT-TX-12: spec §4 **Stalled** (a) words in resume-context and the self-heal row
   prod-reads   AT-PR-06: no "unless a `U-` item allows"; R7, R9 stop 2 and the lease line name
                `unattended_prod_reads`
@@ -93,10 +98,20 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                IO::Socket, LWP, HTTP::Tiny or Net::
   export-schema AT-WB-01 (static): every `ev` the helper and mod code write has a
                watch/export_schema.pm entry (the WATCHER §6.3 list half is a watch case)
-  report-skill AT-WB-15: description "Only when the user asks", one `<store> report` call, no
-               `$ARGUMENTS`, no bare launcher, no log reads, REVEAL/COPY lines not run
+  report-skill AT-WB-15: description "Only when the user asks", only `<store> report` calls, no
+               `$ARGUMENTS`, no bare launcher, no log reads, REVEAL/COPY lines not run; AT-RS-01:
+               the dry run, the one question and the summaries-only-after-a-yes rule
   no-age-rule  AT-ST-06: no file-time test in reconcile.pm, copies.pm, postcompact.pm
   perl-utf8    AT-P5-06: a helper .pm/.pl with non-ASCII on a code line needs `use utf8`
+  Gates of the 2026-10-23 owner rulings:
+  approvals    AP-11 (scoped approval carry): the template's `## Approvals` (skeleton and §4.2
+               block), resume Rule 3 "explicit gate", resume-context step 4 "Measured facts list
+               it as checked", spec §12 "explicit gates", `## Approvals` in sections_main, and no
+               "approvals never carry" or "Approvals (verified)" anywhere
+  model-pin    MG-1 (ratify R4): no compact, submit or command call under hooks/ passes a model,
+               effort, fallback model or agent; no userConfig key names a model
+  queue-text   AT-QA-06: assets/queue.md (## Handoff, ## Resume, ≤1,600 B); the skills keep only
+               the pointer lines
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
@@ -201,27 +216,51 @@ LIST_LAST = re.compile(r"\b(?:or|nor)\s*$", re.I)
 LIST_NEXT = re.compile(r"^\s*,?\s*(?:or|nor)\s+" + VERBS + r"\b", re.I)
 STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
 MAIN_RULE = re.compile(r"notification wakes you", re.I)
-# AT-W-02: bytes of the full render (every tag line kept); resume = the resume protocol hard cap
-# (compaction-rem-6, 2026-10-22: 3,000; was DP-8's 2,500), subagent = the classic +fallback
-# budget (compaction DESIGN-NOTES §1, tools/assemble).
+# AT-W-02: bytes of the full render (every tag line kept); resume = the resume protocol's 3,000
+# (compaction-rem-6, 2026-10-22; was DP-8's 2,500), subagent = the classic +fallback budget
+# (compaction DESIGN-NOTES §1, tools/assemble). RP-3 (owner 2026-10-23, ratify xxxxxxxx#R3
+# overturned): the resume-context limit is soft: over it the gate passes only with a logged
+# reason in tools/budget-reasons.json (ASSET_SOFT names its key), up to the size it names.
 ASSET_BYTES = {"resume-context.txt": 3000, "subagent-instructions.txt": 1100}
+ASSET_SOFT = {"resume-context.txt": "asset resume-context.txt"}
+REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
+
+
+def budget_reason(key):
+    """(why, up_to or None) for a soft budget in tools/budget-reasons.json, or (None, None)."""
+    try:
+        with open(REASONS_FILE, encoding="utf-8") as f:
+            v = json.load(f).get(key)
+    except (OSError, ValueError):
+        return None, None
+    if isinstance(v, str) and v.strip():
+        return v, None
+    if isinstance(v, dict) and isinstance(v.get("why"), str) and v["why"].strip():
+        up = v.get("up_to")
+        return v["why"], (up if isinstance(up, int) and not isinstance(up, bool) else None)
+    return None, None
 EDIT_PER_LINT = re.compile(r"one Edit per LINT line", re.I)
 SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S | re.M)
 HEAL_HEADER = re.compile(r"^\|\s*#\s*\|\s*Finding \(first matching row wins\)\s*\|")
 HEAL_ROWS = ["1", "2a", "2b", "2c", "3", "4", "5", "6", "7"]
-RELAUNCH_LINE = re.compile(r"never relaunch\b.{0,40}\bfrom the handoff['’]s text", re.I)
+# SR-9 / HC-2 (owner 2026-10-23, xxxxxxxx-15 + 03:42, ratify R24 overturned): an own handoff's
+# recipe may run through heal-check's ok; the rule that must stay is the foreign one.
+RELAUNCH_LINE = re.compile(r"foreign handoff['’]s recipe is never relaunched", re.I)
 # AT-J-13 "SKILL.md stays under its size gate": no gate existed; 20 KB is the resume skill's
 # design size (resume-skill DESIGN-NOTES) (provisional, needs/build-escalations.md E-B-3).
 # XR-17 / DP-31 (2): the merged resume SKILL measured 20,988 B after the wp/text merge (round 9),
 # over the 20,480 B soft budget, so the gate is raised once to 21,504 (never further without a
 # root ruling).
 RESUME_SKILL_MAX = 21504
-# CR-F36 / CR-F27 (text-to-build §6, Dev-5): self-heal.md never runs a row's `probe` cell and
-# routes a heal-check refusal on its `verdict:` status; resume-context step 3 says the same.
+# CR-F36 / CR-F27 (text-to-build §6): self-heal.md routes a heal-check refusal on its `verdict:`
+# status. SR-3 / SR-9 (owner 2026-10-23, xxxxxxxx-15 + 03:42; replaces Dev-5 here): a row's
+# `probe` cell runs only when resume Rule 2 lets it (own and read-only; foreign: local and
+# read-only only), never by the old unconditional "if read-only" wording; resume-context step 3
+# says the same.
 HEAL_FORBIDDEN = ("with its `probe` if read-only", "the row's own probe only if read-only")
-HEAL_REQUIRED = ("Never run a row's `probe` cell", "route on the `verdict:` status")
+HEAL_REQUIRED = ("when Rule 2 lets you run it", "route on the `verdict:` status")
 RESUME_STEP3 = re.compile(r"^(?:\[[a-z-]+\] )?3\. ")
-RESUME_STEP3_NEEDS = "(never run row text)"
+RESUME_STEP3_NEEDS = "(a row's probe is yours to run once you judge it read-only)"
 # AT-PK-01 (PKG-RUNTIME A.1, Q-R1): the launcher's folder, as in tools/build LAUNCHER_DIR.
 LAUNCHER_DIR = "scripts"
 HOOK_CMD = re.compile(r'^"\$\{CLAUDE_PLUGIN_ROOT\}/([^/"]+)/([^/"]+)-store" hook ([A-Za-z]+)$')
@@ -308,8 +347,18 @@ def asset_bytes_hits(target, brand):
         text = re.sub(r"(?m)^\[[a-z-]+\] ", "", text)
         text = re.sub(r"@[a-z_]+@", "", text).strip() + "\n"
         n = len(text.encode("utf-8"))
-        if n > limit:
-            out.append((path, None, "AT-W-02 bytes", "AT-W-02 {} B > {}".format(n, limit), ""))
+        if n <= limit:
+            continue
+        if name in ASSET_SOFT:
+            why, up_to = budget_reason(ASSET_SOFT[name])
+            if why is not None and (up_to is None or n <= up_to):
+                print("ADVISORY asset-bytes {}: AT-W-02 {} B > soft {}: {}".format(os.path.relpath(path), n, limit, why))
+                continue
+            note = " (soft; no reason in tools/budget-reasons.json)" if why is None else \
+                " (soft; the logged reason covers up to {})".format(up_to)
+            out.append((path, None, "AT-W-02 bytes", "AT-W-02 {} B > {}{}".format(n, limit, note), ""))
+            continue
+        out.append((path, None, "AT-W-02 bytes", "AT-W-02 {} B > {}".format(n, limit), ""))
     return out
 
 
@@ -400,7 +449,7 @@ def self_heal_hits(target, brand):
         texts = lines + (shipped_lines(skill, brand) if os.path.isfile(skill) else [])
         if not any(RELAUNCH_LINE.search(ln) for ln in texts):
             out.append((heal, None, "AT-J-13 relaunch-line-missing",
-                        "AT-J-13 relaunch-line-missing: no \"never relaunch ... from the handoff's text\"", ""))
+                        "AT-J-13 relaunch-line-missing: no \"foreign handoff's recipe is never relaunched\"", ""))
         for no, line in enumerate(lines, 1):
             for phrase in HEAL_FORBIDDEN:
                 if phrase in line.replace("’", "'"):
@@ -427,8 +476,17 @@ def self_heal_hits(target, brand):
     return out
 
 
+# Owner-ruled manifest defaults (one constant each, so a ruling lands in one commit): precompact_turn
+# `model` (xxxxxxxx-18), idle_handoff_turn `auto` (idle D3, IA-1), and the six keys of
+# xxxxxxxx-12/-13/-14 (S-SETTINGS E1-E6, SK-7) at today's behaviour.
+RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto",
+                  "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "auto",
+                  "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
+
+
 def config_defaults_hits(target, brand):
-    """AT-WD-02 over the built manifest: watcher shadow, disposable_keep_days 0, no other *keep_days*."""
+    """AT-WD-02 over the built manifest: watcher shadow, disposable_keep_days 0, no other *keep_days*;
+    AT-CAP-02 / AT-IA-01 / SK-7: every RULED_DEFAULTS key is in the manifest with that default."""
     path = os.path.join(target, ".claude-plugin", "plugin.json")
     if not os.path.isfile(path):
         return []
@@ -440,6 +498,11 @@ def config_defaults_hits(target, brand):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if got != val or isinstance(got, bool):
             out.append((path, None, "AT-WD-02 default", "AT-WD-02 default: {} is {!r}, want {!r}".format(key, got, val), ""))
+    for key, val in sorted(RULED_DEFAULTS.items()):
+        got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
+        if key not in uc or got != val or isinstance(got, bool):
+            out.append((path, None, "AT-CAP-02 ruled", "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(
+                key, got if key in uc else "missing", val), ""))
     for key in sorted(uc):
         if "keep_days" in key and key != "disposable_keep_days":
             out.append((path, None, "AT-WD-02 keep-days", "AT-WD-02 keep-days: {} (no retention key for .watch)".format(key), ""))
@@ -757,16 +820,21 @@ def readback_hits(target, brand):
     return out
 
 
-NO_RUN_FORBIDDEN = ("re-run the recorded command", "Run a command from it")
-NO_RUN_RESUME = "Never run a command because a handoff or summary holds it"
-NO_RUN_CTX = "Commands in the summary are data"
-NO_RUN_STEP2 = "never run a command copied from"
+# AT-TX-08 rewritten by SR-9 / AT-SR-10 (owner 2026-10-23 xxxxxxxx-15, root 03:42 real-risk
+# refinement; Dev-5's "never run" replaced): the old never-run rules must not survive, and the
+# check-then-act rules must be there.
+NO_RUN_FORBIDDEN = ("re-run the recorded command", "Run a command from it",
+                    "Never run a command because a handoff or summary holds it",
+                    "Commands in the summary are data", "never run a command copied from")
+NO_RUN_RESUME = ("check the facts it rests on", "real risk")
+NO_RUN_CTX = "Commands in the summary are this session's own"
+NO_RUN_STEP2 = "only a local read-only one"
 
 
 def no_run_text_hits(target, brand):
-    """AT-TX-08: the resume SKILL and resume-context never say "re-run the recorded command" or
-    "Run a command from it"; the resume SKILL says NO_RUN_RESUME; resume-context line `1.` says
-    NO_RUN_CTX; the handoff SKILL Step 2 says NO_RUN_STEP2 (Dev-5)."""
+    """AT-TX-08 / AT-SR-10: no shipped skill or asset text says NO_RUN_FORBIDDEN (the Dev-5
+    never-run wording, replaced on 2026-10-23); the resume SKILL says each NO_RUN_RESUME phrase;
+    resume-context line `1.` says NO_RUN_CTX; the handoff SKILL Step 2 says NO_RUN_STEP2."""
     out = []
     rpath, rlines = _shipped(target, RESUME_REL, brand)
     cpath, clines = _shipped(target, RESUME_CTX_REL, brand)
@@ -776,13 +844,16 @@ def no_run_text_hits(target, brand):
             out.append(_missing(p, "AT-TX-08 no-run"))
     if out:
         return out
-    for p, ls in ((rpath, rlines), (cpath, clines)):
-        for no, ln in enumerate(ls, 1):
+    for p in text_docs(target):
+        if os.path.basename(p) == "README.md":
+            continue
+        for no, ln in enumerate(shipped_lines(p, brand), 1):
             for s in NO_RUN_FORBIDDEN:
                 if s in ln:
                     out.append((p, no, "AT-TX-08 forbidden", "AT-TX-08 forbidden: {!r}".format(s), ln))
-    if not any(NO_RUN_RESUME in ln for ln in rlines):
-        out.append((rpath, None, "AT-TX-08 resume-rule", "AT-TX-08 resume-rule: no {!r}".format(NO_RUN_RESUME), ""))
+    for phrase in NO_RUN_RESUME:
+        if not any(phrase in ln for ln in rlines):
+            out.append((rpath, None, "AT-TX-08 resume-rule", "AT-TX-08 resume-rule: no {!r}".format(phrase), ""))
     one = [ln for ln in clines if re.match(r"^(?:\[[a-z-]+\] )?1\. ", ln)]
     if not one or not all(NO_RUN_CTX in ln for ln in one):
         out.append((cpath, None, "AT-TX-08 context-line-1", "AT-TX-08 context-line-1: line `1.` lacks {!r}".format(NO_RUN_CTX), ""))
@@ -1194,12 +1265,18 @@ LOG_READ = re.compile(r"\b(?:Read|Grep|cat|grep|tail|less|head)\b[^.]*\blogs?\b"
 NEGATED_LOG_READ = re.compile(r"\b(?:Do not|Never|never|don't)\b[^.]*\b(?:read|open|grep)\b[^.]*\blogs?\b", re.I)
 
 
+REPORT_RS1 = ("<store> report --dry-run", "<store> report --with-summaries",
+              "Never pass `--with-summaries` without a yes in this run", "business content is not masked",
+              "No, logs only")
+
+
 def report_skill_hits(target, brand):
     """AT-WB-15 (W-BETA C, XR-04, XR-21): the report SKILL description starts "Only when the
-    user asks"; exactly one helper call, `<store> report`; no `$ARGUMENTS`, no bare
-    `<brand>-store`; no instruction to read or grep logs; the REVEAL and COPY lines are named as
-    not to be run. (`disable-model-invocation: true` waits for PR-2 P-156; the call-form gate
-    refuses it until then.)"""
+    user asks"; every helper call is `<store> report …` (RS-1, owner xxxxxxxx-19: a dry run, one
+    question, then the report, with summaries only after a yes, REPORT_RS1 / AT-RS-01); no
+    `$ARGUMENTS`, no bare `<brand>-store`; no instruction to read or grep logs; the REVEAL and
+    COPY lines are named as not to be run. (`disable-model-invocation: true` waits for PR-2
+    P-156; the call-form gate refuses it until then.)"""
     path = os.path.join(target, *REPORT_REL.split("/"))
     if not os.path.isfile(path):
         return [_missing(path, "AT-WB-15 report")]
@@ -1210,8 +1287,11 @@ def report_skill_hits(target, brand):
     lines = shipped_lines(path, brand)
     text = "\n".join(lines)
     calls = re.findall(r"`<store> ([a-z][a-z-]*)", text)
-    if calls != ["report"]:
-        out.append((path, None, "AT-WB-15 calls", "AT-WB-15 calls: helper calls {} (want exactly one `<store> report`)".format(calls), ""))
+    if not calls or set(calls) != {"report"}:
+        out.append((path, None, "AT-WB-15 calls", "AT-WB-15 calls: helper calls {} (want only `<store> report …`)".format(calls), ""))
+    for phrase in REPORT_RS1:
+        if phrase not in text:
+            out.append((path, None, "AT-RS-01 text", "AT-RS-01 text: no {!r}".format(phrase), ""))
     for no, ln in enumerate(lines, 1):
         if "$ARGUMENTS" in ln:
             out.append((path, no, "AT-WB-15 arguments", "AT-WB-15 arguments: `$ARGUMENTS`", ln))
@@ -1288,6 +1368,160 @@ def perl_utf8_hits(target, brand):
                 out.append((p, hit[0], "AT-P5-06 perl-utf8", "AT-P5-06 perl-utf8: non-ASCII on a code line and no `use utf8`", hit[1]))
     return out
 
+# ---------------------------------------------------------------- 2026-10-23 rulings
+# AP-11 (D-2 replaced by scoped approval carry, owner 2026-10-23 01:5x): the texts carry the scope
+# rules, and no shipped text keeps the old "approvals never carry" promise.
+APPROVALS_BANNED = re.compile(r"approvals never carry|Approvals \(verified\)", re.I)
+APPROVALS_NEEDS = ((RESUME_REL, "explicit gate"), (SPEC_REL, "explicit gates"))
+
+
+def approvals_hits(target, brand):
+    """AP-11 / AT-AP-01 / AT-AP-06 / AT-AP-09: the template's §4 skeleton has `## Approvals` right
+    after `## User constraints` and §4.2 its Approvals block; resume Rule 3 says "explicit gate";
+    every resume-context step-4 line says "Measured facts list it as checked"; spec §12 says
+    "explicit gates"; `sections_main` lists `## Approvals`; no skill, asset or README line says
+    "approvals never carry" or "Approvals (verified)"."""
+    out = []
+    tpath, tlines = _shipped(target, TEMPLATE_REL, brand)
+    if tlines is None:
+        out.append(_missing(tpath, "AP-11 approvals"))
+    else:
+        s4 = _section(tlines, r"^## 4\. ", r"^## \d+\. ") or []
+        heads = [ln for ln in s4 if re.match(r"^##? ", ln)]
+        if "## Approvals" not in heads or heads.index("## Approvals") == 0 or heads[heads.index("## Approvals") - 1] != "## User constraints":
+            out.append((tpath, None, "AP-11 skeleton", "AP-11 skeleton: §4 has no `## Approvals` right after `## User constraints`", ""))
+        s42 = _section(tlines, r"^### 4\.2 ", r"^### ") or []
+        if "## Approvals" not in s42 or not any(re.search(r'U-\d+: approval "', ln) for ln in s42):
+            out.append((tpath, None, "AP-11 block", "AP-11 block: §4.2 has no `## Approvals` block with an approval line", ""))
+    rpath, rlines = _shipped(target, RESUME_REL, brand)
+    if rlines is not None:
+        three = [ln for ln in rlines if ln.startswith("3. ")]
+        if not three or "explicit gate" not in three[0]:
+            out.append((rpath, None, "AP-11 rule3", "AP-11 rule3: resume Rule 3 lacks 'explicit gate'", ""))
+    cpath, clines = _shipped(target, RESUME_CTX_REL, brand)
+    if clines is not None:
+        four = [ln for ln in clines if re.match(r"^(?:\[[a-z-]+\] )?4\. ", ln)]
+        if not four or not all("Measured facts list it as checked" in ln for ln in four):
+            out.append((cpath, None, "AP-11 step4", "AP-11 step4: a resume-context step-4 line lacks 'Measured facts list it as checked'", ""))
+    spath, slines = _shipped(target, SPEC_REL, brand)
+    if slines is not None:
+        s12 = _section(slines, r"^## 12\. ", r"^## \d+\. ") or []
+        if not any("explicit gates" in ln for ln in s12):
+            out.append((spath, None, "AP-11 spec12", "AP-11 spec12: spec §12 lacks 'explicit gates'", ""))
+    _sp, spec = spec_literals(target)
+    if isinstance(spec, dict) and "## Approvals" not in (spec.get("sections_main") or []):
+        out.append((spath, None, "AP-11 headings", "AP-11 headings: sections_main lacks '## Approvals'", ""))
+    for path in text_docs(target):
+        for no, ln in enumerate(shipped_lines(path, brand), 1):
+            m = APPROVALS_BANNED.search(ln)
+            if m:
+                out.append((path, no, "AP-11 banned", "AP-11 banned: {!r}".format(m.group(0)), ln))
+    return out
+
+
+# MG-1 (ratify R4 kept + tested, owner 2026-10-23): compaction and the handoff turn run on the
+# session's own model. No call the mod makes to compact, submit or run a command passes a model,
+# effort, fallback model or agent; no userConfig key is named for a model.
+MODEL_PIN_CALL = re.compile(r"\$\.(session\.compact|prompt\.submit|command\.run)\s*\(")
+MODEL_PIN_KEY = re.compile(r"(?<![\w$.])(model|effort|fallbackModel|agent)\s*:|\.\.\.")
+
+
+def _call_args(src, start):
+    """The text between the `(` that ends at `start` and its matching `)`, or None."""
+    depth, i = 1, start
+    while i < len(src) and depth:
+        ch = src[i]
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch in "'\"`":
+            j = src.find(ch, i + 1)
+            while j > 0 and src[j - 1] == "\\":
+                j = src.find(ch, j + 1)
+            if j < 0:
+                return None
+            i = j
+        i += 1
+    return src[start:i - 1] if depth == 0 else None
+
+
+def model_pin_hits(target, brand):
+    """MG-1 / AT-MG-01 over a built plugin folder: every `$.session.compact(…)`,
+    `$.prompt.submit(…)` and `$.command.run(…)` under hooks/ (not *.gen.ts) has no `model`,
+    `effort`, `fallbackModel` or `agent` key and no spread; no userConfig key contains `model`."""
+    if not _is_plugin(target):
+        return []
+    out = []
+    n = 0
+    for d, dirs, files in os.walk(os.path.join(target, "hooks")):
+        dirs[:] = sorted(x for x in dirs if x not in ("node_modules", "tests"))
+        for f in sorted(files):
+            if not f.endswith(".ts") or f.endswith(".gen.ts"):
+                continue
+            p = os.path.join(d, f)
+            src = _read(p)
+            for m in MODEL_PIN_CALL.finditer(src):
+                n += 1
+                args = _call_args(src, m.end())
+                no = src.count("\n", 0, m.start()) + 1
+                if args is None:
+                    out.append((p, no, "AT-MG-01 parse", "AT-MG-01 parse: cannot read the arguments of ${}".format(m.group(1)), ""))
+                    continue
+                k = MODEL_PIN_KEY.search(args)
+                if k:
+                    out.append((p, no, "AT-MG-01 key", "AT-MG-01 key: ${}(…) passes {!r}".format(m.group(1), k.group(0).rstrip(": ")), ""))
+    if n == 0:
+        out.append((os.path.join(target, "hooks"), None, "AT-MG-01 scan", "AT-MG-01 scan: no compact or submit call found", ""))
+    mpath, defaults = _manifest_defaults(target)
+    for key in sorted(defaults):
+        if "model" in key.lower():
+            out.append((mpath, None, "AT-MG-01 config", "AT-MG-01 config: userConfig key {} names a model".format(key), ""))
+    return out
+
+
+# AT-QA-06 (Q-ADAPTER QA-4, owner xxxxxxxx-11): the queue rules live in assets/queue.md, which
+# the skills read only when the queue is on; the skills keep only the pointer lines.
+QUEUE_MD_REL = "assets/queue.md"
+QUEUE_MD_MAX = 1600
+
+
+def queue_text_hits(target, brand):
+    """AT-QA-06: assets/queue.md exists with `## Handoff` and `## Resume` and at most
+    QUEUE_MD_MAX bytes shipped; the resume SKILL points to it (Resume) and holds no
+    `<store> lane adopt` call, and its report marks the Queue line conditional; the handoff SKILL Step 2
+    points to it (Handoff); the template holds no `queued_line`."""
+    out = []
+    qpath, qlines = _shipped(target, QUEUE_MD_REL, brand)
+    if qlines is None:
+        return [_missing(qpath, "AT-QA-06 queue.md")]
+    n = len("\n".join(qlines).encode("utf-8"))
+    if n > QUEUE_MD_MAX:
+        out.append((qpath, None, "AT-QA-06 size", "AT-QA-06 size: {} B > {}".format(n, QUEUE_MD_MAX), ""))
+    for h in ("## Handoff", "## Resume"):
+        if h not in qlines:
+            out.append((qpath, None, "AT-QA-06 section", "AT-QA-06 section: no {!r}".format(h), ""))
+    rpath, rlines = _shipped(target, RESUME_REL, brand)
+    hpath, hlines = _shipped(target, HANDOFF_REL, brand)
+    tpath, tlines = _shipped(target, TEMPLATE_REL, brand)
+    if rlines is not None:
+        if not any("assets/queue.md` (Resume)" in ln for ln in rlines):
+            out.append((rpath, None, "AT-QA-06 pointer", "AT-QA-06 pointer: no `assets/queue.md` (Resume) line", ""))
+        for no, ln in enumerate(rlines, 1):
+            if "<store> lane adopt" in ln:
+                out.append((rpath, no, "AT-QA-06 moved", "AT-QA-06 moved: '<store> lane adopt' belongs in assets/queue.md", ln))
+        if not any(ln.startswith("Queue: ") and "(only when the queue is on)" in ln for ln in rlines):
+            out.append((rpath, None, "AT-QA-06 report", "AT-QA-06 report: the R8 Queue line is not marked '(only when the queue is on)'", ""))
+    if hlines is not None:
+        s2 = _section(hlines, r"^## Step 2 ", r"^## ") or []
+        if not any("assets/queue.md` (Handoff)" in ln for ln in s2):
+            out.append((hpath, None, "AT-QA-06 pointer", "AT-QA-06 pointer: Step 2 has no `assets/queue.md` (Handoff) line", ""))
+    if tlines is not None:
+        for no, ln in enumerate(tlines, 1):
+            if "queued_line" in ln:
+                out.append((tpath, no, "AT-QA-06 moved", "AT-QA-06 moved: 'queued_line' belongs in assets/queue.md", ln))
+    return out
+
 
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
               ("write-first", write_first_hits), ("self-heal", self_heal_hits),
@@ -1309,7 +1543,10 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("export-schema", export_schema_hits),
               ("report-skill", report_skill_hits),
               ("no-age-rule", no_age_rule_hits),
-              ("perl-utf8", perl_utf8_hits)]
+              ("perl-utf8", perl_utf8_hits),
+              ("approvals", approvals_hits),
+              ("model-pin", model_pin_hits),
+              ("queue-text", queue_text_hits)]
 
 
 def pending_row(gate, rule, rel, line):
