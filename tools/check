@@ -169,7 +169,7 @@ def tree_state():
 
 
 def copy_tree(dst):
-    """Copy the work tree (tracked and untracked files; no .git, node_modules or tmp/) to dst.
+    """Copy the work tree (tracked and untracked files; no .git folder or file, node_modules or tmp/) to dst.
 
     node_modules is linked, not copied, so X-types runs in the copy. Symlinks stay links.
     """
@@ -190,7 +190,10 @@ def copy_tree(dst):
         dirs[:] = keep
         os.makedirs(os.path.join(dst, rel), exist_ok=True)
         for f in files:
-            if f not in COPY_SKIP:
+            # A linked git worktree has a `.git` FILE (a gitdir pointer), not a folder: copied, it
+            # would make every git command in the copy (the X-tools probes' init, add, commit and
+            # checkout) act on the worktree's own repository and branch.
+            if f not in COPY_SKIP and not (rel == "." and f in COPY_SKIP_TOP):
                 shutil.copy2(os.path.join(d, f), os.path.join(dst, rel, f), follow_symlinks=False)
     if os.path.isdir(os.path.join(REPO, "node_modules")):
         os.symlink(os.path.join(REPO, "node_modules"), os.path.join(dst, "node_modules"))
