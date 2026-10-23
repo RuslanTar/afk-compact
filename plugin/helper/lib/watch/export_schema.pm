@@ -92,7 +92,7 @@ our %SCHEMA = (
         nonce => 'nonce', trigger => [enum => @TRIGGER], agent_id => 'hash', compaction_seq => 'int',
         channel => [enum => @CHANNEL], instructions_bytes => 'int', block_bytes => 'int', measured => 'bool',
         instr_version => 'word', tokens_before => 'num', checkpoint_ms => [counts => 'word'], full_checkpoint => 'bool',
-        timeouts => [list => 'word'], evidence => [counts => 'word'], approvals_verified => [list => 'word'],
+        timeouts => [list => 'word'], evidence => [counts => 'word'], approvals_checked => [list => 'word'],
         fallback => 'bool', error_class => 'word', idle => 'bool', idle_gap_s => 'num', midturn => 'bool',
     },
     precompact => {
@@ -176,6 +176,11 @@ our %SCHEMA = (
     handoff_user_interjected => { ht => 'hash' },
     handoff_mode => { mode => [enum => qw(private repo)], reason => 'word', declared => 'bool', accepted => 'bool' },
     idle_mismatch => { nonce => 'nonce' },
+    # MG-3 / MG-5 (2026-10-23): the summarizer request's cache-read share, and a cold one (A-28)
+    compaction_cache => { nonce => 'nonce', read_share => 'num' },
+    compaction_cold => { nonce => 'nonce', read_share => 'num' },
+    # ID-2 (2026-10-23): a native idle compaction no plugin dispatch shaped (A-29)
+    idle_unshaped => { boundary_uuid => 'hash' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
     # RP-2 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): a resume block over its soft 6,500 chars
     resume_block_over_soft => { nonce => 'nonce', chars => 'int' },
@@ -210,7 +215,7 @@ our %SCHEMA = (
                    cap => 'int', continues_last_hour => 'int', continue_without_nudge => 'bool', result => 'word',
                    relation => 'word', native_thrash => 'bool', mod_thrash => 'bool', batches => 'int',
                    lost_U => 'int', lost_D => 'int', lost_X => 'int', rules => [list => 'word'], hard => 'bool',
-                   chars => 'int', growth => 'num', mb => 'num', kind => 'word' }],
+                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num' }],
     },
     watch_error => { stage => 'word', error_class => 'word' },
     # --- other rows of MOD-SPEC (kebab-case there, snake_case on disk) and of the built code ---

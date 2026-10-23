@@ -160,6 +160,8 @@ Fixed per rule; no user content. Shown as `afk-compact watcher: <text> (<alert_i
 | A-25 | watcher unhealthy |
 | A-26 | plugin layers not running |
 | A-27 | auto-continue without a nudge |
+| A-28 | compaction or handoff turn read cold |
+| A-29 | idle compaction not shaped |
 
 ## 14. Wait specs (Dev-7 D2, D3; DP-1, DP-14)
 
@@ -550,7 +552,9 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "A-24": "storage growth",
     "A-25": "watcher unhealthy",
     "A-26": "plugin layers not running",
-    "A-27": "auto-continue without a nudge"
+    "A-27": "auto-continue without a nudge",
+    "A-28": "compaction or handoff turn read cold",
+    "A-29": "idle compaction not shaped"
   }
 }
 ```

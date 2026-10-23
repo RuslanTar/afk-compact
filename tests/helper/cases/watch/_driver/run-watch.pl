@@ -93,7 +93,7 @@ sub spec_for_tests {
                              'mcp-write' => '\Amcp__[A-Za-z0-9_-]+__(?:create|update|delete|send)' },
         secret_rules => [ { id => 'jwt', class => 'HARD', re => 'eyJ[A-Za-z0-9_-]{8,}' },
                           { id => 'kv', class => 'WARN', re => '(?:pass|secret|token|key)\s*[=:]\s*\S{6,}' } ],
-        alert_texts => { map { sprintf('A-%02d', $_) => sprintf('test text %02d', $_) } 1 .. 27 },
+        alert_texts => { map { sprintf('A-%02d', $_) => sprintf('test text %02d', $_) } 1 .. 29 },
     };
 }
 

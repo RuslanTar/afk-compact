@@ -936,6 +936,8 @@
     "A-24": "storage growth",
     "A-25": "watcher unhealthy",
     "A-26": "plugin layers not running",
-    "A-27": "auto-continue without a nudge"
+    "A-27": "auto-continue without a nudge",
+    "A-28": "compaction or handoff turn read cold",
+    "A-29": "idle compaction not shaped"
   }
 }

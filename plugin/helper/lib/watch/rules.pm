@@ -1,6 +1,6 @@
 package watch::rules;
 # lib/watch/rules.pm: the Stop-time rule engine (WATCHER-SPEC §2 joins, §3
-# realtime fields, §7.1 rules A-01..A-27). Owner: WP-watch. Inputs: this
+# realtime fields, §7.1 rules A-01..A-29). Owner: WP-watch. Inputs: this
 # session's rows (classic, mod, mod fallback events, dispatch records, rollup,
 # sidecar slots) and the sweeper's new boundaries and events. Output: alert
 # rows and `precompute_or_failed` info rows. Never acts (WATCH §7.2).
@@ -24,6 +24,10 @@ use watch::hturn;
 my %OKV = map { $_ => 1 } qw(ok ok-trailer);
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
 my $JOIN_S = 120;
+# A-28 (MG-5): a first request that read under this share of its input from the cache, at this
+# many context tokens or more, is cold.
+our $COLD_SHARE = 0.5;
+our $COLD_MIN_TOKENS = 100_000;
 
 # The row kinds the rules read from the classic and mod streams and from the
 # mod's events/ files. Only these are decoded and kept (lib/watch/cache.pm);
@@ -39,7 +43,7 @@ our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_e
                 stash_dropped stash_kept copy_attributed copy_attribution_ambiguous copy_attribution_failed
                 orphan_finished
                 handoff_turn_start handoff_turn_end idle_mismatch resume_remeasured resume_remeasure_failed
-                submit_dropped queue_contract);
+                submit_dropped queue_contract approvals_carry compaction_cold idle_unshaped);
 my %KIND = map { $_ => 1 } @KINDS;
 our %MISSED;
 
@@ -640,10 +644,33 @@ sub _event_rules {
     my ($ctx, $S, $ex, $sess, $events, $C) = @_;
     my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
     my $vh = $sess->{vh} || [];
-    my %approved;
-    for my $d (rows_of($S, 'dispatch')) {
-        $approved{$_} = 1 for grep { defined && !ref } @{ ref $d->{approvals_verified} eq 'ARRAY' ? $d->{approvals_verified} : [] };
+    # A-12 (AP-9, 2026-10-23): an outward call after a boundary or a manual resume is consented
+    # by a later human-typed row (the sweep's window consent) or by an approval checked for that
+    # window: a class in the approvals_checked of a dispatch row or the classes of an
+    # approvals_carry row (`measure` on the handoff or on the summary's copy) logged between the
+    # window's start (less $JOIN_S: the after-step measures near the boundary row) and the call.
+    # An explicit-gate class (spec explicit_gate_classes) is never consented by an approval.
+    my $gl = (ref $ctx->{spec} eq 'HASH' && ref $ctx->{spec}{explicit_gate_classes} eq 'ARRAY')
+        ? $ctx->{spec}{explicit_gate_classes} : [qw(deploy env-write infra-write prod-write protected-push)];
+    my %gate = map { $_ => 1 } grep { defined && !ref } @$gl;
+    my @carry;
+    for my $d (rows_of($S, 'dispatch'), rows_of($S, 'approvals_carry')) {
+        my $l = ($d->{ev} // '') eq 'approvals_carry' ? $d->{classes} : $d->{approvals_checked};
+        my %c = map { $_ => 1 } grep { defined && !ref && !$gate{$_} } @{ ref $l eq 'ARRAY' ? $l : [] };
+        push @carry, [ _t($d), \%c ] if %c && defined _t($d);
     }
+    my $approved = sub {
+        my ($e) = @_;
+        return 0 if !@carry || $gate{ $e->{class} // '' };
+        # Event times are epochs (watch::rows::ts_of).
+        my $t = _num($e->{ts}) // return 0;
+        my $w = _num($e->{win_ts});
+        for my $c (@carry) {
+            next if $c->[0] > $t || (defined $w && $c->[0] < $w - $JOIN_S);
+            return 1 if $c->[1]{ $e->{class} };
+        }
+        return 0;
+    };
     my $max_cont = $ctx->{settings}{max_auto_continues_per_hour};
     my %kind = %{ $sess->{task_kinds} || {} };
     for my $slot (@{ $S->{bg} }) {
@@ -654,7 +681,7 @@ sub _event_rules {
     for my $e (@$events) {
         tick($ctx);
         my $k = $e->{k};
-        if ($k eq 'outward' && !$approved{ $e->{class} }) {
+        if ($k eq 'outward' && !$approved->($e)) {
             $R->(rule => 'A-12', severity => 'critical', id_parts => [$e->{win_uuid} // $e->{win_line}, $e->{class}, $e->{call_no}],
                  evidence => { class => $e->{class}, call_no => $e->{call_no}, line => $e->{line},
                                after => $e->{win_kind}, ($e->{win_kind} eq 'resume' ? (args_present => watch::ctx::B($e->{args})) : ()) });
@@ -718,7 +745,31 @@ sub _event_rules {
     for my $r (rows_of($S, 'thrash')) {
         $R->(rule => 'A-07', severity => 'critical', id_parts => ['mod', $r->{ts}], evidence => { mod_thrash => \1 });
     }
+    # A-28 (MG-5, ratify R4 guard, 2026-10-23): a compaction_cold row, or a handoff turn whose
+    # first request read under $COLD_SHARE of its input from the cache at >= $COLD_MIN_TOKENS
+    # (handoff_turn_end cache_read_share; the context size from its handoff_turn_start t0): the
+    # request may have gone to another model than the session's own.
+    for my $r (rows_of($S, 'compaction_cold')) {
+        $R->(rule => 'A-28', severity => 'warn', id_parts => ['compaction', $r->{nonce} // $r->{ts}],
+             evidence => { read_share => _num($r->{read_share}), kind => 'compaction' });
+    }
+    my %t0 = map { ($_->{ht} // '') => $_->{t0} } grep { defined $_->{ht} } rows_of($S, 'handoff_turn_start');
+    for my $r (rows_of($S, 'handoff_turn_end')) {
+        my $share = _num($r->{cache_read_share});
+        next unless defined $share && $share < $COLD_SHARE;
+        my $tok = _num($r->{t0}) // _num($t0{ $r->{handoff_ht} // '' });
+        next unless defined $tok && $tok >= $COLD_MIN_TOKENS;
+        $R->(rule => 'A-28', severity => 'warn', id_parts => ['handoff-turn', $r->{handoff_ht} // $r->{ts}],
+             evidence => { read_share => $share, kind => 'handoff-turn' });
+    }
+    # A-29 (ID-2, 2026-10-23): an idle_unshaped row (reconcile: a "Compacted while idle" boundary
+    # that no plugin dispatch shaped; native idle compaction ran on its own).
+    for my $r (rows_of($S, 'idle_unshaped')) {
+        $R->(rule => 'A-29', severity => 'warn', id_parts => [ 'b', $r->{boundary_uuid} // $r->{ts} ], evidence => {});
+    }
 }
+
+sub _num { my ($v) = @_; return (defined $v && !ref $v && $v =~ /\A-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?\z/) ? 0 + $v : undef }
 
 sub _session_rules {
     my ($ctx, $S, $ex, $sess) = @_;
