@@ -1,0 +1,495 @@
+{
+ "id": "AT-CK-02-03-05-06-08-09-12",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "SK-1..SK-5, SK-7 (owner xxxxxxxx-12/-13/-14, S-SETTINGS E1-E5): the AT-CK rows AT-CK-01-04-07-11 left: a ticket_pattern id with a slash gives no ticket bucket and an invalid pattern the default plus a note (AT-CK-02; the id-rule `ticket_invalid` note is not built); locate lists the old default-pattern bucket first after a pattern change (AT-CK-03); secret_extra_rules HARD withholds as user-hard-1 and blocks publish, WARN redacts and is an ADVISORY line, NAME withholds by name, the shipped rules still fire, and a flag or env value is ignored with a note (AT-CK-04..06); resume_proceed confirm in the file with auto from env stays confirm with a note (AT-CK-08; no command takes a --resume-proceed flag, so env stands in for the flag); evidence_total_max_mb 20 stops evidence --keep and the sweep with `withheld: over-total`, 5 is clamped to 10 (AT-CK-09); export classes of the six keys (AT-CK-12)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/plain-dir"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-20_09-00-00_55555555_old.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-20T09:00:00+03:00\nsession_id: 55555555-5555-4555-8555-555555555555\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a0b0c0d⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/misc/2026-10-21_08-00-00_66666666_new.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0b0c0d0e\ndate: 2026-10-21T08:00:00+03:00\nsession_id: 66666666-6666-4666-8666-666666666666\nactor: main\n---\n⟪$BRAND v1 n=0b0c0d0e s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0b0c0d0e⟫\n"
+    },
+    {
+     "write": "$TMP/s/acme.txt",
+     "content": "token ACME-123456789012\n"
+    },
+    {
+     "write": "$TMP/s/warn.txt",
+     "content": "note FOO-SECRET-ABC\n"
+    },
+    {
+     "write": "$TMP/s/infra.tfstate",
+     "content": "{}\n"
+    },
+    {
+     "write": "$TMP/s/bearer.txt",
+     "content": "Authorization: Bearer KzBUBaOFMbaSHiXFlNF98JdLrFnem3xhKjnBOjzo\n"
+    },
+    {
+     "write": "$TMP/s/plain.txt",
+     "content": "plain\n"
+    },
+    {
+     "bigfile": "$TMP/big/k1.bin",
+     "bytes": 8388608,
+     "fill": "keep one\n"
+    },
+    {
+     "bigfile": "$TMP/big/k2.bin",
+     "bytes": 8388608,
+     "fill": "keep two\n"
+    },
+    {
+     "bigfile": "$TMP/big/k3.bin",
+     "bytes": 8388608,
+     "fill": "keep three\n"
+    },
+    {
+     "bigfile": "$TMP/big/c1.bin",
+     "bytes": 6291456,
+     "fill": "clamp one\n"
+    },
+    {
+     "bigfile": "$TMP/big/c2.bin",
+     "bytes": 6291456,
+     "fill": "clamp two\n"
+    }
+   ]
+  },
+  {
+   "name": "AT-CK-02: a ticket_pattern whose id holds a slash gives no ticket bucket",
+   "options": {
+    "ticket_pattern": "(feature/[A-Z]+)"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "/repo/retry/"
+    ],
+    "stdout_lacks": [
+     "/repo/feature",
+     "/repo/LAB-7/"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-02: an invalid ticket_pattern (Dev-7 limits) falls back to the default",
+   "options": {
+    "ticket_pattern": "(?{ 1 })LAB"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "/repo/LAB-7/"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-02: status notes the invalid pattern and never prints it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^note: ticket_pattern: invalid, the default is used$",
+     " · ticket_pattern invalid \\(default used\\) · "
+    ],
+    "stdout_absent": [
+     "(?{"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-03: after a ticket_pattern change locate still finds the old default-pattern bucket first",
+   "options": {
+    "ticket_pattern": "(?:^|/)([0-9]+)-"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "(?s)/repo/LAB-7/2026-10-20_09-00-00_55555555_old\\.md.*/repo/misc/2026-10-21_08-00-00_66666666_new\\.md"
+   }
+  },
+  {
+   "name": "stage for the evidence and publish steps (default pattern, three user secret rules, total 20 MB)",
+   "options": {
+    "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+",
+    "secret_extra_rules": "HARD:ACME-[0-9]{12};WARN:FOO-SECRET-[A-Z]+;NAME:*.tfstate",
+    "evidence_total_max_mb": 20
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "/repo/LAB-7/"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-04..06: HARD withholds (user-hard-1), WARN redacts (user-warn-2), NAME withholds, shipped rules still fire",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--keep",
+    "$TMP/s/acme.txt",
+    "$TMP/s/warn.txt",
+    "$TMP/s/infra.tfstate",
+    "$TMP/s/bearer.txt",
+    "$TMP/s/plain.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/acme\\.txt$",
+     "^redacted \\S+/warn\\.txt \\d+ [0-9a-f]{8} \\S+/warn\\.txt$",
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/infra\\.tfstate$",
+     "^withheld - \\d+ [0-9a-f]{8} \\S+/bearer\\.txt$",
+     "^copied \\S+/plain\\.txt \\d+ [0-9a-f]{8} \\S+/plain\\.txt$",
+     "^Volatile: \\S+/acme\\.txt — withheld by the secret gate \\(user-hard-1\\)$",
+     "^Volatile: \\S+/infra\\.tfstate — withheld by the secret gate \\(deny-name\\)$",
+     "^Volatile: \\S+/bearer\\.txt — withheld by the secret gate \\((?!user-)[a-z0-9-]+(,[a-z0-9-]+)*\\)$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/warn.txt",
+      "absent_text": [
+       "FOO-SECRET-ABC"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/acme.txt",
+      "count": 0
+     },
+     {
+      "path": "$STAGE/evidence.jsonl",
+      "contains": [
+       "user-warn-2"
+      ],
+      "absent_text": [
+       "ACME-[0-9]",
+       "FOO-SECRET"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-05/06: a --secret-extra-rules flag and the env value are ignored with a note (settings file only)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID",
+    "--secret-extra-rules",
+    "HARD:."
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_SECRET_EXTRA_RULES": "HARD:."
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^note: secret_extra_rules: settings file only$",
+     " · secret_extra_rules 3 · "
+    ],
+    "stdout_absent": [
+     "ACME-",
+     "FOO-SECRET",
+     "tfstate"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-04: a HARD user rule blocks publish as user-hard-1; a WARN user rule is an ADVISORY line",
+   "setup": [
+    {
+     "write": "$STAGE/body.md",
+     "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 14:05 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- vendor token ACME-123456789012 seen in the log; note FOO-SECRET-ABC\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    }
+   ],
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT secret-hard .*rules=user-hard-1$",
+     "^ADVISORY secret-warn .*rules=user-warn-2$"
+    ],
+    "stdout_absent": [
+     "ACME-123456789012",
+     "FOO-SECRET-ABC"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-08: resume_proceed confirm in the file and auto from env: confirm plus a note",
+   "options": {
+    "resume_proceed": "confirm"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_RESUME_PROCEED": "auto"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings: resume_proceed confirm \\(settings\\) · ",
+     "^note: resume_proceed: the stricter confirm \\(settings\\) is used$"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-09: evidence --keep stops at evidence_total_max_mb 20 (withheld: over-total)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE",
+    "--keep",
+    "$TMP/big/k1.bin",
+    "$TMP/big/k2.bin",
+    "$TMP/big/k3.bin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied \\S+/k1\\.bin 8388608 [0-9a-f]{8} \\S+/k1\\.bin$",
+     "^copied \\S+/k2\\.bin 8388608 [0-9a-f]{8} \\S+/k2\\.bin$",
+     "^withheld - 8388608 [0-9a-f]{8} \\S+/k3\\.bin$",
+     "^Volatile: \\S+/k3\\.bin — withheld: over-total \\(evidence_total_max_mb 20\\)$"
+    ],
+    "stdout_lacks": [
+     "^Ref-only: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/evidence/$STEM/k3.bin",
+      "count": 0
+     },
+     {
+      "path": "$STAGE/evidence.jsonl",
+      "contains": [
+       "over-total"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "second stage for the clamp step",
+   "options": {
+    "evidence_total_max_mb": 5
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "clamp"
+   ],
+   "capture": {
+    "STAGE2": "json:stage"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "AT-CK-09: evidence_total_max_mb 5 is clamped to 10: one 6 MB file copied, the second withheld",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE2",
+    "--keep",
+    "$TMP/big/c1.bin",
+    "$TMP/big/c2.bin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied \\S+/c1\\.bin 6291456 [0-9a-f]{8} \\S+/c1\\.bin$",
+     "^withheld - 6291456 [0-9a-f]{8} \\S+/c2\\.bin$",
+     "^Volatile: \\S+/c2\\.bin — withheld: over-total \\(evidence_total_max_mb 10\\)$"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-09: the sweep stops at evidence_total_max_mb 20 too (MANIFEST row withheld, over the total cap)",
+   "options": {
+    "evidence_total_max_mb": 20
+   },
+   "setup": [
+    {
+     "bigfile": "$TMP/tmpdir/sw/s1.bin",
+     "bytes": 8388608,
+     "fill": "sweep one\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/sw/s2.bin",
+     "bytes": 8388608,
+     "fill": "sweep two\n"
+    },
+    {
+     "bigfile": "$TMP/tmpdir/sw/s3.bin",
+     "bytes": 8388608,
+     "fill": "sweep three\n"
+    },
+    {
+     "paths": [
+      "$TMP/tmpdir/sw/s1.bin",
+      "$TMP/tmpdir/sw/s2.bin",
+      "$TMP/tmpdir/sw/s3.bin"
+     ],
+     "sid": "12222222-2222-4333-8444-555555555555"
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "12222222-2222-4333-8444-555555555555",
+    "--nonce",
+    "3c4d5e6f",
+    "--cwd",
+    "$TMP/plain-dir"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^copied\\t\\S+/sw/s1\\.bin\\t\\S+/s1\\.bin\\t8388608\\t[0-9a-f]{8}$",
+     "^copied\\t\\S+/sw/s2\\.bin\\t\\S+/s2\\.bin\\t8388608\\t[0-9a-f]{8}$",
+     "^withheld\\t\\S+/sw/s3\\.bin\\t-\\t8388608\\t[0-9a-f]{8}$",
+     "^TOTAL copied=2 dup=0 ref_only=0 redacted=0 withheld=1 referenced_budget=0$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/*/*_12222222-3c4d5e-evidence/s3.bin*",
+      "count": 0
+     },
+     {
+      "path": "$DISP/*/*_12222222-3c4d5e-evidence/MANIFEST.tsv",
+      "has": [
+       "^-\\t\\S+/sw/s3\\.bin\\t8388608\\t[0-9a-f]{64}\\t\\S+\\t\\S+\\t-\\twithheld\\t-\\tover the total cap$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-12 (AT-WB-08): export classes of the six keys: no ticket pattern, a rule count, enum, numbers",
+   "lib": "settings_export",
+   "args": {
+    "values": {
+     "ticket_pattern": "(?:^|/)([0-9]+)-",
+     "secret_extra_rules": "HARD:ACME-[0-9]{12};WARN:FOO-SECRET-[A-Z]+;NAME:*.tfstate",
+     "resume_proceed": "confirm",
+     "handoff_reuse_window_min": 30,
+     "evidence_total_max_mb": 20,
+     "watch_quota_mb": 0
+    },
+    "want": {
+     "secret_extra_rules": 3,
+     "resume_proceed": "confirm",
+     "handoff_reuse_window_min": 30,
+     "evidence_total_max_mb": 20,
+     "watch_quota_mb": 0
+    },
+    "absent": [
+     "ticket_pattern"
+    ]
+   }
+  },
+  {
+   "name": "AT-CK-12: an unknown resume_proceed value exports as other",
+   "lib": "settings_export",
+   "args": {
+    "values": {
+     "resume_proceed": "maybe"
+    },
+    "want": {
+     "resume_proceed": "other"
+    }
+   }
+  }
+ ]
+}
