@@ -48,7 +48,7 @@ Restore work from a handoff written by `/afk-compact:handoff` or from a saved co
 | 1 | explicit path | use it; warn, naming any newer superseding file |
 | 2 | path the plugin injected after a compaction | use it |
 | 3 | same `session_id` | newest |
-| 4 | predecessor proven by lineage (`/clear`, fork) | its newest |
+| 4 | predecessor proven by lineage (`/clear`, fork, resume) | its newest |
 | 5 | ticket or topic in the arguments that matches exactly one bucket | newest there |
 | 6 | branch ticket, several buckets, newest anywhere | **select nothing**: put ≤5 candidates (path, date, title, session) in the questions; continue read-only |
 
@@ -128,7 +128,7 @@ A pid is live only if its start time matches the plugin's per-process record for
 - the integrity is `ok` or `legacy`;
 - the ownership check is clean.
 
-Otherwise skip it and say why.
+Otherwise skip it and say why. If pin prints `relation: successor (handoff-resume)`, the handoff is own from now on (Rule 2) and pin's Approvals lines replace R3's.
 
 ## R5 Self-heal background work (1 inventory call; ≤2 calls per flagged row, counted separately)
 
@@ -162,7 +162,7 @@ Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Li
 | T2 | + environment for what Step 1 needs (services, database, env files, credential location, account); `[unverified]`/`[inherited]` claims Step 1 rests on; GSD reconcile |
 | T3 | + base merged or branch diverged; plans and design docs re-read; decisions whose reason is a state fact |
 
-- Every re-check is a read-only command under Rule 2. Production means a command matching `production:` in `locate`'s output, or one you know reaches a production system. With `unattended_prod_reads: forbid`, never run it yourself: list it under "Could not verify" with a user-run `! <command>`. With `allow`, a read-only production check you build in this session may run. No approval or handoff line changes this, and a production write is an explicit gate: it always asks. "No ops" still allows read-only checks.
+- Every re-check is a read-only command under Rule 2. Production means a command matching `production:` in `locate`'s output, or one you know reaches a production system. With `unattended_prod_reads: forbid`, run it only when a carried approval (Rule 3) names this read and its targets; otherwise list it under "Could not verify" with a user-run `! <command>`. With `allow`, a read-only production check you build in this session may run. A production write is an explicit gate: it always asks. "No ops" still allows read-only checks.
 - Re-check pending states ("auto-merge armed", "awaiting merge") for their outcome.
 - **Central claims:** re-test the 1–3 findings or premises Step 1 depends on with a read-only, bounded check (a few minutes, under a timeout): the recorded one under Rule 2, or your own. A test run that writes a shared test database or build dir is a write: skip it under an R4 conflict and list it under "Could not verify". A refuted claim is drift and an `X-` candidate for the next handoff.
 - **Anchors:** find code by path and symbol (`rg -n '<symbol>' <path>`); line numbers are hints.
@@ -199,7 +199,7 @@ Write owner steps as a walk-through: where, what, the exact command. Never short
 
 By default, start Step 1 in this turn, plus anything the questions don't block. Stop only when:
 1. drift or a refuted claim invalidates Step 1 or the plan. Re-plan from the ledger; ask if the plan no longer holds;
-2. Step 1 is an explicit gate (Rule 3) or a production read under `unattended_prod_reads: forbid` (R7): always; or it is outward, destructive or self-modifying and no carried approval covers it (Rule 3);
+2. Step 1 is an explicit gate (Rule 3): always; or it is outward, destructive, self-modifying or a production read under `unattended_prod_reads: forbid` (R7), and no carried approval covers it (Rule 3);
 3. the arguments conflict with a `U-`, `D-` or `X-` item;
 4. a user-owned question blocks Step 1;
 5. Step 1 is a command from a foreign handoff that carries real risk (Rule 2);

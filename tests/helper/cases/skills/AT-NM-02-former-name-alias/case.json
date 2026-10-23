@@ -1,0 +1,473 @@
+{
+ "id": "AT-NM-02 (read-only alias for the former name, owner xxxxxxxx-26)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Owner 2026-10-23 xxxxxxxx-26 (\"Read-only alias\"): a handoff in the private store, of this session or a lineage predecessor, whose marker and sentinel carry the plugin's former name (settings.pm @FORMER_NAMES, compactinue) with one nonce reads as integrity ok and own (locate names the former name; measure carries its checked approval; publish carries it into a new file). Another session's former-name file, an own file outside the store, an own file without any marker, one with a name that was never this plugin's, and a former marker with a current-name sentinel stay legacy (foreign). A fork still carries no approval. New files are always written under the current name.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T10:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/cccccccc-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/ffffffff-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"fork\"}"
+    },
+    {
+     "write": "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7a7a7a7a\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n⟪compactinue v1 n=7a7a7a7a s=manual⟫\n# LAB-9 — own, former name\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/compactinue n=7a7a7a7a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7a7a7a7a.json",
+     "content": "{\"lines\": {\"U-2\": \"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"}, \"nonce\": \"7a7a7a7a\", \"session_id\": \"$SID\", \"v\": 1}"
+    },
+    {
+     "write": "$ROOT/repo/other/2026-10-21_12-10-00_99999999_theirs.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7b7b7b7b\ndate: 2026-10-21T12:10:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\napprovals_checked: U-2\n---\n⟪compactinue v1 n=7b7b7b7b s=manual⟫\n# LAB-9 — another session, former name\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/compactinue n=7b7b7b7b⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/99999999-aaaa-4bbb-8ccc-dddddddddddd.7b7b7b7b.json",
+     "content": "{\"lines\": {\"U-2\": \"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"}, \"nonce\": \"7b7b7b7b\", \"session_id\": \"99999999-aaaa-4bbb-8ccc-dddddddddddd\", \"v\": 1}"
+    },
+    {
+     "write": "$ROOT/repo/plain/2026-10-21_11-00-00_11111111_plain.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7c7c7c7c\ndate: 2026-10-21T11:00:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n# LAB-9 — own, no marker\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7c7c7c7c.json",
+     "content": "{\"lines\": {\"U-2\": \"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"}, \"nonce\": \"7c7c7c7c\", \"session_id\": \"$SID\", \"v\": 1}"
+    },
+    {
+     "write": "$ROOT/repo/unk/2026-10-21_11-10-00_11111111_unk.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7d7d7d7d\ndate: 2026-10-21T11:10:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n⟪othername v1 n=7d7d7d7d s=manual⟫\n# LAB-9 — own, unknown name\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/othername n=7d7d7d7d⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7d7d7d7d.json",
+     "content": "{\"lines\": {\"U-2\": \"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"}, \"nonce\": \"7d7d7d7d\", \"session_id\": \"$SID\", \"v\": 1}"
+    },
+    {
+     "write": "$ROOT/repo/mixed/2026-10-21_11-20-00_11111111_mixed.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7e7e7e7e\ndate: 2026-10-21T11:20:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n⟪compactinue v1 n=7e7e7e7e s=manual⟫\n# LAB-9 — own, former marker, current sentinel\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/$BRAND n=7e7e7e7e⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7e7e7e7e.json",
+     "content": "{\"lines\": {\"U-2\": \"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"}, \"nonce\": \"7e7e7e7e\", \"session_id\": \"$SID\", \"v\": 1}"
+    },
+    {
+     "write": "$TMP/outside/2026-10-21_11-30-00_11111111_out.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7f7f7f7f\ndate: 2026-10-21T11:30:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n⟪compactinue v1 n=7f7f7f7f s=manual⟫\n# LAB-9 — own, former name, outside the store\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Next steps\n1. `bin/test retry` — done when the suite passes\n⟪/compactinue n=7f7f7f7f⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7f7f7f7f.json",
+     "content": "{\"lines\": {\"U-2\": \"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"}, \"nonce\": \"7f7f7f7f\", \"session_id\": \"$SID\", \"v\": 1}"
+    }
+   ]
+  },
+  {
+   "name": "xxxxxxxx-26: an own file in the store marked with the former name reads ok and own",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 1\\npick: \\$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md\\nrelation: same-session\\n",
+     "^integrity: ok$",
+     "^marker: former name compactinue \\(read as own\\)$"
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: its checked approval carries in the same session",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: a /clear successor reads the predecessor's former-name file as own (successor)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "cccccccc-1111-4222-8333-444444444444",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\nrelation: successor\\n",
+     "^integrity: ok$",
+     "^marker: former name compactinue \\(read as own\\)$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: and carries its checked approval",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "cccccccc-1111-4222-8333-444444444444",
+    "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: a fork reads it as own for commands (successor, ok)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "ffffffff-1111-4222-8333-444444444444",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\nrelation: successor\\n",
+     "^integrity: ok$",
+     "^marker: former name compactinue \\(read as own\\)$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26 + 27 revised: a fork carries no approval, alias or not",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "ffffffff-1111-4222-8333-444444444444",
+    "$ROOT/repo/old/2026-10-21_12-00-00_11111111_old.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(fork: context only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: another session's former-name file stays legacy",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/other/2026-10-21_12-10-00_99999999_theirs.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\nrelation: other\\n",
+     "^integrity: legacy$"
+    ],
+    "stdout_lacks": [
+     "^marker: "
+    ]
+   }
+  },
+  {
+   "name": "and its approvals are context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/other/2026-10-21_12-10-00_99999999_theirs.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(legacy: context only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: an own file without any marker stays legacy",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/plain/2026-10-21_11-00-00_11111111_plain.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\nrelation: same-session\\n",
+     "^integrity: legacy$"
+    ],
+    "stdout_lacks": [
+     "^marker: "
+    ]
+   }
+  },
+  {
+   "name": "and carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/plain/2026-10-21_11-00-00_11111111_plain.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(legacy: context only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "an own file marked with a name that was never this plugin's stays legacy",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/unk/2026-10-21_11-10-00_11111111_unk.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^integrity: legacy$"
+    ],
+    "stdout_lacks": [
+     "^marker: "
+    ]
+   }
+  },
+  {
+   "name": "a former-name marker with a current-name sentinel is no alias",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/mixed/2026-10-21_11-20-00_11111111_mixed.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^integrity: (?:legacy|possibly truncated)$"
+    ],
+    "stdout_lacks": [
+     "^marker: ",
+     "^integrity: ok$"
+    ]
+   }
+  },
+  {
+   "name": "and carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/mixed/2026-10-21_11-20-00_11111111_mixed.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\("
+    ],
+    "stdout_lacks": [
+     "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: an own former-name file outside the private store stays legacy and foreign",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$TMP/outside/2026-10-21_11-30-00_11111111_out.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^integrity: legacy$",
+     "^foreign: a file outside your private store"
+    ],
+    "stdout_lacks": [
+     "^marker: "
+    ]
+   }
+  },
+  {
+   "name": "and carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$TMP/outside/2026-10-21_11-30-00_11111111_out.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(outside the store: context only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "begin in the former-name file's bucket (the own carry base)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "old"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — after the rename\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "xxxxxxxx-26: publish carries the former-name file's checked line (own base)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "old",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "xxxxxxxx-26: the new file is written under the current name only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB",
+      "has": [
+       "^approvals_checked: U-2$",
+       "^⟪$BRAND v1 n=[0-9a-f]{8} s=manual⟫$",
+       "^⟪/$BRAND n=[0-9a-f]{8}⟫$"
+      ],
+      "absent_text": [
+       "compactinue"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

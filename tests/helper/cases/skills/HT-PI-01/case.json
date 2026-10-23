@@ -44,7 +44,7 @@
  ],
  "expect": {
   "exit": 0,
-  "stdout": "pinned repo/LAB-7\n",
+  "stdout": "pinned repo/LAB-7\nrelation: other (not linked: no start record)\n",
   "files": [
    {
     "path": "$ROOT/.sessions/$SID.json",
@@ -76,7 +76,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout": "pinned repo/misc\n",
+    "stdout": "pinned repo/misc\nrelation: other (not linked: no start record)\n",
     "files": [
      {
       "path": "$ROOT/.sessions/$SID.json",

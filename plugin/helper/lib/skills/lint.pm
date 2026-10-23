@@ -19,7 +19,8 @@ package skills::lint;
 #      2026-10-23 (AP-4): approval_chain [{text, checked}] (the own chain's file),
 #        transcript (the writing session's transcript path, undef when not found) and
 #        session_id (rows of another session do not count) for the approval checks
-#        (skills::approvals).
+#        (skills::approvals); quote_floor [ok, epoch] (skills::approvals::quote_floor: a
+#        claimed session counts only rows after the claim).
 # The result also carries `acuity`: the rating found in Resume here, or undef; and
 # `approvals`: {checked => [U-n…], lines, unchecked, classes} for the frontmatter and row.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
@@ -258,7 +259,7 @@ sub lint {
     # that has the section and the three ids.
     my $approvals = skills::approvals::lint(\@lines, prev_lines => \%prev_lines, tag_re => $tag_re, note => $note,
                                             chain => $in->{approval_chain}, transcript => $in->{transcript},
-                                            sid => $in->{session_id});
+                                            sid => $in->{session_id}, quote_floor => $in->{quote_floor});
     push @block, @{ $approvals->{blocking} };
     push @adv, @{ $approvals->{advisory} };
 

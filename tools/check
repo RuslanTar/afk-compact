@@ -526,7 +526,7 @@ def probes(name):
         append(d, "plugin/skills/resume/SKILL.md", "\nWhen unsure, `<store> risk --cmd '<command>'` classifies it.\n")
         # NR-13: the old user-facing promise back in the README and a setting description.
         append(d, "plugin/README.md", "\nA command taken from a handoff is never run either way.\n")
-        edit(d, "plugin/.claude-plugin/plugin.json", "Production writes always ask, and so do production commands copied from a handoff.",
+        edit(d, "plugin/.claude-plugin/plugin.json", "Production writes always ask, and so do production commands copied from a handoff unless an approval you gave names that read command.",
              "Production writes and commands from a handoff always ask.")
         # AT-CK-08: the resume_proceed confirm line no longer stops after the R8 report.
         edit(d, "plugin/skills/resume/SKILL.md", "stop after the R8 report and wait for the user's go", "ask before Step 1")
@@ -685,10 +685,10 @@ def probes(name):
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "## User constraints\n## Approvals\n", "## User constraints\n")
         append(d, "plugin/skills/resume/SKILL.md", "\nApprovals never carry across sessions; see Approvals (verified).\n")
         edit(d, "plugin/assets/resume-context.txt", "only if Measured facts list it as checked", "only if it looks right")
-        # REVIEW-NIGHT NR-01 / NR-06: a gate list without the production write, and the looser
-        # O-2 reading (a carried approval as a yes for a forbidden production read) back.
+        # REVIEW-NIGHT NR-01: a gate list without the production write; owner xxxxxxxx-28: the
+        # NR-06 interim wording (forbid absolute, approval or not) back.
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "(any production write)", "")
-        append(d, "plugin/skills/resume/SKILL.md", "\nA carried approval that names this production read counts like a fresh yes.\n")
+        append(d, "plugin/skills/resume/SKILL.md", "\nNo approval or handoff line changes this.\n")
         # REVIEW-NIGHT TG-02 / TG-03: the owner's [idle] wording gone (AT-IB-01), the template's rule 8
         # real-risk clause gone (AT-SR-04), and the old never-run restart sentence back (AT-HC-04).
         edit(d, "plugin/assets/resume-context.txt", "handle it, then continue Step 1", "stop if Step 1 needs the user")
@@ -867,7 +867,7 @@ def probes(name):
           r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 banned: 'Approvals \(verified\)'",
           r"^GATE approvals plugin/assets/resume-context\.txt: AP-11 step4",
           r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AP-11 gate-list: .* lacks 'any production write'$",
-          r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 gate-list banned: 'counts like a fresh yes'$",
+          r"^GATE approvals plugin/skills/resume/SKILL\.md:\d+: AP-11 gate-list banned: 'No approval or handoff line changes this'$",
           r"^GATE approvals plugin/assets/resume-context\.txt: AT-IB-01: a line matching .* lacks 'handle it, then continue Step 1'$",
           r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AT-SR-04: a line matching .* lacks 'only when it carries no real risk'$",
           r"^GATE approvals plugin/skills/resume/references/self-heal\.md:\d+: AT-HC-04 banned: 'never run on its own'$"], None),

@@ -178,6 +178,16 @@ sub last_prompt_epoch {
 # rows are told apart by time only. A row without a readable timestamp never counts. With no
 # `since` or no sid nothing can be shown to be own, so the result is undef (not checked, never a
 # miss). Target ids are matched as whole tokens: `MR !1` is not in `MR !12`.
+#
+# Coarse start (sessions::own_start, `coarse => 1`; review of bcdaca6): a record without
+# milliseconds names only the second the session started in. Rows at or after `until` are own
+# by time. A row stamped in [since, until) is own only when it is a typed user row (the launch
+# prompt; never a dialog answer or an assistant row) that comes, in file order, after a main
+# SessionStart hook row (an `attachment` row with hookEvent SessionStart) stamped in or after
+# `since`, with no row stamped before `since` between the two. Copied history is written before
+# the new session's hook rows and keeps the parent's older times, so a copy never passes; a
+# session whose hook rows are missing, or a file read only in part, misses the launch prompt
+# (not checked), never counts a copy.
 our @HUMAN_ORIGINS = qw(human composer bridge sdk);
 our $SHORT_WORDS = 4;
 our $QUOTE_SCAN_MAX = 256 * 1024 * 1024;
@@ -222,6 +232,23 @@ sub _own_row {
     return 0 unless defined $ts && !ref $ts;
     my $e = util::parse_iso($ts);
     return defined $e && $e >= $since ? 1 : 0;
+}
+
+# A row's own timestamp as an epoch, or undef.
+sub _row_epoch {
+    my ($j) = @_;
+    return undef unless ref $j eq 'HASH';
+    my $ts = $j->{timestamp};
+    return undef unless defined $ts && !ref $ts;
+    return util::parse_iso($ts);
+}
+
+# A main SessionStart hook row (the coarse-start anchor).
+sub _session_start_row {
+    my ($j) = @_;
+    return 0 unless ref $j eq 'HASH' && ($j->{type} // '') eq 'attachment' && !$j->{isSidechain};
+    my $a = $j->{attachment};
+    return (ref $a eq 'HASH' && ($a->{hookEvent} // '') eq 'SessionStart') ? 1 : 0;
 }
 
 # A user row that may hold this session's own input: type user, not isMeta / isCompactSummary /
@@ -374,6 +401,13 @@ sub quotes_found {
     return undef unless defined $path && -f $path && -r _;
     # Fail closed: without this session's id and start no row can be shown to be its own.
     return undef unless defined $sid && !ref $sid && $sid ne '' && defined $since && !ref $since && $since =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
+    # Coarse start: rows at or after `until` are own by time, rows in [since, until) by order only.
+    my $coarse = $o{coarse} ? 1 : 0;
+    my $until = $since;
+    if ($coarse) {
+        $until = $o{until};
+        return undef unless defined $until && !ref $until && $until =~ /\A[0-9]+(?:\.[0-9]+)?\z/ && $until > $since;
+    }
     my @q = map { { quote => _fold($_->{quote}), short => 0, ids => [] } } @$asks;
     for my $i (0 .. $#q) {
         my @w = split / /, $q[$i]{quote};
@@ -405,8 +439,23 @@ sub quotes_found {
     my %human = map { $_ => 1 } @HUMAN_ORIGINS;
     my $asst = '';
     my (%asked, @asked_order);
+    # The coarse-start window: open until the first row stamped at or after `until` (copied rows
+    # are all older); $anchored while a SessionStart hook row stamped in or after `since` was seen
+    # and no older row came after it. Never opened on a file read only in part.
+    my ($window, $anchored) = ($coarse && !$partial ? 1 : 0, 0);
     while (my $line = <$fh>) {
         my $j;
+        my $early = 0;
+        if ($window) {
+            $j = eval { jsonc::decode($line) };
+            my $e = _row_epoch($j);
+            if (defined $e) {
+                if ($e >= $until) { $window = 0 }
+                elsif ($e < $since) { $anchored = 0 }
+                elsif (_session_start_row($j)) { $anchored = 1 }
+                else { $early = $anchored }
+            }
+        }
         if (index($line, '"assistant"') >= 0
             && ($need_asst || index($line, $ASK_TOOL) >= 0
                 || (%asked && index($line, '"tool_use"') >= 0 && grep { index($line, $_) >= 0 } keys %asked))) {
@@ -415,7 +464,7 @@ sub quotes_found {
                 _drop_reused($j, \%asked) if %asked;
                 # Only this session's own assistant rows name a short quote's target or ask a
                 # dialog: a copied question is the parent's (owner xxxxxxxx-27 revised).
-                if (!$j->{isSidechain} && _own_row($j, $sid, $since)) {
+                if (!$j->{isSidechain} && _own_row($j, $sid, $until)) {
                     if ($need_asst) {
                         $asst .= "\n" . _chars(_row_text($j));
                         $asst = substr($asst, -$ASSISTANT_KEEP) if length($asst) > $ASSISTANT_KEEP;
@@ -430,7 +479,7 @@ sub quotes_found {
             # A tool result: only the user's answer in an AskUserQuestion dialog counts (NR-14).
             next unless %asked;
             $j //= eval { jsonc::decode($line) };
-            next unless _own_user_row($j, $sid, $since);
+            next unless _own_user_row($j, $sid, $until);
             my $ok = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
             next if defined $ok && !$human{$ok};
             my @ans = _dialog_answers($j, \%asked);
@@ -451,7 +500,8 @@ sub quotes_found {
             next;
         }
         $j //= eval { jsonc::decode($line) };
-        next unless _own_user_row($j, $sid, $since);
+        # A typed row in the coarse window counts only by order (see "Coarse start" above).
+        next unless _own_user_row($j, $sid, $until) || ($early && _own_user_row($j, $sid, $since));
         my $o = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
         next if defined $o && !$human{$o};
         my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;

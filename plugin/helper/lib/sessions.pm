@@ -22,11 +22,12 @@ sub write_live {
     my ($sid, $cwd, $worktree, $source) = @_;
     my $c = rc::claude();
     my $f = by_pid() . '/' . _key($c) . '.live-' . substr($sid, 0, 8) . '.json';
-    # ts in milliseconds (own_since: a row from the record's second may be the owner's launch
-    # prompt); a whole-second clock writes no fraction, which own_since rounds up.
+    # ts in milliseconds when Time::HiRes loads (own_start: a row from the record's second may be
+    # the owner's launch prompt); without it no fraction is written, and own_start reads the
+    # record as coarse (that second is decided by row order, never by time).
     my $now = util::now();
     my $rec = jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, host => identity::host(), session_id => $sid, cwd => $cwd,
-                         worktree => $worktree, source => $source, ts => (util::_hires() ? util::iso_ms($now) : util::iso($now)));
+                         worktree => $worktree, source => $source, ts => (util::stamp_ms() ? util::iso_ms($now) : util::iso($now)));
     return util::write_excl($f, jsonc::encode_bytes($rec) . "\n", 0600);
 }
 
@@ -102,26 +103,45 @@ sub records_for {
     return { n => $n, live => [grep { !$ended{ $_->{_key} } } @live], all => \@live, newest => $newest };
 }
 
-# own_since(sid) -> epoch | undef: the time from which a row of sid's transcript can be sid's own
-# (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"). The earliest live- record of the
-# session (SessionStart writes one, in milliseconds, before the session writes a row of its own;
-# a launch prompt's row may follow it within the same second). A stamp without a fraction (an
-# older record, or a clock without milliseconds) is rounded up to the next whole second, so a row
-# from the second that record was taken in does not count. Rows that a fork, a `--fork-session`
-# resume or a background copy carried over keep the parent's times, all before this. undef: no
-# record (nothing can be shown to be own).
-sub own_since {
+# own_start(sid) -> {since, until, coarse} | undef: from when a row of sid's transcript can be
+# sid's own (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"). The session's live-
+# records (SessionStart writes one before the session writes a row of its own; a launch prompt's
+# row may follow it within the same second). Rows that a fork, a `--fork-session` resume or a
+# background copy carried over keep the parent's times, all before the first record.
+#   - Every record in milliseconds (Time::HiRes present): {since => the earliest, until => the
+#     same, coarse => 0}: a row at or after it is own by time.
+#   - A record without a fraction (a perl without Time::HiRes, or an older record) names only
+#     its second S, and the session may have started anywhere in it: {since => S, until => the
+#     next whole second (or an earlier millisecond record), coarse => 1}. A row at or after
+#     `until` is own by time; a row in [since, until) is own only by the order rule of
+#     transcript::quotes_found (review of bcdaca6): a typed user row that comes after one of this
+#     session's SessionStart hook rows (stamped in or after S), with no older row between them.
+#     Time alone never makes such a row own, so no clock resolution can let a copy count.
+# undef: no record (nothing can be shown to be own).
+sub own_start {
     my ($sid) = @_;
     return undef unless defined $sid && !ref $sid && $sid ne '';
-    my $best;
+    my ($fine, $coarse);
     for my $r (@{ records_for($sid)->{all} || [] }) {
         my $ts = $r->{ts};
         next unless defined $ts && !ref $ts;
         my $e = util::parse_iso($ts) // next;
-        $e = int($e) + 1 unless $ts =~ /T\d\d:\d\d:\d\d\.\d/;
-        $best = $e if !defined $best || $e < $best;
+        if ($ts =~ /T\d\d:\d\d:\d\d\.\d/) { $fine = $e if !defined $fine || $e < $fine }
+        else { my $s = int($e); $coarse = $s if !defined $coarse || $s < $coarse }
     }
-    return $best;
+    return undef unless defined $fine || defined $coarse;
+    return { since => $fine, until => $fine, coarse => 0 } if !defined $coarse || (defined $fine && $fine <= $coarse);
+    my $until = $coarse + 1;
+    $until = $fine if defined $fine && $fine < $until;
+    return { since => $coarse, until => $until, coarse => 1 };
+}
+
+# own_since(sid) -> epoch | undef: the time from which every row of sid's transcript is own by
+# time alone (own_start's `until`).
+sub own_since {
+    my ($sid) = @_;
+    my $s = own_start($sid) or return undef;
+    return $s->{until};
 }
 
 # record_live(record) -> 1 when a live- record with no ended- twin still counts as live

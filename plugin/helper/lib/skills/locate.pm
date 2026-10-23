@@ -143,11 +143,16 @@ sub run {
     if ($pick) {
         my $ps = $sid_of->($pick);
         my $rel = $rel_of{$ps} // (($tier == 1 || $tier == 2 || $tier == 5) ? 'other' : 'unselected');
-        my $int = skills::store::integrity($pick);
+        # Owner xxxxxxxx-26 (read-only alias): this session's or a predecessor's file in the store
+        # may carry its marker under the plugin's former name.
+        my $alias = $rel_of{$ps} && !skills::store::is_export($pick) && !skills::store::imported($pick)
+            && _in_store($pick->{path}, $ctx->{root}) ? 1 : 0;
+        my $int = skills::store::integrity($pick, alias => $alias);
         my $age_s = defined $pick->{epoch} ? $now - $pick->{epoch} : undef;
         skills::cli::say("relation: $rel");
         skills::cli::say('age: ' . _age($age_s));
         skills::cli::say("integrity: $int->{integrity}");
+        skills::cli::say("marker: former name $int->{former} (read as own)") if defined $int->{former};
         skills::cli::say('date: ' . ($pick->{fm}{date} // 'unknown'));
         skills::cli::say('session: ' . skills::ctx::sid8($ps));
         my $t = skills::store::title_of($pick);
