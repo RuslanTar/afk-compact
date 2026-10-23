@@ -275,6 +275,16 @@ BASH_PATH = re.compile(r"\bon the Bash PATH\b", re.I)
 PENDING = [
     # (Empty since build round 9: the launcher-move rows printed PENDING-DONE after the wp/text
     # (TXT-05) and wp/docs (DOC-01) merges and were removed.)
+    # 2026-10-23 rulings, written test-first: the manifest keys of SK-7 (xxxxxxxx-12/-13/-14) and
+    # the IA-1 default (idle D3) land with the Phase 2 helper and settings work (SPEC-DELTAS §4).
+    # One row per key, so a regression in a ruled key that already ships still fails.
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: evidence_total_max_mb is 'missing'"),
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: handoff_reuse_window_min is 'missing'"),
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: idle_handoff_turn is 'off'"),
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: resume_proceed is 'missing'"),
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: secret_extra_rules is 'missing'"),
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: ticket_pattern is 'missing'"),
+    ("config-defaults", "AT-CAP-02 ruled", ".claude-plugin/plugin.json", "ruled: watch_quota_mb is 'missing'"),
 ]
 
 
@@ -505,8 +515,9 @@ def config_defaults_hits(target, brand):
     for key, val in sorted(RULED_DEFAULTS.items()):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if key not in uc or got != val or isinstance(got, bool):
-            out.append((path, None, "AT-CAP-02 ruled", "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(
-                key, got if key in uc else "missing", val), ""))
+            # The text is also the "line", so a PENDING row can name one key (its fragment).
+            text = "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(key, got if key in uc else "missing", val)
+            out.append((path, None, "AT-CAP-02 ruled", text, text))
     for key in sorted(uc):
         if "keep_days" in key and key != "disposable_keep_days":
             out.append((path, None, "AT-WD-02 keep-days", "AT-WD-02 keep-days: {} (no retention key for .watch)".format(key), ""))
