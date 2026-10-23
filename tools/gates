@@ -11,7 +11,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 config-defaults, launcher, template-shape, lint-texts, xref, no-args-inline,
                 readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder,
                 export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8,
-                approvals, model-pin, queue-text)
+                approvals, model-pin, queue-text, risk-corpus)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -117,6 +117,10 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                effort, fallback model or agent; no userConfig key names a model
   queue-text   AT-QA-06: assets/queue.md (## Handoff, ## Resume, ≤1,600 B); the skills keep only
                the pointer lines
+  risk-corpus  AT-SR-09, F half (REVIEW-NIGHT NR-03/04/05): the spec's risk literals classify every
+               row of tests/fixtures/risk/corpus.tsv as it says (risk_reference: each pipeline
+               segment read-only or a test/build verb, and no risk, outward, production or HARD
+               secret pattern)
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
@@ -1626,6 +1630,105 @@ def queue_text_hits(target, brand):
     return out
 
 
+# AT-SR-09, F half (SPEC-DELTAS §5; REVIEW-NIGHT NR-03/NR-04/NR-05, TG-06): the spec's risk
+# literals classify every row of tests/fixtures/risk/corpus.tsv as it says. The reference reading
+# of the literals (what SR-7's `risk` must do too): a command carries no real risk only when every
+# pipeline segment (split on |, ||, &&, ;, & and newlines) matches readonly_cmd_re or
+# test_build_re, and no risk_classes, outward_classes, prod_classes or HARD secret_rules pattern
+# matches the whole command. The recorded-command and work-tree path checks are code-only.
+RISK_CORPUS = os.path.join(REPO, "tests", "fixtures", "risk", "corpus.tsv")
+SEGMENT_SPLIT = re.compile(r"\|\||&&|[|;&\n]")
+
+
+def risk_reference(spec, cmd):
+    """The set of risk class ids the spec literals give `cmd` (empty = no real risk)."""
+    hits = set()
+    gates = set(spec.get("explicit_gate_classes") or [])
+    for c in spec.get("outward_classes") or []:
+        if re.search(c["re"], cmd):
+            hits.add("gate" if c["id"] in gates else "outward")
+    for c in spec.get("prod_classes") or []:
+        if re.search(c["re"], cmd):
+            hits.add("production")
+    for c in spec.get("secret_rules") or []:
+        if c.get("class") == "HARD" and re.search(c["re"], cmd):
+            hits.add("credential-value")
+    for c in spec.get("risk_classes") or []:
+        if "re" in c and re.search(c["re"], cmd):
+            hits.add(c["id"])
+    ro = re.compile(spec["readonly_cmd_re"])
+    tb = re.compile(spec["test_build_re"])
+    for seg in SEGMENT_SPLIT.split(cmd):
+        seg = seg.strip()
+        if seg and not (ro.search(seg) or tb.search(seg)):
+            hits.add("not-read-only")
+    return hits
+
+
+def risk_corpus_hits(target, brand):
+    """AT-SR-09 (F half) over a built plugin folder: every corpus row gets its expected answer
+    (none = no class; ask = some class, the named ones among them)."""
+    spath, spec = spec_literals(target)
+    if not _is_plugin(target):
+        return []
+    if not isinstance(spec, dict):
+        return [(spath, None, "AT-SR-09 spec", "AT-SR-09 spec: no spec-literals block", "")]
+    missing = [k for k in ("readonly_cmd_re", "test_build_re", "risk_classes", "outward_classes", "prod_classes")
+               if k not in spec]
+    if missing:
+        return [(spath, None, "AT-SR-09 spec", "AT-SR-09 spec: no {}".format(", ".join(missing)), "")]
+    if not os.path.isfile(RISK_CORPUS):
+        return [(RISK_CORPUS, None, "AT-SR-09 corpus", "AT-SR-09 corpus: missing", "")]
+    out = []
+    rows = 0
+    with open(RISK_CORPUS, encoding="utf-8") as f:
+        for no, ln in enumerate(f, 1):
+            ln = ln.rstrip("\n")
+            if not ln or ln.startswith("#"):
+                continue
+            cols = ln.split("\t")
+            if len(cols) < 3 or cols[0] not in ("none", "ask"):
+                out.append((RISK_CORPUS, no, "AT-SR-09 row", "AT-SR-09 row: not `none|ask<TAB>command<TAB>classes`", ln))
+                continue
+            rows += 1
+            want, cmd, need = cols[0], cols[1], [c for c in cols[2].split(",") if c not in ("", "-")]
+            try:
+                got = risk_reference(spec, cmd)
+            except re.error as e:
+                return [(spath, None, "AT-SR-09 spec", "AT-SR-09 spec: a pattern does not compile ({})".format(e), "")]
+            if want == "none" and got:
+                out.append((RISK_CORPUS, no, "AT-SR-09 none", "AT-SR-09 none: {!r} gets {}".format(cmd, ",".join(sorted(got))), ln))
+            elif want == "ask" and not got:
+                out.append((RISK_CORPUS, no, "AT-SR-09 ask", "AT-SR-09 ask: {!r} carries no risk class".format(cmd), ln))
+            elif want == "ask" and not set(need) <= got:
+                out.append((RISK_CORPUS, no, "AT-SR-09 class", "AT-SR-09 class: {!r} gets {}, want {}".format(
+                    cmd, ",".join(sorted(got)), ",".join(need)), ln))
+    if rows == 0:
+        out.append((RISK_CORPUS, None, "AT-SR-09 corpus", "AT-SR-09 corpus: no rows", ""))
+    # REVIEW-NIGHT NR-20 / AT-AP-07: protected_branch_re, matched against the lower-cased name.
+    pbr = spec.get("protected_branch_re")
+    try:
+        prx = re.compile(pbr) if isinstance(pbr, str) else None
+    except re.error:
+        prx = None
+    if prx is None:
+        out.append((spath, None, "AT-AP-07 branch", "AT-AP-07 branch: no protected_branch_re that compiles", ""))
+    else:
+        for branch, want in PROTECTED_CASES:
+            if bool(prx.search(branch.lower())) != want:
+                out.append((spath, None, "AT-AP-07 branch", "AT-AP-07 branch: {} is {}protected, want {}".format(
+                    branch, "" if not want else "not ", "protected" if want else "not protected"), ""))
+    return out
+
+
+PROTECTED_CASES = [("main", True), ("Main", True), ("master", True), ("trunk", True), ("develop", True),
+                   ("development", True), ("stable", True), ("staging", True), ("gh-pages", True), ("prod", True),
+                   ("production", True), ("production-eu", True), ("prod/eu", True), ("release", True),
+                   ("release/1.2", True), ("releases/1.2", True), ("release-1.2", True), ("hotfix/x", True),
+                   ("feat/x", False), ("v2", False), ("product", False), ("productivity", False), ("hotfix", False),
+                   ("staging-notes", False)]
+
+
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
               ("write-first", write_first_hits), ("self-heal", self_heal_hits),
               ("config-defaults", config_defaults_hits), ("launcher", launcher_hits),
@@ -1649,7 +1752,8 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("perl-utf8", perl_utf8_hits),
               ("approvals", approvals_hits),
               ("model-pin", model_pin_hits),
-              ("queue-text", queue_text_hits)]
+              ("queue-text", queue_text_hits),
+              ("risk-corpus", risk_corpus_hits)]
 
 
 def pending_row(gate, rule, rel, line):

@@ -667,6 +667,11 @@ def probes(name):
         append(d, "plugin/skills/resume/SKILL.md", "\nNew session: `<store> lane adopt --lane '<id>' --if-free`.\n")
         edit(d, "plugin/skills/handoff/SKILL.md", "assets/queue.md` (Handoff)", "assets/queue.md`")
 
+    def risk_corpus(d):
+        """AT-SR-09 / NR-04 / NR-20: `jq` back on the read-only list, `staging` off the protected list."""
+        edit(d, "plugin/assets/handoff-spec.md", "|(ls|cat|head|", "|(jq|ls|cat|head|")
+        edit(d, "plugin/assets/handoff-spec.md", "|stable|staging|", "|stable|")
+
     def stray_helper_file(d):
         write_text(os.path.join(d, "plugin", "helper", "lib", "foo.pm.orig"), "stray\n")
 
@@ -805,6 +810,9 @@ def probes(name):
         ("queue-text", "AT-QA-06", gates_only("queue-text"), queue_text,
          [r"^GATE queue-text plugin/skills/resume/SKILL\.md:\d+: AT-QA-06 moved",
           r"^GATE queue-text plugin/skills/handoff/SKILL\.md: AT-QA-06 pointer"], None),
+        ("risk-corpus", "AT-SR-09", gates_only("risk-corpus"), risk_corpus,
+         [r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'jq -n env' carries no risk class$",
+          r"^GATE risk-corpus plugin/assets/handoff-spec\.md: AT-AP-07 branch: staging is not protected, want protected$"], None),
         ("ic-desc", "AT-IC-11", gates_only("ic-desc"), ic_desc,
          [r"^GATE ic-desc plugin/skills/resume/SKILL\.md: AT-IC-11 resume: description names \['/clear', 'break'\]$"], None),
         ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,
