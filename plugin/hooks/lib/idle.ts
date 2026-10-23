@@ -22,6 +22,12 @@ export const IDLE_FIRE_MS = 49 * 60000
 export const IDLE_MIN_TEXT = '49'
 /** Every rate-limit window must stay below this share (else `near-limit`). */
 export const NEAR_LIMIT_PCT = 90
+/**
+ * O-9, PROVISIONAL (owner decision open; SPEC-DELTAS §9 recommended reading): a failed read of
+ * Claude Code's idle settings counts as native idle on, so the plugin sends no pre-idle turn while
+ * the user is away. `false` would treat an unreadable setting as native off (the plugin's turn on).
+ */
+export const NATIVE_UNKNOWN_COUNTS_AS_ON = true
 
 function dueKey(sid: string): string {
   return `idle_due:${sid}`
@@ -74,7 +80,8 @@ function schedule(d: Deps, sid: string, at: number, now: number): void {
  */
 async function pluginTurnOn(d: Deps, sid: string): Promise<{ on: boolean; native: 'on' | 'off' | 'unknown' }> {
   const native = await d.nativeIdle()
-  const on = d.cfg.idle_handoff_turn === 'auto' && native === 'off'
+  const nativeOff = native === 'off' || (native === 'unknown' && !NATIVE_UNKNOWN_COUNTS_AS_ON)
+  const on = d.cfg.idle_handoff_turn === 'auto' && nativeOff
   const pair = native + '/' + (on ? 'on' : 'off')
   if (d.state.idleMode !== pair) {
     d.state.idleMode = pair
@@ -118,7 +125,7 @@ async function blocked(d: Deps, sid: string): Promise<string | { tokens: number;
   // IA-3: native idle may have been switched on (or become unreadable) since the timer was armed.
   const mode = await pluginTurnOn(d, sid)
   if (mode.native === 'on') return 'native-on'
-  if (mode.native === 'unknown') return 'native-unknown'
+  if (mode.native === 'unknown' && NATIVE_UNKNOWN_COUNTS_AS_ON) return 'native-unknown'
   if (!mode.on) return 'disabled'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'

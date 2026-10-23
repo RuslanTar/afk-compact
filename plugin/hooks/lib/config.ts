@@ -146,9 +146,19 @@ function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
 }
 
 /**
+ * PROVISIONAL (SPEC-DELTAS IA-1 / AT-IA-01, a reading of this build, not an owner ruling): an
+ * `idle_handoff_turn` value that is neither `auto`, `off` nor the old `on` reads as `auto`. The other
+ * keys fall back to the value with no extra plugin action (`precompact_turn: code`,
+ * `unattended_prod_reads: forbid`); `'off'` here would do the same for this key. settings.pm
+ * `$IDLE_INVALID` holds the same value.
+ */
+export const IDLE_INVALID_READS_AS: Config['idle_handoff_turn'] = 'auto'
+
+/**
  * `idle_handoff_turn` (IA-1): `auto` or `off`, trimmed and case-folded; the old value `on` reads as
- * `auto` with a `config_note`; any other value is `auto` plus `config_invalid` (the owner's words
- * switch the plugin turn off only when native idle is on, which idle.ts checks; there is no forced on).
+ * `auto` with a `config_note`; any other value is IDLE_INVALID_READS_AS plus `config_invalid` (the
+ * owner's words switch the plugin turn off only when native idle is on, which idle.ts checks; there
+ * is no forced on).
  */
 function idleTurn(o: PluginOptions, notes: Config['notes']): Config['idle_handoff_turn'] {
   const v = o['idle_handoff_turn']
@@ -160,7 +170,7 @@ function idleTurn(o: PluginOptions, notes: Config['notes']): Config['idle_handof
     return 'auto'
   }
   notes.invalid.push('idle_handoff_turn')
-  return 'auto'
+  return IDLE_INVALID_READS_AS
 }
 
 function handoffTokens(o: PluginOptions, notes: Config['notes']): number {

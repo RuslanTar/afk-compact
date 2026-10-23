@@ -99,8 +99,8 @@ sub records_for {
 }
 
 # record_live(record) -> 1 when a live- record with no ended- twin still counts as live
-# (MOD-SPEC §5.8, MOD-SPEC §7 liveness). Provisional root reading of owner question C-STORE-1
-# (Recommended "Process gone counts"): a record of this host whose pid is gone or runs with
+# (MOD-SPEC §5.8, MOD-SPEC §7 liveness). Owner ruling xxxxxxxx-07 (2026-10-22 23:54, CR-1) on
+# question C-STORE-1, "Process gone counts": a record of this host whose pid is gone or runs with
 # another start time counts as ended (a crash). A record with no host field (written before
 # the host field) or of another host counts as live: only an ended- record ends it (fail
 # closed). The literal reading (only an ended- record) is `return 1` here.

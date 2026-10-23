@@ -49,7 +49,8 @@ our @KEYS = (
     [relaunch_auto               => 'str',  'on',                      'enum'],
     [relaunch_allow              => 'str',  '',                        'list'],
     [relaunch_quiet_s            => 'num',  120,                       'num'],
-    # 2026-10-22: S-SETTINGS B (helper), D (mod; the default is OD-4 provisional, BLD-08), IC-1 (mod)
+    # 2026-10-22: S-SETTINGS B (helper), D (mod; the default `model` is the owner's xxxxxxxx-18,
+    # 2026-10-23 01:48, E-1 checks it; PT-1), IC-1 (mod)
     [unattended_prod_reads       => 'str',  'forbid',                  'enum'],
     [prod_patterns               => 'str',  '',                        'list'],
     [precompact_turn             => 'str',  'model',                   'enum'],
@@ -85,6 +86,11 @@ our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules);
 # or env can make the plugin stricter, never looser than the settings file. Values from loose to
 # strict.
 our %TIGHTEN = (resume_proceed => [qw(auto confirm)]);
+# PROVISIONAL (SPEC-DELTAS IA-1 / AT-IA-01, a reading of this build, not an owner ruling): an
+# idle_handoff_turn value other than auto, off or the old on reads as this; the other keys fall
+# back to the value with no extra plugin action, which `off` would be here. One value with
+# config.ts IDLE_INVALID_READS_AS.
+our $IDLE_INVALID = 'auto';
 
 # Flag spellings: --<key with dashes>, plus the short forms the skills pass.
 our %FLAG_ALIAS = (
@@ -237,11 +243,11 @@ sub resolve {
         ($val{$key}, $src{$key}) = ($best, $bsrc // 'default');
     }
     # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; the old value `on` reads as
-    # `auto` with a note; any other value but `off` is `auto` with a note.
+    # `auto` with a note; any other value but `off` is $IDLE_INVALID (PROVISIONAL, below) with a note.
     {
         (my $x = lc($val{idle_handoff_turn} // 'auto')) =~ s/^\s+|\s+$//g;
         if ($x eq 'on') { push @notes, 'idle_handoff_turn: on reads as auto'; $x = 'auto' }
-        elsif ($x ne 'auto' && $x ne 'off') { push @notes, 'idle_handoff_turn: not auto or off, auto used'; $x = 'auto' }
+        elsif ($x ne 'auto' && $x ne 'off') { push @notes, "idle_handoff_turn: not auto or off, $IDLE_INVALID used"; $x = $IDLE_INVALID }
         $val{idle_handoff_turn} = $x;
     }
     # SK-1 / SK-2: an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
