@@ -1,0 +1,16 @@
+{
+ "id": "R-4-linux-start-time",
+ "note": "ROOT-RULINGS R-4 on Linux in Docker (node:20, the BUILD-PLAN §5.4 MX-06 image: perl 5.36 and ps; offline, read-only root, a tmpfs /tmp, the plugin's helper/ mounted read-only): identity::start_time of a live pid equals `ps -o lstart=` and the fork's second, and stays the same while the process allocates 3 x 32 MiB (its /proc field 23 grows). Before the fix it read field 23, so the start time moved with memory. Skips unless Docker answers and holds the image (no pull).",
+ "needs": ["docker-image:node:20"],
+ "steps": [
+  {
+   "lib": "linux_start_time",
+   "args": {
+    "image": "node:20",
+    "probe": "probe.pl",
+    "mb": 32,
+    "steps": 3
+   }
+  }
+ ]
+}

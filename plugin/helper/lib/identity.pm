@@ -20,11 +20,15 @@ sub _is_claude {
     return 0;
 }
 
+# _proc_stat(pid) -> (comm, ppid, starttime ticks) from /proc/<pid>/stat (proc(5)): 1 pid,
+# 2 (comm), 3 state, 4 ppid, 5-21 pgrp .. itrealvalue (17 fields), 22 starttime, 23 vsize.
+# comm is in parentheses and may hold spaces, parentheses and newlines (the greedy match ends
+# at the last `)`); the fields after it hold none. Before this fix the pattern skipped 18
+# fields and read field 23 (the process size in bytes), so a start time moved with memory.
 sub _proc_stat {
     my ($pid) = @_;
     my $raw = util::read_file("/proc/$pid/stat") // return;
-    # comm is in parentheses and may hold spaces; fields after it are fixed.
-    return unless $raw =~ /^\d+ \((.*)\) (\S) (\d+)(?: \S+){18} (\d+)/s;
+    return unless $raw =~ /^\d+ \((.*)\) (\S) (\d+)(?: \S+){17} (\d+)/s;
     return ($1, $3, $4);
 }
 
@@ -108,6 +112,12 @@ sub claude_pid {
 }
 
 # alive(pid, lstart) -> 1 when the pid runs and its start time matches.
+# A Linux record written before the R-4 fix holds btime + vsize/HZ in place of the start time.
+# It is judged like any other: its pid runs with another start time, so it counts as ended
+# (S-17). The old code reached the same verdict once the process's size had changed since the
+# record was written (its own reading moved with memory); only a record whose process kept its
+# size gets another verdict now. Such records matter only while processes started before the
+# upgrade still run.
 sub alive {
     my ($pid, $lstart) = @_;
     return 0 unless defined $pid && $pid =~ /^\d+$/ && $pid > 0;

@@ -1,0 +1,16 @@
+{
+ "id": "R-4-linux-start-time-floor",
+ "note": "ROOT-RULINGS R-4 at the perl floor in Docker (perl:5.28-slim, the BUILD-PLAN §5.4 MX-03 image: perl 5.28.3, no ps): the R-4-linux-start-time probe without the ps comparison: identity::start_time of a live pid lies within the fork's second and stays the same while the process allocates 3 x 32 MiB. Skips unless Docker answers and holds the image (no pull).",
+ "needs": ["docker-image:perl:5.28-slim"],
+ "steps": [
+  {
+   "lib": "linux_start_time",
+   "args": {
+    "image": "perl:5.28-slim",
+    "probe": "../R-4-linux-start-time/probe.pl",
+    "mb": 32,
+    "steps": 3
+   }
+  }
+ ]
+}

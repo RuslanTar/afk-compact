@@ -44,7 +44,8 @@
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
 #     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
-#     where the temp folder is case-sensitive)
+#     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
+#     answers and holds that image locally)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -243,6 +244,7 @@ for my $cf (@CASES) {
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
                       || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
                       || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
+                      || (/^docker-image:(.+)$/ && !docker_image($1))
                       || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
@@ -1099,6 +1101,9 @@ sub invoke {
 #   assemble_goldens  {dir, runtime}: helper assembler vs tools/assemble goldens (BT-04)
 #   sha_vectors       {}: embedded SHA-256 vs Digest::SHA and a known vector
 #   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
+#   proc_stat_lines   {file}: identity::_proc_stat over recorded Linux /proc/<pid>/stat lines (R-4)
+#   linux_start_time  {image, probe, mb, steps}: identity::start_time on Linux in Docker (R-4;
+#                     a subprocess: the case "needs" ["docker-image:<image>"])
 my $LIBS_READY;
 sub _libs {
     return if $LIBS_READY;
@@ -1113,6 +1118,17 @@ sub nocase_fs {
     my $d = $RUN_TMP // ($ENV{TMPDIR} || "/tmp");
     my $u = uc $d;
     return ($u ne $d && -d $u) ? 1 : 0;
+}
+
+# docker_image(ref) -> 1 when a Docker daemon answers and holds the image locally (the case
+# "needs": ["docker-image:<ref>"] skips otherwise; no case pulls an image).
+my %DOCKER_IMAGE;
+sub docker_image {
+    my ($ref) = @_;
+    return $DOCKER_IMAGE{$ref} if exists $DOCKER_IMAGE{$ref};
+    my $docker = util::which('docker');
+    my $r = $docker ? util::run([$docker, 'image', 'inspect', '--format', '{{.Id}}', $ref], timeout_ms => 20000) : { exit => 1 };
+    return $DOCKER_IMAGE{$ref} = $r->{exit} == 0 ? 1 : 0;
 }
 
 sub builtin {
@@ -1687,6 +1703,55 @@ sub builtin {
             push @e, 'check ' . ($c // 'null') . ", want $a->{want_check}"
                 if $src eq 'result-text' && defined $a->{want_check} && ($c // '') ne $a->{want_check};
         }
+        return @e;
+    }
+    if ($name eq 'proc_stat_lines') {
+        # R-4: identity::_proc_stat over real /proc/<pid>/stat lines recorded on Linux ({lines:
+        # [{id, line, comm, ppid, starttime, vsize}]}): the comm whole (spaces, parentheses, a
+        # newline, a tab, fake fields after a `)`), the ppid, and the start ticks of field 22,
+        # never field 23 (vsize). Each line is served in place of /proc/<pid>/stat, so the
+        # parser runs on any host.
+        my $doc = eval { jsonc::decode(util::read_file(src_file($a->{file}, $cdir)) // '') };
+        return ("$a->{file}: unreadable") unless ref $doc eq 'HASH' && ref $doc->{lines} eq 'ARRAY' && @{ $doc->{lines} };
+        no warnings qw(redefine once);
+        my $orig = \&util::read_file;
+        for my $l (@{ $doc->{lines} }) {
+            my ($pid) = ($l->{line} // '') =~ /\A(\d+) /;
+            if (!defined $pid) { push @e, "$l->{id}: no pid in the line"; next }
+            local *util::read_file = sub { return $_[0] eq "/proc/$pid/stat" ? $l->{line} : $orig->(@_) };
+            my @got = identity::_proc_stat($pid);
+            if (!@got) { push @e, "$l->{id}: the line does not parse"; next }
+            push @e, "$l->{id}: comm " . jsonc::encode($got[0]) . ', want ' . jsonc::encode($l->{comm}) if $got[0] ne $l->{comm};
+            push @e, "$l->{id}: ppid $got[1], want $l->{ppid}" if $got[1] != $l->{ppid};
+            push @e, "$l->{id}: start ticks $got[2], want $l->{starttime} (field 22)"
+                . ($got[2] == ($l->{vsize} // -1) ? ' - that is field 23, vsize' : '') if $got[2] != $l->{starttime};
+        }
+        return @e;
+    }
+    if ($name eq 'linux_start_time') {
+        # R-4: the probe (a Perl file in the case folder) runs in a Linux container with the
+        # plugin's helper/ mounted read-only and nothing else writable but a tmpfs /tmp, offline.
+        # It checks identity::start_time against `ps -o lstart=` (where the image has ps) and
+        # the fork time, and that it stays the same while the process allocates memory. Each
+        # `FAIL: ` line it prints is an error; it must end with `DONE`.
+        my $docker = util::which('docker') // return ('no docker on PATH');
+        my $probe = util::read_file(src_file($a->{probe} // 'probe.pl', $cdir)) // return ('no probe');
+        my $helper = ($PLUGIN_SRC // "$REPO/plugin") . '/helper';
+        my $cname = "store-h-r4-$$-" . util::rand_hex(4);
+        my @run = ($docker, 'run', '--rm', '-i', '--init', '--pull', 'never', '--name', $cname, '--network', 'none',
+                   '--read-only', '--tmpfs', '/tmp', '-e', 'LC_ALL=C', '-e', 'TZ=UTC', '-v', "$helper:/w/helper:ro",
+                   $a->{image}, 'perl', '-', $a->{mb} // 32, $a->{steps} // 3);
+        # docker's own errors (no such image, a path Docker cannot share) go to stdout too
+        my $r = util::run(['/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @run], stdin => $probe, timeout_ms => ($a->{timeout_s} // 120) * 1000);
+        if ($r->{timed_out}) {
+            util::run([$docker, 'rm', '-f', $cname], timeout_ms => 30000);
+            push @e, "$a->{image}: timed out after " . ($a->{timeout_s} // 120) . ' s';
+        }
+        my $out = $r->{out} // '';
+        print map { "#   $a->{image}| $_\n" } split /\n/, $out if $VERBOSE;
+        push @e, map { "$a->{image}: $_" } $out =~ /^FAIL: (.*)$/mg;
+        push @e, "$a->{image}: exit $r->{exit}" . ($out =~ /\S/ ? ': ' . chars(substr($out, -600)) : '') if $r->{exit} != 0 && !@e;
+        push @e, "$a->{image}: no DONE line" if $r->{exit} == 0 && $out !~ /^DONE /m;
         return @e;
     }
     if ($name eq 'live_peers') {
