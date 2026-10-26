@@ -7,7 +7,7 @@ argument-hint: "[--since 7d]"
 # Report
 <!-- W-BETA C (CROSS-REVIEW XR-04, XR-21): no disable-model-invocation and no allowed-tools until PR-2 row P-156 is reviewed; the description says "Only when the user asks" instead. -->
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is two folders above this skill's base directory: use that root. <!-- CW-1 (Cowork check 2026-10-26) -->
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..` (if that has `${` too: two folders above this skill's base directory); use that root. <!-- CW-1 (Cowork check 2026-10-26). CW-1 review: `${CLAUDE_SKILL_DIR}` is the documented substitution for a skill's own folder (Claude Code changelog); the base-directory line is the second fallback -->
 
 Three steps; add the user's arguments to each call when they gave any (for example `--since 7d`). <!-- RS-1 (owner xxxxxxxx-19: summaries opt-in per report, asked each time) -->
 

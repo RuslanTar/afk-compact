@@ -7,7 +7,7 @@ argument-hint: "[--since 7d]"
 # Report
 
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is two folders above this skill's base directory: use that root.
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..` (if that has `${` too: two folders above this skill's base directory); use that root.
 
 Three steps; add the user's arguments to each call when they gave any (for example `--since 7d`).
 

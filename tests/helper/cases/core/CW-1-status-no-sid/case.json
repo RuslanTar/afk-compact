@@ -33,6 +33,9 @@
                    "^handoff mode: private ",
                    "^automatic relaunch: ",
                    "^unattended_prod_reads: forbid ",
+                   "^protected branches: the shipped list \\+ 0 yours ",
+                   "^pre-idle handoff turn: ",
+                   "^settings: resume_proceed \\S+ \\([^)]+\\) · handoff_reuse_window_min ",
                    "^queue: off$",
                    "^kept mismatch stashes: 1 \\(redacted; the plugin never deletes them\\)$",
                    "^Alerts, last 7 days: none$",
@@ -99,6 +102,34 @@
   {"argv": ["pin", "--resumed-from", "$TMP/work/none.md"],
    "expect": {"exit": 3, "stdout": "REFUSED: no-session\n"}},
   {"argv": ["pin", "--sid", "${CLAUDE_SESSION_ID}", "--resumed-from", "$TMP/work/none.md"],
-   "expect": {"exit": 3, "stdout": "REFUSED: no-session\n"}}
+   "expect": {"exit": 3, "stdout": "REFUSED: no-session\n"}},
+  {"name": "the pool of rows without a session id (hook.pl logs them under `unknown`)",
+   "setup": [
+    {"write": "$WATCH/unknown.classic.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-26T02:11:00+02:00", "ev": "watch_error", "sid": "unknown", "actor": "main", "writer": "classic"}]}
+   ]},
+  {"name": "status --sid unknown (the placeholder, not a session): the no-id path, the pool is not shown, nothing written",
+   "argv": ["status", "--sid", "unknown", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_has": ["^session: unknown \\(no session id\\); ", "^thresholds: settings only \\(", "^queue: off$"],
+    "stdout_lacks": ["^escalations: ", "watch_error", "^last hook row: ", "reconcile --sid"],
+    "absent": ["$WATCH/unknown"]}},
+  {"name": "status --sid smoke and --sid anon-…: the same",
+   "argv": ["status", "--sid", "smoke", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_has": ["^session: unknown \\(no session id\\); "],
+    "stdout_lacks": ["^escalations: ", "reconcile --sid"], "absent": ["$WATCH/smoke"]}},
+  {"argv": ["status", "--sid", "anon-1258b019e83284fa", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_has": ["^session: unknown \\(no session id\\); "],
+    "stdout_lacks": ["^escalations: ", "reconcile --sid"], "absent": ["$WATCH/anon-*"]}},
+  {"name": "reconcile and checkpoint refuse a placeholder id: its folder is many sessions' rows",
+   "argv": ["reconcile", "--sid", "unknown", "--orphans", "--full"],
+   "expect": {"exit": 64, "stdout": "",
+    "stderr_has": ["^usage: --sid is not a session id \\(unknown is the plugin's placeholder for rows without one\\)$"],
+    "absent": ["$WATCH/unknown"]}},
+  {"argv": ["reconcile", "--sid", "smoke", "--orphans", "--full"],
+   "expect": {"exit": 64, "stdout": "", "stderr_has": ["^usage: --sid is not a session id \\(smoke is the plugin's placeholder "]}},
+  {"argv": ["checkpoint", "--sid", "anon-1258b019e83284fa", "--nonce", "71000001", "--budget-ms", "10000"],
+   "expect": {"exit": 64, "stdout": "", "stderr_has": ["^usage: --sid is not a session id \\(anon-1258b019e83284fa is the plugin's placeholder "],
+    "absent": ["$WATCH/anon-*"]}}
  ]
 }

@@ -5,9 +5,9 @@ description: 'Show handoff plugin status: "handoff status", "did compaction save
 
 # Status
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is two folders above this skill's base directory: use that root. If no helper is there, say so and stop.
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..` (if that has `${` too: two folders above this skill's base directory); use that root. If no helper is there, say so and stop.
 
-Run `<store> status --sid "${CLAUDE_SESSION_ID}"` and relay its lines as printed, in its order. If that `--sid` value is empty or has `${`, run it as written: never guess or invent a session id (no folder name or other id). The helper then prints `session: unknown (no session id)` and only the lines that are not about this session.
+Run `<store> status --sid '${CLAUDE_SESSION_ID}'` and relay its lines as printed, in its order. If that `--sid` value is empty or has `${`, run it as written: never guess or invent a session id (no folder name or other id). The helper then prints `session: unknown (no session id)` and only the lines that are not about this session.
 - `watcher:` first (its state, log size, how to share or turn it off), then `notice: <text>` while the first-run notice is unshown;
 - effective thresholds with `min_window`, clamped values marked; `plugin compactions off: …` when the window is below it;
 - `seat_state` of the last 5 compactions, with trigger, verdict and copy path;

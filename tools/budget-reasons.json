@@ -16,7 +16,7 @@
     "up_to": 4700
   },
   "asset skills/resume/SKILL.md": {
-    "why": "NR-12, provisional until the root rules (SPEC-DELTAS §10.7): the owner rulings of 2026-10-23 add Rule 2's own/foreign command rule with its real-risk list, Rule 3's scoped approvals with the explicit-gate list, and R9's stops 5-6 with resume_proceed (about 1,100 B), then R4's handoff-resume pin line (review of bcdaca6) and R7's carried production read (owner xxxxxxxx-28); trimming back to 21,504 would cut that text or the helper-output descriptions R1, R3, R5 and R6 rely on",
+    "why": "NR-12, provisional until the root rules (SPEC-DELTAS §10.7): the owner rulings of 2026-10-23 add Rule 2's own/foreign command rule with its real-risk list, Rule 3's scoped approvals with the explicit-gate list, and R9's stops 5-6 with resume_proceed (about 1,100 B), then R4's handoff-resume pin line (review of bcdaca6) and R7's carried production read (owner xxxxxxxx-28); trimming back to 21,504 would cut that text or the helper-output descriptions R1, R3, R5 and R6 rely on. CW-1 (Cowork check 2026-10-26) adds the plugin-root and session-id fallbacks of the <store> line and R1 (about 190 B) within the same limit: the intro's overview sentence was dropped and the <store> line reworded to pay for them",
     "up_to": 22528
   }
 }

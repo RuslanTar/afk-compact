@@ -57,7 +57,9 @@ sub main {
 # init_sid(opt, writer) -> sid after rc::init with the settings flags of opt. A missing, empty
 # or unsubstituted --sid (CW-1: a Cowork task's skill text kept `${CLAUDE_SESSION_ID}` and its
 # Bash had the variable empty) is refused with the reason: these commands work on one
-# session's state. Read-only `status` takes no_sid() first and runs without one.
+# session's state. Read-only `status` takes no_sid() first and runs without one. A placeholder id
+# the helper itself logs under (reserved_sid) is refused too: its folder is a pool of rows from
+# many sessions, never one session's state (CW-1 review).
 sub init_sid {
     my ($opt, $writer) = @_;
     if (no_sid($opt->{sid})) {
@@ -65,6 +67,8 @@ sub init_sid {
         die "usage: --sid is required ($why; this command works on one session's state and never runs without its id)\n";
     }
     die "usage: --sid is not a session id\n" unless valid_sid($opt->{sid});
+    die "usage: --sid is not a session id ($opt->{sid} is the plugin's placeholder for rows without one)\n"
+        if reserved_sid($opt->{sid});
     rc::init(sid => $opt->{sid}, writer => $writer // 'helper', flags => settings::flags_from($opt));
     rc::preamble();
     return $opt->{sid};
@@ -77,11 +81,22 @@ sub valid_sid {
     return defined $s && $s =~ /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/ ? 1 : 0;
 }
 
-# no_sid(value) -> 1 when --sid was not given, is empty (spaces only) or is a `${…}` reference
-# left unsubstituted (the skills' unset rule, lib/skills/util.pm unset_value), else 0
+# no_sid(value) -> 1 when --sid was not given, is empty or only spaces, or is a `${…}` reference
+# left unsubstituted, else 0. The skills' unset rule (lib/skills/util.pm unset_value) is the
+# same except that it takes a spaces-only value as set; such a value is no session id either
+# way (valid_sid refuses spaces).
 sub no_sid {
     my ($s) = @_;
     return !defined $s || $s =~ /\A\s*\z/ || $s =~ /\A\$\{/ ? 1 : 0;
+}
+
+# reserved_sid(value) -> 1 for a placeholder id the helper itself logs under, never a real
+# session: `unknown` (rows without a session id: cmd/hook.pl, cmd/notice.pl, cmd/watch.pl,
+# lib/skills/core.pm), `smoke` (cmd/smoke.pl without --sid) and `anon-*` (the skills' identity
+# without a session id, lib/skills/ctx.pm resolve_sid), else 0
+sub reserved_sid {
+    my ($s) = @_;
+    return defined $s && ($s eq 'unknown' || $s eq 'smoke' || $s =~ /\Aanon-/) ? 1 : 0;
 }
 
 1;

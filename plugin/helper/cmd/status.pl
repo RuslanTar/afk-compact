@@ -11,7 +11,8 @@
 # the kept mismatch stashes with their paths (C-STORE D3). 2026-10-23 (owner xxxxxxxx-29): the
 # protected branches line with a warning per ignored protected_branches entry.
 # 2026-10-26 (CW-1): `status` without a session id (missing, empty or unsubstituted --sid):
-# `session: unknown (no session id)` and the store-wide lines only; nothing is written.
+# `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
+# placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
 use strict;
 use warnings;
 use utf8;
@@ -44,9 +45,11 @@ sub run {
     # CW-1 (Cowork check 2026-10-26): status only reads, so a missing, empty or unsubstituted
     # --sid gives the store-wide lines and `session: unknown (no session id)` instead of a
     # refusal; this session's lines are left out and nothing is written (no preamble rows, no
-    # once markers, no session folder). A value that is not a session id is still refused.
+    # once markers, no session folder). A value that is not a session id is still refused. A
+    # placeholder id (args::reserved_sid: `unknown`, `smoke`, `anon-*`) names a pool of rows
+    # from many sessions, not this one, so it takes the same no-id path (CW-1 review).
     my $sid;
-    if (args::no_sid($opt->{sid})) {
+    if (args::no_sid($opt->{sid}) || args::reserved_sid($opt->{sid})) {
         rc::init(sid => undef, writer => 'helper', flags => settings::flags_from($opt));
     } else {
         $sid = args::init_sid($opt);
