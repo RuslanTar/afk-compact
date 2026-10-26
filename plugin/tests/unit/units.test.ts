@@ -393,6 +393,11 @@ test('AT-IA-01 idle_handoff_turn: common words, and any other value reads as off
     const r = parseOptions({ idle_handoff_turn: w } as never)
     expect([w, r.idle_handoff_turn, r.notes.invalid]).toEqual([w, 'auto', []])
   }
+  // A blank value (spaces, a tab) is unset: the default, no note; settings.pm reads it so too.
+  for (const w of ['  ', '\t', ' \t ']) {
+    const r = parseOptions({ idle_handoff_turn: w } as never)
+    expect([w, r.idle_handoff_turn, r.notes.invalid]).toEqual([w, DEFAULTS.idle_handoff_turn, []])
+  }
   for (const w of ['flase', 'enabled', 'auto-ish', '2', 2, 'of']) {
     const r = parseOptions({ idle_handoff_turn: w } as never)
     expect([w, r.idle_handoff_turn, r.notes.invalid]).toEqual([w, 'off', ['idle_handoff_turn']])

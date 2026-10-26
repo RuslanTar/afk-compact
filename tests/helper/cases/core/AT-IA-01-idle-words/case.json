@@ -2,7 +2,7 @@
  "id": "AT-IA-01",
  "layer": "H",
  "owner": "core",
- "note": "IA-1, owner xxxxxxxx-13 (2026-10-26, \"Off + common words\"): settings.pm reads idle_handoff_turn false, no, none, disabled or 0 (a JSON false too) as off and true, yes, 1 or on (a JSON true too) as auto, trimmed and case-folded; any other value reads as off ($IDLE_INVALID, one value with config.ts IDLE_INVALID_READS_AS) with a note /status shows. Before this ruling every unknown value read as auto.",
+ "note": "IA-1, owner xxxxxxxx-13 (2026-10-26, \"Off + common words\"): settings.pm reads idle_handoff_turn false, no, none, disabled or 0 (a JSON false too) as off and true, yes, 1 or on (a JSON true too) as auto, trimmed and case-folded; any other value reads as off ($IDLE_INVALID, one value with config.ts IDLE_INVALID_READS_AS) with a note /status shows. Before this ruling every unknown value read as auto. A value that is blank once trimmed (spaces, a tab) is unset, the default auto with no note, as config.ts unset() reads it (review r2: /status said off while the hooks ran auto).",
  "now": "2026-10-26T20:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -302,6 +302,46 @@
     "stdout_has": [
      "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$",
      "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+    ]
+   }
+  },
+  {
+   "name": "'  ' (spaces only) is unset: the default auto, no note (config.ts reads it so)",
+   "options": {
+    "idle_handoff_turn": "  "
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "a tab only is unset: the default auto, no note (config.ts reads it so)",
+   "options": {
+    "idle_handoff_turn": "\t"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
     ]
    }
   }

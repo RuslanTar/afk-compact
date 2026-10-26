@@ -22,16 +22,19 @@ package skills::risk;
 #   - write-outside: a write target (cp/mv/ln/tee/install/touch/mkdir/dd of=, a redirect) at
 #     home, the root, a parent folder or a real path outside the work tree;
 #   - recorded: a segment byte-identical to a command the plugin recorded in any session's
-#     jobs.jsonl under the watch root lifts only `not-read-only`;
-#   - test-build: a test_build_re segment counts only when the repository defines the target
-#     (Makefile rule, package.json script, Rakefile, build.gradle*, gradlew), no test or build
-#     definition differs from HEAD in the work tree (NR-23: the exemption ends once such a file
-#     changed), and none differs between the HEAD this session started on and HEAD (owner
-#     xxxxxxxx-08, REVIEW-NIGHT-2 U-05: a commit, merge, checkout or reset since the start); an
-#     unknown start HEAD (no record of this session for this work tree, a record without one, a
-#     commit git no longer has) asks, and so does a git status or diff that fails, runs out of
-#     time or is cut off (MITIGATIONS 4.1). The start HEAD is per session id: a /clear, fork or
-#     handoff-resume successor starts on its own HEAD (a stated limit);
+#     jobs.jsonl under the watch root lifts only `not-read-only`, and only while the build state
+#     below is clean and known; it never lifts a test_build_re segment (review r2);
+#   - test-build: a test_build_re segment counts only when the repository defines the target in
+#     a file git tracks (Makefile rule, package.json script, Rakefile, build.gradle*, gradlew), no
+#     test or build definition differs from HEAD in the work tree (NR-23: the exemption ends once
+#     such a file changed), and none differs between the start HEAD and HEAD (owner xxxxxxxx-08,
+#     REVIEW-NIGHT-2 U-05: a commit, merge, checkout or reset since the start); an unknown start
+#     HEAD (no record for this work tree, a record without one, a commit git no longer has) asks,
+#     and so does a git status or diff that fails, runs out of time or is cut off (MITIGATIONS
+#     4.1). The start HEAD is the oldest of this session and its predecessors through clear and
+#     handoff-resume links (start_heads). Stated limits: a fork starts on its own HEAD; a
+#     $BUILD_DEF_RE file git ignores (.bundle/config, .npmrc) and .git/hooks never show in git
+#     status, so a change to one is not seen;
 #   - gate: the explicit gate classes name the first family that matches (env-write, then
 #     infra-write, then deploy); a production class on a command that is not exactly one
 #     production read (_prod_read_cmd) is the prod-write gate; a push whose destination is the remote's default branch, matches
@@ -169,7 +172,29 @@ sub classify {
     my $top = $w->{in_git} ? (skills::util::abs_path($w->{worktree}) // $w->{worktree}) : undef;
     my ($recorded, $jobs_read) = (undef, 0);
     my %why;
-    my ($build_dirty, $dirty_read, $start_changed);
+    # The build state (NR-23, xxxxxxxx-08, MITIGATIONS 4.1), read once: undef when clean and
+    # known, else the note why a test or build run asks.
+    my ($build_note, $build_read);
+    my $build_state = sub {
+        return $build_note if $build_read++;
+        return $build_note = 'outside a git work tree the test and build definitions cannot be checked; a test or build run asks'
+            unless defined $top;
+        my $dirty = _build_dirty($top);
+        if (!defined $dirty) {
+            # git status failed, ran out of time or was cut off (fail closed).
+            return $build_note = 'the test and build definitions could not be checked; a test or build run asks';
+        }
+        return $build_note = 'a test or build definition differs from HEAD (' . _first3($dirty) . '); a test or build run asks' if @$dirty;
+        my $sc = _start_changed($top, $a{start_heads});
+        if (!$sc->{known}) {
+            return $build_note = $sc->{failed}
+                ? 'the test and build definitions could not be checked; a test or build run asks'
+                : 'the HEAD this session started on is not known for this work tree; a test or build run asks';
+        }
+        return $build_note = 'a test or build definition changed since this session started (' . _first3($sc->{files}) . '); a test or build run asks'
+            if @{ $sc->{files} };
+        return $build_note = undef;
+    };
     for my $seg (split $SEG_SPLIT, $cmd) {
         $seg =~ s/\A\s+|\s+\z//g;
         next if $seg eq '';
@@ -180,31 +205,31 @@ sub classify {
             next;
         }
         if ($seg =~ $tb) {
-            ($build_dirty, $dirty_read) = (_build_dirty($top), 1) unless $dirty_read;
-            my $def = _defined_target($seg, $cwd, $top);
-            if (!$def) { push @notes, 'the repository defines no such test or build target here' }
-            elsif (!defined $build_dirty) {
-                # MITIGATIONS 4.1: git status failed, ran out of time or was cut off (fail closed).
-                push @notes, 'the test and build definitions could not be checked; a test or build run asks';
-            }
-            elsif (@$build_dirty) { push @notes, 'a test or build definition differs from HEAD (' . _first3($build_dirty) . '); a test or build run asks' }
-            elsif (!($start_changed //= _start_changed($top, $a{start_heads}))->{known}) {
-                push @notes, $start_changed->{failed}
-                    ? 'the test and build definitions could not be checked; a test or build run asks'
-                    : 'the HEAD this session started on is not known for this work tree; a test or build run asks';
-            }
-            elsif (@{ $start_changed->{files} }) {
-                push @notes, 'a test or build definition changed since this session started (' . _first3($start_changed->{files}) . '); a test or build run asks';
-            }
-            else { $why{'test-build'} = 1; next }
+            # A test or build run that fails a check asks; a jobs.jsonl record never lifts it
+            # (review r2: a recorded `make test` ran the changed Makefile unasked).
+            # The build state first: an unreadable index fails the tracked check of
+            # _defined_target too, and "could not be checked" is the true note then.
+            my $note = $build_state->()
+                // (_defined_target($seg, $cwd, $top) ? undef : 'the repository defines no such test or build target here');
+            if (!defined $note) { $why{'test-build'} = 1; next }
+            push @notes, $note;
+            $hit{'not-read-only'} = 1;
+            $hit{'write-outside'} = 1 if _write_outside($seg, $cwd, $top);
+            next;
         }
         if (!$jobs_read) { $recorded = _recorded_commands($a{watch}); $jobs_read = 1 }
         if ($recorded->{$seg} || $recorded->{$cmd}) {
             # A recorded command lifts only not-read-only: a write outside the tree still asks
-            # (REVIEW-NIGHT-3 R3-09).
-            $why{recorded} = 1;
-            $hit{'write-outside'} = 1 if _write_outside($seg, $cwd, $top);
-            next;
+            # (REVIEW-NIGHT-3 R3-09). It lifts nothing while a test or build definition changed,
+            # the start HEAD is unknown or git cannot tell: a recorded `make test TEST=x` or
+            # `bundle exec rspec` runs those definitions too (review r2, fail closed).
+            my $note = $build_state->();
+            if (!defined $note) {
+                $why{recorded} = 1;
+                $hit{'write-outside'} = 1 if _write_outside($seg, $cwd, $top);
+                next;
+            }
+            push @notes, $note =~ s/; a test or build run asks\z/; a recorded command asks too/r;
         }
         $hit{'not-read-only'} = 1;
         $hit{'write-outside'} = 1 if _write_outside($seg, $cwd, $top);
@@ -405,28 +430,49 @@ sub _write_outside {
 }
 
 # The repository defines the target of a test_build_re segment (spec §4: make, npm, pnpm,
-# yarn, rake, gradle); cargo, go and pytest need only to run inside the work tree.
+# yarn, rake, gradle); cargo, go and pytest need only to run inside the work tree. The file that
+# defines it (Makefile, package.json, Rakefile, build.gradle*, gradlew) must be tracked: an
+# ignored one never shows in git status, so NR-23 and the start HEAD could not see a change to
+# it (review r2: a Makefile the session wrote in an ignored build/ folder).
 sub _defined_target {
     my ($seg, $cwd, $top) = @_;
     return 0 unless defined $top;
     return 0 if _outside($cwd, $cwd, $top);
     my @w = _words($seg);
     my $b = skills::util::bytes($cwd);
-    my $read = sub { my ($f) = @_; return -f "$b/$f" ? skills::util::read_text("$b/$f", 1048576) : undef };
+    # The name as the folder lists it (a case-insensitive disk finds `makefile` for Makefile;
+    # git tracks the listed name).
+    my %on = map { $_ => 1 } skills::util::list_dir($b);
+    my $real = sub {
+        my ($f) = @_;
+        return undef unless -f "$b/$f";
+        return $f if $on{$f};
+        my ($x) = grep { lc($_) eq lc($f) } sort keys %on;
+        return $x;
+    };
+    my $has = sub { my $f = $real->($_[0]); return defined $f && _tracked($cwd, $f) ? 1 : 0 };
+    my $read = sub { my ($f) = @_; return $has->($f) ? skills::util::read_text("$b/$f", 1048576) : undef };
     if ($w[0] eq 'make') {
         my $t = $w[1] // return 0;
         for my $mf (qw(GNUmakefile makefile Makefile)) {
-            my $text = $read->($mf) // next;
+            next unless -f "$b/$mf";
+            # make reads the first of these that exists; an untracked one is not the repository's.
+            my $text = $read->($mf) // return 0;
             return ($text =~ /^\Q$t\E[ \t]*(?:[ \t][^:=\n]*)?::?(?![=])/m) ? 1 : 0;
         }
         return 0;
     }
     if ($w[0] eq 'rake' || ($w[0] eq 'bundle' && ($w[2] // '') eq 'rake')) {
-        return (grep { -f "$b/$_" } qw(Rakefile rakefile Rakefile.rb rakefile.rb)) ? 1 : 0;
+        for my $rf (qw(Rakefile rakefile Rakefile.rb rakefile.rb)) {
+            next unless -f "$b/$rf";
+            return $has->($rf) ? 1 : 0;
+        }
+        return 0;
     }
     if ($w[0] eq 'gradle' || $w[0] eq './gradlew') {
-        return 0 if $w[0] eq './gradlew' && !-f "$b/gradlew";
-        return (grep { -f "$b/$_" } qw(build.gradle build.gradle.kts settings.gradle settings.gradle.kts)) ? 1 : 0;
+        return 0 if $w[0] eq './gradlew' && !$has->('gradlew');
+        my @g = grep { -f "$b/$_" } qw(build.gradle build.gradle.kts settings.gradle settings.gradle.kts);
+        return (@g && !grep { !$has->($_) } @g) ? 1 : 0;
     }
     if ($w[0] =~ /\A(?:npm|pnpm|yarn)\z/) {
         my $script = ($w[1] // '') eq 'run' ? $w[2] : $w[1];
@@ -438,6 +484,13 @@ sub _defined_target {
     }
     return 1 if $w[0] =~ /\A(?:cargo|go|pytest|python3?)\z/;
     return 0;
+}
+
+# 1 when git tracks $f (relative to $cwd); 0 when it does not, or git fails (fail closed).
+sub _tracked {
+    my ($cwd, $f) = @_;
+    my $r = skills::gitfacts::git($cwd, 'ls-files', '--error-unmatch', '--', $f);
+    return ($r->{rc} == 0 && !$r->{timed_out}) ? 1 : 0;
 }
 
 # Test and build definitions that differ from HEAD in the work tree (tracked changes and
@@ -462,15 +515,23 @@ sub _build_dirty {
 
 sub _first3 { my ($l) = @_; return join(', ', @$l[0 .. ($#$l < 2 ? $#$l : 2)]) }
 
-# start_heads(ctx, sid) -> {real work-tree path => start HEAD or undef}: for each work tree a
-# live record of this session names, the head of its oldest such record (a resumed session
-# keeps the HEAD it first started on). {} for an anonymous session (CW-1) or no record.
+# start_heads(ctx, sid) -> {real work-tree path => start HEAD or undef}: for each work tree, the
+# head of the oldest record that names it among this session's live records (a resumed session
+# keeps the HEAD it first started on) and the records, live or ended, of its predecessors reached
+# through `clear` and `handoff-resume` links only (ctx::chain, up to 3 hops; review r2: a manual
+# /clear re-armed the exemption on the successor's HEAD). A `fork` or `bg-copy` link ends the
+# walk: such a successor starts on its own HEAD (a stated limit). {} for an anonymous session
+# (CW-1) or no record.
 sub start_heads {
     my ($ctx, $sid) = @_;
     my %h;
     return \%h unless defined $sid && $sid ne '';
-    my @r = grep { $_->{state} eq 'live' && ($_->{data}{session_id} // '') eq $sid && defined $_->{data}{worktree} && !ref $_->{data}{worktree} }
-            @{ skills::ctx::records($ctx, substr($sid, 0, 8)) };
+    my $named = sub { my ($x, $s) = @_; return ($x->{data}{session_id} // '') eq $s && defined $x->{data}{worktree} && !ref $x->{data}{worktree} };
+    my @r = grep { $_->{state} eq 'live' && $named->($_, $sid) } @{ skills::ctx::records($ctx, substr($sid, 0, 8)) };
+    for my $p (@{ skills::ctx::chain($ctx, $sid) }) {
+        last unless $p->{reason} eq 'clear' || $p->{reason} eq 'handoff-resume';
+        push @r, grep { $named->($_, $p->{sid}) } @{ skills::ctx::records($ctx, substr($p->{sid}, 0, 8)) };
+    }
     @r = sort { (skills::util::iso_to_epoch($a->{data}{ts}) // 0) <=> (skills::util::iso_to_epoch($b->{data}{ts}) // 0) } @r;
     for my $x (@r) {
         my $wt = skills::util::abs_path($x->{data}{worktree}) // $x->{data}{worktree};

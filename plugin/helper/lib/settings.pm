@@ -280,6 +280,14 @@ sub resolve {
     # owner xxxxxxxx-13); any other value is $IDLE_INVALID with a note.
     {
         (my $x = lc($val{idle_handoff_turn} // 'auto')) =~ s/^\s+|\s+$//g;
+        if ($x eq '') {
+            # Blank once trimmed (spaces, a tab) is unset, as config.ts unset() reads it: the
+            # default, no note (review r2: /status said off while the hooks ran auto).
+            my $d = ref $uc->{idle_handoff_turn} eq 'HASH' && exists $uc->{idle_handoff_turn}{default}
+                ? $uc->{idle_handoff_turn}{default} : (grep { $_->[0] eq 'idle_handoff_turn' } @KEYS)[0]->[2];
+            ($x = lc($d // 'auto')) =~ s/^\s+|\s+$//g;
+            $src{idle_handoff_turn} = 'default';
+        }
         if ($x eq 'on') { push @notes, 'idle_handoff_turn: on reads as auto'; $x = 'auto' }
         elsif (grep { $_ eq $x } @IDLE_OFF_WORDS) { $x = 'off' }
         elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }

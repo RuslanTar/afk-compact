@@ -24,7 +24,7 @@ none	make test	-	the repository's test target
 none	make check	-	a check target
 none	npm test	-	the repository's test script
 none	npm run lint	-	a lint script
-none	npm run test:e2e	-	a test script with a suffix
+ask	npm run test:e2e	not-read-only	review r2: xxxxxxxx-05 names :unit as the only colon suffix; an end-to-end script usually calls the network
 none	rake spec	-	a spec task
 none	bundle exec rake test	-	a test task
 none	./gradlew build	-	a build task
@@ -159,7 +159,7 @@ none	make test-fast	-	owner xxxxxxxx-05 (harmless suffixes): a listed target wit
 none	make test_unit	-	xxxxxxxx-05: _unit
 none	make check-quick	-	xxxxxxxx-05: -quick
 none	npm run test-unit	-	xxxxxxxx-05: -unit, a script the package defines
-none	npm run test:unit	-	xxxxxxxx-05: :unit (any :name passed before)
+none	npm run test:unit	-	xxxxxxxx-05: :unit, the only colon suffix (any :name passed before)
 none	make test V=1	-	xxxxxxxx-05: the make variable V=1
 none	make test-fast -j4 VERBOSE=1	-	xxxxxxxx-05: VERBOSE=1 beside a listed flag
 ask	make test-staging	not-read-only	xxxxxxxx-05: a staging target usually calls the network
@@ -183,4 +183,13 @@ ask	./gradlew test-unit	not-read-only	xxxxxxxx-05 fix: gradle takes no new suffi
 ask	rake test-fast	not-read-only	xxxxxxxx-05 fix: rake takes no new suffix (the task is not checked)
 none	yarn test-unit	-	xxxxxxxx-05: a suffix for a script the package defines
 none	make test_unit V=1	-	xxxxxxxx-05: make takes both
-none	rake test:units	-	a :<name> part for rake, as before
+ask	rake test:units	not-read-only	review r2: rake takes no :<name> (the task is never checked); passed before
+ask	npm run test:watch	not-read-only	review r2: a :<name> other than :unit (--watch never ends)
+ask	make test:staging	not-read-only	review r2: a :<name> other than :unit
+ask	npm run build:docker	not-read-only	review r2: a :<name> other than :unit
+ask	yarn test:integration	not-read-only	review r2: a :<name> other than :unit
+ask	make check:all	not-read-only	review r2: a :<name> other than :unit (open for the owner)
+ask	rake test:e2e	not-read-only	review r2: rake takes no :<name>
+ask	gradle test:e2e	not-read-only	review r2: gradle takes no :<name> (`:` names a project; an abbreviated task)
+ask	./gradlew build:docker	not-read-only	review r2: gradle takes no :<name>
+none	pnpm test:unit	-	xxxxxxxx-05: :unit for pnpm

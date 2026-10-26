@@ -99,7 +99,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   BLD-05 end-of-round gates over a built plugin folder (build round 9, after the last merge):
   config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS and
                watch/ctx.pm %DEFAULTS equal the manifest defaults; manifest and @KEYS list the
-               same keys
+               same keys; AT-IA-01: settings.pm and config.ts hold the same idle off/auto words
+               and the same value for any other word
   export-classes AT-WB-08: every settings key exports as num/bool/enum/path/list/drop; dir and
                file keys as path or drop; enum keys have %ENUM values
   no-network   AT-WB-11 (static): report.pl and every helper module it loads name no
@@ -1267,6 +1268,7 @@ def config_sources_hits(target, brand):
             if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _lit(r.group(2))):
                 out.append((cpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: config.ts DEFAULTS {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
+    out.extend(_idle_words_hits(spath, cpath))
     wpath = os.path.join(target, *WATCH_CTX_REL.split("/"))
     if not os.path.isfile(wpath):
         out.append(_missing(wpath, "AT-CAP-02 ctx.pm"))
@@ -1279,6 +1281,32 @@ def config_sources_hits(target, brand):
             if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _lit(r.group(2)), perl_bool=True):
                 out.append((wpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: watch/ctx.pm {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
+    return out
+
+
+def _idle_words_hits(spath, cpath):
+    """AT-IA-01 (owner xxxxxxxx-13, one value): settings.pm @IDLE_OFF_WORDS, @IDLE_AUTO_WORDS and
+    $IDLE_INVALID hold the same words and value as config.ts IDLE_OFF_WORDS, IDLE_AUTO_WORDS and
+    IDLE_INVALID_READS_AS (review r2: they matched only by hand)."""
+    if not (os.path.isfile(spath) and os.path.isfile(cpath)):
+        return []
+    pl, ts = _read(spath), _read(cpath)
+    out = []
+    for pname, tname in (("IDLE_OFF_WORDS", "IDLE_OFF_WORDS"), ("IDLE_AUTO_WORDS", "IDLE_AUTO_WORDS")):
+        pm = re.search(r"^our @" + pname + r" = qw\(([^)]*)\);", pl, re.M)
+        tm = re.search(r"^export const " + tname + r": readonly string\[\] = \[([^\]]*)\]", ts, re.M)
+        pw = pm.group(1).split() if pm else None
+        tw = re.findall(r"'([^']*)'", tm.group(1)) if tm else None
+        if pw is None or tw is None or sorted(pw) != sorted(tw):
+            text = "AT-IA-01 idle words: settings.pm @{} {} != config.ts {} {}".format(
+                pname, " ".join(pw) if pw is not None else "missing", tname, " ".join(tw) if tw is not None else "missing")
+            out.append((spath, None, "AT-IA-01 idle words", text, text))
+    pm = re.search(r"^our \$IDLE_INVALID = '([^']*)';", pl, re.M)
+    tm = re.search(r"^export const IDLE_INVALID_READS_AS: [^=]+= '([^']*)'", ts, re.M)
+    if not pm or not tm or pm.group(1) != tm.group(1):
+        text = "AT-IA-01 idle words: settings.pm $IDLE_INVALID {} != config.ts IDLE_INVALID_READS_AS {}".format(
+            pm.group(1) if pm else "missing", tm.group(1) if tm else "missing")
+        out.append((spath, None, "AT-IA-01 idle words", text, text))
     return out
 
 
