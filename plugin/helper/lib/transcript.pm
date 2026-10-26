@@ -152,22 +152,26 @@ sub last_prompt_epoch {
 # yourself." as line 1 of a 3-line reply), with the same "assistant text names a target" rule.
 # The whole-message rule above applies only when neither the message nor the quote starts with
 # an item number; a numbered reply, one line or several, goes through these rules. An unnumbered
-# line of a longer message never counts. The line's item number (`1.`, `1)`, `1:`, after an
-# optional list bullet or bold mark) n decides first:
-# (a) when exactly one item of the assistant's last numbered list names one of the targets, the
-#     line counts only when n is that item's number;
-# (b) when no item of that list names a target (or the text has no such list), the line counts
-#     only when it holds the action (a word of 3 or more letters of the approval's action,
-#     @ITEM_STOP_WORDS aside) or a target id;
-# when two or more items name a target, no line counts (asked again: the number cannot tell
-# which question it answered). A line holding a refusal word ($ITEM_NO: "no", "not", "don't",
-# "wait", "later" …) never counts. "1. yes / 2. no" to "1. Run the tests? 2. Push feat/x?"
-# never confirms the push with "1. yes", nor does "1. yes, push" to "1. Push feat/x? 2. Push
-# feat/y?" confirm feat/y. A quote written with its item number ("1. publish yourself.") must
-# match that number. The assistant's last numbered list is the list that ends the text (fail
-# closed): an unindented line that is no item, or a fenced code block, after it ends it, and a
-# later list replaces it; a number not above the one before it starts a new list; a numbered
-# line indented more than the list's first item is part of the current item (a sub-list).
+# line of a longer message never counts. The veto and the permit are kept apart. The line's item
+# number (`1.`, `1)`, `1:`, after an optional list bullet or bold mark) n decides first:
+# (a) when any numbered item of the assistant text (any list, one followed by prose, a later
+#     row or a code block included) names one of the targets, only this rule may permit: the line
+#     counts only when the closing list (the numbered list that ends the text) has exactly one
+#     item naming a target and n is that item's number;
+# (b) only when no numbered item of the assistant text names a target (or it has no list), the
+#     line counts when it holds an outward verb of the action (@ITEM_VERBS: push, merge, publish,
+#     deploy …; never an object noun or a descriptive word such as "comments" or "retry") or a
+#     target id.
+# So no line counts when two or more items of the closing list name a target, nor when the list
+# that names it is followed by any further line (asked again). A line holding a refusal word
+# ($ITEM_NO: "no", "not", "don't", "wait", "later", "tomorrow" …) or ending in a question mark
+# never counts, and a refusal on an unnumbered line of the reply makes no line count. "1. yes /
+# 2. no" to "1. Run the tests? 2. Push feat/x?" never confirms the push with "1. yes", nor does
+# "1. yes, push" to "1. Push feat/x? 2. Push feat/y?" confirm feat/y, with or without a line after
+# the list. A quote written with its item number ("1. publish yourself.") must match that number.
+# An unindented line that is no item, or a fence line, ends a list; a number not above the one
+# before it starts a new list; a numbered line indented more than the list's first item is part
+# of the current item (a sub-list). A list inside a code block is never the closing list.
 #
 # Owner-ruled quote sources (owner xxxxxxxx-09 "Quote src", 2026-10-26: all four kept as built,
 # no longer provisional): Q-1 code checks each quote against the user's own rows at all (O-3);
@@ -233,83 +237,109 @@ my $PASTED = qr/\bU-[0-9]+:[ \t]*approval\b/;
 my $ITEM_RE = qr/\A[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?([0-9]{1,3})[.):](?:\*\*|__)?(?:[ \t]+(.*))?\z/s;
 # A fence line of a code block.
 my $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
-# Words of an action that never make a reply line "hold the action" (the go-ahead words too:
-# "proceed" or "continue" in a model-written action names no action).
-our @ITEM_STOP_WORDS = qw(the and for with into onto from then than this that these those them they its all any not now
-    yet you your yours yourself please can may will would just also once when after before over via git origin upstream yes okay
-    sure fine done here there one two proceed continue ahead good great right correct agree agreed sounds lgtm);
-my %ITEM_STOP = map { $_ => 1 } @ITEM_STOP_WORDS;
-# A refusal or a delay in a reply line: such a line is never an approval.
-my $ITEM_NO = qr/(?<![A-Za-z'\x{2019}])(?:no|not|nope|nah|never|don['\x{2019}]?t|wait|later|stop|cancel|hold|skip)(?![A-Za-z'\x{2019}])|n['\x{2019}]t(?![A-Za-z])/i;
+# The outward verbs a reply line may name under rule (b): [verb, its forms]. Only these make a
+# line "hold the action"; an object noun or a descriptive word of the model-written action
+# ("comments", "retry", "commit", "update") never does.
+our @ITEM_VERBS = (
+    [ 'force-push', qr/force[- ]?push(?:es|ed|ing)?/ ],
+    [ 'push',       qr/push(?:es|ed|ing)?/ ],
+    [ 'merge',      qr/merg(?:e|es|ed|ing)/ ],
+    [ 'publish',    qr/publish(?:es|ed|ing)?/ ],
+    [ 'deploy',     qr/deploy(?:s|ed|ing)?/ ],
+    [ 'rebase',     qr/rebas(?:e|es|ed|ing)/ ],
+    [ 'squash',     qr/squash(?:es|ed|ing)?/ ],
+    [ 'amend',      qr/amend(?:s|ed|ing)?/ ],
+    [ 'delete',     qr/delet(?:e|es|ed|ing)/ ],
+    [ 'wipe',       qr/wip(?:e|es|ed|ing)/ ],
+);
+# A refusal or a delay in a reply line: such a line is never an approval, and such an unnumbered
+# line in a numbered reply makes no line of it count.
+my $ITEM_NO = qr/(?<![A-Za-z'\x{2019}])(?:no|not|nope|nah|never|don['\x{2019}]?t|wait|later|stop|cancel|hold|skip|tomorrow|pause|abort|postpone)(?![A-Za-z'\x{2019}])|n['\x{2019}]t(?![A-Za-z])/i;
 
 # A short quote and a message compared whole: folded, lower case, end dots and `!` dropped.
 sub _whole { my ($s) = @_; my $x = lc _fold($s); $x =~ s/[.!\s]+\z//; return $x }
 
-# The words of an action that a reply line may hold: lower case, 3 or more letters, stop words
-# aside.
-sub _action_words {
+# The outward verbs (@ITEM_VERBS) a text names: {verb => 1}.
+sub _verbs {
     my ($s) = @_;
-    my %w;
-    for my $x (lc(_chars($s // '')) =~ /([a-z][a-z0-9-]*[a-z0-9])/g) {
-        $w{$x} = 1 if length($x) >= 3 && !$ITEM_STOP{$x};
+    my $t = lc _chars($s // '');
+    my %v;
+    for my $x (@ITEM_VERBS) {
+        my $re = $x->[1];
+        $v{ $x->[0] } = 1 if $t =~ /(?<![a-z0-9_])$re(?![a-z0-9_-])/;
     }
-    return \%w;
+    # "force-push" is a push too, and "push" inside "force-push" is that verb alone.
+    $v{push} = 1 if $v{'force-push'};
+    return \%v;
 }
 
-# The items of the numbered list that ends an assistant text: {number => item text}, empty when
-# the text does not end in one. An unindented line that is no item, or a fenced code block, ends
-# a list (what follows it is no item); a number not above the one before it starts a new list;
-# a numbered line indented more than the list's first item, and an indented line, belong to the
-# current item.
-sub _last_list {
+# The numbered lists of an assistant text: {lists => [{items => {number => item text}}...],
+# closing => the list that ends the text or undef}. An unindented line that is no item, or a
+# fence line, ends a list; a number not above the one before it starts a new list; a numbered
+# line indented more than the list's first item, and an indented line, belong to the current
+# item. Lists inside a code block are lists too (for the veto), but never the closing list, and a
+# code block left open at the end leaves no closing list.
+sub _lists {
     my ($text) = @_;
-    my (%items, $cur, $prev, $ind, $fence);
+    my (@lists, $L, $cur, $prev, $ind, $fence);
     for my $l (split /\n/, $text // '') {
-        if ($l =~ $FENCE_RE) { $fence = !$fence; %items = (); ($cur, $prev, $ind) = (); next }
-        next if $fence;
+        if ($l =~ $FENCE_RE) { $fence = !$fence; ($L, $cur, $prev, $ind) = (); next }
         next if $l !~ /\S/;
         my ($li) = $l =~ /\A([ \t]*)/;
         my $w = length($li =~ s/\t/    /gr);
         if ($l =~ $ITEM_RE && !(defined $cur && $w > $ind)) {
             my $n = 0 + $1;
-            if (!defined $prev || $n <= $prev) { %items = (); $ind = $w }
+            if (!$L || $n <= $prev) { $L = { items => {}, fenced => ($fence ? 1 : 0) }; push @lists, $L; $ind = $w }
             ($cur, $prev) = ($n, $n);
-            $items{$n} = $l;
+            $L->{items}{$n} = $l;
         } elsif (defined $cur && $w > 0) {
-            $items{$cur} .= "\n$l";
+            $L->{items}{$cur} .= "\n$l";
         } else {
-            %items = ();
-            ($cur, $prev, $ind) = ();
+            ($L, $cur, $prev, $ind) = ();
         }
     }
-    %items = () if $fence;
-    return \%items;
+    my $closing = $L && !$fence && !$L->{fenced} ? $L : undef;
+    return { lists => \@lists, closing => $closing };
 }
 
 # _matching_item(message, quote record, assistant text) -> 1 when one whole numbered line of the
-# message is the short quote and that line answers the one item that names a target, or, when no
-# item names one, itself holds the action or a target (owner xxxxxxxx-06; see "Matching item"
-# above). The caller has checked that the assistant text names a target.
+# message is the short quote and either (a) a numbered item of the assistant text names a target,
+# the closing list has exactly one such item and the line's number is that item's, or (b) no
+# numbered item of the assistant text names a target and the line holds an outward verb of the
+# action or a target id (owner xxxxxxxx-06; see "Matching item" above). The caller has checked
+# that the assistant text names a target.
 sub _matching_item {
     my ($msg, $q, $asst) = @_;
-    my $named;
-    for my $l (split /\n/, $msg) {
+    my @lines = split /\n/, $msg;
+    # A refusal on an unnumbered line of a numbered reply ("wait, don't push yet") retracts it.
+    return 0 if grep { $_ !~ $ITEM_RE && _fold($_) =~ $ITEM_NO } @lines;
+    my $ctx;
+    for my $l (@lines) {
         next unless $l =~ $ITEM_RE;
         my ($n, $body) = (0 + $1, $2 // '');
         next unless _whole($body) eq $q->{wbody};
         next if defined $q->{qnum} && $n != $q->{qnum};
         my $fl = _fold($body);
         next if $fl =~ $ITEM_NO;
-        if (!$named) {
-            my $list = _last_list($asst);
-            $named = [ grep { my $it = $list->{$_}; grep { $it =~ $_ } @{ $q->{ids} } } sort { $a <=> $b } keys %$list ];
-        }
-        if (@$named) {
-            return 1 if @$named == 1 && $named->[0] == $n;
+        # A question back ("1. push it?"), or a pasted copy of the assistant's own questions.
+        next if $fl =~ /[?\x{ff1f}]\s*\z/;
+        $ctx //= do {
+            my $ls = _lists($asst);
+            my $names = sub { my ($it) = @_; scalar grep { $it =~ $_ } @{ $q->{ids} } };
+            my $any = grep { $names->($_) } map { values %{ $_->{items} } } @{ $ls->{lists} };
+            my @named = $ls->{closing}
+                ? grep { $names->($ls->{closing}{items}{$_}) } sort { $a <=> $b } keys %{ $ls->{closing}{items} }
+                : ();
+            { veto => $any ? 1 : 0, named => \@named };
+        };
+        if ($ctx->{veto}) {
+            # Only (a) may permit: the one item of the closing list that names the target.
+            return 1 if @{ $ctx->{named} } == 1 && $ctx->{named}[0] == $n;
             next;
         }
         return 1 if grep { $fl =~ $_ } @{ $q->{ids} };
-        return 1 if grep { $q->{awords}{$_} } map { lc } $fl =~ /([A-Za-z][A-Za-z0-9-]*[A-Za-z0-9])/g;
+        my $lv = _verbs($fl);
+        return 1 if grep { $lv->{$_} } keys %{ $q->{averbs} };
     }
     return 0;
 }
@@ -547,7 +577,7 @@ sub quotes_found {
         my ($qn, $qb) = $qq =~ $ITEM_RE ? (0 + $1, $2 // '') : (undef, $qq);
         $q[$i]{qnum} = $qn;
         $q[$i]{wbody} = _whole($qb);
-        $q[$i]{awords} = _action_words($asks->[$i]{action});
+        $q[$i]{averbs} = _verbs($asks->[$i]{action});
     }
     my $origins = ref $o{origins} eq 'ARRAY' ? $o{origins} : undef;
     my @found = map { $_->{quote} eq '' ? 0 : undef } @q;

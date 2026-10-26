@@ -40,8 +40,10 @@ package skills::approvals;
 #         "push feat/x and deploy" never carries a deploy);
 #         P-2 a push approval that names no branch is protected-push ($PUSH_UNNAMED_IS_GATE), as
 #         `risk` counts an unknown push destination: "yes, push it" is re-asked after a
-#         compaction; only a `branch <name>`, a `git push` refspec or a branch-shaped name right
-#         after "push" names a branch (_push_named; not `HEAD`, a file path or a repo slug);
+#         compaction; only a `branch <name>`, a `git push` refspec or a name right after "push"
+#         names a branch, and only a name with a letter and a slash or a branch that exists in cwd
+#         (_push_named, _branch_word; not `HEAD`, a number, a filler word, a tag, a command
+#         substitution, a file path or a repo slug);
 #         P-3 a local merge (not a merge request) whose words name a protected branch is
 #         protected-push ("merge feat/x into main" is re-asked);
 #         P-4 a name after its remote prefix counts as that branch (`team/release` is `release`);
@@ -54,8 +56,9 @@ package skills::approvals;
 #         all), Q-2 a message holding an approval line was pasted and does not count, Q-3 rows of
 #         another session do not count, Q-4 whole words only (R3-04); owner xxxxxxxx-06 "Matching
 #         item": a quote under 4 words is the whole message, or one whole numbered line of it that
-#         answers the one item of the closing list naming a target, or, when no item names one,
-#         itself holds the action or a target (see transcript.pm "Matching item"); owner
+#         answers the one item of the closing list naming a target, or, when no numbered item of
+#         the assistant text names one, itself holds an outward verb of the action or a target
+#         (see transcript.pm "Matching item"); owner
 #         xxxxxxxx-12 "Count, log origin": SDK-origin rows count as the user's words, and the
 #         approvals_carry row counts the carried approvals by the origin of the row their quote
 #         was found in (`origins`, class words only; publish keeps each checked id's origin in
@@ -150,11 +153,23 @@ our $PROD_WRITE_WORDS = qr/\b(?:fix|change|edit|set|add|remove|enable|disable|ro
 # Owner xxxxxxxx-10 "Push names" (P-2 kept, confirmed "Keep all four"): a push approval that
 # names no branch is protected-push. Only these name a branch (_push_named): a `branch <name>`
 # target or phrase, a refspec of a `git push` command (either side of `src:dst`), or in plain
-# words a branch-shaped name (`feat/x`, `rel-2`) right after "push" ($PUSH_FILLER words
-# aside). `HEAD`, `@`, a file name (`app/retry.rb`), a path that exists in cwd and a word in any
-# other target (a file path, an `owner/repo` slug) name none.
+# words a name right after "push" ($PUSH_FILLER words aside), each only when the name has a
+# slash (`feat/x`) or is a branch that exists in cwd (_branch_word). `HEAD`, `@`, a number ("push
+# 2 commits"), a hyphenated word that is no branch ("push the follow-up fix"), a stop word ("push
+# this branch to origin"), a tag (`v1.2.0`, "the tag", `--tags`), a command substitution or
+# variable in a `git push`, a file name (`app/retry.rb`), a path that exists in cwd and a word in
+# any other target (a file path, an `owner/repo` slug) name none.
 our $PUSH_UNNAMED_IS_GATE = 1;
 our $PUSH_FILLER = qr/\A(?:the|branch|to|up|on|onto|into)\z/i;
+# Words after "branch" (or "push") that are never a branch name.
+our %BRANCH_STOP = map { $_ => 1 } qw(a an the to up and of on onto into in at for from with by as
+    it its this that these those my your our their i now then here there current same new old
+    other remote local origin upstream is was be name named called first next last);
+# A tag-shaped name (`v1.2.0`, `1.2`, `v2`): a tag push names no branch.
+our $TAG_NAME = qr/\A[vV]?[0-9]+(?:\.[0-9]+)*(?:[-+][0-9A-Za-z.-]+)?\z/;
+# A tag push in words or flags: `--tags`, `--follow-tags`, `refs/tags/`, or the word "tag" or
+# "tags" (not inside a name such as `fix/tag-parser`).
+our $PUSH_TAG = qr/--(?:follow-)?tags\b|\brefs\/tags\/|(?<![\w\/-])tags?(?![\w\/-])/i;
 # The origin class words the approvals_carry row counts (owner xxxxxxxx-12); anything else is
 # `unknown` (a line carried from a record written before the origins were kept).
 our %ORIGIN_WORDS = map { $_ => 1 } qw(human composer bridge sdk none dialog unknown);
@@ -275,7 +290,10 @@ sub classes {
         for my $t (@{ $e->{targets} }, $e->{action}) {
             my $id = $t =~ s/\s+@\s.*\z//sr;
             for my $w (split /[\s`'"]+/, $id) {
-                $w =~ s/[.,;)]+\z//;
+                # Sentence marks around a name ("to main!", "(main)", "main/"); a `:` inside
+                # stays the refspec split below.
+                $w =~ s/[.,;:!?)\]>\/]+\z//;
+                $w =~ s/\A[(\[<]+//;
                 next if $w eq '';
                 for my $part (split /:/, $w) {
                     my $b = $part =~ s{\A\+}{}r;
@@ -293,10 +311,13 @@ sub classes {
 
 # _push_named(entry, cwd) -> 1 when a push approval names the branch it pushes (P-2; see
 # $PUSH_UNNAMED_IS_GATE): a `branch <name>` in a target or the action, a refspec of a `git push`
-# command, or in plain words a branch-shaped name right after "push". Fail closed: anything
-# else names no branch, so the push is protected-push.
+# command, or in plain words a name right after "push", each only when _branch_word takes it.
+# Fail closed: anything else names no branch, so the push is protected-push. A tag push names no
+# branch; a `git push` whose words hold a command substitution or a variable (`$(…)`, a
+# backtick, `$x`) names none (it pushes whatever the shell fills in, the checked-out branch too).
 sub _push_named {
     my ($e, $cwd) = @_;
+    return 0 if grep { ($_ // '') =~ $PUSH_TAG } @{ $e->{targets} }, $e->{action};
     for my $t (@{ $e->{targets} }, $e->{action}) {
         my $id = ($t // '') =~ s/\s+@\s.*\z//sr;
         while ($id =~ /\bbranch[ \t]+[`'"]?([^\s`'",;)]+)/gi) { return 1 if _branch_word($1, $cwd) }
@@ -305,8 +326,10 @@ sub _push_named {
     my $git = 0;
     for my $seg (split /&&|\|\||[;|\n]/, $act) {
         next unless $seg =~ /\bgit\b.*?\bpush\b(.*)\z/s;
+        my $rest = $1;
+        return 0 if $rest =~ /[\$`]/;
         $git = 1;
-        my @w = grep { $_ ne '' } map { s/\A[`'"]+|[`'".,)]+\z//gr } split /\s+/, $1;
+        my @w = grep { $_ ne '' } map { s/\A[`'"]+|[`'".,)]+\z//gr } split /\s+/, $rest;
         my ($remote, $take);
         for my $x (@w) {
             if ($take) { $take = 0; next }
@@ -321,21 +344,48 @@ sub _push_named {
         next unless $w[$i] =~ /\A(?:force-?)?push(?:ed|es|ing)?\z/i;
         my $j = $i + 1;
         $j++ while $j <= $#w && $w[$j] =~ $PUSH_FILLER;
-        return 1 if $j <= $#w && $w[$j] =~ m{[/_0-9-]} && _branch_word($w[$j], $cwd);
+        return 1 if $j <= $#w && _branch_word($w[$j], $cwd);
     }
     return 0;
 }
 
-# _branch_word(word, cwd) -> 1 when the word can be a branch name: ref characters only, not
-# `HEAD` or `@` (or `HEAD~1`), not a file name with a letter extension, not a path in cwd.
+# _branch_word(word, cwd) -> 1 when the word names a branch: ref characters only with at least
+# one letter, and either a slash (`feat/x`, `team/feat-y`) or the name of a branch that exists
+# in cwd (refs/heads/<w>, or refs/remotes/<remote>/<w>; _ref_names). Never `HEAD` or `@` (or
+# `HEAD~1`), a stop word (%BRANCH_STOP: "push this branch to origin"), a tag-shaped name
+# (`v1.2.0`, `1.2.0`), a file name with a letter extension or a path in cwd. With no cwd (or
+# outside git) only a slash name counts.
 sub _branch_word {
     my ($w, $cwd) = @_;
     $w //= '';
     $w =~ s{\Arefs/(?:heads|remotes)/}{};
-    return 0 unless $w =~ m{\A[A-Za-z0-9_][A-Za-z0-9._/-]*\z} && $w !~ m{//|[/.]\z};
+    return 0 unless $w =~ m{\A[A-Za-z0-9_][A-Za-z0-9._/-]*\z} && $w !~ m{//|[/.]\z} && $w =~ /[A-Za-z]/;
     return 0 if $w =~ /\A(?:HEAD|@)(?:[~^].*)?\z/ || $w =~ /\.[A-Za-z][A-Za-z0-9]{0,5}\z/;
+    return 0 if $BRANCH_STOP{ lc $w } || $w =~ $TAG_NAME;
+    $cwd //= skills::util::cwd();
     return 0 if defined $cwd && -e "$cwd/$w";
-    return 1;
+    return 1 if $w =~ m{/};
+    return _ref_names($cwd)->{$w} ? 1 : 0;
+}
+
+# The short names of the branches in cwd: each refs/heads/<w>, and <w> of each
+# refs/remotes/<remote>/<w> ({} outside git or with no cwd).
+my %REF_NAMES;
+sub _ref_names {
+    my ($cwd) = @_;
+    return {} unless defined $cwd;
+    $REF_NAMES{$cwd} //= do {
+        my %n;
+        my $r = eval { skills::gitfacts::git($cwd, 'for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes') };
+        if (ref $r eq 'HASH' && $r->{rc} == 0) {
+            for my $l (split /\n/, $r->{out} // '') {
+                if ($l =~ m{\Arefs/heads/(.+)\z}) { $n{$1} = 1 }
+                elsif ($l =~ m{\Arefs/remotes/[^/]+/(.+)\z} && $1 ne 'HEAD') { $n{$1} = 1 }
+            }
+        }
+        \%n;
+    };
+    return $REF_NAMES{$cwd};
 }
 
 # 1 when an approval that names production is one production read by the allow list above
