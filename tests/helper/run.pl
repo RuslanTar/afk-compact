@@ -137,20 +137,16 @@ sub repo_tmp {
     util::mkdir_p($REPO_TMP);
     return $REPO_TMP;
 }
+# Start times through the helper's own reader (identity::_read_start, uncached: /proc on
+# Linux, else `ps -o lstart=`), so a Linux image without ps (no procps) gets them too.
+require "identity.pm";
 my $RUNNER_LSTART;
 sub runner_lstart {
     return $RUNNER_LSTART if defined $RUNNER_LSTART;
-    my $r = util::run(['ps', '-o', 'lstart=', '-p', $$], timeout_ms => 5000, env => { LC_ALL => 'C' });
-    ($RUNNER_LSTART = $r->{out} // '') =~ s/\s+/ /g;
-    $RUNNER_LSTART =~ s/\A | \z//g;
+    $RUNNER_LSTART = (identity::_read_start($$))[1] // '';
     return $RUNNER_LSTART;
 }
-my $LSTART1 = do {
-    my $r = util::run(['ps', '-o', 'lstart=', '-p', '1'], timeout_ms => 5000);
-    (my $v = $r->{out} // '') =~ s/\s+/ /g;
-    $v =~ s/\A | \z//g;
-    $v;
-};
+my $LSTART1 = (identity::_read_start(1))[1] // '';
 
 sub copy_tree {
     my ($src, $dst) = @_;

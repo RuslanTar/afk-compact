@@ -2,7 +2,8 @@ package identity;
 # lib/identity.pm: Claude Code process id and start time (MOD-SPEC §2.1, S-17).
 # Owner: WP-core. Ancestor walk to the first process whose command is the Claude
 # Code binary. Start time: Linux /proc/<pid>/stat field 22 + btime (R-4); else
-# `ps -o lstart=`. Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk.
+# `ps -o lstart=`. Every start-time read in the helper goes through _read_start.
+# Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk.
 use strict;
 use warnings;
 use utf8;
@@ -41,26 +42,47 @@ sub _btime {
     return $BTIME;
 }
 
-# start_time(pid) -> string in `ps -o lstart=` form ("Tue Oct 21 14:05:12 2026"), or undef
+# _read_start(pid, ps) -> (epoch, lstart string), both undef when unreadable; never cached.
+# Linux with a readable /proc/<pid>/stat: field 22 + btime (R-4), so no `ps` is needed (a
+# slim image has no procps); else `ps -o lstart=` (ps: a path, default the first on PATH).
+sub _read_start {
+    my ($pid, $ps) = @_;
+    return (undef, undef) unless defined $pid && $pid =~ /^\d+$/;
+    if ($^O eq 'linux' && -r "/proc/$pid/stat") {
+        my (undef, undef, $ticks) = _proc_stat($pid);
+        return (undef, undef) unless defined $ticks;
+        my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
+        my $epoch = _btime() + int($ticks / $hz);
+        my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime $epoch);
+        $s =~ s/  / /g;
+        return ($epoch, $s);
+    }
+    $ps //= util::which('ps') // return (undef, undef);
+    my $r = util::run([$ps, '-o', 'lstart=', '-p', $pid], timeout_ms => 2000, env => { LC_ALL => 'C', LANG => 'C' });
+    return (undef, undef) unless $r->{exit} == 0;
+    (my $s = $r->{out}) =~ s/^\s+|\s+$//g;
+    $s =~ s/\s+/ /g;
+    return (undef, undef) if $s eq '';
+    return (lstart_epoch($s), $s);
+}
+
+# start_time(pid) -> string in `ps -o lstart=` form ("Tue Oct 21 14:05:12 2026"), or undef.
+# Cached per pid for the life of this process.
 sub start_time {
     my ($pid) = @_;
     return undef unless defined $pid && $pid =~ /^\d+$/;
     return $START{$pid} if exists $START{$pid};
-    my $s;
-    if ($^O eq 'linux' && -r "/proc/$pid/stat") {
-        my (undef, undef, $ticks) = _proc_stat($pid);
-        my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
-        if (defined $ticks) {
-            my $epoch = _btime() + int($ticks / $hz);
-            $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime $epoch);
-            $s =~ s/  / /g;
-        }
-    } elsif (my $ps = util::which('ps')) {
-        my $r = util::run([$ps, '-o', 'lstart=', '-p', $pid], timeout_ms => 2000, env => { LC_ALL => 'C', LANG => 'C' });
-        if ($r->{exit} == 0) { ($s = $r->{out}) =~ s/^\s+|\s+$//g; $s =~ s/\s+/ /g; $s = undef if $s eq '' }
-    }
+    my (undef, $s) = _read_start($pid);
     $START{$pid} = $s;
     return $s;
+}
+
+# start_epoch(pid, ps => path) -> seconds since epoch of the process start, or undef. Not
+# cached, so a reused pid shows its new start (the wait helper polls with it).
+sub start_epoch {
+    my ($pid, %o) = @_;
+    my ($e) = _read_start($pid, $o{ps});
+    return $e;
 }
 
 # Seconds since epoch for an lstart string (digits pass through).

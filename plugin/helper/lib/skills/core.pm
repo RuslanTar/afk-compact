@@ -13,7 +13,7 @@ package skills::core;
 #   log::append($file, $row)           -> appends to the absolute stream file
 #   lock::with($path, \%owner, $fn)    -> $fn's return; dies when the lock is live
 #   identity::claude_pid()             -> {pid, lstart}
-#   identity::lstart($pid)             -> optional; start time in the record format
+#   identity::start_time($pid)         -> start time in the record format, or undef
 #   nonce::draw($sid)                  -> 8 lowercase hex
 #   secrets::scan($text)               -> [{rule, class}]
 #   secrets::classify_file($path)      -> (copy | redact | withhold, [{rule, class}])
@@ -161,22 +161,14 @@ sub claude_pid {
     return $r;
 }
 
-# Start time of any pid, in the format the per-process records carry.
+# Start time of any pid, in the format the per-process records carry: identity::start_time
+# only (/proc on Linux, else `ps -o lstart=` under LC_ALL=C), never a second `ps` read, so a
+# Linux image without ps reads the same start time the records hold.
 sub lstart {
     my ($pid) = @_;
     return undef unless defined $pid && $pid =~ /\A\d+\z/;
-    for my $f (qw(start_time lstart)) {
-        my $code = identity->can($f) or next;
-        my $v = eval { $code->($pid) };
-        return $v if defined $v && $v ne '';
-    }
-    my $r = skills::util::run(['ps', '-o', 'lstart=', '-p', $pid], 2000);
-    return undef if $r->{rc} != 0;
-    my $v = $r->{out};
-    $v =~ s/\s+\z//;
-    $v =~ s/\A\s+//;
-    $v =~ s/\s+/ /g;
-    return $v eq '' ? undef : $v;
+    my $v = eval { identity::start_time($pid) };
+    return defined $v && $v ne '' ? $v : undef;
 }
 
 sub nonce {
