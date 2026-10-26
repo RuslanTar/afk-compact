@@ -16,7 +16,12 @@ use utf8;
 
 package cmd_measure;
 
+# The whole `measure --compact` call's budget: the mod kills its delivery-time re-measure at 3 s
+# (resume.ts REMEASURE_MS), and git (<= 2 s) and this session's GSD scan run in sequence.
+our $CLI_BUDGET_MS = 2700;
+
 sub run {
+    my $t0 = util::clock_ms();
     my ($opt, $rest) = args::parse(\@_, bools => ['compact', 'brief'],
                                    known => [qw(sid cwd nonce root log-dir queue-cmd disposable-root copy transcript)]);
     if ($opt->{compact}) {
@@ -31,7 +36,7 @@ sub run {
         my %o;
         $o{transcript} = util::expand_tilde($opt->{transcript}) if defined $opt->{transcript} && $opt->{transcript} ne '';
         $o{approvals} = _approvals($sid, $cwd, util::expand_tilde($opt->{copy}), $o{transcript}) if defined $opt->{copy};
-        args::out(measure::compact($sid, $cwd, $opt->{nonce}, %o));
+        args::out(measure::compact($sid, $cwd, $opt->{nonce}, %o, budget_ms => $CLI_BUDGET_MS - (util::clock_ms() - $t0)));
         return 0;
     }
     die "usage: --copy and --brief need --compact\n" if defined $opt->{copy} || $opt->{brief};

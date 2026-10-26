@@ -1,14 +1,14 @@
 {
   "resume protocol": {
-    "why": "owner 2026-10-23 (ratify xxxxxxxx#R3 overturned): scoped approvals in step 4 (with the explicit-gate list and the effect-absent check of REVIEW-NIGHT NR-01/NR-21, and the production rule of owner xxxxxxxx-28), the run-own-commands rule of step 1 (with the foreign-tag rule of NR-02), the background-result [idle] rule with the check of the messages kept after the summary (owner xxxxxxxx-18, the card's own reading: the soft budget pays for it) and the [idle-again] note of a person's return (owner xxxxxxxx-37, which replaced the ID-3 [idle-return] line) need about 3,700 chars; the owner's 2026-10-26 GSD re-entry ruling (\"Raise the cap\" for model-facing texts) adds the [driver] line, 212 chars, kept only beside a measured Active driver, so the worst path (idle+idle-again+nonok+handoff-partial+driver) runs 3,908 chars, 3,918 with a 16-character plugin name; the 10,000 cutoff stays hard",
+    "why": "owner 2026-10-23 (ratify xxxxxxxx#R3 overturned): scoped approvals in step 4 (with the explicit-gate list and the effect-absent check of REVIEW-NIGHT NR-01/NR-21, and the production rule of owner xxxxxxxx-28), the run-own-commands rule of step 1 (with the foreign-tag rule of NR-02), the background-result [idle] rule with the check of the messages kept after the summary (owner xxxxxxxx-18, the card's own reading: the soft budget pays for it) and the [idle-again] note of a person's return (owner xxxxxxxx-37, which replaced the ID-3 [idle-return] line) need about 3,700 chars; the owner's 2026-10-26 GSD re-entry ruling (\"Raise the cap\" for model-facing texts) adds the [driver] line, 205 chars, kept only beside a measured Active driver and never with [idle-halt], so the worst path (idle+idle-again+nonok+handoff-partial+driver) runs 3,901 chars, 3,911 with a 16-character plugin name; the 10,000 cutoff stays hard",
     "up_to": 3920
   },
   "resume block total": {
-    "why": "the larger protocol beside the 3,000 B measured block (owner 2026-10-23, ratify xxxxxxxx#R3 overturned; owner xxxxxxxx-18 and xxxxxxxx-37 add the idle check line and the [idle-again] note; the owner's 2026-10-26 GSD re-entry ruling adds the [driver] line, worst 7,124 chars, 7,134 with a 16-character plugin name); the runtime cap is 9,500 chars (resumeblock.pm $MAX_CHARS, resume.ts BLOCK_MAX; RP-2/RP-4), under the hard 10,000 SessionStart cutoff, and a block over 6,500 logs resume_block_over_soft",
+    "why": "the larger protocol beside the 3,000 B measured block (owner 2026-10-23, ratify xxxxxxxx#R3 overturned; owner xxxxxxxx-18 and xxxxxxxx-37 add the idle check line and the [idle-again] note; the owner's 2026-10-26 GSD re-entry ruling adds the [driver] line, worst 7,117 chars, 7,127 with a 16-character plugin name); the runtime cap is 9,500 chars (resumeblock.pm $MAX_CHARS, resume.ts BLOCK_MAX; RP-2/RP-4), under the hard 10,000 SessionStart cutoff, and a block over 6,500 logs resume_block_over_soft",
     "up_to": 7140
   },
   "asset resume-context.txt": {
-    "why": "AT-W-02 counts every tag line of the resume context, so it grows with the resume protocol above (same owner ruling, the same REVIEW-NIGHT NR-01/NR-02/NR-21 lines and owner xxxxxxxx-28's production rule); both step-4 lines count here, and so do both idle lines ([idle] and its halt variant [idle-halt], owner xxxxxxxx-25, of which a block carries at most one) and the [idle-again] note (owner xxxxxxxx-37), and the [driver] re-enter line (owner 2026-10-26, GSD re-entry per session; 4,322 B with it)",
+    "why": "AT-W-02 counts every tag line of the resume context, so it grows with the resume protocol above (same owner ruling, the same REVIEW-NIGHT NR-01/NR-02/NR-21 lines and owner xxxxxxxx-28's production rule); both step-4 lines count here, and so do both idle lines ([idle] and its halt variant [idle-halt], owner xxxxxxxx-25, of which a block carries at most one) and the [idle-again] note (owner xxxxxxxx-37), and the [driver] re-enter line (owner 2026-10-26, GSD re-entry per session; 4,315 B with it)",
     "up_to": 4330
   },
   "static core": {
@@ -16,7 +16,7 @@
     "up_to": 4700
   },
   "asset skills/resume/SKILL.md": {
-    "why": "NR-12, provisional until the root rules (SPEC-DELTAS §10.7): the owner rulings of 2026-10-23 add Rule 2's own/foreign command rule with its real-risk list, Rule 3's scoped approvals with the explicit-gate list, and R9's stops 5-6 with resume_proceed (about 1,100 B), then R4's handoff-resume pin line (review of bcdaca6) and R7's carried production read (owner xxxxxxxx-28); trimming back to 21,504 would cut that text or the helper-output descriptions R1, R3, R5 and R6 rely on",
-    "up_to": 22528
+    "why": "NR-12, provisional until the root rules (SPEC-DELTAS §10.7): the owner rulings of 2026-10-23 add Rule 2's own/foreign command rule with its real-risk list, Rule 3's scoped approvals with the explicit-gate list, and R9's stops 5-6 with resume_proceed (about 1,100 B), then R4's handoff-resume pin line (review of bcdaca6) and R7's carried production read (owner xxxxxxxx-28); trimming back to 21,504 would cut that text or the helper-output descriptions R1, R3, R5 and R6 rely on; the owner's 2026-10-26 GSD re-entry ruling (\"Raise the cap\" for model-facing texts) adds R9's Active driver re-entry, placed after the stop checks with its own-handoff and foreign-handoff rule (review of the first build): 22,642 B, about 22,657 B under the 14-character rename drill",
+    "up_to": 22664
   }
 }

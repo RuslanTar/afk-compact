@@ -117,7 +117,10 @@ TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "s
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
 # active on every path; "most" = at most one. combos() skips every other combination, so the
 # goldens, the step checks and every walk over combinations see only paths that can happen.
-EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "idle-halt", "midturn"), "most")]}
+# Owner 2026-10-26 [driver] (review of the first build): the re-enter line never joins [idle-halt],
+# which stops and waits for the user while auto-continue is paused.
+EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "idle-halt", "midturn"), "most"),
+                     (("driver", "idle-halt"), "most")]}
 # A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
 # block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
 NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt")}}
@@ -295,10 +298,10 @@ def combos(asset):
 # Owner 2026-10-26 [driver]: one more tag line that can join any resume block would double the
 # resume-context goldens (96 to 192), and goldens.gen.ts would pass the 1 MiB the test kit reads
 # (claude plugin test: "over 1048576 bytes and was not read"). Its goldens are rendered only
-# beside these tags (8 more goldens: each prod line alone, with [midturn], [idle] or
-# [idle-halt]); the grammar is the same for every tag line, and the budget, step, store and
+# beside these tags (6 more goldens: each prod line alone, with [midturn] or [idle]; never with
+# [idle-halt], EXCLUSIVE); the grammar is the same for every tag line, and the budget, step, store and
 # leftover walks still run over every combination (combos).
-GOLDEN_SPARSE = {"res": {"driver": {"prod-forbid", "prod-allow", "midturn", "idle", "idle-halt"}}}
+GOLDEN_SPARSE = {"res": {"driver": {"prod-forbid", "prod-allow", "midturn", "idle"}}}
 
 
 def golden_combos(asset):
@@ -409,6 +412,9 @@ def step_checks():
 # compaction or an after-turn copy; the [halt] line says when the plugin still compacts (DP-4).
 HALT_FORBIDDEN = ("the plugin compacts the session into a handoff summary", "after this turn the plugin copies")
 HALT_LINE_NEEDS = "only if auto-continue is off or at its hourly limit"
+# Owner 2026-10-26 [driver] (review of the first build): a halted idle block ([idle-halt]: stop and
+# wait for the user) never tells the model to run a re-enter command.
+HALT_RES_FORBIDDEN = ("re-enter command",)
 
 
 def halt_checks():
@@ -424,6 +430,14 @@ def halt_checks():
         for phrase in HALT_FORBIDDEN:
             if phrase in s:
                 print(f"halt check nudge {'+'.join(tags):27} FAIL promises '{phrase}'")
+                bad = True
+    for tags in combos("res"):
+        if "idle-halt" not in tags:
+            continue
+        s = assemble(TEXT["res"], tags).lower()
+        for phrase in HALT_RES_FORBIDDEN:
+            if phrase in s:
+                print(f"halt check res {'+'.join(tags)} FAIL runs '{phrase}' while halted")
                 bad = True
     print("CR-F30/F35 (halted nudge: no compaction or copy promise)  " + ("FAIL" if bad else "ok"))
     return bad
@@ -608,14 +622,14 @@ IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"], ["idle",
 # checked again with it.
 PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
                  ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS
-for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS):
+for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if "idle-halt" not in b):
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
 TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["idle", "nonok"],
               ["idle", "nonok", "handoff-partial"], ["idle", "idle-again", "nonok", "handoff-partial"],
               ["idle-halt", "idle-again", "nonok", "handoff-partial"])
-for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS):
+for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if "idle-halt" not in b):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")

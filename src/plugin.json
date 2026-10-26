@@ -254,6 +254,12 @@
       "title": "Protected branches",
       "description": "Extra branch names or globs, separated by ';', that count as protected beside the shipped list (the remote's default branch, main, master, trunk, develop, stable, staging, gh-pages, prod…, release…, hotfix/…): a push to one always asks again, whatever was approved before. * matches within one part of the name, ** across /, ? one character. They can only add: no entry removes a shipped branch. Read from your settings file only (flags and env are ignored). Empty = the shipped list only.",
       "default": ""
+    },
+    "driver_skills": {
+      "type": "string",
+      "title": "Loop skills to re-enter",
+      "description": "Skill names, separated by ';', that drive a session as a loop beside the shipped list (gsd-autonomous, gsd-execute-phase, gsd-manager, superpowers:executing-plans, superpowers:subagent-driven-development). When a session invoked one, the resume after a compaction or a handoff runs it again (Active driver line). A skill the session never invoked is never run. Empty = the shipped list only.",
+      "default": ""
     }
   }
 }

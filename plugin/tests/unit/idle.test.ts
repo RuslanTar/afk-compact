@@ -178,6 +178,34 @@ test('AT-IB-03: halt on at an idle compaction: a task-notification turn gets [id
   if (halt !== undefined) expect(back).not.toContain(halt)
 })
 
+// Owner 2026-10-26 [driver] (GSD re-entry per session; review of the first build): a halted idle
+// block never carries the re-enter line, though its re-measure names an Active driver (EXCLUSIVE
+// in tools/assemble); the person's return, which clears halt, gets it.
+test('AT-GR-06: halt on at an idle compaction: the [idle-halt] block keeps the Active driver fact but not the [driver] re-enter line; the person\'s return gets it', async ($, on) => {
+  const w = new World().install(on)
+  w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' }))
+  await w.start($)
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\n' +
+    'Active driver: /phase-loop (Skill, 2026-10-26 14:25 +0300) · re-enter: /phase-loop --ws workstream-a\nIn flight: none listed\nEvidence: none'
+  await w.userTurn($, 'Background task finished.', 'task-notification')
+  w.tokens = 150000
+  await w.turnEnd($)
+  await w.advance(1600 * 1000)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.userTurn($, 'Another background task finished.', 'task-notification')
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  const driver = lineOf(w, ['driver'])
+  expect(driver === undefined).toBe(!hasTag('resume-context', 'driver'))
+  expect(block).toContain('Active driver: /phase-loop')
+  if (driver !== undefined) expect(block).not.toContain(driver)
+  await w.turnEnd($)
+  await w.advance(120 * 1000)
+  await w.userTurn($, 'back')
+  const back = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(back).toContain('Active driver: /phase-loop')
+  if (driver !== undefined) expect(back).toContain(driver)
+})
+
 test('AT-IB-03: halt starts right after the idle block was built (its compaction is the second bad summary): the block goes out with [idle-halt], rebuilt from its stored measure (no new measure call) under that measure\'s stamp', async ($, on) => {
   const w = new World().install(on)
   w.summaryMode = 'unshaped'

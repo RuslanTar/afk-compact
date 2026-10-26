@@ -122,7 +122,7 @@ const driverText = (name: string): string | undefined => {
 }
 const GSD_MEASURE = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\n' +
   'GSD (this session): workstream workstream-a · /r/.planning/workstreams/workstream-a/STATE.md: status executing · phase 2\n' +
-  'Active driver: /phase-loop (Skill, 2026-10-26 14:25 +0300) · re-enter: /gsd-resume-work --ws workstream-a, then /phase-loop\n' +
+  'Active driver: /phase-loop (Skill, 2026-10-26 14:25 +0300) · re-enter: /phase-loop --ws workstream-a\n' +
   'In flight: none listed\nEvidence: none'
 
 test('AT-GR-05 (mod): a re-measure with an Active driver line gets the [driver] re-enter line, before step 5', async ($, on) => {
@@ -136,7 +136,20 @@ test('AT-GR-05 (mod): a re-measure with an Active driver line gets the [driver] 
   expect(block).toContain('Active driver: /phase-loop')
   if (line === undefined) throw new Error('no [driver] line in resume-context')
   expect(block).toContain(line)
-  expect(line).toContain('re-enter commands')
+  expect(line).toContain('run its re-enter command (Skill tool)')
+})
+
+test('AT-GR-05 (mod): a re-measure with GSD lines but no Active driver line (GSD only) has no [driver] line', async ($, on) => {
+  const w = new World().install(on)
+  const line = driverText(w.name) ?? 'no such line'
+  await w.start($)
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\n' +
+    'GSD (this session): workstream workstream-b · /r/.planning/workstreams/workstream-b/STATE.md: status planning · phase 5\n' +
+    'GSD re-entry (new session only): /gsd-resume-work --ws workstream-b\nIn flight: none listed\nEvidence: none'
+  await raiseCompact($, { trigger: 'auto' })
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(block).toContain('GSD re-entry (new session only): /gsd-resume-work --ws workstream-b')
+  expect(block).not.toContain(line)
 })
 
 test('AT-GR-05 (mod): a re-measure without an Active driver line (a session not working with GSD or a loop skill) has no [driver] line', async ($, on) => {

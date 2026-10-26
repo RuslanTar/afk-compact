@@ -197,7 +197,7 @@ Write owner steps as a walk-through: where, what, the exact command. Never short
 
 ## R9 Proceed or stop
 
-An `Active driver:` line: first run its `re-enter:` commands (Skill tool), unless Step 1 is one. By default, start Step 1 in this turn, plus anything the questions don't block. Stop only when:
+By default, start Step 1 in this turn, plus anything the questions don't block. Stop only when:
 1. drift or a refuted claim invalidates Step 1 or the plan. Re-plan from the ledger; ask if the plan no longer holds;
 2. Step 1 is an explicit gate (Rule 3): always; or it is outward, destructive, self-modifying or a production read under `unattended_prod_reads: forbid` (R7), and no carried approval covers it (Rule 3);
 3. the arguments conflict with a `U-`, `D-` or `X-` item;
@@ -212,6 +212,8 @@ Stay read-only:
 - where R4 found a conflict;
 - where R1 found possible truncation or selected nothing;
 - where R3 said to relaunch.
+
+An `Active driver:` line, once you proceed (no stop above, the go given under `confirm`, no R4 conflict): from an own handoff or this session's summary, run its `re-enter:` command (Skill tool) before Step 1, unless Step 1 is it; from a foreign one, show it and ask (Rule 2).
 
 Re-probe an In-flight row just before any action that depends on it.
 

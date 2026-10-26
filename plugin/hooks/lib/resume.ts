@@ -97,8 +97,9 @@ export async function buildBlockWith(
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
   // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
   const remeasure = fresh === null ? undefined : fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
-  // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver.
-  if (remeasure !== undefined && DRIVER_LINE.test(remeasure)) tags.push('driver')
+  // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver,
+  // never in a halted idle block ([idle-halt] stops and waits for the user; EXCLUSIVE in tools/assemble).
+  if (remeasure !== undefined && DRIVER_LINE.test(remeasure) && !tags.includes('idle-halt')) tags.push('driver')
   const measuredAt = at ?? (await d.now())
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)

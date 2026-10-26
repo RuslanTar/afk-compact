@@ -192,10 +192,11 @@ sub run {
     }
     if ($repin) { $ownership{repin} = $repin }
 
-    # This session's own GSD line and Active driver line (owner 2026-10-26 21:37: from its
-    # transcript, never the worktree's .planning alone): {line, driver, workstream, state}.
+    # This session's own GSD line, GSD re-entry line and Active driver line (owner 2026-10-26
+    # 21:37: from its transcript, never the worktree's .planning alone): {line, reentry, driver,
+    # workstream, state}.
     my $gs = skills::core::gsd(sid => $sid, cwd => $cwd, worktree => $g->{worktree});
-    my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line driver workstream state) } : undef;
+    my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line reentry driver workstream state) } : undef;
     $gsd->{line} //= $gs->{lines}[0] if $gsd && !defined $gsd->{driver};
 
     my ($queued_line, $queue_lane, $queue) = _queue($ctx, $sid);
