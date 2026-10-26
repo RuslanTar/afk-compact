@@ -130,22 +130,44 @@ sub last_prompt_epoch {
     return $best;
 }
 
-# AP-4 (spec §15 approval-quote, SPEC-DELTAS §3.1 (c); provisional on owner decision O-3: code
-# checks the quote). quotes_found(path, [{quote, targets => [identity…]}…], sid, since => epoch)
-# -> [1|0…] in the order given, or undef when the transcript cannot be read (no file, unreadable)
-# or the session's id or start is unknown (see "Own rows only" below). One pass, in
-# memory; no text is stored, logged or returned. A quote counts when it occurs, white space
-# folded, in a human-typed user row: type user, not isMeta / isCompactSummary / isSidechain, no
-# tool result, origin kind absent or a person's (@HUMAN_ORIGINS), and not a notification,
-# command-output or reminder text. A quote of $SHORT_WORDS words or more counts as whole words
-# in the message (REVIEW-NIGHT-3 R3-04: "push to main" is not in "push to maintenance"). A
-# shorter quote must be the whole message (case, end dots and exclamation marks aside: "yes",
-# "Yes!"; never a "yes" inside "yes, but not now" or an "ok" inside "token"), and the assistant
-# text since the previous human row must name one of its targets (the identity before ` @ `, or
-# that identity's last word): it directly answers that message. A message that holds an
-# approval line (`U-n: approval`) was pasted, so none of its words count. Only the last
-# $QUOTE_SCAN_MAX bytes are read; a quote not found in a longer file is undef for that quote
-# (not checked, never a miss).
+# AP-4 (spec §15 approval-quote, SPEC-DELTAS §3.1 (c)). quotes_found(path, [{quote, targets =>
+# [identity…], action}…], sid, since => epoch [, origins => \@kinds]) -> [1|0…] in the order
+# given, or undef when the transcript cannot be read (no file, unreadable) or the session's id
+# or start is unknown (see "Own rows only" below). One pass, in memory; no text is stored,
+# logged or returned. With `origins`, $kinds[i] is set for each quote found to the class word of
+# the row that held it (the row's origin kind of @HUMAN_ORIGINS, `none` for a typed row without
+# one, `dialog` for a dialog answer); owner xxxxxxxx-12 "Count, log origin": the approvals_carry
+# row counts them, never any text. A quote counts when it occurs, white space folded, in a
+# human-typed user row: type user, not isMeta / isCompactSummary / isSidechain, no tool result,
+# origin kind absent or a person's (@HUMAN_ORIGINS), and not a notification, command-output or
+# reminder text. A quote of $SHORT_WORDS words or more counts as whole words in the message
+# (REVIEW-NIGHT-3 R3-04: "push to main" is not in "push to maintenance"). A shorter quote must
+# be the whole message (case, end dots and exclamation marks aside: "yes", "Yes!"; never a "yes"
+# inside "yes, but not now" or an "ok" inside "token"), and the assistant text since the
+# previous human row must name one of its targets (the identity before ` @ `, or that
+# identity's last word): it directly answers that message.
+#
+# Matching item (owner xxxxxxxx-06 "Matching item", NIGHT-REVIEW 2.7, R3-04): a short quote may
+# also be one whole line of a longer message (the owner answers in numbered lists: "1. publish
+# yourself." as line 1 of a 3-line reply), with the same "assistant text names a target" rule,
+# and only when (a) the line's item number (`1.`, `1)`, `1:`, after an optional list bullet or
+# bold mark) equals the number of an item of the assistant's last numbered list that names one
+# of the targets, or (b) the line itself holds the action (a word of 3 or more letters of the
+# approval's action, @ITEM_STOP_WORDS aside) or a target id. "1. yes / 2. no" to "1. Run the
+# tests? 2. Push feat/x?" never confirms the push with "1. yes": item 1 names no target, and
+# "yes" holds no action. A quote written with its item number ("1. publish yourself.") must
+# match that number. The assistant's last numbered list is the one that ends the text: a number
+# not above the one before it starts a new list; an item runs to the next item or to a blank
+# line followed by an unindented line.
+#
+# Owner-ruled quote sources (owner xxxxxxxx-09 "Quote src", 2026-10-26: all four kept as built,
+# no longer provisional): Q-1 code checks each quote against the user's own rows at all (O-3);
+# Q-2 a message that holds an approval line (`U-n: approval`) was pasted, so none of its words
+# count ($PASTED); Q-3 rows stamped with another session's id do not count ("Own rows only"
+# below); Q-4 quotes match whole words only. SDK-origin rows (`claude -p`, Agent SDK hosts) count
+# as the user's words (owner xxxxxxxx-12 "Count, log origin"; their count is logged, see above).
+# Only the last $QUOTE_SCAN_MAX bytes are read; a quote not found in a longer file is undef for
+# that quote (not checked, never a miss).
 #
 # Dialog answers (NR-14, owner xxxxxxxx-23 "Dialogs count", xxxxxxxx-20): the user's answer in
 # an AskUserQuestion dialog counts as their words. The result row must answer a tool_use named
@@ -197,9 +219,72 @@ our $ASK_KEEP = 256;                  # dialogs awaiting their answer, at most
 my $NOTES_ONLY = '(notes only)';      # the answer value of a question with a note and no option
 my $NOT_TYPED = qr/\A\s*<(?:task-notification|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr|system-reminder|local-command-caveat)\b/;
 my $PASTED = qr/\bU-[0-9]+:[ \t]*approval\b/;
+# Matching item: an item line of a numbered list (an optional `-`/`*`/`+` bullet and a bold
+# mark around the number), its number and its text.
+my $ITEM_RE = qr/\A[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?([0-9]{1,3})[.):](?:\*\*|__)?(?:[ \t]+(.*))?\z/s;
+# Words of an action that never make a reply line "hold the action".
+our @ITEM_STOP_WORDS = qw(the and for with into onto from then than this that these those them they its all any not now
+    yet you your yours yourself please can may will would just also once when after before over via git origin upstream yes okay
+    sure fine done here there one two);
+my %ITEM_STOP = map { $_ => 1 } @ITEM_STOP_WORDS;
 
 # A short quote and a message compared whole: folded, lower case, end dots and `!` dropped.
 sub _whole { my ($s) = @_; my $x = lc _fold($s); $x =~ s/[.!\s]+\z//; return $x }
+
+# The words of an action that a reply line may hold: lower case, 3 or more letters, stop words
+# aside.
+sub _action_words {
+    my ($s) = @_;
+    my %w;
+    for my $x (lc(_chars($s // '')) =~ /([a-z][a-z0-9-]*[a-z0-9])/g) {
+        $w{$x} = 1 if length($x) >= 3 && !$ITEM_STOP{$x};
+    }
+    return \%w;
+}
+
+# The items of the last numbered list of an assistant text: {number => item text}.
+sub _last_list {
+    my ($text) = @_;
+    my (%items, $cur, $prev, $blank);
+    for my $l (split /\n/, $text // '') {
+        if ($l !~ /\S/) { $blank = 1; next }
+        if ($l =~ $ITEM_RE) {
+            my $n = 0 + $1;
+            %items = () if !defined $prev || $n <= $prev;
+            ($cur, $prev) = ($n, $n);
+            $items{$n} = $l;
+        } elsif (defined $cur && (!$blank || $l =~ /\A[ \t]/)) {
+            $items{$cur} .= "\n$l";
+        } else {
+            $cur = undef;
+        }
+        $blank = 0;
+    }
+    return \%items;
+}
+
+# _matching_item(message, quote record, assistant text) -> 1 when one whole line of the message
+# is the short quote and that line answers the item that names a target, or itself holds the
+# action or a target (owner xxxxxxxx-06; see "Matching item" above). The caller has checked that
+# the assistant text names a target.
+sub _matching_item {
+    my ($msg, $q, $asst) = @_;
+    my $list;
+    for my $l (split /\n/, $msg) {
+        next unless $l =~ /\S/;
+        my ($n, $body) = $l =~ $ITEM_RE ? (0 + $1, $2 // '') : (undef, $l);
+        next unless _whole($body) eq $q->{wbody};
+        next if defined $q->{qnum} && !(defined $n && $n == $q->{qnum});
+        my $fl = _fold($body);
+        return 1 if grep { $fl =~ $_ } @{ $q->{ids} };
+        return 1 if grep { $q->{awords}{$_} } map { lc } $fl =~ /([A-Za-z][A-Za-z0-9-]*[A-Za-z0-9])/g;
+        next unless defined $n;
+        $list //= _last_list($asst);
+        my $item = $list->{$n};
+        return 1 if defined $item && grep { $item =~ $_ } @{ $q->{ids} };
+    }
+    return 0;
+}
 
 sub _chars {
     my ($s) = @_;
@@ -429,7 +514,13 @@ sub quotes_found {
         my $post = $qq =~ /\w\z/ ? '(?!\w)' : '';
         $q[$i]{re} = qr/$pre\Q$qq\E$post/;
         $q[$i]{whole} = _whole($qq);
+        # Matching item: the quote without its own item number, and that number.
+        my ($qn, $qb) = $qq =~ $ITEM_RE ? (0 + $1, $2 // '') : (undef, $qq);
+        $q[$i]{qnum} = $qn;
+        $q[$i]{wbody} = _whole($qb);
+        $q[$i]{awords} = _action_words($asks->[$i]{action});
     }
+    my $origins = ref $o{origins} eq 'ARRAY' ? $o{origins} : undef;
     my @found = map { $_->{quote} eq '' ? 0 : undef } @q;
     my $need_asst = grep { $_->{short} } @q;
     my $size = -s $path;
@@ -495,6 +586,7 @@ sub quotes_found {
                         next unless $ft =~ $q[$i]{re};
                     }
                     $found[$i] = 1;
+                    $origins->[$i] = 'dialog' if $origins;
                 }
             }
             next;
@@ -514,12 +606,15 @@ sub quotes_found {
         for my $i (0 .. $#q) {
             next if $found[$i] || $q[$i]{quote} eq '';
             if ($q[$i]{short}) {
-                next unless $fw eq $q[$i]{whole};
                 next unless grep { $asst =~ $_ } @{ $q[$i]{ids} };
+                # The whole message, or one whole line of it that answers the matching item
+                # (owner xxxxxxxx-06).
+                next unless $fw eq $q[$i]{whole} || ($q[$i]{wbody} ne '' && _matching_item($t, $q[$i], $asst));
             } else {
                 next unless $ft =~ $q[$i]{re};
             }
             $found[$i] = 1;
+            $origins->[$i] = (defined $o ? $o : 'none') if $origins;
         }
         $asst = '';
     }

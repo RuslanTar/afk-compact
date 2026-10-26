@@ -36,7 +36,8 @@ package skills::core;
 #   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
 #   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
 #   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
-#   transcript::quotes_found($path, [{quote, targets}], $sid, since => $epoch) -> [1|0|undef…] | undef (AP-4)
+#   transcript::quotes_found($path, [{quote, targets, action}], $sid, since => $epoch [, origins => \@kinds])
+#                                        -> [1|0|undef…] | undef (AP-4; origins: owner xxxxxxxx-12)
 #   sessions::own_start($sid)          -> {since, until, coarse} from the session's per-process
 #                                        records | undef (review of bcdaca6: coarse = no milliseconds)
 #   sessions::ended($sid)              -> 1 when no per-process record of sid is live (handoff-resume link)
@@ -194,6 +195,7 @@ sub nonce {
 # milliseconds leaves its own second to the row-order rule (transcript.pm "Coarse start"). No
 # record: undef (not checked; the line is published unchecked and the next session re-asks).
 # after => epoch: a later floor (a successor's claim on this session, root reading 2026-10-23).
+# origins => \@kinds: filled with the origin class word of each quote found (owner xxxxxxxx-12).
 sub quotes_found {
     my ($path, $asks, $sid, %o) = @_;
     return undef unless defined &transcript::quotes_found && defined &sessions::own_start;
@@ -206,6 +208,7 @@ sub quotes_found {
         my $f = $s->{coarse} && $s->{until} > $o{after} ? $s->{until} : $o{after};
         %w = (since => $f);
     }
+    $w{origins} = $o{origins} if ref $o{origins} eq 'ARRAY';
     my $r = transcript::quotes_found($path, $asks, $sid, %w);
     return ref $r eq 'ARRAY' ? $r : undef;
 }

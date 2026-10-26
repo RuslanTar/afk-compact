@@ -270,7 +270,7 @@ sub run {
     # plugin-owned record; without it every line of this handoff is context only (re-ask).
     if (@{ $ap->{checked} || [] }) {
         my $pd = skills::store::read_doc($path);
-        my ($n, $hwhy) = $pd ? skills::approvals::record_hashes($ctx, $pd, $ap->{checked}) : (0, q(read-back));
+        my ($n, $hwhy) = $pd ? skills::approvals::record_hashes($ctx, $pd, $ap->{checked}, $ap->{origins}) : (0, q(read-back));
         $row->{approvals}{hashed} = $n if $row->{approvals};
         if ($hwhy) {
             skills::cli::say("ADVISORY approval-hash-unrecorded $hwhy (the approvals of this handoff are context only)");
