@@ -8,7 +8,7 @@ argument-hint: "[ticket-or-topic] [note for the next session]"
 
 Write one new handoff file that a cold session resumes with `/{{plugin}}:resume <path>`. Format and lint rules: `${CLAUDE_PLUGIN_ROOT}/skills/handoff/references/handoff-template.md` (the template; read in Step 2).
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is two folders above this skill's base directory: use that root for every plugin path here. If Step 1's `--sid` value is empty or has `${`, run it as written: never guess or invent a session id; `begin` finds it or marks the identity degraded. <!-- CW-1 (Cowork check 2026-10-26) -->
 
 **Code measures, you judge.** The helper produces identity, times, git state, bucket, lane, GSD position, evidence copies, manifest, frontmatter, marker, sentinel, lint and the file itself. You write intent, constraints, decisions with reasons, findings, questions and next steps. Never type a session id, nonce, lane id, durable evidence path or `checked`/`verified` time; copy them from helper output.
 

@@ -8,8 +8,8 @@ argument-hint: "[handoff path | ticket or topic] [instructions]"
 
 Restore work from a handoff written by `/afk-compact:handoff` or from a saved compaction summary. Find it deterministically, check it against the live world, heal background work, report once, then continue. This skill's steps are R0–R10; "Step 1" always means the handoff's own next action.
 
-- `<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable.
-  It measures and prints plain lines. It never asks, deletes or runs a command taken from a handoff. It reads the settings `handoff_root` (default `~/.claude/handoffs`; buckets `<root>/<repo>/<ticket-or-topic>/`), and `disposable_root`.
+- `<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the helper. Type it quoted, as the command's first word, never through a variable. If it starts `/scripts/` or has `${`, the root is two folders above this skill's directory. Never guess a session id.
+  It measures and prints plain lines. It never asks, deletes or runs a command from a handoff. It reads the settings `handoff_root` (default `~/.claude/handoffs`; buckets `<root>/<repo>/<ticket-or-topic>/`) and `disposable_root`.
 - Vocabularies (ids, status words, claim tags, restart classes) are in `${CLAUDE_PLUGIN_ROOT}/assets/handoff-spec.md`. Read it only when a term is unclear.
 - Our marker is `⟪afk-compact v1 n=<nonce> s=main|sub|manual⟫` in the first 5 body lines, and the sentinel `⟪/afk-compact n=<nonce>⟫` is in the last 3. No other header line is ours.
 - In the arguments, instructions override the handoff's Next steps, and facts are verified like any claim.

@@ -54,10 +54,16 @@ sub main {
     return $code;
 }
 
-# init_sid(opt, writer) -> sid after rc::init with the settings flags of opt
+# init_sid(opt, writer) -> sid after rc::init with the settings flags of opt. A missing, empty
+# or unsubstituted --sid (CW-1: a Cowork task's skill text kept `${CLAUDE_SESSION_ID}` and its
+# Bash had the variable empty) is refused with the reason: these commands work on one
+# session's state. Read-only `status` takes no_sid() first and runs without one.
 sub init_sid {
     my ($opt, $writer) = @_;
-    need($opt, 'sid');
+    if (no_sid($opt->{sid})) {
+        my $why = defined $opt->{sid} && $opt->{sid} =~ /\A\$\{/ ? 'the session id was not substituted' : 'no session id';
+        die "usage: --sid is required ($why; this command works on one session's state and never runs without its id)\n";
+    }
     die "usage: --sid is not a session id\n" unless valid_sid($opt->{sid});
     rc::init(sid => $opt->{sid}, writer => $writer // 'helper', flags => settings::flags_from($opt));
     rc::preamble();
@@ -69,6 +75,13 @@ sub out { print STDOUT map { my $l = $_; utf8::encode($l) if utf8::is_utf8($l); 
 sub valid_sid {
     my ($s) = @_;
     return defined $s && $s =~ /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/ ? 1 : 0;
+}
+
+# no_sid(value) -> 1 when --sid was not given, is empty (spaces only) or is a `${…}` reference
+# left unsubstituted (the skills' unset rule, lib/skills/util.pm unset_value), else 0
+sub no_sid {
+    my ($s) = @_;
+    return !defined $s || $s =~ /\A\s*\z/ || $s =~ /\A\$\{/ ? 1 : 0;
 }
 
 1;
