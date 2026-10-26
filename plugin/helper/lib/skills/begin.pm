@@ -1,7 +1,8 @@
 package skills::begin;
 # lib/skills/begin.pm: `begin` (HDN §6; BUILD-PLAN §3.1 row; D-14, RV-18,
-# RV-19, RV-26, RV-28, OD-16). Prints one JSON object of at most 3 KB and
-# creates the stage <bucket>/.staging/<sid8>-<nonce>/ (0700) with settings.json.
+# RV-19, RV-26, RV-28, OD-16). Prints one JSON object of at most 3 KB (more only when
+# every list is at its floor, see _fit) and creates the stage
+# <bucket>/.staging/<sid8>-<nonce>/ (0700) with settings.json.
 # 2026-10-21 rulings: the carry base is the newest handoff in the bucket, whoever
 # wrote it, with previous_kind own|chain|foreign (small-rulings §2.1; a document with
 # imported_from is never the base, DP-6); an open plugin handoff turn of this session
@@ -34,6 +35,10 @@ our $REUSE_WINDOW_MIN = 15;
 our $MAX_BYTES = 3072;
 # The file in the stage that holds begin's whole reply, every newer_foreign entry included.
 our $FULL_NAME = 'begin-full.json';
+# The reply shows at most this many in-flight tasks and tmp candidates; begin-full.json has
+# them all, and `trimmed.cut` counts the rest (U-04 follow-up: never a silent cap).
+our $INFLIGHT_SHOW = 8;
+our $TMP_SHOW = 20;
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
 
 my %FLAG_KEY = (
@@ -302,8 +307,20 @@ sub run {
     $out{inflight_measured} = { %$inflight, sidecar => _rel($ctx, $inflight->{sidecar}) };
     skills::util::write_replace("$stage/$FULL_NAME", skills::util::json_encode({ %out, newer_foreign => \@foreign_all }) . "\n", 0600);
 
-    skills::cli::say(_fit(\%out, scalar @foreign_all, _rel($ctx, "$stage/$FULL_NAME")));
+    # The reply's own caps: the first $INFLIGHT_SHOW tasks and $TMP_SHOW candidates; _fit
+    # counts the rest against every entry begin found.
+    my %found = (newer_foreign => scalar @foreign_all, inflight_measured => scalar @{ $inflight->{tasks} },
+                 tmp_candidates => scalar @$tmp);
+    $out{inflight_measured}{tasks} = _first($inflight->{tasks}, $INFLIGHT_SHOW);
+    $out{tmp_candidates} = _first($tmp, $TMP_SHOW);
+    skills::cli::say(_fit(\%out, \%found, _rel($ctx, "$stage/$FULL_NAME")));
     return 0;
+}
+
+# The first n entries of a list, as a new list.
+sub _first {
+    my ($l, $n) = @_;
+    return [ @$l[0 .. ($#$l < $n - 1 ? $#$l : $n - 1)] ];
 }
 
 # Newest frontmatter date first, file name as the tiebreak (a named sub: run() has a
@@ -412,7 +429,8 @@ sub _queue {
 }
 
 # Last background sidecar slot of this session (MOD §7 ring): the highest seq, never the
-# newest mtime (DP-13; sidecar::newest).
+# newest mtime (DP-13; sidecar::newest). Every task, for begin-full.json; `gitignored` is
+# measured (one git call each) only for the $INFLIGHT_SHOW the reply shows, null after them.
 sub _inflight {
     my ($ctx, $sid, $g) = @_;
     my ($d, $path) = skills::core::sidecar_newest("$ctx->{watch}/$sid");
@@ -423,11 +441,10 @@ sub _inflight {
         if (defined $t->{output}) {
             $r{output} = $t->{output};
             $r{exists} = -e $t->{output} ? \1 : \0;
-            my $ig = $g->{in_git} ? skills::gitfacts::check_ignore($g->{worktree}, $t->{output}) : undef;
+            my $ig = $g->{in_git} && @tasks < $INFLIGHT_SHOW ? skills::gitfacts::check_ignore($g->{worktree}, $t->{output}) : undef;
             $r{gitignored} = defined $ig ? ($ig ? \1 : \0) : undef;
         }
         push @tasks, \%r;
-        last if @tasks >= 8;
     }
     return { sidecar => $path, ts => $d->{ts}, tasks => \@tasks };
 }
@@ -453,7 +470,8 @@ sub sidecar_tasks {
     return \@out;
 }
 
-# Ephemeral paths the mod recorded from this session's tool calls (MOD §10).
+# Ephemeral paths the mod recorded from this session's tool calls (MOD §10), newest first:
+# every distinct path, for begin-full.json.
 sub _tmp_candidates {
     my ($ctx, $sid) = @_;
     my $t = skills::util::read_file("$ctx->{watch}/$sid/paths.jsonl", 1024 * 1024);
@@ -465,7 +483,6 @@ sub _tmp_candidates {
         next unless defined $p && !ref $p && !$seen{$p}++;
         my @st = stat $p;
         push @out, { path => $p, exists => (@st ? \1 : \0), bytes => (@st ? $st[7] : undef) };
-        last if @out >= 20;
     }
     return \@out;
 }
@@ -473,14 +490,16 @@ sub _tmp_candidates {
 # Encode within 3 KB (U-04). Lists are shortened in this order: the tails of tmp_candidates,
 # porcelain.first, inflight_measured.tasks and gsd, the config source labels, the rest of
 # tmp_candidates and porcelain.first, the two root values in config (whole paths; the
-# handoff root is store_root again), and last newer_foreign down to one entry (the handoff
-# list the Ownership record rests on). Nothing goes silently: `trimmed.cut` counts, under the
-# reply key, the entries the reply leaves out (newer_foreign against every entry begin
-# found, which its cap of 2 or 3 alone can cut; the others against the list begin built;
-# config: the fields dropped), and `trimmed.all` names the file in the stage that holds
-# them all. The count is part of the encoded size.
+# handoff root is store_root again), and last newer_foreign, down to one entry (the handoff
+# list the Ownership record rests on) and only when that brings the reply within 3 KB: an
+# entry is never given up for nothing. Past every cut the reply stays over 3 KB. Nothing goes
+# silently: `trimmed.cut` counts, under the reply key, the entries the reply leaves out,
+# against every entry begin found ($found: a key's count when it is above the list's
+# length; newer_foreign's cap of 2 or 3 and the in-flight and tmp caps cut alone), config:
+# the fields dropped; `trimmed.all` names the file in the stage that holds them all. The
+# count is part of the encoded size.
 sub _fit {
-    my ($out, $nf_total, $all) = @_;
+    my ($out, $found, $all) = @_;
     my %list = (
         newer_foreign             => sub { $out->{newer_foreign} },
         tmp_candidates            => sub { $out->{tmp_candidates} },
@@ -490,7 +509,9 @@ sub _fit {
     );
     my $n = sub { my $l = $_[0]->(); return ref $l eq 'ARRAY' ? scalar @$l : 0 };
     my %total = map { $_ => $n->($list{$_}) } keys %list;
-    $total{newer_foreign} = $nf_total if ($nf_total // 0) > $total{newer_foreign};
+    for my $k (keys %{ $found || {} }) {
+        $total{$k} = $found->{$k} if exists $total{$k} && ($found->{$k} // 0) > $total{$k};
+    }
     my $config_cut = 0;
     my $encode = sub {
         my %cut = map { my $c = $total{$_} - $n->($list{$_}); $c > 0 ? ($_ => $c) : () } keys %list;
@@ -514,14 +535,24 @@ sub _fit {
             }
             $did;
         },
-        sub { my $l = $out->{newer_foreign}; return 0 unless @$l > 1; pop @$l; 1 },
+        sub {
+            my $l = $out->{newer_foreign};
+            return 0 unless @$l > 1;
+            my @had = @$l;
+            splice(@$l, 1);
+            my $fits = skills::util::blen($encode->()) <= $MAX_BYTES;
+            @$l = @had;
+            return 0 unless $fits;
+            pop @$l;
+            1;
+        },
     );
     my $j = $encode->();
     for my $t (@trim) {
         while (skills::util::blen($j) > $MAX_BYTES && $t->()) { $j = $encode->() }
         last if skills::util::blen($j) <= $MAX_BYTES;
     }
-    return $j;
+    return $encode->();
 }
 
 1;
