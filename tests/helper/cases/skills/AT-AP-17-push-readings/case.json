@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner xxxxxxxx-10 \"Push names\" (2026-10-26, confirmed \"Keep all four\"; NIGHT-REVIEW 3.4): all four push readings stay as built. P-1 plain words name gates (AT-AP-04 R3-02); P-2 a push approval that names no branch is protected-push, whatever branch is checked out; P-3 a local merge naming a protected branch is protected-push; P-4 a name after a remote prefix counts as that branch (team/release is release); the remote default branch (origin/dev) and a protected name (release) are gates. A named push of feat/x, a local merge into feat/x and team/feat-y carry, so the case is not one that asks for everything. Summary path (measure --compact --copy); the row counts the carried approvals by origin (owner xxxxxxxx-12).",
+ "note": "Owner xxxxxxxx-10 \"Push names\" (2026-10-26, confirmed \"Keep all four\"; NIGHT-REVIEW 3.4): all four push readings stay as built. P-1 plain words name gates (AT-AP-04 R3-02); P-2 a push approval that names no branch is protected-push, whatever branch is checked out; P-3 a local merge naming a protected branch is protected-push; P-4 a name after a remote prefix counts as that branch (team/release is release); the remote default branch (origin/dev) and a protected name (release) are gates. A named push of feat/x, a local merge into feat/x and team/feat-y carry, so the case is not one that asks for everything. Summary path (measure --compact --copy); the row counts the carried approvals by origin (owner xxxxxxxx-12). What names a branch for P-2 (review of the first build: any word with a slash used to count): a `branch <name>` target, a refspec of a git push (either side of src:dst) or a branch-shaped name right after \"push\" in plain words. A file-path target (U-10), a repo slug (U-11) and `git push origin HEAD` (U-12) name none and ask; plain \"push feat/z\" (U-13) and `HEAD:feat/q` (U-14) name one and carry.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -29,7 +29,7 @@
     },
     {
      "write": "$HOME/.claude/projects/-x/$SID.jsonl",
-     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"go ahead and push it now\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge feat/x into main here\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push the team release branch\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push it to origin dev please\"}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to the release branch\"}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin now\"}}\n{\"type\": \"user\", \"uuid\": \"u7\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge feat/y into feat/x here\"}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push team/feat-y as well\"}}\n"
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"go ahead and push it now\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge feat/x into main here\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push the team release branch\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push it to origin dev please\"}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to the release branch\"}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin now\"}}\n{\"type\": \"user\", \"uuid\": \"u7\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge feat/y into feat/x here\"}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push team/feat-y as well\"}}\n{\"type\":\"user\",\"uuid\":\"u9\",\"timestamp\":\"2026-10-21T13:08:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"yes go ahead and push it\"}}\n{\"type\":\"user\",\"uuid\":\"u10\",\"timestamp\":\"2026-10-21T13:09:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"yes push it to github\"}}\n{\"type\":\"user\",\"uuid\":\"u11\",\"timestamp\":\"2026-10-21T13:10:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"push this commit up please\"}}\n{\"type\":\"user\",\"uuid\":\"u12\",\"timestamp\":\"2026-10-21T13:11:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"push feat/z up as well\"}}\n{\"type\":\"user\",\"uuid\":\"u13\",\"timestamp\":\"2026-10-21T13:12:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"push this commit to feat/q\"}}\n"
     },
     {
      "git": [
@@ -49,7 +49,7 @@
     },
     {
      "write": "$TMP/copy.md",
-     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"go ahead and push it now\" — action push it · targets the retry fix @ 1a2b3c4 · once · not yet used; U-3 approval \"merge feat/x into main here\" — action merge feat/x into main locally · targets branch main @ 1a2b3c4 · once · not yet used; U-4 approval \"push the team release branch\" — action git push origin team/release · targets branch team/release @ 1a2b3c4 · once · not yet used; U-5 approval \"push it to origin dev please\" — action git push origin/dev · targets branch origin/dev @ 1a2b3c4 · once · not yet used; U-6 approval \"push feat/x to the release branch\" — action push feat/x to release · targets branch release @ 1a2b3c4 · once · not yet used; U-7 approval \"push feat/x to origin now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-8 approval \"merge feat/y into feat/x here\" — action merge feat/y into feat/x locally · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-9 approval \"push team/feat-y as well\" — action git push origin team/feat-y · targets branch team/feat-y @ 1a2b3c4 · once · not yet used\n"
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"go ahead and push it now\" — action push it · targets the retry fix @ 1a2b3c4 · once · not yet used; U-3 approval \"merge feat/x into main here\" — action merge feat/x into main locally · targets branch main @ 1a2b3c4 · once · not yet used; U-4 approval \"push the team release branch\" — action git push origin team/release · targets branch team/release @ 1a2b3c4 · once · not yet used; U-5 approval \"push it to origin dev please\" — action git push origin/dev · targets branch origin/dev @ 1a2b3c4 · once · not yet used; U-6 approval \"push feat/x to the release branch\" — action push feat/x to release · targets branch release @ 1a2b3c4 · once · not yet used; U-7 approval \"push feat/x to origin now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-8 approval \"merge feat/y into feat/x here\" — action merge feat/y into feat/x locally · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-9 approval \"push team/feat-y as well\" — action git push origin team/feat-y · targets branch team/feat-y @ 1a2b3c4 · once · not yet used; U-10 approval \"yes go ahead and push it\" — action push it · targets app/retry.rb @ 1a2b3c4 · once · not yet used; U-11 approval \"yes push it to github\" — action git push · targets repo ruslan/afk-compact @ 1a2b3c4 · once · not yet used; U-12 approval \"push this commit up please\" — action git push origin HEAD · targets commit 1a2b3c4 of app/retry.rb @ 1a2b3c4 · once · not yet used; U-13 approval \"push feat/z up as well\" — action push feat/z · targets the z fix @ 1a2b3c4 · once · not yet used; U-14 approval \"push this commit to feat/q\" — action git push origin HEAD:feat/q · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used\n"
     }
    ]
   },
@@ -71,8 +71,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Approvals \\(checked\\): U-7 git push origin feat/x → branch feat/x @ 1a2b3c4; U-8 merge feat/y into feat/x locally → branch feat/x @ 1a2b3c4; U-9 git push origin team/feat-y → branch team/feat-y @ 1a2b3c4$",
-     "^Approvals \\(gate, re-ask\\): U-2 push it → the retry fix @ 1a2b3c4; U-3 merge feat/x into main locally → branch main @ 1a2b3c4; U-4 git push origin team/release → branch team/release @ 1a2b3c4; U-5 git push origin/dev → branch origin/dev @ 1a2b3c4; U-6 push feat/x to release → branch release @ 1a2b3c4$"
+     "^Approvals \\(checked\\): U-7 git push origin feat/x → branch feat/x @ 1a2b3c4; U-8 merge feat/y into feat/x locally → branch feat/x @ 1a2b3c4; U-9 git push origin team/feat-y → branch team/feat-y @ 1a2b3c4; U-13 push feat/z → the z fix @ 1a2b3c4; U-14 git push origin HEAD:feat/q → commit 1a2b3c4 @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-2 push it → the retry fix @ 1a2b3c4; U-3 merge feat/x into main locally → branch main @ 1a2b3c4; U-4 git push origin team/release → branch team/release @ 1a2b3c4; U-5 git push origin/dev → branch origin/dev @ 1a2b3c4; U-6 push feat/x to release → branch release @ 1a2b3c4; U-10 push it → app/retry\\.rb @ 1a2b3c4; U-11 git push → repo ruslan/afk-compact @ 1a2b3c4; U-12 git push origin HEAD → commit 1a2b3c4 of app/retry\\.rb @ 1a2b3c4$"
     ],
     "rows": [
      {
@@ -80,11 +80,11 @@
       "ev": "approvals_carry",
       "fields": {
        "source": "summary",
-       "checked": 3,
-       "gate": 5,
+       "checked": 5,
+       "gate": 8,
        "unchecked": 0,
        "origins": {
-        "human": 3
+        "human": 5
        }
       }
      }
@@ -122,8 +122,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Approvals \\(checked\\): U-7 git push origin feat/x → branch feat/x @ 1a2b3c4; U-8 merge feat/y into feat/x locally → branch feat/x @ 1a2b3c4; U-9 git push origin team/feat-y → branch team/feat-y @ 1a2b3c4$",
-     "^Approvals \\(gate, re-ask\\): U-2 push it → the retry fix @ 1a2b3c4; U-3 merge feat/x into main locally → branch main @ 1a2b3c4; U-4 git push origin team/release → branch team/release @ 1a2b3c4; U-5 git push origin/dev → branch origin/dev @ 1a2b3c4; U-6 push feat/x to release → branch release @ 1a2b3c4$"
+     "^Approvals \\(checked\\): U-7 git push origin feat/x → branch feat/x @ 1a2b3c4; U-8 merge feat/y into feat/x locally → branch feat/x @ 1a2b3c4; U-9 git push origin team/feat-y → branch team/feat-y @ 1a2b3c4; U-13 push feat/z → the z fix @ 1a2b3c4; U-14 git push origin HEAD:feat/q → commit 1a2b3c4 @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-2 push it → the retry fix @ 1a2b3c4; U-3 merge feat/x into main locally → branch main @ 1a2b3c4; U-4 git push origin team/release → branch team/release @ 1a2b3c4; U-5 git push origin/dev → branch origin/dev @ 1a2b3c4; U-6 push feat/x to release → branch release @ 1a2b3c4; U-10 push it → app/retry\\.rb @ 1a2b3c4; U-11 git push → repo ruslan/afk-compact @ 1a2b3c4; U-12 git push origin HEAD → commit 1a2b3c4 of app/retry\\.rb @ 1a2b3c4$"
     ]
    }
   }

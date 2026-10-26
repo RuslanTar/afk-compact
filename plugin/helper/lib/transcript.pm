@@ -148,17 +148,26 @@ sub last_prompt_epoch {
 # identity's last word): it directly answers that message.
 #
 # Matching item (owner xxxxxxxx-06 "Matching item", NIGHT-REVIEW 2.7, R3-04): a short quote may
-# also be one whole line of a longer message (the owner answers in numbered lists: "1. publish
-# yourself." as line 1 of a 3-line reply), with the same "assistant text names a target" rule,
-# and only when (a) the line's item number (`1.`, `1)`, `1:`, after an optional list bullet or
-# bold mark) equals the number of an item of the assistant's last numbered list that names one
-# of the targets, or (b) the line itself holds the action (a word of 3 or more letters of the
-# approval's action, @ITEM_STOP_WORDS aside) or a target id. "1. yes / 2. no" to "1. Run the
-# tests? 2. Push feat/x?" never confirms the push with "1. yes": item 1 names no target, and
-# "yes" holds no action. A quote written with its item number ("1. publish yourself.") must
-# match that number. The assistant's last numbered list is the one that ends the text: a number
-# not above the one before it starts a new list; an item runs to the next item or to a blank
-# line followed by an unindented line.
+# also be one whole numbered line of a message (the owner answers in numbered lists: "1. publish
+# yourself." as line 1 of a 3-line reply), with the same "assistant text names a target" rule.
+# The whole-message rule above applies only when neither the message nor the quote starts with
+# an item number; a numbered reply, one line or several, goes through these rules. An unnumbered
+# line of a longer message never counts. The line's item number (`1.`, `1)`, `1:`, after an
+# optional list bullet or bold mark) n decides first:
+# (a) when exactly one item of the assistant's last numbered list names one of the targets, the
+#     line counts only when n is that item's number;
+# (b) when no item of that list names a target (or the text has no such list), the line counts
+#     only when it holds the action (a word of 3 or more letters of the approval's action,
+#     @ITEM_STOP_WORDS aside) or a target id;
+# when two or more items name a target, no line counts (asked again: the number cannot tell
+# which question it answered). A line holding a refusal word ($ITEM_NO: "no", "not", "don't",
+# "wait", "later" …) never counts. "1. yes / 2. no" to "1. Run the tests? 2. Push feat/x?"
+# never confirms the push with "1. yes", nor does "1. yes, push" to "1. Push feat/x? 2. Push
+# feat/y?" confirm feat/y. A quote written with its item number ("1. publish yourself.") must
+# match that number. The assistant's last numbered list is the list that ends the text (fail
+# closed): an unindented line that is no item, or a fenced code block, after it ends it, and a
+# later list replaces it; a number not above the one before it starts a new list; a numbered
+# line indented more than the list's first item is part of the current item (a sub-list).
 #
 # Owner-ruled quote sources (owner xxxxxxxx-09 "Quote src", 2026-10-26: all four kept as built,
 # no longer provisional): Q-1 code checks each quote against the user's own rows at all (O-3);
@@ -222,11 +231,16 @@ my $PASTED = qr/\bU-[0-9]+:[ \t]*approval\b/;
 # Matching item: an item line of a numbered list (an optional `-`/`*`/`+` bullet and a bold
 # mark around the number), its number and its text.
 my $ITEM_RE = qr/\A[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?([0-9]{1,3})[.):](?:\*\*|__)?(?:[ \t]+(.*))?\z/s;
-# Words of an action that never make a reply line "hold the action".
+# A fence line of a code block.
+my $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
+# Words of an action that never make a reply line "hold the action" (the go-ahead words too:
+# "proceed" or "continue" in a model-written action names no action).
 our @ITEM_STOP_WORDS = qw(the and for with into onto from then than this that these those them they its all any not now
     yet you your yours yourself please can may will would just also once when after before over via git origin upstream yes okay
-    sure fine done here there one two);
+    sure fine done here there one two proceed continue ahead good great right correct agree agreed sounds lgtm);
 my %ITEM_STOP = map { $_ => 1 } @ITEM_STOP_WORDS;
+# A refusal or a delay in a reply line: such a line is never an approval.
+my $ITEM_NO = qr/(?<![A-Za-z'\x{2019}])(?:no|not|nope|nah|never|don['\x{2019}]?t|wait|later|stop|cancel|hold|skip)(?![A-Za-z'\x{2019}])|n['\x{2019}]t(?![A-Za-z])/i;
 
 # A short quote and a message compared whole: folded, lower case, end dots and `!` dropped.
 sub _whole { my ($s) = @_; my $x = lc _fold($s); $x =~ s/[.!\s]+\z//; return $x }
@@ -242,46 +256,60 @@ sub _action_words {
     return \%w;
 }
 
-# The items of the last numbered list of an assistant text: {number => item text}.
+# The items of the numbered list that ends an assistant text: {number => item text}, empty when
+# the text does not end in one. An unindented line that is no item, or a fenced code block, ends
+# a list (what follows it is no item); a number not above the one before it starts a new list;
+# a numbered line indented more than the list's first item, and an indented line, belong to the
+# current item.
 sub _last_list {
     my ($text) = @_;
-    my (%items, $cur, $prev, $blank);
+    my (%items, $cur, $prev, $ind, $fence);
     for my $l (split /\n/, $text // '') {
-        if ($l !~ /\S/) { $blank = 1; next }
-        if ($l =~ $ITEM_RE) {
+        if ($l =~ $FENCE_RE) { $fence = !$fence; %items = (); ($cur, $prev, $ind) = (); next }
+        next if $fence;
+        next if $l !~ /\S/;
+        my ($li) = $l =~ /\A([ \t]*)/;
+        my $w = length($li =~ s/\t/    /gr);
+        if ($l =~ $ITEM_RE && !(defined $cur && $w > $ind)) {
             my $n = 0 + $1;
-            %items = () if !defined $prev || $n <= $prev;
+            if (!defined $prev || $n <= $prev) { %items = (); $ind = $w }
             ($cur, $prev) = ($n, $n);
             $items{$n} = $l;
-        } elsif (defined $cur && (!$blank || $l =~ /\A[ \t]/)) {
+        } elsif (defined $cur && $w > 0) {
             $items{$cur} .= "\n$l";
         } else {
-            $cur = undef;
+            %items = ();
+            ($cur, $prev, $ind) = ();
         }
-        $blank = 0;
     }
+    %items = () if $fence;
     return \%items;
 }
 
-# _matching_item(message, quote record, assistant text) -> 1 when one whole line of the message
-# is the short quote and that line answers the item that names a target, or itself holds the
-# action or a target (owner xxxxxxxx-06; see "Matching item" above). The caller has checked that
-# the assistant text names a target.
+# _matching_item(message, quote record, assistant text) -> 1 when one whole numbered line of the
+# message is the short quote and that line answers the one item that names a target, or, when no
+# item names one, itself holds the action or a target (owner xxxxxxxx-06; see "Matching item"
+# above). The caller has checked that the assistant text names a target.
 sub _matching_item {
     my ($msg, $q, $asst) = @_;
-    my $list;
+    my $named;
     for my $l (split /\n/, $msg) {
-        next unless $l =~ /\S/;
-        my ($n, $body) = $l =~ $ITEM_RE ? (0 + $1, $2 // '') : (undef, $l);
+        next unless $l =~ $ITEM_RE;
+        my ($n, $body) = (0 + $1, $2 // '');
         next unless _whole($body) eq $q->{wbody};
-        next if defined $q->{qnum} && !(defined $n && $n == $q->{qnum});
+        next if defined $q->{qnum} && $n != $q->{qnum};
         my $fl = _fold($body);
+        next if $fl =~ $ITEM_NO;
+        if (!$named) {
+            my $list = _last_list($asst);
+            $named = [ grep { my $it = $list->{$_}; grep { $it =~ $_ } @{ $q->{ids} } } sort { $a <=> $b } keys %$list ];
+        }
+        if (@$named) {
+            return 1 if @$named == 1 && $named->[0] == $n;
+            next;
+        }
         return 1 if grep { $fl =~ $_ } @{ $q->{ids} };
         return 1 if grep { $q->{awords}{$_} } map { lc } $fl =~ /([A-Za-z][A-Za-z0-9-]*[A-Za-z0-9])/g;
-        next unless defined $n;
-        $list //= _last_list($asst);
-        my $item = $list->{$n};
-        return 1 if defined $item && grep { $item =~ $_ } @{ $q->{ids} };
     }
     return 0;
 }
@@ -507,8 +535,9 @@ sub quotes_found {
             my ($last) = $id =~ /(\S+)\z/;
             push @ids, $last if defined $last && $last ne $id && length($last) >= 2;
         }
-        # Whole tokens: `MR !1` must not match inside `MR !12`, nor `feat/x` inside `feat/xy`.
-        $q[$i]{ids} = [ map { my $p = /\A\w/ ? '(?<!\w)' : ''; my $s = /\w\z/ ? '(?!\w)' : ''; qr/$p\Q$_\E$s/ } @ids ];
+        # Whole tokens: `MR !1` must not match inside `MR !12`, nor `feat/x` inside `feat/xy`,
+        # `feat/x-old`, `feat/x.old`, `feat/x/old` or `old-feat/x`.
+        $q[$i]{ids} = [ map { my $p = /\A\w/ ? '(?<![\w-])' : ''; my $s = /\w\z/ ? '(?![\w-]|[.\/][\w-])' : ''; qr/$p\Q$_\E$s/ } @ids ];
         my $qq = $q[$i]{quote};
         my $pre = $qq =~ /\A\w/ ? '(?<!\w)' : '';
         my $post = $qq =~ /\w\z/ ? '(?!\w)' : '';
@@ -607,9 +636,10 @@ sub quotes_found {
             next if $found[$i] || $q[$i]{quote} eq '';
             if ($q[$i]{short}) {
                 next unless grep { $asst =~ $_ } @{ $q[$i]{ids} };
-                # The whole message, or one whole line of it that answers the matching item
-                # (owner xxxxxxxx-06).
-                next unless $fw eq $q[$i]{whole} || ($q[$i]{wbody} ne '' && _matching_item($t, $q[$i], $asst));
+                # The whole message when neither it nor the quote is numbered, else one whole
+                # numbered line of it that answers the matching item (owner xxxxxxxx-06).
+                if ($ft !~ $ITEM_RE && !defined $q[$i]{qnum}) { next unless $fw eq $q[$i]{whole} }
+                else { next unless $q[$i]{wbody} ne '' && _matching_item($t, $q[$i], $asst) }
             } else {
                 next unless $ft =~ $q[$i]{re};
             }
