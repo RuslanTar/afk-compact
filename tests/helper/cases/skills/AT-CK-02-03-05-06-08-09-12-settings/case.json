@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "SK-1..SK-5, SK-7 (owner xxxxxxxx-12/-13/-14, S-SETTINGS E1-E5): the AT-CK rows AT-CK-01-04-07-11 left: a ticket_pattern id with a slash gives no ticket bucket and an invalid pattern the default plus a note (AT-CK-02; the id-rule `ticket_invalid` note is not built); locate lists the old default-pattern bucket first after a pattern change (AT-CK-03); secret_extra_rules HARD withholds as user-hard-1 and blocks publish, WARN redacts and is an ADVISORY line, NAME withholds by name, the shipped rules still fire, and a flag or env value is ignored with a note (AT-CK-04..06); resume_proceed confirm in the file with auto from env stays confirm with a note (AT-CK-08; no command takes a --resume-proceed flag, so env stands in for the flag); evidence_total_max_mb 20 stops evidence --keep and the sweep with `withheld: over-total`, 5 is clamped to 10 (AT-CK-09); export classes of the six keys (AT-CK-12)",
+ "note": "SK-1..SK-5, SK-7 (owner xxxxxxxx-12/-13/-14, S-SETTINGS E1-E5): the AT-CK rows AT-CK-01-04-07-11 left: a ticket_pattern id with a slash gives no ticket bucket and an invalid pattern the default plus a note (AT-CK-02; the id-rule `ticket_invalid` note is not built); locate lists the old default-pattern bucket first after a pattern change (AT-CK-03); secret_extra_rules HARD withholds as user-hard-1 and blocks publish, WARN redacts and is an ADVISORY line, NAME withholds by name, the shipped rules still fire, and a flag or env value is ignored with a note (AT-CK-04..06); resume_proceed confirm in the file with auto from env stays confirm with a note (AT-CK-08; no command takes a --resume-proceed flag, so env stands in for the flag); evidence_total_max_mb 20 stops evidence --keep and the sweep with `withheld: over-total`, 5 is clamped to 10 (AT-CK-09; the sweep step lifts the 8 s sweep budget with STORE_TEST_SWEEP_BUDGET_MS, since two 8 MB secret scans can pass 8 s on a busy host and turn s3 into referenced-budget before the cap is reached); export classes of the six keys (AT-CK-12)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -424,6 +424,9 @@
      "sid": "12222222-2222-4333-8444-555555555555"
     }
    ],
+   "env": {
+    "STORE_TEST_SWEEP_BUDGET_MS": "600000"
+   },
    "argv": [
     "sweep",
     "--sid",

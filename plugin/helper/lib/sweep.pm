@@ -96,7 +96,11 @@ sub run {
     }
     util::trace('sweep');
     my $t0 = util::clock_ms();
-    my $deadline = $t0 + ($a{budget_ms} // 8000);
+    # test seam (STORE_TEST_MODE only): STORE_TEST_SWEEP_BUDGET_MS replaces the budget, so a
+    # case about the caps (AT-CK-09) is not decided by how busy the host is
+    my $budget = (util::test_mode() && ($ENV{STORE_TEST_SWEEP_BUDGET_MS} // '') =~ /\A[1-9][0-9]{0,6}\z/)
+        ? 0 + $ENV{STORE_TEST_SWEEP_BUDGET_MS} : ($a{budget_ms} // 8000);
+    my $deadline = $t0 + $budget;
     my $index = rc::watch() . '/evidence-index.tsv';
     my $used = 0;
     my (@rows, %rules, $bytes);
