@@ -127,7 +127,8 @@ const TAGS: Record<string, Tag[]> = {
  * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
  * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
  * (owner xxxxxxxx-25) and `midturn`, `idle-again` (owner xxxxxxxx-37) only with `idle` or
- * `idle-halt`, `handoff` never with `handoff-partial`, and one handoff-turn kind at a time.
+ * `idle-halt`, `handoff` never with `handoff-partial`, `driver` never with `idle-halt`, and one
+ * handoff-turn kind at a time.
  */
 function combos(tags: Tag[]): Tag[][] {
   let out: Tag[][] = [[]]
@@ -136,6 +137,8 @@ function combos(tags: Tag[]): Tag[][] {
   if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
   out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
   out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt'))
+  // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused).
+  out = out.filter(c => !(has(c, 'driver') && has(c, 'idle-halt')))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }

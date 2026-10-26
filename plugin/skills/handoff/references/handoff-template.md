@@ -168,12 +168,13 @@ sibling repos: <name abs path> · this handoff: @self@
 ```
 
 The helper replaces `@self@` with the published path. Subsections only when they apply:
-- **GSD**, only when `begin` printed `gsd` (this session's own GSD work or driving skill, measured from its transcript); copy `gsd.line` and `gsd.driver` as printed, never recall or add a workstream:
+- **GSD**, only when `begin` printed `gsd` (this session's own GSD work or driving skill, measured from its transcript); copy `gsd.line`, `gsd.reentry` and `gsd.driver` (those printed) as printed, never recall or add a workstream:
   ```
   GSD (this session): workstream <ws> · <STATE.md path>: status … · phase … · last activity …
-  Active driver: <command> (<how>, <stamp>) · re-enter: <commands>
+  GSD re-entry (new session only): /gsd-resume-work --ws <ws>
+  Active driver: <command> (<how>, <stamp>) · re-enter: <command>
   ```
-  The resume runs the `re-enter:` commands. This skill never writes STATE.md or `.planning/HANDOFF.json`.
+  The resume runs an Active driver's `re-enter:` command. This skill never writes STATE.md or `.planning/HANDOFF.json`.
 - **Environment**: services and how to start them, the env contract (names, never values), where credentials live and how they are provisioned, the account; point to project docs that hold it.
 - **Guards in force** (≤5 lines, only when met this session): `<guard> → blocks <what> → sanctioned route <allow rule | user-run ! <cmd> | project script>`. Never a way around a guard.
 - **Ownership**: writer sid8; other live sessions or peers on this checkout, bucket or lane; foreign commits; newer handoffs from other sessions and what they decided; `read-only: <resource>, owned by <sid8 | peer>`.

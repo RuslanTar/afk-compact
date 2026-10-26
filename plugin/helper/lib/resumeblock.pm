@@ -30,7 +30,8 @@ sub build {
     # quoting can carry (store_path_unquotable) has no word: drop the lines that hold the token.
     my $store = ctx::store_cmd();
     my $re = $a{remeasure} // '';
-    # Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver.
+    # Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver
+    # (never with [idle-halt], which this classic path never sets).
     push @tags, 'driver' if $re =~ /^Active driver: /m;
     my $max = 3000;
     my $text;

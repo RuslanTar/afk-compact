@@ -467,6 +467,12 @@ def probes(name):
         t = t.replace("only if auto-continue is off or at its hourly limit", "at once")
         write_text(p, t + "Copy no evidence: after this turn the plugin copies the temp files this session cited.\n")
 
+    def driver_halt(d):
+        """Owner 2026-10-26 [driver]: a re-enter instruction planted into the [idle-halt] line, so a
+        halted idle block would run a loop skill while auto-continue is paused."""
+        edit(d, "src/assets/resume-context.txt", "then stop and wait for the user (auto-continue is paused).",
+             "then run the Active driver's re-enter command, then stop and wait for the user (auto-continue is paused).")
+
     def edit(d, rel, old, new, count=1):
         """Replace old with new in a copy's file; a missing old is a probe bug, not a pass."""
         p = os.path.join(d, *rel.split("/"))
@@ -822,7 +828,7 @@ def probes(name):
         ("write-first", "AT-SK-03", gates_only("write-first"), write_first,
          [r"^GATE write-first plugin/skills/handoff/SKILL\.md:\d+: AT-SK-03 before-final"], None),
         ("self-heal", "AT-J-13", gates_only("self-heal"), self_heal,
-         [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 21504 \(the logged reason covers up to 22528\)$",
+         [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 21504 \(the logged reason covers up to 22664\)$",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): 'with its `probe` if read-only'",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): \"the row's own probe only if read-only\"",
@@ -953,6 +959,8 @@ def probes(name):
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
          [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",
           r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),
+        ("driver-halt", "GSD re-entry [driver]", ["tools/assemble"], driver_halt,
+         [r"^halt check res \S*idle-halt\S* FAIL runs 're-enter command' while halted$", r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),
         ("prod-exclusive", "XR-19", ["tools/assemble"], prod_exclusive,
          [r"^step check res \S*prod-allow +FAIL steps not 1\.\.n", r"^RESULT: FAIL$"], None),
         ("submit-slash", "AT-LT-18/AT-IC-12", ["tools/assemble"], submit_slash,

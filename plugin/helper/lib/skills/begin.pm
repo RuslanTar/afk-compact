@@ -208,10 +208,11 @@ sub run {
     }
     if ($repin) { $ownership{repin} = $repin }
 
-    # This session's own GSD line and Active driver line (owner 2026-10-26 21:37: from its
-    # transcript, never the worktree's .planning alone): {line, driver, workstream, state}.
+    # This session's own GSD line, GSD re-entry line and Active driver line (owner 2026-10-26
+    # 21:37: from its transcript, never the worktree's .planning alone): {line, reentry, driver,
+    # workstream, state}.
     my $gs = skills::core::gsd(sid => $sid, cwd => $cwd, worktree => $g->{worktree});
-    my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line driver workstream state) } : undef;
+    my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line reentry driver workstream state) } : undef;
     $gsd->{line} //= $gs->{lines}[0] if $gsd && !defined $gsd->{driver};
 
     my ($queued_line, $queue_lane, $queue) = _queue($ctx, $sid);
@@ -541,8 +542,8 @@ sub _json_lines {
 # Encode within 3 KB (U-04). What carries no entry goes first: the config source labels, then
 # the two root values in config (whole paths; the handoff root is store_root again). Then
 # lists are shortened in this order: the tails of tmp_candidates, porcelain.first and
-# inflight_measured.tasks, gsd's workstream and state fields (the line and the Active driver
-# line stay), the rest of tmp_candidates and porcelain.first, and last
+# inflight_measured.tasks, gsd's workstream and state fields (its GSD, re-entry and Active
+# driver lines stay), the rest of tmp_candidates and porcelain.first, and last
 # newer_foreign, down to one entry (the handoff list the Ownership record rests on) and only
 # when that brings the reply within 3 KB: an entry is never given up for nothing. Past every
 # cut the reply stays over 3 KB. The cuts are greedy, so a later, larger cut can leave room:
@@ -600,8 +601,8 @@ sub _fit {
         }
         $did;
     };
-    # gsd is this session's {line, driver, workstream, state}: workstream and state go together
-    # (the line and the Active driver line name them), counted as fields, as config.
+    # gsd is this session's {line, reentry, driver, workstream, state}: workstream and state go
+    # together (the GSD, re-entry and Active driver lines name them), counted as fields, as config.
     my $gsd_drop = sub {
         my $g = $out->{gsd};
         return 0 unless ref $g eq 'HASH';

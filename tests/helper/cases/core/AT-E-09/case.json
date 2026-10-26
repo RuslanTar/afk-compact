@@ -1,6 +1,6 @@
 {
  "id": "AT-E-09",
- "note": "MOD-SPEC §10 AT-E-09 (OD-8, S-13; owner 2026-10-26 21:37, GSD re-entry per session): checkpoint --measured in tests/fixtures/repos/planning-state.json: a session whose transcript shows no GSD work gets no GSD lines although the worktree has .planning/STATE.md; once its transcript holds a typed /gsd-progress, the JSON and the measured block carry its flat GSD line (read from STATE.md's prose lines) and its Active driver line; git status --porcelain and the STATE.md mtime are unchanged, and no pin is written",
+ "note": "MOD-SPEC §10 AT-E-09 (OD-8, S-13; owner 2026-10-26 21:37, GSD re-entry per session): checkpoint --measured in tests/fixtures/repos/planning-state.json: a session whose transcript shows no GSD work gets no GSD lines although the worktree has .planning/STATE.md; once its transcript holds a typed /gsd-progress, the JSON and the measured block carry its flat GSD line (read from STATE.md's prose lines) and its passive GSD re-entry line (no Active driver: /gsd-progress is no loop); git status --porcelain and the STATE.md mtime are unchanged, and no pin is written",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -100,7 +100,7 @@
       "re": "^GSD \\(this session\\): no workstream named · \\S+/\\.planning/STATE\\.md: status in progress · phase 2 of 4 \\(retry worker\\) · last activity 2026-10-21 - plan 2\\.3 started$"
      },
      "gsd.1": {
-      "re": "^Active driver: GSD \\(newest: /gsd-progress, typed, 2026-10-21 13:00 \\+0300\\) · re-enter: /gsd-resume-work$"
+      "re": "^GSD re-entry \\(new session only\\): /gsd-resume-work$"
      },
      "measured_block": {
       "re": "(?m)^GSD \\(this session\\): no workstream named · \\S+/\\.planning/STATE\\.md: status in progress"

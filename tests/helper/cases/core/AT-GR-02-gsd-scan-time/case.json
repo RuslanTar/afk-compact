@@ -37,7 +37,7 @@
        "sessionId": "22222222-2222-4222-8222-222222222222",
        "timestamp": "2026-10-26T10:00:00.000Z",
        "type": "user",
-       "uuid": "row-0054",
+       "uuid": "row-0106",
        "version": "2.1.310",
        "message": {
         "role": "user",
@@ -65,7 +65,7 @@
        "sessionId": "22222222-2222-4222-8222-222222222222",
        "timestamp": "2026-10-26T10:01:00.000Z",
        "type": "user",
-       "uuid": "row-0007",
+       "uuid": "row-0010",
        "version": "2.1.310",
        "message": {
         "role": "user",
@@ -82,14 +82,14 @@
        "sessionId": "22222222-2222-4222-8222-222222222222",
        "timestamp": "2026-10-26T10:02:00.000Z",
        "type": "assistant",
-       "uuid": "row-0009",
+       "uuid": "row-0012",
        "version": "2.1.310",
        "message": {
         "role": "assistant",
         "content": [
          {
           "type": "tool_use",
-          "id": "toolu_0008",
+          "id": "toolu_0011",
           "name": "Skill",
           "input": {
            "skill": "phase-loop",
@@ -106,14 +106,14 @@
        "sessionId": "22222222-2222-4222-8222-222222222222",
        "timestamp": "2026-10-26T10:03:00.000Z",
        "type": "assistant",
-       "uuid": "row-0011",
+       "uuid": "row-0014",
        "version": "2.1.310",
        "message": {
         "role": "assistant",
         "content": [
          {
           "type": "tool_use",
-          "id": "toolu_0010",
+          "id": "toolu_0013",
           "name": "Bash",
           "input": {
            "command": "gsd_run query state.load --ws workstream-a --cwd $TMP/repo",
@@ -142,7 +142,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /gsd-resume-work --ws workstream-a, then /phase-loop --ws workstream-a resume$"
+     "^Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /phase-loop --ws workstream-a resume$"
     ],
     "ms_max": 1800
    }
@@ -162,7 +162,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /gsd-resume-work --ws workstream-a, then /phase-loop --ws workstream-a resume$"
+     "^Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /phase-loop --ws workstream-a resume$"
     ],
     "ms_max": 1000
    }
