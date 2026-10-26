@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-12; O-3 decided (owner xxxxxxxx-09, all four quote-source rules kept).; REVIEW-NIGHT-3: gates named in words beside a class hit, src:dst refspecs and the remote default branch (R3-02), a local merge into a protected branch no longer a gate (owner xxxxxxxx-10, P-3 loosened); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01 (root ruling 2026-10-23 11:56): a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask)",
+ "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-12; O-3 decided (owner xxxxxxxx-09, all four quote-source rules kept).; REVIEW-NIGHT-3: gates named in words beside a class hit, src:dst refspecs, a local merge into a protected branch and the remote default branch (R3-02; owner xxxxxxxx-10 \"Push names\": all four push readings kept); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01 (root ruling 2026-10-23 11:56): a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -406,7 +406,7 @@
    ]
   },
   {
-   "name": "R3-02: a gate named in words beside a push, a src:dst refspec to main, the remote default branch; owner xxxxxxxx-10 (P-3 loosened): a local merge into main is no push and carries",
+   "name": "R3-02: a gate named in words beside a push, a src:dst refspec to main, a local merge into main, the remote default branch (owner xxxxxxxx-10: all four push readings kept)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -423,8 +423,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Approvals \\(checked\\): U-9 merge feat/x into main locally → branch main @ 1a2b3c4$",
-     "^Approvals \\(gate, re-ask\\): U-7 git push origin feat/x and deploy → branch feat/x @ 1a2b3c4; U-8 git push origin feat/x:main → branch feat/x @ 1a2b3c4; U-10 push feat/x to dev → branch dev @ 1a2b3c4$"
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(gate, re-ask\\): U-7 git push origin feat/x and deploy → branch feat/x @ 1a2b3c4; U-8 git push origin feat/x:main → branch feat/x @ 1a2b3c4; U-9 merge feat/x into main locally → branch main @ 1a2b3c4; U-10 push feat/x to dev → branch dev @ 1a2b3c4$"
     ]
    }
   },

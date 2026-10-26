@@ -33,21 +33,19 @@ package skills::approvals;
 #         at or before the claim carry approvals only along the claimant's line, the ones dated
 #         after it only along the predecessor's own (_claim_cut), and the resumed predecessor's
 #         quote checks count only rows after the claim (quote_floor);
-#   gates from text (owner xxxxxxxx-10 "Push names", 2026-10-26; NIGHT-REVIEW 3.4):
-#         P-1 kept (owner-ruled): $ACTION_WORDS reads a plain-words action ("push feat/x") into
-#         outward class ids, and a gate named in plain words counts beside a class pattern's hit
-#         (REVIEW-NIGHT-3 R3-02: "push feat/x and deploy" never carries a deploy);
-#         P-2 loosened: a push approval that names no branch carries as a push of the current
-#         branch: protected-push only when the current branch or its upstream's branch is
-#         protected, or the current branch cannot be told (a detached HEAD, no repository), as
-#         `risk` reads a push without a refspec ($PUSH_UNNAMED_IS_GATE = 0; 1 restores "every
-#         unnamed push is a gate");
-#         P-3 loosened: a local merge (not a merge request) whose words name a protected branch is
-#         no longer protected-push by itself; with push words it is a push like any other;
-#         P-4 loosened: a name after a remote prefix (`team/release`) is not read as that branch,
-#         except the remote's default branch itself after its own remote's name (`origin/dev`
-#         when origin's HEAD is dev): the remote's default branch is always protected (spec §4
-#         Explicit gate, §12 protected-push; not a reading);
+#   gates from text (owner xxxxxxxx-10 "Push names", 2026-10-26, confirmed "Keep all four":
+#         all four kept as built, no longer provisional; NIGHT-REVIEW 3.4):
+#         P-1 $ACTION_WORDS reads a plain-words action ("push feat/x") into outward class ids, and
+#         a gate named in plain words counts beside a class pattern's hit (REVIEW-NIGHT-3 R3-02:
+#         "push feat/x and deploy" never carries a deploy);
+#         P-2 a push approval that names no branch is protected-push ($PUSH_UNNAMED_IS_GATE), as
+#         `risk` counts an unknown push destination: "yes, push it" is re-asked after a
+#         compaction;
+#         P-3 a local merge (not a merge request) whose words name a protected branch is
+#         protected-push ("merge feat/x into main" is re-asked);
+#         P-4 a name after its remote prefix counts as that branch (`team/release` is `release`);
+#         the remote's default branch is protected, as in `risk` (spec §4 Explicit gate, §12
+#         protected-push; not a reading);
 #         owner xxxxxxxx-29: a branch in the user's add-only `protected_branches` setting is
 #         protected too (beside the shipped list, never instead of it);
 #   quotes (transcript::quotes_found): owner xxxxxxxx-09 "Quote src" (2026-10-26) kept all four
@@ -147,9 +145,9 @@ our $PROD_TARGET_WORDS = 4;
 our %PROD_CLAUSE_WORDS = map { $_ => 1 } qw(and then also plus or after afterwards before so to while if when unless until
     with via using by once xargs tee the a an it them this that);
 our $PROD_WRITE_WORDS = qr/\b(?:fix|change|edit|set|add|remove|enable|disable|rotate|trigger|kill|stop|start|roll[ -]?back|promote|purge|flush|clear|backfill|import|load|sync|send|run|execute|migrat\w*|release|upgrade|downgrade|install|uninstall|drain|cordon|evict|terminate|reboot|shutdown|resize|approve|close|archive|tag|label|annotate|scp|rsync)\b/i;
-# Owner xxxxxxxx-10 (P-2 loosened): 0 reads a push approval that names no branch as a push of
-# the current branch (_current_protected); 1 restores "every unnamed push is a gate".
-our $PUSH_UNNAMED_IS_GATE = 0;
+# Owner xxxxxxxx-10 "Push names" (P-2 kept, confirmed "Keep all four"): a push approval that
+# names no branch is protected-push.
+our $PUSH_UNNAMED_IS_GATE = 1;
 # The origin class words the approvals_carry row counts (owner xxxxxxxx-12); anything else is
 # `unknown` (a line carried from a record written before the origins were kept).
 our %ORIGIN_WORDS = map { $_ => 1 } qw(human composer bridge sdk none dialog unknown);
@@ -223,14 +221,12 @@ sub section_lines {
 # classes(entry [, cwd]) -> {outward => [class ids], gate => gate id | undef}
 # The outward ids are the class patterns' hits on the action and targets, else the plain
 # words' ($ACTION_WORDS). The gate is read from both (REVIEW-NIGHT-3 R3-02: "git push origin
-# feat/x and deploy" names a deploy although a class pattern matched the push). A push whose
-# words name a protected branch is protected-push: protected_branch_re, an entry of the user's
-# protected_branches setting (owner xxxxxxxx-29, add-only) or the remote default branch of
-# origin or upstream in cwd, each side of a `src:dst` refspec counted. Owner xxxxxxxx-10: a
-# local merge is no push by itself (P-3); a name after a remote prefix (`team/release`) is read
-# whole, not as `release` (P-4), but `<remote>/<its default branch>` (`origin/dev`) stays
-# protected; a push that names no branch is a push of the current branch (P-2,
-# _current_protected).
+# feat/x and deploy" names a deploy although a class pattern matched the push). A push, or a
+# local merge (not a merge request), whose words name a protected branch is protected-push:
+# protected_branch_re, an entry of the user's protected_branches setting (owner xxxxxxxx-29,
+# add-only) or the remote default branch of origin or upstream in cwd, each side of a `src:dst`
+# refspec and a name after its remote prefix (`fork/main`) counted. Owner-ruled (xxxxxxxx-10
+# "Push names", all four kept; see the header): P-1 to P-4.
 sub classes {
     my ($e, $cwd) = @_;
     my $text = "$e->{action} · $e->{targets_text}";
@@ -262,12 +258,11 @@ sub classes {
         if ($PROD_READ_CARRIES && _prod_read($e, $text, \%any)) { $prod = 'read' }
         else { $gate = 'prod-write' }
     }
-    if (!defined $gate && $any{push}) {
+    my $merge = $e->{action} =~ /\bmerge\b/i && !$any{'mr-write'};
+    if (!defined $gate && ($any{push} || $merge)) {
         my $pre = skills::spec::regex_at('protected_branch_re');
         my $pb = skills::core::protected();
-        my @defs = _default_branches($cwd);
-        my %def = map { $_->[1] => 1 } @defs;
-        my %rdef = map { ("$_->[0]/$_->[1]" => 1) } @defs;
+        my %def = map { $_ => 1 } _default_branches($cwd);
         my ($named, $protected) = (0, 0);
         for my $t (@{ $e->{targets} }, $e->{action}) {
             my $id = $t =~ s/\s+@\s.*\z//sr;
@@ -277,36 +272,16 @@ sub classes {
                 for my $part (split /:/, $w) {
                     my $b = $part =~ s{\A\+}{}r;
                     $b =~ s{\Arefs/(?:heads|remotes)/}{};
-                    $protected = 1 if ($pre && lc($b) =~ $pre) || $def{$b} || $rdef{$b} || defined skills::core::protected_user($b, $pb);
+                    for my $n ($b, ($b =~ m{\A[^/]+/(.+)\z} ? $1 : ())) {
+                        $protected = 1 if ($pre && lc($n) =~ $pre) || $def{$n} || defined skills::core::protected_user($n, $pb);
+                    }
                 }
             }
             $named = 1 if $id =~ /\bbranch[ \t]+\S/i || $id =~ m{[A-Za-z0-9._-]/[A-Za-z0-9._/-]};
         }
-        $protected = 1 if !$protected && !$named && ($PUSH_UNNAMED_IS_GATE || _current_protected($cwd, $pre, $pb, \%def));
-        $gate = 'protected-push' if $protected;
+        $gate = 'protected-push' if $protected || ($any{push} && !$named && $PUSH_UNNAMED_IS_GATE);
     }
     return { outward => \@ids, gate => $gate, prod => $prod };
-}
-
-# Owner xxxxxxxx-10 (P-2 loosened): a push approval that names no branch is a push of the
-# current branch, read as `risk` reads `git push` without a refspec. 1 (protected) when the
-# current branch or its upstream's branch is the remote default branch, matches
-# protected_branch_re or an entry of the user's protected_branches setting, or when the current
-# branch cannot be told (no cwd, no repository, a detached HEAD: fail closed, as `risk` counts an
-# unknown push destination).
-sub _current_protected {
-    my ($cwd, $pre, $pb, $def) = @_;
-    $cwd //= skills::util::cwd();
-    return 1 unless defined $cwd;
-    my $cur = eval { skills::gitfacts::line(skills::gitfacts::git($cwd, 'symbolic-ref', '--short', '-q', 'HEAD')) };
-    return 1 unless defined $cur && $cur ne '';
-    my @b = ($cur);
-    my $u = eval { skills::gitfacts::line(skills::gitfacts::git($cwd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}')) };
-    push @b, $1 if defined $u && $u =~ m{\A[^/]+/(.+)\z};
-    for my $n (@b) {
-        return 1 if !$pre || lc($n) =~ $pre || $def->{$n} || defined skills::core::protected_user($n, $pb);
-    }
-    return 0;
 }
 
 # 1 when an approval that names production is one production read by the allow list above
@@ -421,7 +396,7 @@ sub _prod_targets {
 }
 
 # The default branches of the remotes origin and upstream in cwd (refs/remotes/<r>/HEAD), the
-# spec's "the remote's default branch" of protected-push: ([remote, branch]…); () outside git.
+# spec's "the remote's default branch" of protected-push; () outside git.
 my %DEFAULT_BRANCHES;
 sub _default_branches {
     my ($cwd) = @_;
@@ -431,7 +406,7 @@ sub _default_branches {
         my @b;
         for my $r (qw(origin upstream)) {
             my $x = eval { skills::gitfacts::line(skills::gitfacts::git($cwd, 'symbolic-ref', '--short', '-q', "refs/remotes/$r/HEAD")) };
-            push @b, [ $r, $1 ] if defined $x && $x =~ m{\A\Q$r\E/(.+)\z};
+            push @b, $1 if defined $x && $x =~ m{\A\Q$r\E/(.+)\z};
         }
         \@b;
     };
