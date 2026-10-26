@@ -1,8 +1,10 @@
 package sessions;
 # lib/sessions.pm: per-process records and lineage (MOD-SPEC §7, HK-49, OD-16).
 # Owner: WP-core. All records are write-once by exclusive create.
-#   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.live-<sid8>.json  {pid, pid_lstart, host, session_id, cwd, worktree, source, ts}
+#   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.live-<sid8>.json  {pid, pid_lstart, host, session_id, cwd, worktree, head, source, ts}
 #     (host added for the cross-session finish, MOD-SPEC §5.8 / C-STORE D8; additive)
+#     (head: the work tree's HEAD commit when the record was written, null outside git or on an
+#     unborn branch; owner xxxxxxxx-08, the start HEAD that `risk` compares build files with; additive)
 #   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.ended-<sid8>.json {session_id, reason, ts}
 #   <root>/.sessions/<sid>.lineage.json {previous_session_id, lineage_reason}
 use strict;
@@ -19,7 +21,7 @@ sub _key {
 }
 
 sub write_live {
-    my ($sid, $cwd, $worktree, $source) = @_;
+    my ($sid, $cwd, $worktree, $source, $head) = @_;
     my $c = rc::claude();
     my $f = by_pid() . '/' . _key($c) . '.live-' . substr($sid, 0, 8) . '.json';
     # ts in milliseconds when Time::HiRes loads (own_start: a row from the record's second may be
@@ -27,7 +29,7 @@ sub write_live {
     # record as coarse (that second is decided by row order, never by time).
     my $now = util::now();
     my $rec = jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, host => identity::host(), session_id => $sid, cwd => $cwd,
-                         worktree => $worktree, source => $source, ts => (util::stamp_ms() ? util::iso_ms($now) : util::iso($now)));
+                         worktree => $worktree, head => $head, source => $source, ts => (util::stamp_ms() ? util::iso_ms($now) : util::iso($now)));
     return util::write_excl($f, jsonc::encode_bytes($rec) . "\n", 0600);
 }
 

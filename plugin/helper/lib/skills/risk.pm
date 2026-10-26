@@ -24,18 +24,25 @@ package skills::risk;
 #   - recorded: a segment byte-identical to a command the plugin recorded in any session's
 #     jobs.jsonl under the watch root lifts only `not-read-only`;
 #   - test-build: a test_build_re segment counts only when the repository defines the target
-#     (Makefile rule, package.json script, Rakefile, build.gradle*, gradlew) and no test or build
-#     definition differs from HEAD (NR-23: the exemption ends once such a file changed);
+#     (Makefile rule, package.json script, Rakefile, build.gradle*, gradlew), no test or build
+#     definition differs from HEAD in the work tree (NR-23: the exemption ends once such a file
+#     changed), and none differs between the HEAD this session started on and HEAD (owner
+#     xxxxxxxx-08, REVIEW-NIGHT-2 U-05: a commit, merge, checkout or reset since the start); an
+#     unknown start HEAD (no record of this session for this work tree, a record without one, a
+#     commit git no longer has) asks;
 #   - gate: the explicit gate classes name the first family that matches (env-write, then
 #     infra-write, then deploy); a production class on a command that is not read-only is the
 #     prod-write gate; a push whose destination is the remote's default branch, matches
 #     protected_branch_re or an entry of the user's add-only protected_branches setting (owner
 #     xxxxxxxx-29), or cannot be told (--all, --mirror, a detached HEAD) is protected-push;
 #     without a refspec the current branch and its upstream's branch both count.
-# Provisional readings (owner decisions open, recommended reading built): O-6 (this check in
-# code at all); $PROD_WRITE_RE (which production commands are the prod-write gate); the
-# test/build exemption refused while a $BUILD_DEF_RE file differs from HEAD (NR-23); an unknown
-# push destination counts as protected.
+# Owner-ruled readings (2026-10-26, night review xxxxxxxx-07 "Risk rules", all four kept): a
+# production command that is not read-only is the prod-write gate ($PROD_WRITE_RE, R-1); an
+# unknown push destination counts as protected (R-2); a quote or backslash inside a word makes a
+# foreign command ask (R-3, REVIEW-NIGHT-3 R3-01: readonly_cmd_re refuses such a word); the class
+# patterns also match the unquoted, lower-cased form (_forms, R-4, R3-06). The test/build
+# exemption ends on a $BUILD_DEF_RE change in the work tree (NR-23) or since the start HEAD
+# (xxxxxxxx-08). Still provisional: O-6 (this check in code at all).
 # Source own (an own handoff or this session's summary, resume Rule 2): runs under the normal
 # permission rules, so only gate, outward, production and credential-value ask.
 use strict;
@@ -84,7 +91,7 @@ sub run {
     my $cwd = defined $o->{cwd} && $o->{cwd} ne '' ? skills::util::abs_path($o->{cwd}) : skills::util::cwd();
     die skills::cli::usage('--cwd: not a folder') unless defined $cwd && -d skills::util::bytes($cwd);
     my $ctx = skills::ctx::new({});
-    skills::ctx::resolve_sid($ctx, undef);
+    my $id = skills::ctx::resolve_sid($ctx, undef);
     my $r;
     if (length($raw) > $CMD_MAX || $raw =~ /\x00/) {
         $r = { result => 'ask', classes => ['opaque'], ids => [], why => undef, notes => [] };
@@ -92,7 +99,8 @@ sub run {
         my $cmd = skills::util::text($raw);
         $cmd =~ s/\r?\n\z//;
         die skills::cli::usage('--cmd-file: empty command') unless $cmd =~ /\S/;
-        $r = classify($cmd, source => $source, cwd => $cwd, watch => $ctx->{watch});
+        $r = classify($cmd, source => $source, cwd => $cwd, watch => $ctx->{watch},
+                      start_heads => start_heads($ctx, $id->{degraded} && $id->{degraded} eq 'no-session-id' ? undef : $id->{sid}));
     }
     if ($r->{result} eq 'none') {
         skills::cli::say("risk: none ($r->{why})");
@@ -105,9 +113,11 @@ sub run {
     return 0;
 }
 
-# classify(cmd, source => own|foreign, cwd => DIR, watch => DIR)
+# classify(cmd, source => own|foreign, cwd => DIR, watch => DIR, start_heads => {worktree => head|undef})
 #   -> {result => none|ask, classes => [risk ids in @ORDER], ids => [outward/gate/prod ids],
 #       why => read-only|recorded|test-build|own (none only), notes => [..]}
+# start_heads (start_heads() below): the HEAD this session started on per work tree; without
+# an entry for the command's work tree a test or build run asks (owner xxxxxxxx-08).
 # Also used by heal-check for an own handoff's recipe (HC-1).
 sub classify {
     my ($cmd, %a) = @_;
@@ -156,7 +166,7 @@ sub classify {
     my $top = $w->{in_git} ? (skills::util::abs_path($w->{worktree}) // $w->{worktree}) : undef;
     my ($recorded, $jobs_read) = (undef, 0);
     my %why;
-    my $build_dirty;
+    my ($build_dirty, $start_changed);
     for my $seg (split $SEG_SPLIT, $cmd) {
         $seg =~ s/\A\s+|\s+\z//g;
         next if $seg eq '';
@@ -170,7 +180,13 @@ sub classify {
             $build_dirty //= _build_dirty($top);
             my $def = _defined_target($seg, $cwd, $top);
             if (!$def) { push @notes, 'the repository defines no such test or build target here' }
-            elsif (@$build_dirty) { push @notes, 'a test or build definition differs from HEAD (' . join(', ', @$build_dirty[0 .. ($#$build_dirty < 2 ? $#$build_dirty : 2)]) . '); a test or build run asks' }
+            elsif (@$build_dirty) { push @notes, 'a test or build definition differs from HEAD (' . _first3($build_dirty) . '); a test or build run asks' }
+            elsif (!($start_changed //= _start_changed($top, $a{start_heads}))->{known}) {
+                push @notes, 'the HEAD this session started on is not known for this work tree; a test or build run asks';
+            }
+            elsif (@{ $start_changed->{files} }) {
+                push @notes, 'a test or build definition changed since this session started (' . _first3($start_changed->{files}) . '); a test or build run asks';
+            }
             else { $why{'test-build'} = 1; next }
         }
         if (!$jobs_read) { $recorded = _recorded_commands($a{watch}); $jobs_read = 1 }
@@ -413,6 +429,40 @@ sub _build_dirty {
         push @f, $p if $p =~ $BUILD_DEF_RE;
     }
     return \@f;
+}
+
+sub _first3 { my ($l) = @_; return join(', ', @$l[0 .. ($#$l < 2 ? $#$l : 2)]) }
+
+# start_heads(ctx, sid) -> {real work-tree path => start HEAD or undef}: for each work tree a
+# live record of this session names, the head of its oldest such record (a resumed session
+# keeps the HEAD it first started on). {} for an anonymous session (CW-1) or no record.
+sub start_heads {
+    my ($ctx, $sid) = @_;
+    my %h;
+    return \%h unless defined $sid && $sid ne '';
+    my @r = grep { $_->{state} eq 'live' && ($_->{data}{session_id} // '') eq $sid && defined $_->{data}{worktree} && !ref $_->{data}{worktree} }
+            @{ skills::ctx::records($ctx) };
+    @r = sort { (skills::util::iso_to_epoch($a->{data}{ts}) // 0) <=> (skills::util::iso_to_epoch($b->{data}{ts}) // 0) } @r;
+    for my $x (@r) {
+        my $wt = skills::util::abs_path($x->{data}{worktree}) // $x->{data}{worktree};
+        next if exists $h{$wt};
+        my $hd = $x->{data}{head};
+        $h{$wt} = (defined $hd && !ref $hd && $hd =~ /\A[0-9a-f]{7,64}\z/) ? $hd : undef;
+    }
+    return \%h;
+}
+
+# _start_changed(top, start_heads) -> {known => 0|1, files => [..]}: the $BUILD_DEF_RE files that
+# differ between the start HEAD of this work tree and HEAD (commits, merges, checkouts and
+# resets alike; renames list both names). Not known without a start HEAD or when git cannot
+# compare it (fail closed: the caller asks).
+sub _start_changed {
+    my ($top, $sh) = @_;
+    my $head = defined $top && ref $sh eq 'HASH' ? $sh->{$top} : undef;
+    return { known => 0, files => [] } unless defined $head;
+    my $r = skills::gitfacts::git($top, 'diff', '--name-only', '--no-renames', '-z', $head, 'HEAD', '--');
+    return { known => 0, files => [] } unless $r->{rc} == 0;
+    return { known => 1, files => [grep { $_ ne '' && $_ =~ $BUILD_DEF_RE } split /\0/, $r->{out}] };
 }
 
 # {command => 1} of every command the plugin recorded (jobs.jsonl in each session folder under

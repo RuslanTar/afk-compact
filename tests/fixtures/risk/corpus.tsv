@@ -155,3 +155,21 @@ ask	diff --rec src docs-link	not-read-only	R3-10
 none	git log --format="%h %s" -5	-	R3-01: a value quoted after = stays read-only
 none	rg -n "foo bar" src	-	R3-01: a whole quoted word stays read-only
 none	git log --author="A B" -3	-	R3-01
+none	make test-fast	-	owner xxxxxxxx-05 (harmless suffixes): a listed target with -fast
+none	make test_unit	-	xxxxxxxx-05: _unit
+none	make check-quick	-	xxxxxxxx-05: -quick
+none	npm run test-unit	-	xxxxxxxx-05: -unit, a script the package defines
+none	npm run test:unit	-	xxxxxxxx-05: :unit (any :name passed before)
+none	make test V=1	-	xxxxxxxx-05: the make variable V=1
+none	make test-fast -j4 VERBOSE=1	-	xxxxxxxx-05: VERBOSE=1 beside a listed flag
+ask	make test-staging	not-read-only	xxxxxxxx-05: a staging target usually calls the network
+ask	make test-e2e	not-read-only	xxxxxxxx-05: an end-to-end target usually calls the network
+ask	make build-docker	not-read-only	xxxxxxxx-05: any other suffix
+ask	make test-fast-staging	not-read-only	xxxxxxxx-05: the suffix must end the target
+ask	make test SHELL=/bin/sh	not-read-only	xxxxxxxx-05: a variable that names a program
+ask	make test MAKEFLAGS=-fnotes	not-read-only	xxxxxxxx-05: a variable that names another makefile
+ask	make test V=2	not-read-only	xxxxxxxx-05: V=1 only
+ask	make -j4 test	not-read-only	xxxxxxxx-05: a flag before the target
+ask	npm test -- --watch	not-read-only	xxxxxxxx-05: --watch never ends
+ask	bundle exec rspec	not-read-only	xxxxxxxx-05: loads .rspec and spec helpers NR-23 cannot see
+ask	bin/rails test	not-read-only	xxxxxxxx-05: loads bin/rails and config/

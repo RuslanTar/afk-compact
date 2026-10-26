@@ -146,29 +146,32 @@ function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
 }
 
 /**
- * PROVISIONAL (SPEC-DELTAS IA-1 / AT-IA-01, a reading of this build, not an owner ruling): an
- * `idle_handoff_turn` value that is neither `auto`, `off` nor the old `on` reads as `auto`. The other
- * keys fall back to the value with no extra plugin action (`precompact_turn: code`,
- * `unattended_prod_reads: forbid`); `'off'` here would do the same for this key. settings.pm
- * `$IDLE_INVALID` holds the same value.
+ * Owner xxxxxxxx-13 (2026-10-26, "Off + common words"; SPEC-DELTAS IA-1 / AT-IA-01): an
+ * `idle_handoff_turn` of `false`, `no`, `none`, `disabled` or `0` reads as `off`; `true`, `yes`, `1`
+ * or `on` as `auto`; any other value reads as IDLE_INVALID_READS_AS, the value with no extra plugin
+ * action, as for the other keys (`precompact_turn: code`, `unattended_prod_reads: forbid`).
+ * settings.pm `@IDLE_OFF_WORDS`, `@IDLE_AUTO_WORDS` and `$IDLE_INVALID` hold the same lists and value.
  */
-export const IDLE_INVALID_READS_AS: Config['idle_handoff_turn'] = 'auto'
+export const IDLE_OFF_WORDS: readonly string[] = ['off', 'false', 'no', 'none', 'disabled', '0']
+export const IDLE_AUTO_WORDS: readonly string[] = ['auto', 'true', 'yes', '1', 'on']
+export const IDLE_INVALID_READS_AS: Config['idle_handoff_turn'] = 'off'
 
 /**
- * `idle_handoff_turn` (IA-1): `auto` or `off`, trimmed and case-folded; the old value `on` reads as
- * `auto` with a `config_note`; any other value is IDLE_INVALID_READS_AS plus `config_invalid` (the
- * owner's words switch the plugin turn off only when native idle is on, which idle.ts checks; there
- * is no forced on).
+ * `idle_handoff_turn` (IA-1): trimmed and case-folded (a JSON boolean or number as its text); the old
+ * value `on` reads as `auto` with a `config_note`; the common words read as `off` or `auto`; any other
+ * value is IDLE_INVALID_READS_AS plus `config_invalid` (the owner's words switch the plugin turn off
+ * only when native idle is on, which idle.ts checks; there is no forced on).
  */
 function idleTurn(o: PluginOptions, notes: Config['notes']): Config['idle_handoff_turn'] {
   const v = o['idle_handoff_turn']
   if (unset(v)) return DEFAULTS.idle_handoff_turn
-  const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
-  if (t === 'auto' || t === 'off') return t
+  const t = typeof v === 'string' ? v.trim().toLowerCase() : typeof v === 'boolean' || typeof v === 'number' ? String(v) : ''
   if (t === 'on') {
     notes.noted = [...(notes.noted ?? []), { key: 'idle_handoff_turn', note: 'legacy-on' }]
     return 'auto'
   }
+  if (IDLE_OFF_WORDS.includes(t)) return 'off'
+  if (IDLE_AUTO_WORDS.includes(t)) return 'auto'
   notes.invalid.push('idle_handoff_turn')
   return IDLE_INVALID_READS_AS
 }

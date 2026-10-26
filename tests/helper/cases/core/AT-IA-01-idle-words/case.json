@@ -1,0 +1,309 @@
+{
+ "id": "AT-IA-01",
+ "layer": "H",
+ "owner": "core",
+ "note": "IA-1, owner xxxxxxxx-13 (2026-10-26, \"Off + common words\"): settings.pm reads idle_handoff_turn false, no, none, disabled or 0 (a JSON false too) as off and true, yes, 1 or on (a JSON true too) as auto, trimmed and case-folded; any other value reads as off ($IDLE_INVALID, one value with config.ts IDLE_INVALID_READS_AS) with a note /status shows. Before this ruling every unknown value read as auto.",
+ "now": "2026-10-26T20:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "native idle compaction off in the user settings file",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "content": "{\"idleCompaction\": false}\n"
+    }
+   ]
+  },
+  {
+   "name": "'false' reads as off, no note",
+   "options": {
+    "idle_handoff_turn": "false"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "' No ' reads as off, no note",
+   "options": {
+    "idle_handoff_turn": " No "
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "'NONE' reads as off, no note",
+   "options": {
+    "idle_handoff_turn": "NONE"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "'disabled' reads as off, no note",
+   "options": {
+    "idle_handoff_turn": "disabled"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "'0' reads as off, no note",
+   "options": {
+    "idle_handoff_turn": "0"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "a JSON false reads as off",
+   "options": {
+    "idle_handoff_turn": false
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "'true' reads as auto, no note",
+   "options": {
+    "idle_handoff_turn": "true"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "'Yes' reads as auto, no note",
+   "options": {
+    "idle_handoff_turn": "Yes"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "'1' reads as auto, no note",
+   "options": {
+    "idle_handoff_turn": "1"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "a JSON true reads as auto",
+   "options": {
+    "idle_handoff_turn": true
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "the old on still reads as auto, with its note",
+   "options": {
+    "idle_handoff_turn": "on"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: auto \\(native idle compaction off → the plugin's turn at 49 min\\)$",
+     "^note: idle_handoff_turn: on reads as auto$"
+    ]
+   }
+  },
+  {
+   "name": "'maybe' is not a known word: off, with the /status note",
+   "options": {
+    "idle_handoff_turn": "maybe"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$",
+     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+    ]
+   }
+  },
+  {
+   "name": "'flase' is not a known word: off, with the /status note",
+   "options": {
+    "idle_handoff_turn": "flase"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$",
+     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+    ]
+   }
+  },
+  {
+   "name": "'enabled' is not a known word: off, with the /status note",
+   "options": {
+    "idle_handoff_turn": "enabled"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$",
+     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+    ]
+   }
+  },
+  {
+   "name": "'2' is not a known word: off, with the /status note",
+   "options": {
+    "idle_handoff_turn": "2"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$",
+     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+    ]
+   }
+  }
+ ]
+}

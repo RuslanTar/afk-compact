@@ -16,8 +16,8 @@
        {
         "files": {
          "README.md": "seed\n",
-         "Makefile": "test:\n\t./run-tests\ncheck: test\n\t./lint\nrelease:\n\tgit push\ninstall:\n\tcp bin/x /usr/local/bin\n",
-         "package.json": "{\n \"name\": \"x\",\n \"scripts\": {\n  \"test\": \"jest\",\n  \"lint\": \"eslint .\",\n  \"test:e2e\": \"jest e2e\",\n  \"build\": \"tsc\",\n  \"release\": \"np\",\n  \"db:reset\": \"x\",\n  \"build-and-deploy\": \"x\"\n }\n}\n",
+         "Makefile": "test:\n\t./run-tests\ncheck: test\n\t./lint\nrelease:\n\tgit push\ninstall:\n\tcp bin/x /usr/local/bin\ntest-fast:\n\t./run-tests -q\ntest_unit:\n\t./run-tests -q\ncheck-quick:\n\t./lint -q\ntest-staging:\n\t./run-remote\ntest-e2e:\n\t./run-remote\nbuild-docker:\n\t./run-remote\ntest-fast-staging:\n\t./run-remote\n",
+         "package.json": "{\n \"name\": \"x\",\n \"scripts\": {\n  \"test\": \"jest\",\n  \"lint\": \"eslint .\",\n  \"test:e2e\": \"jest e2e\",\n  \"test:unit\": \"jest unit\",\n  \"test-unit\": \"jest unit\",\n  \"build\": \"tsc\",\n  \"release\": \"np\",\n  \"db:reset\": \"x\",\n  \"build-and-deploy\": \"x\"\n }\n}\n",
          "Rakefile": "task :spec\ntask :test\n",
          "build.gradle": "plugins {}\n",
          "gradlew": "#!/bin/sh\n",
@@ -78,8 +78,16 @@
      "to": "$TMP/outside"
     },
     {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "STARTHEAD"
+    },
+    {
      "write": "$ROOT/.sessions/by-pid/1-1792580000.live-11111111.json",
-     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-23T08:00:00+03:00\"}"
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"session_id\": \"$SID\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"head\": \"$STARTHEAD\", \"source\": \"startup\", \"ts\": \"2026-10-23T08:00:00+03:00\"}"
     },
     {
      "write": "$WATCH/$SID/jobs.jsonl",

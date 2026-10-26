@@ -91,11 +91,14 @@ our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_bra
 # or env can make the plugin stricter, never looser than the settings file. Values from loose to
 # strict.
 our %TIGHTEN = (resume_proceed => [qw(auto confirm)]);
-# PROVISIONAL (SPEC-DELTAS IA-1 / AT-IA-01, a reading of this build, not an owner ruling): an
-# idle_handoff_turn value other than auto, off or the old on reads as this; the other keys fall
-# back to the value with no extra plugin action, which `off` would be here. One value with
-# config.ts IDLE_INVALID_READS_AS.
-our $IDLE_INVALID = 'auto';
+# Owner xxxxxxxx-13 (2026-10-26, "Off + common words"; SPEC-DELTAS IA-1 / AT-IA-01): an
+# idle_handoff_turn value of false, no, none, disabled or 0 reads as off; true, yes, 1 or on as
+# auto; any other value reads as $IDLE_INVALID with a note (/status), the value with no extra
+# plugin action, as for the other keys. The same lists and value as config.ts IDLE_OFF_WORDS,
+# IDLE_AUTO_WORDS and IDLE_INVALID_READS_AS.
+our @IDLE_OFF_WORDS = qw(off false no none disabled 0);
+our @IDLE_AUTO_WORDS = qw(auto true yes 1 on);
+our $IDLE_INVALID = 'off';
 
 # Flag spellings: --<key with dashes>, plus the short forms the skills pass.
 our %FLAG_ALIAS = (
@@ -273,11 +276,14 @@ sub resolve {
         ($val{$key}, $src{$key}) = ($best, $bsrc // 'default');
     }
     # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; the old value `on` reads as
-    # `auto` with a note; any other value but `off` is $IDLE_INVALID (PROVISIONAL, below) with a note.
+    # `auto` with a note; the common words read as off or auto (@IDLE_OFF_WORDS, @IDLE_AUTO_WORDS,
+    # owner xxxxxxxx-13); any other value is $IDLE_INVALID with a note.
     {
         (my $x = lc($val{idle_handoff_turn} // 'auto')) =~ s/^\s+|\s+$//g;
         if ($x eq 'on') { push @notes, 'idle_handoff_turn: on reads as auto'; $x = 'auto' }
-        elsif ($x ne 'auto' && $x ne 'off') { push @notes, "idle_handoff_turn: not auto or off, $IDLE_INVALID used"; $x = $IDLE_INVALID }
+        elsif (grep { $_ eq $x } @IDLE_OFF_WORDS) { $x = 'off' }
+        elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
+        else { push @notes, "idle_handoff_turn: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
         $val{idle_handoff_turn} = $x;
     }
     # SK-1 / SK-2: an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
