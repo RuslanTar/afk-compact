@@ -1,6 +1,6 @@
 {
  "id": "AT-E-02",
- "note": "MOD-SPEC §10 AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (withheld, rules over-total, by the 50 MB evidence_total_max_mb default since SK-5, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB",
+ "note": "MOD-SPEC §10 AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (withheld, rules over-total, by the 50 MB evidence_total_max_mb default since SK-5, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB. Third step (MOD-SPEC §5.3 step 5, the 8 s sweep budget): with the budget set to 300 ms by STORE_TEST_SWEEP_BUDGET_MS, a dense 10 MB file whose secret scan and redact take seconds starts inside the budget and is stopped inside the file once the deadline passes: it and the file after it are referenced-budget, no copy of it is written, and the sweep_evidence row's ms stays within the budget plus 2 s (before the stop inside a file, that file was redacted and copied whatever the deadline)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -145,6 +145,68 @@
     ],
     "absent": [
      "$DISP/2026-10-21/*_12222222-2b3c4d-evidence/part-*.bin:count>5"
+    ]
+   }
+  },
+  {
+   "name": "sweep budget: a file the deadline passes in stops there (MOD-SPEC §5.3 step 5)",
+   "setup": [
+    {
+     "bigfile": "$TMP/tmpdir/late/dense.bin",
+     "bytes": 10485760,
+     "fill": "tok q7Zp4Xk2Lm9Rb3Vt8Nc1Hy6Jw5Gd0Fs+Ea/Ui2Ko7Pl3Mn\n"
+    },
+    {
+     "write": "$TMP/tmpdir/late/after.txt",
+     "content": "a small file after the budget\n"
+    },
+    {
+     "paths": [
+      "$TMP/tmpdir/late/dense.bin",
+      "$TMP/tmpdir/late/after.txt"
+     ],
+     "sid": "13333333-2222-4333-8444-555555555555"
+    }
+   ],
+   "env": {
+    "STORE_TEST_SWEEP_BUDGET_MS": "300"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "13333333-2222-4333-8444-555555555555",
+    "--nonce",
+    "3c4d5e6f",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^referenced-budget\\t\\S+/late/dense\\.bin\\t-\\t10485760\\t-$",
+     "^referenced-budget\\t\\S+/late/after\\.txt\\t-\\t30\\t-$",
+     "^TOTAL copied=0 dup=0 ref_only=0 redacted=0 withheld=0 referenced_budget=2$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-21/*_13333333-3c4d5e-evidence/dense.bin*",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/13333333-2222-4333-8444-555555555555.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1,
+      "fields": {
+       "copied": 0,
+       "redacted": 0,
+       "referenced_budget": 2
+      },
+      "fields_le": {
+       "ms": 2300
+      }
+     }
     ]
    }
   }

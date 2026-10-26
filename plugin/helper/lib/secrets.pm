@@ -16,10 +16,22 @@ sub _entropy {
     return $h;
 }
 
+# The sweep's deadline (an epoch ms from util::clock_ms, set with `local` by sweep::run; undef
+# = none). scan and redact check it before each rule and every 256 hits, and die with
+# $OVER_BUDGET once it has passed, so one large file cannot carry the sweep far past its
+# budget (MOD-SPEC §5.3 step 5: the rest become referenced (budget) rows). A file is written
+# only after both passes, so a stop leaves no partial copy. The user's rules (U-06) are checked
+# once before their child starts; inside it their own time bound holds (_user_spans).
+our $DEADLINE;
+our $OVER_BUDGET = "secrets: over the sweep budget\n";
+sub _check_deadline { die $OVER_BUDGET if defined $DEADLINE && util::clock_ms() >= $DEADLINE }
+
 sub _matches {
     my ($text, $r) = @_;
     my @spans;
+    my $n = 0;
     while ($text =~ /$r->{re}/g) {
+        _check_deadline() unless ++$n % 256;
         my ($s, $e) = ($-[0], $+[0]);
         last if $e == $s && !defined pos($text);
         if ($e == $s) { pos($text) = $e + 1; next }
@@ -64,7 +76,11 @@ our $TIMEOUT_RULE = 'regex-timeout';
 sub _user_spans {
     my ($text, $rules) = @_;
     return ({}, '') unless @$rules;
+    # the sweep's deadline is checked here, in this process; the child that runs the patterns
+    # has its own time bound, so a deadline that passed there is not taken for a stopped rule
+    _check_deadline();
     my ($res, $stopped) = userre::run('secret_extra_rules', [map { { re => $_->{re}, at => $_->{at} } } @$rules], sub {
+        local $DEADLINE;
         my @s = _matches($text, { re => $_[0]{re}, lead => 0, trail => 0 });
         my @m;
         for my $sp (@s) {
@@ -91,6 +107,7 @@ sub scan {
     my $all = rules();
     my ($u, $stopped) = _user_spans($text, [grep { $_->{user} } @$all]);
     for my $r (@$all) {
+        _check_deadline() unless $r->{user};
         my $n = $r->{user} ? ($u->{ $r->{id} } ? $u->{ $r->{id} }[0] : 0) : scalar(my @s = _matches($text, $r));
         push @hits, { rule => $r->{id}, class => $r->{class}, count => $n } if $n;
     }
@@ -119,7 +136,7 @@ sub redact {
         next if %only && !$only{ $r->{class} };
         my ($n, @s);
         if ($r->{user}) { my $x = $u->{ $r->{id} } or next; ($n, @s) = ($x->[0], @{ $x->[1] }) }
-        else { @s = _matches($text, $r); $n = scalar @s }
+        else { _check_deadline(); @s = _matches($text, $r); $n = scalar @s }
         next unless @s;
         push @hits, { rule => $r->{id}, class => $r->{class}, count => $n };
         push @spans, map { [$_->[0], $_->[1], $r->{id}, $rank] } @s;
