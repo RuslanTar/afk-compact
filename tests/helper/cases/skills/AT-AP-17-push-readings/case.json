@@ -1,0 +1,138 @@
+{
+ "id": "AT-AP-17 (push readings of approvals, owner xxxxxxxx-10)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Owner xxxxxxxx-10 \"Push names\" (2026-10-26, confirmed \"Keep all four\"; NIGHT-REVIEW 3.4): all four push readings stay as built. P-1 plain words name gates (AT-AP-04 R3-02); P-2 a push approval that names no branch is protected-push, whatever branch is checked out; P-3 a local merge naming a protected branch is protected-push; P-4 a name after a remote prefix counts as that branch (team/release is release); the remote default branch (origin/dev) and a protected name (release) are gates. A named push of feat/x, a local merge into feat/x and team/feat-y carry, so the case is not one that asks for everything. Summary path (measure --compact --copy); the row counts the carried approvals by origin (owner xxxxxxxx-12). What names a branch for P-2 (review of the first build: any word with a slash used to count): a `branch <name>` target, a refspec of a git push (either side of src:dst) or a branch-shaped name right after \"push\" in plain words. A file-path target (U-10), a repo slug (U-11) and `git push origin HEAD` (U-12) name none and ask; plain \"push feat/z\" (U-13) and `HEAD:feat/q` (U-14) name one and carry. Second review (each gate here carried on 8b498a2): a name counts only with a letter and either a slash or a branch that exists in the repository, so \"push the follow-up fix\" (U-15), \"push 2 commits\" (U-16), \"push the 2 commits\" (U-23), `git push origin qa` with no qa branch (U-24), \"push this branch to origin\" (U-19) and \"push the branch up\" (U-20) name none; a `git push` holding `$(...)` or a backtick names none (U-17, U-18, U-28); a tag push names none (`v1.2.0`, U-22; `refs/tags/`, U-27); \"to main!\" is main (U-21). The existing branch rel-2 (U-25) and fix/tag-parser (U-26) carry.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"go ahead and push it now\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge feat/x into main here\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push the team release branch\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push it to origin dev please\"}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to the release branch\"}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin now\"}}\n{\"type\": \"user\", \"uuid\": \"u7\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge feat/y into feat/x here\"}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push team/feat-y as well\"}}\n{\"type\":\"user\",\"uuid\":\"u9\",\"timestamp\":\"2026-10-21T13:08:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"yes go ahead and push it\"}}\n{\"type\":\"user\",\"uuid\":\"u10\",\"timestamp\":\"2026-10-21T13:09:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"yes push it to github\"}}\n{\"type\":\"user\",\"uuid\":\"u11\",\"timestamp\":\"2026-10-21T13:10:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"push this commit up please\"}}\n{\"type\":\"user\",\"uuid\":\"u12\",\"timestamp\":\"2026-10-21T13:11:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"push feat/z up as well\"}}\n{\"type\":\"user\",\"uuid\":\"u13\",\"timestamp\":\"2026-10-21T13:12:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"push this commit to feat/q\"}}\n{\"message\":{\"content\":\"yes push the follow-up fix\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:13:00+03:00\",\"type\":\"user\",\"uuid\":\"u13\"}\n{\"message\":{\"content\":\"push those 2 commits please\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:14:00+03:00\",\"type\":\"user\",\"uuid\":\"u14\"}\n{\"message\":{\"content\":\"push it with git please\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:15:00+03:00\",\"type\":\"user\",\"uuid\":\"u15\"}\n{\"message\":{\"content\":\"push it with backticks please\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:16:00+03:00\",\"type\":\"user\",\"uuid\":\"u16\"}\n{\"message\":{\"content\":\"yes push this branch now\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:17:00+03:00\",\"type\":\"user\",\"uuid\":\"u17\"}\n{\"message\":{\"content\":\"ok push the branch up\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:18:00+03:00\",\"type\":\"user\",\"uuid\":\"u18\"}\n{\"message\":{\"content\":\"push feat/x to main now\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:19:00+03:00\",\"type\":\"user\",\"uuid\":\"u19\"}\n{\"message\":{\"content\":\"yes push the build up\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:20:00+03:00\",\"type\":\"user\",\"uuid\":\"u20\"}\n{\"message\":{\"content\":\"push the 2 commits up\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:21:00+03:00\",\"type\":\"user\",\"uuid\":\"u21\"}\n{\"message\":{\"content\":\"yes push it to qa\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:22:00+03:00\",\"type\":\"user\",\"uuid\":\"u22\"}\n{\"message\":{\"content\":\"yes push rel-2 to origin\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:23:00+03:00\",\"type\":\"user\",\"uuid\":\"u23\"}\n{\"message\":{\"content\":\"yes push fix/tag-parser now\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:24:00+03:00\",\"type\":\"user\",\"uuid\":\"u24\"}\n{\"message\":{\"content\":\"ok push the build ref\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:25:00+03:00\",\"type\":\"user\",\"uuid\":\"u25\"}\n{\"message\":{\"content\":\"push it to the default\",\"role\":\"user\"},\"origin\":{\"kind\":\"human\"},\"timestamp\":\"2026-10-21T13:26:00+03:00\",\"type\":\"user\",\"uuid\":\"u26\"}\n"
+    },
+    {
+     "git": [
+      "update-ref",
+      "refs/remotes/origin/dev",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo"
+    },
+    {
+     "git": [
+      "symbolic-ref",
+      "refs/remotes/origin/HEAD",
+      "refs/remotes/origin/dev"
+     ],
+     "cwd": "$TMP/repo"
+    },
+    {
+     "git": [
+      "branch",
+      "rel-2"
+     ],
+     "cwd": "$TMP/repo"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"go ahead and push it now\" — action push it · targets the retry fix @ 1a2b3c4 · once · not yet used; U-3 approval \"merge feat/x into main here\" — action merge feat/x into main locally · targets branch main @ 1a2b3c4 · once · not yet used; U-4 approval \"push the team release branch\" — action git push origin team/release · targets branch team/release @ 1a2b3c4 · once · not yet used; U-5 approval \"push it to origin dev please\" — action git push origin/dev · targets branch origin/dev @ 1a2b3c4 · once · not yet used; U-6 approval \"push feat/x to the release branch\" — action push feat/x to release · targets branch release @ 1a2b3c4 · once · not yet used; U-7 approval \"push feat/x to origin now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-8 approval \"merge feat/y into feat/x here\" — action merge feat/y into feat/x locally · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-9 approval \"push team/feat-y as well\" — action git push origin team/feat-y · targets branch team/feat-y @ 1a2b3c4 · once · not yet used; U-10 approval \"yes go ahead and push it\" — action push it · targets app/retry.rb @ 1a2b3c4 · once · not yet used; U-11 approval \"yes push it to github\" — action git push · targets repo ruslan/afk-compact @ 1a2b3c4 · once · not yet used; U-12 approval \"push this commit up please\" — action git push origin HEAD · targets commit 1a2b3c4 of app/retry.rb @ 1a2b3c4 · once · not yet used; U-13 approval \"push feat/z up as well\" — action push feat/z · targets the z fix @ 1a2b3c4 · once · not yet used; U-14 approval \"push this commit to feat/q\" — action git push origin HEAD:feat/q · targets commit 1a2b3c4 @ 1a2b3c4 · once · not yet used; U-15 approval \"yes push the follow-up fix\" — action push the follow-up fix · targets the retry fix @ 1a2b3c4 · once · not yet used; U-16 approval \"push those 2 commits please\" — action push 2 commits · targets the retry fix @ 1a2b3c4 · once · not yet used; U-17 approval \"push it with git please\" — action git push origin $(git rev-parse --abbrev-ref HEAD) · targets the retry fix @ 1a2b3c4 · once · not yet used; U-18 approval \"push it with backticks please\" — action git push origin `git rev-parse --abbrev-ref HEAD` · targets the retry fix @ 1a2b3c4 · once · not yet used; U-19 approval \"yes push this branch now\" — action push this branch to origin · targets origin @ 1a2b3c4 · once · not yet used; U-20 approval \"ok push the branch up\" — action push the branch up · targets origin @ 1a2b3c4 · once · not yet used; U-21 approval \"push feat/x to main now\" — action push feat/x to main! · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-22 approval \"yes push the build up\" — action git push origin v1.2.0 · targets the build @ 1a2b3c4 · once · not yet used; U-23 approval \"push the 2 commits up\" — action push the 2 commits · targets the retry fix @ 1a2b3c4 · once · not yet used; U-24 approval \"yes push it to qa\" — action git push origin qa · targets the retry fix @ 1a2b3c4 · once · not yet used; U-25 approval \"yes push rel-2 to origin\" — action git push origin rel-2 · targets the retry fix @ 1a2b3c4 · once · not yet used; U-26 approval \"yes push fix/tag-parser now\" — action push fix/tag-parser · targets the parser fix @ 1a2b3c4 · once · not yet used; U-27 approval \"ok push the build ref\" — action git push origin refs/tags/v1.2.0 · targets the build @ 1a2b3c4 · once · not yet used; U-28 approval \"push it to the default\" — action git push origin $(git symbolic-ref --short refs/remotes/origin/HEAD) · targets the retry fix @ 1a2b3c4 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "on feat/x (not protected, no upstream): the unnamed push, the local merge into main, team/release, origin/dev and release ask; the named feat/x push, the merge into feat/x and team/feat-y carry",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-7 git push origin feat/x → branch feat/x @ 1a2b3c4; U-8 merge feat/y into feat/x locally → branch feat/x @ 1a2b3c4; U-9 git push origin team/feat-y → branch team/feat-y @ 1a2b3c4; U-13 push feat/z → the z fix @ 1a2b3c4; U-14 git push origin HEAD:feat/q → commit 1a2b3c4 @ 1a2b3c4; U-25 git push origin rel-2 → the retry fix @ 1a2b3c4; U-26 push fix/tag-parser → the parser fix @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-2 push it → the retry fix @ 1a2b3c4; U-3 merge feat/x into main locally → branch main @ 1a2b3c4; U-4 git push origin team/release → branch team/release @ 1a2b3c4; U-5 git push origin/dev → branch origin/dev @ 1a2b3c4; U-6 push feat/x to release → branch release @ 1a2b3c4; U-10 push it → app/retry\\.rb @ 1a2b3c4; U-11 git push → repo ruslan/afk-compact @ 1a2b3c4; U-12 git push origin HEAD → commit 1a2b3c4 of app/retry\\.rb @ 1a2b3c4; U-15 push the follow-up fix → the retry fix @ 1a2b3c4; U-16 push 2 commits → the retry fix @ 1a2b3c4; U-17 git push origin \\$\\(git rev-parse --abbrev-ref HEAD\\) → the retry fix @ 1a2b3c4; U-18 git push origin `git rev-parse --abbrev-ref HEAD` → the retry fix @ 1a2b3c4; U-19 push this branch to origin → origin @ 1a2b3c4; U-20 push the branch up → origin @ 1a2b3c4; U-21 push feat/x to main! → branch feat/x @ 1a2b3c4; U-22 git push origin v1\\.2\\.0 → the build @ 1a2b3c4; U-23 push the 2 commits → the retry fix @ 1a2b3c4; U-24 git push origin qa → the retry fix @ 1a2b3c4; U-27 git push origin refs/tags/v1\\.2\\.0 → the build @ 1a2b3c4; U-28 git push origin \\$\\(git symbolic-ref --short refs/remotes/origin/HEAD\\) → the retry fix @ 1a2b3c4$"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "summary",
+       "checked": 7,
+       "gate": 20,
+       "unchecked": 0,
+       "origins": {
+        "human": 7
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "detached HEAD",
+   "setup": [
+    {
+     "git": [
+      "checkout",
+      "-q",
+      "--detach"
+     ],
+     "cwd": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "detached HEAD: the same readings (they never depend on the checked-out branch)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-7 git push origin feat/x → branch feat/x @ 1a2b3c4; U-8 merge feat/y into feat/x locally → branch feat/x @ 1a2b3c4; U-9 git push origin team/feat-y → branch team/feat-y @ 1a2b3c4; U-13 push feat/z → the z fix @ 1a2b3c4; U-14 git push origin HEAD:feat/q → commit 1a2b3c4 @ 1a2b3c4; U-25 git push origin rel-2 → the retry fix @ 1a2b3c4; U-26 push fix/tag-parser → the parser fix @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-2 push it → the retry fix @ 1a2b3c4; U-3 merge feat/x into main locally → branch main @ 1a2b3c4; U-4 git push origin team/release → branch team/release @ 1a2b3c4; U-5 git push origin/dev → branch origin/dev @ 1a2b3c4; U-6 push feat/x to release → branch release @ 1a2b3c4; U-10 push it → app/retry\\.rb @ 1a2b3c4; U-11 git push → repo ruslan/afk-compact @ 1a2b3c4; U-12 git push origin HEAD → commit 1a2b3c4 of app/retry\\.rb @ 1a2b3c4; U-15 push the follow-up fix → the retry fix @ 1a2b3c4; U-16 push 2 commits → the retry fix @ 1a2b3c4; U-17 git push origin \\$\\(git rev-parse --abbrev-ref HEAD\\) → the retry fix @ 1a2b3c4; U-18 git push origin `git rev-parse --abbrev-ref HEAD` → the retry fix @ 1a2b3c4; U-19 push this branch to origin → origin @ 1a2b3c4; U-20 push the branch up → origin @ 1a2b3c4; U-21 push feat/x to main! → branch feat/x @ 1a2b3c4; U-22 git push origin v1\\.2\\.0 → the build @ 1a2b3c4; U-23 push the 2 commits → the retry fix @ 1a2b3c4; U-24 git push origin qa → the retry fix @ 1a2b3c4; U-27 git push origin refs/tags/v1\\.2\\.0 → the build @ 1a2b3c4; U-28 git push origin \\$\\(git symbolic-ref --short refs/remotes/origin/HEAD\\) → the retry fix @ 1a2b3c4$"
+    ]
+   }
+  }
+ ]
+}

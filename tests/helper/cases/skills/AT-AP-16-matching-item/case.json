@@ -1,0 +1,206 @@
+{
+ "id": "AT-AP-16 (matching item, owner xxxxxxxx-06)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Owner xxxxxxxx-06 \"Matching item\" (2026-10-26; NIGHT-REVIEW 2.7, R3-04): a quote under 4 words also counts as one whole line of a longer message, when the assistant text before it names a target and (a) the line's item number is that of the item of the assistant's last numbered list that names a target, or (b) the line itself holds a word of the action or a target. Counted: \"1. publish yourself.\" and \"publish yourself\" (line 1 of a 3-line reply; it holds the action), \"yes\" as \"2. yes\" answering item 2 \"Push branch feat/y\", and \"merge it\" (line 1, holds the action; item 1 names no target; an sdk-origin row). Refused (approval-quote): \"1. yes\" of \"1. yes / 2. no\" for the push of feat/x that item 2 asked (the trap), \"yes\" for feat/w named only in an earlier list, \"1. yes\" where line 1 is \"later\", and an unnumbered \"ok\" line holding no action. Then the handoff's measure counts the carried approvals by origin (owner xxxxxxxx-12): human 3, sdk 1, kept in the publish record.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Two questions:\\n1. Run the tests?\\n2. Push feat/x to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. no\"}}\n{\"type\": \"assistant\", \"uuid\": \"a2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Before I go on:\\n1. Publish the package afk-compact to npm?\\n2. Delete the old tag v0?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. publish yourself.\\n2. keep it\\n3. then stop\"}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Plan:\\n1. Fix the window\\n2. Push feat/w later\\n\\nQuestions:\\n1. Keep the size?\\n2. Rename it?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. yes\"}}\n{\"type\": \"assistant\", \"uuid\": \"a4\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Next:\\n1. Run the suite?\\n2. Push branch feat/y to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. later\\n2. yes\"}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Shall I push feat/v and tag it?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\\nalso rebuild the docs\"}}\n{\"type\": \"assistant\", \"uuid\": \"a6\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"MR !31 is green.\\n1. Anything else first?\\n2. Close MR !30?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u7\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"origin\": {\"kind\": \"sdk\"}, \"message\": {\"role\": \"user\", \"content\": \"1. merge it\\n2. close MR !30 too\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"1. publish yourself.\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-4: approval \"publish yourself\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-5: approval \"yes\" — action git push origin feat/w · targets branch feat/w @ 1a2b3c4 · once · not yet used\n- U-6: approval \"yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-7: approval \"1. yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-8: approval \"ok\" — action git push origin feat/v · targets branch feat/v @ 1a2b3c4 · once · not yet used\n- U-9: approval \"merge it\" — action merge MR !31 · targets MR !31 @ head 1f1f1f1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "matching item: a numbered line counts only for the item that names the target, or when it holds the action or a target",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^LINT approval-quote line 13$",
+     "^LINT approval-quote line 15$",
+     "^LINT approval-quote line 16$",
+     "^REFUSED: lint \\(4 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-quote line 11$",
+     "approval-quote line 12$",
+     "approval-quote line 14$",
+     "approval-quote line 17$",
+     "approval-unchecked",
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-3: approval \"1. publish yourself.\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-4: approval \"publish yourself\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-6: approval \"yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-9: approval \"merge it\" — action merge MR !31 · targets MR !31 @ head 1f1f1f1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "matching item: the four counted lines publish and are listed",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 4,
+        "checked": 4,
+        "unchecked": 0,
+        "hashed": 4
+       }
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "the handoff lists the four ids",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB",
+      "has": [
+       "^approvals_checked: U-3, U-4, U-6, U-9$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "owner xxxxxxxx-12: measure <handoff> counts the carried approvals by the origin publish recorded; no text in the row",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 publish the package to npm → package afk-compact @ 0\\.1\\.0; U-4 publish the package to npm → package afk-compact @ 0\\.1\\.0; U-6 git push origin feat/y → branch feat/y @ 1a2b3c4; U-9 merge MR !31 → MR !31 @ head 1f1f1f1$"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 4,
+       "gate": 0,
+       "origins": {
+        "human": 3,
+        "sdk": 1
+       }
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "publish yourself"
+     },
+     {
+      "dir": "$ROOT/.sessions/approvals",
+      "text": "publish yourself"
+     }
+    ]
+   }
+  }
+ ]
+}

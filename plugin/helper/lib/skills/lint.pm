@@ -22,7 +22,8 @@ package skills::lint;
 #        (skills::approvals); quote_floor [ok, epoch] (skills::approvals::quote_floor: a
 #        claimed session counts only rows after the claim).
 # The result also carries `acuity`: the rating found in Resume here, or undef; and
-# `approvals`: {checked => [U-n…], lines, unchecked, classes} for the frontmatter and row.
+# `approvals`: {checked => [U-n…], lines, unchecked, classes, origins} for the frontmatter, the row
+# and the line-hash record.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
 # private-path classes come from the spec too (fail closed: spec-missing <key>).
 use strict;

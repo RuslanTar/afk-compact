@@ -14,8 +14,10 @@ package skills::approvals;
 # the question, an option description or any other tool output); no quote, action or target text
 # is logged: rows carry counts and class ids only.
 #
-# PROVISIONAL (owner decisions open, recommended reading built; REVIEW-NIGHT-2 §3):
-#   O-3   code checks the quote (this module at all);
+# Readings (REVIEW-NIGHT-2 §3; PROVISIONAL unless a ruling is named: owner decision open,
+# recommended reading built):
+#   O-3   decided (owner 2026-10-26 xxxxxxxx-09, "Quote src" Q-1 kept): code checks the quote
+#         (this module at all);
 #   O-1   only the own chain carries: a foreign handoff's approvals are never listed as checked;
 #   O-12  decided (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"): approvals carry only
 #         from this session and its `clear` / `handoff-resume` predecessors (%CARRY_REASON); a
@@ -31,16 +33,36 @@ package skills::approvals;
 #         at or before the claim carry approvals only along the claimant's line, the ones dated
 #         after it only along the predecessor's own (_claim_cut), and the resumed predecessor's
 #         quote checks count only rows after the claim (quote_floor);
-#   gates from text: $ACTION_WORDS reads a plain-words action ("push feat/x") into outward
-#         class ids, and a push that names no branch, or a protected one, is protected-push
-#         ($PUSH_UNNAMED_IS_GATE), as `risk` counts an unknown push destination;
-#         REVIEW-NIGHT-3 R3-02: a gate named in plain words counts beside a class pattern's hit,
-#         the remote default branch is protected as in `risk`, and a local merge (not a merge
-#         request) whose words name a protected branch is protected-push;
+#   gates from text (owner xxxxxxxx-10 "Push names", 2026-10-26, confirmed "Keep all four":
+#         all four kept as built, no longer provisional; NIGHT-REVIEW 3.4):
+#         P-1 $ACTION_WORDS reads a plain-words action ("push feat/x") into outward class ids, and
+#         a gate named in plain words counts beside a class pattern's hit (REVIEW-NIGHT-3 R3-02:
+#         "push feat/x and deploy" never carries a deploy);
+#         P-2 a push approval that names no branch is protected-push ($PUSH_UNNAMED_IS_GATE), as
+#         `risk` counts an unknown push destination: "yes, push it" is re-asked after a
+#         compaction; only a `branch <name>`, a `git push` refspec or a name right after "push"
+#         names a branch, and only a name with a letter and a slash or a branch that exists in cwd
+#         (_push_named, _branch_word; not `HEAD`, a number, a filler word, a tag, a command
+#         substitution, a file path or a repo slug);
+#         P-3 a local merge (not a merge request) whose words name a protected branch is
+#         protected-push ("merge feat/x into main" is re-asked);
+#         P-4 a name after its remote prefix counts as that branch (`team/release` is `release`);
+#         the remote's default branch is protected, as in `risk` (spec §4 Explicit gate, §12
+#         protected-push; not a reading);
 #         owner xxxxxxxx-29: a branch in the user's add-only `protected_branches` setting is
 #         protected too (beside the shipped list, never instead of it);
-#   quotes (transcript::quotes_found, R3-04): whole words; a quote under 4 words is the whole
-#         message; a message holding an approval line was pasted and does not count.
+#   quotes (transcript::quotes_found): owner xxxxxxxx-09 "Quote src" (2026-10-26) kept all four
+#         rules as built, no longer provisional: Q-1 code checks the quote (O-3, this module at
+#         all), Q-2 a message holding an approval line was pasted and does not count, Q-3 rows of
+#         another session do not count, Q-4 whole words only (R3-04); owner xxxxxxxx-06 "Matching
+#         item": a quote under 4 words is the whole message, or one whole numbered line of it that
+#         answers the one item of the closing list naming a target, or, when no numbered item of
+#         the assistant text names one, itself holds an outward verb of the action or a target
+#         (see transcript.pm "Matching item"); owner
+#         xxxxxxxx-12 "Count, log origin": SDK-origin rows count as the user's words, and the
+#         approvals_carry row counts the carried approvals by the origin of the row their quote
+#         was found in (`origins`, class words only; publish keeps each checked id's origin in
+#         its line-hash record so a handoff's carry can count it too).
 #
 # Line hashes (REVIEW-NIGHT-3 U3-01; root ruling 2026-10-23 11:56, a must-have before unattended
 # use): publish records a SHA-256 of each checked `## Approvals` line, keyed by its id, in a
@@ -128,7 +150,29 @@ our $PROD_TARGET_WORDS = 4;
 our %PROD_CLAUSE_WORDS = map { $_ => 1 } qw(and then also plus or after afterwards before so to while if when unless until
     with via using by once xargs tee the a an it them this that);
 our $PROD_WRITE_WORDS = qr/\b(?:fix|change|edit|set|add|remove|enable|disable|rotate|trigger|kill|stop|start|roll[ -]?back|promote|purge|flush|clear|backfill|import|load|sync|send|run|execute|migrat\w*|release|upgrade|downgrade|install|uninstall|drain|cordon|evict|terminate|reboot|shutdown|resize|approve|close|archive|tag|label|annotate|scp|rsync)\b/i;
+# Owner xxxxxxxx-10 "Push names" (P-2 kept, confirmed "Keep all four"): a push approval that
+# names no branch is protected-push. Only these name a branch (_push_named): a `branch <name>`
+# target or phrase, a refspec of a `git push` command (either side of `src:dst`), or in plain
+# words a name right after "push" ($PUSH_FILLER words aside), each only when the name has a
+# slash (`feat/x`) or is a branch that exists in cwd (_branch_word). `HEAD`, `@`, a number ("push
+# 2 commits"), a hyphenated word that is no branch ("push the follow-up fix"), a stop word ("push
+# this branch to origin"), a tag (`v1.2.0`, "the tag", `--tags`), a command substitution or
+# variable in a `git push`, a file name (`app/retry.rb`), a path that exists in cwd and a word in
+# any other target (a file path, an `owner/repo` slug) name none.
 our $PUSH_UNNAMED_IS_GATE = 1;
+our $PUSH_FILLER = qr/\A(?:the|branch|to|up|on|onto|into)\z/i;
+# Words after "branch" (or "push") that are never a branch name.
+our %BRANCH_STOP = map { $_ => 1 } qw(a an the to up and of on onto into in at for from with by as
+    it its this that these those my your our their i now then here there current same new old
+    other remote local origin upstream is was be name named called first next last);
+# A tag-shaped name (`v1.2.0`, `1.2`, `v2`): a tag push names no branch.
+our $TAG_NAME = qr/\A[vV]?[0-9]+(?:\.[0-9]+)*(?:[-+][0-9A-Za-z.-]+)?\z/;
+# A tag push in words or flags: `--tags`, `--follow-tags`, `refs/tags/`, or the word "tag" or
+# "tags" (not inside a name such as `fix/tag-parser`).
+our $PUSH_TAG = qr/--(?:follow-)?tags\b|\brefs\/tags\/|(?<![\w\/-])tags?(?![\w\/-])/i;
+# The origin class words the approvals_carry row counts (owner xxxxxxxx-12); anything else is
+# `unknown` (a line carried from a record written before the origins were kept).
+our %ORIGIN_WORDS = map { $_ => 1 } qw(human composer bridge sdk none dialog unknown);
 our $ENTRY_MAX = 160;
 our $HASH_DIR = 'approvals';                 # under <handoff_root>/.sessions/
 my $NONCE_RE = qr/\A[A-Za-z0-9_-]{1,64}\z/;
@@ -203,7 +247,9 @@ sub section_lines {
 # local merge (not a merge request), whose words name a protected branch is protected-push:
 # protected_branch_re, an entry of the user's protected_branches setting (owner xxxxxxxx-29,
 # add-only) or the remote default branch of origin or upstream in cwd, each side of a `src:dst`
-# refspec and a name after its remote prefix (`fork/main`) counted.
+# refspec and a name after its remote prefix (`fork/main`) counted. Owner-ruled (xxxxxxxx-10
+# "Push names", all four kept; see the header): P-1 to P-4; what names a branch for P-2:
+# _push_named.
 sub classes {
     my ($e, $cwd) = @_;
     my $text = "$e->{action} · $e->{targets_text}";
@@ -243,11 +289,14 @@ sub classes {
         my $pre = skills::spec::regex_at('protected_branch_re');
         my $pb = skills::core::protected();
         my %def = map { $_ => 1 } _default_branches($cwd);
-        my ($named, $protected) = (0, 0);
+        my $protected = 0;
         for my $t (@{ $e->{targets} }, $e->{action}) {
             my $id = $t =~ s/\s+@\s.*\z//sr;
             for my $w (split /[\s`'"]+/, $id) {
-                $w =~ s/[.,;)]+\z//;
+                # Sentence marks around a name ("to main!", "(main)", "main/"); a `:` inside
+                # stays the refspec split below.
+                $w =~ s/[.,;:!?)\]>\/]+\z//;
+                $w =~ s/\A[(\[<]+//;
                 next if $w eq '';
                 for my $part (split /:/, $w) {
                     my $b = $part =~ s{\A\+}{}r;
@@ -257,11 +306,89 @@ sub classes {
                     }
                 }
             }
-            $named = 1 if $id =~ /\bbranch[ \t]+\S/i || $id =~ m{[A-Za-z0-9._-]/[A-Za-z0-9._/-]};
         }
-        $gate = 'protected-push' if $protected || ($any{push} && !$named && $PUSH_UNNAMED_IS_GATE);
+        $gate = 'protected-push' if $protected || ($any{push} && $PUSH_UNNAMED_IS_GATE && !_push_named($e, $cwd));
     }
     return { outward => \@ids, gate => $gate, prod => $prod };
+}
+
+# _push_named(entry, cwd) -> 1 when a push approval names the branch it pushes (P-2; see
+# $PUSH_UNNAMED_IS_GATE): a `branch <name>` in a target or the action, a refspec of a `git push`
+# command, or in plain words a name right after "push", each only when _branch_word takes it.
+# Fail closed: anything else names no branch, so the push is protected-push. A tag push names no
+# branch; a `git push` whose words hold a command substitution or a variable (`$(…)`, a
+# backtick, `$x`) names none (it pushes whatever the shell fills in, the checked-out branch too).
+sub _push_named {
+    my ($e, $cwd) = @_;
+    return 0 if grep { ($_ // '') =~ $PUSH_TAG } @{ $e->{targets} }, $e->{action};
+    for my $t (@{ $e->{targets} }, $e->{action}) {
+        my $id = ($t // '') =~ s/\s+@\s.*\z//sr;
+        while ($id =~ /\bbranch[ \t]+[`'"]?([^\s`'",;)]+)/gi) { return 1 if _branch_word($1, $cwd) }
+    }
+    my $act = $e->{action} // '';
+    my $git = 0;
+    for my $seg (split /&&|\|\||[;|\n]/, $act) {
+        next unless $seg =~ /\bgit\b.*?\bpush\b(.*)\z/s;
+        my $rest = $1;
+        return 0 if $rest =~ /[\$`]/;
+        $git = 1;
+        my @w = grep { $_ ne '' } map { s/\A[`'"]+|[`'".,)]+\z//gr } split /\s+/, $rest;
+        my ($remote, $take);
+        for my $x (@w) {
+            if ($take) { $take = 0; next }
+            if ($x =~ /\A-/) { $take = 1 if $x =~ /\A(?:-o|--push-option|--repo|--receive-pack|--exec)\z/; next }
+            if (!defined $remote) { $remote = $x; next }
+            for my $side (split /:/, $x =~ s/\A\+//r) { return 1 if _branch_word($side, $cwd) }
+        }
+    }
+    return 0 if $git;
+    my @w = map { s/\A[`'"(]+|[`'".,;:!?)]+\z//gr } split /\s+/, $act;
+    for my $i (0 .. $#w) {
+        next unless $w[$i] =~ /\A(?:force-?)?push(?:ed|es|ing)?\z/i;
+        my $j = $i + 1;
+        $j++ while $j <= $#w && $w[$j] =~ $PUSH_FILLER;
+        return 1 if $j <= $#w && _branch_word($w[$j], $cwd);
+    }
+    return 0;
+}
+
+# _branch_word(word, cwd) -> 1 when the word names a branch: ref characters only with at least
+# one letter, and either a slash (`feat/x`, `team/feat-y`) or the name of a branch that exists
+# in cwd (refs/heads/<w>, or refs/remotes/<remote>/<w>; _ref_names). Never `HEAD` or `@` (or
+# `HEAD~1`), a stop word (%BRANCH_STOP: "push this branch to origin"), a tag-shaped name
+# (`v1.2.0`, `1.2.0`), a file name with a letter extension or a path in cwd. With no cwd (or
+# outside git) only a slash name counts.
+sub _branch_word {
+    my ($w, $cwd) = @_;
+    $w //= '';
+    $w =~ s{\Arefs/(?:heads|remotes)/}{};
+    return 0 unless $w =~ m{\A[A-Za-z0-9_][A-Za-z0-9._/-]*\z} && $w !~ m{//|[/.]\z} && $w =~ /[A-Za-z]/;
+    return 0 if $w =~ /\A(?:HEAD|@)(?:[~^].*)?\z/ || $w =~ /\.[A-Za-z][A-Za-z0-9]{0,5}\z/;
+    return 0 if $BRANCH_STOP{ lc $w } || $w =~ $TAG_NAME;
+    $cwd //= skills::util::cwd();
+    return 0 if defined $cwd && -e "$cwd/$w";
+    return 1 if $w =~ m{/};
+    return _ref_names($cwd)->{$w} ? 1 : 0;
+}
+
+# The short names of the branches in cwd: each refs/heads/<w>, and <w> of each
+# refs/remotes/<remote>/<w> ({} outside git or with no cwd).
+my %REF_NAMES;
+sub _ref_names {
+    my ($cwd) = @_;
+    return {} unless defined $cwd;
+    $REF_NAMES{$cwd} //= do {
+        my %n;
+        my $r = eval { skills::gitfacts::git($cwd, 'for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes') };
+        if (ref $r eq 'HASH' && $r->{rc} == 0) {
+            for my $l (split /\n/, $r->{out} // '') {
+                if ($l =~ m{\Arefs/heads/(.+)\z}) { $n{$1} = 1 }
+                elsif ($l =~ m{\Arefs/remotes/[^/]+/(.+)\z} && $1 ne 'HEAD') { $n{$1} = 1 }
+            }
+        }
+        \%n;
+    };
+    return $REF_NAMES{$cwd};
 }
 
 # 1 when an approval that names production is one production read by the allow list above
@@ -397,10 +524,11 @@ sub _default_branches {
 #      chain => [{text, checked => {U-n => 1}}], transcript => path | undef,
 #      quote_floor => [quote_floor(ctx, sid)])
 #   -> {blocking => [[rule, where]…], advisory => [...], checked => [U-n…], lines => n,
-#       unchecked => n, classes => [outward ids of checked approvals]}
+#       unchecked => n, classes => [outward ids of checked approvals],
+#       origins => {U-n => origin class word} for the checked ids (owner xxxxxxxx-12)}
 sub lint {
     my ($lines, %a) = @_;
-    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, classes => []);
+    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, classes => [], origins => {});
     return \%r unless enabled();
     my $in = section_lines($lines);
     my ($tag_re, $note) = ($a{tag_re}, $a{note} // '');
@@ -431,32 +559,50 @@ sub lint {
     }
     my @ask;
     for my $e (@own) {
-        if (_carried($e, $a{chain})) { $e->{ok} = 1; next }
+        if (my $d = _carried($e, $a{chain})) { $e->{ok} = 1; $e->{origin} = _origin_word($d->{origins}{ $e->{id} }); next }
         push @ask, $e;
     }
     if (@ask) {
         my ($fok, $floor) = ref $a{quote_floor} eq 'ARRAY' ? @{ $a{quote_floor} } : (1, undef);
+        my @org;
         my $res = defined $a{transcript} && $fok
-            ? skills::core::quotes_found($a{transcript}, [ map { { quote => $_->{quote}, targets => $_->{targets} } } @ask ], $a{sid}, after => $floor)
+            ? skills::core::quotes_found($a{transcript}, [ map { _ask($_) } @ask ], $a{sid}, after => $floor, origins => \@org)
             : undef;
         for my $k (0 .. $#ask) {
             my $v = $res ? $res->[$k] : undef;
             if (!defined $v) { push @{ $r{advisory} }, [ 'approval-unchecked', $ask[$k]{where} ]; $r{unchecked}++ }
-            elsif ($v) { $ask[$k]{ok} = 1 }
+            elsif ($v) { $ask[$k]{ok} = 1; $ask[$k]{origin} = _origin_word($org[$k]) }
             else { push @{ $r{blocking} }, [ 'approval-quote', $ask[$k]{where} ] }
         }
     }
     my %cls;
     for my $e (grep { $_->{ok} } @own) {
         push @{ $r{checked} }, $e->{id};
+        $r{origins}{ $e->{id} } = $e->{origin} // 'unknown';
         $cls{$_} = 1 for @{ classes($e)->{outward} };
     }
     $r{classes} = [ sort keys %cls ];
     return \%r;
 }
 
+# One quote check's ask: the quote, the targets and the action (the matching-item rule reads the
+# action's words; owner xxxxxxxx-06).
+sub _ask { my ($e) = @_; return { quote => $e->{quote}, targets => $e->{targets}, action => $e->{action} } }
+
+# An origin class word of %ORIGIN_WORDS, else `unknown`.
+sub _origin_word { my ($w) = @_; return defined $w && !ref $w && $ORIGIN_WORDS{$w} ? $w : 'unknown' }
+
+# {origin word => n} over a list of entries (their `origin`).
+sub _origin_counts {
+    my ($es) = @_;
+    my %n;
+    $n{ _origin_word($_->{origin}) }++ for @$es;
+    return \%n;
+}
+
 # A line carried from an own-chain file that listed its id in approvals_checked: the same id,
 # words, action, targets and once/standing; its state may go from `not yet used` to `used`.
+# Returns that chain document (its `origins` name where the quote was found), else undef.
 sub _carried {
     my ($e, $chain) = @_;
     for my $d (@{ $chain || [] }) {
@@ -465,10 +611,10 @@ sub _carried {
             my $p = parse_line($l) or next;
             next unless $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote} && $p->{action} eq $e->{action}
                 && $p->{targets_text} eq $e->{targets_text} && $p->{scope} eq $e->{scope};
-            return 1 if $p->{state} eq 'not yet used' || $p->{state} eq $e->{state};
+            return $d if $p->{state} eq 'not yet used' || $p->{state} eq $e->{state};
         }
     }
-    return 0;
+    return undef;
 }
 
 # The ids of a frontmatter approvals_checked value.
@@ -478,7 +624,7 @@ sub checked_ids {
     return { map { $_ => 1 } grep { /\AU-[0-9]+\z/ } split /\s*,\s*/, $v };
 }
 
-# An own-chain document for the carry check: {text, checked}; undef unless the file is own for
+# An own-chain document for the carry check: {text, checked, origins}; undef unless the file is own for
 # this session by own_relation (REVIEW-NIGHT-3 R3-03: a fork's or bg-copy's base, an export, an
 # imported copy or a file outside the store lends no checked approvals to the new handoff).
 # Only checked ids whose line matches the publish record carry (U3-01).
@@ -489,7 +635,7 @@ sub chain_doc {
     my ($own) = own_relation($d, $ctx, $sid);
     return undef unless $own;
     my ($good) = verify_checked($ctx, $d, checked_ids($d->{fm}{approvals_checked}));
-    return { text => $d->{body} // '', checked => $good };
+    return { text => $d->{body} // '', checked => $good, origins => origins_of($ctx, $d) };
 }
 
 # ---- line hashes (U3-01)
@@ -521,11 +667,13 @@ sub _section_entries {
     return \@out;
 }
 
-# record_hashes(ctx, doc, \@ids) -> (n hashed, undef) | (0, why): publish, after the handoff is
-# placed and read back. Exclusive create: an existing record is never rewritten (the same
-# record again, from a retry, is fine).
+# record_hashes(ctx, doc, \@ids [, {U-n => origin word}]) -> (n hashed, undef) | (0, why):
+# publish, after the handoff is placed and read back. Exclusive create: an existing record is
+# never rewritten (the same record again, from a retry, is fine). The record also keeps each
+# hashed id's origin class word (`origins`, owner xxxxxxxx-12: no text), so a later carry of
+# the handoff can count it in its approvals_carry row.
 sub record_hashes {
-    my ($ctx, $d, $ids) = @_;
+    my ($ctx, $d, $ids, $origins) = @_;
     my %want = map { $_ => 1 } @{ $ids || [] };
     return (0, undef) unless %want;
     my $p = hash_path($ctx, $d->{fm}) or return (0, 'no-key');
@@ -536,7 +684,9 @@ sub record_hashes {
         $h{ $e->{id} } = line_hash($e->{line});
     }
     return (0, 'no-line') unless %h;
-    my $json = skills::util::json_encode({ v => 1, session_id => $d->{fm}{session_id}, nonce => $d->{fm}{nonce}, lines => \%h }) . "\n";
+    my %rec = (v => 1, session_id => $d->{fm}{session_id}, nonce => $d->{fm}{nonce}, lines => \%h);
+    $rec{origins} = { map { $_ => _origin_word($origins->{$_}) } keys %h } if ref $origins eq 'HASH';
+    my $json = skills::util::json_encode(\%rec) . "\n";
     my $ok = eval {
         skills::util::mkdir_p(File::Basename::dirname($p));
         skills::util::write_excl($p, $json, 0600);
@@ -547,14 +697,30 @@ sub record_hashes {
     return (defined $have && $have eq $json) ? (scalar(keys %h), undef) : (0, 'exists');
 }
 
-# The record of a handoff: {U-n => hex}, or undef when there is none or it does not fit the file.
-sub hashes_of {
+# The record of a handoff as stored, or undef when there is none or it does not fit the file.
+sub _record_of {
     my ($ctx, $d) = @_;
     my $p = hash_path($ctx, $d->{fm}) or return undef;
     return undef unless -f $p && !-l $p;
     my $r = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
     return undef unless ref $r eq 'HASH' && ($r->{v} // 0) eq '1' && ref $r->{lines} eq 'HASH'
         && ($r->{session_id} // '') eq ($d->{fm}{session_id} // '') && ($r->{nonce} // '') eq ($d->{fm}{nonce} // '');
+    return $r;
+}
+
+# The origins a handoff's record keeps: {U-n => origin word} ({} for a record without them, or
+# no record; owner xxxxxxxx-12).
+sub origins_of {
+    my ($ctx, $d) = @_;
+    my $r = _record_of($ctx, $d) or return {};
+    return {} unless ref $r->{origins} eq 'HASH';
+    return { map { $_ => _origin_word($r->{origins}{$_}) } grep { /\AU-[0-9]+\z/ } keys %{ $r->{origins} } };
+}
+
+# The record of a handoff: {U-n => hex}, or undef when there is none or it does not fit the file.
+sub hashes_of {
+    my ($ctx, $d) = @_;
+    my $r = _record_of($ctx, $d) or return undef;
     my %h;
     for my $id (keys %{ $r->{lines} }) {
         my $x = $r->{lines}{$id};
@@ -730,6 +896,8 @@ sub handoff_lines {
     # An id on two lines is no one's check (R3-05; publish refuses it, an edited file may not).
     my %n;
     $n{ $_->{id} }++ for @e;
+    my $org = origins_of($ctx, $d);
+    $_->{origin} = $org->{ $_->{id} } for @e;
     my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
     my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %$unver;
     if (@bad) {
@@ -760,11 +928,14 @@ sub summary_lines {
     my $root = defined &rc::root ? eval { rc::root() } : undef;
     my $ctx = defined $root && !ref $root && $root ne '' ? { root => $root } : undef;
     my ($fok, $floor) = quote_floor($ctx, $sid);
+    my @org;
     my $res = defined $transcript && $fok
-        ? skills::core::quotes_found($transcript, [ map { { quote => $_->{quote}, targets => $_->{targets} } } @e ], $sid, after => $floor)
+        ? skills::core::quotes_found($transcript, [ map { _ask($_) } @e ], $sid, after => $floor, origins => \@org)
         : undef;
     my (@ok, @no);
-    for my $k (0 .. $#e) { if ($res && $res->[$k]) { push @ok, $e[$k] } else { push @no, $e[$k] } }
+    for my $k (0 .. $#e) {
+        if ($res && $res->[$k]) { $e[$k]{origin} = $org[$k]; push @ok, $e[$k] } else { push @no, $e[$k] }
+    }
     return _report(\@ok, \@no, 'summary', $cwd);
 }
 
@@ -781,8 +952,10 @@ sub _report {
     my @out = ('Approvals (checked): ' . (@carry ? join('; ', map { _entry($_) } @carry) : 'none'));
     push @out, 'Approvals (gate, re-ask): ' . join('; ', map { _entry($_) } @gate) if @gate;
     push @out, 'Approvals (unchecked): ' . join(', ', map { $_->{id} } @$no) if @$no;
+    # Owner xxxxxxxx-12 "Count, log origin": the carried approvals by the origin of the row their
+    # quote was found in (class words only, never text).
     return (\@out, { source => $source, checked => scalar(@carry), gate => scalar(@gate), unchecked => scalar(@$no),
-                     classes => [ sort keys %cls ] });
+                     classes => [ sort keys %cls ], (@carry ? (origins => _origin_counts(\@carry)) : ()) });
 }
 
 1;

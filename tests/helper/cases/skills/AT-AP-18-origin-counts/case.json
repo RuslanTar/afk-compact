@@ -1,0 +1,88 @@
+{
+ "id": "AT-AP-18 (origin counts on approvals_carry, owner xxxxxxxx-12)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "Owner xxxxxxxx-12 \"Count, log origin\" (2026-10-26; NIGHT-REVIEW 3.6): an sdk-origin row (claude -p, Agent SDK) still counts as the user's words, and the approvals_carry row counts the carried approvals by the origin of the row their quote was found in: human, sdk, composer, none (a typed row without an origin), dialog (an AskUserQuestion answer). A gate (the push to main, U-7) is not carried and not counted. Class words only: no quote text in any row.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin now\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"sdk\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/y to origin now\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": \"push feat/z to origin now\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"composer\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/t to origin now\"}}\n{\"type\": \"assistant\", \"uuid\": \"a9\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_q9\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Which branch should I push?\", \"header\": \"Push\", \"multiSelect\": false, \"options\": [{\"label\": \"feat/u\", \"description\": \"the docs\"}, {\"label\": \"none\", \"description\": \"wait\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u9\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"sourceToolAssistantUUID\": \"a9\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_q9\", \"content\": \"User has answered your questions: \\\"Which branch should I push?\\\"=\\\"push feat/u to origin now\\\". You can now continue with the user's answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Which branch should I push?\", \"header\": \"Push\", \"multiSelect\": false, \"options\": [{\"label\": \"feat/u\", \"description\": \"the docs\"}, {\"label\": \"none\", \"description\": \"wait\"}]}], \"answers\": {\"Which branch should I push?\": \"push feat/u to origin now\"}}}\n"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals: U-2 approval \"push feat/x to origin now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used; U-3 approval \"push feat/y to origin now\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used; U-4 approval \"push feat/z to origin now\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 · once · not yet used; U-5 approval \"push feat/t to origin now\" — action git push origin feat/t · targets branch feat/t @ 1a2b3c4 · once · not yet used; U-6 approval \"push feat/u to origin now\" — action git push origin feat/u · targets branch feat/u @ 1a2b3c4 · once · not yet used; U-7 approval \"push feat/y to origin now\" — action git push origin main · targets branch main @ 1a2b3c4 · once · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "the carried approvals by origin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-3 git push origin feat/y → branch feat/y @ 1a2b3c4; U-4 git push origin feat/z → branch feat/z @ 1a2b3c4; U-5 git push origin feat/t → branch feat/t @ 1a2b3c4; U-6 git push origin feat/u → branch feat/u @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-7 git push origin main → branch main @ 1a2b3c4$"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "summary",
+       "checked": 5,
+       "gate": 1,
+       "origins": {
+        "human": 1,
+        "sdk": 1,
+        "none": 1,
+        "composer": 1,
+        "dialog": 1
+       }
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "to origin now"
+     }
+    ]
+   }
+  }
+ ]
+}
