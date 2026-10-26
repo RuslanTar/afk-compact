@@ -252,6 +252,8 @@ our %SCHEMA = (
                           min_window => [or => 'num', 'never'], small_window => 'bool', soft_max_raw => 'num', target_raw => 'num' },
     config_clamped => { key => 'word', configured => 'num', effective => 'num' },
     config_invalid => { key => 'word', index => 'int' },
+    # U-06 (lib/userre.pm): one of the user's own patterns stopped at its time bound, by key and position
+    regex_timeout => { key => 'word', index => 'int', why => [enum => qw(timeout load budget error)] },
     config_ambiguous => { candidates => 'int' },
     continue_capped => { continues_last_hour => 'int' },
     decl_unknown_keys => { keys => 'drop' },

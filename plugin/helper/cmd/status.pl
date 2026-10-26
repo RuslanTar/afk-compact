@@ -13,6 +13,7 @@
 # 2026-10-26 (CW-1): `status` without a session id (missing, empty or unsubstituted --sid):
 # `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
 # placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
+# U-06: a warning per pattern of the user's stopped at its time bound (lib/userre.pm).
 use strict;
 use warnings;
 use utf8;
@@ -143,7 +144,7 @@ sub run {
     push @out, $pol ? sprintf('policy: mods managed only %s · hooks managed only %s',
                               ($pol->{mods_managed_only} ? 'yes' : 'no'), ($pol->{hooks_managed_only} ? 'yes' : 'no'))
                     : 'policy: no mod row yet';
-    push @out, store_lines($opt->{cwd}, $d);
+    push @out, store_lines($opt->{cwd}, $d, $classic);
 
     my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
     push @out, 'last hook row: ' . ($last_row // 'none');
@@ -169,8 +170,10 @@ sub smoke_lines {
 # The lines from the settings and the store, not from this session's streams: unsafe roots,
 # handoff mode, automatic relaunch (this session's jobs only with its folder d), prod reads,
 # protected branches, idle turn, settings, queue mode, kept stashes, former-name options, notes.
+# The U-06 pattern warnings read this session's hook rows (classic), so without a session id
+# there are none to show.
 sub store_lines {
-    my ($cwd, $d) = @_;
+    my ($cwd, $d, $classic) = @_;
     my @out;
     for my $key (qw(handoff_root log_dir disposable_root)) {
         push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
@@ -180,6 +183,7 @@ sub store_lines {
     push @out, relaunch_lines($d);
     push @out, prod_lines();
     push @out, protected_lines();
+    push @out, regex_lines($classic);
     push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`. Without a
@@ -261,8 +265,7 @@ sub relaunch_lines {
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
 sub watcher_lines {
-    my $w = lc(rc::val('watcher') // 'shadow');
-    $w =~ s/^\s+|\s+$//g;
+    my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     my $brand = ctx::brand();
     return ('watcher: off · existing logs kept (nothing deleted) · core files still written: copies check, '
             . 'background list, heal counters, rollups, liveness') if $w eq 'off';
@@ -327,8 +330,7 @@ sub min_window {
     my $soft = rc::val('compact_soft_max_tokens') // 0;
     my $need = _ceil($c->{min_target} * $c->{target_den} / $c->{target_num});
     return 'never' if $target < $c->{min_target} || $soft < $need;
-    my $ht = lc(rc::val('handoff_turn') // 'halt');
-    $ht =~ s/^\s+|\s+$//g;
+    my $ht = settings::trim(lc(rc::val('handoff_turn') // 'halt'));
     my $h = rc::val('handoff_turn_max_tokens') // 64000;
     $h = $c->{handoff_tokens_min} if $h < $c->{handoff_tokens_min};
     $h = $c->{handoff_tokens_max} if $h > $c->{handoff_tokens_max};
@@ -443,6 +445,35 @@ sub protected_lines {
     my $src = $SRC{ $r->{source}{protected_branches} // 'default' } // 'default';
     my @l = ('protected branches: the shipped list + ' . ($p->{user} // 0) . " yours ($src)");
     push @l, "  warning: protected_branches #$_->{index} invalid, ignored (the shipped list still applies)" for @{ $p->{invalid} || [] };
+    return @l;
+}
+
+# ---------------------------------------------------------------- the user's patterns (U-06)
+# One warning per pattern of the user's that this session stopped at its time bound
+# (lib/userre.pm, `regex_timeout` rows), by key and position, never the pattern, with what the
+# plugin did instead.
+my %REGEX_SAFE = (secret_extra_rules => 'counted as a hit of its kind on what it checked', prod_patterns => 'counted as production',
+                  protected_branches => 'counted as protected', ticket_pattern => 'no ticket used',
+                  relaunch_allow => 'not allowlisted (asks)', deny_class_patterns => 'not used for the class');
+my %REGEX_WHY = (timeout => 'stopped after its time limit', load => 'stopped while the machine was busy',
+                 budget => 'not run (the time for your patterns was used up)', error => 'could not run');
+my %REGEX_RANK = (timeout => 4, budget => 3, load => 2, error => 1);
+sub regex_lines {
+    my ($rows) = @_;
+    my (%why, @order);
+    for my $r (grep { ($_->{ev} // '') eq 'regex_timeout' } @{ $rows || [] }) {
+        my ($k, $i, $w) = ($r->{key} // '', $r->{index} // '', $r->{why} // '');
+        next unless $REGEX_SAFE{$k} && $i =~ /\A[0-9]{1,3}\z/;
+        push @order, "$k.$i" unless exists $why{"$k.$i"};
+        # one line per pattern: its most telling row (a slow pattern over a busy machine)
+        $why{"$k.$i"} = $w if !defined $why{"$k.$i"} || ($REGEX_RANK{$w} // 0) > ($REGEX_RANK{ $why{"$k.$i"} } // 0);
+    }
+    my @l;
+    for my $ki (@order) {
+        my ($k, $i) = $ki =~ /\A(.+)\.([0-9]+)\z/;
+        my $w = $why{$ki};
+        push @l, "warning: $k #$i " . ($REGEX_WHY{$w} // 'stopped') . "; $REGEX_SAFE{$k}" . ($w eq 'timeout' ? ' (make the pattern simpler)' : '');
+    }
     return @l;
 }
 

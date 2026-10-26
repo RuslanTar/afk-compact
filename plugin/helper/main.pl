@@ -57,7 +57,7 @@ if ($IS_HOOK) {
 for my $lib (qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
                 git gsd queue bucket frontmatter detect assemble secrets evidence
                 dispatch transcript scope sessions sidecar copies measure checkpoint
-                sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice)) {
+                sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre)) {
     my $ok = eval { require "$lib.pm"; 1 };
     if (!$ok) {
         if ($IS_HOOK) { local $/; my $d = <STDIN>; exit 0 }
@@ -66,6 +66,8 @@ for my $lib (qw(util jsonc sha ctx spec settings paths roots log rc identity loc
     }
 }
 ctx::init($HELPER_DIR);
+# U-06: the time bound of the user's patterns for a subcommand the mod calls with a short timeout
+userre::limits(@{ $userre::SUB_S{$sub} }) if $userre::SUB_S{$sub};
 
 my $file = "$HELPER_DIR/cmd/$sub.pl";
 if (!-f $file) {

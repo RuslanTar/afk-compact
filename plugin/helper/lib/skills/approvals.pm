@@ -227,9 +227,12 @@ sub classes {
     # prod-write gate.
     my $prod;
     my $pp = skills::core::prod();
-    for my $c (@{ ref $pp->{classes} eq 'ARRAY' ? $pp->{classes} : [] }) {
-        next unless ref $c eq 'HASH' && defined $c->{re};
-        if ($text =~ $c->{re}) { $prod = 'write'; last }
+    if (defined &settings::prod_class) { $prod = 'write' if defined settings::prod_class($text, $pp) }    # U-06: time-bound
+    else {
+        for my $c (@{ ref $pp->{classes} eq 'ARRAY' ? $pp->{classes} : [] }) {
+            next unless ref $c eq 'HASH' && defined $c->{re};
+            if ($text =~ $c->{re}) { $prod = 'write'; last }
+        }
     }
     if (defined $prod && !defined $gate) {
         if ($PROD_READ_CARRIES && _prod_read($e, $text, \%any)) { $prod = 'read' }

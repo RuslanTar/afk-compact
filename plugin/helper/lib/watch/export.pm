@@ -1017,7 +1017,15 @@ sub _assemble {
     };
     my $mtext = _canon($manifest);
     die "report: identity in the manifest\n" if identity_hits($mtext, $id_list);
-    die "report: secret in the manifest\n" if @{ secret_hits($ctx, scan_text('manifest.json', $mtext)) };
+    # U-06: the manifest is scanned last, so the user's secret rules get time of their own for it
+    # (the files may have spent the budget); a rule that still could not finish fails the report
+    # closed, under its own reason
+    my $scan_m = sub { secret_hits($ctx, scan_text('manifest.json', $mtext)) };
+    my $mh = defined &userre::reserve ? userre::reserve('manifest', $scan_m) : $scan_m->();
+    my $tr = defined $secrets::TIMEOUT_RULE ? $secrets::TIMEOUT_RULE : 'regex-timeout';
+    die "report: a secret_extra_rules pattern could not finish on the manifest (make the pattern simpler)\n"
+        if @$mh && !grep { $_ ne $tr } @$mh;
+    die "report: secret in the manifest\n" if @$mh;
     my @entries = grep { $_->[0] eq 'README.txt' } @ok;
     push @entries, [ 'manifest.json', $mtext ];
     push @entries, grep { $_->[0] ne 'README.txt' } @ok;

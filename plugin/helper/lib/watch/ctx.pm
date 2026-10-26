@@ -124,7 +124,7 @@ sub _settings {
     $s{triggers} = (defined $t && !ref $t && $t =~ /\A\s*(?:1|true|yes|on)\s*\z/i) ? 'true' : 'false';
     # `handoff_turn` as the mod parses it (config.ts handoffTurn): trimmed and case-folded;
     # anything but `halt` or `off` is the default. It sets the clamp's reserve (rules::thresholds).
-    (my $ht = lc(ref $s{handoff_turn} ? '' : $s{handoff_turn})) =~ s/\A\s+|\s+\z//g;
+    my $ht = _trim(lc(ref $s{handoff_turn} ? '' : $s{handoff_turn}));
     $s{handoff_turn} = ($ht eq 'halt' || $ht eq 'off') ? $ht : $DEFAULTS{handoff_turn};
     ($s{watcher}, $s{watcher_unknown}) = _watcher_value($given);
     return \%s;
@@ -141,9 +141,19 @@ sub _watcher_value {
     $raw = $given->{watcher} if $given && exists $given->{watcher} && defined $given->{watcher} && !ref $given->{watcher};
     $raw = $ENV{CLAUDE_PLUGIN_OPTION_WATCHER} unless defined $raw;
     return ('shadow', 0) if !defined $raw || index($raw, '${user_config.') == 0;
-    (my $v = lc $raw) =~ s/\A\s+|\s+\z//g;
+    my $v = _trim(lc $raw);
     return ($v, 0) if $v eq 'shadow' || $v eq 'off';
     return ('shadow', 1);
+}
+
+# _trim(text) -> text without leading and trailing white space, in linear time (U-06 review:
+# s/\A\s+|\s+\z//g is quadratic in a long inner run of spaces; settings::trim does the same)
+sub _trim {
+    my ($s) = @_;
+    return $s unless defined $s;
+    $s =~ s/\A\s+//;
+    $s =~ s/\s+\z//;
+    return $s;
 }
 
 # One `config_note` row per session when the `watcher` value was not `shadow`/`off`
