@@ -517,7 +517,9 @@ sub unset_value {
 
 # ---------------------------------------------------------------- processes
 
-# Run argv with a deadline. Returns {rc, out, timed_out}. stderr is discarded. stdin => BYTES
+# Run argv with a deadline. Returns {rc, out, timed_out, truncated}. stderr is discarded. Output
+# past max_bytes (default 4 MiB) is read and dropped: truncated is then 1 (rc unaffected), so a
+# caller that must see every line treats it as unknown. stdin => BYTES
 # feeds those bytes to the command's standard input (written as it reads; a command that
 # stops reading early ends the write, never the helper), else stdin is /dev/null.
 sub run {
@@ -550,7 +552,7 @@ sub run {
     }
     my $out = '';
     my $deadline = time + ($timeout_ms // 2000) / 1000;
-    my $timed_out = 0;
+    my ($timed_out, $truncated) = (0, 0);
     my $rin = '';
     vec($rin, fileno($r), 1) = 1;
     my $max = $o{max_bytes} // 4 * 1024 * 1024;
@@ -567,7 +569,7 @@ sub run {
         }
         my $got = sysread($r, my $buf, 65536);
         last unless $got;
-        $out .= $buf if length($out) < $max;
+        if (length($out) < $max) { $out .= $buf } else { $truncated = 1 }
     }
     close $r;
     close $iw if $iw;
@@ -578,7 +580,7 @@ sub run {
     }
     waitpid($pid, 0);
     my $rc = $timed_out ? -1 : ($? >> 8);
-    return { rc => $rc, out => $out, timed_out => $timed_out };
+    return { rc => $rc, out => $out, timed_out => $timed_out, truncated => $truncated };
 }
 
 sub _nonblock {

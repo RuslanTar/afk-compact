@@ -173,3 +173,14 @@ ask	make -j4 test	not-read-only	xxxxxxxx-05: a flag before the target
 ask	npm test -- --watch	not-read-only	xxxxxxxx-05: --watch never ends
 ask	bundle exec rspec	not-read-only	xxxxxxxx-05: loads .rspec and spec helpers NR-23 cannot see
 ask	bin/rails test	not-read-only	xxxxxxxx-05: loads bin/rails and config/
+ask	npm run test V=1	not-read-only	xxxxxxxx-05 fix: V=1 is a make variable only
+ask	npm run test-fast VERBOSE=1	not-read-only	xxxxxxxx-05 fix: VERBOSE=1 is a make variable only
+ask	yarn test-fast V=1	not-read-only	xxxxxxxx-05 fix: V=1 is a make variable only
+ask	rake test V=1	not-read-only	xxxxxxxx-05 fix: V=1 is a make variable only
+ask	gradle test V=1	not-read-only	xxxxxxxx-05 fix: V=1 is a make variable only
+ask	gradle build-quick	not-read-only	xxxxxxxx-05 fix: gradle takes no new suffix (the task is not checked; an abbreviated name may run another task)
+ask	./gradlew test-unit	not-read-only	xxxxxxxx-05 fix: gradle takes no new suffix
+ask	rake test-fast	not-read-only	xxxxxxxx-05 fix: rake takes no new suffix (the task is not checked)
+none	yarn test-unit	-	xxxxxxxx-05: a suffix for a script the package defines
+none	make test_unit V=1	-	xxxxxxxx-05: make takes both
+none	rake test:units	-	a :<name> part for rake, as before

@@ -82,11 +82,13 @@ sub records_dir { my ($ctx) = @_; return "$ctx->{root}/.sessions/by-pid" }
 
 # All records: [{pid, epoch, state(live|ended), sid8, path, data}]
 sub records {
-    my ($ctx) = @_;
+    my ($ctx, $sid8) = @_;
     my $dir = records_dir($ctx);
     my @out;
     for my $f (skills::util::list_dir($dir)) {
         next unless $f =~ /\A(\d+)-(\d+)\.(live|ended)-([0-9a-z]+)\.json\z/;
+        # An optional sid8 keeps only that session's files, before any is read.
+        next if defined $sid8 && $4 ne $sid8;
         my $d = eval { skills::util::json_decode(skills::util::read_file("$dir/$f", 65536)) };
         push @out, { pid => $1, epoch => $2, state => $3, sid8 => $4, path => "$dir/$f", data => (ref $d eq 'HASH' ? $d : {}) };
     }

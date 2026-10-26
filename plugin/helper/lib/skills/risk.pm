@@ -29,20 +29,23 @@ package skills::risk;
 #     changed), and none differs between the HEAD this session started on and HEAD (owner
 #     xxxxxxxx-08, REVIEW-NIGHT-2 U-05: a commit, merge, checkout or reset since the start); an
 #     unknown start HEAD (no record of this session for this work tree, a record without one, a
-#     commit git no longer has) asks;
+#     commit git no longer has) asks, and so does a git status or diff that fails, runs out of
+#     time or is cut off (MITIGATIONS 4.1). The start HEAD is per session id: a /clear, fork or
+#     handoff-resume successor starts on its own HEAD (a stated limit);
 #   - gate: the explicit gate classes name the first family that matches (env-write, then
-#     infra-write, then deploy); a production class on a command that is not read-only is the
-#     prod-write gate; a push whose destination is the remote's default branch, matches
+#     infra-write, then deploy); a production class on a command that is not exactly one
+#     production read (_prod_read_cmd) is the prod-write gate; a push whose destination is the remote's default branch, matches
 #     protected_branch_re or an entry of the user's add-only protected_branches setting (owner
 #     xxxxxxxx-29), or cannot be told (--all, --mirror, a detached HEAD) is protected-push;
 #     without a refspec the current branch and its upstream's branch both count.
 # Owner-ruled readings (2026-10-26, night review xxxxxxxx-07 "Risk rules", all four kept): a
-# production command that is not read-only is the prod-write gate ($PROD_WRITE_RE, R-1); an
+# production command that is not exactly one production read, or that holds a $PROD_WRITE_RE
+# verb or an outward or gate class, is the prod-write gate (R-1); an
 # unknown push destination counts as protected (R-2); a quote or backslash inside a word makes a
 # foreign command ask (R-3, REVIEW-NIGHT-3 R3-01: readonly_cmd_re refuses such a word); the class
 # patterns also match the unquoted, lower-cased form (_forms, R-4, R3-06). The test/build
 # exemption ends on a $BUILD_DEF_RE change in the work tree (NR-23) or since the start HEAD
-# (xxxxxxxx-08). Still provisional: O-6 (this check in code at all).
+# (xxxxxxxx-08). This check in code at all: owner-ruled (O-6, xxxxxxxx-35, as built).
 # Source own (an own handoff or this session's summary, resume Rule 2): runs under the normal
 # permission rules, so only gate, outward, production and credential-value ask.
 use strict;
@@ -166,7 +169,7 @@ sub classify {
     my $top = $w->{in_git} ? (skills::util::abs_path($w->{worktree}) // $w->{worktree}) : undef;
     my ($recorded, $jobs_read) = (undef, 0);
     my %why;
-    my ($build_dirty, $start_changed);
+    my ($build_dirty, $dirty_read, $start_changed);
     for my $seg (split $SEG_SPLIT, $cmd) {
         $seg =~ s/\A\s+|\s+\z//g;
         next if $seg eq '';
@@ -177,12 +180,18 @@ sub classify {
             next;
         }
         if ($seg =~ $tb) {
-            $build_dirty //= _build_dirty($top);
+            ($build_dirty, $dirty_read) = (_build_dirty($top), 1) unless $dirty_read;
             my $def = _defined_target($seg, $cwd, $top);
             if (!$def) { push @notes, 'the repository defines no such test or build target here' }
+            elsif (!defined $build_dirty) {
+                # MITIGATIONS 4.1: git status failed, ran out of time or was cut off (fail closed).
+                push @notes, 'the test and build definitions could not be checked; a test or build run asks';
+            }
             elsif (@$build_dirty) { push @notes, 'a test or build definition differs from HEAD (' . _first3($build_dirty) . '); a test or build run asks' }
             elsif (!($start_changed //= _start_changed($top, $a{start_heads}))->{known}) {
-                push @notes, 'the HEAD this session started on is not known for this work tree; a test or build run asks';
+                push @notes, $start_changed->{failed}
+                    ? 'the test and build definitions could not be checked; a test or build run asks'
+                    : 'the HEAD this session started on is not known for this work tree; a test or build run asks';
             }
             elsif (@{ $start_changed->{files} }) {
                 push @notes, 'a test or build definition changed since this session started (' . _first3($start_changed->{files}) . '); a test or build run asks';
@@ -207,11 +216,15 @@ sub classify {
     my ($family) = grep { my $g = $_; grep { $_ eq $g } @gate_hits } @GATE_FAMILY;
     $family //= $gate_hits[0];
     if (defined $family) { $hit{gate} = 1; $id->($family) }
-    # A production command is a write (the prod-write gate) when an outward or destructive class
-    # also matched or it holds a write verb; otherwise it stays `production` (a read the user's
-    # setting or a scoped approval may cover, O-2). Without the job record's read-only mark the
-    # code cannot know more; either way it asks.
-    if (defined $prod_id && (@out_hits || @gate_hits || $any->($PROD_WRITE_RE))) { $hit{gate} = 1; $id->('prod-write') }
+    # A production command is a write (the prod-write gate, R-1) unless it is exactly one
+    # production read (_prod_read_cmd: one segment of the approvals read grammar or of
+    # readonly_cmd_re) with no outward or destructive class and no write verb; only such a read
+    # stays `production` (a read the user's setting or a scoped approval may cover, O-2). Either
+    # way it asks.
+    if (defined $prod_id && (@out_hits || @gate_hits || $any->($PROD_WRITE_RE) || !_prod_read_cmd($cmd, $ro))) {
+        $hit{gate} = 1;
+        $id->('prod-write');
+    }
     if (grep { $_ eq 'push' || $_ eq 'force-push' } @out_hits) {
         if (_protected_push($cmd, $cwd, $top)) { $hit{gate} = 1; $id->('protected-push') }
     }
@@ -228,6 +241,20 @@ sub classify {
     my %keep = map { $_ => 1 } @classes;
     @notes = () unless $keep{'not-read-only'};
     return { result => 'ask', classes => \@classes, ids => \@ids, why => undef, notes => \@notes };
+}
+
+# R-1 (owner xxxxxxxx-07 "Risk rules", kept): 1 when the command is exactly one production read,
+# the allow list approvals.pm applies to an approval's action (owner xxxxxxxx-28): one segment,
+# not starting with a quote, that is one `kubectl` or `helm` read of the read grammar
+# (skills::approvals::_tool_read: listed subcommands and flags, plain words) or matches
+# readonly_cmd_re. Anything else that names production is a write (fail closed).
+sub _prod_read_cmd {
+    my ($cmd, $ro) = @_;
+    (my $c = $cmd) =~ s/\A\s+|\s+\z//g;
+    return 0 if $c eq '' || $c =~ $SEG_SPLIT || $c =~ /\A[`"']/;
+    return 1 if $c =~ $ro;
+    require skills::approvals;
+    return skills::approvals::_tool_read($c) ? 1 : 0;
 }
 
 # Word split of one segment with the shell's quote removal: double-quoted and single-quoted
@@ -414,12 +441,14 @@ sub _defined_target {
 }
 
 # Test and build definitions that differ from HEAD in the work tree (tracked changes and
-# untracked files), as paths relative to the top; [] outside git or when git fails.
+# untracked files), as paths relative to the top; [] outside git (no target is defined there).
+# undef when git status fails, runs out of time or its output was cut off (MITIGATIONS 4.1:
+# unknown, so the caller asks; it read as "nothing changed" before).
 sub _build_dirty {
     my ($top) = @_;
     return [] unless defined $top;
     my $r = skills::gitfacts::git($top, 'status', '--porcelain', '--untracked-files=all');
-    return [] unless $r->{rc} == 0;
+    return undef if $r->{rc} != 0 || $r->{timed_out} || $r->{truncated};
     my @f;
     for my $l (split /\n/, $r->{out}) {
         next unless length($l) > 3;
@@ -441,7 +470,7 @@ sub start_heads {
     my %h;
     return \%h unless defined $sid && $sid ne '';
     my @r = grep { $_->{state} eq 'live' && ($_->{data}{session_id} // '') eq $sid && defined $_->{data}{worktree} && !ref $_->{data}{worktree} }
-            @{ skills::ctx::records($ctx) };
+            @{ skills::ctx::records($ctx, substr($sid, 0, 8)) };
     @r = sort { (skills::util::iso_to_epoch($a->{data}{ts}) // 0) <=> (skills::util::iso_to_epoch($b->{data}{ts}) // 0) } @r;
     for my $x (@r) {
         my $wt = skills::util::abs_path($x->{data}{worktree}) // $x->{data}{worktree};
@@ -452,16 +481,18 @@ sub start_heads {
     return \%h;
 }
 
-# _start_changed(top, start_heads) -> {known => 0|1, files => [..]}: the $BUILD_DEF_RE files that
+# _start_changed(top, start_heads) -> {known => 0|1, failed => 0|1, files => [..]}: the $BUILD_DEF_RE files that
 # differ between the start HEAD of this work tree and HEAD (commits, merges, checkouts and
 # resets alike; renames list both names). Not known without a start HEAD or when git cannot
-# compare it (fail closed: the caller asks).
+# compare it, runs out of time or its output was cut off (failed; fail closed: the caller asks).
 sub _start_changed {
     my ($top, $sh) = @_;
     my $head = defined $top && ref $sh eq 'HASH' ? $sh->{$top} : undef;
     return { known => 0, files => [] } unless defined $head;
     my $r = skills::gitfacts::git($top, 'diff', '--name-only', '--no-renames', '-z', $head, 'HEAD', '--');
-    return { known => 0, files => [] } unless $r->{rc} == 0;
+    # A start HEAD git no longer has is an unknown start, not a failed check.
+    return { known => 0, failed => ($r->{rc} == 128 && !$r->{timed_out} && !$r->{truncated} ? 0 : 1), files => [] }
+        if $r->{rc} != 0 || $r->{timed_out} || $r->{truncated};
     return { known => 1, files => [grep { $_ ne '' && $_ =~ $BUILD_DEF_RE } split /\0/, $r->{out}] };
 }
 

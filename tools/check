@@ -721,11 +721,17 @@ def probes(name):
     def risk_corpus(d):
         """AT-SR-09 / NR-04 / NR-20: `jq` back on the read-only list, `staging` off the protected list;
         REVIEW-NIGHT-2 R2-03: git grep's -O only as the first letter again (a bundle and an
-        abbreviation of --open-files-in-pager pass); R2-01: pytest takes any argument again."""
+        abbreviation of --open-files-in-pager pass); R2-01: pytest takes any argument again;
+        owner xxxxxxxx-05: make takes any -<word> suffix (test-staging, build-docker pass), and rake
+        and gradle take the new suffixes and V=1."""
         edit(d, "plugin/assets/handoff-spec.md", "|(cat|head|", "|(jq|cat|head|")
         edit(d, "plugin/assets/handoff-spec.md", "|stable|staging|", "|stable|")
         edit(d, "plugin/assets/handoff-spec.md", "(-[A-Za-z0-9]*O|--output|--op|", "(-O|--output|")
         edit(d, "plugin/assets/handoff-spec.md", "^(pytest|python3?[ \\\\t]+-m[ \\\\t]+pytest)", "^(pytest|python3?[ \\\\t]+-m[ \\\\t]+pytest)([ \\\\t].*)?$|^(pytest)")
+        edit(d, "plugin/assets/handoff-spec.md", "(:[A-Za-z0-9_]+|-fast|-unit|_unit|-quick)?([ \\\\t]+(-j[0-9]*|-[kqsv]+|--(keep-going|silent|quiet|verbose|trace|info|stacktrace|offline|no-daemon|continue)|V=1|VERBOSE=1))",
+             "(:[A-Za-z0-9_]+|-[a-z]+)?([ \\\\t]+(-j[0-9]*|-[kqsv]+|--(keep-going|silent|quiet|verbose|trace|info|stacktrace|offline|no-daemon|continue)|V=1|VERBOSE=1))")
+        edit(d, "plugin/assets/handoff-spec.md", "(:[A-Za-z0-9_]+)?([ \\\\t]+(-j[0-9]*",
+             "(:[A-Za-z0-9_]+|-fast|-unit|_unit|-quick)?([ \\\\t]+(V=1|-j[0-9]*")
 
     def store_flags(d):
         """TG-01: a flag the helper's wait does not take, a command the helper does not know, and
@@ -890,7 +896,12 @@ def probes(name):
           r"^GATE risk-corpus plugin/assets/handoff-spec\.md: AT-AP-07 branch: staging is not protected, want protected$",
           r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'git grep -nOsh TODO' carries no risk class$",
           r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'git grep --open=sh TODO' carries no risk class$",
-          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'pytest --basetemp=src' carries no risk class$"], None),
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'pytest --basetemp=src' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'make test-staging' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'make build-docker' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'gradle test V=1' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'gradle build-quick' carries no risk class$",
+          r"^GATE risk-corpus tests/fixtures/risk/corpus\.tsv:\d+: AT-SR-09 ask: 'rake test-fast' carries no risk class$"], None),
         ("store-flags", "TG-01", gates_only("store-flags"), store_flags,
          [r"^GATE store-flags plugin/skills/resume/SKILL\.md:\d+: TG-01 flag: `<store> wait --forever`: the helper's wait takes no --forever$",
           r"^GATE store-flags plugin/assets/resume-context\.txt:\d+: TG-01 command: `<store> frobnicate` is no helper command$",
