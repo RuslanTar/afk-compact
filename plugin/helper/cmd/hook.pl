@@ -181,7 +181,7 @@ sub on_SessionStart {
     my ($lin, $where);
     if (rc::root_ok('handoff_root')) {
         $where = git::where($p->{cwd});
-        eval { sessions::write_live($sid, $p->{cwd}, $where->{toplevel}, $src) };
+        eval { sessions::write_live($sid, $p->{cwd}, $where->{toplevel}, $src, $where->{head}) };
         $lin = eval { sessions::write_lineage($sid, $src) } if $src eq 'clear' || $src eq 'fork';
     }
     $lin = sessions::lineage($sid) if !$lin || $lin->{exists};
