@@ -1,0 +1,233 @@
+{
+ "id": "AT-CF-03, AT-CF-06 fit (U-04) long-path",
+ "layer": "H",
+ "owner": "skills",
+ "note": "The real begin steps of AT-CF-03-06-fit-counted with the store root, the disposable root and the repository 246 characters deeper under the temp folder (U-04 and its review: the fit-counted case's exact 20 and 8 failed past a 121-character TMPDIR). Shown + counted = found, the newest first, begin-full.json holds every entry, and the reply stays within 3,072 B at either depth",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/handoffs",
+  "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/trash-staging"
+ },
+ "steps": [
+  {
+   "setup": [
+    {
+     "at": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/repo",
+     "repo": {
+      "branch": "feature/LAB-7-x",
+      "commits": [
+       {
+        "files": {
+         "app/a.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     }
+    },
+    {
+     "content": "{\"seq\":1,\"tasks\":[{\"id\":\"b0000\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0001\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0002\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0003\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0004\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0005\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0006\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0007\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0008\",\"kind\":\"shell\",\"output\":\"$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/repo/out-b0008.log\",\"status\":\"running\"},{\"id\":\"b0009\",\"kind\":\"shell\",\"output\":\"$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/repo/out-b0009.log\",\"status\":\"running\"}],\"ts\":\"2026-10-21T13:59:00+03:00\"}",
+     "write": "$WATCH/33333333-3333-4333-8333-333333333333/bg/slot-1.json"
+    },
+    {
+     "paths": [
+      "/u04/x00",
+      "/u04/x01",
+      "/u04/x02",
+      "/u04/x03",
+      "/u04/x04",
+      "/u04/x05",
+      "/u04/x06",
+      "/u04/x07",
+      "/u04/x08",
+      "/u04/x09",
+      "/u04/x10",
+      "/u04/x11",
+      "/u04/x12",
+      "/u04/x13",
+      "/u04/x14",
+      "/u04/x15",
+      "/u04/x16",
+      "/u04/x17",
+      "/u04/x18",
+      "/u04/x19",
+      "/u04/x20",
+      "/u04/x21",
+      "/u04/x22",
+      "/u04/x23",
+      "/u04/x24"
+     ],
+     "sid": "55555555-5555-4555-8555-555555555555"
+    },
+    {
+     "paths": [
+      "/u04/y00",
+      "/u04/y01",
+      "/u04/y02",
+      "/u04/y03",
+      "/u04/y04",
+      "/u04/y05",
+      "/u04/y06",
+      "/u04/y07",
+      "/u04/y08",
+      "/u04/y09",
+      "/u04/y10",
+      "/u04/y11",
+      "/u04/y12",
+      "/u04/y13",
+      "/u04/y14",
+      "/u04/y15",
+      "/u04/y16",
+      "/u04/y17",
+      "/u04/y18",
+      "/u04/y19",
+      "/u04/y20",
+      "/u04/y21",
+      "/u04/y22",
+      "/u04/y23",
+      "/u04/y24",
+      "/u04/y25",
+      "/u04/y26",
+      "/u04/y27",
+      "/u04/y28",
+      "/u04/y29"
+     ],
+     "sid": "66666666-6666-4666-8666-666666666666"
+    }
+   ]
+  },
+  {
+   "argv": [
+    "begin",
+    "--sid",
+    "33333333-3333-4333-8333-333333333333",
+    "--topic",
+    "x"
+   ],
+   "cwd": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/repo",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "contains": [
+       "\"id\":\"b0000\"",
+       "\"id\":\"b0008\"",
+       "\"id\":\"b0009\""
+      ],
+      "mode": "0600",
+      "path": "$ROOT/repo/LAB-7/.staging/33333333-*/begin-full.json",
+      "has": [
+       "^ +\\{\"exists\":false,\"gitignored\":\"unmeasured\",\"id\":\"b0009\","
+      ]
+     }
+    ],
+    "json": {
+     "inflight_measured.sidecar": ".watch/33333333-3333-4333-8333-333333333333/bg/slot-1.json",
+     "trimmed.all": {
+      "re": "^repo/LAB-7/\\.staging/33333333-[0-9a-f]{8}/begin-full\\.json$"
+     },
+     "trimmed.cut.tmp_candidates": {
+      "null": 1
+     },
+     "inflight_measured.tasks": {
+      "len_min": 3,
+      "len_plus": "trimmed.cut.inflight_measured",
+      "total": 10
+     },
+     "inflight_measured.tasks.0.id": "b0000"
+    },
+    "stdout_max_bytes": 3073
+   },
+   "name": "10 background tasks: shown + trimmed.cut = 10, all 10 in begin-full.json, one a line; the sidecar relative to store_root"
+  },
+  {
+   "argv": [
+    "begin",
+    "--sid",
+    "55555555-5555-4555-8555-555555555555",
+    "--topic",
+    "x"
+   ],
+   "cwd": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/repo",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "contains": [
+       "\"path\":\"/u04/x00\"",
+       "\"path\":\"/u04/x04\"",
+       "\"path\":\"/u04/x24\""
+      ],
+      "mode": "0600",
+      "path": "$ROOT/repo/LAB-7/.staging/55555555-*/begin-full.json"
+     }
+    ],
+    "json": {
+     "tmp_candidates.0.path": "/u04/x24",
+     "trimmed.all": {
+      "re": "^repo/LAB-7/\\.staging/55555555-[0-9a-f]{8}/begin-full\\.json$"
+     },
+     "trimmed.cut.inflight_measured": {
+      "null": 1
+     },
+     "tmp_candidates": {
+      "len_min": 1,
+      "len_plus": "trimmed.cut.tmp_candidates",
+      "total": 25
+     }
+    },
+    "stdout_max_bytes": 3073
+   },
+   "name": "25 tmp paths: shown (the newest first) + trimmed.cut = 25, all 25 in begin-full.json"
+  },
+  {
+   "name": "paths.jsonl past its read size (test size 1,000 B): the newest rows read, the older rows counted in trimmed.unread; shown + cut + unread = 30",
+   "cwd": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/repo",
+   "env": {
+    "STORE_TEST_PATHS_MAX": "1000"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--topic",
+    "x"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3073,
+    "json": {
+     "tmp_candidates": {
+      "len_min": 1,
+      "len_plus": [
+       "trimmed.cut.tmp_candidates",
+       "trimmed.unread.tmp_candidates"
+      ],
+      "total": 30
+     },
+     "tmp_candidates.0.path": "/u04/y29",
+     "trimmed.unread.tmp_candidates": {
+      "re": "^[1-9][0-9]*$"
+     },
+     "trimmed.all": {
+      "re": "^repo/LAB-7/\\.staging/66666666-[0-9a-f]{8}/begin-full\\.json$"
+     }
+    },
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/.staging/66666666-*/begin-full.json",
+      "mode": "0600",
+      "contains": [
+       "\"path\":\"/u04/y29\"",
+       "\"unread\":"
+      ],
+      "lacks": [
+       "\"path\":\"/u04/y00\""
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "begin: JSON <=3 KB with every HDN §6 key (+ reuse_window_min, D-14); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket; no queue_cmd: \"queue\": {\"mode\": \"off\"}, no Queued: line, no queue call (Q-ADAPTER QA-1)",
+ "note": "begin: JSON <=3 KB with every HDN §6 key (+ reuse_window_min, D-14; + store_root, with bucket.path and the other store paths relative to it, U-04; no trimmed key when nothing is cut); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket; no queue_cmd: \"queue\": {\"mode\": \"off\"}, no Queued: line, no queue call (Q-ADAPTER QA-1)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -64,6 +64,7 @@
    "ahead",
    "behind",
    "in_progress",
+   "store_root",
    "bucket",
    "stem",
    "stage",
@@ -98,7 +99,7 @@
    "branch": "feature/retry",
    "porcelain.count": 1,
    "porcelain.first.0": " M app/retry.rb",
-   "bucket.path": "$ROOT/repo/retry-fix",
+   "bucket.path": "repo/retry-fix",
    "bucket.source": "topic",
    "stage": {
     "re": "/repo/retry-fix/\\.staging/11111111-[0-9a-f]{8}$"
@@ -135,7 +136,8 @@
    "queue.mode": "off",
    "queue.why": {
     "null": 1
-   }
+   },
+   "store_root": "$ROOT"
   },
   "files": [
    {
@@ -169,9 +171,10 @@
    "expect": {
     "exit": 0,
     "json": {
-     "bucket.path": "$HOME/elsewhere/repo/t2",
+     "bucket.path": "repo/t2",
      "config.handoff_root.value": "$HOME/elsewhere",
-     "config.handoff_root.source": "flag"
+     "config.handoff_root.source": "flag",
+     "store_root": "$HOME/elsewhere"
     }
    }
   },
@@ -213,7 +216,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "bucket.path": "$ROOT/repo/LAB-7",
+     "bucket.path": "repo/LAB-7",
      "bucket.source": "pin"
     }
    }
@@ -231,7 +234,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "bucket.path": "$ROOT/repo/other-topic",
+     "bucket.path": "repo/other-topic",
      "bucket.source": "topic-explicit",
      "ownership.repin.result": "ok",
      "ownership.repin.from": "repo/LAB-7"
@@ -259,7 +262,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "bucket.path": "$ROOT/repo/LAB-7",
+     "bucket.path": "repo/LAB-7",
      "bucket.source": "pin",
      "ownership.repin.result": "refused",
      "ownership.repin.held_by": "22222222"

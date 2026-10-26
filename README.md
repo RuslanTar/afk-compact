@@ -390,7 +390,7 @@ The helper waits 5 seconds at most (`NOT QUEUED (timeout)`); every non-zero exit
 | Where (defaults) | What | Written by |
 |---|---|---|
 | `~/.claude/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
-| `~/.claude/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/` and refused drafts under `.staging/` | `/afk-compact:handoff` |
+| `~/.claude/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/`, and under `.staging/` one work folder per handoff run: its draft (kept when refused) and `begin-full.json`, every entry `begin` measured, which a handoff points to when begin's reply left entries out | `/afk-compact:handoff` |
 | `<repository>/.claude/handoffs/<topic>/` (repo mode only; the folder is the `root` of the declaration) | A portable export of each published handoff, left untracked. Also, from `project init`, `.claude/handoffs.json` and the folder's `README.md` and `.gitignore` | `/afk-compact:handoff`; `project init` |
 | `~/.claude/handoffs/.sessions/` | Session pins, `/clear` lineage, and one small record per session start and end | hooks and skills |
 | `~/.claude/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |

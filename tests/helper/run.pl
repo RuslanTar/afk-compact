@@ -34,7 +34,9 @@
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
 #   expect: stdout_has / stdout_lacks (regexes, /m); stderr_has (regexes, /m); json_keys; json {dotted path: value |
-#     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
+#     {re} | {null} | {len} | {len_min} | {len_plus, total} | {present} | {max_bytes}}; files
+#     has / lacks (regexes, /m); {len_plus: "<dotted path>" or a list of them, total: N}: the
+#     list's length plus the numbers at those paths (0 when absent) is N
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
@@ -51,6 +53,8 @@
 #     runs as root, its mode-free steps too, so a root run does not cover them). A case that
 #     uses $LSTART1 or $RUNNER_LSTART in a zone (case or step "tz", an env TZ) whose tz
 #     database file the host lacks skips as "needs tzdata" (zone_missing), with no "needs" entry.
+#   builtin begin_fit {reply, found, all, unread, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
+#     (the staged copy) over a fixed reply, independent of the temp folder's path
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -899,6 +903,41 @@ sub fixture_repo {
 }
 
 # Dotted path into decoded JSON: (found, value)
+# json_expect(decoded, {dotted path: value | {re} | {null} | {len} | {len_min} | {len_plus, total}
+#                          | {present} | {max_bytes}})
+# -> the failures (expect.json, and the begin_fit builtin).
+sub json_expect {
+    my ($d, $spec) = @_;
+    my @e;
+    for my $p (sort keys %{ $spec || {} }) {
+        my ($ok, $v) = jpath($d, $p);
+        my $w = $spec->{$p};
+        if (ref $w eq 'HASH') {
+            push @e, "json $p !~ /$w->{re}/: " . scalar_text($v) if exists $w->{re} && !($ok && defined $v && !ref $v && $v =~ /$w->{re}/);
+            push @e, "json $p not null" if exists $w->{null} && $ok && defined $v;
+            push @e, "json $p length, want $w->{len}" if exists $w->{len} && !(ref $v eq 'ARRAY' && @$v == $w->{len});
+            push @e, "json $p length, want at least $w->{len_min}" if exists $w->{len_min} && !(ref $v eq 'ARRAY' && @$v >= $w->{len_min});
+            if (exists $w->{total}) {
+                # U-04: a count that holds at any temp folder: shown + counted = found.
+                my @at = ref $w->{len_plus} eq 'ARRAY' ? @{ $w->{len_plus} } : grep { defined } $w->{len_plus};
+                my $sum = ref $v eq 'ARRAY' ? scalar @$v : undef;
+                for my $q (@at) { my ($k, $c) = jpath($d, $q); $sum += $c if defined $sum && $k && defined $c && !ref $c }
+                push @e, "json $p length + " . join(' + ', @at) . ' = ' . ($sum // 'not a list') . ", want $w->{total}"
+                    unless defined $sum && $sum == $w->{total};
+            }
+            push @e, "json $p missing" if exists $w->{present} && !$ok;
+            if (exists $w->{max_bytes}) {
+                my $b = defined $v && !ref $v ? $v : '';
+                utf8::encode($b) if utf8::is_utf8($b);
+                push @e, "json $p is " . length($b) . " bytes > $w->{max_bytes}" if !$ok || !defined $v || length($b) > $w->{max_bytes};
+            }
+        } elsif (scalar_text($v) ne scalar_text($w)) {
+            push @e, "json $p = " . scalar_text($v) . ", want " . scalar_text($w);
+        }
+    }
+    return @e;
+}
+
 sub jpath {
     my ($d, $path) = @_;
     for my $k (split /\./, $path) {
@@ -1740,6 +1779,29 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'begin_fit') {
+        # U-04: skills::begin::_fit (the staged copy) over a fixed reply, so the trim order is
+        # pinned whatever the temp folder's path: {reply, found, all, unread, pad: {key, to}} where pad
+        # sets reply.<key> to a string that makes the encoded reply exactly `to` bytes before
+        # the fit; then json (as expect.json) over the fitted reply, and its size in
+        # min_bytes / max_bytes.
+        local @INC = ("$STAGE/helper/lib", @INC);
+        require "skills/begin.pm";
+        my $r = $a->{reply} || {};
+        if (my $p = $a->{pad}) {
+            $r->{ $p->{key} } = '';
+            my $n = $p->{to} - skills::util::blen(skills::util::json_encode($r));
+            return ("pad: the reply is already over $p->{to} bytes") if $n < 0;
+            $r->{ $p->{key} } = 'p' x $n;
+        }
+        my $j = skills::begin::_fit($r, $a->{found} || {}, $a->{all}, $a->{unread});
+        my $len = skills::util::blen($j);
+        push @e, "fitted reply is $len bytes > $a->{max_bytes}" if defined $a->{max_bytes} && $len > $a->{max_bytes};
+        push @e, "fitted reply is $len bytes < $a->{min_bytes}" if defined $a->{min_bytes} && $len < $a->{min_bytes};
+        my $d = eval { jsonc::decode($j) };
+        return (@e, "fitted reply is not a JSON object") unless ref $d eq 'HASH';
+        return (@e, json_expect($d, $a->{json}));
+    }
     if ($name eq 'handoff_turn_api') {
         # D-18 B7/B8: the seams begin and publish call (lib/handoff_turn.pm): the open ht
         # begin binds (newest, no .published, at most 60 min old), one stage per ht
@@ -2156,23 +2218,7 @@ sub check {
                     my ($got, $want) = (join(',', sort keys %$d), join(',', sort @{ $x->{json_keys} }));
                     push @e, "json keys [$got], want [$want]" if $got ne $want;
                 }
-                for my $p (sort keys %{ $x->{json} || {} }) {
-                    my ($ok, $v) = jpath($d, $p);
-                    my $w = $x->{json}{$p};
-                    if (ref $w eq 'HASH') {
-                        push @e, "json $p !~ /$w->{re}/: " . scalar_text($v) if exists $w->{re} && !($ok && defined $v && !ref $v && $v =~ /$w->{re}/);
-                        push @e, "json $p not null" if exists $w->{null} && $ok && defined $v;
-                        push @e, "json $p length, want $w->{len}" if exists $w->{len} && !(ref $v eq 'ARRAY' && @$v == $w->{len});
-                        push @e, "json $p missing" if exists $w->{present} && !$ok;
-                        if (exists $w->{max_bytes}) {
-                            my $b = defined $v && !ref $v ? $v : '';
-                            utf8::encode($b) if utf8::is_utf8($b);
-                            push @e, "json $p is " . length($b) . " bytes > $w->{max_bytes}" if !$ok || !defined $v || length($b) > $w->{max_bytes};
-                        }
-                    } elsif (scalar_text($v) ne scalar_text($w)) {
-                        push @e, "json $p = " . scalar_text($v) . ", want " . scalar_text($w);
-                    }
-                }
+                push @e, json_expect($d, $x->{json});
             }
         }
         push @e, "stdout is " . length($out) . " bytes > $x->{stdout_max_bytes}" if defined $x->{stdout_max_bytes} && length($out) > $x->{stdout_max_bytes};

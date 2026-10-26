@@ -62,7 +62,7 @@
     "exit": 0,
     "json": {
      "mode.mode": "repo",
-     "bucket.path": "$ROOT/m/LAB-7"
+     "bucket.path": "m/LAB-7"
     }
    },
    "capture": {

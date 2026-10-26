@@ -115,7 +115,8 @@
    "expect": {
     "exit": 0,
     "json": {
-     "bucket.path": "$TMP/dot/handoffs/repo/LAB-7"
+     "bucket.path": "repo/LAB-7",
+     "store_root": "$TMP/dot/handoffs"
     }
    }
   },
