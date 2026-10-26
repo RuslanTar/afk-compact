@@ -12,11 +12,14 @@ import type { AssetName } from './assets.gen'
  * the handoff-turn asset's `submit-halt`, `submit-pre` and `submit-idle` (one per turn kind).
  * 2026-10-23: the resume block's `idle-halt` (owner xxxxxxxx-25: `[idle]` in halt mode, never with
  * `idle` or `midturn`) and `idle-again` (owner xxxxxxxx-37: the block again on a person's return).
+ * 2026-10-26: the resume block's `driver` (owner, GSD re-entry per session: kept only when the
+ * re-measure names this session's `Active driver:`).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
+  | 'driver'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<

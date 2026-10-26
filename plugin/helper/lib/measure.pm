@@ -1,11 +1,12 @@
 package measure;
 # lib/measure.pm: facts measured by code (MOD-SPEC §2.6 `measure --compact`, §10
-# measured block). Order: git; in-flight inventory (every listed id); evidence map
-# (<= 8 rows from this compaction's checkpoint or sweep); GSD (own worktree, <= 8
-# lines); the Queued: line when queue_cmd is set. <= 3,000 B, cut at a line
-# boundary with `(+N lines)`. With `--copy` (AP-5) the approvals lines of the summary follow
-# the git lines (cmd/measure.pl checks them); without it there is none. Times are
-# stamps (`In flight (sidecar 2026-10-21 14:05 +0300)`, RV-24).
+# measured block). Order: git; this session's GSD line and Active driver line (lib/gsd.pm:
+# from its own transcript, never from the worktree alone; none for a session that worked with
+# neither; right after git, so the cap never cuts them); in-flight inventory (every listed id);
+# evidence map (<= 8 rows from this compaction's checkpoint or sweep); the Queued: line when
+# queue_cmd is set. <= 3,000 B, cut at a line boundary with `(+N lines)`. With `--copy`
+# (AP-5) the approvals lines of the summary follow the git and GSD lines (cmd/measure.pl
+# checks them); without it there is none. Times are stamps (`In flight (sidecar 2026-10-21 14:05 +0300)`, RV-24).
 # Owner: WP-core.
 use strict;
 use warnings;
@@ -55,10 +56,21 @@ sub evidence_lines {
     return @out;
 }
 
+# gsd_lines(gsd::session result) -> its lines (none for a session without GSD or a driver).
 sub gsd_lines {
     my ($g) = @_;
-    return () unless $g && $g->{status} eq 'ok';
-    return ('GSD (' . util::abbrev($g->{path}) . '):', map { "  $_" } @{ $g->{lines} });
+    return () unless ref $g eq 'HASH' && ref $g->{lines} eq 'ARRAY';
+    return @{ $g->{lines} };
+}
+
+# The GSD scan's budget inside a measure: at most gsd::$SCAN_MS, never past the caller's deadline.
+sub gsd_session {
+    my ($sid, $cwd, $wt, $transcript, $ms) = @_;
+    return { status => 'timeout', lines => ['GSD: not measured (timeout)'] } if $ms < 100;
+    my $sid_dir = rc::sid_dir();
+    return eval { gsd::session(sid => $sid, transcript => $transcript, cwd => $cwd, worktree => $wt,
+                               cache_dir => (defined $sid_dir && -d $sid_dir ? $sid_dir : undef), budget_ms => $ms) }
+        // { status => 'unread', lines => [] };
 }
 
 sub cap {
@@ -118,7 +130,8 @@ sub _evidence_rows {
     return [];
 }
 
-# compact(sid, cwd, nonce, %o{git => result, lane => result, budget_ms => N}) -> text (<= 3,000 B)
+# compact(sid, cwd, nonce, %o{git => result, lane => result, budget_ms => N, transcript => path,
+#   gsd => gsd::session result}) -> text (<= 3,000 B)
 # One budget for every step that waits (git 2 s, queue 3 s at most): a step that would
 # start with too little time left is skipped (git reads `not measured (timeout)`, the
 # Queued: line is left out), so a hook caller stays inside its own timeout.
@@ -133,12 +146,12 @@ sub compact {
     my $sid_dir = rc::sid_dir();
     my $g = $o{git} || ($left->(2000) >= 200 ? git::measure($cwd, $left->(2000)) : { status => 'timeout' });
     my @l = git_lines($g);
+    my $wt = $o{worktree} // $g->{toplevel};
+    $wt //= git::where($cwd, $left->(2000))->{toplevel} if $g->{status} eq 'ok' && $left->(2000) >= 200;
+    push @l, gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS)));
     push @l, @{ $o{approvals} } if ref $o{approvals} eq 'ARRAY';
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);
     push @l, evidence_lines($o{evidence_rows} || (defined $sid_dir ? _evidence_rows($sid_dir, $nonce) : []));
-    my $wt = $o{worktree} // $g->{toplevel};
-    $wt //= git::where($cwd, $left->(2000))->{toplevel} if $g->{status} eq 'ok' && $left->(2000) >= 200;
-    push @l, gsd_lines(gsd::read($wt));
     my $lane = $o{lane};
     if (!$lane && defined rc::val('queue_cmd') && rc::val('queue_cmd') ne '' && $left->(3000) >= 200) {
         $lane = queue::lane($sid, rc::val('queue_cmd'), $left->(3000));

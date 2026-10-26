@@ -192,8 +192,11 @@ sub run {
     }
     if ($repin) { $ownership{repin} = $repin }
 
-    my $gsd = $g->{in_git} ? skills::core::gsd($g->{worktree}) : undef;
-    $gsd = [ @$gsd[0 .. ($#$gsd < 7 ? $#$gsd : 7)] ] if $gsd;
+    # This session's own GSD line and Active driver line (owner 2026-10-26 21:37: from its
+    # transcript, never the worktree's .planning alone): {line, driver, workstream, state}.
+    my $gs = skills::core::gsd(sid => $sid, cwd => $cwd, worktree => $g->{worktree});
+    my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line driver workstream state) } : undef;
+    $gsd->{line} //= $gs->{lines}[0] if $gsd && !defined $gsd->{driver};
 
     my ($queued_line, $queue_lane, $queue) = _queue($ctx, $sid);
     my $inflight = _inflight($ctx, $sid, $g);
@@ -265,7 +268,7 @@ sub run {
         own_previous_handoff => $carry{own_previous_handoff}, queue_lane => $queue_lane, queue_mode => $queue->{mode},
         handoff_ht => ($ht ? $ht->{ht} : undef), slug => $topic,
         mode => $m->{mode}, mode_reason => $m->{reason},
-        gsd_state => ($gsd && $g->{worktree} && -f "$g->{worktree}/.planning/STATE.md" ? "$g->{worktree}/.planning/STATE.md" : undef),
+        gsd_state => ($gs && defined $gs->{state} && -f $gs->{state} ? $gs->{state} : undef),
         identity_degraded => $id->{degraded},
         # T-TEXT E6: the Acuity floor code measured (publish's acuity advisory reads it): a
         # merge, rebase, cherry-pick or revert in progress -> unstable; a measured in-flight
@@ -457,7 +460,7 @@ sub _fit {
         sub { my $p = $out->{porcelain}; return 0 unless $p && @{ $p->{first} } > 5; pop @{ $p->{first} }; 1 },
         sub { my $l = $out->{inflight_measured}{tasks}; return 0 unless $l && @$l > 3; pop @$l; 1 },
         sub { my $l = $out->{newer_foreign}; return 0 unless @$l > 1; pop @$l; 1 },
-        sub { my $g = $out->{gsd}; return 0 unless $g && @$g > 3; pop @$g; 1 },
+        sub { my $g = $out->{gsd}; return 0 unless ref $g eq 'HASH' && grep { exists $g->{$_} } qw(workstream state); delete @$g{qw(workstream state)}; 1 },
         sub { my $l = $out->{tmp_candidates}; return 0 unless @$l; pop @$l; 1 },
         sub { my $p = $out->{porcelain}; return 0 unless $p && @{ $p->{first} }; pop @{ $p->{first} }; 1 },
         sub { my $c = $out->{config}; my $did = 0; for (values %$c) { $did = 1 if delete $_->{source} } $did },

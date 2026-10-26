@@ -1,6 +1,7 @@
 package checkpoint;
 # lib/checkpoint.pm: the pre-compaction checkpoint (MOD-SPEC §10). Owner: WP-core.
-# Budget 10 s total; git 2 s, GSD 2 s, queue <= 5 s; a timed-out step reads
+# Budget 10 s total; git 2 s, GSD 1.5 s (this session's transcript, lib/gsd.pm), queue <= 5 s;
+# a timed-out step reads
 # `not measured (timeout)`. Never asks the model, never writes STATE.md, repo files
 # or pins, never queues or adopts. Output <= 6 KB JSON; written to
 # <watch>/<sid>/checkpoint/<nonce>.json by exclusive create.
@@ -54,10 +55,12 @@ sub run {
     push @timeouts, 'git' if $g->{status} eq 'timeout';
     $ms{git} = util::clock_ms() - $s0;
 
-    # GSD (2 s; a file read)
+    # GSD: this session's own GSD line and Active driver line (its transcript; never the
+    # worktree's STATE.md alone)
     $s0 = util::clock_ms();
     my $where = $g->{status} eq 'ok' ? git::where($a{cwd}, $left->(2000)) : {};
-    my $gsd = gsd::read($where->{toplevel} // ($g->{status} eq 'not-git' ? undef : undef));
+    my $gsd = measure::gsd_session($sid, $a{cwd}, $where->{toplevel}, $a{transcript}, $left->($gsd::SCAN_MS));
+    push @timeouts, 'gsd' if $gsd->{status} eq 'timeout';
     $ms{gsd} = util::clock_ms() - $s0;
 
     # lane (<= 5 s), only when configured
@@ -85,7 +88,7 @@ sub run {
 
     my $block;
     if ($a{measured}) {
-        my $facts = measure::compact($sid, $a{cwd}, $a{nonce}, git => $g, lane => $lane, worktree => $where->{toplevel},
+        my $facts = measure::compact($sid, $a{cwd}, $a{nonce}, git => $g, lane => $lane, worktree => $where->{toplevel}, gsd => $gsd,
                                      evidence_rows => $sw->{rows}, max => 3000 - 40, quiet => 1);
         $block = measure::cap(["Measured facts (" . util::iso(util::now()) . "):", split(/\n/, $facts)], 3000);
     }
@@ -94,7 +97,7 @@ sub run {
         measured_block => $block,
         lane           => ($lane && $lane->{status} eq 'ok' ? $lane->{lane} : undef),
         queued_line    => ($lane && $lane->{status} eq 'ok' ? $lane->{queued_line} : undef),
-        gsd            => ($gsd->{status} eq 'ok' ? $gsd->{lines} : []),
+        gsd            => [@{ $gsd->{lines} || [] }],
         git            => ($g->{status} eq 'ok' ? { branch => $g->{branch}, head => $g->{head}, count => $g->{count},
                                                     ahead => $g->{ahead}, behind => $g->{behind} }
                                                  : $g->{status} eq 'timeout' ? 'not measured (timeout)' : $g->{status}),

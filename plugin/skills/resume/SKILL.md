@@ -100,7 +100,7 @@ Age tier from `date`: **T1** <24 h; **T2** 1–7 days, any T1 drift, or Acuity `
 - the first 20 dirty files plus a count, and ahead/behind;
 - commits since `git_commit`, with author;
 - whether the handoff's worktree exists;
-- this worktree's GSD position and the other worktrees holding STATE.md;
+- the GSD state file the handoff names, if any;
 - live sessions on this checkout (pid with matching start time);
 - `Approvals (checked)`: approvals whose quote code found in the user's messages (handoff: frontmatter; summary: this session's transcript).
 
@@ -166,9 +166,9 @@ Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Li
 - Re-check pending states ("auto-merge armed", "awaiting merge") for their outcome.
 - **Central claims:** re-test the 1–3 findings or premises Step 1 depends on with a read-only, bounded check (a few minutes, under a timeout): the recorded one under Rule 2, or your own. A test run that writes a shared test database or build dir is a write: skip it under an R4 conflict and list it under "Could not verify". A refuted claim is drift and an `X-` candidate for the next handoff.
 - **Anchors:** find code by path and symbol (`rg -n '<symbol>' <path>`); line numbers are hints.
-- **GSD reconcile** (with `.planning/`): compare STATE.md's in-file last-activity stamp (never mtime) with the handoff's GSD line.
+- **GSD reconcile** (handoff with a GSD line): compare its STATE.md's in-file last-activity stamp (never mtime) with that line.
   - STATE.md newer: use it; the handoff line is drift.
-  - Handoff newer, and no live peer or coordinator per R4: `<store> stash <STATE.md>` (copies to today's disposable folder), then update this worktree's STATE.md only. Report other worktrees; never rewrite them.
+  - Handoff newer, and no live peer or coordinator per R4: `<store> stash <STATE.md>` (copies to today's disposable folder), then update that STATE.md only. Never rewrite another one.
 - Anything you cannot check goes under "Could not verify". Ask only if Step 1 depends on it.
 - Never skip a remote check to save calls. If a step overruns its budget, say so in the report.
 
@@ -197,7 +197,7 @@ Write owner steps as a walk-through: where, what, the exact command. Never short
 
 ## R9 Proceed or stop
 
-By default, start Step 1 in this turn, plus anything the questions don't block. Stop only when:
+An `Active driver:` line: first run its `re-enter:` commands (Skill tool), unless Step 1 is one. By default, start Step 1 in this turn, plus anything the questions don't block. Stop only when:
 1. drift or a refuted claim invalidates Step 1 or the plan. Re-plan from the ledger; ask if the plan no longer holds;
 2. Step 1 is an explicit gate (Rule 3): always; or it is outward, destructive, self-modifying or a production read under `unattended_prod_reads: forbid` (R7), and no carried approval covers it (Rule 3);
 3. the arguments conflict with a `U-`, `D-` or `X-` item;

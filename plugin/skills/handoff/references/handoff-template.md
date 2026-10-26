@@ -168,13 +168,12 @@ sibling repos: <name abs path> · this handoff: @self@
 ```
 
 The helper replaces `@self@` with the published path. Subsections only when they apply:
-- **GSD**, only when `begin` printed `gsd`; copy it, never recall:
+- **GSD**, only when `begin` printed `gsd` (this session's own GSD work or driving skill, measured from its transcript); copy `gsd.line` and `gsd.driver` as printed, never recall or add a workstream:
   ```
-  STATE.md <path> · worktree <path> · branch <branch> · --ws <workstream>
-  Position: phase X of Y · plan A of B · <status> · last activity <in-file stamp>
-  Continuity: stopped at <…> · resume file <.continue-here path>
+  GSD (this session): workstream <ws> · <STATE.md path>: status … · phase … · last activity …
+  Active driver: <command> (<how>, <stamp>) · re-enter: <commands>
   ```
-  If the helper prints `GSD: not determined (<N> worktrees have STATE.md)`, write only that. Disagreeing state files: list each with its in-file last-activity stamp. The resume keeps the newest by that stamp and rewrites the others only in its own worktree, after an ownership check finds no live peer or coordinator and after a disposable copy; elsewhere it reports. This skill never writes STATE.md or `.planning/HANDOFF.json`; it points to STATE.md.
+  The resume runs the `re-enter:` commands. This skill never writes STATE.md or `.planning/HANDOFF.json`.
 - **Environment**: services and how to start them, the env contract (names, never values), where credentials live and how they are provisioned, the account; point to project docs that hold it.
 - **Guards in force** (≤5 lines, only when met this session): `<guard> → blocks <what> → sanctioned route <allow rule | user-run ! <cmd> | project script>`. Never a way around a guard.
 - **Ownership**: writer sid8; other live sessions or peers on this checkout, bucket or lane; foreign commits; newer handoffs from other sessions and what they decided; `read-only: <resource>, owned by <sid8 | peer>`.

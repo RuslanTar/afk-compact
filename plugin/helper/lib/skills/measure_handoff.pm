@@ -75,13 +75,15 @@ sub run {
     if (my $wt = $fm->{worktree}) {
         push @out, "handoff worktree: $wt " . (-d $wt ? 'exists' : 'missing');
     }
+    # The GSD state file this handoff names (frontmatter `gsd`, its session's own; an export's is
+    # repository-relative), re-read now; never every worktree's (owner 2026-10-26 21:37).
+    if (defined $fm->{gsd} && $fm->{gsd} ne '') {
+        my $gp = $fm->{gsd};
+        $gp = "$g->{worktree}/$gp" if $gp !~ m{\A/} && $g->{in_git};
+        my $l = skills::core::gsd_state($gp);
+        push @out, "GSD (handoff): $l" if defined $l;
+    }
     if ($g->{in_git}) {
-        my $gsd = skills::core::gsd($g->{worktree});
-        if ($gsd) { push @out, 'GSD:'; push @out, "  $_" for @$gsd[0 .. ($#$gsd < 7 ? $#$gsd : 7)] }
-        for my $wt (@{ skills::gitfacts::worktrees($g->{worktree}) }) {
-            next if $wt eq $g->{worktree};
-            push @out, "other STATE.md: $wt/.planning/STATE.md" if -f "$wt/.planning/STATE.md";
-        }
         for my $p (@{ skills::ctx::live_peers($ctx, $g->{worktree}, $id->{sid}) }) {
             push @out, "live session: $p->{sid8} pid $p->{pid} on this checkout";
         }
