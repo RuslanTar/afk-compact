@@ -59,9 +59,9 @@ our $SESSION_COMPACT_MS = 3500;
 our $T0;
 
 # U-06 (lib/userre.pm): [seconds one of the user's own patterns may run, seconds this hook may
-# lose to stopped ones], at most a fifth of the event's hook timeout (hooks.json: PreCompact 5,
-# PostCompact 15, SessionStart 5, SessionEnd 5, Stop 8, SubagentStop 3, StopFailure 2,
-# PermissionDenied 2).
+# spend in all their children], the budget at most a fifth of the event's hook timeout
+# (hooks.json: PreCompact 5, PostCompact 15, SessionStart 5, SessionEnd 5, Stop 8, SubagentStop
+# 3, StopFailure 2, PermissionDenied 2).
 our %REGEX_S = (PreCompact => [0.5, 1], PostCompact => [1, 2], SessionStart => [0.5, 1], SessionEnd => [0.5, 1],
                 Stop => [1, 1.5], SubagentStop => [0.3, 0.6], StopFailure => [0.25, 0.4], PermissionDenied => [0.25, 0.4]);
 
@@ -327,6 +327,7 @@ our @GUARD_DEFAULT = (
     ['scope'       => qr/outside|scope|directory|working dir|path/i],
 );
 
+our $GUARD_MAX = 32;
 sub _guard_rules {
     my $s = rc::val('deny_class_patterns') // '';
     return @GUARD_DEFAULT if $s eq '';
@@ -335,9 +336,12 @@ sub _guard_rules {
     for my $pair (split /;/, $s) {
         next unless $pair =~ /\S/;    # positions count the entries, as settings::list does
         $n++;
+        # U-06: the limits of the other pattern keys (32 entries, 200 characters, settings::pattern_ok)
+        last if $n > $GUARD_MAX;
         next unless $pair =~ /^\s*(sleep-poll|routing|secret|write-guard|scope|other)\s*=\s*(.+?)\s*$/;
         my ($cls, $src) = ($1, $2);
-        my $re = eval { qr/$src/i } or next;
+        next unless settings::pattern_ok($src, 200);
+        my $re = eval { local $SIG{__WARN__} = sub { }; qr/$src/i } or next;
         push @r, [$cls => $re, $n];
     }
     return @r ? @r : @GUARD_DEFAULT;

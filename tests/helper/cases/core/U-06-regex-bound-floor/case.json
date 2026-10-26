@@ -1,0 +1,9 @@
+{
+ "id": "U-06-regex-bound-floor",
+ "note": "U-06 at the perl floor in Docker (debian:buster-slim: perl-base 5.28 without Time::HiRes, no pgrep; perl:5.28-slim with it): a stopped pattern ends within its limit as timeout and never before it, a 60,000-span answer is never stopped, twenty patterns that each finish under the limit stop when the budget is spent, and the pattern child ends after its helper is killed or stopped and holds no lock of the helper's. Skips unless Docker answers and holds both images (no pull).",
+ "needs": ["docker-image:debian:buster-slim", "docker-image:perl:5.28-slim"],
+ "steps": [
+  {"name": "debian:buster-slim (no Time::HiRes)", "lib": "linux_start_time", "args": {"image": "debian:buster-slim", "probe": "probe.pl", "timeout_s": 180}},
+  {"name": "perl:5.28-slim", "lib": "linux_start_time", "args": {"image": "perl:5.28-slim", "probe": "probe.pl", "timeout_s": 180}}
+ ]
+}

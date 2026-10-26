@@ -66,6 +66,8 @@ for my $lib (qw(util jsonc sha ctx spec settings paths roots log rc identity loc
     }
 }
 ctx::init($HELPER_DIR);
+# U-06: the time bound of the user's patterns for a subcommand the mod calls with a short timeout
+userre::limits(@{ $userre::SUB_S{$sub} }) if $userre::SUB_S{$sub};
 
 my $file = "$HELPER_DIR/cmd/$sub.pl";
 if (!-f $file) {

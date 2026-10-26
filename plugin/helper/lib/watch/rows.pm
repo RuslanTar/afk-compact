@@ -185,7 +185,8 @@ sub classify {
             if ($name eq 'Bash') {
                 my $cmd = defined $in->{command} && !ref $in->{command} ? $in->{command} : '';
                 $c{outward} = bash_classes($cmd, $outward || []);
-                $c{protected} = 1 if ($PROTECTED_RE || @{ $PROTECTED_USER || [] })
+                $c{protected} = 1 if ($PROTECTED_RE || @{ $PROTECTED_USER || [] }
+                                      || (ref $PROTECTED_BOUNDED eq 'HASH' && @{ $PROTECTED_BOUNDED->{globs} || [] }))
                                      && grep({ $_ eq 'push' || $_ eq 'force-push' } @{ $c{outward} })
                                      && push_protected($cmd, $PROTECTED_RE, $PROTECTED_USER);
                 $c{readonly} = $cmd =~ $READONLY_BASH ? 1 : 0;

@@ -411,17 +411,26 @@ sub protected_lines {
 # One warning per pattern of the user's that this session stopped at its time bound
 # (lib/userre.pm, `regex_timeout` rows), by key and position, never the pattern, with what the
 # plugin did instead.
-my %REGEX_SAFE = (secret_extra_rules => 'what it checked was withheld', prod_patterns => 'counted as production',
+my %REGEX_SAFE = (secret_extra_rules => 'counted as a hit of its kind on what it checked', prod_patterns => 'counted as production',
                   protected_branches => 'counted as protected', ticket_pattern => 'no ticket used',
                   relaunch_allow => 'not allowlisted (asks)', deny_class_patterns => 'not used for the class');
-my %REGEX_WHY = (timeout => 'stopped after its time limit', budget => 'not run (the time for your patterns was used up)',
-                 error => 'could not run');
+my %REGEX_WHY = (timeout => 'stopped after its time limit', load => 'stopped while the machine was busy',
+                 budget => 'not run (the time for your patterns was used up)', error => 'could not run');
+my %REGEX_RANK = (timeout => 4, budget => 3, load => 2, error => 1);
 sub regex_lines {
     my ($rows) = @_;
-    my (%seen, @l);
+    my (%why, @order);
     for my $r (grep { ($_->{ev} // '') eq 'regex_timeout' } @{ $rows || [] }) {
         my ($k, $i, $w) = ($r->{key} // '', $r->{index} // '', $r->{why} // '');
-        next unless $REGEX_SAFE{$k} && $i =~ /\A[0-9]{1,3}\z/ && !$seen{"$k.$i"}++;
+        next unless $REGEX_SAFE{$k} && $i =~ /\A[0-9]{1,3}\z/;
+        push @order, "$k.$i" unless exists $why{"$k.$i"};
+        # one line per pattern: its most telling row (a slow pattern over a busy machine)
+        $why{"$k.$i"} = $w if !defined $why{"$k.$i"} || ($REGEX_RANK{$w} // 0) > ($REGEX_RANK{ $why{"$k.$i"} } // 0);
+    }
+    my @l;
+    for my $ki (@order) {
+        my ($k, $i) = $ki =~ /\A(.+)\.([0-9]+)\z/;
+        my $w = $why{$ki};
         push @l, "warning: $k #$i " . ($REGEX_WHY{$w} // 'stopped') . "; $REGEX_SAFE{$k}" . ($w eq 'timeout' ? ' (make the pattern simpler)' : '');
     }
     return @l;

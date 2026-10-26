@@ -52,14 +52,16 @@ sub rules {
 }
 
 # U-06: the user's HARD and WARN rules run in one child with the time bound of lib/userre.pm.
-# _user_spans(text, \@user rules) -> ({rule id => [count, [[start, end]…]]}, stopped 0|1); the spans
-# of one rule that touch are merged (redact merges them anyway), the count is the match count. A
-# rule that is stopped or not run makes the text withheld: scan adds the HARD hit
-# `regex-timeout`, redact replaces the whole text.
+# _user_spans(text, \@user rules) -> ({rule id => [count, [[start, end]…]]}, stopped class); the
+# spans of one rule that touch are merged (redact merges them anyway), the count is the match
+# count. A rule that is stopped or not run counts as a hit of its class over the whole text:
+# scan adds the hit `regex-timeout`, HARD when a HARD rule was among them, else WARN, and redact
+# replaces the whole text. So a stopped HARD rule withholds; a stopped WARN rule does what a WARN
+# hit does (a HARD-only redaction, as the summary copy's, keeps the text).
 our $TIMEOUT_RULE = 'regex-timeout';
 sub _user_spans {
     my ($text, $rules) = @_;
-    return ({}, 0) unless @$rules;
+    return ({}, '') unless @$rules;
     my ($res, $stopped) = userre::run('secret_extra_rules', [map { { re => $_->{re}, at => $_->{at} } } @$rules], sub {
         my @s = _matches($text, { re => $_[0]{re}, lead => 0, trail => 0 });
         my @m;
@@ -75,7 +77,8 @@ sub _user_spans {
         my ($n, @p) = @$v;
         $out{ $rules->[$i]{id} } = [$n, [map { [$p[2 * $_], $p[2 * $_ + 1]] } 0 .. int(@p / 2) - 1]];
     }
-    return (\%out, @$stopped ? 1 : 0);
+    my @un = grep { !$res->[$_] } 0 .. $#$rules;
+    return (\%out, (grep { ($rules->[$_]{class} // '') eq 'HARD' } @un) ? 'HARD' : @un ? 'WARN' : '');
 }
 
 # scan(text) -> [{rule, class, count}] (no values)
@@ -89,7 +92,7 @@ sub scan {
         my $n = $r->{user} ? ($u->{ $r->{id} } ? $u->{ $r->{id} }[0] : 0) : scalar(my @s = _matches($text, $r));
         push @hits, { rule => $r->{id}, class => $r->{class}, count => $n } if $n;
     }
-    push @hits, { rule => $TIMEOUT_RULE, class => 'HARD', count => 1 } if $stopped;
+    push @hits, { rule => $TIMEOUT_RULE, class => $stopped, count => 1 } if $stopped;
     return \@hits;
 }
 
@@ -120,7 +123,7 @@ sub redact {
         push @spans, map { [$_->[0], $_->[1], $r->{id}, $rank] } @s;
     }
     if ($stopped) {
-        push @hits, { rule => $TIMEOUT_RULE, class => 'HARD', count => 1 };
+        push @hits, { rule => $TIMEOUT_RULE, class => $stopped, count => 1 };
         push @spans, [0, length $text, $TIMEOUT_RULE, 0];
     }
     my @merged;
