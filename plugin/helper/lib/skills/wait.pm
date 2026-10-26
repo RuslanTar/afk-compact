@@ -178,16 +178,12 @@ sub _marker_re {
 
 # ---- pids
 
-# start(pid) -> epoch of the process start, or undef (ps -o lstart=; not cached, so a
-# reused pid shows a new start).
+# start(pid) -> epoch of the process start, or undef (identity::start_epoch: /proc on Linux,
+# so a slim image without ps still tells a reused pid; else ps -o lstart=, /bin/ps first).
+# Not cached, so a reused pid shows a new start.
 sub _start {
     my ($pid) = @_;
-    my $ps = -x '/bin/ps' ? '/bin/ps' : (util::which('ps') // return undef);
-    my $r = util::run([$ps, '-o', 'lstart=', '-p', $pid], timeout_ms => 2000, env => { LC_ALL => 'C', LANG => 'C' });
-    return undef unless $r->{exit} == 0;
-    (my $s = $r->{out}) =~ s/^\s+|\s+$//g;
-    $s =~ s/\s+/ /g;
-    return $s eq '' ? undef : identity::lstart_epoch($s);
+    return identity::start_epoch($pid, ps => (-x '/bin/ps' ? '/bin/ps' : undef));
 }
 
 sub _running {
