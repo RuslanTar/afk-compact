@@ -44,9 +44,26 @@ flowchart TD
 ## Requirements
 
 - Claude Code **2.1.287** or newer (mods). The one-line install below needs **2.1.292** or newer. This version was tested against **2.1.306**; the `PermissionDenied` and `StopFailure` hooks are not yet checked on older versions.
-- **Perl 5.28** or newer, using only modules that ship with every perl. It is already on macOS, on Debian and Ubuntu (slim images too), and on Windows with Git for Windows. On Alpine, run `apk add perl` first; on a minimal Fedora image, `dnf install perl-interpreter`.
+- **Perl 5.28** or newer, using only modules that ship with every perl. It is already on macOS and on Debian and Ubuntu (slim images too). On Alpine, run `apk add perl` first; on a minimal Fedora image, `dnf install perl-interpreter`.
 - `git` for the git measurements. On a Mac without the Command Line Tools, the plugin skips git rather than open the install dialog.
 - Claude Code in a terminal, or a local session of the desktop app. claude.ai and Cowork are not tested yet: whether they install the plugin and run its hooks, mod and helper has not been checked.
+
+## Platforms
+
+| Platform | This version |
+|---|---|
+| macOS 13 or newer | Supported. The full test suite runs on macOS (Apple silicon). |
+| Linux with glibc | Supported, with perl 5.28 or newer. In containers, the helper compiles and its smoke checks pass on Debian 10 and 12, Ubuntu 20.04 and a current Ubuntu, and Fedora, with perl 5.28 to 5.42, on arm64 and emulated amd64. Perl 5.28 itself is checked on two images; with perl 5.26 or no perl, the plugin falls back as described in [Limits](#limits). Not yet done on Linux: a clean run of the full test suite and a real Claude Code session. |
+| Alpine and other musl systems | Expected to work, not yet tested in a session. With `apk add perl`, the helper's smoke checks pass in an Alpine container; without perl, the fallback works there. |
+| WSL 2 | Expected to work like Linux, not yet tested. |
+| Windows, native | Not supported yet; planned for a later release. |
+
+The plugin has never run on native Windows. What follows is expected from the way it is built, not something that has been seen:
+
+- **Without Git for Windows**, Claude Code runs hook commands in PowerShell, which cannot start the plugin's launcher. Each plugin hook is then expected to fail with a visible hook error at its event. These errors do not block a tool call or a compaction, but compactions are not reliably shaped, no summary or evidence copies are saved, and the skills cannot call the helper.
+- **With Git for Windows**, the hooks may reach the helper through Git Bash and its perl, but nothing on that path has been tested: process start times, file locks and paths may be wrong, and the mod's own helper calls are expected to fail.
+
+On Windows, running Claude Code inside WSL 2 is the expected route until native support lands.
 
 ## Install
 
@@ -481,8 +498,9 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 
 ## Limits
 
+- **Native Windows** is not supported yet. Without Git for Windows, the plugin's hooks are expected to fail with visible hook errors rather than stay quiet; see [Platforms](#platforms).
 - **claude.ai and Cowork** are not tested yet, so for now the plugin is for Claude Code sessions on your own machine.
-- **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, Windows without Git for Windows, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/{{plugin}}:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
+- **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/{{plugin}}:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
 - **Subagents** get shaped summaries and copies, but no resume block. They also get no nudge and no handoff turn.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
 - **Automatic relaunch covers read-only and allowlisted jobs only.** A production job asks unless `unattended_prod_reads` allows a read-only one, and a job whose output file could not be confirmed asks.
