@@ -63,7 +63,7 @@ sub main {
 sub init_sid {
     my ($opt, $writer) = @_;
     if (no_sid($opt->{sid})) {
-        my $why = defined $opt->{sid} && $opt->{sid} =~ /\A\$\{/ ? 'the session id was not substituted' : 'no session id';
+        my $why = unsubstituted($opt->{sid}) ? 'the session id was not substituted' : 'no session id';
         die "usage: --sid is required ($why; this command works on one session's state and never runs without its id)\n";
     }
     die "usage: --sid is not a session id\n" unless valid_sid($opt->{sid});
@@ -81,13 +81,21 @@ sub valid_sid {
     return defined $s && $s =~ /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/ ? 1 : 0;
 }
 
-# no_sid(value) -> 1 when --sid was not given, is empty or only spaces, or is a `${…}` reference
-# left unsubstituted, else 0. The skills' unset rule (lib/skills/util.pm unset_value) is the
-# same except that it takes a spaces-only value as set; such a value is no session id either
-# way (valid_sid refuses spaces).
+# no_sid(value) -> 1 when --sid was not given, is empty or only spaces, or is a reference left
+# unsubstituted (unsubstituted), else 0. The skills' unset rule (lib/skills/util.pm unset_value
+# with lib/skills/ctx.pm placeholder_sid) is the same except that it takes a spaces-only value as
+# set; such a value is no session id either way (valid_sid refuses spaces).
 sub no_sid {
     my ($s) = @_;
-    return !defined $s || $s =~ /\A\s*\z/ || $s =~ /\A\$\{/ ? 1 : 0;
+    return !defined $s || $s =~ /\A\s*\z/ || unsubstituted($s) ? 1 : 0;
+}
+
+# unsubstituted(value) -> 1 for a variable reference the skill text or the shell left as written:
+# `${…}`, `$NAME`, or a bare `CLAUDE_*` name (a model that dropped the braces and the dollar;
+# CW-1 review 2), else 0
+sub unsubstituted {
+    my ($s) = @_;
+    return defined $s && ($s =~ /\A\s*\$/ || $s =~ /\ACLAUDE_[A-Z0-9_]+\z/) ? 1 : 0;
 }
 
 # reserved_sid(value) -> 1 for a placeholder id the helper itself logs under, never a real

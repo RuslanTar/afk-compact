@@ -182,8 +182,11 @@ sub store_lines {
     push @out, protected_lines();
     push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
-    # session's last list outcome); /status is the only place that says `queue: off`
-    push @out, 'queue: ' . queue::mode_text();
+    # session's last list outcome); /status is the only place that says `queue: off`. Without a
+    # session id that outcome is not read, so `on` says so (CW-1 review 2)
+    my $q = queue::mode_text();
+    $q .= " (this session's queue state unknown: no session id)" if $q eq 'on' && !defined $d;
+    push @out, 'queue: ' . $q;
     push @out, kept_lines();
     push @out, former_name_lines();
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };

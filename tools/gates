@@ -938,14 +938,14 @@ COMMAND_TEXT_NEEDS = [
     ("AT-CK-13 confirm", "skills/resume/SKILL.md", r"^With `resume_proceed: confirm`", "the light path is not affected"),
     # CW-1 (Cowork check 2026-10-26, and its review): a task whose skill text keeps the variables
     # and whose Bash has them empty. Each `<store>` line finds the plugin root through the
-    # documented `${CLAUDE_SKILL_DIR}` (then the skill's base directory) for every plugin path and
+    # documented `${CLAUDE_SKILL_DIR}` for every plugin path and
     # says what happens without a helper; the skills never guess a session id, and every
     # `--sid '${CLAUDE_SESSION_ID}'` is single-quoted, so an unsubstituted reference reaches the
-    # helper as written (no id) instead of whatever the Bash environment holds.
+    # helper as written (no id) instead of whatever the Bash environment holds. The root rows are
     ("CW-1 root", "skills/status/SKILL.md", r"^`<store>` = ", "the plugin root is `${CLAUDE_SKILL_DIR}/../..`"),
-    ("CW-1 root", "skills/status/SKILL.md", r"^`<store>` = ", "If no helper is there, say so and stop."),
+    ("CW-1 root", "skills/status/SKILL.md", r"^`<store>` = ", "If that has `${` too or no helper is there, say so and stop."),
     ("CW-1 root", "skills/handoff/SKILL.md", r"^`<store>` = ", "the plugin root is `${CLAUDE_SKILL_DIR}/../..`"),
-    ("CW-1 root", "skills/handoff/SKILL.md", r"^`<store>` = ", "use that root for every plugin path here; no helper there: B."),
+    ("CW-1 root", "skills/handoff/SKILL.md", r"^`<store>` = ", "use that root for every plugin path here; if that has `${` too or no helper is there: B."),
     ("CW-1 root", "skills/report/SKILL.md", r"^`<store>` = ", "the plugin root is `${CLAUDE_SKILL_DIR}/../..`"),
     ("CW-1 root", "skills/report/SKILL.md", r"^Do not read, open or summarise", "If the helper is missing, print the README path of the plugin and stop."),
     ("CW-1 root", "skills/resume/SKILL.md", r"^- `<store>` = ", "use `${CLAUDE_SKILL_DIR}/../..`"),
@@ -954,7 +954,7 @@ COMMAND_TEXT_NEEDS = [
     ("CW-1 sid", "skills/status/SKILL.md", r"^Run `<store> status ", "never guess or invent a session id"),
     ("CW-1 sid", "skills/handoff/SKILL.md", r"^`<store>` = ", "never guess or invent a session id"),
     ("CW-1 sid", "skills/handoff/SKILL.md", r"^- `<store> begin ", "`<store> begin --sid '${CLAUDE_SESSION_ID}'"),
-    ("CW-1 sid", "skills/resume/SKILL.md", r"^- `<store>` = ", "Never guess a session id."),
+    ("CW-1 sid", "skills/resume/SKILL.md", r"^- `<store>` = ", "Never guess a session id; run `--sid` as written."),
     ("CW-1 sid", "skills/resume/SKILL.md", r"^`<store> locate ", "`<store> locate --sid '${CLAUDE_SESSION_ID}'"),
     ("CW-1 sid", "skills/resume/SKILL.md", r"^\*\*Pin:\*\* `<store> pin ", "`<store> pin --sid '${CLAUDE_SESSION_ID}'"),
     ("CW-1 sid", "skills/resume/SKILL.md", r"^- Helper missing:", "no session id: every pick is `other`"),

@@ -7,7 +7,7 @@ argument-hint: "[--since 7d]"
 # Report
 <!-- W-BETA C (CROSS-REVIEW XR-04, XR-21): no disable-model-invocation and no allowed-tools until PR-2 row P-156 is reviewed; the description says "Only when the user asks" instead. -->
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..` (if that has `${` too: two folders above this skill's base directory); use that root. <!-- CW-1 (Cowork check 2026-10-26). CW-1 review: `${CLAUDE_SKILL_DIR}` is the documented substitution for a skill's own folder (Claude Code changelog); the base-directory line is the second fallback -->
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..`; use that root. <!-- CW-1 (Cowork check 2026-10-26). PROVISIONAL (CW-1 review 2): `${CLAUDE_SKILL_DIR}` is documented (Claude Code changelog 2.1.69), but Cowork kept its skill folder in another tree than the plugin, so whether `<skill dir>/../..` holds the helper there is unchecked; an owner Cowork re-check decides this line. The base-directory fallback was dropped: undocumented, and in 2.1.310 built from the same data as `${CLAUDE_SKILL_DIR}` -->
 
 Three steps; add the user's arguments to each call when they gave any (for example `--since 7d`). <!-- RS-1 (owner xxxxxxxx-19: summaries opt-in per report, asked each time) -->
 

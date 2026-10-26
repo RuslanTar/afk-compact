@@ -76,6 +76,17 @@ sub sid8 { my ($sid) = @_; my $s = $sid // ''; $s =~ s/[^0-9A-Za-z]//g; return l
 
 sub valid_sid { my ($v) = @_; return defined $v && $v =~ /\A[0-9A-Za-z][0-9A-Za-z_-]{7,63}\z/ }
 
+# placeholder_sid(value) -> 1 for a given --sid that is never this session's id (CW-1 review 2):
+# the plugin's own placeholders (`anon-*`, this file's identity without a session id, which
+# begin prints and degraded handoffs carry; `unknown`; `smoke`) and a variable name or `$`
+# reference left unsubstituted (a bare `CLAUDE_*`). The same set as lib/args.pm reserved_sid
+# with unsubstituted; resolve_sid takes such a value as unset.
+sub placeholder_sid {
+    my ($v) = @_;
+    return defined $v && ($v =~ /\Aanon-/ || $v eq 'unknown' || $v eq 'smoke' || $v =~ /\A\s*\$/
+                          || $v =~ /\ACLAUDE_[A-Z0-9_]+\z/) ? 1 : 0;
+}
+
 # ---------------------------------------------------------------- per-process records
 
 sub records_dir { my ($ctx) = @_; return "$ctx->{root}/.sessions/by-pid" }
@@ -144,11 +155,13 @@ sub own_record {
 
 # Session identity (TPL §6): the record, cross-checked with the passed id.
 # The passed id is a cross-check only (HDN §8): on a mismatch the record
-# wins and the identity is marked degraded.
+# wins and the identity is marked degraded. A placeholder (placeholder_sid) is taken as unset
+# (CW-1 review 2): the record, else a fresh anon- id marked degraded (no-session-id).
 # Returns {sid, sid8, source, degraded, pid, lstart}.
 sub resolve_sid {
     my ($ctx, $flag) = @_;
-    my $given = (defined $flag && !skills::util::unset_value($flag) && valid_sid($flag)) ? $flag : undef;
+    my $given = (defined $flag && !skills::util::unset_value($flag) && !placeholder_sid($flag) && valid_sid($flag))
+              ? $flag : undef;
     my ($rec, $cp) = own_record($ctx);
     my $rsid = $rec ? $rec->{data}{session_id} : undef;
     $rsid = undef unless valid_sid($rsid);
