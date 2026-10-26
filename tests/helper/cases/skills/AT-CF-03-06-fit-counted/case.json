@@ -2,7 +2,7 @@
  "id": "AT-CF-03, AT-CF-06 fit (U-04)",
  "layer": "H",
  "owner": "skills",
- "note": "U-04 (REVIEW-NIGHT-2 and its review): begin's reply shows at most 8 in-flight tasks and 20 tmp candidates and counts the rest in trimmed.cut, with or without size pressure, while begin-full.json holds every task and path; inflight_measured.sidecar is relative to store_root. The lib steps run skills::begin::_fit (the staged copy) over a fixed reply, so the trim order holds whatever the temp folder's path: the config source labels and the two root values go before newer_foreign, newer_foreign is shortened only when that brings the reply within 3,072 B, and a reply that cannot get there keeps its entries and stays over",
+ "note": "U-04 (REVIEW-NIGHT-2 and its reviews): begin's reply shows at most 8 in-flight tasks and 20 tmp candidates and counts the rest in trimmed.cut, with or without size pressure, while begin-full.json holds every task and path, one entry a line; inflight_measured.sidecar is relative to store_root; a paths.jsonl past its read size is read from its newest rows and the older rows are counted in trimmed.unread. The real begin steps assert what holds at any temp folder (shown + counted = found, the newest first); the -long twin runs them 246 characters deeper. The lib steps run skills::begin::_fit (the staged copy) over a fixed reply, so the exact counts are pinned: the config source labels and the two root values go first, newer_foreign is shortened only when that brings the reply within 3,072 B, a reply that cannot get there keeps its entries and stays over, porcelain.first and tmp_candidates cuts under size pressure are counted, and the put-back pass returns every cut that fits again",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -23,7 +23,7 @@
      }
     },
     {
-     "content": "{\"seq\":1,\"tasks\":[{\"id\":\"b0000\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0001\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0002\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0003\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0004\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0005\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0006\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0007\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0008\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0009\",\"kind\":\"shell\",\"status\":\"running\"}],\"ts\":\"2026-10-21T13:59:00+03:00\"}",
+     "content": "{\"seq\":1,\"tasks\":[{\"id\":\"b0000\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0001\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0002\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0003\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0004\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0005\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0006\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0007\",\"kind\":\"shell\",\"status\":\"running\"},{\"id\":\"b0008\",\"kind\":\"shell\",\"output\":\"$TMP/repo/out-b0008.log\",\"status\":\"running\"},{\"id\":\"b0009\",\"kind\":\"shell\",\"output\":\"$TMP/repo/out-b0009.log\",\"status\":\"running\"}],\"ts\":\"2026-10-21T13:59:00+03:00\"}",
      "write": "$WATCH/33333333-3333-4333-8333-333333333333/bg/slot-1.json"
     },
     {
@@ -55,6 +55,41 @@
       "/u04/x24"
      ],
      "sid": "55555555-5555-4555-8555-555555555555"
+    },
+    {
+     "paths": [
+      "/u04/y00",
+      "/u04/y01",
+      "/u04/y02",
+      "/u04/y03",
+      "/u04/y04",
+      "/u04/y05",
+      "/u04/y06",
+      "/u04/y07",
+      "/u04/y08",
+      "/u04/y09",
+      "/u04/y10",
+      "/u04/y11",
+      "/u04/y12",
+      "/u04/y13",
+      "/u04/y14",
+      "/u04/y15",
+      "/u04/y16",
+      "/u04/y17",
+      "/u04/y18",
+      "/u04/y19",
+      "/u04/y20",
+      "/u04/y21",
+      "/u04/y22",
+      "/u04/y23",
+      "/u04/y24",
+      "/u04/y25",
+      "/u04/y26",
+      "/u04/y27",
+      "/u04/y28",
+      "/u04/y29"
+     ],
+     "sid": "66666666-6666-4666-8666-666666666666"
     }
    ]
   },
@@ -77,26 +112,30 @@
        "\"id\":\"b0009\""
       ],
       "mode": "0600",
-      "path": "$ROOT/repo/LAB-7/.staging/33333333-*/begin-full.json"
+      "path": "$ROOT/repo/LAB-7/.staging/33333333-*/begin-full.json",
+      "has": [
+       "^ +\\{\"exists\":false,\"gitignored\":\"unmeasured\",\"id\":\"b0009\","
+      ]
      }
     ],
     "json": {
      "inflight_measured.sidecar": ".watch/33333333-3333-4333-8333-333333333333/bg/slot-1.json",
-     "inflight_measured.tasks": {
-      "len": 8
-     },
-     "inflight_measured.tasks.7.id": "b0007",
      "trimmed.all": {
       "re": "^repo/LAB-7/\\.staging/33333333-[0-9a-f]{8}/begin-full\\.json$"
      },
-     "trimmed.cut.inflight_measured": 2,
      "trimmed.cut.tmp_candidates": {
       "null": 1
-     }
+     },
+     "inflight_measured.tasks": {
+      "len_min": 3,
+      "len_plus": "trimmed.cut.inflight_measured",
+      "total": 10
+     },
+     "inflight_measured.tasks.0.id": "b0000"
     },
-    "stdout_max_bytes": 3072
+    "stdout_max_bytes": 3073
    },
-   "name": "10 background tasks: 8 shown, 2 counted, all 10 in begin-full.json; the sidecar relative to store_root"
+   "name": "10 background tasks: shown + trimmed.cut = 10, all 10 in begin-full.json, one a line; the sidecar relative to store_root"
   },
   {
    "argv": [
@@ -121,22 +160,70 @@
      }
     ],
     "json": {
-     "tmp_candidates": {
-      "len": 20
-     },
      "tmp_candidates.0.path": "/u04/x24",
-     "tmp_candidates.19.path": "/u04/x05",
      "trimmed.all": {
       "re": "^repo/LAB-7/\\.staging/55555555-[0-9a-f]{8}/begin-full\\.json$"
      },
      "trimmed.cut.inflight_measured": {
       "null": 1
      },
-     "trimmed.cut.tmp_candidates": 5
+     "tmp_candidates": {
+      "len_min": 1,
+      "len_plus": "trimmed.cut.tmp_candidates",
+      "total": 25
+     }
     },
-    "stdout_max_bytes": 3072
+    "stdout_max_bytes": 3073
    },
-   "name": "25 tmp paths: the newest 20 shown, 5 counted, all 25 in begin-full.json"
+   "name": "25 tmp paths: shown (the newest first) + trimmed.cut = 25, all 25 in begin-full.json"
+  },
+  {
+   "name": "paths.jsonl past its read size (test size 1,000 B): the newest rows read, the older rows counted in trimmed.unread; shown + cut + unread = 30",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_PATHS_MAX": "1000"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--topic",
+    "x"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3073,
+    "json": {
+     "tmp_candidates": {
+      "len_min": 1,
+      "len_plus": [
+       "trimmed.cut.tmp_candidates",
+       "trimmed.unread.tmp_candidates"
+      ],
+      "total": 30
+     },
+     "tmp_candidates.0.path": "/u04/y29",
+     "trimmed.unread.tmp_candidates": {
+      "re": "^[1-9][0-9]*$"
+     },
+     "trimmed.all": {
+      "re": "^repo/LAB-7/\\.staging/66666666-[0-9a-f]{8}/begin-full\\.json$"
+     }
+    },
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/.staging/66666666-*/begin-full.json",
+      "mode": "0600",
+      "contains": [
+       "\"path\":\"/u04/y29\"",
+       "\"unread\":"
+      ],
+      "lacks": [
+       "\"path\":\"/u04/y00\""
+      ]
+     }
+    ]
+   }
   },
   {
    "args": {
@@ -145,27 +232,23 @@
      "newer_foreign": 2
     },
     "json": {
-     "config.disposable_root.value": {
-      "null": 1
-     },
-     "config.evidence_quota_mb.value": 512,
-     "config.handoff_root.source": {
-      "null": 1
-     },
-     "config.handoff_root.value": {
-      "null": 1
-     },
-     "config.queue_cmd.source": {
-      "null": 1
-     },
      "newer_foreign": {
       "len": 2
      },
-     "trimmed.all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json",
-     "trimmed.cut.config": 7,
      "trimmed.cut.newer_foreign": {
       "null": 1
-     }
+     },
+     "trimmed.cut.config": 5,
+     "config.disposable_root.value": {
+      "null": 1
+     },
+     "config.handoff_root.value": "/home/someone/projects/checkouts/a-long-store/handoffs",
+     "config.handoff_root.source": {
+      "null": 1
+     },
+     "config.queue_cmd.source": "default",
+     "config.evidence_quota_mb.value": 512,
+     "trimmed.all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json"
     },
     "max_bytes": 3072,
     "pad": {
@@ -221,10 +304,11 @@
      "store_root": "/home/someone/projects/checkouts/a-long-store/handoffs",
      "tmp_candidates": [],
      "worktree": ""
-    }
+    },
+    "min_bytes": 3000
    },
    "lib": "begin_fit",
-   "name": "fit order: the config labels and root values go before newer_foreign (pre-fit 3,110 B)"
+   "name": "fit order: the config labels and root values go before newer_foreign; the put-back pass returns what fits again (pre-fit 3,110 B)"
   },
   {
    "args": {
@@ -237,8 +321,9 @@
       "len": 1
      },
      "newer_foreign.0.sid8": "77777777",
-     "trimmed.cut.config": 7,
-     "trimmed.cut.newer_foreign": 1
+     "trimmed.cut.newer_foreign": 1,
+     "trimmed.cut.config": 6,
+     "config.handoff_root.value": "/home/someone/projects/checkouts/a-long-store/handoffs"
     },
     "max_bytes": 3072,
     "pad": {
@@ -294,10 +379,11 @@
      "store_root": "/home/someone/projects/checkouts/a-long-store/handoffs",
      "tmp_candidates": [],
      "worktree": ""
-    }
+    },
+    "min_bytes": 3000
    },
    "lib": "begin_fit",
-   "name": "fit: newer_foreign is shortened when that brings the reply within 3 KB (pre-fit 3,300 B)"
+   "name": "fit: newer_foreign is shortened when that brings the reply within 3 KB; the room left is filled again (pre-fit 3,300 B)"
   },
   {
    "args": {
@@ -595,6 +681,448 @@
    },
    "lib": "begin_fit",
    "name": "fit: the caps alone are counted, with no size pressure"
+  },
+  {
+   "name": "fit: porcelain.first is cut under size pressure and counted (pre-fit 3,600 B)",
+   "lib": "begin_fit",
+   "args": {
+    "reply": {
+     "config": {
+      "disposable_keep_days": {
+       "source": "default",
+       "value": 14
+      },
+      "disposable_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/trash-staging"
+      },
+      "evidence_quota_mb": {
+       "source": "default",
+       "value": 512
+      },
+      "handoff_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/handoffs"
+      },
+      "queue_cmd": {
+       "source": "default",
+       "value": ""
+      }
+     },
+     "gsd": null,
+     "inflight_measured": {
+      "sidecar": null,
+      "tasks": []
+     },
+     "newer_foreign": [
+      {
+       "date": "2026-10-21T13:30:00+03:00",
+       "inflight_line": null,
+       "path": "r9/LAB-9/2026-10-21_13-30-00_77777777_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "77777777"
+      },
+      {
+       "date": "2026-10-21T12:00:00+03:00",
+       "inflight_line": 13,
+       "path": "r9/LAB-9/2026-10-21_12-00-00_99999999_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "99999999"
+      }
+     ],
+     "porcelain": {
+      "count": 20,
+      "first": [
+       " M app/u04-file-00.rb",
+       " M app/u04-file-01.rb",
+       " M app/u04-file-02.rb",
+       " M app/u04-file-03.rb",
+       " M app/u04-file-04.rb",
+       " M app/u04-file-05.rb",
+       " M app/u04-file-06.rb",
+       " M app/u04-file-07.rb",
+       " M app/u04-file-08.rb",
+       " M app/u04-file-09.rb",
+       " M app/u04-file-10.rb",
+       " M app/u04-file-11.rb",
+       " M app/u04-file-12.rb",
+       " M app/u04-file-13.rb",
+       " M app/u04-file-14.rb",
+       " M app/u04-file-15.rb",
+       " M app/u04-file-16.rb",
+       " M app/u04-file-17.rb",
+       " M app/u04-file-18.rb",
+       " M app/u04-file-19.rb"
+      ]
+     },
+     "store_root": "/home/someone/projects/checkouts/a-long-store/handoffs",
+     "tmp_candidates": [],
+     "worktree": ""
+    },
+    "found": {
+     "newer_foreign": 2
+    },
+    "all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json",
+    "pad": {
+     "key": "worktree",
+     "to": 3600
+    },
+    "max_bytes": 3072,
+    "json": {
+     "porcelain.first": {
+      "len": 3
+     },
+     "porcelain.first.0": " M app/u04-file-00.rb",
+     "trimmed.cut.porcelain": 17,
+     "porcelain.count": 20,
+     "newer_foreign": {
+      "len": 2
+     }
+    }
+   }
+  },
+  {
+   "name": "fit: tmp_candidates is cut under size pressure, counted against all 25 found (pre-fit 3,600 B)",
+   "lib": "begin_fit",
+   "args": {
+    "reply": {
+     "config": {
+      "disposable_keep_days": {
+       "source": "default",
+       "value": 14
+      },
+      "disposable_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/trash-staging"
+      },
+      "evidence_quota_mb": {
+       "source": "default",
+       "value": 512
+      },
+      "handoff_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/handoffs"
+      },
+      "queue_cmd": {
+       "source": "default",
+       "value": ""
+      }
+     },
+     "gsd": null,
+     "inflight_measured": {
+      "sidecar": null,
+      "tasks": []
+     },
+     "newer_foreign": [
+      {
+       "date": "2026-10-21T13:30:00+03:00",
+       "inflight_line": null,
+       "path": "r9/LAB-9/2026-10-21_13-30-00_77777777_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "77777777"
+      },
+      {
+       "date": "2026-10-21T12:00:00+03:00",
+       "inflight_line": 13,
+       "path": "r9/LAB-9/2026-10-21_12-00-00_99999999_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "99999999"
+      }
+     ],
+     "porcelain": {
+      "count": 0,
+      "first": []
+     },
+     "store_root": "/home/someone/projects/checkouts/a-long-store/handoffs",
+     "tmp_candidates": [
+      {
+       "path": "/u04/x24",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x23",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x22",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x21",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x20",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x19",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x18",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x17",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x16",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x15",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x14",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x13",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x12",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x11",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x10",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x09",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x08",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x07",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x06",
+       "exists": false,
+       "bytes": null
+      },
+      {
+       "path": "/u04/x05",
+       "exists": false,
+       "bytes": null
+      }
+     ],
+     "worktree": ""
+    },
+    "found": {
+     "newer_foreign": 2,
+     "tmp_candidates": 25
+    },
+    "all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json",
+    "pad": {
+     "key": "worktree",
+     "to": 3600
+    },
+    "max_bytes": 3072,
+    "json": {
+     "tmp_candidates": {
+      "len": 11
+     },
+     "tmp_candidates.0.path": "/u04/x24",
+     "trimmed.cut.tmp_candidates": 14,
+     "newer_foreign": {
+      "len": 2
+     }
+    }
+   }
+  },
+  {
+   "name": "fit: a later, larger cut leaves room; the earlier cuts that fit again are put back (pre-fit 3,300 B)",
+   "lib": "begin_fit",
+   "args": {
+    "reply": {
+     "config": {
+      "disposable_keep_days": {
+       "source": "default",
+       "value": 14
+      },
+      "disposable_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/trash-staging"
+      },
+      "evidence_quota_mb": {
+       "source": "default",
+       "value": 512
+      },
+      "handoff_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/handoffs"
+      },
+      "queue_cmd": {
+       "source": "default",
+       "value": ""
+      }
+     },
+     "gsd": null,
+     "inflight_measured": {
+      "sidecar": null,
+      "tasks": []
+     },
+     "newer_foreign": [
+      {
+       "date": "2026-10-21T13:30:00+03:00",
+       "inflight_line": null,
+       "path": "r9/LAB-9/2026-10-21_13-30-00_77777777_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "77777777"
+      },
+      {
+       "date": "2026-10-21T12:00:00+03:00",
+       "inflight_line": 13,
+       "path": "r9/LAB-9/2026-10-21_12-00-00_99999999_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "99999999"
+      }
+     ],
+     "porcelain": {
+      "count": 6,
+      "first": [
+       " M app/u04-file-00.rb",
+       " M app/u04-file-01.rb",
+       " M app/u04-file-02.rb",
+       " M app/u04-file-03.rb",
+       " M app/u04-file-04.rb",
+       " M app/u04-file-05.rb"
+      ]
+     },
+     "store_root": "/home/someone/projects/checkouts/a-long-store/handoffs",
+     "tmp_candidates": [
+      {
+       "path": "/u04/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+       "exists": false,
+       "bytes": null
+      }
+     ],
+     "worktree": ""
+    },
+    "found": {
+     "newer_foreign": 2
+    },
+    "all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json",
+    "pad": {
+     "key": "worktree",
+     "to": 3300
+    },
+    "max_bytes": 3072,
+    "json": {
+     "porcelain.first": {
+      "len": 6
+     },
+     "tmp_candidates": {
+      "len": 0
+     },
+     "trimmed.cut.tmp_candidates": 1,
+     "trimmed.cut.porcelain": {
+      "null": 1
+     },
+     "trimmed.cut.config": {
+      "null": 1
+     },
+     "config.handoff_root.source": "settings",
+     "newer_foreign": {
+      "len": 2
+     }
+    }
+   }
+  },
+  {
+   "name": "fit: rows begin did not read are counted in trimmed.unread, with nothing cut",
+   "lib": "begin_fit",
+   "args": {
+    "reply": {
+     "config": {
+      "disposable_keep_days": {
+       "source": "default",
+       "value": 14
+      },
+      "disposable_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/trash-staging"
+      },
+      "evidence_quota_mb": {
+       "source": "default",
+       "value": 512
+      },
+      "handoff_root": {
+       "source": "settings",
+       "value": "/home/someone/projects/checkouts/a-long-store/handoffs"
+      },
+      "queue_cmd": {
+       "source": "default",
+       "value": ""
+      }
+     },
+     "gsd": null,
+     "inflight_measured": {
+      "sidecar": null,
+      "tasks": []
+     },
+     "newer_foreign": [
+      {
+       "date": "2026-10-21T13:30:00+03:00",
+       "inflight_line": null,
+       "path": "r9/LAB-9/2026-10-21_13-30-00_77777777_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "77777777"
+      },
+      {
+       "date": "2026-10-21T12:00:00+03:00",
+       "inflight_line": 13,
+       "path": "r9/LAB-9/2026-10-21_12-00-00_99999999_retry-the-flaky-export-job-after-the-queue-fix.md",
+       "sid8": "99999999"
+      }
+     ],
+     "porcelain": {
+      "count": 0,
+      "first": []
+     },
+     "store_root": "/home/someone/projects/checkouts/a-long-store/handoffs",
+     "tmp_candidates": [],
+     "worktree": ""
+    },
+    "found": {
+     "newer_foreign": 2
+    },
+    "all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json",
+    "unread": {
+     "tmp_candidates": 7
+    },
+    "max_bytes": 3072,
+    "json": {
+     "trimmed.unread.tmp_candidates": 7,
+     "trimmed.cut": {
+      "null": 1
+     },
+     "trimmed.all": "r9/LAB-9/.staging/33333333-0a0b0c0d/begin-full.json"
+    }
+   }
   }
  ]
 }

@@ -1,0 +1,119 @@
+{
+ "id": "HT-B-01 store paths outside store_root (U-04)",
+ "layer": "H",
+ "owner": "skills",
+ "note": "U-04: begin prints store paths relative to store_root, and a store path outside it whole. A second begin in an open handoff turn returns the stage the first one bound (D-18 B7), with its bucket; when the store root changed in between, that bucket, its handoffs and trimmed.all lie under the old root: they print whole while store_root names the new root. The watch folder is pinned (log_dir) so both begins see the turn",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/watch"
+ },
+ "steps": [
+  {
+   "setup": [
+    {
+     "at": "$TMP/repo",
+     "repo": {
+      "branch": "feature/LAB-7-x",
+      "commits": [
+       {
+        "files": {
+         "app/a.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     }
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_own.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d0d0d0d\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=0d0d0d0d s=manual⟫\n# LAB-7 — own\n## User constraints\nnone stated\n⟪/$BRAND n=0d0d0d0d⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "the mod opens a handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "cap",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin under the first root: the store paths relative to it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "x"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "store_root": "$ROOT",
+     "bucket.path": "repo/LAB-7",
+     "previous_handoff": "repo/LAB-7/2026-10-21_09-00-00_11111111_own.md",
+     "own_latest.path": "repo/LAB-7/2026-10-21_09-00-00_11111111_own.md",
+     "handoff_turn.ht": "a1b2c3d4",
+     "resumed": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "begin again under another root: the bound stage and its bucket stay under the first root and print whole",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "x",
+    "--root",
+    "~/root2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_max_bytes": 3073,
+    "json": {
+     "resumed": 1,
+     "stage": "$STAGE",
+     "store_root": "$HOME/root2",
+     "bucket.path": "$ROOT/repo/LAB-7",
+     "previous_handoff": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_own.md",
+     "own_latest.path": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_own.md",
+     "config.handoff_root.value": "$HOME/root2"
+    },
+    "files": [
+     {
+      "path": "$STAGE/begin-full.json",
+      "mode": "0600",
+      "has": [
+       "^ \"bucket\":\\{\\n  \"path\":\"$ROOT/repo/LAB-7\",$",
+       "^ \"store_root\":\"$HOME/root2\",$"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

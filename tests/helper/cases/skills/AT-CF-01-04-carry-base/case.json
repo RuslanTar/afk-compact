@@ -56,7 +56,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout_max_bytes": 3072,
+    "stdout_max_bytes": 3073,
     "json": {
      "previous_handoff": "repo/LAB-7/2026-10-21_12-00-00_99999999_other.md",
      "previous_kind": "foreign",

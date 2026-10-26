@@ -32,7 +32,9 @@
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
 #   expect: stdout_has / stdout_lacks (regexes, /m); json_keys; json {dotted path: value |
-#     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
+#     {re} | {null} | {len} | {len_min} | {len_plus, total} | {present} | {max_bytes}}; files
+#     has / lacks (regexes, /m); {len_plus: "<dotted path>" or a list of them, total: N}: the
+#     list's length plus the numbers at those paths (0 when absent) is N
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
@@ -46,7 +48,7 @@
 #     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
 #     answers and holds that image locally)
-#   builtin begin_fit {reply, found, all, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
+#   builtin begin_fit {reply, found, all, unread, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
@@ -773,7 +775,8 @@ sub fixture_repo {
 }
 
 # Dotted path into decoded JSON: (found, value)
-# json_expect(decoded, {dotted path: value | {re} | {null} | {len} | {present} | {max_bytes}})
+# json_expect(decoded, {dotted path: value | {re} | {null} | {len} | {len_min} | {len_plus, total}
+#                          | {present} | {max_bytes}})
 # -> the failures (expect.json, and the begin_fit builtin).
 sub json_expect {
     my ($d, $spec) = @_;
@@ -785,6 +788,15 @@ sub json_expect {
             push @e, "json $p !~ /$w->{re}/: " . scalar_text($v) if exists $w->{re} && !($ok && defined $v && !ref $v && $v =~ /$w->{re}/);
             push @e, "json $p not null" if exists $w->{null} && $ok && defined $v;
             push @e, "json $p length, want $w->{len}" if exists $w->{len} && !(ref $v eq 'ARRAY' && @$v == $w->{len});
+            push @e, "json $p length, want at least $w->{len_min}" if exists $w->{len_min} && !(ref $v eq 'ARRAY' && @$v >= $w->{len_min});
+            if (exists $w->{total}) {
+                # U-04: a count that holds at any temp folder: shown + counted = found.
+                my @at = ref $w->{len_plus} eq 'ARRAY' ? @{ $w->{len_plus} } : grep { defined } $w->{len_plus};
+                my $sum = ref $v eq 'ARRAY' ? scalar @$v : undef;
+                for my $q (@at) { my ($k, $c) = jpath($d, $q); $sum += $c if defined $sum && $k && defined $c && !ref $c }
+                push @e, "json $p length + " . join(' + ', @at) . ' = ' . ($sum // 'not a list') . ", want $w->{total}"
+                    unless defined $sum && $sum == $w->{total};
+            }
             push @e, "json $p missing" if exists $w->{present} && !$ok;
             if (exists $w->{max_bytes}) {
                 my $b = defined $v && !ref $v ? $v : '';
@@ -1608,7 +1620,7 @@ sub builtin {
     }
     if ($name eq 'begin_fit') {
         # U-04: skills::begin::_fit (the staged copy) over a fixed reply, so the trim order is
-        # pinned whatever the temp folder's path: {reply, found, all, pad: {key, to}} where pad
+        # pinned whatever the temp folder's path: {reply, found, all, unread, pad: {key, to}} where pad
         # sets reply.<key> to a string that makes the encoded reply exactly `to` bytes before
         # the fit; then json (as expect.json) over the fitted reply, and its size in
         # min_bytes / max_bytes.
@@ -1621,7 +1633,7 @@ sub builtin {
             return ("pad: the reply is already over $p->{to} bytes") if $n < 0;
             $r->{ $p->{key} } = 'p' x $n;
         }
-        my $j = skills::begin::_fit($r, $a->{found} || {}, $a->{all});
+        my $j = skills::begin::_fit($r, $a->{found} || {}, $a->{all}, $a->{unread});
         my $len = skills::util::blen($j);
         push @e, "fitted reply is $len bytes > $a->{max_bytes}" if defined $a->{max_bytes} && $len > $a->{max_bytes};
         push @e, "fitted reply is $len bytes < $a->{min_bytes}" if defined $a->{min_bytes} && $len < $a->{min_bytes};
