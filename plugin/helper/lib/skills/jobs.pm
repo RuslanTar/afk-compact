@@ -217,15 +217,17 @@ sub effects {
     return ($read_only ? 'prod-read' : 'prod-write') if defined prod_class($cmd, $prod // skills::core::prod());
     return 'none' if $read_only;
     my $outs = $recipe ? expected_outputs($recipe->{text}) : undef;
-    return 'local' if $outs && @$outs && !chained($cmd) && grep { $cmd =~ $_ } @{ $rl->{allow} || [] };
+    return 'local' if $outs && @$outs && !chained($cmd) && defined &settings::relaunch_allowed && settings::relaunch_allowed($cmd, $rl);
     return 'unknown';
 }
 
 # prod_class(command, production settings) -> the id of the first production class the
-# command matches (prod-token, user-prod-<n>), or undef.
+# command matches (prod-token, user-prod-<n>), or undef. settings::prod_class runs the user's
+# prod_patterns with a time bound (U-06; a stopped one counts as production).
 sub prod_class {
     my ($cmd, $prod) = @_;
     return undef unless defined $cmd && ref $prod eq 'HASH';
+    return settings::prod_class($cmd, $prod) if defined &settings::prod_class;
     for my $c (@{ ref $prod->{classes} eq 'ARRAY' ? $prod->{classes} : [] }) {
         next unless ref $c eq 'HASH' && defined $c->{re};
         return $c->{id} // 'prod' if $cmd =~ $c->{re};
@@ -403,7 +405,7 @@ sub recipe_effects {
     my $f = skills::risk::classify($cmd, source => 'foreign', cwd => $cwd, watch => $watch);
     return 'none' if $f->{result} eq 'none' && ($f->{why} // '') eq 'read-only';
     my $outs = $recipe ? expected_outputs($recipe->{text}) : undef;
-    return 'local' if $outs && @$outs && !chained($cmd) && grep { $cmd =~ $_ } @{ $rl->{allow} || [] };
+    return 'local' if $outs && @$outs && !chained($cmd) && defined &settings::relaunch_allowed && settings::relaunch_allowed($cmd, $rl);
     return 'unknown';
 }
 

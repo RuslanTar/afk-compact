@@ -133,9 +133,12 @@ sub classify {
     }
     my $prod = skills::core::prod();
     my $prod_id;
-    for my $c (@{ $prod->{classes} || [] }) {
-        next unless ref $c eq 'HASH' && defined $c->{re};
-        if ($any->($c->{re})) { $prod_id = $c->{id} // 'prod'; last }
+    if (defined &settings::prod_class) { $prod_id = settings::prod_class(\@forms, $prod) }    # U-06: the user's patterns time-bound
+    else {
+        for my $c (@{ $prod->{classes} || [] }) {
+            next unless ref $c eq 'HASH' && defined $c->{re};
+            if ($any->($c->{re})) { $prod_id = $c->{id} // 'prod'; last }
+        }
     }
     $hit{production} = 1 if defined $prod_id;
     my (@hard, %hard_seen);

@@ -10,6 +10,7 @@
 # written); relaunch_allow active (S-SETTINGS C); the unattended_prod_reads line (S-SETTINGS B);
 # the kept mismatch stashes with their paths (C-STORE D3). 2026-10-23 (owner xxxxxxxx-29): the
 # protected branches line with a warning per ignored protected_branches entry.
+# U-06: a warning per pattern of the user's stopped at its time bound (lib/userre.pm).
 use strict;
 use warnings;
 use utf8;
@@ -142,6 +143,7 @@ sub run {
     push @out, relaunch_lines($d);
     push @out, prod_lines();
     push @out, protected_lines();
+    push @out, regex_lines($classic);
     push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`
@@ -402,6 +404,26 @@ sub protected_lines {
     my $src = $SRC{ $r->{source}{protected_branches} // 'default' } // 'default';
     my @l = ('protected branches: the shipped list + ' . ($p->{user} // 0) . " yours ($src)");
     push @l, "  warning: protected_branches #$_->{index} invalid, ignored (the shipped list still applies)" for @{ $p->{invalid} || [] };
+    return @l;
+}
+
+# ---------------------------------------------------------------- the user's patterns (U-06)
+# One warning per pattern of the user's that this session stopped at its time bound
+# (lib/userre.pm, `regex_timeout` rows), by key and position, never the pattern, with what the
+# plugin did instead.
+my %REGEX_SAFE = (secret_extra_rules => 'what it checked was withheld', prod_patterns => 'counted as production',
+                  protected_branches => 'counted as protected', ticket_pattern => 'no ticket used',
+                  relaunch_allow => 'not allowlisted (asks)', deny_class_patterns => 'not used for the class');
+my %REGEX_WHY = (timeout => 'stopped after its time limit', budget => 'not run (the time for your patterns was used up)',
+                 error => 'could not run');
+sub regex_lines {
+    my ($rows) = @_;
+    my (%seen, @l);
+    for my $r (grep { ($_->{ev} // '') eq 'regex_timeout' } @{ $rows || [] }) {
+        my ($k, $i, $w) = ($r->{key} // '', $r->{index} // '', $r->{why} // '');
+        next unless $REGEX_SAFE{$k} && $i =~ /\A[0-9]{1,3}\z/ && !$seen{"$k.$i"}++;
+        push @l, "warning: $k #$i " . ($REGEX_WHY{$w} // 'stopped') . "; $REGEX_SAFE{$k}" . ($w eq 'timeout' ? ' (make the pattern simpler)' : '');
+    }
     return @l;
 }
 

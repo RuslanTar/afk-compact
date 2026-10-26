@@ -1131,6 +1131,262 @@ sub docker_image {
     return $DOCKER_IMAGE{$ref} = $r->{exit} == 0 ? 1 : 0;
 }
 
+# ---------------------------------------------------------------- U-06 (builtin user_regex_bound)
+# u06_within(seconds, code) -> the lines code returns, run in a forked child (its own process
+# group) that is killed with its group after `seconds`: one "hung" line then. A line that starts
+# with "# " is printed as a note, not returned as an error.
+sub u06_within {
+    my ($secs, $code) = @_;
+    pipe(my $r, my $w) or return ("pipe: $!");
+    my $pid = fork();
+    return ("fork: $!") unless defined $pid;
+    if ($pid == 0) {
+        close $r;
+        setpgrp(0, 0);
+        my @e = eval { $code->() };
+        push @e, "died: $@" if $@;
+        my $out = join('', map { (my $x = $_) =~ s/\n/ /g; "$x\n" } @e);
+        utf8::encode($out) if utf8::is_utf8($out);
+        my $off = 0;
+        while ($off < length $out) { my $n = syswrite($w, $out, length($out) - $off, $off); last unless $n; $off += $n }
+        POSIX::_exit(0);
+    }
+    close $w;
+    my ($buf, $rin, $eof) = ('', '', 0);
+    vec($rin, fileno($r), 1) = 1;
+    my $end = util::clock_ms() + $secs * 1000;
+    while ((my $left = $end - util::clock_ms()) > 0) {
+        my $n = select(my $ro = $rin, undef, undef, $left / 1000);
+        next if $n == 0 || ($n < 0 && $!{EINTR});
+        last if $n < 0;
+        my $got = sysread($r, my $c, 65536);
+        if (!$got) { $eof = 1; last }
+        $buf .= $c;
+    }
+    close $r;
+    if (!$eof) { kill 'KILL', -$pid; kill 'KILL', $pid; waitpid($pid, 0); return ("hung: no answer within $secs s (a pattern ran without a time bound)") }
+    waitpid($pid, 0);
+    utf8::decode($buf);
+    my @l = split /\n/, $buf;
+    print "$_\n" for grep { /\A# / } @l;
+    return grep { !/\A# / } @l;
+}
+
+# u06_check(check, args) -> errors of one U-06 check (in the u06_within child). args: limit and
+# budget (lib/userre.pm, default 0.5 and 3 s), max_call_ms (prod-normal, default 50), seed.
+sub u06_check {
+    my ($check, $o) = @_;
+    no warnings 'once';
+    my @e;
+    my $lim = $o->{limit} // 0.5;
+    # without lib/userre.pm (the code before U-06) the same calls run unbounded and hang
+    my $have = defined &userre::limits;
+    userre::limits($lim, $o->{budget} // 3) if $have;
+    userre::clear() if $have;
+    my $allowed = sub { defined &settings::relaunch_allowed ? settings::relaunch_allowed(@_) : scalar grep { $_[0] =~ $_ } @{ $_[1]{allow} } };
+    local %rc::R = ();
+    my $bound = int(($lim + 0.7) * 1000);    # one stopped pattern: its limit, the fork and the kill
+    my $long = ('a' x 100_000) . 'b';         # (a+)+$ backtracks quadratically from every a: minutes
+    my $timed = sub { my $t0 = util::clock_ms(); my @r = $_[0]->(); return (util::clock_ms() - $t0, @r) };
+    my $stopped = sub { join(' ', map { join(':', @$_) } @userre::STOPPED) };
+    my $want_stopped = sub { my ($w) = @_; return $stopped->() eq $w ? () : ('stopped [' . $stopped->() . "], want [$w]") };
+    my $over = sub { my ($ms, $what) = @_; return $ms > $bound ? ("$what took $ms ms, over the bound of $bound ms") : () };
+    my $kids = sub {
+        my $r = util::run(['pgrep', '-P', $_[0] // $$], timeout_ms => 5000);
+        return grep { /\A\d+\z/ } split /\s+/, $r->{out} // '';
+    };
+    if ($check eq 'prod') {
+        # a stopped production pattern counts as production, and is not run again
+        my $p = settings::prod({ values => { prod_patterns => 'acme-eu1;(a+)+$' } });
+        my ($ms, $id) = $timed->(sub { settings::prod_class("echo $long", $p) });
+        push @e, 'a stopped prod pattern gave ' . ($id // 'no class') . ', want user-prod-2 (production)' unless ($id // '') eq 'user-prod-2';
+        push @e, $over->($ms, 'the catastrophic pattern'), $want_stopped->('prod_patterns:2:timeout');
+        my @k = $kids->();
+        push @e, 'a pattern child still runs: ' . join(' ', @k) if @k;
+        ($ms, $id) = $timed->(sub { settings::prod_class("echo x$long", $p) });
+        push @e, "the stopped pattern ran again ($ms ms)" if $ms > 300;
+        push @e, 'the next call gave ' . ($id // 'no class') . ', want user-prod-2' unless ($id // '') eq 'user-prod-2';
+        return @e;
+    }
+    if ($check eq 'prod-normal') {
+        my $p = settings::prod({ values => { prod_patterns => '--context=acme-eu1;db\.acme\.internal' } });
+        my %want = ('kubectl get pods --context=acme-eu1' => 'user-prod-1', 'psql -h db.acme.internal -c 1' => 'user-prod-2',
+                    'kubectl get pods --context=prod-eu' => 'prod-token', 'git status' => undef);
+        for my $t (sort keys %want) {
+            my $g = settings::prod_class($t, $p);
+            push @e, "'$t' gave " . ($g // 'none') . ', want ' . ($want{$t} // 'none') unless ($g // '') eq ($want{$t} // '');
+        }
+        push @e, 'a list of texts: no class' unless (settings::prod_class(['git status', 'psql -h db.acme.internal'], $p) // '') eq 'user-prod-2';
+        my $n = 20;
+        my $max = $o->{max_call_ms} // 50;
+        my ($ms) = $timed->(sub { settings::prod_class("make build-$_", $p) for 1 .. $n });
+        push @e, sprintf('# U-06 overhead: %.1f ms per call that runs 2 user patterns (one fork)', $ms / $n);
+        push @e, "$n calls took $ms ms, over $max ms each" if $ms > $n * $max;
+        ($ms) = $timed->(sub { settings::prod_class('make build-1', $p) });
+        push @e, sprintf('# U-06 the same call again: %d ms (kept answer)', $ms);
+        push @e, 'stopped [' . $stopped->() . '] on normal input' if @userre::STOPPED;
+        return @e;
+    }
+    if ($check eq 'secret') {
+        # a stopped secret rule withholds: a HARD hit for scan, the whole text for redact
+        local %rc::R = (settings => { values => { secret_extra_rules => 'HARD:ACME-[0-9]{12};WARN:(a+)+$' } });
+        my $ids = sub { join(',', map { "$_->{rule}/$_->{class}" } @{ $_[0] || [] }) };
+        my ($ms, $h) = $timed->(sub { secrets::scan("token ACME-123456789012\n$long") });
+        push @e, 'scan [' . $ids->($h) . '], want user-hard-1/HARD and regex-timeout/HARD'
+            unless $ids->($h) =~ m{user-hard-1/HARD} && $ids->($h) =~ m{regex-timeout/HARD};
+        push @e, $over->($ms, 'scan'), $want_stopped->('secret_extra_rules:2:timeout');
+        my ($red) = secrets::redact("plain text\n$long");
+        push @e, 'redact kept text: ' . substr($red, 0, 60) unless $red eq '[redacted:regex-timeout]';
+        my $dir = "$RUN_TMP/u06-$$";
+        util::mkdir_p($dir);
+        write_text("$dir/big.txt", "plain\n$long\n", '0600');
+        write_text("$dir/big.log", "plain\n$long\n", '0600');
+        my ($cl) = secrets::classify_file("$dir/big.txt");
+        push @e, "classify_file (a text file): $cl, want withhold" unless $cl eq 'withhold';
+        my ($cl2, undef, $raw) = secrets::classify_file("$dir/big.log");
+        my ($copy) = defined $raw ? secrets::redact($raw) : ('');
+        push @e, "classify_file (a log): $cl2 with a copy that keeps text" unless $cl2 eq 'redact' && $copy eq '[redacted:regex-timeout]';
+        unlink "$dir/big.txt", "$dir/big.log";
+        rmdir $dir;
+        return @e;
+    }
+    if ($check eq 'secret-normal') {
+        local %rc::R = (settings => { values => { secret_extra_rules => 'HARD:ACME-[0-9]{12};WARN:FOO-[A-Z]' } });
+        my $got = join(',', map { "$_->{rule}/$_->{class}/$_->{count}" } @{ secrets::scan("token ACME-123456789012 FOO-AFOO-B\n") });
+        push @e, "scan [$got], want [user-hard-1/HARD/1,user-warn-2/WARN/2]" unless $got eq 'user-hard-1/HARD/1,user-warn-2/WARN/2';
+        my ($red, $rh) = secrets::redact('x ACME-123456789012 FOO-AFOO-B y');
+        push @e, "redact: '$red'" unless $red eq 'x [redacted:user-hard-1] [redacted:user-warn-2] y';
+        my $n = join(',', map { "$_->{rule}:$_->{count}" } @$rh);
+        push @e, "redact hits [$n]" unless $n eq 'user-hard-1:1,user-warn-2:2';
+        ($red) = secrets::redact('x ACME-123456789012 FOO-AFOO-B y', ['HARD']);
+        push @e, "redact HARD only: '$red'" unless $red eq 'x [redacted:user-hard-1] FOO-AFOO-B y';
+        push @e, 'stopped [' . $stopped->() . '] on normal input' if @userre::STOPPED;
+        return @e;
+    }
+    if ($check eq 'ticket') {
+        # the subject is cut to 256 characters, so the catastrophic pattern is exponential: (a{1,30}){1,30}$
+        my ($ms, $tk) = $timed->(sub { settings::ticket(('a' x 250) . 'b', { values => { ticket_pattern => '(a{1,30}){1,30}$' } }) });
+        push @e, "a stopped ticket pattern gave '$tk', want no ticket" if defined $tk;
+        push @e, $over->($ms, 'the catastrophic pattern'), $want_stopped->('ticket_pattern:1:timeout');
+        for my $c (['feature/lab_77-x', '(lab_[0-9]+)', 'lab_77'], ['feature/LAB-7-retry', 'LAB-[0-9]+', 'LAB-7'],
+                   ['main', '(lab_[0-9]+)', undef], ['feature/x/../y', 'feature/(x/\.\./y)', undef],
+                   ['feature/LAB-7-retry', '[A-Z][A-Z0-9]+-[0-9]+', 'LAB-7']) {
+            my $g = settings::ticket($c->[0], { values => { ticket_pattern => $c->[1] } });
+            push @e, "ticket '$c->[0]' /$c->[1]/: " . ($g // 'none') . ', want ' . ($c->[2] // 'none') unless ($g // '') eq ($c->[2] // '');
+        }
+        return @e;
+    }
+    if ($check eq 'relaunch') {
+        # a stopped relaunch_allow pattern does not match: the job asks
+        my $rl = settings::relaunch({ values => { relaunch_allow => '^make test$;^(a+)+$' } });
+        push @e, "'make test' is not allowlisted" unless $allowed->('make test', $rl);
+        push @e, "'make deploy' is allowlisted" if $allowed->('make deploy', $rl);
+        my ($ms, $ok) = $timed->(sub { $allowed->($long, $rl) });
+        push @e, 'a stopped relaunch_allow pattern matched (the job must ask)' if $ok;
+        push @e, $over->($ms, 'the catastrophic pattern'), $want_stopped->('relaunch_allow:2:timeout');
+        return @e;
+    }
+    if ($check eq 'protected') {
+        # a glob that mixes * and ** keeps the plain translation, bounded: a stopped one protects
+        my $p = settings::protected({ values => { protected_branches => 'qa-env;uat/*;**a*a*a*a*a*a*a*a*a*a?' } });
+        my $lin = join(' ', map { $_->{linear} // '-' } @{ $p->{globs} });
+        push @e, "linear [$lin], want [1 1 0]" unless $lin eq '1 1 0';
+        my %want = ('qa-env' => 'user-branch-1', 'uat/eu' => 'user-branch-2', 'uat/eu/x' => undef, 'feat/x' => undef,
+                    'x/' . ('a' x 12) => 'user-branch-3');
+        for my $t (sort keys %want) {
+            my $g = settings::protected_user($t, $p);
+            push @e, "'$t' gave " . ($g // 'none') . ', want ' . ($want{$t} // 'none') unless ($g // '') eq ($want{$t} // '');
+        }
+        my ($ms, $id) = $timed->(sub { settings::protected_user(('a' x 200) . '!b', $p) });
+        push @e, 'a stopped glob gave ' . ($id // 'none') . ', want user-branch-3 (protected)' unless ($id // '') eq 'user-branch-3';
+        push @e, $over->($ms, 'the catastrophic glob'), $want_stopped->('protected_branches:3:timeout');
+        return @e;
+    }
+    if ($check eq 'name-glob') {
+        # a NAME glob compiles to a regex that cannot backtrack: no time bound needed
+        local %rc::R = (settings => { values => { secret_extra_rules => 'NAME:*a*a*a*a*a*a*a*a*a*a?' } });
+        my ($ms, $d) = $timed->(sub { secrets::denied_name('/tmp/u06-none/' . ('a' x 200) . '!b') });
+        push @e, "a 202-character name took $ms ms (the glob backtracks)" if $ms > 500;
+        push @e, 'a name the glob does not match is denied' if $d;
+        push @e, 'a name the glob matches is not denied' unless secrets::denied_name('/tmp/u06-none/' . ('a' x 20) . 'c');
+        push @e, 'stopped [' . $stopped->() . '] (a glob needs no bound)' if @userre::STOPPED;
+        return @e;
+    }
+    if ($check eq 'glob-same') {
+        # glob_re answers as the plain translation does, on random globs and names (both flavours);
+        # a glob that mixes * and ** gives the plain translation's answer through protected_user
+        srand($o->{seed} // 6);
+        my $plain = sub {
+            my ($g, $dbl) = @_;
+            my $rx = join '', map { $_ eq '**' ? '.*' : $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) }
+                              grep { $_ ne '' } split($dbl ? qr/(\*\*|\*|\?)/ : qr/(\*|\?)/, $g);
+            return qr/\A$rx\z/s;
+        };
+        my $pick = sub { my ($set, $n) = @_; return join '', map { $set->[ int rand @$set ] } 1 .. $n };
+        my ($n, $bad, $mixed) = (0, 0, 0);
+        for my $flavour ('name', 'branch') {
+            my $dbl = $flavour eq 'branch' ? '**' : undef;
+            my @gs = $flavour eq 'name' ? qw(a b * ?) : ('a', 'b', '/', '*', '?', '**');
+            my @ns = $flavour eq 'name' ? qw(a b) : qw(a b /);
+            for (1 .. 500) {
+                my $g = $pick->(\@gs, 1 + int rand 7);
+                my $old = $plain->($g, $dbl);
+                if (!settings::glob_linear($g, $dbl)) {
+                    next if $mixed >= 40;
+                    $mixed++;
+                    my $p = { globs => [{ id => 'g', re => $old, at => 1, linear => 0 }] };
+                    for (1 .. 5) {
+                        my $s = 'a' . $pick->(\@ns, int rand 9);
+                        $n++;
+                        my ($x, $y) = (defined settings::protected_user($s, $p) ? 1 : 0, $s =~ $old ? 1 : 0);
+                        push @e, "mixed glob '$g' on '$s': $x, the plain translation $y" if $x != $y && $bad++ < 5;
+                    }
+                    next;
+                }
+                my $new = settings::glob_re($g, $dbl);
+                for (1 .. 12) {
+                    my $s = $pick->(\@ns, int rand 11);
+                    $n++;
+                    my ($x, $y) = ($s =~ $new ? 1 : 0, $s =~ $old ? 1 : 0);
+                    push @e, "$flavour glob '$g' on '$s': $x, the plain translation $y" if $x != $y && $bad++ < 5;
+                }
+            }
+        }
+        push @e, "only $n comparisons ($mixed mixed globs)" if $n < 5000 || $mixed < 10;
+        push @e, 'stopped [' . $stopped->() . ']' if @userre::STOPPED;
+        return @e;
+    }
+    if ($check eq 'budget') {
+        # after this process lost its budget to stopped patterns, the rest take the safe side unrun
+        userre::limits(0.3, 0.5) if $have;
+        my $rl = settings::relaunch({ values => { relaunch_allow => '^(a+)+$;^(a{1,30}){1,30}$;^a' } });
+        my ($ms, $ok) = $timed->(sub { $allowed->($long, $rl) });
+        push @e, 'allowlisted after the time ran out (the job must ask)' if $ok;
+        push @e, "took $ms ms, over 1600" if $ms > 1600;
+        push @e, $want_stopped->('relaunch_allow:1:timeout relaunch_allow:2:timeout relaunch_allow:3:budget');
+        return @e;
+    }
+    if ($check eq 'no-orphan') {
+        # the pattern's child ends by its own alarm when the helper is killed mid-match
+        userre::limits(1, 3) if $have;
+        my $rl = settings::relaunch({ values => { relaunch_allow => '^(a+)+$' } });
+        my $pid = fork();
+        return ("fork: $!") unless defined $pid;
+        if ($pid == 0) { eval { $allowed->($long, $rl) }; POSIX::_exit(0) }
+        util::sleep_ms(300);
+        my @g = $kids->($pid);
+        kill 'KILL', $pid;
+        waitpid($pid, 0);
+        return ('no pattern child under the helper') unless @g;
+        my $t0 = util::clock_ms();
+        util::sleep_ms(50) while util::clock_ms() - $t0 < 3000 && grep { kill 0, $_ } @g;
+        my @left = grep { kill 0, $_ } @g;
+        if (@left) { kill 'KILL', @left; return ('the pattern child outlived the killed helper: ' . join(' ', @left)) }
+        return (sprintf('# U-06 orphan check: the pattern child ended %d ms after its helper was killed', util::clock_ms() - $t0));
+    }
+    return ("unknown check '$check'");
+}
+
 sub builtin {
     my ($name, $a, $cdir) = @_;
     _libs();
@@ -1650,6 +1906,13 @@ sub builtin {
             push @e, "invalid [$got], want [$want]" unless $got eq $want;
         }
         return @e;
+    }
+    if ($name eq 'user_regex_bound') {
+        # U-06 (REVIEW-NIGHT-2): the user's own patterns run with a wall-clock bound
+        # (lib/userre.pm) and a stopped one takes its setting's safe side. One `check` per step;
+        # it runs in a forked child this runner kills after `within_s` (default 20), so code
+        # without the bound fails as "hung" instead of backtracking for minutes.
+        return u06_within($a->{within_s} // 20, sub { u06_check($a->{check} // '', $a) });
     }
     if ($name eq 'settings_export') {
         # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).

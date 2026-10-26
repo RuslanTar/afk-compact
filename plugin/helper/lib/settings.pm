@@ -15,6 +15,7 @@ package settings;
 use strict;
 use warnings;
 use utf8;
+require "userre.pm";    # U-06: the time bound for the user's own patterns
 
 # The 39 keys of MOD-SPEC §1.2: type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
@@ -321,8 +322,8 @@ sub _current {
 # limits (no `(?{`, `(??{`, `(*`), else the shipped default (invalid 1). ticket(text[, resolved,
 # default_only]) -> the id (group 1 when the pattern has one, else the whole match) when it
 # matches \A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z, else undef (no `..` or `/` in a bucket path).
-# The subject is cut to 256 characters (a branch name); a Perl regex cannot be interrupted by
-# an alarm, so the length caps are the guard.
+# The subject is cut to 256 characters (a branch name). A custom pattern runs with the time
+# bound of lib/userre.pm (U-06): one that is stopped gives no ticket.
 our $TICKET_DEFAULT = '[A-Z][A-Z0-9]+-[0-9]+';
 our $TICKET_ID = qr/\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/;
 sub ticket_re {
@@ -337,9 +338,18 @@ sub ticket {
     my ($s, $r, $default_only) = @_;
     return undef unless defined $s && !ref $s && $s ne '';
     $s = substr($s, 0, 256);
-    my $re = $default_only ? qr/$TICKET_DEFAULT/ : ticket_re($r)->{re};
-    return undef unless $s =~ $re;
-    my $id = (@- > 1 && defined $-[1]) ? substr($s, $-[1], $+[1] - $-[1]) : substr($s, $-[0], $+[0] - $-[0]);
+    my $tr = $default_only ? { re => qr/$TICKET_DEFAULT/, custom => 0 } : ticket_re($r);
+    my ($s0, $e0, $s1, $e1);
+    if ($tr->{custom}) {
+        my ($st, $pos) = userre::capture('ticket_pattern', { re => $tr->{re}, at => 1 }, $s);
+        return undef unless $st eq 'ok' && $pos;
+        ($s0, $e0, $s1, $e1) = @$pos;
+    } else {
+        return undef unless $s =~ $tr->{re};
+        ($s0, $e0) = ($-[0], $+[0]);
+        ($s1, $e1) = ($-[1], $+[1]) if @- > 1 && defined $-[1];
+    }
+    my $id = defined $s1 ? substr($s, $s1, $e1 - $s1) : substr($s, $s0, $e0 - $s0);
     return $id =~ $TICKET_ID ? $id : undef;
 }
 
@@ -348,8 +358,10 @@ sub ticket {
 # regex at most 200 characters, compiling, within the Dev-7 limits; a glob one name with * and ?.
 # Additive only: the shipped rules and their exceptions always apply, so a user rule can only
 # withhold more. Ids user-hard-<n>, user-warn-<n>, user-name-<n> (n = 1-based position); rows
-# never carry the pattern. secret_extra([resolved]) -> {rules => [{id, class, re}],
-# names => [{id, re}], invalid => [n…]}.
+# never carry the pattern. secret_extra([resolved]) -> {rules => [{id, class, re, at}],
+# names => [{id, re}], invalid => [n…]}. A HARD or WARN rule runs with the time bound of
+# lib/userre.pm (secrets.pm; a stopped rule withholds); a glob compiles to a regex that cannot
+# backtrack (glob_re).
 our $EXTRA_MAX = 32;
 sub secret_extra {
     my ($r) = @_;
@@ -364,15 +376,61 @@ sub secret_extra {
         if ($kind eq 'NAME') {
             (my $g = $body) =~ s/\\x3b/;/gi;
             if ($g =~ m{/} || length($g) > 200) { push @invalid, $n; next }
-            my $rx = join '', map { $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) } split /([*?])/, $g;
-            push @names, { id => "user-name-$n", re => qr/\A$rx\z/ };
+            push @names, { id => "user-name-$n", re => glob_re($g) };
             next;
         }
         my $re = pattern_ok($body, 200);
         if (!$re) { push @invalid, $n; next }
-        push @rules, { id => 'user-' . lc($kind) . "-$n", class => $kind, re => $re };
+        push @rules, { id => 'user-' . lc($kind) . "-$n", class => $kind, re => $re, at => $n };
     }
     return { rules => \@rules, names => \@names, invalid => \@invalid };
+}
+
+# glob_re(glob[, flags]) -> a regex for a glob of literal characters, `?` (one character but `/`),
+# `*` (any characters but `/`) and `**` (any characters with `flags` `**`; else two `*`), over the
+# whole subject. U-06: `\A[^/]*a[^/]*a…\z`, the plain translation, backtracks polynomially (ten
+# stars on a 200-character name ran for minutes). Here every star but the last is an atomic group
+# that stops at the leftmost place where the next run of literals and `?` matches. With only `*`
+# stars, or only `**` stars, the leftmost place is never worse than a later one (the runs have a
+# fixed length; a later place leaves the stars after it less room, and a `*` from the earlier
+# place reaches whatever it reaches from the later one), so the answer is the plain
+# translation's, in time linear in the subject times the glob's length; the last star backtracks
+# alone. glob_linear(glob, flags) -> 0 for a glob that mixes `*` and `**`, where that does not
+# hold: the caller matches the plain translation with the time bound of lib/userre.pm.
+sub glob_linear {
+    my ($g, $flags) = @_;
+    return 1 unless ($flags // '') eq '**';
+    my @st = $g =~ /(\*+)/g;
+    my %k = map { ($_ eq '*' ? '*' : '**') => 1 } @st;
+    return keys(%k) > 1 ? 0 : 1;
+}
+sub glob_re {
+    my ($g, $flags) = @_;
+    my $dbl = ($flags // '') eq '**';
+    my @tok = grep { $_ ne '' } split($dbl ? qr/(\*\*|\*|\?)/ : qr/(\*|\?)/, $g);
+    # collapse runs of stars (`*` `*` reads as `*`, `**` `*` as `**`)
+    my @t;
+    for my $x (@tok) {
+        my $star = $x eq '*' || $x eq '**';
+        if ($star && @t && ($t[-1] eq '*' || $t[-1] eq '**')) { $t[-1] = '**' if $x eq '**'; next }
+        push @t, $x;
+    }
+    my $lit = sub { join '', map { $_ eq '?' ? '[^/]' : quotemeta($_) } @_ };
+    my @stars = grep { $t[$_] eq '*' || $t[$_] eq '**' } 0 .. $#t;
+    my $rx = '\A';
+    my $at = 0;
+    for my $k (0 .. $#stars) {
+        my $si = $stars[$k];
+        $rx .= $lit->(@t[$at .. $si - 1]) if $si > $at;
+        my $q = $t[$si] eq '**' ? '.*' : '[^/]*';
+        my $end = $k < $#stars ? $stars[$k + 1] - 1 : $#t;
+        my $seg = $lit->(@t[$si + 1 .. $end]);
+        $rx .= $k < $#stars ? "(?>$q?$seg)" : "$q$seg";
+        $at = $end + 1;
+    }
+    $rx .= $lit->(@t[$at .. $#t]) if !@stars && @t;
+    $rx .= '\z';
+    return qr/$rx/s;
 }
 
 # list(value) -> entries of a `;`-separated list key (REVIEW B-5, escalation E-B-1:
@@ -428,17 +486,28 @@ sub relaunch {
     $auto =~ s/^\s+|\s+$//g;
     if ($auto !~ /^(on|shadow|off)$/) { push @invalid, { key => 'relaunch_auto', value => $v->{relaunch_auto} }; $auto = 'off' }
     my @pats = list($v->{relaunch_allow});
+    my @at;
     for my $i (0 .. $#pats) {
         my $p = $pats[$i];
         my $re = ($i < $ALLOW_MAX && $p =~ /^\^/ && length($p) <= $ALLOW_LEN) ? eval { qr/$p/ } : undef;
-        if ($re) { push @allow, $re } else { push @invalid, { key => 'relaunch_allow', value => $p } }
+        if ($re) { push @allow, $re; push @at, $i + 1 } else { push @invalid, { key => 'relaunch_allow', value => $p } }
     }
     my $q = $v->{relaunch_quiet_s};
     my ($lo, $hi) = limits('relaunch_quiet_s');
     ($lo, $hi) = ($lo // 30, $hi // 3600);
     my $used = !defined $q ? 120 : $q < $lo ? $lo : $q > $hi ? $hi : $q;
     push @clamped, { key => 'relaunch_quiet_s', configured => $q, used => $used } if defined $q && $used != $q;
-    return { auto => $auto, allow => \@allow, quiet_s => $used, allow_active => 1, invalid => \@invalid, clamped => \@clamped };
+    return { auto => $auto, allow => \@allow, allow_at => \@at, quiet_s => $used, allow_active => 1, invalid => \@invalid, clamped => \@clamped };
+}
+
+# relaunch_allowed(command, relaunch) -> 1 when a relaunch_allow pattern matches the command. The
+# patterns run with the time bound of lib/userre.pm (U-06): one that is stopped does not match.
+sub relaunch_allowed {
+    my ($cmd, $rl) = @_;
+    return 0 unless defined $cmd && !ref $cmd && ref $rl eq 'HASH' && ref $rl->{allow} eq 'ARRAY' && @{ $rl->{allow} };
+    my @at = ref $rl->{allow_at} eq 'ARRAY' ? @{ $rl->{allow_at} } : ();
+    my @e = map { { re => $rl->{allow}[$_], at => $at[$_] // $_ + 1 } } 0 .. $#{ $rl->{allow} };
+    return defined userre::first('relaunch_allow', \@e, [$cmd], 'skip') ? 1 : 0;
 }
 
 # ---------------------------------------------------------------- production (S-SETTINGS B)
@@ -481,18 +550,34 @@ sub prod {
     my $user = 0;
     for my $i (0 .. $#pats) {
         my $re = $i < $PROD_MAX ? pattern_ok($pats[$i]) : undef;
-        if ($re) { push @classes, { id => 'user-prod-' . ($i + 1), re => $re }; $user++ }
+        if ($re) { push @classes, { id => 'user-prod-' . ($i + 1), re => $re, user => 1, at => $i + 1 }; $user++ }
         else { push @invalid, { key => 'prod_patterns', index => $i + 1 } }
     }
     return { reads => $reads, classes => \@classes, user => $user, invalid => \@invalid };
 }
 
-# prod_class(text, prod) -> the id of the first production class the text matches, or undef
+# prod_class(text or [texts], prod) -> the id of the first production class a text matches, or
+# undef. The shipped classes match here; the user's (`user` set) run with the time bound of
+# lib/userre.pm (U-06), where one that is stopped counts as a match: production.
 sub prod_class {
     my ($text, $p) = @_;
-    return undef unless defined $text;
-    for my $c (@{ ($p || {})->{classes} || [] }) { return $c->{id} if $text =~ $c->{re} }
-    return undef;
+    my @t = grep { defined && !ref } (ref $text eq 'ARRAY' ? @$text : ($text));
+    return undef unless @t;
+    my @c = grep { ref $_ eq 'HASH' && defined $_->{re} } @{ (ref $p eq 'HASH' ? $p->{classes} : undef) || [] };
+    my $user = sub { $_[0]{user} || ($_[0]{id} // '') =~ /\Auser-/ };
+    my $ship;
+    for my $i (0 .. $#c) {
+        next if $user->($c[$i]);
+        my $re = $c[$i]{re};
+        if (grep { $_ =~ $re } @t) { $ship = $i; last }
+    }
+    # the user's classes listed before the first shipped one that matches
+    my @u = grep { $user->($c[$_]) && (!defined $ship || $_ < $ship) } 0 .. $#c;
+    if (@u) {
+        my $k = userre::first('prod_patterns', [map { { re => $c[$_]{re}, at => $c[$_]{at} } } @u], \@t, 'match');
+        return $c[ $u[$k] ]{id} // 'prod' if defined $k;
+    }
+    return defined $ship ? ($c[$ship]{id} // 'prod') : undef;
 }
 
 # ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
@@ -520,9 +605,12 @@ sub protected {
     for my $i (0 .. $#e) {
         (my $g = lc $e[$i]) =~ s{\Arefs/heads/}{};
         if ($i >= $PROTECTED_MAX || !_branch_glob_ok($g)) { push @invalid, { key => 'protected_branches', index => $i + 1 }; next }
+        # U-06: glob_re cannot backtrack; a glob that mixes `*` and `**` keeps the plain
+        # translation and is matched with the time bound (protected_user)
+        if (glob_linear($g, '**')) { push @globs, { id => 'user-branch-' . ($i + 1), re => glob_re($g, '**'), at => $i + 1, linear => 1 }; next }
         my $rx = join '', map { $_ eq '**' ? '.*' : $_ eq '*' ? '[^/]*' : $_ eq '?' ? '[^/]' : quotemeta($_) }
                           grep { $_ ne '' } split /(\*\*|\*|\?)/, $g;
-        push @globs, { id => 'user-branch-' . ($i + 1), re => qr/\A$rx\z/s };
+        push @globs, { id => 'user-branch-' . ($i + 1), re => qr/\A$rx\z/s, at => $i + 1, linear => 0 };
     }
     return { globs => \@globs, user => scalar(@globs), invalid => \@invalid };
 }
@@ -542,10 +630,20 @@ sub protected_user {
     my ($name, $p) = @_;
     return undef unless defined $name && !ref $name && $name ne '';
     my $n = lc $name;
-    for my $g (@{ ref $p eq 'HASH' && ref $p->{globs} eq 'ARRAY' ? $p->{globs} : [] }) {
-        return $g->{id} if ref $g eq 'HASH' && $n =~ $g->{re};
+    my @g = grep { ref $_ eq 'HASH' && defined $_->{re} } @{ ref $p eq 'HASH' && ref $p->{globs} eq 'ARRAY' ? $p->{globs} : [] };
+    my $lin;
+    for my $i (0 .. $#g) {
+        next if defined $g[$i]{linear} && !$g[$i]{linear};
+        if ($n =~ $g[$i]{re}) { $lin = $i; last }
     }
-    return undef;
+    # an entry kept as the plain translation, listed before that one: with the time bound, where
+    # one that is stopped counts as protected (U-06)
+    my @b = grep { defined $g[$_]{linear} && !$g[$_]{linear} && (!defined $lin || $_ < $lin) } 0 .. $#g;
+    if (@b) {
+        my $k = userre::first('protected_branches', [map { { re => $g[$_]{re}, at => $g[$_]{at} } } @b], [$n], 'match');
+        return $g[ $b[$k] ]{id} if defined $k;
+    }
+    return defined $lin ? $g[$lin]{id} : undef;
 }
 
 # ---------------------------------------------------------------- export (W-BETA D)

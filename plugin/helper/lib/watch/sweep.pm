@@ -406,7 +406,10 @@ sub run {
     # (one reading for the approvals, `risk` and the watcher); beside the spec's list, never instead.
     my $pb = eval { require settings; defined &settings::protected
                     ? settings::protected({ values => { protected_branches => $ctx->{settings}{protected_branches} } }) : undef };
-    local $watch::rows::PROTECTED_USER = (ref $pb eq 'HASH' && ref $pb->{globs} eq 'ARRAY') ? [ map { $_->{re} } @{ $pb->{globs} } ] : [];
+    my @pg = (ref $pb eq 'HASH' && ref $pb->{globs} eq 'ARRAY') ? @{ $pb->{globs} } : ();
+    # U-06: an entry that mixes `*` and `**` (linear 0) is matched with a time bound
+    local $watch::rows::PROTECTED_USER = [ map { $_->{re} } grep { !defined $_->{linear} || $_->{linear} } @pg ];
+    local $watch::rows::PROTECTED_BOUNDED = { globs => [ grep { defined $_->{linear} && !$_->{linear} } @pg ] };
     my @files;
     my @subs;
     my $budget = $RUN_BYTES;

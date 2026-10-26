@@ -58,11 +58,19 @@ our $WATCH_HARD_S = 3;
 our $SESSION_COMPACT_MS = 3500;
 our $T0;
 
+# U-06 (lib/userre.pm): [seconds one of the user's own patterns may run, seconds this hook may
+# lose to stopped ones], at most a fifth of the event's hook timeout (hooks.json: PreCompact 5,
+# PostCompact 15, SessionStart 5, SessionEnd 5, Stop 8, SubagentStop 3, StopFailure 2,
+# PermissionDenied 2).
+our %REGEX_S = (PreCompact => [0.5, 1], PostCompact => [1, 2], SessionStart => [0.5, 1], SessionEnd => [0.5, 1],
+                Stop => [1, 1.5], SubagentStop => [0.3, 0.6], StopFailure => [0.25, 0.4], PermissionDenied => [0.25, 0.4]);
+
 sub run {
     my ($event) = @_;
     my $t0 = $T0 = util::clock_ms();
     my $raw = do { local $/; <STDIN> };
     return 0 unless defined $event && $EVENTS{$event};
+    userre::limits(@{ $REGEX_S{$event} });
     my $p = defined $raw && $raw =~ /\S/ ? eval { jsonc::decode($raw) } : undef;
     my $sid = ref $p eq 'HASH' ? $p->{session_id} : undef;
     if (ref $p ne 'HASH' || !args::valid_sid($sid)) {
@@ -323,13 +331,30 @@ sub _guard_rules {
     my $s = rc::val('deny_class_patterns') // '';
     return @GUARD_DEFAULT if $s eq '';
     my @r;
+    my $n = 0;
     for my $pair (split /;/, $s) {
+        next unless $pair =~ /\S/;    # positions count the entries, as settings::list does
+        $n++;
         next unless $pair =~ /^\s*(sleep-poll|routing|secret|write-guard|scope|other)\s*=\s*(.+?)\s*$/;
         my ($cls, $src) = ($1, $2);
         my $re = eval { qr/$src/i } or next;
-        push @r, [$cls => $re];
+        push @r, [$cls => $re, $n];
     }
     return @r ? @r : @GUARD_DEFAULT;
+}
+
+# _guard_class(text) -> the first guard class whose pattern matches, else `other`. The user's
+# deny_class_patterns (rules with a position) run with the time bound of lib/userre.pm (U-06):
+# one that is stopped does not match.
+sub _guard_class {
+    my ($hay) = @_;
+    my @r = _guard_rules();
+    if (@r && defined $r[0][2]) {
+        my $k = userre::first('deny_class_patterns', [map { { re => $_->[1], at => $_->[2] } } @r], [$hay], 'skip');
+        return defined $k ? $r[$k][0] : 'other';
+    }
+    for my $r (@r) { return $r->[0] if $hay =~ $r->[1] }
+    return 'other';
 }
 
 # _turn_kind() -> (kind, inject_epoch, heal_epoch): the turn kind of MOD-SPEC §1.3 from the
@@ -453,8 +478,7 @@ sub on_PermissionDenied {
     my $rc = 'other';
     for my $r (@REASON) { if ($reason =~ $r->[1]) { $rc = $r->[0]; last } }
     my $hay = $reason . "\n" . (ref $p->{tool_input} ? jsonc::encode($p->{tool_input}) : ($p->{tool_input} // ''));
-    my $gc = 'other';
-    for my $r (_guard_rules()) { if ($hay =~ $r->[1]) { $gc = $r->[0]; last } }
+    my $gc = _guard_class($hay);
     my $tail = _tail512($p->{transcript_path});
     my ($tk, $inject, $heal) = _turn_kind($tail);
     my $by = defined $p->{agent_id} ? 'session' : _caused_by($inject, $heal, $tail);

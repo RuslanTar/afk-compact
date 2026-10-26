@@ -42,9 +42,12 @@ sub bash_classes {
 
 # AP-9 (REVIEW-NIGHT-3 R3-15): the spec's protected_branch_re, compiled by the sweep for its run;
 # undef = no check. $PROTECTED_USER (owner xxxxxxxx-29): the compiled entries of the user's
-# add-only protected_branches setting, matched the same way, beside the spec's list.
+# add-only protected_branches setting, matched the same way, beside the spec's list. $PROTECTED_BOUNDED (U-06):
+# the user's entries that mix `*` and `**`, as settings::protected returns them; settings::protected_user
+# matches them with a time bound (a stopped one counts as protected).
 our $PROTECTED_RE;
 our $PROTECTED_USER = [];
+our $PROTECTED_BOUNDED;
 
 # 1 when a git push in the command names a protected destination: a refspec's destination (or
 # the ref named) matching protected_branch_re or one of the user's entries, lower-cased, or
@@ -54,7 +57,9 @@ our $PROTECTED_USER = [];
 sub push_protected {
     my ($cmd, $pre, $user) = @_;
     my @user = grep { ref $_ eq 'Regexp' } @{ ref $user eq 'ARRAY' ? $user : [] };
-    return 0 unless (defined $pre || @user) && defined $cmd;
+    my $bounded = ref $PROTECTED_BOUNDED eq 'HASH' && ref $PROTECTED_BOUNDED->{globs} eq 'ARRAY' && @{ $PROTECTED_BOUNDED->{globs} }
+                  && defined &settings::protected_user ? $PROTECTED_BOUNDED : undef;
+    return 0 unless (defined $pre || @user || $bounded) && defined $cmd;
     (my $c = $cmd) =~ s/\\(.)/$1/gs;
     $c =~ tr/"'//d;
     for my $seg (split /\|\||&&|[|;&\n]/, $c) {
@@ -73,6 +78,7 @@ sub push_protected {
             $d =~ s{\Arefs/heads/}{};
             next if $d eq '';
             return 1 if (defined $pre && lc($d) =~ $pre) || grep { lc($d) =~ $_ } @user;
+            return 1 if $bounded && defined settings::protected_user($d, $bounded);
         }
     }
     return 0;

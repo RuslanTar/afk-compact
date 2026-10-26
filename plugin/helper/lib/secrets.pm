@@ -46,8 +46,36 @@ sub _extra {
     return $EXTRA{$v};
 }
 sub rules {
-    my @x = map { { id => $_->{id}, class => $_->{class}, re => $_->{re}, min_entropy => undef, lead => 0, trail => 0 } } @{ _extra()->{rules} };
+    my @x = map { { id => $_->{id}, class => $_->{class}, re => $_->{re}, min_entropy => undef, lead => 0, trail => 0,
+                    user => 1, at => $_->{at} } } @{ _extra()->{rules} };
     return [ @{ spec::secret_rules() }, @x ];
+}
+
+# U-06: the user's HARD and WARN rules run in one child with the time bound of lib/userre.pm.
+# _user_spans(text, \@user rules) -> ({rule id => [count, [[start, end]…]]}, stopped 0|1); the spans
+# of one rule that touch are merged (redact merges them anyway), the count is the match count. A
+# rule that is stopped or not run makes the text withheld: scan adds the HARD hit
+# `regex-timeout`, redact replaces the whole text.
+our $TIMEOUT_RULE = 'regex-timeout';
+sub _user_spans {
+    my ($text, $rules) = @_;
+    return ({}, 0) unless @$rules;
+    my ($res, $stopped) = userre::run('secret_extra_rules', [map { { re => $_->{re}, at => $_->{at} } } @$rules], sub {
+        my @s = _matches($text, { re => $_[0]{re}, lead => 0, trail => 0 });
+        my @m;
+        for my $sp (@s) {
+            if (@m && $sp->[0] <= $m[-1][1]) { $m[-1][1] = $sp->[1] if $sp->[1] > $m[-1][1] }
+            else { push @m, [@$sp] }
+        }
+        return (scalar(@s), map { @$_ } @m);
+    }, halt => 1, memo => "spans\0$text");
+    my %out;
+    for my $i (0 .. $#$rules) {
+        my $v = $res->[$i] or next;
+        my ($n, @p) = @$v;
+        $out{ $rules->[$i]{id} } = [$n, [map { [$p[2 * $_], $p[2 * $_ + 1]] } 0 .. int(@p / 2) - 1]];
+    }
+    return (\%out, @$stopped ? 1 : 0);
 }
 
 # scan(text) -> [{rule, class, count}] (no values)
@@ -55,10 +83,13 @@ sub scan {
     my ($text) = @_;
     return [] unless defined $text && $text ne '';
     my @hits;
-    for my $r (@{ rules() }) {
-        my @s = _matches($text, $r);
-        push @hits, { rule => $r->{id}, class => $r->{class}, count => scalar @s } if @s;
+    my $all = rules();
+    my ($u, $stopped) = _user_spans($text, [grep { $_->{user} } @$all]);
+    for my $r (@$all) {
+        my $n = $r->{user} ? ($u->{ $r->{id} } ? $u->{ $r->{id} }[0] : 0) : scalar(my @s = _matches($text, $r));
+        push @hits, { rule => $r->{id}, class => $r->{class}, count => $n } if $n;
     }
+    push @hits, { rule => $TIMEOUT_RULE, class => 'HARD', count => 1 } if $stopped;
     return \@hits;
 }
 
@@ -76,13 +107,21 @@ sub redact {
     my %only = map { $_ => 1 } @{ $only || [] };
     my (@hits, @spans);
     my $rank = 0;
-    for my $r (@{ rules() }) {
+    my $all = rules();
+    my ($u, $stopped) = _user_spans($text, [grep { $_->{user} && (!%only || $only{ $_->{class} }) } @$all]);
+    for my $r (@$all) {
         $rank++;
         next if %only && !$only{ $r->{class} };
-        my @s = _matches($text, $r);
+        my ($n, @s);
+        if ($r->{user}) { my $x = $u->{ $r->{id} } or next; ($n, @s) = ($x->[0], @{ $x->[1] }) }
+        else { @s = _matches($text, $r); $n = scalar @s }
         next unless @s;
-        push @hits, { rule => $r->{id}, class => $r->{class}, count => scalar @s };
+        push @hits, { rule => $r->{id}, class => $r->{class}, count => $n };
         push @spans, map { [$_->[0], $_->[1], $r->{id}, $rank] } @s;
+    }
+    if ($stopped) {
+        push @hits, { rule => $TIMEOUT_RULE, class => 'HARD', count => 1 };
+        push @spans, [0, length $text, $TIMEOUT_RULE, 0];
     }
     my @merged;
     for my $sp (sort { $a->[0] <=> $b->[0] || $b->[1] <=> $a->[1] } @spans) {
