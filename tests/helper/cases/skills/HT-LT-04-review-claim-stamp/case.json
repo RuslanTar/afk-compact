@@ -1,5 +1,6 @@
 {
  "id": "HT-LT-04 (CR-F9, CR-F10)",
+ "needs": ["nonroot"],
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",

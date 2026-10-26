@@ -7,7 +7,8 @@
   {"setup": [
     {"repo": "$TMP/r30", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n", "hr/keep.md": "tracked\n"}},
     {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"repo_roots": "$TMP/r30", "handoff_root": "$TMP/r30/hr"}}}}},
-    {"stub": "git", "dir": "$TMP/slowbin", "script": "sleep 6\nexit 0"}
+    {"stub": "git", "dir": "$TMP/slowbin", "script": "sleep 6\nexit 0"},
+    {"bin_mirror": "/bin", "dir": "$TMP/nogit", "except": ["git"]}
   ]},
   {"name": "store inside the repository", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r30"],
    "expect": {"exit": 0,
@@ -16,7 +17,7 @@
                     "^handoff_root must stay outside the repository; repo mode only exports into it$"],
      "absent": ["$TMP/r30/hr/.watch", "$TMP/r30/.claude/handoffs"]}},
   {"name": "git unavailable", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r30"],
-   "env": {"PATH": "/bin"},
+   "env": {"PATH": "$TMP/nogit"},
    "expect": {"exit": 0, "stdout_has": ["^handoff mode: private \\(repo-git-unavailable\\)$", "^halt: off"]}},
   {"name": "git too slow", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r30"],
    "path_prepend": ["$TMP/slowbin"],

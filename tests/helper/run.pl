@@ -13,9 +13,11 @@
 #   "expect": {...}}
 # Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir, symlink (+ to),
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
-#   shortcuts), stub (executable script), run (a helper call without assertions).
+#   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
+#   out: a PATH without git), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $PLUGIN_VERSION, $STORE (the
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, in the case's "tz"
+#   like $RUNNER_LSTART; default UTC), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
 #   variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
@@ -45,7 +47,7 @@
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
 #     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
-#     answers and holds that image locally)
+#     answers and holds that image locally; "nonroot" skips when the runner runs as root)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -137,20 +139,44 @@ sub repo_tmp {
     util::mkdir_p($REPO_TMP);
     return $REPO_TMP;
 }
-my $RUNNER_LSTART;
-sub runner_lstart {
-    return $RUNNER_LSTART if defined $RUNNER_LSTART;
-    my $r = util::run(['ps', '-o', 'lstart=', '-p', $$], timeout_ms => 5000, env => { LC_ALL => 'C' });
-    ($RUNNER_LSTART = $r->{out} // '') =~ s/\s+/ /g;
-    $RUNNER_LSTART =~ s/\A | \z//g;
-    return $RUNNER_LSTART;
+# lstart_in(pid, tz): `ps -o lstart=` for pid as the helper reads it in a case: under the
+# zone the case's helper calls get (TZ, child_env) and the C locale. An lstart is local
+# time, so one read in the runner's own zone matches the helper only while the host's
+# current UTC offset equals the case's (a UTC+2 zone host after the switch to winter time, a
+# Linux container in UTC). One ps call per (pid, zone). Where ps gives no lstart (an image
+# without procps; busybox ps has no lstart) and /proc/<pid>/stat is there, the start time is
+# btime + field 22 / CLK_TCK (proc(5)) in the same form, else ''.
+my %LSTART;
+my $LSTART_RE = qr/\A\w{3} \w{3} \d+ \d\d:\d\d:\d\d \d{4}\z/;
+sub lstart_in {
+    my ($pid, $tz) = @_;
+    return $LSTART{"$pid $tz"} //= do {
+        my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
+        (my $v = $r->{out} // '') =~ s/\s+/ /g;
+        $v =~ s/\A | \z//g;
+        $v = proc_lstart($pid, $tz) // '' unless $v =~ $LSTART_RE;
+        $v;
+    };
 }
-my $LSTART1 = do {
-    my $r = util::run(['ps', '-o', 'lstart=', '-p', '1'], timeout_ms => 5000);
-    (my $v = $r->{out} // '') =~ s/\s+/ /g;
-    $v =~ s/\A | \z//g;
-    $v;
-};
+sub proc_lstart {
+    my ($pid, $tz) = @_;
+    my $stat = util::read_file("/proc/$pid/stat") // return undef;
+    my ($btime) = (util::read_file('/proc/stat') // '') =~ /^btime (\d+)$/m;
+    # the fields after the last `)` (comm may hold any byte): 3 state .. 22 starttime
+    my @f = split ' ', substr($stat, rindex($stat, ')') + 1);
+    return undef unless defined $btime && defined $f[19] && $f[19] =~ /\A\d+\z/;
+    my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
+    my $old = $ENV{TZ};
+    $ENV{TZ} = $tz;
+    POSIX::tzset();
+    my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime($btime + int($f[19] / $hz)));
+    if (defined $old) { $ENV{TZ} = $old } else { delete $ENV{TZ} }
+    POSIX::tzset();
+    $s =~ s/ +/ /g;
+    return $s;
+}
+# A case's zone: its "tz", else UTC (child_env; a step's own "tz" is not applied here).
+sub case_tz { return $_[0]{tz} // 'UTC' }
 
 sub copy_tree {
     my ($src, $dst) = @_;
@@ -244,9 +270,12 @@ for my $cf (@CASES) {
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
                       || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
                       || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
-                      || (/^docker-image:(.+)$/ && !docker_image($1))
+                      || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
                       || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
-    if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
+    # "nonroot": the case makes a file or folder unwritable or unreadable by its mode, which
+    # uid 0 ignores; as root it skips with that reason (run the suite as a normal user).
+    my $why = $> == 0 && grep({ $_ eq 'nonroot' } @{ $case->{needs} || [] }) ? ' (running as root, which ignores file modes)' : '';
+    if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "$why\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
     # The case's work dirs: c<N> under the system temp folder and, for tmp_base "repo"
@@ -421,12 +450,12 @@ sub run_case {
     $V{BRAND} = $BRAND;
     $V{HOST} = $HOSTNAME;
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
-    $V{LSTART1} = $LSTART1;
+    $V{LSTART1} = lstart_in(1, case_tz($case));
     $V{TYPES} = types_file();
     # The runner's own pid and start time: the parent every helper call it starts sees
     # (the launcher execs perl), for cases that stand the runner in for Claude Code.
     $V{RUNNER_PID} = $$;
-    $V{RUNNER_LSTART} = runner_lstart();
+    $V{RUNNER_LSTART} = lstart_in($$, case_tz($case));
     # "manifest": {dotted path in plugin.json: value}: this case runs against its own
     # staged copy whose plugin.json holds these values (e.g. a non-ASCII description).
     $V{PLUGIN} = stage_variant($case->{manifest}, "$V{TMP}/plugin") if ref $case->{manifest} eq 'HASH';
@@ -676,7 +705,7 @@ sub make_repo {
 
 sub is_setup_action {
     my ($s) = @_;
-    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub bin_mirror repo dispatch transcript run git bigfile age
                                                tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha append);
 }
 
@@ -898,6 +927,19 @@ sub setup {
     if (exists $s->{stub}) {
         my $dir = $s->{dir} // "$V->{TMP}/bin";
         write_text("$dir/$s->{stub}", "#!/bin/sh\n" . ($s->{script} // 'exit 0') . "\n", '0755');
+        return;
+    }
+    # bin_mirror <folder> + dir (+ except [names]): dir gets a link to every entry of folder
+    # but the excepted names, for a PATH that lacks a tool. PATH=/bin does not do that on
+    # hosts where /bin is a link to /usr/bin (Debian, Ubuntu, Fedora).
+    if (exists $s->{bin_mirror}) {
+        my $dir = $s->{dir} // die "bin_mirror needs dir\n";
+        my %skip = map { ($_ => 1) } @{ $s->{except} || [] };
+        util::mkdir_p($dir);
+        for my $e (util::list_dir($s->{bin_mirror})) {
+            next if $skip{$e} || $e =~ /\A\.\.?\z/;
+            symlink("$s->{bin_mirror}/$e", "$dir/$e") or die "bin_mirror $dir/$e: $!\n";
+        }
         return;
     }
     if (exists $s->{repo} && ref $s->{repo} eq 'HASH') { make_repo($s->{repo}, $s->{at}, $V); return }
