@@ -2,7 +2,7 @@
  "id": "AT-CF-02, AT-CF-03, AT-CF-06",
  "layer": "H",
  "owner": "skills",
- "note": "begin carry base by relation: a lineage predecessor's newest file is chain with no notice (next_ids from it); an empty bucket gives all carry keys null and next_ids 1; with a foreign base, newer_foreign lists up to 2 other newer files (never the base) with their In flight line, a document with imported_from is never the base (DP-6) but is listed, and the JSON stays within 3,072 B. The case runs in the system temp folder, not the repository's tmp/: begin prints about ten absolute store paths, so under tmp/ the 3,072 B check depended on the checkout's path length (it failed in the BT-02 rename drill copy of a worktree, 11 characters deeper)",
+ "note": "begin carry base by relation: a lineage predecessor's newest file is chain with no notice (next_ids from it); an empty bucket gives all carry keys null and next_ids 1; with a foreign base, newer_foreign lists up to 2 other newer files (never the base) with their In flight line, a document with imported_from is never the base (DP-6) but is listed, and the JSON stays within 3,072 B. U-04 (REVIEW-NIGHT-2): store paths are relative to store_root, so the size depends on the checkout's path only through store_root, stage, worktree and the two root settings; the two newer files the cap leaves out are counted in trimmed.cut and listed in the stage's begin-full.json, never dropped silently. The twin case AT-CF-02-03-06-relations-long runs the same steps with the store and the repositories a long path deeper (the BT-02 rename drill runs every case in a deeper copy of the checkout)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -108,7 +108,10 @@
       "null": 1
      },
      "next_ids.U": 3,
-     "next_ids.D": 1
+     "next_ids.D": 1,
+     "store_root": "$ROOT",
+     "previous_handoff": "r8/LAB-8/2026-10-21_10-00-00_44444444_pred.md",
+     "bucket.path": "r8/LAB-8"
     }
    },
    "name": "AT-CF-02 chain base"
@@ -158,17 +161,36 @@
     "stdout_max_bytes": 3072,
     "json": {
      "previous_kind": "foreign",
-     "previous_handoff": "$ROOT/r9/LAB-9/2026-10-21_13-00-00_99999999_x3.md",
-     "own_previous_handoff": "$ROOT/r9/LAB-9/2026-10-21_09-00-00_33333333_own.md",
+     "previous_handoff": "r9/LAB-9/2026-10-21_13-00-00_99999999_x3.md",
+     "own_previous_handoff": "r9/LAB-9/2026-10-21_09-00-00_33333333_own.md",
      "newer_foreign": {
       "len": 2
      },
-     "newer_foreign.0.path": "$ROOT/r9/LAB-9/2026-10-21_13-30-00_77777777_imp.md",
-     "newer_foreign.1.path": "$ROOT/r9/LAB-9/2026-10-21_12-00-00_99999999_x2.md",
-     "newer_foreign.1.inflight_line": 13
-    }
+     "newer_foreign.0.path": "r9/LAB-9/2026-10-21_13-30-00_77777777_imp.md",
+     "newer_foreign.1.path": "r9/LAB-9/2026-10-21_12-00-00_99999999_x2.md",
+     "newer_foreign.1.inflight_line": 13,
+     "store_root": "$ROOT",
+     "bucket.path": "r9/LAB-9",
+     "own_latest.path": "r9/LAB-9/2026-10-21_09-00-00_33333333_own.md",
+     "trimmed.cut.newer_foreign": 2,
+     "trimmed.all": {
+      "re": "^r9/LAB-9/\\.staging/33333333-[0-9a-f]{8}/begin-full\\.json$"
+     }
+    },
+    "files": [
+     {
+      "path": "$ROOT/r9/LAB-9/.staging/33333333-*/begin-full.json",
+      "mode": "0600",
+      "contains": [
+       "\"path\":\"r9/LAB-9/2026-10-21_13-30-00_77777777_imp.md\"",
+       "\"path\":\"r9/LAB-9/2026-10-21_12-00-00_99999999_x2.md\"",
+       "\"path\":\"r9/LAB-9/2026-10-21_11-00-00_99999999_x1.md\"",
+       "\"path\":\"r9/LAB-9/2026-10-21_10-00-00_99999999_base.md\""
+      ]
+     }
+    ]
    },
-   "name": "AT-CF-03/06 newer_foreign without the base; imported never the base; 3 KB"
+   "name": "AT-CF-03/06 newer_foreign without the base; imported never the base; 2 more counted, all in begin-full.json; 3 KB"
   }
  ]
 }

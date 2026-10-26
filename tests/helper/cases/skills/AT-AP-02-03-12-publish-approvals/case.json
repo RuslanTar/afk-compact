@@ -213,7 +213,8 @@
     ]
    },
    "capture": {
-    "PUB1": "re:^Wrote handoff to: (.+)$"
+    "PUB1": "re:^Wrote handoff to: (.+)$",
+    "PUB1_REL": "re:^Wrote handoff to: .*?/\\.claude/handoffs/(.+)$"
    }
   },
   {
@@ -258,7 +259,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "previous_handoff": "$PUB1",
+     "previous_handoff": "$PUB1_REL",
      "previous_kind": "own"
     }
    },
@@ -503,7 +504,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "previous_handoff": "$ROOT/repo/approvals/2026-10-21_14-20-00_edited.md",
+     "previous_handoff": "repo/approvals/2026-10-21_14-20-00_edited.md",
      "previous_kind": "own"
     }
    },

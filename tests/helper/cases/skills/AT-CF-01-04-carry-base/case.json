@@ -58,11 +58,11 @@
     "exit": 0,
     "stdout_max_bytes": 3072,
     "json": {
-     "previous_handoff": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_99999999_other.md",
+     "previous_handoff": "repo/LAB-7/2026-10-21_12-00-00_99999999_other.md",
      "previous_kind": "foreign",
      "previous_sid8": "99999999",
      "previous_stamp": "2026-10-21 12:00 +0300",
-     "own_previous_handoff": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "own_previous_handoff": "repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
      "carry_notice": "not your chain: the newest handoff here is 99999999's (2026-10-21 12:00 +0300); yours is 2026-10-21_09-00-00_11111111_retry (2026-10-21 09:00 +0300)",
      "next_ids.U": 5,
      "next_ids.D": 7,
@@ -71,7 +71,7 @@
       "re": "^[0-9a-f]{12}$"
      },
      "ownership.foreign_commits.count": 0,
-     "own_latest.path": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "own_latest.path": "repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
      "newer_foreign": {
       "len": 0
      }

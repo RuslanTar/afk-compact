@@ -9,7 +9,7 @@
  "cwd":"$TMP/repo",
  "argv":["begin","--sid","$SID","--topic","retry"],
  "capture":{"STAGE":"json:stage","NONCE":"json:nonce","STEM":"json:stem"},
- "expect":{"exit":0,"json":{"bucket.source":"branch","previous_handoff":"$ROOT/repo/LAB-7/2026-10-20_09-00-00_11111111_retry.md"}},
+ "expect":{"exit":0,"json":{"bucket.source":"branch","previous_handoff":"repo/LAB-7/2026-10-20_09-00-00_11111111_retry.md"}},
  "then":[
   {"cwd":"$TMP/repo","argv":["evidence","--stage","$STAGE","--keep","$TMP/scratch/run-suite.sh"],
    "expect":{"exit":0,"stdout_has":["^copied $ROOT/repo/LAB-7/evidence/$STEM/run-suite.sh 11 [0-9a-f]{8} $TMP/scratch/run-suite.sh$","^Evidence: $ROOT/repo/LAB-7/evidence/$STEM/ \\(1 files, 0.0 MB; MANIFEST.tsv\\)$"]}},

@@ -96,7 +96,7 @@
    "now": "2026-10-21T14:06:30+03:00",
    "argv": ["begin", "--sid", "$SID", "--topic", "retry"],
    "capture": {"STAGE": "json:stage", "STEM": "json:stem"},
-   "expect": {"exit": 0, "json": {"previous_handoff": "$ROOT/repo/LAB-7/$STEM.md"}}
+   "expect": {"exit": 0, "json": {"previous_handoff": "repo/LAB-7/$STEM.md"}}
   },
   {
    "write": "$STAGE/body.md",
