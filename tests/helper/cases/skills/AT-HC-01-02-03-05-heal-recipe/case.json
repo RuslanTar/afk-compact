@@ -3,11 +3,13 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "HC-1 (ratify R24 overturned, within the real-risk reading): with no job record, an own handoff's recipe (relation successor via /clear) whose command is read-only, in MANIFEST, class auto, origin ended and output quiet is ok with run-source: handoff and heal row run_source handoff; a not-read-only, not-allowlisted recipe command is effects-unknown and asks with ask-source handoff; another session's recipe is refused (relation); a recipe that differs from a later job record is recipe-mismatch (record wins); counters still cap a resume at one restart. recipe-not-local for an imported copy is AT-RM-11 (unchanged).",
+ "note": "HC-1 (ratify R24 overturned, within the real-risk reading): with no job record, an own handoff's recipe (relation successor via /clear) whose command is read-only, in MANIFEST, class auto, origin ended and output quiet is ok with run-source: handoff and heal row run_source handoff; a not-read-only, not-allowlisted recipe command is effects-unknown and asks with ask-source handoff; another session's recipe is refused (relation); a recipe that differs from a later job record is recipe-mismatch (record wins); counters still cap a resume at one restart. recipe-not-local for an imported copy is AT-RM-11 (unchanged). The recipe command's `make` is a stub in $TMP/bin on the helper's PATH, so the case does not depend on the host having make (V7 runnable: on a host without it the recipe reads as not runnable).",
  "tz": "Etc/GMT-3",
+ "path_prepend": ["$TMP/bin"],
  "steps": [
   {
    "setup": [
+    {"stub": "make"},
     {
      "repo": {
       "branch": "feat/x",

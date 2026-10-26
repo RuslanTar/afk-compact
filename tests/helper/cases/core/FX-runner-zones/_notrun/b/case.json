@@ -1,0 +1,8 @@
+{
+ "id": "_notrun-tzdata",
+ "note": "Inner case of FX-runner-zones (run by runner_child): $LSTART1 in a zone with no tz database file, so it is not run",
+ "tz": "Nowhere/No_Such_Zone",
+ "steps": [
+  {"name": "never runs", "exec": ["/bin/sh", "-c", "exit 1", "$LSTART1"], "expect": {"exit": 0}}
+ ]
+}

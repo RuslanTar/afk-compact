@@ -13,7 +13,7 @@
 #   position id or a slug; a bundle that mixes the two fails; a bad spec_version fails.
 use Cwd ();
 use File::Basename ();
-use Digest::SHA ();
+# sha256 through core's sha::hex256 (Digest::SHA when it loads, else the embedded one; the driver loads it)
 my $plugin = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../../plugin');
 # The ids as first shipped (spec_version 2). Never change one; add a new heading's id here.
 my %PIN = (
@@ -34,7 +34,7 @@ my $mk = sub {
     my $rows = join('', map { watch::json::encode({ v => 1, ev => 'postcompact', ts => '2026-10-21T14:00:00.000+03:00',
                                                     sid => 'abcdef012345', section_chars => $_ }) . "\n" } @sc);
     my $m = { schema => "$T::BRAND-report/1", plugin => $T::BRAND, install_id => '0123456789abcdef',
-              files => [ { name => $RN, bytes => length $rows, sha256 => Digest::SHA::sha256_hex($rows) } ],
+              files => [ { name => $RN, bytes => length $rows, sha256 => sha::hex256($rows) } ],
               withheld => [], dropped => {}, (defined $sv ? (spec_version => $sv) : ()) };
     require watch::bundle;
     main::write_file($path, watch::bundle::zip([ [ 'README.txt', "report\n" ], [ 'manifest.json', watch::json::encode($m) . "\n" ],

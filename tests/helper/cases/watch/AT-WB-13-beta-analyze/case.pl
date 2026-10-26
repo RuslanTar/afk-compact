@@ -9,7 +9,7 @@
 # not fresh, needs -I, and has no network or delete code. `forget` lists one install's files
 # and removes nothing. When WP-fix's tests/fixtures/beta/ is present, its cases.json
 # outcomes hold too.
-use Digest::SHA ();
+# sha256 through core's sha::hex256 (Digest::SHA when it loads, else the embedded one; the driver loads it)
 my $REPO = Cwd::abs_path(File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/../../../../..');
 my $TOOL = "$REPO/tools/beta-analyze";
 my %got;
@@ -93,7 +93,7 @@ my $tsv = sub {
                   my $m = watch::json::decode($e->{'manifest.json'}{data});
                   $m->{$_} = $mch->{$_} for keys %{ $mch || {} };
                   if ($rehash) {
-                      for my $f (@{ $m->{files} }) { $f->{sha256} = Digest::SHA::sha256_hex($d{ $f->{name} }); $f->{bytes} = length $d{ $f->{name} } }
+                      for my $f (@{ $m->{files} }) { $f->{sha256} = sha::hex256($d{ $f->{name} }); $f->{bytes} = length $d{ $f->{name} } }
                   }
                   $d{'manifest.json'} = watch::json::encode($m) . "\n";
                   my $bytes = watch::bundle::zip([ (map { [ $_, $d{$_} ] } @order), @{ $extra || [] } ], $T::BASE);

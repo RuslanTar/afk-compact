@@ -105,7 +105,10 @@ my $SHA;
 BEGIN { $SHA = eval { require Digest::SHA; 1 } ? 1 : 0 }
 
 # sha256 hex of bytes: ctx-supplied function (core's, with its embedded
-# fallback) first, then Digest::SHA; undef when neither exists.
+# fallback) first, then Digest::SHA, then core's sha::hex256 when loaded (the
+# helper always loads it: the hook path's ctx has no sha256, and a perl without
+# Digest::SHA, Fedora's perl-interpreter, gets the embedded one); undef when none
+# exists.
 sub sha256_hex {
     my ($bytes, $ctx) = @_;
     return undef unless defined $bytes;
@@ -117,6 +120,10 @@ sub sha256_hex {
         return lc $h if defined $h && $h =~ /\A[0-9a-fA-F]{64}\z/;
     }
     return Digest::SHA::sha256_hex($bytes) if $SHA;
+    if (defined &sha::hex256) {
+        my $h = eval { sha::hex256($bytes) };
+        return lc $h if defined $h && $h =~ /\A[0-9a-fA-F]{64}\z/;
+    }
     return undef;
 }
 

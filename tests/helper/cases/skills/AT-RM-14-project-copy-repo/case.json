@@ -142,7 +142,9 @@
   {
    "name": "exports untouched",
    "exec": [
-    "/usr/bin/cmp",
+    "/usr/bin/perl",
+    "-e",
+    "local $/; my ($x, $y) = map { open(my $f, '<:raw', $_) or die \"$_: $!\\n\"; scalar <$f> } @ARGV; exit($x eq $y ? 0 : 1)",
     "$TMP/x0",
     "$TMP/x1"
    ],

@@ -8,7 +8,7 @@ package watch::bundle;
 # never trips the analyzer's ratio-bomb refusal (tools/beta-analyze RATIO_MAX 100). The reader
 # takes STORE, and DEFLATE when the raw-inflate module loads; any other method is an error.
 # HMAC-SHA256 uses Digest::SHA when present, else the caller's sha256 (the helper's embedded
-# one). No encryption, no symlinks, no absolute names, no `..`.
+# one), else core's sha::hex256 when loaded. No encryption, no symlinks, no absolute names, no `..`.
 use strict;
 use warnings;
 use utf8;
@@ -151,6 +151,8 @@ sub hmac_sha256_hex {
     utf8::encode($msg) if utf8::is_utf8($msg);
     $DIGEST = eval { require Digest::SHA; 1 } ? 1 : 0 unless defined $DIGEST;
     return Digest::SHA::hmac_sha256_hex($msg, $key) if $DIGEST;
+    # no sha256 from the caller (a ctx without one): core's embedded one when loaded
+    $sha256 = \&sha::hex256 if ref $sha256 ne 'CODE' && defined &sha::hex256;
     die "bundle: no sha256\n" unless ref $sha256 eq 'CODE';
     my $h = sub { return pack('H*', $sha256->($_[0])) };
     $key = $h->($key) if length($key) > 64;

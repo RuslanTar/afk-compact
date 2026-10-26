@@ -11,7 +11,9 @@
 # $WATCH, $SID, $PROJ, ... in their stdin). Every call's stdout and stderr are
 # captured and must be empty unless a step says otherwise.
 # A case that returns `skip => <reason>` (its input, e.g. a WP-fix fixture, is not on this
-# branch yet) prints `ok - <id> # SKIP <reason>` and runs nothing.
+# branch yet) prints `ok - <id> # SKIP <reason>` and runs nothing. A case that needs a tool
+# not on PATH (`needs => ["cmd:<name>"]`) prints `not ok - <id> # TODO not run: needs <name>
+# ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
@@ -31,6 +33,9 @@ my $REPO = Cwd::abs_path("$HERE/../../../../..");
 use lib "$HERE";
 BEGIN { unshift @INC, File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/../../../../../plugin/helper/lib' }
 use T;
+# core's util and sha, loaded as the helper (main.pl) always loads them: without Digest::SHA
+# (Fedora's perl-interpreter) the watcher's sha256 falls back to sha::hex256
+BEGIN { require "util.pm"; require "sha.pm" }
 use watch;
 use watch::json;
 use watch::io;
@@ -45,14 +50,16 @@ $T::REPO = $REPO;
 
 my @dirs = @ARGV ? @ARGV : map { "$HERE/../$_" } grep { -f "$HERE/../$_/case.pl" } sort(watch::io::list_dir("$HERE/.."));
 my ($pass, $fail, $skipped) = (0, 0, 0);
-our $SKIP;
+our ($SKIP, $NOTRUN);
+my $notrun = 0;
 my @failed;
 
 for my $dir (@dirs) {
     my $id = File::Basename::basename(Cwd::abs_path($dir));
-    local $SKIP;
+    local ($SKIP, $NOTRUN);
     my @errs = eval { run_case(Cwd::abs_path($dir)) };
     push @errs, "died: $@" if $@;
+    if (!@errs && defined $NOTRUN) { $notrun++; print "not ok - $id # TODO not run: $NOTRUN\n"; next }
     if (!@errs && defined $SKIP) { $skipped++; print "ok - $id # SKIP $SKIP\n"; next }
     if (@errs) {
         $fail++;
@@ -64,7 +71,7 @@ for my $dir (@dirs) {
         print "ok - $id\n";
     }
 }
-print "# watch cases: $pass passed, $fail failed" . ($skipped ? ", $skipped skipped" : '') . "\n";
+print "# watch cases: $pass passed, $fail failed" . ($skipped ? ", $skipped skipped" : '') . ($notrun ? ", $notrun not run" : '') . "\n";
 exit($fail ? 1 : 0);
 
 sub spec_for_tests {
@@ -192,16 +199,14 @@ sub run_case {
     # `skip => reason`: a case whose input is not on this branch yet (a WP-fix fixture)
     if (defined $case->{skip}) { $SKIP = $case->{skip}; return () }
     # `needs => [...]`, as in the core runner: "nonroot" skips when this runs as root (uid 0
-    # ignores file modes; its user name is a word every bundle holds), "cmd:<name>" skips
-    # while <name> is not on PATH. `needs_note` says what the case loses then.
+    # ignores file modes; its user name is a word every bundle holds); "cmd:<name>" is not
+    # run while <name> is not on PATH (a missing tool: neither a pass nor a skip).
+    # `needs_note` says what the case loses then.
     my @path = split /:/, $ENV{PATH} // '';
-    my @miss = grep { my ($cmd) = /\Acmd:(.+)\z/; ($_ eq 'nonroot' && $> == 0) || (defined $cmd && !grep { -x "$_/$cmd" } @path) }
-               @{ $case->{needs} || [] };
-    if (@miss) {
-        $SKIP = 'needs ' . join(', ', map { $_ eq 'nonroot' ? "$_ (running as root)" : "$_ (not on PATH)" } @miss)
-              . (defined $case->{needs_note} ? ": $case->{needs_note}" : '');
-        return ();
-    }
+    my @cmd = grep { my $c = $_; !grep { -x "$_/$c" } @path } map { /\Acmd:(.+)\z/ ? $1 : () } @{ $case->{needs} || [] };
+    my $note = defined $case->{needs_note} ? ": $case->{needs_note}" : '';
+    if (@cmd) { $NOTRUN = join(', ', map { "needs $_ (not on PATH)" } @cmd) . $note; return () }
+    if ($> == 0 && grep { $_ eq 'nonroot' } @{ $case->{needs} || [] }) { $SKIP = "needs nonroot (running as root)$note"; return () }
     my $tmp = File::Temp::tempdir('watchcase-XXXXXX', TMPDIR => 1, CLEANUP => 1);
     my %v = (TMP => $tmp, HOME => "$tmp/home", SID => $T::SID, BRAND => $T::BRAND, PLUGIN => "$tmp/plugin");
     $v{ROOT} = "$v{HOME}/.claude/handoffs";
