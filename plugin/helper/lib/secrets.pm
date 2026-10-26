@@ -16,10 +16,21 @@ sub _entropy {
     return $h;
 }
 
+# The sweep's deadline (an epoch ms from util::clock_ms, set with `local` by sweep::run; undef
+# = none). scan and redact check it before each rule and every 256 hits, and die with
+# $OVER_BUDGET once it has passed, so one large file cannot carry the sweep far past its
+# budget (MOD-SPEC §5.3 step 5: the rest become referenced (budget) rows). A file is written
+# only after both passes, so a stop leaves no partial copy.
+our $DEADLINE;
+our $OVER_BUDGET = "secrets: over the sweep budget\n";
+sub _check_deadline { die $OVER_BUDGET if defined $DEADLINE && util::clock_ms() >= $DEADLINE }
+
 sub _matches {
     my ($text, $r) = @_;
     my @spans;
+    my $n = 0;
     while ($text =~ /$r->{re}/g) {
+        _check_deadline() unless ++$n % 256;
         my ($s, $e) = ($-[0], $+[0]);
         last if $e == $s && !defined pos($text);
         if ($e == $s) { pos($text) = $e + 1; next }
@@ -56,6 +67,7 @@ sub scan {
     return [] unless defined $text && $text ne '';
     my @hits;
     for my $r (@{ rules() }) {
+        _check_deadline();
         my @s = _matches($text, $r);
         push @hits, { rule => $r->{id}, class => $r->{class}, count => scalar @s } if @s;
     }
@@ -79,6 +91,7 @@ sub redact {
     for my $r (@{ rules() }) {
         $rank++;
         next if %only && !$only{ $r->{class} };
+        _check_deadline();
         my @s = _matches($text, $r);
         next unless @s;
         push @hits, { rule => $r->{id}, class => $r->{class}, count => scalar @s };

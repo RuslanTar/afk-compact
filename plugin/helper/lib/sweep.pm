@@ -97,7 +97,8 @@ sub run {
     util::trace('sweep');
     my $t0 = util::clock_ms();
     # test seam (STORE_TEST_MODE only): STORE_TEST_SWEEP_BUDGET_MS replaces the budget, so a
-    # case about the caps (AT-CK-09) is not decided by how busy the host is
+    # case about the caps (AT-CK-09) is not decided by how busy the host is, and a small one
+    # shows that a file the deadline passes in is stopped there (AT-E-02)
     my $budget = (util::test_mode() && ($ENV{STORE_TEST_SWEEP_BUDGET_MS} // '') =~ /\A[1-9][0-9]{0,6}\z/)
         ? 0 + $ENV{STORE_TEST_SWEEP_BUDGET_MS} : ($a{budget_ms} // 8000);
     my $deadline = $t0 + $budget;
@@ -105,14 +106,20 @@ sub run {
     my $used = 0;
     my (@rows, %rules, $bytes);
     $bytes = 0;
+    # The deadline also holds inside a file: the secret scan and redact stop once it passes
+    # (secrets::$DEADLINE), so a large file that starts late becomes referenced-budget too
+    # instead of carrying the sweep past the mod's 10 s helper timeout.
+    no warnings 'once';    # secrets.pm may compile after this file
+    local $secrets::DEADLINE = $deadline;
     for my $p (@{ candidates($sid_dir, $a{transcript}) }) {
         my $r;
+        my $late = sub { return { status => 'referenced-budget', origin => $p, copy => undef,
+                                  bytes => (-f $p ? -s _ : undef), sha8 => undef, rules => [] } };
         if (util::clock_ms() >= $deadline) {
-            $r = { status => 'referenced-budget', origin => $p, copy => undef, bytes => (-f $p ? -s _ : undef),
-                   sha8 => undef, rules => [] };
+            $r = $late->();
         } else {
-            $r = eval { evidence::copy($p, $dest, { used => \$used }, $index) }
-                 || { status => 'missing', origin => $p, rules => [] };
+            $r = eval { evidence::copy($p, $dest, { used => \$used }, $index) };
+            $r ||= ($@ // '') eq $secrets::OVER_BUDGET ? $late->() : { status => 'missing', origin => $p, rules => [] };
         }
         $tot{ $r->{status} }++;
         $rules{$_}++ for @{ $r->{rules} || [] };
