@@ -7,30 +7,36 @@ package userre;
 # file or a long name, and a length cap does not prevent it: `(a+)+$` on a 100 KB run of `a`,
 # or ten `[^/]*` in a row on a 200-character name. The match therefore runs in a forked child
 # that the helper kills when one pattern runs longer than its limit ($LIMIT_S, set by the caller
-# from its own timeout; ticket_pattern has a fixed one, %KEY_LIMIT_S, so every process gives a
-# branch the same ticket). Each whole MiB of the text adds $PER_MB_S to the limit, so a plain
-# pattern on a large evidence file is not taken for a slow one (a linear rule takes about 0.1 s
-# of CPU per MB). The child's clock starts when it says it is ready, so the time to fork and be
-# scheduled is not the pattern's, and stops when it says the pattern has matched, so sending a
-# long answer is not either. The child also arms its own alarm with the default action before
-# each pattern, so the kernel ends it when the helper is gone, and it keeps no descriptor of the
-# helper's but its answer pipe (no stdout, no lock).
+# from its own timeout; ticket_pattern has a fixed one, %KEY_LIMIT_S, and time of its own, below,
+# so a short call or a process that spent its budget gives a branch the same ticket as any
+# other; only a busy machine that stops it twice in one call gives none). Each whole MiB of the
+# text adds $PER_MB_S to the limit, so a plain pattern on a large evidence file is not taken for
+# a slow one (a linear rule takes about 0.1 s of CPU per MB). The child's clock starts when it
+# says it is ready, so the time to fork and be scheduled is not the pattern's, and stops when it
+# says the pattern has matched, so sending a long answer is not either. The child also arms its
+# own alarm with the default action before each pattern, so the kernel ends it when the helper is
+# gone, and it keeps no descriptor of the helper's but its answer pipe (no stdout, no lock).
 #
 # The process has one budget ($BUDGET_S) for all the time spent in pattern children, whether
 # the patterns finished or not: many patterns that each stay under the limit stop when it is
 # spent, so a hook stays inside its timeout. A large text adds $PER_MB_S per whole MiB and
 # pattern to it, never past $CEIL_S, which the caller sets from its own timeout. A child's
 # first $FREE_S seconds of starting (the fork, a few milliseconds) are not counted, so a process
-# that makes many quick calls does not use the budget up on forks; a slower start counts. A
-# pattern that is stopped, or not run (budget spent, no fork), takes its setting's safe side,
-# which the caller decides: a secret rule counts as a hit of its class, a production pattern or
-# a protected branch counts as a match, a ticket pattern gives no ticket, a relaunch_allow or
-# deny_class_patterns entry does not match. Why: `timeout` (the pattern used at least half its
-# limit in CPU: it is slow), `load` (it did not: the machine was busy; tried once more, then the
-# safe side for that call; a second try cut by the budget is still `load`), `budget`, `error`.
+# that makes many quick calls does not use the budget up on forks; a slower start counts. Two
+# uses have time of their own instead (%RESERVE_S), outside the budget and never taken from it:
+# ticket_pattern (the folder a copy is filed under must not depend on what the process did
+# before) and the scans a caller runs inside reserve(name, code) (the report's own manifest,
+# scanned after every file). A pattern that is stopped, or not run (budget spent, no fork),
+# takes its setting's safe side, which the caller decides: a secret rule counts as a hit of its
+# class, a production pattern or a protected branch counts as a match, a ticket pattern gives no
+# ticket, a relaunch_allow or deny_class_patterns entry does not match. Why: `timeout` (the
+# pattern used at least half its limit in CPU: it is slow), `load` (it did not: the machine was
+# busy; tried once more, then the safe side for that call; a second try cut by the budget, or
+# not started for want of it, is still `load`), `budget`, `error`.
 #
-# Each run of a pattern that did not finish is remembered for the session (one line, the
-# text's length and the CPU the run used, a timeout counting its whole limit, in the session's
+# Each run of a pattern that did not finish by its own limit (`timeout` or `load`; a run the
+# budget cut short is the process's, not the pattern's) is remembered for the session (one line,
+# the text's length and the CPU the run used, a timeout counting its whole limit, in the session's
 # once/ folder: regex_slow.<key>.<16 hex of the pattern's sha256>, never the pattern). A later
 # call, in this process or another, does not run the pattern on a text once the remembered runs
 # on texts no longer than it used that text's limit: a pattern stopped on a 12 MB file still
@@ -66,8 +72,13 @@ our $GRANT = 0;        # what large texts added to the budget
 # a large file.
 our %SUB_S = (map({ $_ => [0.25, 0.4] } qw(log ident dispatch prev-copy claim notice handoff-turn handoff-state)),
               measure => [0.5, 0.6], sweep => [1, 2, 5], 'save-copy' => [1, 2, 5], checkpoint => [1, 2, 6]);
+# Time of its own, outside the budget: ticket_pattern (two tries of its limit: one more after a
+# busy machine) and the scans a caller names with reserve() (the report's manifest)
+our %RESERVE_S = (ticket_pattern => 0.6, manifest => 2);
+our $POOL;             # the reserve() a scan runs in, else undef
 our @STOPPED;          # [key, at, why], one per key and position, in order
-our $SPENT = 0;        # seconds spent in pattern children
+our $SPENT = 0;        # seconds spent in pattern children, out of the budget
+our %RSPENT;           # seconds spent out of each %RESERVE_S
 my %REC;               # "key\0pattern" => [[text length, cpu ms]…]: its runs that did not finish
 my ($NAMES, $NAMES_DIR, %KEYHAS);    # the session's regex_slow.* markers, listed once
 my %noted;
@@ -133,9 +144,20 @@ sub _limit {
 # clear(): forget the stopped patterns, the time spent, the answers kept and the markers read
 # (tests: a new process); the session's markers stay
 sub clear {
-    $SPENT = 0; $GRANT = 0; %REC = (); %KEYHAS = (); $NAMES = undef; %noted = (); @STOPPED = (); %MEMO = (); $MEMO_BIG = undef;
+    $SPENT = 0; $GRANT = 0; %RSPENT = (); %REC = (); %KEYHAS = (); $NAMES = undef; %noted = (); @STOPPED = (); %MEMO = (); $MEMO_BIG = undef;
     return;
 }
+
+# reserve(name, code) -> what code returns: the patterns code runs take their time from
+# $RESERVE_S{name}, not from the budget (a name not in %RESERVE_S has none: they are not run)
+sub reserve {
+    my ($name, $code) = @_;
+    local $POOL = $name;
+    return $code->();
+}
+
+# _pool(key) -> the %RESERVE_S name a run of key takes its time from, else undef (the budget)
+sub _pool { my ($key) = @_; return $POOL // (exists $RESERVE_S{$key} ? $key : undef) }
 
 sub _note {
     my ($key, $at, $why) = @_;
@@ -353,13 +375,15 @@ sub run {
     $GRANT += $PER_MB_S * $mb * $n if $mb;
     my $halt = sub { return 0 unless $o{halt}; return ref $o{halt} eq 'CODE' ? $o{halt}->($_[0]) : 1 };
     my (@res, @stopped, %again);
+    my $pool = _pool($key);
     my $i = 0;
     while ($i < $n) {
         my $e = $entries->[$i];
-        my $left = _budget() - $SPENT;
+        my $left = defined $pool ? ($RESERVE_S{$pool} // 0) - ($RSPENT{$pool} // 0) : _budget() - $SPENT;
         my $slow = _slow($key, $e, $len, $limit);
         if ($slow || $left <= 0.01) {
-            _note($key, $e->{at} // $i + 1, $slow ? 'timeout' : 'budget');
+            # tried once on a busy machine, no time left for the second try: still the machine
+            _note($key, $e->{at} // $i + 1, $slow ? 'timeout' : $again{$i} ? 'load' : 'budget');
             push @stopped, $i;
             last if $halt->($i);
             $i++;
@@ -368,7 +392,7 @@ sub run {
         my $j = $i;
         $j++ while $j + 1 < $n && !_slow($key, $entries->[$j + 1], $len, $limit);
         my $c = _child($entries, $i, $j, $job, $o{until}, $limit, $left);
-        $SPENT += $c->{cost};
+        if (defined $pool) { $RSPENT{$pool} += $c->{cost} } else { $SPENT += $c->{cost} }
         $res[$_] = $c->{got}{$_} for keys %{ $c->{got} };
         last if $c->{ended};
         my $miss = $c->{miss};
@@ -376,8 +400,11 @@ sub run {
         my $why = $c->{why};
         # a second try after a busy machine, cut by the budget: still the machine
         $why = 'load' if $why eq 'budget' && $again{$miss};
-        # what a run that did not finish used, for this session's later calls
-        _record($key, $entries->[$miss], $len, $why eq 'timeout' ? int($limit * 1000) : int($c->{cpu} * 1000)) if $c->{mid} && $why ne 'error';
+        # what a run that did not finish by its own limit used, for this session's later calls; a
+        # run the budget cut short says nothing of the pattern (U-06 review: such cuts in tight
+        # processes added up to its limit and skipped it in processes with room)
+        _record($key, $entries->[$miss], $len, $why eq 'timeout' ? int($limit * 1000) : int($c->{cpu} * 1000))
+            if $c->{mid} && ($c->{why} eq 'timeout' || $c->{why} eq 'load');
         # a busy machine is not a slow pattern: once more, then the safe side for this call
         if ($why eq 'load' && !$again{$miss}++) { $i = $miss; next }
         _note($key, $entries->[$miss]{at} // $miss + 1, $why);

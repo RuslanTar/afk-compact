@@ -1,9 +1,9 @@
 {
  "id": "U-06-regex-bound-floor",
- "note": "U-06 at the perl floor in Docker (debian:buster-slim: perl-base 5.28 without Time::HiRes, no pgrep; perl:5.28-slim with it): a stopped pattern ends within its limit as timeout and never before it, a 60,000-span answer is never stopped, twenty patterns that each finish under the limit stop when the budget is spent, a trivial call is charged under 0.25 ms of the budget (the child's exit is not counted), and the pattern child ends after its helper is killed or stopped and holds no lock of the helper's. Skips unless Docker answers and holds both images (no pull).",
- "needs": ["docker-image:debian:buster-slim", "docker-image:perl:5.28-slim"],
+ "note": "U-06 at the perl floor in Docker (debian:buster-slim: perl-base 5.28 without Time::HiRes, no pgrep, else debian:bookworm-slim: perl-base 5.36, also without it; perl:5.28-slim with it): a stopped pattern ends within its limit as timeout and never before it, a 60,000-span answer is never stopped, twenty patterns that each finish under the limit stop when the budget is spent, a trivial call is charged under 0.25 ms of the budget (the child's exit is not counted), and the pattern child ends after its helper is killed or stopped and holds no lock of the helper's. Skips unless Docker answers and holds one of the two Debian images (no pull); the perl:5.28-slim step is not run (a note) when that image is missing. U-06 review: bookworm-slim is the fallback because it is the image a Mac is likely to hold, so the guard on the charge (only this case catches a cost that counts the child's exit) runs there too.",
+ "needs": ["docker-image-any:debian:buster-slim|debian:bookworm-slim"],
  "steps": [
-  {"name": "debian:buster-slim (no Time::HiRes)", "lib": "linux_start_time", "args": {"image": "debian:buster-slim", "probe": "probe.pl", "timeout_s": 180}},
-  {"name": "perl:5.28-slim", "lib": "linux_start_time", "args": {"image": "perl:5.28-slim", "probe": "probe.pl", "timeout_s": 180}}
+  {"name": "perl-base without Time::HiRes (debian:buster-slim, else debian:bookworm-slim)", "lib": "linux_start_time", "args": {"images": ["debian:buster-slim", "debian:bookworm-slim"], "probe": "probe.pl", "timeout_s": 180}},
+  {"name": "perl:5.28-slim", "lib": "linux_start_time", "args": {"images": ["perl:5.28-slim"], "probe": "probe.pl", "timeout_s": 180}}
  ]
 }

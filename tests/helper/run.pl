@@ -45,7 +45,7 @@
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
 #     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
-#     answers and holds that image locally)
+#     answers and holds that image locally; "docker-image-any:<ref>|<ref>" unless it holds one)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -245,6 +245,7 @@ for my $cf (@CASES) {
                       || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
                       || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
                       || (/^docker-image:(.+)$/ && !docker_image($1))
+                      || (/^docker-image-any:(.+)$/ && !grep { docker_image($_) } split /\|/, $1)
                       || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
     if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
@@ -1102,8 +1103,9 @@ sub invoke {
 #   sha_vectors       {}: embedded SHA-256 vs Digest::SHA and a known vector
 #   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
 #   proc_stat_lines   {file}: identity::_proc_stat over recorded Linux /proc/<pid>/stat lines (R-4)
-#   linux_start_time  {image, probe, mb, steps}: identity::start_time on Linux in Docker (R-4;
-#                     a subprocess: the case "needs" ["docker-image:<image>"])
+#   linux_start_time  {image | images, probe, mb, steps}: identity::start_time on Linux in Docker
+#                     (R-4; a subprocess: the case "needs" ["docker-image:<image>"]; images: the
+#                     first one held here, none: a note and not run)
 my $LIBS_READY;
 sub _libs {
     return if $LIBS_READY;
@@ -1648,6 +1650,19 @@ sub u06_check {
         ($ms) = $timed->(sub { settings::trim(' x' . (' ' x 400_000) . 'y ') });
         push @e, "settings::trim took $ms ms" if $ms > 500;
         push @e, 'settings::trim kept the ends' unless settings::trim("  x y \n") eq 'x y';
+        # the watcher reads `watcher` and `handoff_turn` itself (U-06 review: both kept the
+        # quadratic form, 2.5 s and 1.8 s on 100,000 inner spaces)
+        require watch::ctx;
+        my $w = ' shadow' . (' ' x 400_000) . 'x ';
+        my ($wv, $wu);
+        ($ms) = $timed->(sub { ($wv, $wu) = watch::ctx::_watcher_value({ watcher => $w }) });
+        push @e, "watch::ctx::_watcher_value took $ms ms on 400,000 inner spaces" if $ms > 500;
+        push @e, "watch::ctx::_watcher_value: $wv/$wu, want shadow/1" unless "$wv/$wu" eq 'shadow/1';
+        push @e, 'watch::ctx::_watcher_value: " OFF " is not off' unless (watch::ctx::_watcher_value({ watcher => " OFF \n" }))[0] eq 'off';
+        my $s;
+        ($ms) = $timed->(sub { $s = watch::ctx::_settings({ settings => { values => { handoff_turn => $w } } }) });
+        push @e, "watch::ctx::_settings (handoff_turn) took $ms ms on 400,000 inner spaces" if $ms > 500;
+        push @e, 'watch::ctx::_settings: " Off " is not off' unless watch::ctx::_settings({ settings => { values => { handoff_turn => " Off " } } })->{handoff_turn} eq 'off';
         return @e;
     }
     if ($check eq 'no-hash') {
@@ -1726,6 +1741,116 @@ sub u06_check {
         my $f = watch::rows::classify($row, 'afk-compact', [['push', qr/\bgit\s+push\b/]]);
         my ($c) = @{ ref $f eq 'HASH' && ref $f->{calls} eq 'ARRAY' ? $f->{calls} : [] };
         push @e, 'a push to rel/eu/x1 is not protected with only a bounded entry set' unless $c && $c->{protected};
+        return @e;
+    }
+    # (a+)+$ on n a's then b, n grown until one match takes about `secs` of CPU here
+    my $calibrate = sub {
+        my ($secs) = @_;
+        my $n = 300;
+        while ($n < 400_000) {
+            my $s = ('a' x $n) . 'b';
+            my @c0 = times;
+            my $x = $s =~ /(a+)+$/;
+            my @c1 = times;
+            last if ($c1[0] + $c1[1]) - ($c0[0] + $c0[1]) >= $secs;
+            $n = int($n * 1.2);
+        }
+        return $n;
+    };
+    if ($check eq 'budget-no-mark') {
+        # a run the budget cut short is not remembered against the pattern (U-06 review: ten such
+        # cuts in processes with 0.12 s left added up to the pattern's 1 s limit, and a process
+        # with room then skipped it as timeout where it finishes in 0.3 s)
+        my $dir = "$RUN_TMP/u06-bnm-$$";
+        local %rc::R = (watch => $dir, sid => 'aaaaaaaa-0000-4000-8000-000000000046');
+        my $once = "$dir/$rc::R{sid}/once";
+        util::mkdir_p($once);
+        my $subj = 'echo ' . ('a' x $calibrate->(0.3)) . 'b';
+        my $e1 = [{ re => qr/(a+)+$/, at => 1 }];
+        my $bad = 0;
+        for my $p (1 .. 10) {
+            userre::clear() if $have;    # a new process, little of its budget left
+            userre::limits(1, 0.12) if $have;
+            userre::first('prod_patterns', $e1, ["$subj $p"], 'match');
+            push @e, "tight process $p: stopped [" . $stopped->() . '], want prod_patterns:1:budget' if $stopped->() ne 'prod_patterns:1:budget' && $bad++ < 2;
+        }
+        my @m = glob("$once/regex_slow.*");
+        push @e, 'markers after cuts by the budget only: ' . join(' ', map { util::basename($_) . ' (' . (util::read_file($_) // '') =~ tr/\n// . ' runs)' } @m) if @m;
+        userre::clear() if $have;    # a process with room
+        userre::limits(2, 4) if $have;
+        my $k = userre::first('prod_patterns', $e1, [$subj], 'match');
+        push @e, 'a process with room: stopped [' . $stopped->() . '], want the pattern run to the end' if @userre::STOPPED;
+        unlink glob("$once/*");
+        rmdir $_ for $once, "$dir/$rc::R{sid}", $dir;
+        return @e;
+    }
+    if ($check eq 'ticket-own-time') {
+        # ticket_pattern has time of its own: a process whose budget a stopped pattern spent still
+        # gives the branch its ticket, and the ticket takes nothing from the budget (U-06 review:
+        # it gave none, and the copy went under repo/<topic> instead of repo/<ticket>)
+        userre::limits(0.25, 0.25) if $have;
+        settings::prod_class("echo $long", settings::prod({ values => { prod_patterns => '(a+)+$' } }));
+        my $spent = $userre::SPENT;
+        push @e, sprintf('the stopped prod pattern left %.3f s of the budget, want none (the check needs it spent)', 0.25 - $spent) if 0.25 - $spent > 0.01;
+        my $tk = settings::ticket('feature/lab_77-x', { values => { ticket_pattern => '(lab_[0-9]+)' } });
+        push @e, 'a spent budget: ticket ' . ($tk // 'none') . ', want lab_77; stopped [' . $stopped->() . ']' unless ($tk // '') eq 'lab_77';
+        push @e, sprintf('the ticket took %.3f s from the budget', $userre::SPENT - $spent) if $userre::SPENT != $spent;
+        return @e;
+    }
+    if ($check eq 'manifest-reserve') {
+        # the report scans its manifest last, inside userre::reserve('manifest'): a budget the
+        # files spent does not stop the user's secret rules on it (U-06 review: every rule was
+        # `budget`, the scan gave regex-timeout and the report died 'secret in the manifest')
+        local %rc::R = (settings => { values => { secret_extra_rules => 'HARD:ACME-[0-9]{12}' } });
+        my $m = '{"files":[{"name":"rows.jsonl","bytes":12}],"watcher":"shadow"}';
+        my $ids = sub { join(',', map { $_->{rule} } @{ $_[0] || [] }) };
+        userre::limits(0.25, 0.4) if $have;
+        $userre::SPENT = 0.4;    # the files spent the budget
+        my $h = secrets::scan($m);
+        push @e, 'the budget spent, no reserve: scan [' . $ids->($h) . '], want regex-timeout' unless $ids->($h) eq 'regex-timeout';
+        userre::clear() if $have;
+        userre::limits(0.25, 0.4) if $have;
+        $userre::SPENT = 0.4;
+        $h = defined &userre::reserve ? userre::reserve('manifest', sub { secrets::scan($m) }) : secrets::scan($m);
+        push @e, 'the budget spent, in the manifest reserve: scan [' . $ids->($h) . '], want no hit' if @$h;
+        push @e, 'the manifest scan took time from the budget' if $userre::SPENT != 0.4;
+        return @e;
+    }
+    if ($check eq 'answer-not-limit') {
+        # a pattern that matched at once but answers with very many numbers: sending the answer
+        # does not count against its limit (the child's `D` line; a09efae)
+        userre::limits(0.2, 30, 30) if $have;
+        my $want = $o->{numbers} // 3_000_000;
+        my ($ms, $res, $st) = $timed->(sub { userre::run('prod_patterns', [{ re => qr/x/, at => 1 }], sub { return (1 .. $want) }) });
+        my $got = $res->[0] ? scalar @{ $res->[0] } : 0;
+        push @e, "an answer of $want numbers: $got back, stopped [" . $stopped->() . "] after $ms ms, want all of it" unless $got == $want && !@$st;
+        push @e, "# U-06 answer-not-limit: $want numbers in $ms ms";
+        return @e;
+    }
+    if ($check eq 'ceiling') {
+        # the budget grows with a large text but never past the caller's ceiling (sweep 5 s,
+        # checkpoint 6 s, Stop 3 s): twenty patterns that each finish under their limit on a
+        # 3 MiB text stop when the ceiling is spent, so the hook stays inside its timeout
+        userre::limits(0.25, 0.4, 1) if $have;
+        my @ents = map { +{ re => qr/x$_/, at => $_ } } 1 .. 20;
+        my ($ms, $res, $st) = $timed->(sub {
+            userre::run('prod_patterns', \@ents, sub { select(undef, undef, undef, 0.3); return (0) }, size => 3 << 20) });
+        my $done = grep { $res->[$_] } 0 .. 19;
+        push @e, "20 patterns of 0.3 s on 3 MiB took $ms ms, over the ceiling of 1 s and the kill (1700 ms)" if $ms > 1700;
+        push @e, 'no pattern was left unrun with why budget: [' . $stopped->() . ']' unless grep { $_->[2] eq 'budget' } @userre::STOPPED;
+        push @e, "$done patterns finished, want 2 or more (the limit grows with the text)" if $done < 2;
+        push @e, "# U-06 ceiling: $done of 20 finished in $ms ms";
+        return @e;
+    }
+    if ($check eq 'load-no-time') {
+        # a `load` stop that leaves no budget for the second try: the pattern ran once, so it
+        # reads `load`, not `budget` ("not run (the time for your patterns was used up)")
+        $userre::CPU_SHARE = 0.5;
+        userre::limits(0.25, 0.255) if $have;
+        my $nap = [{ re => qr/(?{ select(undef, undef, undef, 30) })/, at => 1 }];
+        my $k = userre::first('prod_patterns', $nap, ['echo x5'], 'match');
+        push @e, 'a pattern stopped as load did not count as a match' unless defined $k && $k == 0;
+        push @e, $want_stopped->('prod_patterns:1:load');
         return @e;
     }
     return ("unknown check '$check'");
@@ -2342,6 +2467,13 @@ sub builtin {
         # the fork time, and that it stays the same while the process allocates memory. Each
         # `FAIL: ` line it prints is an error; it must end with `DONE`.
         my $docker = util::which('docker') // return ('no docker on PATH');
+        # "images": the first of them this machine holds (no pull); none: a note, not run
+        if (ref $a->{images} eq 'ARRAY') {
+            my ($img) = grep { docker_image($_) } @{ $a->{images} };
+            if (!defined $img) { print '# not run: none of ' . join(', ', @{ $a->{images} }) . " is here (no pull)\n"; return () }
+            $a = { %$a, image => $img };
+            print "# $img\n";
+        }
         my $probe = util::read_file(src_file($a->{probe} // 'probe.pl', $cdir)) // return ('no probe');
         my $helper = ($PLUGIN_SRC // "$REPO/plugin") . '/helper';
         my $cname = "store-h-r4-$$-" . util::rand_hex(4);
