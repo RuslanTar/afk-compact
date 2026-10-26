@@ -65,6 +65,7 @@ my $tsv = sub {
 };
 
 {
+    needs => [q(cmd:python3)], needs_note => q(tools/beta-analyze is a python3 tool),
     allow_canary => 1,
     files => T::beta_install(),
     transcript => [ T::prompt(0) ],

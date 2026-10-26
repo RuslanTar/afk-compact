@@ -2,6 +2,7 @@
 # watch_error rows; no stdout; the hook path exits 0. The rows after the bad
 # line are still swept.
 {
+    needs => [q(nonroot)], needs_note => q(chmod 0 does not stop root reading the transcript, so no unreadable row; the whole case skips),
     transcript => [ T::prompt(0) ],
     steps => [
         { call => 'append', raw => "{\"type\":\"user\", not json\n" },

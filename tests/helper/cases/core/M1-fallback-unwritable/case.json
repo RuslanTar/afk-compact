@@ -1,5 +1,6 @@
 {
  "id": "M1-fallback-unwritable",
+ "needs": ["nonroot"],
  "note": "MOD-SPEC §3.2 ('an unshaped seated compaction is the worse failure'), BUILD-PLAN §3.1 ('shaping still runs'): classic PreCompact prints the fallback text even when its dispatch record cannot be written, (a) the handoff root itself is read-only, (b) only the watch dir is read-only; exit 0, nothing on stderr",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

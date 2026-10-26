@@ -2,6 +2,6 @@
  "id": "AT-RN-05-inner-repo",
  "tmp_base": "repo",
  "steps": [
-  {"exec": ["/bin/test", "-d", "$TMP"], "expect": {"exit": 0}}
+  {"exec": ["/bin/sh", "-c", "test -d \"$0\"", "$TMP"], "expect": {"exit": 0}}
  ]
 }

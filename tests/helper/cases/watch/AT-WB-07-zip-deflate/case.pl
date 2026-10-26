@@ -9,6 +9,7 @@ my %got;
 my $rows = join('', map { qq({"v":1,"ev":"compaction","compaction_seq":$_,"verdict":"ok","trigger":"auto","pre_tokens":) . (200000 + $_ * 37) . "}\n" } 1 .. 300);
 my @entries = ([ 'rows/0123456789ab.jsonl', $rows ], [ 'tiny.txt', 'ab' ], [ 'flat.txt', 'a' x 200000 ]);
 {
+    needs => [q(cmd:python3)], needs_note => q(the Python zipfile read; the whole case skips, its perl zip checks too),
     steps => [
         { call => 'code', code => sub {
               my ($v) = @_;

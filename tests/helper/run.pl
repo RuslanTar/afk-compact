@@ -13,9 +13,11 @@
 #   "expect": {...}}
 # Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir, symlink (+ to),
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
-#   shortcuts), stub (executable script), run (a helper call without assertions).
+#   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
+#   out: a PATH without git), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time), $PLUGIN_VERSION, $STORE (the
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
+#   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
 #   variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
@@ -45,7 +47,10 @@
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
 #     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
-#     answers and holds that image locally)
+#     answers and holds that image locally; "nonroot" skips the whole case when the runner
+#     runs as root, its mode-free steps too, so a root run does not cover them). A case that
+#     uses $LSTART1 or $RUNNER_LSTART in a zone (case or step "tz", an env TZ) whose tz
+#     database file the host lacks skips as "needs tzdata" (zone_missing), with no "needs" entry.
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -137,20 +142,122 @@ sub repo_tmp {
     util::mkdir_p($REPO_TMP);
     return $REPO_TMP;
 }
-my $RUNNER_LSTART;
-sub runner_lstart {
-    return $RUNNER_LSTART if defined $RUNNER_LSTART;
-    my $r = util::run(['ps', '-o', 'lstart=', '-p', $$], timeout_ms => 5000, env => { LC_ALL => 'C' });
-    ($RUNNER_LSTART = $r->{out} // '') =~ s/\s+/ /g;
-    $RUNNER_LSTART =~ s/\A | \z//g;
-    return $RUNNER_LSTART;
+# lstart_in(pid, tz): `ps -o lstart=` for pid as the helper reads it in a case: under the
+# zone the helper call gets (TZ, child_env; undef: no TZ) and the C locale. An lstart is
+# local time, so one read in the runner's own zone matches the helper only while the host's
+# current UTC offset equals the case's (a UTC+2 zone host after the switch to winter time, a
+# Linux container in UTC). One ps call per (pid, zone), the zone keyed by defined-ness (no
+# TZ and TZ='' are not the same zone). Where ps gives no lstart (an image without procps;
+# busybox ps has no lstart) and /proc/<pid>/stat is there, the start time is btime + field
+# 22 / CLK_TCK (proc(5)) in the same form, else ''. An empty read (a ps timeout under load)
+# is tried once more and never cached, so it does not stick for the rest of the run.
+my %LSTART;
+my $LSTART_RE = qr/\A\w{3} \w{3} \d+ \d\d:\d\d:\d\d \d{4}\z/;
+sub lstart_in {
+    my ($pid, $tz) = @_;
+    my $key = "$pid " . (defined $tz ? "=$tz" : '-');
+    return $LSTART{$key} if defined $LSTART{$key};
+    for my $try (1, 2) {
+        my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
+        (my $v = $r->{out} // '') =~ s/\s+/ /g;
+        $v =~ s/\A | \z//g;
+        $v = proc_lstart($pid, $tz) // '' unless $v =~ $LSTART_RE;
+        return $LSTART{$key} = $v if $v =~ $LSTART_RE;
+    }
+    return '';
 }
-my $LSTART1 = do {
-    my $r = util::run(['ps', '-o', 'lstart=', '-p', '1'], timeout_ms => 5000);
-    (my $v = $r->{out} // '') =~ s/\s+/ /g;
-    $v =~ s/\A | \z//g;
-    $v;
-};
+# proc_lstart(pid, tz): the /proc start time in ps's lstart form, with the C locale's day and
+# month names whatever the runner's locale (the helper runs with no LANG or LC_*: spawn,
+# child_env), so it matches what the helper reads.
+my @LSTART_DAY = qw(Sun Mon Tue Wed Thu Fri Sat);
+my @LSTART_MON = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
+sub proc_lstart {
+    my ($pid, $tz) = @_;
+    my $stat = util::read_file("/proc/$pid/stat") // return undef;
+    my ($btime) = (util::read_file('/proc/stat') // '') =~ /^btime (\d+)$/m;
+    # the fields after the last `)` (comm may hold any byte): 3 state .. 22 starttime
+    my @f = split ' ', substr($stat, rindex($stat, ')') + 1);
+    return undef unless defined $btime && defined $f[19] && $f[19] =~ /\A\d+\z/;
+    my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
+    my $old = $ENV{TZ};
+    if (defined $tz) { $ENV{TZ} = $tz } else { delete $ENV{TZ} }
+    POSIX::tzset();
+    my @t = localtime($btime + int($f[19] / $hz));
+    if (defined $old) { $ENV{TZ} = $old } else { delete $ENV{TZ} }
+    POSIX::tzset();
+    my $s = sprintf('%s %s %d %02d:%02d:%02d %d', $LSTART_DAY[$t[6]], $LSTART_MON[$t[4]], $t[3], $t[2], $t[1], $t[0], $t[5] + 1900);
+    return $s =~ $LSTART_RE ? $s : undef;
+}
+# step_tz(step, case, V): the TZ a helper call of the step gets, as child_env sets it: the
+# step's "tz", else the case's, else UTC, unless the case's or the step's env sets TZ
+# (null: no TZ, undef here). No step: the case's own (its vars, before step 1).
+sub step_tz {
+    my ($st, $case, $V) = @_;
+    my %ce = (%{ $case->{env} || {} }, %{ ($st && $st->{env}) || {} });
+    return exists $ce{TZ} ? (defined $ce{TZ} ? subst($ce{TZ}, $V) : undef) : ($st ? $st->{tz} : undef) // $case->{tz} // 'UTC';
+}
+# lstart_var(name, V): $LSTART1 (pid 1) or $RUNNER_LSTART (the runner), filled where a string
+# uses it, in the zone in force ($V->{' tz'}: the step's, step_tz; a setup "run" action's
+# own, invoke). A start time the runner cannot read is a runner error, never '': a record
+# whose start is empty counts as a live owner (identity::alive), so the case would pass
+# without checking liveness. A case's vars are filled once, before step 1, in the case's
+# zone; a later helper call in another zone dies (lstart_zone_check).
+sub lstart_var {
+    my ($name, $V) = @_;
+    my $pid = $name eq 'LSTART1' ? 1 : $$;
+    my $v = lstart_in($pid, $V->{' tz'});
+    die "\$$name: no start time for pid $pid (ps gives no lstart, /proc/$pid/stat unreadable)\n" if $v eq '';
+    $V->{' lstart_before_steps'} = 1 if $V->{' before_steps'};
+    return $v;
+}
+# lstart_zone(V, tz): the zone in force becomes tz; $V{LSTART1} and $V{RUNNER_LSTART} hold
+# the start times in it as ordinary entries (other code reads %V, e.g. a recorder's map),
+# set only when the read gives a value: an unreadable one stays out of %V, and the
+# placeholder still dies in subst (lstart_var).
+sub lstart_zone {
+    my ($V, $tz) = @_;
+    $V->{' tz'} = $tz;
+    for my $n (qw(LSTART1 RUNNER_LSTART)) {
+        my $v = lstart_in($n eq 'LSTART1' ? 1 : $$, $tz);
+        if ($v ne '') { $V->{$n} = $v } else { delete $V->{$n} }
+    }
+}
+# lstart_zone_check(V, label): dies when the case's vars took a start time in the case's
+# zone and the helper call about to run gets another one.
+sub lstart_zone_check {
+    my ($V, $label) = @_;
+    my ($c, $t) = ($V->{' case_tz'}, $V->{' tz'});
+    die "$label: the case's vars hold \$LSTART1 or \$RUNNER_LSTART, filled in zone " . ($c // '(no TZ)')
+        . ', but this step runs in ' . ($t // '(no TZ)') . "\n"
+        if $V->{' lstart_before_steps'} && (defined $c ? "=$c" : '-') ne (defined $t ? "=$t" : '-');
+}
+# zone_missing(tz): the zone names a tz database file (Etc/GMT-3, Europe/Berlin) that this
+# host lacks (an image without tzdata), so libc would quietly use UTC and a case in that zone
+# would test nothing about zones. A POSIX TZ string ("<+03>-3", "EST5EDT") or UTC needs no file.
+my %ZONE_MISSING;
+sub zone_missing {
+    my ($tz) = @_;
+    return 0 unless defined $tz;
+    (my $z = $tz) =~ s/\A://;
+    return 0 if $z eq '' || $z =~ /[<>,]/ || $z =~ /\A[A-Za-z]{3,}[-+]?\d/ || $z =~ /\A(?:UTC|UCT|GMT|Zulu|Universal)\z/;
+    return -f $z ? 0 : 1 if $z =~ m{\A/};
+    return $ZONE_MISSING{$z} //= (grep { defined && $_ ne '' && -f "$_/$z" }
+        ($ENV{TZDIR}, '/usr/share/zoneinfo', '/usr/lib/zoneinfo', '/usr/share/lib/zoneinfo', '/etc/zoneinfo', '/share/zoneinfo')) ? 0 : 1;
+}
+# case_zones(case): every zone a helper call of the case can get (case and step "tz", a TZ
+# in the case's or a step's env, setup "run" actions), for zone_missing.
+sub case_zones {
+    my ($case) = @_;
+    my @z = ($case->{tz}, (ref $case->{env} eq 'HASH' ? $case->{env}{TZ} : ()));
+    for my $st ($case, @{ $case->{steps} || [] }, (ref $case->{then} eq 'ARRAY' ? @{ $case->{then} } : ())) {
+        next unless ref $st eq 'HASH';
+        for my $x ($st, grep { ref $_ eq 'HASH' } @{ ref $st->{setup} eq 'ARRAY' ? $st->{setup} : [] }) {
+            push @z, $x->{tz}, (ref $x->{env} eq 'HASH' ? $x->{env}{TZ} : ());
+        }
+    }
+    my %seen;
+    return grep { defined && !ref && !$seen{$_}++ } @z;
+}
 
 sub copy_tree {
     my ($src, $dst) = @_;
@@ -244,9 +351,21 @@ for my $cf (@CASES) {
     my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
                       || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
                       || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
-                      || (/^docker-image:(.+)$/ && !docker_image($1))
+                      || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
                       || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
-    if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "\n"; next }
+    # "nonroot": the case makes a file or folder unwritable or unreadable by its mode, which
+    # uid 0 ignores; as root it skips with that reason (run the suite as a normal user).
+    my $why = $> == 0 && grep({ $_ eq 'nonroot' } @{ $case->{needs} || [] }) ? ' (running as root, which ignores file modes)' : '';
+    if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "$why\n"; next }
+    # A case that uses $LSTART1 / $RUNNER_LSTART in a zone the host's tz database lacks: libc
+    # falls back to UTC for the runner and the helper alike, so the start-time check would pass
+    # without testing zones; it skips with that reason. Other cases in such a zone run (their
+    # clock checks fail visibly where they depend on the zone).
+    if ($raw =~ /\$(?:LSTART1|RUNNER_LSTART)\b/ and my @nz = grep { zone_missing($_) } case_zones($case)) {
+        $SKIPPED++;
+        print "ok $N - $id # SKIP needs tzdata (zone @nz is not installed; libc would use UTC)\n";
+        next;
+    }
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
     # The case's work dirs: c<N> under the system temp folder and, for tmp_base "repo"
@@ -421,12 +540,15 @@ sub run_case {
     $V{BRAND} = $BRAND;
     $V{HOST} = $HOSTNAME;
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
-    $V{LSTART1} = $LSTART1;
     $V{TYPES} = types_file();
-    # The runner's own pid and start time: the parent every helper call it starts sees
-    # (the launcher execs perl), for cases that stand the runner in for Claude Code.
+    # The runner's own pid (and $RUNNER_LSTART its start time, lstart_var): the parent every
+    # helper call it starts sees (the launcher execs perl), for cases that stand the runner in
+    # for Claude Code. Until step 1 the zone is the case's, and $V{LSTART1} and
+    # $V{RUNNER_LSTART} hold the start times in it (lstart_zone).
     $V{RUNNER_PID} = $$;
-    $V{RUNNER_LSTART} = runner_lstart();
+    lstart_zone(\%V, step_tz(undef, $case, \%V));
+    $V{' case_tz'} = $V{' tz'};
+    $V{' before_steps'} = 1;
     # "manifest": {dotted path in plugin.json: value}: this case runs against its own
     # staged copy whose plugin.json holds these values (e.g. a non-ASCII description).
     $V{PLUGIN} = stage_variant($case->{manifest}, "$V{TMP}/plugin") if ref $case->{manifest} eq 'HASH';
@@ -462,14 +584,19 @@ sub run_case {
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
     $V{WATCH} = defined $cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR}) : "$V{ROOT}/.watch";
     $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : "$V{HOME}/.claude/trash-staging";
-    %V = (%V, %{ subst_deep($case->{vars} || {}, \%V) });
+    my $vars = subst_deep($case->{vars} || {}, \%V);
+    %V = (%V, %$vars);
     my @steps = $case->{steps} ? @{ $case->{steps} } : ({ %$case, then => undef });
     push @steps, @{ $case->{then} } if !$case->{steps} && ref $case->{then} eq 'ARRAY';
     my @errs;
     my $i = 0;
+    $V{' before_steps'} = 0;
     for my $st (@steps) {
         $i++;
         my $label = $st->{name} // "step $i";
+        # the zone this step's helper calls get, for $LSTART1 / $RUNNER_LSTART (lstart_var)
+        lstart_zone(\%V, step_tz($st, $case, \%V));
+        lstart_zone_check(\%V, $label);
         my $now = $st->{now} // $case->{now};
         $V{TODAY} = defined $now ? substr($now, 0, 10) : POSIX::strftime('%Y-%m-%d', localtime);
         # "options": {key: value} (case level before step 1, and per step): plugin options in
@@ -558,8 +685,9 @@ sub subst {
     $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
     $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
-    # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
-    $s =~ s/\$([A-Z][A-Z0-9_]*)/exists $V->{$1} && defined $V->{$1} ? $V->{$1} : "\$$1"/ge;
+    # $LSTART1 / $RUNNER_LSTART (lstart_var), then any other $NAME the case defined (vars) or a
+    # step captured; unknown names stay as written.
+    $s =~ s/\$([A-Z][A-Z0-9_]*)/my $n = $1; $n eq 'LSTART1' || $n eq 'RUNNER_LSTART' ? lstart_var($n, $V) : exists $V->{$n} && defined $V->{$n} ? $V->{$n} : "\$$n"/ge;
     return $s;
 }
 
@@ -676,7 +804,7 @@ sub make_repo {
 
 sub is_setup_action {
     my ($s) = @_;
-    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub repo dispatch transcript run git bigfile age
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub bin_mirror repo dispatch transcript run git bigfile age
                                                tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha append);
 }
 
@@ -900,6 +1028,19 @@ sub setup {
         write_text("$dir/$s->{stub}", "#!/bin/sh\n" . ($s->{script} // 'exit 0') . "\n", '0755');
         return;
     }
+    # bin_mirror <folder> + dir (+ except [names]): dir gets a link to every entry of folder
+    # but the excepted names, for a PATH that lacks a tool. PATH=/bin does not do that on
+    # hosts where /bin is a link to /usr/bin (Debian, Ubuntu, Fedora).
+    if (exists $s->{bin_mirror}) {
+        my $dir = $s->{dir} // die "bin_mirror needs dir\n";
+        my %skip = map { ($_ => 1) } @{ $s->{except} || [] };
+        util::mkdir_p($dir);
+        for my $e (util::list_dir($s->{bin_mirror})) {
+            next if $skip{$e} || $e =~ /\A\.\.?\z/;
+            symlink("$s->{bin_mirror}/$e", "$dir/$e") or die "bin_mirror $dir/$e: $!\n";
+        }
+        return;
+    }
     if (exists $s->{repo} && ref $s->{repo} eq 'HASH') { make_repo($s->{repo}, $s->{at}, $V); return }
     if (exists $s->{git}) {
         my $dir = $s->{cwd} // $V->{TMP};
@@ -984,7 +1125,14 @@ sub setup {
         return;
     }
     if (exists $s->{run}) {
-        my $res = invoke({ %$s, argv => $s->{run} }, $case, $V, $cdir, 'setup');
+        # the call gets the action's own tz and env, else the case's (child_env), not the
+        # enclosing step's: its $LSTART1 / $RUNNER_LSTART are filled in that zone
+        my %was = map { ($_ => $V->{$_}) } (' tz', 'LSTART1', 'RUNNER_LSTART');
+        lstart_zone($V, step_tz($s, $case, $V));
+        my $res = eval { lstart_zone_check($V, "setup run @{ $s->{run} }"); invoke({ %$s, argv => $s->{run} }, $case, $V, $cdir, 'setup') };
+        my $err = $@;
+        for my $k (keys %was) { if (defined $was{$k}) { $V->{$k} = $was{$k} } else { delete $V->{$k} } }
+        die $err if $err;
         die "run @{ $s->{run} }: exit $res->[0]{exit}, want $s->{exit}\n" if defined $s->{exit} && $res->[0]{exit} != $s->{exit};
         capture($s->{capture}, $res->[0]{out}, $V) if $s->{capture};
         return;
@@ -1466,6 +1614,19 @@ sub builtin {
                 remove_tree($_, $td, $base) for @new_tmp, @new_repo;
             }
         }
+        return @e;
+    }
+    if ($name eq 'runner_child') {
+        # A child run of this runner on a case-local folder (discovery skips _ folders), with
+        # its own TMPDIR: "dir" (under the case), "exit" (wanted), "stdout_has" (regexes the
+        # output must match), for runner self-checks whose wanted result is a failing case.
+        my $dir = $a->{dir} // die "runner_child: no dir\n";
+        my $td = ($a->{tmp} // die "runner_child: no tmp\n") . '/child-' . util::rand_hex(4);
+        util::mkdir_p($td);
+        my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", "$cdir/$dir"], timeout_ms => 180000, env => { TMPDIR => $td });
+        my $out = chars($r->{out} // '');
+        push @e, "child run of $dir: exit $r->{exit}, want " . ($a->{exit} // 0) . ': ' . substr($out, -600) if $r->{exit} != ($a->{exit} // 0);
+        for my $re (@{ $a->{stdout_has} || [] }) { push @e, "child run of $dir: output has no /$re/: " . substr($out, -600) unless $out =~ /$re/m }
         return @e;
     }
     if ($name eq 'runner_hygiene') {

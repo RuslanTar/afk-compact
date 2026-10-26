@@ -1,0 +1,41 @@
+{
+ "id": "FX-runner-zones",
+ "note": "Runner self-checks for host-independent setups. $LSTART1 is filled in the zone of the helper call that reads it: a step's own tz, a TZ in a step's env, else the case's; a lock owned by pid 1 with that start time is a live owner (pin: REFUSED pin-locked), where a start time read in another zone would read as stale and be taken over. The zones are POSIX TZ strings, so no tz database is needed. A case whose vars take $LSTART1 and whose step runs in another zone stops with a runner error. bin_mirror links every entry of a folder but the excepted names (a PATH without git on hosts where /bin is /usr/bin)",
+ "tmp_base": "repo",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "UTC",
+ "steps": [
+  {"name": "setup",
+   "setup": [
+    {"repo": {"branch": "feature/LAB-7-retry", "commits": [{"files": {"app/retry.rb": "x = 1\n"}, "msg": "seed"}]}, "at": "$TMP/repo"},
+    {"write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a0b0c0d⟫\n"}
+   ]},
+  {"name": "a step's own tz", "tz": "<+03>-3",
+   "setup": [{"write": "$ROOT/.sessions/$SID.json.lock", "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"host\": \"$HOST\"}"}],
+   "cwd": "$TMP/repo",
+   "argv": ["pin", "--sid", "$SID", "--resumed-from", "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md"],
+   "expect": {"exit": 3, "stdout": "REFUSED: pin-locked\n"}},
+  {"name": "a TZ in the step's env", "env": {"TZ": "<+0530>-5:30"},
+   "setup": [{"write": "$ROOT/.sessions/$SID.json.lock", "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"host\": \"$HOST\"}"}],
+   "cwd": "$TMP/repo",
+   "argv": ["pin", "--sid", "$SID", "--resumed-from", "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md"],
+   "expect": {"exit": 3, "stdout": "REFUSED: pin-locked\n"}},
+  {"name": "the case's zone",
+   "setup": [{"write": "$ROOT/.sessions/$SID.json.lock", "content": "{\"sid\": \"other\", \"actor\": \"main\", \"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"host\": \"$HOST\"}"}],
+   "cwd": "$TMP/repo",
+   "argv": ["pin", "--sid", "$SID", "--resumed-from", "$ROOT/repo/LAB-7/2026-10-21_12-00-00_22222222_h.md"],
+   "expect": {"exit": 3, "stdout": "REFUSED: pin-locked\n"}},
+  {"name": "vars in the case's zone, a step in another: runner error",
+   "lib": "runner_child", "args": {"tmp": "$TMP", "dir": "_vars", "exit": 1,
+                                   "stdout_has": ["^not ok 1 - _vars$", "runner error: other zone: the case's vars hold [$]LSTART1 or [$]RUNNER_LSTART, filled in zone UTC, but this step runs in <\\+03>-3$"]}},
+  {"name": "bin_mirror leaves out the excepted names",
+   "setup": [
+    {"write": "$TMP/src/git", "text": "#!/bin/sh\n"},
+    {"write": "$TMP/src/other", "text": "#!/bin/sh\n"},
+    {"bin_mirror": "$TMP/src", "dir": "$TMP/bin", "except": ["git"]}
+   ],
+   "exec": ["/bin/sh", "-c", "test ! -e \"$0/git\" && test ! -L \"$0/git\" && test -L \"$0/other\" && test \"$(readlink \"$0/other\")\" = \"$1/other\"", "$TMP/bin", "$TMP/src"],
+   "expect": {"exit": 0}}
+ ]
+}

@@ -5,7 +5,7 @@
  "tz": "Etc/GMT-3",
  "steps": [
   {"setup": [{"fixture_setup": "fx-small.json"}, {"touch": "$TMP/fx/dir/out.log", "at": "2026-10-21T13:58:00+03:00"}]},
-  {"name": "the recipe ran", "exec": ["/bin/test", "-d", "$TMP/fx/repo/.git"], "expect": {"exit": 0, "files": [{"path": "$TMP/fx/dir/out.log", "contains": ["line 1"]}]}},
+  {"name": "the recipe ran", "exec": ["/bin/sh", "-c", "test -d \"$0\"", "$TMP/fx/repo/.git"], "expect": {"exit": 0, "files": [{"path": "$TMP/fx/dir/out.log", "contains": ["line 1"]}]}},
   {"name": "mtime on the case clock", "exec": ["/usr/bin/perl", "-e", "print((stat shift)[9])", "$TMP/fx/dir/out.log"],
    "expect": {"exit": 0, "stdout": "1792580280"}},
   {"name": "{{plugin}} in runtime.json is filled", "lib": "assembly_runtime_fill",

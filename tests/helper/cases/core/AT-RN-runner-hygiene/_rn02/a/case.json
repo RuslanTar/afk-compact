@@ -2,6 +2,6 @@
  "id": "AT-RN-02-inner-pass",
  "steps": [
   {"setup": [{"write": "$TMP/marker", "text": "a\n"}]},
-  {"exec": ["/bin/test", "-f", "$TMP/marker"], "expect": {"exit": 0}}
+  {"exec": ["/bin/sh", "-c", "test -f \"$0\"", "$TMP/marker"], "expect": {"exit": 0}}
  ]
 }

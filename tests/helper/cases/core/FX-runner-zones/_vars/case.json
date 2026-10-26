@@ -1,0 +1,9 @@
+{
+ "id": "_vars",
+ "note": "Inner case of FX-runner-zones (run by runner_child, which wants it to fail): vars take $LSTART1 in the case's zone, the step runs in another, so the runner stops the case",
+ "tz": "UTC",
+ "vars": {"L": "$LSTART1"},
+ "steps": [
+  {"name": "other zone", "tz": "<+03>-3", "exec": ["/bin/sh", "-c", "exit 0"], "expect": {"exit": 0}}
+ ]
+}
