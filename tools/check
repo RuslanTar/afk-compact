@@ -1172,7 +1172,10 @@ def x_h(argv):
     for line in out.splitlines():
         m = re.match(r"^(not )?ok \d+ - (.*)$", line)
         if m:
-            cur = m.group(2).strip() if m.group(1) else None
+            # `not ok N - id # TODO not run: needs ...`: a case the host could not run (a
+            # missing tool or tz database), counted apart by the runner, not a failure
+            todo = " # TODO not run: " in m.group(2)
+            cur = m.group(2).strip() if m.group(1) and not todo else None
             if cur:
                 failed.append(cur)
             continue

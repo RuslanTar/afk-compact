@@ -15,7 +15,7 @@ my %got;
             my $u = "caf\xe9"; utf8::upgrade($u);
             $got{latin_chars} = watch::io::sha256_hex($u);             # same text as characters: UTF-8
             $got{core_arg} = undef;
-            my $ctx = { sha256 => sub { $got{core_arg} = $_[0]; return Digest::SHA::sha256_hex($_[0]) } };
+            my $ctx = { sha256 => sub { $got{core_arg} = $_[0]; return sha::hex256($_[0]) } };
             $got{core} = watch::io::sha256_hex($s, $ctx);
             $got{undef} = watch::io::sha256_hex(undef);
         } },

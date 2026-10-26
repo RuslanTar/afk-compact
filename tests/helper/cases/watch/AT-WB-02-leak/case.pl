@@ -68,7 +68,7 @@ my %got;
         $E->is($m->{dropped}{'heal.command'}, 1, 'a heal command is never exported');
         my %sha = map { $_->{name} => $_->{sha256} } @{ $m->{files} || [] };
         for my $n (grep { $_ ne 'manifest.json' } @names) {
-            $E->is($sha{$n}, Digest::SHA::sha256_hex($e->{$n}{data}), "manifest sha256 of $n");
+            $E->is($sha{$n}, sha::hex256($e->{$n}{data}), "manifest sha256 of $n");
         }
         my @r = map { watch::json::decode($_) } grep { /\S/ } split /\n/, ($e->{ $rows[0] }{data} // '');
         my ($copy) = grep { $_->{ev} eq 'copy' } @r;

@@ -1,0 +1,8 @@
+{
+ "id": "_notrun-cmd",
+ "note": "Inner case of FX-runner-zones (run by runner_child): a tool the case needs is not on PATH, so it is not run",
+ "needs": ["cmd:afk-compact-no-such-tool"],
+ "steps": [
+  {"name": "never runs", "exec": ["/bin/sh", "-c", "exit 1"], "expect": {"exit": 0}}
+ ]
+}
