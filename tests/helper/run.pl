@@ -16,8 +16,8 @@
 #   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
 #   out: a PATH without git), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, in the case's "tz"
-#   like $RUNNER_LSTART; default UTC), $PLUGIN_VERSION, $STORE (the
+#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
+#   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
 #   variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
@@ -47,7 +47,8 @@
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
 #     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
-#     answers and holds that image locally; "nonroot" skips when the runner runs as root)
+#     answers and holds that image locally; "nonroot" skips the whole case when the runner
+#     runs as root, its mode-free steps too, so a root run does not cover them)
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
 use strict;
@@ -140,8 +141,8 @@ sub repo_tmp {
     return $REPO_TMP;
 }
 # lstart_in(pid, tz): `ps -o lstart=` for pid as the helper reads it in a case: under the
-# zone the case's helper calls get (TZ, child_env) and the C locale. An lstart is local
-# time, so one read in the runner's own zone matches the helper only while the host's
+# zone the helper call gets (TZ, child_env; undef: no TZ) and the C locale. An lstart is
+# local time, so one read in the runner's own zone matches the helper only while the host's
 # current UTC offset equals the case's (a UTC+2 zone host after the switch to winter time, a
 # Linux container in UTC). One ps call per (pid, zone). Where ps gives no lstart (an image
 # without procps; busybox ps has no lstart) and /proc/<pid>/stat is there, the start time is
@@ -150,7 +151,7 @@ my %LSTART;
 my $LSTART_RE = qr/\A\w{3} \w{3} \d+ \d\d:\d\d:\d\d \d{4}\z/;
 sub lstart_in {
     my ($pid, $tz) = @_;
-    return $LSTART{"$pid $tz"} //= do {
+    return $LSTART{"$pid " . ($tz // '')} //= do {
         my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
         (my $v = $r->{out} // '') =~ s/\s+/ /g;
         $v =~ s/\A | \z//g;
@@ -167,7 +168,7 @@ sub proc_lstart {
     return undef unless defined $btime && defined $f[19] && $f[19] =~ /\A\d+\z/;
     my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
     my $old = $ENV{TZ};
-    $ENV{TZ} = $tz;
+    if (defined $tz) { $ENV{TZ} = $tz } else { delete $ENV{TZ} }
     POSIX::tzset();
     my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime($btime + int($f[19] / $hz)));
     if (defined $old) { $ENV{TZ} = $old } else { delete $ENV{TZ} }
@@ -175,8 +176,27 @@ sub proc_lstart {
     $s =~ s/ +/ /g;
     return $s;
 }
-# A case's zone: its "tz", else UTC (child_env; a step's own "tz" is not applied here).
-sub case_tz { return $_[0]{tz} // 'UTC' }
+# step_tz(step, case, V): the TZ a helper call of the step gets, as child_env sets it: the
+# step's "tz", else the case's, else UTC, unless the case's or the step's env sets TZ
+# (null: no TZ, undef here). No step: the case's own (its vars, before step 1).
+sub step_tz {
+    my ($st, $case, $V) = @_;
+    my %ce = (%{ $case->{env} || {} }, %{ ($st && $st->{env}) || {} });
+    return exists $ce{TZ} ? (defined $ce{TZ} ? subst($ce{TZ}, $V) : undef) : ($st ? $st->{tz} : undef) // $case->{tz} // 'UTC';
+}
+# lstart_var(name, V): $LSTART1 (pid 1) or $RUNNER_LSTART (the runner), filled where a string
+# uses it, in the zone in force ($V->{' tz'}: the step's, step_tz). A start time the runner
+# cannot read is a runner error, never '': a record whose start is empty counts as a live
+# owner (identity::alive), so the case would pass without checking liveness. A case's vars
+# are filled once, before step 1, in the case's zone; a later step in another zone dies.
+sub lstart_var {
+    my ($name, $V) = @_;
+    my $pid = $name eq 'LSTART1' ? 1 : $$;
+    my $v = lstart_in($pid, $V->{' tz'});
+    die "\$$name: no start time for pid $pid (ps gives no lstart, /proc/$pid/stat unreadable)\n" if $v eq '';
+    $V->{' lstart_before_steps'} = 1 if $V->{' before_steps'};
+    return $v;
+}
 
 sub copy_tree {
     my ($src, $dst) = @_;
@@ -450,12 +470,13 @@ sub run_case {
     $V{BRAND} = $BRAND;
     $V{HOST} = $HOSTNAME;
     $V{CLAUDE_BIN} = $CLAUDE_BIN;
-    $V{LSTART1} = lstart_in(1, case_tz($case));
     $V{TYPES} = types_file();
-    # The runner's own pid and start time: the parent every helper call it starts sees
-    # (the launcher execs perl), for cases that stand the runner in for Claude Code.
+    # The runner's own pid (and $RUNNER_LSTART its start time, lstart_var): the parent every
+    # helper call it starts sees (the launcher execs perl), for cases that stand the runner in
+    # for Claude Code. Until step 1 the zone is the case's.
     $V{RUNNER_PID} = $$;
-    $V{RUNNER_LSTART} = lstart_in($$, case_tz($case));
+    $V{' tz'} = step_tz(undef, $case, \%V);
+    $V{' before_steps'} = 1;
     # "manifest": {dotted path in plugin.json: value}: this case runs against its own
     # staged copy whose plugin.json holds these values (e.g. a non-ASCII description).
     $V{PLUGIN} = stage_variant($case->{manifest}, "$V{TMP}/plugin") if ref $case->{manifest} eq 'HASH';
@@ -491,14 +512,22 @@ sub run_case {
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
     $V{WATCH} = defined $cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR}) : "$V{ROOT}/.watch";
     $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : "$V{HOME}/.claude/trash-staging";
-    %V = (%V, %{ subst_deep($case->{vars} || {}, \%V) });
+    my $vars = subst_deep($case->{vars} || {}, \%V);
+    %V = (%V, %$vars);
     my @steps = $case->{steps} ? @{ $case->{steps} } : ({ %$case, then => undef });
     push @steps, @{ $case->{then} } if !$case->{steps} && ref $case->{then} eq 'ARRAY';
     my @errs;
     my $i = 0;
+    my $case_tz = $V{' tz'};
+    $V{' before_steps'} = 0;
     for my $st (@steps) {
         $i++;
         my $label = $st->{name} // "step $i";
+        # the zone this step's helper calls get, for $LSTART1 / $RUNNER_LSTART (lstart_var)
+        $V{' tz'} = step_tz($st, $case, \%V);
+        die "$label: the case's vars hold \$LSTART1 or \$RUNNER_LSTART, filled in zone " . ($case_tz // '(no TZ)')
+            . ', but this step runs in ' . ($V{' tz'} // '(no TZ)') . "\n"
+            if $V{' lstart_before_steps'} && ($case_tz // '') ne ($V{' tz'} // '');
         my $now = $st->{now} // $case->{now};
         $V{TODAY} = defined $now ? substr($now, 0, 10) : POSIX::strftime('%Y-%m-%d', localtime);
         # "options": {key: value} (case level before step 1, and per step): plugin options in
@@ -587,8 +616,9 @@ sub subst {
     $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
     $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
     $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
-    # Any other $NAME the case defined (vars) or a step captured; unknown names stay as written.
-    $s =~ s/\$([A-Z][A-Z0-9_]*)/exists $V->{$1} && defined $V->{$1} ? $V->{$1} : "\$$1"/ge;
+    # $LSTART1 / $RUNNER_LSTART (lstart_var), then any other $NAME the case defined (vars) or a
+    # step captured; unknown names stay as written.
+    $s =~ s/\$([A-Z][A-Z0-9_]*)/my $n = $1; $n eq 'LSTART1' || $n eq 'RUNNER_LSTART' ? lstart_var($n, $V) : exists $V->{$n} && defined $V->{$n} ? $V->{$n} : "\$$n"/ge;
     return $s;
 }
 
