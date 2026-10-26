@@ -51,6 +51,8 @@ export const DRIVER_LINE = /^Active driver: /m
 export const REMEASURE_AFTER_MS = 600000
 /** The re-measure's budget at delivery (one helper call). */
 export const REMEASURE_MS = 3000
+/** The helper's own budget for that call (`--budget-ms`): under the kill, with room to print. */
+export const REMEASURE_HELPER_MS = REMEASURE_MS - 300
 
 /**
  * MOD-SPEC §3.4 step 4 (S-SETTINGS B): `[prod-allow]` only when the mod's own option and the
@@ -214,7 +216,7 @@ async function freshBlock(
     ? { ...(await buildBlockWith(d, pend.sid, args, pend.remeasure ?? null, at)), remeasured: false }
     : { block: pend.block, remeasure: pend.remeasure, measuredAt: at, remeasured: false }
   if (!force && t0 - pend.builtAt <= REMEASURE_AFTER_MS) return stored()
-  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS, args.savedCopy ?? undefined)
+  const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS, args.savedCopy ?? undefined, REMEASURE_HELPER_MS)
   if (fresh === undefined) {
     await log(d, pend.sid, 'resume_remeasure_failed', { nonce: pend.nonce, age_s: ageS })
     return stored()

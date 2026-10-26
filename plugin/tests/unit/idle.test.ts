@@ -410,6 +410,10 @@ test('AT-IC-04: the re-measure fails (3 s budget) → the stored block goes out,
   expect(w.rowsOf('resume_remeasure_failed').map(r => r.age_s)).toEqual([700])
   const last = w.callsOf('measure')[w.callsOf('measure').length - 1]
   expect(last?.args.includes('--compact')).toBe(true)
+  // Review of the second build: only this delivery-time re-measure, killed at 3 s, gives the
+  // helper the short budget; the re-measure at compaction keeps the helper's own (7 s).
+  expect(last?.args.join(' ')).toContain('--budget-ms 2700')
+  expect(w.callsOf('measure')[0]?.args.includes('--budget-ms')).toBe(false)
 })
 
 // ---- IC-1 D5: the pre-idle handoff turn (§9.4)

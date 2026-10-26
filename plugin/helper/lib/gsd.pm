@@ -8,8 +8,9 @@ package gsd;
 # and only those that worked with GSD get a GSD line, each with its own workstream. Signals,
 # matched per row (no row text leaves this module; only skill names, short plain arguments,
 # workstream names and paths do):
-#   - a typed slash command (`<command-name>`) in a user row that is not meta, a compact summary
-#     or a sidechain; `/clear` forgets everything before it;
+#   - a typed slash command: a user row that is not meta, a compact summary or a sidechain and
+#     whose text starts with Claude Code's command tags (tags quoted inside a prompt are prose);
+#     `/clear` forgets everything before it;
 #   - a Skill tool call in a main assistant row (skill, args);
 #   - a Bash tool call that runs gsd-tools (`gsd_run <verb>`, `gsd-tools[.cjs] <verb>`,
 #     `node …/gsd-tools.cjs <verb>`) at a command position, outside a heredoc body and outside
@@ -22,21 +23,24 @@ package gsd;
 #     the same files under workstreams/<ws>/; another file dropped into a workstream folder is
 #     not GSD work). A Read never counts and never names a workstream.
 # A session uses GSD when one of these is a GSD command (`gsd-*` or `gsd:*`; not the maintenance
-# commands in %NOT_WORK; `gsd-workstreams` only with switch or resume), a gsd-tools run, a
-# state-file write, or a driver skill (below) invoked with `--ws` of an existing workstream.
-# Any other command or skill with `--ws <name>` only names a workstream (for a session that uses
-# GSD); it is neither GSD work nor a driver (a handoff or catch-up skill is one-shot).
-# Its workstream is the newest one those signals name (`--ws <name>`, `--ws=<name>`,
-# `gsd-workstreams switch|resume <name>`, a state-file write under workstreams/<name>/) whose
-# folder exists under a GSD root the session touched (the row's cwd, `--cwd`, `--repo`, a
-# state-file write's root); the shared .planning/active-workstream pointer never names one.
-# With none named the session works flat.
+# commands in %NOT_WORK; `gsd-workstreams` only with switch or resume), a gsd-tools run or a
+# state-file write. Its workstream is the newest one named by those (`--ws <name>`,
+# `--ws=<name>`, `gsd-workstreams switch|resume <name>`, a state-file write under
+# workstreams/<name>/) or by its driver's own `--ws`, whose folder exists under a GSD root the
+# session touched (the row's cwd, `--cwd`, `--repo`, a state-file write's root; GSD's own walk:
+# up to the first folder holding .git, never $HOME). `--ws` on any other skill names nothing (a
+# handoff or catch-up skill only looked at it); the shared .planning/active-workstream pointer
+# never names one. With none named the session works flat.
 # The driver is the newest typed or Skill-invoked loop skill: one of %DRIVERS, one the owner lists
-# in the `driver_skills` setting, or the first one the user chained into a typed GSD command that
-# names an existing workstream, with `and` or `then` (`/gsd-resume-work --ws X and /<loop>`).
-# /loop and /goal keep themselves and are never listed.
-# Only a driver gets an `Active driver:` line (the resume protocol's [driver] re-entry keys on it);
-# a session that only used GSD gets its GSD line and a passive `GSD re-entry` line.
+# in the `driver_skills` setting, or a skill that is no GSD command but whose own text, as Claude
+# Code loaded it into this session right after the invocation, runs gsd-tools (a loop that drives
+# GSD work). This plugin's own skills, other GSD commands and /loop, /goal are never one.
+# A listed loop chained into a typed GSD command with `and`/`then` (`/gsd-resume-work --ws X and
+# /<loop> <args>`) counts as invoked there, with its own arguments; an unlisted chained skill only
+# through its own invocation. A `/gsd-pause-work` after the driver's newest invocation pauses it.
+# Only an unpaused driver gets an `Active driver:` line (the resume protocol's [driver] re-entry
+# keys on it); a paused one gets a `Paused driver:` line, and a session that used GSD with no
+# driver, a paused one or one that is not a GSD command also gets a passive `GSD re-entry` line.
 use strict;
 use warnings;
 use utf8;
@@ -46,11 +50,12 @@ our $ROW_MAX = 4 * 1024 * 1024;       # a longer row is never decoded
 our $WS_KEEP = 8;                     # newest workstream names kept
 our $ROOTS_KEEP = 8;                  # newest GSD roots kept
 our $SKILLS_KEEP = 64;                # newest invoked skill names kept (one entry each)
+our $LOOPS_KEEP = 32;                 # skill names kept whose text runs gsd-tools
 our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 2;
+our $CACHE_V = 3;
 our %DRIVERS = map { $_ => 1 } qw(gsd-autonomous gsd-execute-phase gsd-manager
                                   superpowers:executing-plans superpowers:subagent-driven-development);
 our %NOT_WORK = map { $_ => 1 } qw(gsd-help gsd-settings gsd-config gsd-update gsd-health);
@@ -111,6 +116,25 @@ sub _args {
     return '' if $a eq '';
     return undef if length($a) > $ARGS_MAX || $a =~ m{[^A-Za-z0-9 ._:/=,@+#%~-]};
     return $a;
+}
+
+# The parts of arguments that cannot be shown which a re-enter command keeps, in their order:
+# `--ws <name>`, a `resume` word, and `--repo` / `--cwd` with a plain absolute path.
+sub _keep {
+    my ($a) = @_;
+    return '' unless defined $a && !ref $a;
+    my @t = split /\s+/, $a;
+    my @k;
+    for (my $i = 0; $i < @t; $i++) {
+        my ($k, $v);
+        if ($t[$i] eq 'resume') { push @k, 'resume'; next }
+        if ($t[$i] =~ /\A--(ws|repo|cwd)=(.+)\z/) { ($k, $v) = ($1, $2) }
+        elsif ($t[$i] =~ /\A--(ws|repo|cwd)\z/ && $i + 1 < @t) { ($k, $v) = ($1, $t[++$i]) }
+        else { next }
+        $v =~ s/\A(['"])(.*)\1\z/$2/;
+        push @k, "--$k $v" if $k eq 'ws' ? $v =~ /\A$WS\z/ : $v =~ $PLAIN_PATH;
+    }
+    return join(' ', @k);
 }
 
 sub _ws_from_args {
@@ -187,10 +211,10 @@ sub bash_calls {
 }
 
 sub _push_ws {
-    my ($st, $name, $root, $ts) = @_;
+    my ($st, $name, $root, $ts, $seq) = @_;
     return unless defined $name && $name =~ /\A$WS\z/ && $name ne 'none';
     my @w = grep { !($_->{name} eq $name && ($_->{root} // '') eq ($root // '')) } @{ $st->{ws} || [] };
-    push @w, { name => $name, root => $root, ts => $ts };
+    push @w, { name => $name, root => $root, ts => $ts, seq => $seq // $st->{seq} // 0 };
     shift @w while @w > $WS_KEEP;
     $st->{ws} = \@w;
 }
@@ -215,12 +239,55 @@ sub _skill {
     }
 }
 
+# The skill text Claude Code loads right after an invocation (a meta row that starts `Base
+# directory for this skill: <dir>`, the folder named as the skill; the invocation's arguments
+# follow as `ARGUMENTS: …` and do not count): a text that runs gsd-tools makes that skill a loop
+# that drives GSD (it is not a GSD command itself).
+sub _skill_text {
+    my ($st, $l) = @_;
+    my $n = $st->{last} // return;
+    return unless index($l, 'gsd_run') >= 0 || index($l, 'gsd-tools') >= 0;
+    return if length($l) > $ROW_MAX;
+    my $j = eval { jsonc::decode($l) };
+    return unless ref $j eq 'HASH' && $j->{isMeta} && ref $j->{message} eq 'HASH';
+    my $c = $j->{message}{content};
+    my $t = !ref $c ? ($c // '')
+          : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : '';
+    my ($dir) = $t =~ m{\A\s*Base directory for this skill: ([^\n]+)} or return;
+    my $cut = rindex($t, "\nARGUMENTS: ");
+    $t = substr($t, 0, $cut) if $cut >= 0;
+    return unless index($t, 'gsd_run') >= 0 || index($t, 'gsd-tools') >= 0;
+    $dir =~ s{[/\s]+\z}{};
+    (my $base = $n) =~ s/\A[^:]*://;
+    return unless lc(util::basename($dir)) eq $base;
+    my $lp = $st->{loops} ||= {};
+    $lp->{$n} = ++$st->{seq};
+    if (keys %$lp > $LOOPS_KEEP) { my ($old) = sort { $lp->{$a} <=> $lp->{$b} } keys %$lp; delete $lp->{$old} }
+}
+
+# This plugin's own skills (handoff, resume, report, status) are one-shot.
+sub _own {
+    my ($name) = @_;
+    my $b = lc(eval { ctx::brand() } // '');
+    return $b ne '' && index($name, "$b:") == 0 ? 1 : 0;
+}
+
+# Arguments of a chained skill: up to the line end or the next `and`/`then` connector.
+sub _chain_args {
+    my ($rest) = @_;
+    $rest =~ s/\n.*\z//s;
+    $rest =~ s/(?:\A|[ \t,;])(?:and|then)[ \t]+.*\z//s;
+    $rest =~ s/\A[\s.,;:!?]+|[\s.,;:!?]+\z//g;
+    return $rest;
+}
+
 # One typed command or Skill call.
 sub _invoked {
     my ($st, $via, $raw, $args, $cwd, $ts) = @_;
     my $name = _norm($raw);
     return unless $name =~ /\A[a-z0-9][a-z0-9:._-]*\z/;
     if ($via eq 'typed' && $name eq 'clear') { %$st = (); return }
+    delete $st->{last};
     return if $BUILTIN{$name};
     my $shown = _args($args);
     my $ws = _ws_from_args($name, $args);
@@ -229,28 +296,34 @@ sub _invoked {
     my %e = (via => $via, name => $name, args => $shown, hidden => (defined $shown ? 0 : 1), ts => $ts,
              seq => ++$st->{seq}, root => $root);
     $e{ws} = $ws if defined $ws;
+    $e{keep} = _keep($args) unless defined $shown;
     my $gsd = _is_gsd_cmd($name, $args);
+    my $own = _own($name);
     if ($gsd) {
         $st->{gsd} = { %e };
         _push_root($st, $root);
+        _push_ws($st, $ws, $root, $ts, $e{seq});
+        $st->{paused} = { seq => $e{seq}, ts => $ts, (defined $ws ? (ws => $ws) : ()) } if $name eq 'gsd-pause-work';
+    } elsif (defined $named && defined $ws && !$own) {
+        _push_root($st, $named);    # where a loop's --ws resolves
     }
-    _push_root($st, $named) if defined $named && ($gsd || defined $ws);
-    # A workstream named by any invocation; it decides only for a session that uses GSD.
-    _push_ws($st, $ws, $root, $ts);
-    _skill($st, \%e) unless $NOT_WORK{$name} || ($name =~ /\Agsd-/ && !$DRIVERS{$name});
-    # The owner's form `/gsd-resume-work --ws X and /<loop>`: the first skill chained with `and` or
-    # `then` on the same line into a typed GSD command that names a workstream drives that
-    # workstream (checked at session()); a skill on a line of its own (`--ws X\n/catch-up`), after
-    # the first, or after a GSD command without a workstream (`/gsd-resume-work and
-    # /<handoff resumer> <file>`) is a one-shot request.
+    return if $NOT_WORK{$name} || $own;
+    _skill($st, \%e) unless $name =~ /\Agsd-/ && !$DRIVERS{$name};
+    $st->{last} = $name unless $name =~ /\Agsd-/;    # its skill text comes next (_skill_text)
+    # The owner's form `/gsd-resume-work --ws X and /<loop> <args>`: the first skill chained with
+    # `and` or `then` on the same line into a typed GSD command that names a workstream, with its
+    # own arguments; it drives only when listed (session()). A skill on a line of its own, after
+    # the first, or after a GSD command without a workstream is not chained.
     if ($gsd && $via eq 'typed' && defined $ws && defined $args && !ref $args) {
         while ($args =~ m{(?:\A|[ \t,;])(?:and|then)[ \t]+/([a-z][a-z0-9:._-]*?)(?=[\s,;!?)]|\.(?:\s|\z)|\z)}g) {
             my $n = _norm($1);
-            next if $BUILTIN{$n} || $NOT_WORK{$n} || $n eq $name || ($n =~ /\Agsd-/ && !$DRIVERS{$n});
-            $st->{chained}{$n} = { ws => $ws, root => $root };
-            my %c = (via => 'typed', name => $n, args => '', hidden => 0, ts => $ts, seq => ++$st->{seq}, root => $root,
-                     chained => 1);
-            $c{ws} = $ws if defined $ws;
+            next if $BUILTIN{$n} || $NOT_WORK{$n} || $n eq $name || _own($n) || ($n =~ /\Agsd-/ && !$DRIVERS{$n});
+            my $ca = _chain_args(substr($args, pos($args)));
+            my $cs = _args($ca);
+            my %c = (via => 'typed', name => $n, args => $cs, hidden => (defined $cs ? 0 : 1), ts => $ts,
+                     seq => ++$st->{seq}, root => _root_from_args($ca) // $root, chained => 1);
+            $c{keep} = _keep($ca) unless defined $cs;
+            $c{ws} = _ws_from_args($n, $ca) // $ws;
             _skill($st, \%c);
             last;
         }
@@ -268,7 +341,9 @@ sub _row {
         return if $j->{isMeta} || $j->{isCompactSummary} || $j->{isVisibleInTranscriptOnly};
         my $t = !ref $c ? ($c // '')
               : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : '';
-        while ($t =~ m{<command-name>/?([^<\s]+)</command-name>(?:\s*<command-args>(.*?)</command-args>)?}gs) {
+        # Claude Code writes a typed command as the row's whole text, starting with its tags; tags
+        # anywhere else are quoted in a prompt.
+        if ($t =~ m{\A\s*<command-(?:message|name)>} && $t =~ m{<command-name>/?([^<\s]+)</command-name>(?:\s*<command-args>(.*?)</command-args>)?}s) {
             _invoked($st, 'typed', $1, $2, $cwd, $ts);
         }
         return;
@@ -284,7 +359,7 @@ sub _row {
                 my $root = $b->{cwd} // $cwd;
                 $st->{gsd} = { via => 'Bash', name => "gsd-tools $b->{verb}", args => '', hidden => 0, ts => $ts, root => $root };
                 _push_root($st, $root);
-                _push_ws($st, $b->{ws}, $root, $ts);
+                _push_ws($st, $b->{ws}, $root, $ts, ++$st->{seq});
             }
         } elsif ($EDIT{$n}) {
             my $p = $in->{file_path} // $in->{notebook_path};
@@ -299,7 +374,7 @@ sub _row {
             $short = $pre . $short;
             $st->{gsd} = { via => $n, name => ".planning/$short", args => '', hidden => 0, ts => $ts, root => $root, file => 1 };
             _push_root($st, $root);
-            _push_ws($st, $ws, $root, $ts);
+            _push_ws($st, $ws, $root, $ts, ++$st->{seq});
         }
     }
 }
@@ -335,16 +410,22 @@ sub scan {
     }
     seek($fh, $off, 0);
     my ($n, $status) = (0, 'ok');
+    # Tests stop a scan after this many rows, as if its time ran out there.
+    my $rows_max = (util::test_mode() && ($ENV{STORE_TEST_GSD_SCAN_ROWS} // '') =~ /\A[1-9][0-9]{0,8}\z/) ? 0 + $ENV{STORE_TEST_GSD_SCAN_ROWS} : 0;
     while (my $l = <$fh>) {
         last unless substr($l, -1) eq "\n";    # a row still being written: next time
+        # Checked before the row counts as read, so a scan that stops here reads it next time.
+        if ((++$n % 256 == 0 && util::clock_ms() > $deadline) || ($rows_max && $n > $rows_max)) { $status = 'timeout'; last }
         $off += length $l;
-        if (++$n % 256 == 0 && util::clock_ms() > $deadline) { $status = 'timeout'; last }
         # metadata rows (request blobs, titles, modes) lead with their type; message rows do not
         next if index($l, '{"type":"') == 0 && index($l, '{"type":"user"') != 0 && index($l, '{"type":"assistant"') != 0;
         next if index($l, '"isSidechain":true') >= 0;
         my $user = index($l, '"type":"user"') >= 0;
-        if ($user) { next unless index($l, '<command-name>') >= 0 }
-        else {
+        if ($user && index($l, '<command-name>') < 0) {
+            _skill_text($st, $l) if defined $st->{last} && index($l, 'Base directory for this skill:') >= 0;
+            next;
+        }
+        if (!$user) {
             next unless index($l, '"type":"assistant"') >= 0 && index($l, '"tool_use"') >= 0
                 && (index($l, '"Skill"') >= 0 || index($l, 'gsd') >= 0 || index($l, '.planning/') >= 0);
         }
@@ -366,11 +447,16 @@ sub scan {
 sub _gsd_root {
     my ($dir) = @_;
     return undef unless defined $dir && $dir =~ m{\A/};
+    my $home = util::home() // '';
+    $home =~ s{/+\z}{};
     for (1 .. 24) {
         return $dir if -d "$dir/.planning";
-        last if $dir eq '/' || $dir eq '';
+        # GSD's own walk: never past a repository or worktree root (a .git folder or file), nor
+        # into the home folder.
+        last if -e "$dir/.git" || $dir eq '/' || $dir eq '';
         $dir =~ s{/[^/]*\z}{};
         $dir = '/' if $dir eq '';
+        last if $home ne '' && $dir eq $home;
     }
     return undef;
 }
@@ -414,20 +500,12 @@ sub _state_text {
     return @p ? join(' · ', @p) : 'no position recorded';
 }
 
-# The driver skill names: %DRIVERS plus the owner's `driver_skills` setting (`;`-separated).
+# The listed driver names: %DRIVERS plus the owner's `driver_skills` setting (`;`-separated).
 sub driver_names {
     my %d = %DRIVERS;
     my $v = eval { rc::val('driver_skills') };
     $d{ _norm($_) } = 1 for eval { settings::list($v) };
     return \%d;
-}
-
-# A skill chained into a typed GSD command whose workstream exists (_invoked).
-sub _chained {
-    my ($st, $name, @roots) = @_;
-    my $c = $st->{chained} && $st->{chained}{$name};
-    return 0 unless ref $c eq 'HASH' && defined $c->{ws};
-    return _ws_any($c->{ws}, $c->{root}, @roots) ? 1 : 0;
 }
 
 # The first workstream folder of name under one of the roots: (root, name) or ().
@@ -451,22 +529,34 @@ sub _fix_ws {
 }
 
 # A command as invoked (`shown`: arguments that cannot be shown are named so), or as re-entered
-# (such arguments are left out but their `--ws`).
+# (of such arguments only the kept parts: `--ws`, `resume`, `--repo`/`--cwd` with a plain path).
 sub _cmd {
     my ($e, $shown) = @_;
     my $c = '/' . $e->{name};
     return $c . " $e->{args}" if defined $e->{args} && $e->{args} ne '';
     return $c . ' (arguments not shown)' if $e->{hidden} && $shown;
+    return $c . " $e->{keep}" if $e->{hidden} && defined $e->{keep} && $e->{keep} ne '';
     return $c . (defined $e->{ws} ? " --ws $e->{ws}" : '');
 }
 
 sub _when { my ($e) = @_; return defined $e->{ts} ? "$e->{via}, " . util::stamp($e->{ts}) : $e->{via} }
 
+# The workstream the shared .planning/active-workstream pointer names under root (its folder
+# exists), or undef. GSD uses it for a session with no --ws and no pointer of its own.
+sub _shared {
+    my ($root) = @_;
+    return undef unless defined $root;
+    my $raw = util::read_file("$root/.planning/active-workstream", 256) // return undef;
+    my ($n) = $raw =~ /\A\s*($WS)\s*\z/ or return undef;
+    return ($n ne 'none' && -d "$root/.planning/workstreams/$n") ? $n : undef;
+}
+
 # session(sid, transcript, cwd, worktree, cache_dir, budget_ms) -> {status: gsd | driver | none |
-# timeout | unread, lines => [GSD line?, GSD re-entry line?, Active driver line?], line, reentry
-# (the GSD re-entry line), driver (the Active driver line), state (the STATE.md path, GSD only),
-# workstream, root, reenter => [the re-enter command]}. No line for a session that worked with
-# neither GSD nor a driver skill, nor for one whose transcript is not found.
+# timeout | unread, lines => [GSD line?, GSD re-entry line?, driver line?], line, reentry (the
+# GSD re-entry line), driver (the Active or Paused driver line), paused (1 for a paused driver),
+# state (the STATE.md path, GSD only), workstream, root, reenter => [the re-enter command]}. No
+# line for a session that worked with neither GSD nor a driver skill, nor for one whose transcript
+# is not found.
 sub session {
     my (%a) = @_;
     my $path = transcript_path($a{sid}, $a{transcript}, $a{cwd}, $a{worktree});
@@ -478,8 +568,11 @@ sub session {
     my $here = $a{worktree} // $a{cwd};
     my @roots = (reverse(@{ $st->{roots} || [] }), $here);
     my $dn = driver_names();
+    my $loops = $st->{loops} || {};
+    # The driver: a listed skill, or one whose loaded text runs gsd-tools (a chained entry counts
+    # the same way: when listed, or when an invocation of that skill loaded such a text).
     my ($d) = sort { $b->{seq} <=> $a->{seq} }
-              grep { $dn->{ $_->{name} } || _chained($st, $_->{name}, @roots) } values %{ $st->{skills} || {} };
+              grep { $dn->{ $_->{name} } || $loops->{ $_->{name} } } values %{ $st->{skills} || {} };
     my $g = $st->{gsd};
     # A driver invoked with an existing workstream drives GSD work.
     if (!$g && $d && defined $d->{ws} && _ws_any($d->{ws}, $d->{root}, @roots)) {
@@ -487,9 +580,12 @@ sub session {
     }
     return { status => 'none', lines => [] } unless $g || $d;
     my %out = (status => ($g ? 'gsd' : 'driver'), lines => []);
-    my ($ws, $root, $cwdflag) = (undef, undef, '');
+    my ($ws, $root, $cwdflag, $caution) = (undef, undef, '', '');
     if ($g) {
-        for my $w (reverse @{ $st->{ws} || [] }) {
+        # The newest workstream named by GSD work, or by the driver's own --ws.
+        my @named = @{ $st->{ws} || [] };
+        push @named, { name => $d->{ws}, root => $d->{root}, seq => $d->{seq} } if $d && defined $d->{ws};
+        for my $w (sort { ($b->{seq} // 0) <=> ($a->{seq} // 0) } @named) {
             ($root, $ws) = _ws_any($w->{name}, $w->{root}, @roots);
             last if defined $ws;
         }
@@ -503,26 +599,39 @@ sub session {
         # GSD work in another checkout than this session's: its commands need --cwd.
         my $hr = _gsd_root($here);
         $cwdflag = " --cwd $root" if defined $root && (!defined $hr || $hr ne $root) && $root =~ $PLAIN_PATH;
+        # Flat work beside a shared pointer: GSD sends a command without --ws to that workstream.
+        my $sh = defined $ws ? undef : _shared($root);
+        $caution = " (caution: .planning/active-workstream names $sh, and GSD uses it)" if defined $sh;
     }
     my $gsd_cmd = '/gsd-resume-work' . (defined $ws ? " --ws $ws" : '') . $cwdflag;
-    my $re;
+    my ($re, $paused);
     if ($d) {
         my %e = %$d;
         $e{args} = _fix_ws($e{args}, $e{root}, @roots) if defined $e{args};
+        $e{keep} = _fix_ws($e{keep}, $e{root}, @roots) if defined $e{keep};
         if (defined $e{ws}) { my (undef, $v) = _ws_any($e{ws}, $e{root}, @roots); $e{ws} = $v // $e{ws} }
         $re = _cmd(\%e);
-        # A GSD loop re-enters with the session's workstream and GSD root (a superpowers driver
-        # takes no GSD flags).
+        # A GSD loop re-enters with the session's workstream (a listed superpowers driver takes no
+        # GSD flags) and, a GSD command, with its GSD root; another loop keeps its own root flag.
         if ($g && ($e{name} =~ /\Agsd-/ || !$DRIVERS{ $e{name} })) {
             $re .= " --ws $ws" if defined $ws && $re !~ /(?:\A|\s)--ws(?:\s|=)/;
-            $re .= $cwdflag if $cwdflag ne '' && $re !~ /(?:\A|\s)--(?:cwd|repo|project-dir)(?:\s|=)/;
+            $re .= $cwdflag if $cwdflag ne '' && $e{name} =~ /\Agsd-/ && $re !~ /(?:\A|\s)--(?:cwd|repo|project-dir)(?:\s|=)/;
         }
-        $out{driver} = 'Active driver: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . ") · re-enter: $re";
-        $out{reentry} = "GSD re-entry (new session only): $gsd_cmd" if $g && !($e{name} =~ /\Agsd-/ || !$DRIVERS{ $e{name} });
-    } else {
-        $out{reentry} = "GSD re-entry (new session only): $gsd_cmd";
+        # A /gsd-pause-work (of this workstream) after the driver's newest invocation pauses it.
+        my $p = $st->{paused};
+        if (ref $p eq 'HASH' && ($p->{seq} // 0) > $e{seq}) {
+            my (undef, $pw) = defined $p->{ws} ? _ws_any($p->{ws}, @roots) : ();
+            $paused = $p if !defined $p->{ws} || !defined $ws || ($pw // $p->{ws}) eq $ws;
+        }
+        $out{driver} = $paused
+            ? 'Paused driver: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . (defined $paused->{ts} ? '; paused ' . util::stamp($paused->{ts}) : '; paused')
+              . ") · re-enter (new session only): $re"
+            : 'Active driver: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . ") · re-enter: $re";
+        $out{paused} = 1 if $paused;
     }
-    $out{reenter} = [ $d ? $re : $gsd_cmd ];
+    # The passive GSD re-entry: beside no driver, a paused one, or one that is no GSD command.
+    $out{reentry} = "GSD re-entry (new session only): $gsd_cmd$caution" if $g && (!$d || $paused || $d->{name} !~ /\Agsd-/);
+    $out{reenter} = [ $d && !$paused ? $re : $gsd_cmd ];
     $out{lines} = [ grep { defined } @out{qw(line reentry driver)} ];
     return \%out;
 }

@@ -1,5 +1,5 @@
 # cmd/measure.pl: two forms (BUILD-PLAN §2 note). Owner: WP-core.
-#   measure --sid S --compact [--cwd DIR] [--nonce N] [--copy FILE] [--transcript FILE]
+#   measure --sid S --compact [--cwd DIR] [--nonce N] [--copy FILE] [--transcript FILE] [--budget-ms MS]
 #                                                     -> the re-measure block <= 3,000 B (MOD-SPEC §2.6)
 #   measure --sid S --compact --brief [--cwd DIR]     -> one line <= 600 B (ID-3 `[idle-return]`)
 #   measure <handoff> [...]                           -> lib/skills/measure_handoff (WP-skills)
@@ -16,17 +16,17 @@ use utf8;
 
 package cmd_measure;
 
-# The whole `measure --compact` call's budget: the mod kills its delivery-time re-measure at 3 s
-# (resume.ts REMEASURE_MS), and git (<= 2 s) and this session's GSD scan run in sequence.
-our $CLI_BUDGET_MS = 2700;
-
+# --budget-ms: the whole call's budget from its start (git <= 2 s, this session's GSD scan and the
+# queue step run in sequence); the mod passes it for the delivery-time re-measure it kills at 3 s
+# (resume.ts REMEASURE_MS). Without it measure::compact keeps its own budget (7 s).
 sub run {
     my $t0 = util::clock_ms();
     my ($opt, $rest) = args::parse(\@_, bools => ['compact', 'brief'],
-                                   known => [qw(sid cwd nonce root log-dir queue-cmd disposable-root copy transcript)]);
+                                   known => [qw(sid cwd nonce root log-dir queue-cmd disposable-root copy transcript budget-ms)]);
     if ($opt->{compact}) {
         my $sid = args::init_sid($opt);
         die "usage: --nonce is 8 lowercase hex\n" if defined $opt->{nonce} && !nonce::valid($opt->{nonce});
+        die "usage: --budget-ms is a number of milliseconds\n" if defined $opt->{'budget-ms'} && $opt->{'budget-ms'} !~ /\A[1-9][0-9]{0,5}\z/;
         my $cwd = $opt->{cwd} // do { require Cwd; Cwd::getcwd() };
         if ($opt->{brief}) {
             die "usage: --brief takes no --copy\n" if defined $opt->{copy};
@@ -36,7 +36,8 @@ sub run {
         my %o;
         $o{transcript} = util::expand_tilde($opt->{transcript}) if defined $opt->{transcript} && $opt->{transcript} ne '';
         $o{approvals} = _approvals($sid, $cwd, util::expand_tilde($opt->{copy}), $o{transcript}) if defined $opt->{copy};
-        args::out(measure::compact($sid, $cwd, $opt->{nonce}, %o, budget_ms => $CLI_BUDGET_MS - (util::clock_ms() - $t0)));
+        $o{budget_ms} = $opt->{'budget-ms'} - (util::clock_ms() - $t0) if defined $opt->{'budget-ms'};
+        args::out(measure::compact($sid, $cwd, $opt->{nonce}, %o));
         return 0;
     }
     die "usage: --copy and --brief need --compact\n" if defined $opt->{copy} || $opt->{brief};

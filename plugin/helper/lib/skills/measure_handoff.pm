@@ -76,12 +76,16 @@ sub run {
         push @out, "handoff worktree: $wt " . (-d $wt ? 'exists' : 'missing');
     }
     # The GSD state file this handoff names (frontmatter `gsd`, its session's own; an export's is
-    # repository-relative), re-read now; never every worktree's (owner 2026-10-26 21:37).
+    # repository-relative), re-read now; never every worktree's (owner 2026-10-26 21:37). Only a
+    # GSD STATE.md path is read, and for a handoff that is not this session's own (another
+    # session's, an export, an import) only one inside this worktree.
     if (defined $fm->{gsd} && $fm->{gsd} ne '') {
         my $gp = $fm->{gsd};
         $gp = "$g->{worktree}/$gp" if $gp !~ m{\A/} && $g->{in_git};
-        my $l = skills::core::gsd_state($gp);
-        push @out, "GSD (handoff): $l" if defined $l;
+        my ($own) = eval { skills::approvals::own_relation($d, $ctx, $id->{sid}) };
+        my $why = _gsd_path_bad($gp, $own ? undef : ($g->{in_git} ? $g->{worktree} : ''));
+        my $l = defined $why ? undef : skills::core::gsd_state($gp);
+        push @out, defined $why ? "GSD (handoff): not read ($why)" : "GSD (handoff): $l" if defined $why || defined $l;
     }
     if ($g->{in_git}) {
         for my $p (@{ skills::ctx::live_peers($ctx, $g->{worktree}, $id->{sid}) }) {
@@ -136,6 +140,21 @@ sub _commits {
 }
 
 # The handoff and its predecessors by previous_handoff, newest first (≤10), across
+# _gsd_path_bad(path, worktree) -> why the path is not read, or undef: it must be absolute, hold
+# no `..` part and end in `/.planning/STATE.md` or `/.planning/workstreams/<ws>/STATE.md`; with a
+# worktree given ('' = none), it must lie inside it.
+sub _gsd_path_bad {
+    my ($p, $wt) = @_;
+    return 'not a GSD STATE.md path'
+        unless $p =~ m{\A/} && $p !~ m{(?:\A|/)\.\.?(?:/|\z)}
+            && $p =~ m{/\.planning/(?:workstreams/[A-Za-z0-9][A-Za-z0-9._-]*/)?STATE\.md\z};
+    return undef unless defined $wt;
+    return 'outside this worktree' if $wt eq '';
+    my ($rp, $rw) = ((-e $p ? Cwd::realpath($p) : undef) // $p, (-d $wt ? Cwd::realpath($wt) : undef) // $wt);
+    return 'outside this worktree' unless index($rp, "$rw/") == 0;
+    return undef;
+}
+
 # foreign hops: a predecessor whose session is neither the handoff's nor in its lineage
 # (A-6, 3 hops) is marked {foreign} (small-rulings §2.5).
 sub chain_docs {
