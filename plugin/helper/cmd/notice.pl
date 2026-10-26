@@ -27,8 +27,7 @@ sub run {
     }
     args::need($opt, 'id');
     die "usage: --id is lowercase letters, digits and -\n" unless notice::valid_id($opt->{id});
-    my $w = lc(rc::val('watcher') // 'shadow');
-    $w =~ s/^\s+|\s+$//g;
+    my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     if ($w eq 'off') { args::out('off'); return 0 }
     my $watch = rc::watch();
     if (!defined $watch) { args::out('REFUSED: ' . (rc::root_reason('log_dir') // 'no-watch')); return 3 }

@@ -61,18 +61,24 @@ sub run {
     my $deadline = $o->{deadline};
     die skills::cli::usage('--deadline must be an epoch in seconds') if defined $deadline && $deadline !~ /\A[0-9]{1,12}\z/;
 
-    my @conds  = map { _parse_cond($W, $_) } @{ $o->{for} };
-    my @guards = map { _parse_guard($W, $_) } @{ $o->{while} || [] };
-    my @watched = grep { $_->{kind} eq 'marker' || $_->{kind} eq 'exit' } @conds;
-    die skills::cli::usage('--stall needs a marker: or exit: condition') if defined $stall && !@watched;
-    my @exit_res = map { { re => qr/$_->{re}/, killed => (($_->{means} // '') eq 'killed' ? 1 : 0) } }
-                   grep { ref $_ eq 'HASH' && _true($_->{active}) && defined $_->{re} } @{ $W->{exit_markers} };
-
-    # B-15: no pattern runs past the cap. The regex engine checks signals between steps.
+    # B-15: no pattern runs past the cap. The regex engine checks signals between steps. Armed
+    # before the conditions are read, so compiling a marker regex is under it too (U-06 review).
     local $SIG{ALRM} = sub { print STDERR "wait: overrun past --max $max s\n"; POSIX::_exit($X{internal}) };
     local $SIG{INT}  = sub { POSIX::_exit(128 + 2) };
     local $SIG{TERM} = sub { POSIX::_exit(128 + 15) };
     alarm($max + $W->{alarm_slack_s});
+
+    my (@conds, @guards, @watched);
+    my $parsed = eval {
+        @conds  = map { _parse_cond($W, $_) } @{ $o->{for} };
+        @guards = map { _parse_guard($W, $_) } @{ $o->{while} || [] };
+        @watched = grep { $_->{kind} eq 'marker' || $_->{kind} eq 'exit' } @conds;
+        die skills::cli::usage('--stall needs a marker: or exit: condition') if defined $stall && !@watched;
+        1;
+    };
+    if (!$parsed) { my $err = $@; alarm 0; die $err }
+    my @exit_res = map { { re => qr/$_->{re}/, killed => (($_->{means} // '') eq 'killed' ? 1 : 0) } }
+                   grep { ref $_ eq 'HASH' && _true($_->{active}) && defined $_->{re} } @{ $W->{exit_markers} };
 
     my $cut = $W->{match_text_max_chars};
     my %ctx = (first_max => $W->{first_scan_max_bytes}, exit_res => \@exit_res, notes => []);
@@ -163,6 +169,8 @@ sub _marker_re {
     for my $bad (@{ $W->{marker_regex_forbidden} }) {
         die skills::cli::usage("marker regex holds $bad") if index($src, $bad) >= 0;
     }
+    # a wildcard property runs while the regex compiles (lib/settings.pm pattern_ok)
+    die skills::cli::usage('marker regex holds a wildcard property') if defined &settings::wildcard_prop && settings::wildcard_prop($src);
     my $re = eval { qr/$src/ };
     die skills::cli::usage('marker regex does not compile') unless $re;
     return $re;

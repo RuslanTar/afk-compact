@@ -223,8 +223,7 @@ sub relaunch_lines {
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
 sub watcher_lines {
-    my $w = lc(rc::val('watcher') // 'shadow');
-    $w =~ s/^\s+|\s+$//g;
+    my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     my $brand = ctx::brand();
     return ('watcher: off · existing logs kept (nothing deleted) · core files still written: copies check, '
             . 'background list, heal counters, rollups, liveness') if $w eq 'off';
@@ -289,8 +288,7 @@ sub min_window {
     my $soft = rc::val('compact_soft_max_tokens') // 0;
     my $need = _ceil($c->{min_target} * $c->{target_den} / $c->{target_num});
     return 'never' if $target < $c->{min_target} || $soft < $need;
-    my $ht = lc(rc::val('handoff_turn') // 'halt');
-    $ht =~ s/^\s+|\s+$//g;
+    my $ht = settings::trim(lc(rc::val('handoff_turn') // 'halt'));
     my $h = rc::val('handoff_turn_max_tokens') // 64000;
     $h = $c->{handoff_tokens_min} if $h < $c->{handoff_tokens_min};
     $h = $c->{handoff_tokens_max} if $h > $c->{handoff_tokens_max};

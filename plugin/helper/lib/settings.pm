@@ -265,7 +265,7 @@ sub resolve {
                       ['env', $env], ['default', $uck // (grep { $_->[0] eq $key } @KEYS)[0]->[2]]) {
             my ($s, $v) = @$cand;
             next if _unset($v) || ref $v;
-            (my $x = lc $v) =~ s/^\s+|\s+$//g;
+            my $x = trim(lc $v);
             if (!exists $rank{$x}) { push @notes, "$key: '$s' value is not " . join(' or ', @order) . ', ignored' if $s ne 'default'; next }
             ($best, $bsrc) = ($x, $s) if !defined $best || $rank{$x} > $rank{$best};
         }
@@ -276,7 +276,7 @@ sub resolve {
     # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; the old value `on` reads as
     # `auto` with a note; any other value but `off` is $IDLE_INVALID (PROVISIONAL, below) with a note.
     {
-        (my $x = lc($val{idle_handoff_turn} // 'auto')) =~ s/^\s+|\s+$//g;
+        my $x = trim(lc($val{idle_handoff_turn} // 'auto'));
         if ($x eq 'on') { push @notes, 'idle_handoff_turn: on reads as auto'; $x = 'auto' }
         elsif ($x ne 'auto' && $x ne 'off') { push @notes, "idle_handoff_turn: not auto or off, $IDLE_INVALID used"; $x = $IDLE_INVALID }
         $val{idle_handoff_turn} = $x;
@@ -438,7 +438,18 @@ sub glob_re {
 sub list {
     my ($v) = @_;
     return () unless defined $v && !ref $v;
-    return grep { $_ ne '' } map { my $x = $_; $x =~ s/^\s+|\s+$//g; $x } split /;/, $v;
+    return grep { $_ ne '' } map { trim($_) } split /;/, $v;
+}
+
+# trim(text) -> text without leading and trailing white space. Two anchored substitutions, as
+# s/^\s+|\s+$//g tries \s+$ from every space of an inner run: 40,000 spaces inside a value
+# took 0.5 s, 400,000 took 43 s, before any length cap (U-06 review).
+sub trim {
+    my ($s) = @_;
+    return $s unless defined $s;
+    $s =~ s/\A\s+//;
+    $s =~ s/\s+\z//;
+    return $s;
 }
 
 # limits(key) -> (min, max) from the manifest's userConfig, else undef
@@ -472,7 +483,8 @@ sub repo_roots {
 # relaunch(resolved) -> {auto => on|shadow|off, allow => [qr], quiet_s => n,
 #   allow_active => 1, invalid => [{key, value}], clamped => [{key, configured, used}]}
 # (Dev-1 config keys): another relaunch_auto value -> off; a relaunch_allow pattern that
-# does not start with ^, is over 200 chars or does not compile is dropped; at most 32;
+# does not start with ^ or that pattern_ok refuses (over 200 chars, an eval group or verb, a
+# wildcard property, not compiling) is dropped; at most 32;
 # relaunch_quiet_s clamped to the manifest's min/max (30-3600). `allow_active` is 1: the
 # allow list takes effect (owner Q-J1-1, 2026-10-22 03:10; S-SETTINGS C). A match makes class
 # `local` only for a single command with no shell chaining (skills' jobs.pm checks that).
@@ -483,13 +495,13 @@ sub relaunch {
     my $v = $r->{values};
     my (@invalid, @clamped, @allow);
     my $auto = lc($v->{relaunch_auto} // 'on');
-    $auto =~ s/^\s+|\s+$//g;
+    $auto = trim($auto);
     if ($auto !~ /^(on|shadow|off)$/) { push @invalid, { key => 'relaunch_auto', value => $v->{relaunch_auto} }; $auto = 'off' }
     my @pats = list($v->{relaunch_allow});
     my @at;
     for my $i (0 .. $#pats) {
         my $p = $pats[$i];
-        my $re = ($i < $ALLOW_MAX && $p =~ /^\^/ && length($p) <= $ALLOW_LEN) ? eval { qr/$p/ } : undef;
+        my $re = ($i < $ALLOW_MAX && $p =~ /^\^/) ? pattern_ok($p, $ALLOW_LEN) : undef;
         if ($re) { push @allow, $re; push @at, $i + 1 } else { push @invalid, { key => 'relaunch_allow', value => $p } }
     }
     my $q = $v->{relaunch_quiet_s};
@@ -524,11 +536,18 @@ our $PROD_LEN = 200;
 # literal as the handoff-spec block, so a missing key never makes the plugin ask less.
 our @PROD_FALLBACK = ({ id => 'prod-token', re => '(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)' });
 
-# pattern_ok(text, max_len) -> compiled regex, or undef (too long, an eval group or verb, or not compiling)
+# pattern_ok(text, max_len) -> compiled regex, or undef (too long, an eval group or verb, a
+# wildcard property, or not compiling). The pattern compiles here, in the helper, with no time
+# bound, so nothing that runs while it compiles may be the user's: perl 5.30 and later match a
+# wildcard property (\p{name=/.../}, \P{gc:/.../}) against every value of the property while
+# the pattern compiles, and a 35-character one ran past 20 s (U-06 review). Any \p{ or \P{ whose
+# value starts with a punctuation character after = or : is refused.
+our $WILDCARD_RE = qr/\\[pP]\s*\{[^}]*?[=:]\s*[^\w\s}]/;
+sub wildcard_prop { my ($p) = @_; return (defined $p && !ref $p && $p =~ $WILDCARD_RE) ? 1 : 0 }
 sub pattern_ok {
     my ($p, $max) = @_;
     return undef unless defined $p && !ref $p && $p ne '' && length($p) <= ($max // $PROD_LEN);
-    return undef if $p =~ /\(\?\??\{|\(\*/;
+    return undef if $p =~ /\(\?\??\{|\(\*/ || wildcard_prop($p);
     my $re = eval { local $SIG{__WARN__} = sub { }; qr/$p/ };
     return $re;
 }
@@ -538,7 +557,7 @@ sub prod {
     my $v = $r->{values} || {};
     my (@invalid, @classes);
     my $reads = lc($v->{unattended_prod_reads} // 'forbid');
-    $reads =~ s/^\s+|\s+$//g;
+    $reads = trim($reads);
     if ($reads !~ /^(forbid|allow)$/) { push @invalid, { key => 'unattended_prod_reads', value => $v->{unattended_prod_reads} }; $reads = 'forbid' }
     my @shipped = spec::has('prod_classes') ? spec::list('prod_classes') : @PROD_FALLBACK;
     for my $c (@shipped) {
@@ -669,7 +688,7 @@ sub export_view {
         elsif ($class eq 'bool') { $out = jsonc::bool($x) }
         elsif ($class eq 'enum') {
             my $c = lc($x // '');
-            $c =~ s/^\s+|\s+$//g;
+            $c = trim($c);
             $out = (grep { $_ eq $c } @{ $ENUM{$key} || [] }) ? $c : 'other';
         }
         elsif ($class eq 'list') { $out = scalar(my @e = list($x)) }

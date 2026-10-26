@@ -59,11 +59,12 @@ our $SESSION_COMPACT_MS = 3500;
 our $T0;
 
 # U-06 (lib/userre.pm): [seconds one of the user's own patterns may run, seconds this hook may
-# spend in all their children], the budget at most a fifth of the event's hook timeout
-# (hooks.json: PreCompact 5, PostCompact 15, SessionStart 5, SessionEnd 5, Stop 8, SubagentStop
-# 3, StopFailure 2, PermissionDenied 2).
-our %REGEX_S = (PreCompact => [0.5, 1], PostCompact => [1, 2], SessionStart => [0.5, 1], SessionEnd => [0.5, 1],
-                Stop => [1, 1.5], SubagentStop => [0.3, 0.6], StopFailure => [0.25, 0.4], PermissionDenied => [0.25, 0.4]);
+# spend in all their children, the most that budget grows to for large texts], the budget at
+# most a fifth of the event's hook timeout (hooks.json: PreCompact 5, PostCompact 15,
+# SessionStart 5, SessionEnd 5, Stop 8, SubagentStop 3, StopFailure 2, PermissionDenied 2). The
+# two that scan evidence files (PostCompact's sweep, Stop's reconcile) get room for a large one.
+our %REGEX_S = (PreCompact => [0.5, 1], PostCompact => [1, 2, 6], SessionStart => [0.5, 1], SessionEnd => [0.5, 1],
+                Stop => [1, 1.5, 3], SubagentStop => [0.3, 0.6], StopFailure => [0.25, 0.4], PermissionDenied => [0.25, 0.4]);
 
 sub run {
     my ($event) = @_;
@@ -296,7 +297,7 @@ sub on_SubagentStop {
 # ------------------------------------------------------------------ StopFailure (WATCHER W10)
 # watcher = off also stops the stop_failure and permission_denied rows (WATCHER §8 item 6,
 # W-BETA A, CONFIG-REVIEW BG-29); the value is read as _watch_call reads it (trimmed, folded).
-sub _watcher_off { my $w = lc(rc::val('watcher') // 'shadow'); $w =~ s/^\s+|\s+$//g; return $w eq 'off' ? 1 : 0 }
+sub _watcher_off { my $w = settings::trim(lc(rc::val('watcher') // 'shadow')); return $w eq 'off' ? 1 : 0 }
 
 sub on_StopFailure {
     my ($p) = @_;
@@ -338,8 +339,11 @@ sub _guard_rules {
         $n++;
         # U-06: the limits of the other pattern keys (32 entries, 200 characters, settings::pattern_ok)
         last if $n > $GUARD_MAX;
-        next unless $pair =~ /^\s*(sleep-poll|routing|secret|write-guard|scope|other)\s*=\s*(.+?)\s*$/;
-        my ($cls, $src) = ($1, $2);
+        # the class, then the rest trimmed: (.+?)\s*$ tried \s*$ at every space of an inner run
+        # (150,000 spaces held this 2 s hook past 10 s; U-06 review)
+        next unless $pair =~ /\A\s*(sleep-poll|routing|secret|write-guard|scope|other)\s*=/;
+        my ($cls, $src) = ($1, settings::trim(substr($pair, $+[0])));
+        next if $src eq '' || index($src, "\n") >= 0;
         next unless settings::pattern_ok($src, 200);
         my $re = eval { local $SIG{__WARN__} = sub { }; qr/$src/i } or next;
         push @r, [$cls => $re, $n];

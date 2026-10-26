@@ -57,7 +57,9 @@ sub rules {
 # count. A rule that is stopped or not run counts as a hit of its class over the whole text:
 # scan adds the hit `regex-timeout`, HARD when a HARD rule was among them, else WARN, and redact
 # replaces the whole text. So a stopped HARD rule withholds; a stopped WARN rule does what a WARN
-# hit does (a HARD-only redaction, as the summary copy's, keeps the text).
+# hit does (a HARD-only redaction, as the summary copy's, keeps the text). Only a stopped HARD
+# rule ends the run: after a stopped WARN rule the rules after it still run, so a HARD rule
+# listed later is not counted as stopped.
 our $TIMEOUT_RULE = 'regex-timeout';
 sub _user_spans {
     my ($text, $rules) = @_;
@@ -70,7 +72,7 @@ sub _user_spans {
             else { push @m, [@$sp] }
         }
         return (scalar(@s), map { @$_ } @m);
-    }, halt => 1, memo => "spans\0$text");
+    }, halt => sub { ($rules->[$_[0]]{class} // '') eq 'HARD' }, memo => "spans\0$text", size => length $text);
     my %out;
     for my $i (0 .. $#$rules) {
         my $v = $res->[$i] or next;

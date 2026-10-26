@@ -82,6 +82,19 @@ for my $l (0.25, 1) {
     fail('total: none was left unrun') unless $b;
 }
 
+# what the budget is charged for a trivial call: the child's start is free up to FREE_S, and
+# without Time::HiRes the floor counts its CPU only after it is ready (U-06 review: it counted
+# the start-up CPU too, in 10 ms ticks)
+{
+    userre::clear();
+    userre::limits(0.25, 100);
+    my $t0 = wall();
+    userre::first('prod_patterns', [{ re => qr/zz/, at => 1 }], ["echo $_"], 'match') for 1 .. 200;
+    my $dt = wall() - $t0;
+    { no warnings 'once'; printf "per call: %.2f ms charged, %.2f ms of wall time, over 200 calls\n", $userre::SPENT * 5, $dt * 5;
+      fail(sprintf('per call: %.2f ms charged, want under 0.25', $userre::SPENT * 5)) if $userre::SPENT * 5 > 0.25 }
+}
+
 # the helper killed (KILL) or stopped (TERM) mid-match: the child ends; it holds no lock
 for my $sig ('KILL', 'TERM') {
     my $f = "/tmp/u06-lock-$$";
