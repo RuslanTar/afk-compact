@@ -8,6 +8,7 @@
 # a changed byte or a `..` name fails verify.
 my %got;
 {
+    needs => [q(nonroot)], needs_note => q(the user name root is a word the bundle holds, so the user-name canary cannot be checked; the whole case skips),
     allow_canary => 1,
     files => T::beta_install(),
     transcript => [ T::prompt(0) ],

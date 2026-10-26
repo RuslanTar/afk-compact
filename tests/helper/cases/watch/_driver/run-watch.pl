@@ -191,6 +191,17 @@ sub run_case {
     die "case.pl did not return a hash" unless ref $case eq 'HASH';
     # `skip => reason`: a case whose input is not on this branch yet (a WP-fix fixture)
     if (defined $case->{skip}) { $SKIP = $case->{skip}; return () }
+    # `needs => [...]`, as in the core runner: "nonroot" skips when this runs as root (uid 0
+    # ignores file modes; its user name is a word every bundle holds), "cmd:<name>" skips
+    # while <name> is not on PATH. `needs_note` says what the case loses then.
+    my @path = split /:/, $ENV{PATH} // '';
+    my @miss = grep { my ($cmd) = /\Acmd:(.+)\z/; ($_ eq 'nonroot' && $> == 0) || (defined $cmd && !grep { -x "$_/$cmd" } @path) }
+               @{ $case->{needs} || [] };
+    if (@miss) {
+        $SKIP = 'needs ' . join(', ', map { $_ eq 'nonroot' ? "$_ (running as root)" : "$_ (not on PATH)" } @miss)
+              . (defined $case->{needs_note} ? ": $case->{needs_note}" : '');
+        return ();
+    }
     my $tmp = File::Temp::tempdir('watchcase-XXXXXX', TMPDIR => 1, CLEANUP => 1);
     my %v = (TMP => $tmp, HOME => "$tmp/home", SID => $T::SID, BRAND => $T::BRAND, PLUGIN => "$tmp/plugin");
     $v{ROOT} = "$v{HOME}/.claude/handoffs";
