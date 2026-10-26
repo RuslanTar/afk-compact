@@ -10,6 +10,9 @@
 # written); relaunch_allow active (S-SETTINGS C); the unattended_prod_reads line (S-SETTINGS B);
 # the kept mismatch stashes with their paths (C-STORE D3). 2026-10-23 (owner xxxxxxxx-29): the
 # protected branches line with a warning per ignored protected_branches entry.
+# 2026-10-26 (CW-1): `status` without a session id (missing, empty or unsubstituted --sid):
+# `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
+# placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
 use strict;
 use warnings;
 use utf8;
@@ -39,18 +42,39 @@ sub _last {
 
 sub run {
     my ($opt) = args::parse(\@_, known => [qw(sid root log-dir cwd)]);
-    my $sid = args::init_sid($opt);
+    # CW-1 (Cowork check 2026-10-26): status only reads, so a missing, empty or unsubstituted
+    # --sid gives the store-wide lines and `session: unknown (no session id)` instead of a
+    # refusal; this session's lines are left out and nothing is written (no preamble rows, no
+    # once markers, no session folder). A value that is not a session id is still refused. A
+    # placeholder id (args::reserved_sid: `unknown`, `smoke`, `anon-*`) names a pool of rows
+    # from many sessions, not this one, so it takes the same no-id path (CW-1 review).
+    my $sid;
+    if (args::no_sid($opt->{sid}) || args::reserved_sid($opt->{sid})) {
+        rc::init(sid => undef, writer => 'helper', flags => settings::flags_from($opt));
+    } else {
+        $sid = args::init_sid($opt);
+    }
     my $d = rc::sid_dir();
     my @out;
     my $brand = ctx::brand();
-    if (!defined $d) {
+    if (!defined rc::watch()) {
         args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')');
+        return 0;
+    }
+    push @out, watcher_lines();
+    if (!defined $sid) {
+        push @out, "session: unknown (no session id); this session's compactions, escalations, halt, policy and hook rows are not shown";
+        push @out, sprintf('thresholds: settings only (target %s · soft max %s · min_window %s)',
+                           rc::val('compact_target_tokens'), rc::val('compact_soft_max_tokens'), min_window());
+        push @out, smoke_lines(), allow_lines($opt->{cwd}), user_run_lines(undef);
+        push @out, store_lines($opt->{cwd}, undef);
+        push @out, watch_lines(undef);
+        args::out(@out);
         return 0;
     }
     my $mod = _bytes_deep(rollup::stream_rows(rc::stream_path('mod')));
     my $classic = _bytes_deep(rollup::stream_rows(rc::stream_path('classic')));
     my @all = (@$mod, @$classic);
-    push @out, watcher_lines();
 
     # thresholds
     my $eff = _last($mod, 'config_effective');
@@ -112,54 +136,70 @@ sub run {
                        ($halted ? 'on (' . ($h->{reason} // 'unknown') . ')' : 'off'),
                        $cont, rc::val('max_auto_continues_per_hour'));
 
-    # version / smoke
-    my $vraw = util::read_file(rc::watch() . '/version.json');
-    my $v = defined $vraw ? _bytes_deep(eval { jsonc::decode($vraw) }) : undef;
-    if (ref $v eq 'HASH' && defined $v->{smokeDue} && $v->{smokeDue} ne '') {
-        my $store = ctx::store_cmd();
-        push @out, "smokeDue: $v->{smokeDue} (Claude Code changed; "
-                   . (defined $store ? "run: ! " . util::text($store) . " smoke)"
-                      : "run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)");
-        push @out, '  the instruction text\'s "next window has / lacks" list was last reviewed for '
-                   . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05';
-    } else {
-        push @out, 'smokeDue: none' . (ref $v eq 'HASH' && $v->{lastVersion} ? " (Claude Code $v->{lastVersion})" : '');
-    }
-    push @out, allow_lines($opt->{cwd}), user_run_lines($sid);
+    push @out, smoke_lines(), allow_lines($opt->{cwd}), user_run_lines($sid);
 
     # policy
     my $pol = _last($mod, 'policy');
     push @out, $pol ? sprintf('policy: mods managed only %s · hooks managed only %s',
                               ($pol->{mods_managed_only} ? 'yes' : 'no'), ($pol->{hooks_managed_only} ? 'yes' : 'no'))
                     : 'policy: no mod row yet';
+    push @out, store_lines($opt->{cwd}, $d);
 
-    # unsafe roots
+    my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
+    push @out, 'last hook row: ' . ($last_row // 'none');
+    push @out, watch_lines($sid);
+    args::out(@out);
+    return 0;
+}
+
+# version / smoke (machine-wide: <watch>/version.json)
+sub smoke_lines {
+    my $vraw = util::read_file(rc::watch() . '/version.json');
+    my $v = defined $vraw ? _bytes_deep(eval { jsonc::decode($vraw) }) : undef;
+    return ('smokeDue: none' . (ref $v eq 'HASH' && $v->{lastVersion} ? " (Claude Code $v->{lastVersion})" : ''))
+        unless ref $v eq 'HASH' && defined $v->{smokeDue} && $v->{smokeDue} ne '';
+    my $store = ctx::store_cmd();
+    return ("smokeDue: $v->{smokeDue} (Claude Code changed; "
+            . (defined $store ? "run: ! " . util::text($store) . " smoke)"
+               : "run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)"),
+            '  the instruction text\'s "next window has / lacks" list was last reviewed for '
+            . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05');
+}
+
+# The lines from the settings and the store, not from this session's streams: unsafe roots,
+# handoff mode, automatic relaunch (this session's jobs only with its folder d), prod reads,
+# protected branches, idle turn, settings, queue mode, kept stashes, former-name options, notes.
+sub store_lines {
+    my ($cwd, $d) = @_;
+    my @out;
     for my $key (qw(handoff_root log_dir disposable_root)) {
         push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
             unless rc::root_ok($key);
     }
-    push @out, mode_lines($opt->{cwd});
+    push @out, mode_lines($cwd);
     push @out, relaunch_lines($d);
     push @out, prod_lines();
     push @out, protected_lines();
     push @out, idle_lines(), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
-    # session's last list outcome); /status is the only place that says `queue: off`
-    push @out, 'queue: ' . queue::mode_text();
-    push @out, kept_lines($sid);
+    # session's last list outcome); /status is the only place that says `queue: off`. Without a
+    # session id that outcome is not read, so `on` says so (CW-1 review 2)
+    my $q = queue::mode_text();
+    $q .= " (this session's queue state unknown: no session id)" if $q eq 'on' && !defined $d;
+    push @out, 'queue: ' . $q;
+    push @out, kept_lines();
     push @out, former_name_lines();
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
+    return @out;
+}
 
-    my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
-    push @out, 'last hook row: ' . ($last_row // 'none');
-
-    # watcher lines (WP-watch)
-    # The seam returns [line] (lib/watch.pm); a plain list is taken too.
+# watcher lines (WP-watch): this session's alerts only with a sid, then the store-wide counts.
+# The seam returns [line] (lib/watch.pm); a plain list is taken too.
+sub watch_lines {
+    my ($sid) = @_;
     my @wl = eval { require "watch.pm"; watch::status_lines($sid) };
     @wl = map { ref $_ eq 'ARRAY' ? @$_ : $_ } @wl;
-    push @out, grep { defined && !ref } @wl;
-    args::out(@out);
-    return 0;
+    return grep { defined && !ref } @wl;
 }
 
 # Block C (D-12): the mode line; when declared but not accepted, the accept route (the
@@ -195,7 +235,7 @@ sub relaunch_lines {
     my $state = $src eq 'none' ? 'inactive (no output path)' : $RELAUNCH_STATE{ $rl->{auto} } // 'off';
     push @l, "automatic relaunch: $state · relaunch_auto $rl->{auto}";
     if ($src ne 'none') {
-        my @jobs = grep { ($_->{ev} // '') eq 'job' } @{ jobrec::read_rows(jobrec::jobs_path($d)) };
+        my @jobs = defined $d ? grep { ($_->{ev} // '') eq 'job' } @{ jobrec::read_rows(jobrec::jobs_path($d)) } : ();
         my $with = grep { defined $_->{output_path} } @jobs;
         my $differs = grep { ($_->{output_path_check} // '') eq 'differs' } @jobs;
         my $line = $src eq 'layout' ? '  output path: from the task-file layout'
@@ -210,7 +250,7 @@ sub relaunch_lines {
         if @{ $rl->{allow} };
     push @l, "  config: $_->{key} invalid, " . ($_->{key} eq 'relaunch_auto' ? 'off used' : 'pattern dropped') for @{ $rl->{invalid} };
     push @l, "  config: $_->{key} $_->{configured} clamped to $_->{used}" for @{ $rl->{clamped} };
-    for my $p (@{ jobrec::unmatched($d) }) {
+    for my $p (defined $d ? @{ jobrec::unmatched($d) } : ()) {
         push @l, '  relaunch unmatched: ' . ($p->{task_id} // '-') . ' (no recorded job ran the bumped command)';
     }
     return @l;
@@ -367,14 +407,15 @@ sub _rule_folders {
     return @out;
 }
 
-# The commands the user types (with the leading !), with the real plugin folder.
+# The commands the user types (with the leading !), with the real plugin folder. Without a
+# session id the reconcile line is left out: it works on this session first (CW-1).
 sub user_run_lines {
     my ($sid) = @_;
     my $store = ctx::store_cmd() // return ();
     $store = util::text($store);
     return ('user-run commands (type them yourself, with the leading !):',
             map { "  ! $store $_" } ('smoke', 'project init', 'project copy', 'watch prune',
-                                     "reconcile --sid $sid --orphans --full", 'report'));
+                                     (defined $sid ? ("reconcile --sid $sid --orphans --full") : ()), 'report'));
 }
 
 # ---------------------------------------------------------------- prod reads (S-SETTINGS B)
@@ -466,7 +507,6 @@ sub former_name_lines {
 # the plugin), in every session folder: the count and the paths (at most 10 shown).
 our $KEPT_SHOW = 10;
 sub kept_lines {
-    my ($sid) = @_;
     my $w = rc::watch() // return ();
     my @kept;
     for my $s (util::list_dir($w)) {

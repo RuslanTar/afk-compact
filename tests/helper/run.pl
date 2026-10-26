@@ -33,7 +33,7 @@
 #   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
-#   expect: stdout_has / stdout_lacks (regexes, /m); json_keys; json {dotted path: value |
+#   expect: stdout_has / stdout_lacks (regexes, /m); stderr_has (regexes, /m); json_keys; json {dotted path: value |
 #     {re} | {null} | {len} | {present} | {max_bytes}}; files has / lacks (regexes, /m)
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
@@ -2178,6 +2178,7 @@ sub check {
         push @e, "stdout is " . length($out) . " bytes > $x->{stdout_max_bytes}" if defined $x->{stdout_max_bytes} && length($out) > $x->{stdout_max_bytes};
         push @e, golden_diff($x->{stdout_golden}, $outc) if $x->{stdout_golden};
         push @e, "stderr not empty: " . chars(substr($r->{err}, 0, 200)) if $x->{stderr_empty} && length $r->{err};
+        if ($x->{stderr_has}) { my $ec = $r->{err} // ''; utf8::decode($ec); for my $re (@{ $x->{stderr_has} }) { push @e, "stderr lacks /$re/: " . chars(substr($r->{err} // '', 0, 200)) unless $ec =~ /$re/m } }
         if (defined $x->{stdout_lines}) { my $n = () = $out =~ /\n/g; push @e, "stdout has $n lines, want $x->{stdout_lines}" if $n != $x->{stdout_lines} }
         if ($x->{stdout_json}) {
             my $j = eval { jsonc::decode($out) };
