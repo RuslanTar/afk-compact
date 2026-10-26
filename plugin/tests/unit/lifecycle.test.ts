@@ -5,6 +5,7 @@ import type { On, Register } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, test } from 'claude-code/testing'
 import { AGENT, HOME, ROOT, SID_A, SID_B, WATCH, World, markerNonce, raiseCompact } from './harness.test'
+import { assemble, hasTag } from '../../hooks/lib/assemble'
 
 test('AT-M1-16: mod-alive.json under sid A at session.start and under sid B at a main turn.start after /clear', async ($, on) => {
   const w = new World().install(on)
@@ -109,6 +110,45 @@ test('prompt.context: TAKEN (SessionStart won) adds no block', async ($, on) => 
   await raiseCompact($, { trigger: 'auto' })
   const ctx = await $.prompt.context({ blocks: [] })
   expect(ctx.blocks.length).toBe(0)
+})
+
+// Owner 2026-10-26 (GSD re-entry per session): the resume block keeps its [driver] line only
+// beside the helper's measured `Active driver:` line (lib/gsd.pm, this session's own transcript).
+const DRIVER_RT = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x' }
+const driverText = (name: string): string | undefined => {
+  const plain = assemble(name, 'resume-context', ['prod-forbid'], DRIVER_RT).split('\n')
+  const added = assemble(name, 'resume-context', ['prod-forbid', 'driver'], DRIVER_RT).split('\n').filter(l => !plain.includes(l))
+  return added.length > 0 ? added.join('\n') : undefined
+}
+const GSD_MEASURE = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\n' +
+  'GSD (this session): workstream workstream-a · /r/.planning/workstreams/workstream-a/STATE.md: status executing · phase 2\n' +
+  'Active driver: /phase-loop (Skill, 2026-10-26 14:25 +0300) · re-enter: /gsd-resume-work --ws workstream-a, then /phase-loop\n' +
+  'In flight: none listed\nEvidence: none'
+
+test('AT-GR-05 (mod): a re-measure with an Active driver line gets the [driver] re-enter line, before step 5', async ($, on) => {
+  const w = new World().install(on)
+  const line = driverText(w.name)
+  expect(hasTag('resume-context', 'driver')).toBe(true)
+  await w.start($)
+  w.measureBlock = GSD_MEASURE
+  await raiseCompact($, { trigger: 'auto' })
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(block).toContain('Active driver: /phase-loop')
+  if (line === undefined) throw new Error('no [driver] line in resume-context')
+  expect(block).toContain(line)
+  expect(line).toContain('re-enter commands')
+})
+
+test('AT-GR-05 (mod): a re-measure without an Active driver line (a session not working with GSD or a loop skill) has no [driver] line', async ($, on) => {
+  const w = new World().install(on)
+  const line = driverText(w.name) ?? 'no such line'
+  await w.start($)
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
+  await raiseCompact($, { trigger: 'auto' })
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(block).toContain('3f9c2e1')
+  expect(block).not.toContain(line)
+  expect(block).not.toContain('Active driver')
 })
 
 test('temp paths cited in main tool inputs go to paths.jsonl once', async ($, on) => {

@@ -1,6 +1,6 @@
 {
  "id": "AT-E-09",
- "note": "MOD-SPEC §10 AT-E-09 (OD-8, S-13): checkpoint --measured in tests/fixtures/repos/planning-state.json: GSD lines from .planning/STATE.md are in the JSON and the measured block; git status --porcelain and the STATE.md mtime are unchanged, and no pin is written",
+ "note": "MOD-SPEC §10 AT-E-09 (OD-8, S-13; owner 2026-10-26 21:37, GSD re-entry per session): checkpoint --measured in tests/fixtures/repos/planning-state.json: a session whose transcript shows no GSD work gets no GSD lines although the worktree has .planning/STATE.md; once its transcript holds a typed /gsd-progress, the JSON and the measured block carry its flat GSD line (read from STATE.md's prose lines) and its Active driver line; git status --porcelain and the STATE.md mtime are unchanged, and no pin is written",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -29,7 +29,55 @@
    }
   },
   {
-   "name": "checkpoint",
+   "name": "checkpoint, no GSD work in the session's transcript: no GSD lines",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "jsonl": [
+      {
+       "cwd": "$TMP/example-repo",
+       "isSidechain": false,
+       "message": {
+        "role": "user",
+        "content": "Why does the retry worker fail?"
+       },
+       "origin": {
+        "kind": "human"
+       },
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T10:00:00.000Z",
+       "type": "user",
+       "uuid": "u1"
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "checkpoint",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "0a1b2c3d",
+    "--budget-ms",
+    "10000",
+    "--measured",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "gsd": {
+      "len": 0
+     },
+     "measured_block": {
+      "re": "\\A(?![\\s\\S]*(?:GSD|Active driver))"
+     }
+    }
+   }
+  },
+  {
+   "name": "checkpoint, the session ran /gsd-progress",
    "argv": [
     "checkpoint",
     "--sid",
@@ -46,18 +94,44 @@
     "exit": 0,
     "json": {
      "gsd": {
-      "len": 5
+      "len": 2
      },
-     "gsd.0": "# Project State",
-     "gsd.1": "Current phase: 2 of 4 (retry worker)",
+     "gsd.0": {
+      "re": "^GSD \\(this session\\): no workstream named · \\S+/\\.planning/STATE\\.md: status in progress · phase 2 of 4 \\(retry worker\\) · last activity 2026-10-21 - plan 2\\.3 started$"
+     },
+     "gsd.1": {
+      "re": "^Active driver: GSD \\(newest: /gsd-progress, typed, 2026-10-21 13:00 \\+0300\\) · re-enter: /gsd-resume-work$"
+     },
      "measured_block": {
-      "re": "(?m)^GSD \\(\\S+/\\.planning/STATE\\.md\\):\\n  # Project State\\n  Current phase: 2 of 4"
+      "re": "(?m)^GSD \\(this session\\): no workstream named · \\S+/\\.planning/STATE\\.md: status in progress"
      }
     },
     "absent": [
      "$ROOT/.sessions/*.json"
     ]
-   }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "jsonl": [
+      {
+       "cwd": "$TMP/example-repo",
+       "isSidechain": false,
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-progress</command-message>\n<command-name>/gsd-progress</command-name>\n<command-args></command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       },
+       "sessionId": "$SID",
+       "timestamp": "2026-10-21T10:00:00.000Z",
+       "type": "user",
+       "uuid": "u1"
+      }
+     ]
+    }
+   ]
   },
   {
    "name": "porcelain after",

@@ -1,0 +1,171 @@
+{
+ "id": "AT-GR-02",
+ "sid": "22222222-2222-4222-8222-222222222222",
+ "note": "GSD re-entry scan time (owner 2026-10-26): measure --compact over a ~40 MB transcript of 20,000 tool-result rows that mention gsd and .planning/ in their output, the GSD rows at the end: the lines are found and the whole helper call stays well inside the 2 s helper budget; a second call reads only what was appended (cache)",
+ "now": "2026-10-26T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "repo": {
+      "branch": "main",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".planning/STATE.md": "---\ngsd_state_version: 1.0\nstatus: executing\ncurrent_phase: 3\nlast_activity: 2026-10-20\n---\n\n# Project State\n",
+         ".planning/ROADMAP.md": "# Roadmap\n",
+         ".planning/workstreams/workstream-a/STATE.md": "---\nstatus: executing\ncurrent_phase: \"2\"\nstopped_at: \"Plan 2.3 task 1\"\nlast_activity: 2026-10-26\nworkstream: workstream-a\n---\n\n# Project State\n",
+         ".planning/workstreams/workstream-b/STATE.md": "---\nstatus: planning\ncurrent_phase: 5\nlast_activity: 2026-10-25\nworkstream: workstream-b\n---\n\n# Project State\n",
+         ".planning/.phase-loop-run": "run 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/22222222-2222-4222-8222-222222222222.jsonl",
+     "jsonl_repeat": {
+      "row": {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0054",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_f",
+          "content": "gsd .planning/ yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+         }
+        ]
+       }
+      },
+      "count": 20000
+     },
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-0007",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-resume-work</command-message>\n<command-name>/gsd-resume-work</command-name>\n<command-args>--ws workstream-a and /phase-loop</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-0009",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_0008",
+          "name": "Skill",
+          "input": {
+           "skill": "phase-loop",
+           "args": "--ws workstream-a resume"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-0011",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_0010",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.load --ws workstream-a --cwd $TMP/repo",
+           "description": "load"
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "first scan, whole file",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "22222222-2222-4222-8222-222222222222",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
+     "^Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /gsd-resume-work --ws workstream-a, then /phase-loop --ws workstream-a resume$"
+    ],
+    "ms_max": 1800
+   }
+  },
+  {
+   "name": "second scan, from the cached offset",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "22222222-2222-4222-8222-222222222222",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
+     "^Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /gsd-resume-work --ws workstream-a, then /phase-loop --ws workstream-a resume$"
+    ],
+    "ms_max": 1000
+   }
+  }
+ ]
+}

@@ -424,7 +424,7 @@ def probes(name):
 
     def reason_malformed(d):
         """REVIEW-NIGHT NR-19: an `up_to` that is not a whole number is an error, not "no limit"."""
-        edit(d, "tools/budget-reasons.json", '"up_to": 3720', '"up_to": "3720"')
+        edit(d, "tools/budget-reasons.json", '"up_to": 3920', '"up_to": "3920"')
 
     def prod_exclusive(d):
         """XR-19 (BLD-04): step 4 only as a [prod-forbid] line (the [prod-allow] step-4 line
@@ -948,7 +948,7 @@ def probes(name):
         ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER \(soft; the logged reason covers up to \d+\)$", r"^RESULT: FAIL$"], None),
         ("reason-malformed", "NR-19", ["tools/assemble"], reason_malformed,
-         [r"^budget reasons \(tools/budget-reasons\.json\): resume protocol: up_to '3720' is not a positive whole number  FAIL$",
+         [r"^budget reasons \(tools/budget-reasons\.json\): resume protocol: up_to '3920' is not a positive whole number  FAIL$",
           r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
          [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",

@@ -2,7 +2,7 @@
  "id": "AT-CF-02, AT-CF-03, AT-CF-06 long-path",
  "layer": "H",
  "owner": "skills",
- "note": "The steps of AT-CF-02-03-06-relations with the store root and the disposable root 69 characters deeper and the three repositories 82 characters deeper, under the temp folder (U-04, REVIEW-NIGHT-2: before store paths were relative, the 3,072 B fit cut newer_foreign by the checkout's path length). The same entries, counts and size bound must hold at either depth. This twin covers deep store and checkout paths under TMPDIR; it is not the BT-02 drill copy, which reaches the main case through its tmp_base \"repo\". The last steps run begin in a checkout 482 characters deeper with a full GSD position and four in-flight tasks with long output paths, a reply that stays over 3 KB at any temp folder once every list is at its floor: newer_foreign then keeps its two entries (a cut that cannot reach the cap gives nothing up), and trimmed.cut counts the cap's 2, the 5 GSD lines, the 1 task and the 7 config fields; begin-full.json holds every entry, line and task",
+ "note": "The steps of AT-CF-02-03-06-relations with the store root and the disposable root 69 characters deeper and the three repositories 82 characters deeper, under the temp folder (U-04, REVIEW-NIGHT-2: before store paths were relative, the 3,072 B fit cut newer_foreign by the checkout's path length). The same entries, counts and size bound must hold at either depth. This twin covers deep store and checkout paths under TMPDIR; it is not the BT-02 drill copy, which reaches the main case through its tmp_base \"repo\". The last steps run begin in a checkout 482 characters deeper whose session typed /gsd-progress there (owner 2026-10-26 21:37: only a session that worked with GSD gets a gsd object) and four in-flight tasks with long output paths, a reply that stays over 3 KB at any temp folder once every list is at its floor: newer_foreign then keeps its two entries (a cut that cannot reach the cap gives nothing up), and trimmed.cut counts the cap's 2, the 1 gsd field (state; the GSD line stays), the 1 task and the 7 config fields; begin-full.json holds every entry, the state path and every task",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -212,6 +212,28 @@
     {
      "write": "$WATCH/33333333-3333-4333-8333-333333333333/bg/slot-1.json",
      "content": "{\"seq\":1,\"ts\":\"2026-10-21T13:59:00+03:00\",\"tasks\":[{\"id\":\"b0000\",\"kind\":\"shell\",\"status\":\"running\",\"output\":\"/u04/oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo/b0000.output\"},{\"id\":\"b0001\",\"kind\":\"shell\",\"status\":\"running\",\"output\":\"/u04/oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo/b0001.output\"},{\"id\":\"b0002\",\"kind\":\"shell\",\"status\":\"running\",\"output\":\"/u04/oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo/b0002.output\"},{\"id\":\"b0003\",\"kind\":\"shell\",\"status\":\"running\",\"output\":\"/u04/oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo/b0003.output\"}]}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/33333333-3333-4333-8333-333333333333.jsonl",
+     "jsonl": [
+      {
+       "cwd": "$TMP/llllllllllllllllllllllllllllllllllllllll/llllllllllllllllllllllllllllllllllllllll/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/r9",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "33333333-3333-4333-8333-333333333333",
+       "timestamp": "2026-10-21T10:58:00.000Z",
+       "type": "user",
+       "uuid": "row-0001",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-progress</command-message>\n<command-name>/gsd-progress</command-name>\n<command-args></command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      }
+     ]
     }
    ]
   },
@@ -232,11 +254,13 @@
       "len": 2
      },
      "newer_foreign.0.path": "r9/LAB-9/2026-10-21_13-30-00_77777777_imp.md",
-     "gsd": {
-      "len": 3
+     "gsd.line": {
+      "re": "^GSD \\(this session\\): no workstream named · /\\S*/llll"
      },
+     "gsd.state": null,
+     "gsd.workstream": null,
      "trimmed.cut.newer_foreign": 2,
-     "trimmed.cut.gsd": 5,
+     "trimmed.cut.gsd": 1,
      "trimmed.all": {
       "re": "^r9/LAB-9/\\.staging/33333333-[0-9a-f]{8}/begin-full\\.json$"
      },
@@ -269,13 +293,13 @@
        "\"path\":\"r9/LAB-9/2026-10-21_12-00-00_99999999_x2.md\"",
        "\"path\":\"r9/LAB-9/2026-10-21_11-00-00_99999999_x1.md\"",
        "\"path\":\"r9/LAB-9/2026-10-21_10-00-00_99999999_base.md\"",
-       "- step 8 ",
+       "/r9/.planning/STATE.md\"",
        "\"id\":\"b0003\""
       ]
      }
     ]
    },
-   "name": "U-04 begin-full.json of the deep checkout holds every newer_foreign entry, GSD line and task"
+   "name": "U-04 begin-full.json of the deep checkout holds every newer_foreign entry, the GSD state path and every task"
   }
  ],
  "env": {

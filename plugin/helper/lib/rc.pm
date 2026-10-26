@@ -105,6 +105,8 @@ sub note_transcript {
     $R{cc_transcript} = $p;
     delete @R{qw(cc_version cc_version_src)};
 }
+# The payload's transcript path (note_transcript), or undef (gsd::transcript_path reads it).
+sub transcript { $R{cc_transcript} }
 
 # C1h hint: basename of CLAUDE_CODE_EXECPATH when it looks like a version.
 sub exec_version {

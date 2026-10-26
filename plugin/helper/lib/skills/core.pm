@@ -19,7 +19,8 @@ package skills::core;
 #   secrets::classify_file($path)      -> (copy | redact | withhold, [{rule, class}])
 #   secrets::redact($text)             -> ($redacted_text, [{rule, class}]) over every rule class
 #   evidence::copy($src,$dir,\%caps,$index) -> {status, copy, bytes, sha256, mtime, scan, rules}
-#   gsd::read($worktree)               -> arrayref of lines | {lines=>[...]} | undef
+#   gsd::session(sid, cwd, worktree, cache_dir) -> {status, lines, line, driver, state, workstream, reenter}
+#   gsd::state($state_md)              -> {status, phase, stopped_at, last_activity} | undef
 #   queue::call(\@argv, $budget_ms)    -> {rc|exit, out|stdout, timed_out|timeout}
 #   queue::lane($sid, $cmd, $budget_ms) -> {status => ok|off|unknown|timeout, why, lane, open,
 #                                        ids, label, queued_line}: the one `list --json` parser
@@ -303,14 +304,28 @@ sub evidence_copy {
     return skills::util::text_deep($r);
 }
 
+# gsd(sid, cwd, worktree) -> this session's GSD facts from its own transcript (gsd::session; owner
+# 2026-10-26 21:37, never the worktree's .planning alone), or undef when it worked with neither GSD
+# nor a driver skill (or its transcript is not found).
 sub gsd {
-    my ($wt) = @_;
-    my $r = eval { gsd::read($wt) };
-    return undef unless defined $r;
-    $r = $r->{lines} if ref $r eq 'HASH';
-    $r = [ split /\n/, $r ] unless ref $r;
-    return undef unless ref $r eq 'ARRAY' && @$r;
+    my (%a) = @_;
+    my $d = sid_dir();
+    my $r = eval { gsd::session(%a, cache_dir => (defined $d && -d $d ? $d : undef)) };
+    return undef unless ref $r eq 'HASH' && ref $r->{lines} eq 'ARRAY' && @{ $r->{lines} };
     return skills::util::text_deep($r);
+}
+
+# gsd_state(path) -> one line `<path>: status … · phase … · last activity …` | `<path> missing`.
+sub gsd_state {
+    my ($p) = @_;
+    return undef unless defined $p && $p ne '';
+    return skills::util::text("$p missing") unless -f $p;
+    my $s = eval { gsd::state($p) } || {};
+    my @f = map { defined $s->{$_->[0]} ? "$_->[1] $s->{$_->[0]}" : () }
+            ([status => 'status'], [phase => 'phase'], [stopped_at => 'stopped at'], [last_activity => 'last activity']);
+    my $l = "$p: " . (@f ? join(' · ', @f) : 'no position recorded');
+    $l = substr($l, 0, 299) . '…' if length $l > 300;
+    return skills::util::text($l);
 }
 
 sub queue_call {

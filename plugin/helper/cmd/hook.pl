@@ -243,7 +243,7 @@ sub session_compact {
     }
     my $block = resumeblock::build(sid => $sid, nonce => $nonce, midturn => $midturn, nonok => $nonok, saved_copy => resumeblock::pending_line(),
                                    measured_at => util::iso($now),
-                                   remeasure => measure::compact($sid, $p->{cwd}, $nonce,
+                                   remeasure => measure::compact($sid, $p->{cwd}, $nonce, transcript => $p->{transcript_path},
                                                                  budget_ms => $SESSION_COMPACT_MS - (util::clock_ms() - ($T0 // util::clock_ms()))));
     my ($r) = resumeblock::claim($sid, $nonce, 'sessionstart', bytes => length($block), nonok_note => jsonc::bool($nonok));
     return ('', { dispatch => $nonce }) unless $r eq 'CLAIMED';

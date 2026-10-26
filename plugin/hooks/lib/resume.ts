@@ -44,6 +44,9 @@ export type BlockArgs = {
   again?: number
 }
 
+/** The helper's `Active driver:` line (lib/gsd.pm) in a re-measure: `[driver]` is kept. */
+export const DRIVER_LINE = /^Active driver: /m
+
 /** IC-1 D3: a block delivered later than this after it was built is built again. */
 export const REMEASURE_AFTER_MS = 600000
 /** The re-measure's budget at delivery (one helper call). */
@@ -94,6 +97,8 @@ export async function buildBlockWith(
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
   // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
   const remeasure = fresh === null ? undefined : fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
+  // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver.
+  if (remeasure !== undefined && DRIVER_LINE.test(remeasure)) tags.push('driver')
   const measuredAt = at ?? (await d.now())
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)

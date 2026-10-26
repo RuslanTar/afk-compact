@@ -1,6 +1,7 @@
 package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
-# resume-context.txt with [midturn]/[nonok] and exactly one of [prod-forbid]/[prod-allow],
+# resume-context.txt with [midturn]/[nonok], exactly one of [prod-forbid]/[prod-allow], and
+# [driver] when the re-measure names this session's Active driver (lib/gsd.pm; owner 2026-10-26),
 # @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total soft
 # 6,500 chars (compaction-rem-6; soft since the owner overturned ratify xxxxxxxx#R3 on 2026-10-23,
 # SPEC-DELTAS RP-2): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
@@ -29,6 +30,8 @@ sub build {
     # quoting can carry (store_path_unquotable) has no word: drop the lines that hold the token.
     my $store = ctx::store_cmd();
     my $re = $a{remeasure} // '';
+    # Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver.
+    push @tags, 'driver' if $re =~ /^Active driver: /m;
     my $max = 3000;
     my $text;
     for (1 .. 12) {

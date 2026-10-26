@@ -208,8 +208,11 @@ sub run {
     }
     if ($repin) { $ownership{repin} = $repin }
 
-    my $gsd = $g->{in_git} ? skills::core::gsd($g->{worktree}) : undef;
-    $gsd = [ @$gsd[0 .. ($#$gsd < 7 ? $#$gsd : 7)] ] if $gsd;
+    # This session's own GSD line and Active driver line (owner 2026-10-26 21:37: from its
+    # transcript, never the worktree's .planning alone): {line, driver, workstream, state}.
+    my $gs = skills::core::gsd(sid => $sid, cwd => $cwd, worktree => $g->{worktree});
+    my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line driver workstream state) } : undef;
+    $gsd->{line} //= $gs->{lines}[0] if $gsd && !defined $gsd->{driver};
 
     my ($queued_line, $queue_lane, $queue) = _queue($ctx, $sid);
     my $inflight = _inflight($ctx, $sid, $g);
@@ -281,7 +284,7 @@ sub run {
         own_previous_handoff => $carry{own_previous_handoff}, queue_lane => $queue_lane, queue_mode => $queue->{mode},
         handoff_ht => ($ht ? $ht->{ht} : undef), slug => $topic,
         mode => $m->{mode}, mode_reason => $m->{reason},
-        gsd_state => ($gsd && $g->{worktree} && -f "$g->{worktree}/.planning/STATE.md" ? "$g->{worktree}/.planning/STATE.md" : undef),
+        gsd_state => ($gs && defined $gs->{state} && -f $gs->{state} ? $gs->{state} : undef),
         identity_degraded => $id->{degraded},
         # T-TEXT E6: the Acuity floor code measured (publish's acuity advisory reads it): a
         # merge, rebase, cherry-pick or revert in progress -> unstable; a measured in-flight
@@ -537,8 +540,9 @@ sub _json_lines {
 
 # Encode within 3 KB (U-04). What carries no entry goes first: the config source labels, then
 # the two root values in config (whole paths; the handoff root is store_root again). Then
-# lists are shortened in this order: the tails of tmp_candidates, porcelain.first,
-# inflight_measured.tasks and gsd, the rest of tmp_candidates and porcelain.first, and last
+# lists are shortened in this order: the tails of tmp_candidates, porcelain.first and
+# inflight_measured.tasks, gsd's workstream and state fields (the line and the Active driver
+# line stay), the rest of tmp_candidates and porcelain.first, and last
 # newer_foreign, down to one entry (the handoff list the Ownership record rests on) and only
 # when that brings the reply within 3 KB: an entry is never given up for nothing. Past every
 # cut the reply stays over 3 KB. The cuts are greedy, so a later, larger cut can leave room:
@@ -546,8 +550,8 @@ sub _json_lines {
 # (a list whose entry does not fit gets none of its earlier ones back). Nothing goes
 # silently: `trimmed.cut` counts, under the reply key, the entries the reply leaves out,
 # against every entry begin found ($found: a key's count when it is above the list's
-# length; newer_foreign's cap of 2 or 3 and the in-flight and tmp caps cut alone), config:
-# the fields dropped; `trimmed.all` names the file in the stage that holds them all;
+# length; newer_foreign's cap of 2 or 3 and the in-flight and tmp caps cut alone), config and
+# gsd: the fields dropped; `trimmed.all` names the file in the stage that holds them all;
 # `trimmed.unread` ($unread) counts what begin did not read, so neither file has it. The
 # counts are part of the encoded size.
 sub _fit {
@@ -558,17 +562,17 @@ sub _fit {
         tmp_candidates            => sub { $out->{tmp_candidates} },
         porcelain                 => sub { $out->{porcelain} ? $out->{porcelain}{first} : undef },
         inflight_measured         => sub { $out->{inflight_measured}{tasks} },
-        gsd                       => sub { $out->{gsd} },
     );
     my $n = sub { my $l = $_[0]->(); return ref $l eq 'ARRAY' ? scalar @$l : 0 };
     my %total = map { $_ => $n->($list{$_}) } keys %list;
     for my $k (keys %{ $found || {} }) {
         $total{$k} = $found->{$k} if exists $total{$k} && ($found->{$k} // 0) > $total{$k};
     }
-    my $config_cut = 0;
+    my ($config_cut, $gsd_cut) = (0, 0);
     my $encode = sub {
         my %cut = map { my $c = $total{$_} - $n->($list{$_}); $c > 0 ? ($_ => $c) : () } keys %list;
         $cut{config} = $config_cut if $config_cut;
+        $cut{gsd} = $gsd_cut if $gsd_cut;
         my %t = ((%cut ? (cut => \%cut) : ()), (%unread ? (unread => \%unread) : ()));
         if (%t) { $out->{trimmed} = { %t, all => $all } } else { delete $out->{trimmed} }
         return skills::util::json_encode($out);
@@ -596,6 +600,18 @@ sub _fit {
         }
         $did;
     };
+    # gsd is this session's {line, driver, workstream, state}: workstream and state go together
+    # (the line and the Active driver line name them), counted as fields, as config.
+    my $gsd_drop = sub {
+        my $g = $out->{gsd};
+        return 0 unless ref $g eq 'HASH';
+        my @k = grep { exists $g->{$_} } qw(workstream state);
+        return 0 unless @k;
+        my %v = map { ($_ => delete $g->{$_}) } @k;
+        $gsd_cut += @k;
+        push @done, [ 'gsd', sub { @$g{ keys %v } = values %v; $gsd_cut -= @k }, sub { delete @$g{@k}; $gsd_cut += @k } ];
+        1;
+    };
     my $porc = sub { $out->{porcelain} ? $out->{porcelain}{first} : undef };
     my @trim = (
         sub { $drop->('source') },
@@ -603,7 +619,7 @@ sub _fit {
         sub { $pop->('tmp_candidates', $out->{tmp_candidates}, 3) },
         sub { $pop->('porcelain', $porc->(), 5) },
         sub { $pop->('inflight_measured', $out->{inflight_measured}{tasks}, 3) },
-        sub { $pop->('gsd', $out->{gsd}, 3) },
+        sub { $gsd_drop->() },
         sub { $pop->('tmp_candidates', $out->{tmp_candidates}, 0) },
         sub { $pop->('porcelain', $porc->(), 0) },
         sub {

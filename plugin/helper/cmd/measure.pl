@@ -1,5 +1,5 @@
 # cmd/measure.pl: two forms (BUILD-PLAN §2 note). Owner: WP-core.
-#   measure --sid S --compact [--cwd DIR] [--nonce N] [--copy FILE [--transcript FILE]]
+#   measure --sid S --compact [--cwd DIR] [--nonce N] [--copy FILE] [--transcript FILE]
 #                                                     -> the re-measure block <= 3,000 B (MOD-SPEC §2.6)
 #   measure --sid S --compact --brief [--cwd DIR]     -> one line <= 600 B (ID-3 `[idle-return]`)
 #   measure <handoff> [...]                           -> lib/skills/measure_handoff (WP-skills)
@@ -7,8 +7,9 @@
 # session's transcript (--transcript, else <config dir>/projects/<slug of the cwd>/<sid>.jsonl) and
 # printed as `Approvals (checked)` lines; a copy that cannot be read yet prints
 # `Approvals: not checked (copy pending)`. Without --copy the block has no approvals line, so the
-# summary's approvals stay context. A leading `~/` in either path is the home folder (the mod passes
-# the saved copy as `save-copy` printed it).
+# summary's approvals stay context. The same transcript gives this session's GSD and Active driver
+# lines (lib/gsd.pm). A leading `~/` in either path is the home folder (the mod passes the saved
+# copy as `save-copy` printed it).
 use strict;
 use warnings;
 use utf8;
@@ -28,7 +29,8 @@ sub run {
             return 0;
         }
         my %o;
-        $o{approvals} = _approvals($sid, $cwd, util::expand_tilde($opt->{copy}), util::expand_tilde($opt->{transcript})) if defined $opt->{copy};
+        $o{transcript} = util::expand_tilde($opt->{transcript}) if defined $opt->{transcript} && $opt->{transcript} ne '';
+        $o{approvals} = _approvals($sid, $cwd, util::expand_tilde($opt->{copy}), $o{transcript}) if defined $opt->{copy};
         args::out(measure::compact($sid, $cwd, $opt->{nonce}, %o));
         return 0;
     }
