@@ -1719,7 +1719,7 @@
    }
   },
   {
-   "name": "nested-co: a session in the main checkout whose GSD work ran with --cwd in the nested worktree",
+   "name": "nested-co: a session in the main checkout whose GSD work ran with --cwd in the nested worktree (a state run: a read alone is a look)",
    "setup": [
     {
      "write": "$HOME/.claude/projects/-x/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.jsonl",
@@ -1746,7 +1746,7 @@
           "id": "toolu_9101",
           "name": "Bash",
           "input": {
-           "command": "gsd_run query state.load --ws workstream-a --cwd $TMP/repo/.claude/worktrees/feat",
+           "command": "gsd_run query state.update-progress --ws workstream-a --cwd $TMP/repo/.claude/worktrees/feat",
            "description": "load"
           }
          }

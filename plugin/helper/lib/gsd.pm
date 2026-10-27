@@ -24,12 +24,14 @@ package gsd;
 #     not GSD work). A Read never counts and never names a workstream.
 # A session uses GSD when one of these is a GSD command (`gsd-*` or `gsd:*`; not the maintenance
 # commands in %NOT_WORK; `gsd-workstreams` only with switch or resume), a gsd-tools run or a
-# state-file write. Its workstream is the newest one named by those (`--ws <name>`,
-# `--ws=<name>`, `gsd-workstreams switch|resume <name>`, a state-file write under
-# workstreams/<name>/) or by its driver's own `--ws`, whose folder exists under a GSD root the
-# session touched (the row's cwd, `--cwd`, `--repo`, a state-file write's root; GSD's own walk:
-# up to the first folder holding .git, never $HOME). `--ws` on any other skill names nothing (a
-# handoff or catch-up skill only looked at it); the shared .planning/active-workstream pointer
+# state-file write; a gsd-tools run that only reads, in a session with no other GSD use so far and
+# no driver open, is a look (a plain ask: "what phase is workstream-a at?"): it names no workstream
+# of the session's own and alone gives no GSD line. Its workstream is the newest one named by
+# those (`--ws <name>`, `--ws=<name>`, `gsd-workstreams switch|resume <name>`, a state-file
+# write under workstreams/<name>/) or by its driver's own `--ws`, whose folder exists under a GSD
+# root the session touched (the row's cwd, `--cwd`, `--repo`, a state-file write's root; GSD's own
+# walk: up to the first folder holding .git, never $HOME). `--ws` on any other skill names nothing
+# (a handoff or catch-up skill only looked at it); the shared .planning/active-workstream pointer
 # never names one. With none named the session works flat.
 # A loop skill is one of %DRIVERS, one the owner lists in the `driver_skills` setting, or a skill
 # that is no GSD command but whose own text, as Claude Code loaded it into this session right after
@@ -55,23 +57,26 @@ package gsd;
 # a typed status look (%LOOK), /gsd-pause-work, one of this plugin's skills or this plugin's own
 # submitted note; nor a prompt this plugin's skill answers right after it). Every human prompt counts,
 # also one that comes while the driver's own agents run (a steering note "continue" reads like a
-# stop or a request for other work: R2, at most a hint); the loop shows itself again in its own
-# context: a turn opened by the notification of its own background work that finished (an agent's
-# or workflow's task notification, its message back, a teammate's idle report, also one Claude Code
-# queued while a turn ran and delivers as the next turn; not a task it stopped, a shutdown or a
-# termination notice, nor work started after a prompt: the session's own research) is its loop
-# context once more, where a spawn, a
-# SendMessage that wakes one of its agents, a %PROGRESS run (it may name the workstream of a driver
-# with none) or a loop it runs as its step is its loop work. A prompt that names /gsd-pause-work in
+# stop, "stop after this wave" or a request for other work: R2, at most a hint). After it only acts
+# the transcript ties to the loop itself make it Active again: its re-invocation, or a GSD loop it
+# runs as its step in its own context, a turn opened by the notification of its own background
+# work that finished (an agent's or workflow's task notification, its message back, a teammate's
+# report or idle note, also one Claude Code queued while a turn ran and delivers as the next turn;
+# not a task it stopped, a shutdown or a termination notice, nor work started after a prompt: the
+# session's own research). A spawn, a SendMessage that wakes one of its agents (a plain reply to its
+# teammate's question after "stop the loop") or a %PROGRESS run there, as anywhere after the prompt,
+# may be the wave the person said to finish, its wrap-up or the work they asked for instead: never
+# Active again (its %PROGRESS runs there may still name the workstream of a driver with none, and
+# its GSD root). A prompt that names /gsd-pause-work in
 # prose ("when finished — /gsd-pause-work") asks for the pause, as the typed command does. Loop
 # work is the driver's own (re)invocation, a step it runs, a GSD work command or a gsd-tools run that
 # changes planning state or a state-file write for its workstream (a state-file write, a phase's own
 # files included, only in its loop context: after a human prompt or once its turn ended with nothing
-# running it may be a note, a fix or a squash message the person asked for; while a human prompt
-# waits or after its turn ended, only a gsd-tools run that records a phase's progress, %PROGRESS: a
-# commit, a todo, a decision, a phase added or a STATE.md note (state.update, state.patch) the
-# person asked for is not; an Agent, Task or Workflow spawn only while no human prompt waits or in
-# such a notification turn); never
+# running it may be a note, a fix or a squash message the person asked for; after its turn ended
+# (no prompt since), only a gsd-tools run that records a phase's progress, %PROGRESS: a commit, a
+# todo, a decision, a phase added or a STATE.md note (state.update, state.patch) the person asked for
+# is not; while a human prompt waits no gsd-tools run is; an Agent, Task or Workflow spawn only while
+# no human prompt waits); never
 # what a skill or command started after a human prompt does, nor what a turn another session's
 # message opened or a turn or a skill of this plugin's own does (its resume reconciling STATE.md,
 # its handoff). A driver with no workstream of its own takes the first one its loop work names
@@ -86,7 +91,12 @@ package gsd;
 #   - `/gsd-pause-work` (of the driver's workstream, or naming none) pauses it once the pause's
 #     own HANDOFF.json or .continue-here file is written (an Edit or Write, a Bash redirect or tee
 #     into one, a commit naming one; never a `git rm`, `rm` or `mv` of one); before that it is
-#     ambiguous (a pause asked "when finished"). A loop that pauses itself without the command
+#     ambiguous (a pause asked "when finished"), and the request holds until the files are written,
+#     the loop is invoked again or a later human prompt comes: reads, status commands, the pause's
+#     own bookkeeping and the progress records of the work the person said to finish change nothing,
+#     and new work (a phase begun, a GSD work command or loop step, a spawn) makes it `pause asked,
+#     then loop work`, never Active (R2: a deferred pause and an ignored one read alike). A loop
+#     that pauses itself without the command
 #     creates one of those files (a Write, a `>` redirect or a tee into one; not an Edit or an
 #     append, nor a commit, which a routine checkpoint or a resume consuming the file also makes)
 #     as the last act of its turn: until a turn ends with none of its background work live it is
@@ -95,13 +105,13 @@ package gsd;
 #     Workflow spawn, a write of a phase file, ROADMAP, REQUIREMENTS, PROJECT or of the checkout's
 #     code; not the pause's own acts: a commit, a run-state append or another file under .planning/,
 #     STATE.md, a note outside the checkout, stopping its work, a message, a read, this plugin's
-#     skills). Loop work for a paused loop (a GSD work command, or a gsd-tools run for that
-#     workstream that changes state other than a commit; not a state-file write after
-#     /gsd-pause-work, as the pause writes STATE.md too) makes it again what it was before the pause
-#     (active, or ambiguous); before the files are written a read or a status command does too, and
-#     after a loop paused itself, that loop work before the next human prompt, or a write of a phase
-#     file, ROADMAP, REQUIREMENTS or PROJECT (not STATE.md) before it; after that prompt a write
-#     never resumes it (a phase file makes it ambiguous, the rest leaves it paused): only its
+#     skills). Loop work for a paused loop whose pause files are written (a GSD work command, or a
+#     gsd-tools run for that workstream that changes state other than a commit; not a state-file
+#     write after /gsd-pause-work, as the pause writes STATE.md too) makes it again what it was
+#     before the pause (active, or ambiguous; at most ambiguous after a human prompt), and after a
+#     loop paused itself, that loop work before the next human prompt, or a write of a phase file,
+#     ROADMAP, REQUIREMENTS or PROJECT (not STATE.md) before it; after that prompt a write never
+#     resumes it (a phase file makes it ambiguous, the rest leaves it paused): only its
 #     re-invocation, a GSD work command or a %PROGRESS run does. A pause file it writes after one of
 #     this plugin's skills in its own turn, or in a turn of this plugin's own, starts a self-pause
 #     too (ambiguous until a turn of the loop's ends). Nothing a turn or a skill of this plugin's own
@@ -115,7 +125,10 @@ package gsd;
 #     single-phase loop (its own completion), a human prompt with no loop work after it (the loop
 #     finished, stopped or was set aside; $IDLE_PROMPTS), a turn end (an assistant row with stop
 #     reason end_turn) with none of its background work live and no loop work after it (the loop's
-#     final report, a stop, or a wait for the user), the checkpoint this plugin's nudge asked for
+#     final report, a stop, or a wait for the user), an interruption mark on a main row ("[Request
+#     interrupted by user]", also "… for tool use"; not in a turn of this plugin's own: the person
+#     stopped the turn, a turn end when none of its background work is live, else as a human
+#     prompt; a typed /compact after it changes nothing), the checkpoint this plugin's nudge asked for
 #     saying `Step 1: none: task done` (`Step 1:` on its line or the next, any dash after `none`),
 #     and while it was invoked with arguments that cannot be
 #     shown, none of them kept for its re-enter command, and no GSD work of its workstream followed.
@@ -135,6 +148,7 @@ package gsd;
 #     loop work, but that turn's end is the loop's and the background work it starts after the
 #     skill is the loop's. An API error or a turn cut off ends neither; the next turn (a prompt, a
 #     task or teammate notification, an interruption mark) carries no exemption over.
+#     A read never moves the driver's GSD root (R3: only its own state-changing work does).
 # Only an active driver gets an `Active driver:` line (the resume protocol's [driver] re-entry keys
 # on it, and only that line is ever run); a paused one gets `Paused driver:` (re-enter in a new
 # session only), an ambiguous one the weaker `Was driving: … · re-enter only if Step 1 belongs to
@@ -155,7 +169,7 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 11;
+our $CACHE_V = 12;
 our $BG_KEEP = 32;                    # newest background tasks kept while no notification names them
 our $IDLE_PROMPTS = 1;                # human prompts with no loop work after them: an active driver is
                                       # only a `Was driving` hint (R2: it may have finished)
@@ -393,8 +407,11 @@ sub _wsn { my ($w) = @_; return undef unless defined $w; $w =~ s/\.+\z//; return
 sub _start {
     my ($st, $e) = @_;
     my $D = $st->{drv};
+    # (a pause asked for whose files are not written yet: a step the model invokes then is loop work
+    # after the request, never a driver of its own)
+    my $pend = $D && $D->{mode} eq 'paused' && !$D->{pause}{done} ? 1 : 0;
     if ($D && $D->{e}{name} ne $e->{name} && ($e->{via} ne 'typed' || $e->{stacked}) && !$LEAF{ $D->{e}{name} }
-        && ($D->{mode} eq 'active' || $D->{mode} eq 'hint')) {
+        && ($D->{mode} eq 'active' || $D->{mode} eq 'hint' || $pend)) {
         # R1: a loop the model invokes (or the user stacked after it in the same message) while the
         # outer driver is active, with no human prompt since that driver's last loop work, is that
         # driver's own step (loop work), unless the driver runs no other loop. (In a turn the
@@ -411,6 +428,7 @@ sub _start {
         if ($e->{name} =~ /\Agsd-/ && (!defined $ws || !defined $D->{ws} || $ws eq $D->{ws})) {
             # named in the hint, so the session sees which step it was in (never the driver)
             $D->{step} = { map { defined $e->{$_} ? ($_ => $e->{$_}) : () } qw(via name args hidden keep ws root) };
+            $D->{after} = 1 if $pend;
             return;
         }
     }
@@ -434,7 +452,7 @@ sub _touch {
     my ($D, $ts) = @_;
     $D->{idle} = 0;
     $D->{wts} = $ts if defined $ts;
-    delete @$D{qw(plast tend tw done)};
+    delete @$D{qw(plast tend tw done ti intr)};
 }
 
 # The driver's loop context: no human prompt since its last loop work, no skill or command a prompt
@@ -445,8 +463,11 @@ sub _mine {
 }
 
 # A turn the notification of the driver's own finished background work opened (after a human
-# prompt too): its spawns, the agents it wakes, its %PROGRESS runs and its GSD loop steps are its
-# loop work again (R2: the loop shows itself; what the person asked for in between stays a hint).
+# prompt too): a GSD loop it runs there as its step is its loop work again (R1, R2: the loop shows
+# itself), and its %PROGRESS runs there may name its workstream and GSD root; its spawns, the agents
+# it wakes and its progress runs there are the loop's own background work, but after a prompt they
+# never make it Active again (they may be the wave the person said to finish, its wrap-up, or the
+# work the person asked for instead).
 sub _ntf {
     my ($D) = @_;
     return ($D && $D->{ntf} && !$D->{other} && !$D->{own} && !$D->{peer} && !$D->{oskill}
@@ -487,15 +508,19 @@ sub _unpause {
 }
 
 # Loop work of the driver (read: it only read planning state; mine: no skill or command started
-# after a human prompt runs it). It is not paused (any longer), and it is again what it was before
-# the pause; only a read after a pause whose files were written is other work.
+# after a human prompt runs it; new: it starts new work, a GSD work command or a phase begun). After
+# a pause whose files were written it is not paused any longer, and it is again what it was before
+# the pause; a read there is other work. A pause asked for whose files are not written yet holds
+# (R2): a read, the pause's own bookkeeping and the progress records of the work the person said to
+# finish change nothing, and new work makes it at most a hint ("pause asked, then loop work").
 sub _work {
-    my ($D, $read, $ts, $mine) = @_;
+    my ($D, $read, $ts, $mine, $new) = @_;
     # A turn or a skill of this plugin's own (its resume reconciling STATE.md, its handoff) never
     # ends a pause (R2, R4).
     return if $D->{mode} eq 'paused' && _plug($D);
     if ($D->{mode} eq 'paused') {
-        if ($read && $D->{pause}{done}) { $D->{after} = 1; return }
+        if (!$D->{pause}{done}) { $D->{after} = 1 if $new && !$read; return }
+        if ($read) { $D->{after} = 1; return }
         _unpause($D);
     }
     $D->{work} = 1;
@@ -615,6 +640,27 @@ sub _turn_end {
     # the first such turn end counts, unless what still ran then has ended since
     return if defined $D->{tend} && !(defined $D->{tw} && !defined $loose);
     $D->{tend} = $ts // 0;
+    delete $D->{ti};
+    if (defined $loose) { $D->{tw} = $loose } else { delete $D->{tw} }
+}
+
+# An interruption mark on a main row ("[Request interrupted by user]", also "… for tool use"): the
+# person stopped the turn (R2: never a false imperative). With none of the driver's background work
+# live it is a turn end with nothing running (ti: interrupted); with some of it live it counts as a
+# human prompt. Either way the driver is at most a hint until its own loop work shows again.
+sub _interrupt {
+    my ($st, $ts) = @_;
+    my $D = $st->{drv} or return;
+    return if $D->{mode} eq 'ended';
+    my ($live, $loose) = _running($st, $D, $ts);
+    if ($live) {
+        $D->{idle} = ($D->{idle} // 0) + 1;
+        $D->{intr} = 1;
+        return;
+    }
+    return if defined $D->{tend};
+    $D->{tend} = $ts // 0;
+    $D->{ti} = 1;
     if (defined $loose) { $D->{tw} = $loose } else { delete $D->{tw} }
 }
 
@@ -666,6 +712,10 @@ sub _prompt {
     return if $D->{mode} eq 'ended';
     $D->{plast} = $st->{seq} // 0;
     $D->{idle} = ($D->{idle} // 0) + 1;
+    delete $D->{intr};
+    # A pause asked for whose files are not written yet holds only until the next human prompt (which
+    # may ask for something else): from here the driver is what it was before it, at most a hint.
+    _unpause($D) if $D->{mode} eq 'paused' && !$D->{pause}{done};
     $D->{pause}{prompted} = 1 if $D->{mode} eq 'paused';
     # the person's prompt opens a turn of its own: no nudge or plugin turn carries over
     _turn_open($D);
@@ -737,7 +787,7 @@ sub _drv_cmd {
         return;
     }
     $D->{other} = 1 if !$mine && !_plug($D) && !$D->{peer};
-    _work($D, $STATUS{$n} ? 1 : 0, $e->{ts}, $mine);
+    _work($D, $STATUS{$n} ? 1 : 0, $e->{ts}, $mine, 1);
     _droot($D, $e->{root}) if $mine && !$STATUS{$n} && !_plug($D);
     return if $STATUS{$n} || $D->{mode} eq 'paused';
     if ($e->{via} eq 'typed' && !$e->{stacked}) {
@@ -765,12 +815,18 @@ sub _drv_tool {
     return _hint($D, 'gsd-tools ran for another workstream')
         if defined $cw && (defined $dw ? $cw ne $dw : $D->{flat} && !_read_run($b));
     return if $D->{mode} eq 'paused' && $b->{verb} =~ /\Acommit(?:\.|\z)/;    # the pause's own commit
-    # After a human prompt, or once its turn ended with nothing running, only a phase's own progress
+    # Once its turn ended with nothing running (no prompt since), only a phase's own progress
     # (%PROGRESS) is loop work: bookkeeping a person asks for (a commit, a todo, a decision, a phase
-    # added) is not. Nor is anything a turn or a skill of this plugin's own runs.
-    my $mine = _plug($D) ? 0 : (($D->{idle} || defined $D->{tend}) && !_progress($b)) ? 0 : 1;
-    _work($D, _read_run($b), $ts, $mine);
-    _droot($D, $dir) if $ctx && $D->{mode} ne 'paused';
+    # added) is not. After a human prompt none is (R2): a progress run may record the wave the person
+    # said to finish before a stop or a pause, so only the loop's GSD loop step in its own turn or its
+    # re-invocation makes it Active again. Nor is anything a turn or a skill of this plugin's own runs.
+    my $mine = (_plug($D) || $D->{idle}) ? 0 : (defined $D->{tend} && !_progress($b)) ? 0 : 1;
+    # (a phase begun is new work; the progress records of finished work are not)
+    my ($base) = $b->{verb} =~ /\A([^.]+)/;
+    my $new = ($base eq 'state' && (defined $b->{sub} ? $b->{sub} : '') eq 'begin-phase') ? 1 : 0;
+    _work($D, _read_run($b), $ts, $mine, $new);
+    # (a read of another checkout is no loop work there: it never moves the driver's GSD root)
+    _droot($D, $dir) if $ctx && !_read_run($b) && $D->{mode} ne 'paused';
     # A single-phase loop's own completion (GSD's execute-phase runs it last).
     _hint($D, 'its phase was marked complete')
         if $STEP{ $D->{e}{name} } && !$D->{other} && $b->{verb} =~ /\Aphase\z|\Aphase\.complete\z/ && ($b->{sub} // '') eq 'complete';
@@ -1059,6 +1115,9 @@ sub _row {
             # another session's message (no hand-back or teammate report of background work) opens a
             # turn that answers it: what runs there is not the loop's (no spawn, write or command)
             my $D = $st->{drv};
+            # (an interruption of a turn of this plugin's own, its status command or its handoff,
+            # stops that turn, not the loop)
+            my $own = $D && $D->{own} ? 1 : 0;
             if ($D && $D->{mode} ne 'ended') {
                 _turn_open($D);
                 $D->{peer} = 1 if $t =~ /\A\s*Another Claude session sent a message/ && $t !~ /<(?:agent|teammate)-message\b/;
@@ -1066,6 +1125,8 @@ sub _row {
                 # (or a queued one this row delivers)
                 $D->{ntf} = 1 if ($st->{ntfhit} || $st->{ntfq}) && !$D->{peer};
             }
+            # the person stopped the loop's turn (Esc): a stop (R2)
+            _interrupt($st, $ts) if !$own && $t =~ /\A\s*\[Request interrupted by user/;
             delete $st->{ntfq};
         }
         delete $st->{ntfhit};
@@ -1090,10 +1151,15 @@ sub _row {
             }
             for my $b (@{ bash_calls($in->{command}) }) {
                 my $root = $b->{cwd} // $cwd;
-                $st->{gsd} = { via => 'Bash', name => "gsd-tools $b->{verb}", args => '', hidden => 0, ts => $ts, root => $root };
+                # A read in a session with no GSD work so far and no driver open (a plain ask: "what
+                # phase is the payments workstream at?") is a look: no GSD use of the session's own,
+                # no workstream of its own (owner 21:37: a plain ask gets no GSD line).
+                my $Dp = $st->{drv};
+                my $peek = _read_run($b) && !$st->{gsd} && !($Dp && ($Dp->{mode} // '') ne 'ended') ? 1 : 0;
+                $st->{gsd} = { via => 'Bash', name => "gsd-tools $b->{verb}", args => '', hidden => 0, ts => $ts, root => $root } unless $peek;
                 _push_root($st, $root);
                 # a status look's own reads name no workstream of the session's
-                my $look = $st->{look} && _read_run($b) ? 1 : 0;
+                my $look = ($st->{look} || $peek) && _read_run($b) ? 1 : 0;
                 $st->{wseq} = ($st->{seq} // 0) + 1 unless $look;
                 _drv_tool($st, $b, $ts, $root);
                 _push_ws($st, $b->{ws}, $root, $ts, ++$st->{seq}, $look);
@@ -1137,10 +1203,10 @@ sub _row {
             # Work after a pause that the transcript does not tie to the loop: ambiguous.
             if ($D->{mode} eq 'paused') { $D->{after} = 1 }
             # A spawn keeps a working loop's time, but after a human prompt it is as likely the
-            # session's own (research, a review) as the loop's: it never outweighs the prompt.
+            # session's own (research, a review, the work the person asked for instead) as the loop's,
+            # also in a turn its own finished background work's notification opened: it never
+            # outweighs the prompt (R2: at most a hint).
             elsif ($D->{mode} ne 'ended' && _mine($D)) { $D->{wts} = $ts if defined $ts }
-            # in a turn its own finished background work's notification opened: the loop goes on
-            elsif (_ntf($D)) { _touch($D, $ts) }
         }
     }
     my $sr = ref $j->{message} eq 'HASH' ? ($j->{message}{stop_reason} // '') : '';
@@ -1302,9 +1368,10 @@ sub _bg_add {
         my @o = sort { $ix->{$a}{n} <=> $ix->{$b}{n} } keys %$ix;
         delete @$ix{ @o[0 .. $#o - 4 * $BG_KEEP] };
     }
-    # launched or woken in a turn its own finished work's notification opened: the loop goes on
-    _touch($D, $ts) if $kind eq 'a' && !_mine($D) && _ntf($D);
-    delete @$D{qw(tend tw done)} if _mine($D);
+    # (launched or woken in a turn its own finished work's notification opened after a prompt: the
+    # loop's own background work, but no loop work that outweighs the prompt; a plain reply to a
+    # teammate's question after "stop the loop" wakes it too)
+    delete @$D{qw(tend tw done ti)} if _mine($D);
 }
 
 # One of this plugin's own submitted notes (`Note from the user's <brand> plugin: …`; Claude Code
@@ -1643,11 +1710,12 @@ sub session {
         $mode = $D->{mode};
         my $why = $D->{why};
         my $at = defined $D->{pause}{ts} ? ' ' . util::stamp($D->{pause}{ts}) : '';
-        if ($mode eq 'paused' && $D->{after}) {
+        if ($mode eq 'paused' && !$D->{pause}{done}) {
+            # A pause asked for ("/gsd-pause-work when finished") whose files are not written yet
+            # (and new loop work after it: the request may be ignored, or still to come).
+            ($mode, $why) = ('hint', "pause asked$at, " . ($D->{after} ? 'then loop work, its files not written yet' : 'its files not written yet'));
+        } elsif ($mode eq 'paused' && $D->{after}) {
             ($mode, $why) = ('hint', "paused$at, then other work");
-        } elsif ($mode eq 'paused' && !$D->{pause}{done}) {
-            # A pause asked for ("/gsd-pause-work when finished") whose files are not written yet.
-            ($mode, $why) = ('hint', "pause asked$at, its files not written yet");
         }
         # Arguments that cannot be shown (prose: "read it only", "do not start yet"), none of the
         # parts a re-enter command keeps (--ws, resume, --repo/--cwd), and no GSD work of its
@@ -1658,7 +1726,8 @@ sub session {
         # R2: a human prompt and no loop work after it: the loop may have finished, stopped on its
         # own outcome or been set aside, which the transcript does not tell apart.
         if ($mode eq 'active' && ($D->{idle} // 0) >= $IDLE_PROMPTS) {
-            ($mode, $why) = ('hint', 'no loop work since ' . (defined $D->{wts} ? util::stamp($D->{wts}) : 'it was invoked') . ' and a prompt after it');
+            ($mode, $why) = ('hint', 'no loop work since ' . (defined $D->{wts} ? util::stamp($D->{wts}) : 'it was invoked')
+                             . ($D->{intr} ? ' and an interruption after it' : ' and a prompt after it'));
         }
         # R2: the checkpoint this plugin's nudge asked for says the task is done.
         if ($mode eq 'active' && defined $D->{done}) {
@@ -1669,7 +1738,7 @@ sub session {
         # that still ran may be a server or a watch), or it created a pause file in a turn that has
         # not ended.
         if ($mode eq 'active' && defined $D->{tend}) {
-            ($mode, $why) = ('hint', 'its turn ended' . ($D->{tend} ? ' ' . util::stamp($D->{tend}) : '')
+            ($mode, $why) = ('hint', ($D->{ti} ? 'its turn was interrupted' : 'its turn ended') . ($D->{tend} ? ' ' . util::stamp($D->{tend}) : '')
                              . (defined $D->{tw} ? " with only a $D->{tw} still running" : ' with nothing running') . ' and no loop work since');
         }
         if (($mode eq 'active' || $mode eq 'hint') && ref $D->{sp} eq 'HASH') {
