@@ -12,6 +12,7 @@ import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
+import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
 import { BLOCK_MAX, BLOCK_SOFT, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
@@ -411,6 +412,38 @@ test('AT-IA-01 idle_handoff_turn: common words, and any other value reads as off
     const r = parseOptions({ idle_handoff_turn: w } as never)
     expect([w, r.idle_handoff_turn, r.notes.invalid]).toEqual([w, 'off', ['idle_handoff_turn']])
   }
+})
+
+// IDLE-COMPACT §5 (D9): `idle_compact` reads like `idle_handoff_turn` (the same word lists and
+// invalid value as settings.pm); default `auto` pending the owner (Q3). `on` is a plain auto word
+// here (no legacy note: the key is new).
+test('AT-IC-C00 idle_compact: default auto; common words; any other value reads as off with config_invalid', () => {
+  expect(DEFAULTS.idle_compact).toBe('auto')
+  expect(parseOptions({}).idle_compact).toBe('auto')
+  for (const w of ['off', 'false', ' No ', 'NONE', 'disabled', '0', false, 0]) {
+    const r = parseOptions({ idle_compact: w } as never)
+    expect([w, r.idle_compact, r.notes.invalid]).toEqual([w, 'off', []])
+  }
+  for (const w of ['auto', 'true', 'Yes', ' 1 ', 'on', true, 1]) {
+    const r = parseOptions({ idle_compact: w } as never)
+    expect([w, r.idle_compact, r.notes.invalid, r.notes.noted]).toEqual([w, 'auto', [], undefined])
+  }
+  for (const w of ['  ', '\t', '${user_config.idle_compact}']) expect(parseOptions({ idle_compact: w } as never).idle_compact).toBe('auto')
+  for (const w of ['maybe', 'enabled', '2']) {
+    const r = parseOptions({ idle_compact: w } as never)
+    expect([w, r.idle_compact, r.notes.invalid]).toEqual([w, IDLE_INVALID_READS_AS, ['idle_compact']])
+  }
+})
+
+// IDLE-COMPACT §1.2, §5: the environment the idle timers read. CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS
+// as native `IXt` reads it; the D10 test seam bounded to 120-3600 s; a flag as Claude Code reads one.
+test('AT-IC-C00 idle env: compactMinOf, cacheSOf, envTruthy', () => {
+  expect([compactMinOf(undefined), compactMinOf(''), compactMinOf('abc'), compactMinOf('-5'), compactMinOf('0'), compactMinOf('1.5')]).toEqual([200000, 200000, 200000, 200000, 200000, 200000])
+  expect([compactMinOf('50000'), compactMinOf(' 300000 '), compactMinOf('100000')]).toEqual([100000, 300000, 100000])
+  expect([cacheSOf(undefined), cacheSOf('60'), cacheSOf('abc'), cacheSOf('119'), cacheSOf('3601'), cacheSOf('600.5')]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
+  expect([cacheSOf('120'), cacheSOf(' 600 '), cacheSOf('3600')]).toEqual([120, 600, 3600])
+  expect(['1', 'true', ' YES ', 'on'].map(envTruthy)).toEqual([true, true, true, true])
+  expect([undefined, '', '0', 'false', 'off', 'no', 'x'].map(v => envTruthy(v))).toEqual([false, false, false, false, false, false, false])
 })
 
 // P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.
