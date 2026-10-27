@@ -432,7 +432,7 @@
     },
     "section-cap": {
       "why": "one section crowds out the others",
-      "fix": "cut that section toward its template §2 cap"
+      "fix": "cut that section toward its template §2 cap if §2 lets you cut it; else keep it and list the advisory in the report"
     },
     "code-block": {
       "why": "code is recoverable from the repository",

@@ -188,7 +188,7 @@ Could not verify: <items> | None
 Next: Starting <Step 1> now | Stopped: <stop rule>
 ```
 
-End with the verdict: `Needs you:` and numbered items in plain language, or the one line `Nothing needed from you`; needs that come later go on one `Coming up:` line, never in the list. For each item give:
+End with the verdict: `Needs you:` and numbered items in plain language, or the one line `Nothing needed from you`; needs that come later go on one `Coming up:` line, never in the list. Under `resume_proceed: confirm` (R9) the first item is the user's go. For each item give:
 - what it is and why it matters;
 - the options and your recommendation;
 - what it blocks.

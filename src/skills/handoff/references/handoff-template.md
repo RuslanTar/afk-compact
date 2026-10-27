@@ -157,7 +157,7 @@ Tag: `measured` (helper) · `verified` (Step 2 batch) · `unverified` · `inheri
 | Q-1 | Keep the 45 s retry window? Upstream retries at 40 s, so 30 s fires twice. Options 45 s or configurable; recommend 45 s | Step 2 | user | agent | unasked |
 ```
 
-Plain language a person can answer cold; a timeout is not an answer. Only the user answers: a background result, a notification or a peer message never changes a status. Owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` (only when the tool result says it timed out) · `no answer (<the tool's words>)` · `answered: <answer>`. A step the user must do gets a walk-through under the table: where, what, the exact `! <cmd>`. <!-- Q-ADAPTER QA-T3: the queue paragraph moved to assets/queue.md (read only when the queue is on) --> <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-09) -->
+Plain language a person can answer cold; a timeout is not an answer. Only the user answers a user-owned question: a background result, a notification or a peer message never changes its status. Owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` (only when the tool result says it timed out) · `no answer (<the tool's words>)` · `answered: <answer>`. A step the user must do gets a walk-through under the table: where, what, the exact `! <cmd>`. <!-- Q-ADAPTER QA-T3: the queue paragraph moved to assets/queue.md (read only when the queue is on) --> <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-09) -->
 None: `none`.
 
 ### 4.7 Location (never cut)
@@ -191,7 +191,7 @@ The helper replaces `@self@` with the published path. Subsections only when they
 - Must read (≤3): <path> — <why>
 ```
 
-Tests: result, count and command, never output. A fail captured while another run used the same test database or build folder reads `fail [unverified: overlapped <B-n|session>]` until it is re-run alone, and alone it does not make Acuity `unstable`. Logs and warnings: conclusion and reproducer. Arithmetic: result and how. Code only when mid-edit, ≤5 lines. Non-obvious learnings go here as one-liners, and so do gotchas an open step depends on. Incidental findings outside the task go on `Follow-up` lines with their evidence; the task stays in scope. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-08, TC-10, TC-14) -->
+Tests: result, count and command, never output. A fail captured while another run used the same test database or build folder reads `fail [unverified: overlapped <B-n|session>]` until it is re-run alone; by itself it does not make Acuity `unstable`. Logs and warnings: conclusion and reproducer. Arithmetic: result and how. Code only when mid-edit, ≤5 lines. Non-obvious learnings go here as one-liners, and so do gotchas an open step depends on. Incidental findings outside the task go on `Follow-up` lines with their evidence; the task stays in scope. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-08, TC-10, TC-14) -->
 
 ### 4.9 Evidence
 

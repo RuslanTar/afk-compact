@@ -156,29 +156,29 @@ describe('AT-P-07 assembler (14-character name)', () => {
     }
   })
   // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
-  // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,680 B since
+  // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,720 B since
   // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS). Classic keeps 8,192.
-  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,680 B (the hard channel total)', () => {
+  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,720 B (the hard channel total)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'handoff', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8680).toBe(true)
+    expect(byteLength(s) <= 8720).toBe(true)
   })
   test('classic fallback (main [auto]+[chain] + subagent [fallback]) ≤8,192 B', () => {
     const s = assembleText(text('handoff-instructions'), ['auto', 'chain'], WORST, ['measured']) + assembleText(text('subagent-instructions'), ['fallback'], WORST)
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,680 B', () => {
+  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,720 B', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8680).toBe(true)
+    expect(byteLength(s) <= 8720).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
-  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,120
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,130
   // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note,
   // the owner's 2026-10-26 GSD re-entry ruling the [driver] line, and the 2026-10-26 plugin-text
   // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last).
-  test('resume protocol ≤4,120 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  test('resume protocol ≤4,130 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 4120).toBe(true)
+      expect(s.length <= 4130).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

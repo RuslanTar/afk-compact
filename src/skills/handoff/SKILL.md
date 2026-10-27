@@ -108,7 +108,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 - `ADVISORY secret-warn rules=<ids>` → take the value out and say where it lives, or report those rule ids; never the value.
 - Saved only when the receipt says so.
 
-## Step 8 — Report (≤8 lines, this order)
+## Step 8 — Report (8 items, this order; the verdict's list and its `Coming up:` line may add lines)
 
 1. The receipt, verbatim, and the export line under it when printed.
 2. `Resume with: /{{plugin}}:resume <path>`
@@ -117,4 +117,4 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 5. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
 6. `carry_notice` verbatim when set, advisories (a `secret-warn` by its rule ids), the bucket if it came from your slug (re-pinned to the user's topic: `ownership.repin` `ok`, say from where; or still differs: `refused`, name the holder), ownership conflicts, what could not be verified; omit when none. <!-- review-fix (bucket line). 2026-10-26 21:2x owner (plugin-text candidates, TC-01/TC-05): the bucket line joined this line so the report stays at 8 lines -->
 7. `Decided without you (say if any is wrong): D-4 <choice>, D-5 <choice>`, for this session's `D-` lines with source `agent`; omit when none. <!-- TC-05 -->
-8. Last, the verdict: `Needs you:` and numbered items in plain words, each with what to do, your recommendation and what it blocks; or the one line `Nothing needed from you`. Needs that come later, not now, go on one `Coming up:` line, never in the list. <!-- TC-01: plain words, no emoji -->
+8. Last, the verdict: `Needs you:` and numbered items in plain words, each with what to do, your recommendation and what it blocks; or the one line `Nothing needed from you`. Work that stays stopped until the user writes (auto-continue paused) is an item. Needs that come later, not now, go on one `Coming up:` line, never in the list. <!-- TC-01: plain words, no emoji; review-fix: a halt is an item, and the header counts items, not lines, so the list is never squashed -->
