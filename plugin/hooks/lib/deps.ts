@@ -6,7 +6,9 @@ import type { ResumePref } from './compact'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
 import type { BlockArgs } from './resume'
+import type { RestartEnv, RestartReport, RestartRun, RestartSetting } from './restart'
 import { optionEnv, parseOptions, paths } from './config'
+import { launchDir } from './launch.gen'
 
 export type RunResult = {
   /** True when the command ran and exited 0. */
@@ -239,6 +241,26 @@ export interface Deps {
    * trial config is on (shadow.ts).
    */
   fork(prompt: string): Promise<unknown>
+  /**
+   * SESSION-RESTART §4.2: `$.ui.log`, one dim transcript line the model does not read (the
+   * restart notice before and after); a failure is ignored.
+   */
+  uiLog(text: string): void
+  /**
+   * SESSION-RESTART §3.4 step 4: `$.command.run({ command })`, the command queued as if typed and
+   * run once the session is idle (`exit` never resolves when it ends the session). Rejects an
+   * unknown name, inside a hook the turn waits on, or past a Stop (F1, F2).
+   */
+  commandRun(command: string): Promise<{ text: string | undefined }>
+  /** G8: the prompt box's draft (`$.prompt.read`), undefined when it cannot be read. */
+  promptDraft(): Promise<string | undefined>
+  /** G9, G3b: `$.session.surfaces()`, undefined when the call throws. */
+  surfaces(): Promise<readonly string[] | undefined>
+  /**
+   * SESSION-RESTART §2.1, §3.2: the literal env reads of restart on update: the session kind,
+   * the background backend and job folder, and the restart launcher's launch folder (launch.gen.ts).
+   */
+  restartEnv(): Promise<RestartEnv>
 }
 
 /** What one module load keeps in memory (a reload starts a fresh one). */
@@ -246,7 +268,7 @@ export type LoadState = {
   loadId: string
   initDone: boolean
   eff: Effective | undefined
-  ident: { pid: number | null; pid_lstart: string | null; watch?: string | null } | undefined
+  ident: { pid: number | null; pid_lstart: string | null; watch?: string | null; restart?: RestartSetting; restartReports?: RestartReport[] } | undefined
   ccVersion: string | null
   helperMissingLogged: boolean
   /** Main turn bookkeeping. */
@@ -418,6 +440,22 @@ export type LoadState = {
    * a compaction our hook shaped counts, a skipped or unclaimed one too.
    */
   commandFails: number
+  /** SESSION-RESTART: the restart this load armed, from its arm to its end (one at a time). */
+  restart: RestartRun | undefined
+  /** `<why>|<to>` of the `refresh_skipped` and `refresh_would` rows this load wrote (once each). */
+  restartLogged: Set<string>
+  /** G9, G10: what this load saw that a restart cannot carry (`session-rules`, `session-dirs`, `remote`, `worktree`). */
+  restartBlocks: Set<string>
+  /** G3b: `session.attach` minus `session.detach` in this load. */
+  attached: number
+  /** `session.end` has begun (set first, synchronously): the exit watchdog stands down. */
+  ending: boolean
+  /** G5: the installed version `claude --version` gave (null: unknown) and when, cached 30 minutes. */
+  drift: { at: number; installed: string | null } | undefined
+  /** The `version_drift` rows this load wrote, by target. */
+  driftLogged: Set<string>
+  /** §2.1: this load's session ran another Claude Code version before (versionCanary), for `refresh_done {route: supervisor}`. */
+  versionMoved: { from: string; to: string } | undefined
 }
 
 /**
@@ -552,6 +590,14 @@ export function newState(loadId: string): LoadState {
     ownCompact: undefined,
     ownCompactTurn: false,
     commandFails: 0,
+    restart: undefined,
+    restartLogged: new Set(),
+    restartBlocks: new Set(),
+    attached: 0,
+    ending: false,
+    drift: undefined,
+    driftLogged: new Set(),
+    versionMoved: undefined,
   }
 }
 
@@ -755,6 +801,49 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       return state.pathsMemo.then(p => withHelperWatch(p, state.ident))
     },
     fork: prompt => $.model.fork({ prompt }),
+    uiLog(text) {
+      try {
+        $.ui.log(text)
+      } catch {
+        // the line is a notice only
+      }
+    },
+    async commandRun(command) {
+      const r = await $.command.run({ command })
+      return { text: typeof r.text === 'string' && r.text.trim() !== '' ? r.text : undefined }
+    },
+    async promptDraft() {
+      try {
+        const b = await $.prompt.read()
+        return typeof b.text === 'string' ? b.text : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async surfaces() {
+      try {
+        return [...(await $.session.surfaces())].map(String)
+      } catch {
+        return undefined
+      }
+    },
+    async restartEnv() {
+      // `$.env.get` takes literal names only (the engine lists what a module reads).
+      const get = async (read: () => Promise<string | undefined>): Promise<string | undefined> => {
+        try {
+          const v = await read()
+          return typeof v === 'string' && v !== '' ? v : undefined
+        } catch {
+          return undefined
+        }
+      }
+      return {
+        kind: await get(() => $.env.get('CLAUDE_CODE_SESSION_KIND')),
+        backend: await get(() => $.env.get('CLAUDE_BG_BACKEND')),
+        jobDir: await get(() => $.env.get('CLAUDE_JOB_DIR')),
+        launch: await get(() => launchDir($)),
+      }
+    },
   }
 }
 

@@ -20,6 +20,7 @@ import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
 import { buildBlockWith, claimedElsewhere, claimedWhere, logOutcome, persistPending, prodAllowed, settleRecords } from './resume'
 import { shadowPrepM3, startShadow } from './shadow'
+import { restartMoment } from './restart'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -315,6 +316,9 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     ...(prodConsent !== undefined ? { prodConsent } : {}),
     ...(idle ? { idle: true } : {}),
   }))
+  // SESSION-RESTART D2 (b): right after Claude Code's own idle compaction; nothing is submitted
+  // after it (the new load waits at the prompt with its block, as after any idle compaction).
+  if (main && idle) await guarded(d, sid, 'restart', () => restartMoment(d, sid, { cont: false, since: t0 }))
   return r
 }
 

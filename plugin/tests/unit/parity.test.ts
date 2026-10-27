@@ -147,7 +147,12 @@ function form(s: string): string {
 
 describe('BT-05 recorded helper replies', () => {
   test('the mod reads every real reply as intended', async () => {
-    expect(await ident(depsFor(reply('ident')), REPLY_SID)).toEqual({ pid: 424242, pid_lstart: 'Tue Oct 21 09:00:00 2026' })
+    expect(await ident(depsFor(reply('ident')), REPLY_SID)).toEqual({ pid: 424242, pid_lstart: 'Tue Oct 21 09:00:00 2026', restart: 'off' })
+    // SESSION-RESTART: restart on update off by default: the gate refuses `off`; no note, no record.
+    expect(JSON.parse(join(reply('restart-gate-off').stdout))).toMatchObject({ ok: false, why: 'off', setting: 'off' })
+    expect(JSON.parse(join(reply('restart-claim-none').stdout))).toMatchObject({ claimed: false, why: 'none', refused: [] })
+    expect(JSON.parse(join(reply('restart-set-absent').stdout))).toEqual({ ok: true, l: 'absent', c: 'absent' })
+    expect(JSON.parse(join(reply('restart-respawn-cancel-none').stdout))).toEqual({ ok: true, killed: false })
     expect(await prevCopy(depsFor(reply('prev-copy-none')), REPLY_SID)).toBeUndefined()
     expect(await prevCopy(depsFor(reply('prev-copy-path')), REPLY_SID)).toMatch(/^~\/.+_c1-1a2b3c\.md$/)
     expect(reply('dispatch-ok').exitCode).toBe(0)
@@ -224,7 +229,7 @@ describe('BT-05 recorded helper replies', () => {
         expect([r.name, fake.exitCode, fake.stdout.trim() !== '', real.trim() !== '']).toEqual([r.name, r.exitCode, true, true])
         continue
       }
-      if (r.name === 'ident' || r.name === 'checkpoint') {
+      if (r.name === 'ident' || r.name === 'checkpoint' || r.name.startsWith('restart-')) {
         // JSON: every key the fake gives (the keys the mod reads) is in the real reply.
         const fk = Object.keys(JSON.parse(fake.stdout) as object).sort()
         const rk = Object.keys(JSON.parse(real) as object)

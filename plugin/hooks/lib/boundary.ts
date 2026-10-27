@@ -18,6 +18,7 @@ import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText } from
 import { compactOff, log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
+import { restartMoment } from './restart'
 import { shadowPrepM3, startShadow } from './shadow'
 
 /** MOD-SPEC §9: the nudged turn ended on a user-owned question (`?` on the last non-blank line). */
@@ -395,9 +396,15 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       return r.skip === undefined ? { ran: true, ok: true } : { ran: true, ok: false, failClass: 'skipped' }
     }
     if (!settled) return { ran: true, ok: false, failClass: 'skipped' }
+    // SESSION-RESTART D2: the restart moment, before the continue; an armed restart owns the
+    // continue (it runs it once if the restart fails before the process ends).
+    let restarting = false
+    await guarded(d, sid, 'restart', async () => {
+      restarting = await restartMoment(d, sid, { cont: !idle, since: run.t0 })
+    })
     // Like Claude Code's own idle compaction, the plugin's sends nothing after it: the resume
     // block waits for the next turn (a background result or the person's return).
-    if (!idle) await guarded(d, sid, 'continue', () => autoContinue(d, sid))
+    if (!idle && !restarting) await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.
     if (s.pending && s.pending.nonce === nonce) s.pending.outcome.halt = s.halt.active
     return { ran: true, ok: true }

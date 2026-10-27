@@ -32,7 +32,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "{\"pid\":424242,\"pid_lstart\":\"Tue Oct 21 09:00:00 2026\",\"execpath_version\":null,\"watch\":\"~/.claude/handoffs/.watch\"}\n"
+   "{\"pid\":424242,\"pid_lstart\":\"Tue Oct 21 09:00:00 2026\",\"execpath_version\":null,\"watch\":\"~/.claude/handoffs/.watch\",\"restart\":\"off\",\"restart_reports\":[]}\n"
   ]
  },
  {
@@ -1038,6 +1038,162 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "stdin": [
    "{\"kind\":\"skip\",\"moment_id\":\"5e55a001-1a2b3c4d\",\"moment\":{\"kind\":\"m3-auto\",\"status\":\"skipped:cold\"}}\n"
+  ]
+ },
+ {
+  "name": "restart-gate-off",
+  "argv": [
+   [
+    "restart"
+   ],
+   [
+    "gate"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--route"
+   ],
+   [
+    "fg"
+   ],
+   [
+    "--from"
+   ],
+   [
+    "2.1.311"
+   ],
+   [
+    "--to"
+   ],
+   [
+    "2.1.312"
+   ],
+   [
+    "--model"
+   ],
+   [
+    ""
+   ],
+   [
+    "--since"
+   ],
+   [
+    "1792580712000"
+   ],
+   [
+    "--now-ms"
+   ],
+   [
+    "1792580712000"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "{\"ok\":false,\"why\":\"off\",\"setting\":\"off\",\"route\":\"fg\",\"mode\":null,\"effort\":null,\"job_short\":null,\"token\":null,\"types\":[]}\n"
+  ]
+ },
+ {
+  "name": "restart-claim-none",
+  "argv": [
+   [
+    "restart"
+   ],
+   [
+    "claim"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--load-id"
+   ],
+   [
+    "l0ad0001"
+   ],
+   [
+    "--now-ms"
+   ],
+   [
+    "1792580712000"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "{\"claimed\":false,\"why\":\"none\",\"route\":null,\"from\":null,\"to\":null,\"continue\":false,\"nonce\":null,\"at\":null,\"refused\":[]}\n"
+  ]
+ },
+ {
+  "name": "restart-set-absent",
+  "argv": [
+   [
+    "restart"
+   ],
+   [
+    "set"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "0123456789abcdef"
+   ],
+   [
+    "--state"
+   ],
+   [
+    "cancelled"
+   ],
+   [
+    "--now-ms"
+   ],
+   [
+    "1792580712000"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "{\"ok\":true,\"l\":\"absent\",\"c\":\"absent\"}\n"
+  ]
+ },
+ {
+  "name": "restart-respawn-cancel-none",
+  "argv": [
+   [
+    "restart"
+   ],
+   [
+    "respawn-cancel"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "0123456789abcdef"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "{\"ok\":true,\"killed\":false}\n"
   ]
  }
 ]

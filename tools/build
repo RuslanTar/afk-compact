@@ -95,6 +95,13 @@ def render_manifest(text, brand):
     return out
 
 
+def launch_env(name):
+    """The env name the restart launcher exports its launch folder in (AFK_COMPACT_LAUNCH for
+    afk-compact): the plugin name in upper case, `-` as `_`, then `_LAUNCH`. The plugin side
+    reads the same name, so both come from here."""
+    return name.upper().replace("-", "_") + "_LAUNCH"
+
+
 def ts_header(src):
     return "// GEN by tools/build from {}. Do not edit; edit the source and run tools/build.\n".format(src)
 
@@ -177,6 +184,18 @@ def plan(brand):
     out["plugin/hooks/lib/spec.gen.ts"] = (spec_ts, PLAIN)
     out["plugin/hooks/lib/meta.gen.ts"] = (ts_header("brand.json") + "export const PLUGIN_VERSION = " +
                                            json.dumps(brand["version"]) + "\n", PLAIN)
+    # SESSION-RESTART §3.2: the restart launcher's launch folder env, read by its literal name
+    # (the engine takes literal $.env.get names only); the launcher exports the same name.
+    env = launch_env(name)
+    out["plugin/hooks/lib/launch.gen.ts"] = (
+        ts_header("brand.json") +
+        "import type { EngineInterface } from 'claude-code'\n\n"
+        "/** The env the restart launcher exports its launch folder in (tools/build launch_env). */\n"
+        "export const LAUNCH_ENV = " + json.dumps(env) + "\n\n"
+        "/** The launch folder of the restart launcher this session runs under, or undefined. */\n"
+        "export async function launchDir($: EngineInterface): Promise<string | undefined> {\n"
+        "  const v = await $.env.get(" + json.dumps(env).replace('"', "'") + ")\n"
+        "  return typeof v === 'string' && v !== '' ? v : undefined\n}\n", PLAIN)
 
     for rel in files_under("src/skills"):
         out["plugin/skills/" + os.path.relpath(rel, "src/skills")] = (render(read(rel), name), PLAIN)

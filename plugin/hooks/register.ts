@@ -13,6 +13,7 @@ import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { blockName, contextBlock } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
+import { onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
 
 export const register: Register = (on, options) => {
   const state = newState(randomHex(8))
@@ -127,6 +128,8 @@ export const register: Register = (on, options) => {
       promptEntering(state, kind)
       // §9.4: a prompt entering cancels the pre-idle timer.
       cancelIdleTimer(realDeps($, options, state))
+      // SESSION-RESTART §2.2 step 4, §3.4 step 3: a prompt entering stops a restart under way.
+      if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state))
     }
     // The shadow trial's M1 moment for this plugin's typed handoff command, before its turn
     // starts; off (one cheap test) without the local trial config.
@@ -157,6 +160,8 @@ export const register: Register = (on, options) => {
     const d = realDeps($, options, state)
     const sid = await prepare(d)
     const tool = String(e.tool)
+    // SESSION-RESTART G10: a worktree entered in this load is a restriction a resume cannot carry.
+    onWorktreeTool(d, tool)
     const input = e as unknown as Record<string, unknown>
     const isAsk = tool === ASK_TOOL
     if (isAsk) {
@@ -192,6 +197,28 @@ export const register: Register = (on, options) => {
     const own = claimOwnCompact(state, e)
     if (own) return onOwnCompact(d, await prepare(d), e, own, x => next(x))
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
+  }).catch(($, e, next) => next(e))
+
+  // SESSION-RESTART §3.4 step 5, G9, G10: our own `/exit` passes only for a fresh armed restart
+  // (else our own answer, and no command runs); a person's `/exit` while armed cancels it; the
+  // commands a restart cannot carry block it for the rest of the load.
+  on('command.run', async ($, e, next) => {
+    const own = await onCommandRun(realDeps($, options, state), e)
+    if (own !== undefined) return own
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // SESSION-RESTART G3b: remote clients attached in this load (observe only).
+  on('session.attach', async ($, e, next) => {
+    const r = await next(e)
+    onAttach(realDeps($, options, state), 1)
+    return r
+  }).catch(($, e, next) => next(e))
+
+  on('session.detach', async ($, e, next) => {
+    const r = await next(e)
+    onAttach(realDeps($, options, state), -1)
+    return r
   }).catch(($, e, next) => next(e))
 
   // The resume block, and the same idle block again when a person comes back after a background

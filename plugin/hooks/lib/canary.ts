@@ -74,6 +74,7 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
     await d.storeSet(BY_SID_KEY, sids)
   }
   const moved = ownFrom !== undefined && ownFrom !== to
+  if (moved) d.state.versionMoved = { from: ownFrom, to }
   if (trips || moved) await log(d, sid, 'version_change', { from: (moved ? ownFrom : from) ?? null, to })
   if (trips) {
     await d.storeSet('lastVersion', to)

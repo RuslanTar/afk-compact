@@ -14,6 +14,7 @@ import { ensureIdent, isoLocal, log, markHeadless } from './log'
 import { claimedElsewhere, logOutcome, settleRecords } from './resume'
 import { showNotice } from './notice'
 import { shadowPluginSide } from './shadow'
+import { restartClaim, restartInterrupt, restartOnEnd } from './restart'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
   const p = await d.paths()
@@ -65,6 +66,12 @@ export async function onSessionStart(d: Deps, interactive?: boolean): Promise<vo
     pid_lstart: d.state.ident?.pid_lstart ?? null,
   })
   if (d.state.headless) await markHeadless(d, sid, 'session-start')
+  // SESSION-RESTART §5.2, §2.3: the carry note of a restart this session made, and the reports.
+  try {
+    await restartClaim(d, sid)
+  } catch {
+    // no claim: the note stays for a later load (or ages into not-confirmed)
+  }
 }
 
 /**
@@ -89,6 +96,8 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   const ours = claimTurn(s, text)
   const alone = ours && (!otherEntering || text.trim() === (sent ?? '').trim())
   const human = !ours && isHuman(s.turnOrigin)
+  // SESSION-RESTART §2.2 step 4, §3.4: a turn took over; an in-flight respawn is cancelled first.
+  if (s.restart !== undefined) await restartInterrupt(d)
   await ensureIdent(d, await d.sessionId())
   const sid = await prepare(d)
   // A new session id in a headless load (after a `/clear`): its own `headless` row.
@@ -131,6 +140,8 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   const s = d.state
   cancelBoundary(d)
   cancelIdleTimer(d)
+  // SESSION-RESTART §3.4 step 6: the launch note's `go` (or cancel) is the first awaited action.
+  await restartOnEnd(d, reason)
   s.resumeAfter = false
   s.lastCycle = null
   s.idleAgain = undefined

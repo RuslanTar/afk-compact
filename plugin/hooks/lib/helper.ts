@@ -1,6 +1,7 @@
 // `$.process.run` wrappers for every helper subcommand the mod calls (BUILD-PLAN §3.1). A call
 // that rejects (cannot start, timed out) or exits non-zero is a failed call; callers fall back.
 import type { Deps, RunResult } from './deps'
+import type { RestartReport, RestartSetting } from './restart'
 
 /** MOD-SPEC §2.3: 2 s for helper calls. */
 export const HELPER_MS = 2000
@@ -31,19 +32,35 @@ export function failClass(r: RunResult): string {
  * `watch`: the helper's effective log folder after its unsafe-root checks (MOD-SPEC §1.2), null
  * when every candidate was refused, undefined when the reply has no such key.
  */
-export type Ident = { pid: number | null; pid_lstart: string | null; watch?: string | null }
+export type Ident = {
+  pid: number | null
+  pid_lstart: string | null
+  watch?: string | null
+  /** SESSION-RESTART D1: `restart_on_update` as the helper resolved it (settings file only). */
+  restart?: RestartSetting
+  /** §2.3: background restarts that failed after the kill, reported once by this load. */
+  restartReports?: RestartReport[]
+}
 
 export async function ident(d: Deps, sid: string): Promise<Ident | undefined> {
   const r = await call(d, ['ident', '--sid', sid])
   if (!r.ok) return undefined
   try {
-    const j = JSON.parse(r.stdout.trim()) as { pid?: unknown; pid_lstart?: unknown; watch?: unknown }
+    const j = JSON.parse(r.stdout.trim()) as { pid?: unknown; pid_lstart?: unknown; watch?: unknown; restart?: unknown; restart_reports?: unknown }
     const id: Ident = {
       pid: typeof j.pid === 'number' ? j.pid : null,
       pid_lstart: typeof j.pid_lstart === 'string' ? j.pid_lstart : null,
     }
     if (j.watch === null) id.watch = null
     else if (typeof j.watch === 'string' && j.watch.startsWith('/')) id.watch = j.watch
+    if (j.restart === 'on' || j.restart === 'shadow' || j.restart === 'off') id.restart = j.restart
+    if (Array.isArray(j.restart_reports)) {
+      const reps = j.restart_reports.flatMap(x => {
+        const o = (x ?? {}) as { short?: unknown; to?: unknown; code?: unknown }
+        return typeof o.short === 'string' ? [{ short: o.short, to: typeof o.to === 'string' ? o.to : null, code: typeof o.code === 'string' ? o.code : 'other' }] : []
+      })
+      if (reps.length > 0) id.restartReports = reps
+    }
     return id
   } catch {
     return undefined

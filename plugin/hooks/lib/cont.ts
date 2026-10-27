@@ -122,6 +122,50 @@ export async function lastCycleEnd(d: Deps, sid: string, last: HaltReason): Prom
 }
 
 /**
+ * SESSION-RESTART §5.3: autoContinue's own checks, with no row and no change: whether the
+ * continue after this compaction would be submitted (`go`), else why not: `not-after` (no
+ * nudge-driven compaction), `halt`, `asks-user`, `disabled` (`max_auto_continues_per_hour` 0) or
+ * `cap` (the hour's continues used up: autoContinue would enter halt, so no restart runs there).
+ */
+export async function continueDecision(d: Deps, sid: string): Promise<{ go: boolean; why?: 'not-after' | 'halt' | 'asks-user' | 'disabled' | 'cap' }> {
+  const s = d.state
+  if (!s.resumeAfter) return { go: false, why: 'not-after' }
+  if (s.halt.active) return { go: false, why: 'halt' }
+  if (s.lastTurnAsksUser) return { go: false, why: 'asks-user' }
+  const max = d.cfg.max_auto_continues_per_hour
+  if (max === 0) return { go: false, why: 'disabled' }
+  if ((await contStamps(d, sid, await d.now())).length >= max) return { go: false, why: 'cap' }
+  return { go: true }
+}
+
+/**
+ * SESSION-RESTART §5.3: the continue a restart carried, submitted in the new load: the `cont:<sid>`
+ * stamp, `continue {result: submitted, after: restart}` and the bare continue line (the resume
+ * block arrives by `prompt.context` from the armed record). False when the cap is used up or the
+ * submit failed (`skipped:submit-failed`).
+ */
+export async function submitContinue(d: Deps, sid: string): Promise<boolean> {
+  const s = d.state
+  const max = d.cfg.max_auto_continues_per_hour
+  const now = await d.now()
+  const stamps = await contStamps(d, sid, now)
+  if (s.halt.active || max === 0 || stamps.length >= max) return false
+  const text = continueLine(d.name)
+  stamps.push(now)
+  await d.storeSet(`cont:${sid}`, stamps)
+  await log(d, sid, 'continue', { result: 'submitted', continues_last_hour: stamps.length, after: 'restart' })
+  submitPending(s, text)
+  try {
+    await d.submit(text)
+    return true
+  } catch {
+    submitSettled(s)
+    await log(d, sid, 'continue', { result: 'skipped:submit-failed', continues_last_hour: stamps.length, after: 'restart' })
+    return false
+  }
+}
+
+/**
  * After a plugin compaction: auto-continue only after a nudge-driven one, not in halt mode,
  * not when the nudged turn ended on a user-owned question, under the hourly cap. The resume
  * block rides along when the `prompt.submit` claim is still free.
