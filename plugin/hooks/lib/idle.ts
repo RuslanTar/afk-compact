@@ -20,11 +20,17 @@
 //   Native fires 54:00 after the last request and the cache lasts to minute 60. When the plugin's
 //   own records show a main compaction since that turn end it stands down (`native-fired`);
 //   otherwise native stayed silent for whatever reason (served `off`, a keypress, a dialog, a
-//   failure), one `idle_silent` row counts the break, and the handoff turn runs while the cache is
-//   still warm. While agents run (native never compacts then) the plugin compacts the main
-//   session itself instead (owner 2026-10-27 03:4x "Compact (Recommended)", which replaces
-//   xxxxxxxx-38 "Measure more first"). It is armed only while `idle_handoff_turn` is auto.
+//   failure, agents running), one `idle_silent` row counts the break, and, with `idle_compact`
+//   auto, the plugin compacts the main session itself while the cache is still warm: always while
+//   agents run (native never compacts then; owner 2026-10-27 03:4x "Compact (Recommended)", which
+//   replaces xxxxxxxx-38 "Measure more first"), and at Claude Code's idle minimum or more when
+//   none run (owner 18:54 Q2: compact instead of the handoff turn). The same guards as `compact`
+//   (`compactGuards`, IDLE-COMPACT D4), the same failure count (D7). Below that minimum, or with
+//   `idle_compact: off`, the handoff turn runs (`agents-running` while agents run). Armed while
+//   `idle_handoff_turn` or `idle_compact` is auto (lane B).
 // - `off`: nothing (a headless load: no plugin turn and, until lane B1, no plugin compaction).
+// Every timer re-reads the wall clock at least once a minute (D12 ticks), so a computer that
+// wakes before the due fires on time; one that wakes after it meets the lapsed bound.
 // One `idle_mode {native, plugin_turn, plugin_compact, compact_min?, served_hint?, cache_s?}` row
 // whenever that policy changes for a session id; `served_hint` (2b) is Claude Code's cached server
 // mode, logged only, never used to decide. The due is persisted (`idle_due:<sid>`, §3.1) with the
@@ -56,6 +62,8 @@ export const IDLE_LATE_MS = 60000
 export const IDLE_PRESENT_MS = 60000
 /** D3: the compaction never fires sooner than this after the turn end. */
 export const IDLE_AFTER_END_MS = 60000
+/** D12 (lane B): the longest wait of an idle timer; each tick re-reads the wall clock (not scaled). */
+export const IDLE_TICK_MS = 60000
 /** D7: failed idle compactions in a row that turn the plugin's idle compaction off for the load. */
 export const IDLE_COMPACT_FAILS_MAX = 2
 /**
@@ -168,10 +176,14 @@ async function idleSkip(d: Deps, sid: string, why: string, kind: IdleKind, lateS
   await skipped(d, sid, why, null, 'idle', { kind, ...(lateS !== undefined ? { late_s: lateS } : {}) })
 }
 
-/** Cancels the timer (synchronous: safe before any await in a hook). */
+/**
+ * Cancels the timer (synchronous: safe before any await in a hook). The generation goes up, so a
+ * tick that is reading the clock right now re-arms nothing (D12).
+ */
 export function cancelIdleTimer(d: Deps): void {
   d.state.idleTimer?.cancel()
   d.state.idleTimer = undefined
+  d.state.idleGen++
 }
 
 /** Cancels the pending delete of this load's last tombstone of `sid`: a newer write replaces it. */
@@ -223,15 +235,25 @@ export async function cancelIdle(d: Deps, sid: string): Promise<void> {
 }
 
 /**
- * Lane A (§3.3): one wait to the due; a wait that fires late meets G3 `lapsed`. `atLoad`: the due
- * had already passed when this load adopted the record (§3.4 late-fire), so G7 applies to the
- * fire of every kind, not only `compact`.
+ * D12 (lane B, §3.3): ticks of at most a minute to the due, each re-reading the wall clock, so a
+ * wait that the computer's sleep stretched (a monotonic clock, INFERRED) fires on time when it
+ * wakes before the due; the last tick is exact, and one that comes late meets G3 `lapsed`. A
+ * cancel (turn start, entering prompt, session end) while a tick reads the clock stops it from
+ * re-arming (`idleGen`). `atLoad`: the due had already passed when this load adopted the record
+ * (§3.4 late-fire), so G7 applies to the fire of every kind, not only `compact`. Exported for
+ * its unit test (AT-IC-C35: the kit cannot hold `$.clock.now` while a tick reads it).
  */
-function schedule(d: Deps, rec: Due, now: number, atLoad = false): void {
+export function schedule(d: Deps, rec: Due, now: number, atLoad = false): void {
   cancelIdleTimer(d)
-  d.state.idleTimer = d.after(Math.max(0, rec.due - now), () => {
+  const gen = d.state.idleGen
+  d.state.idleTimer = d.after(Math.max(0, Math.min(rec.due - now, IDLE_TICK_MS)), () => {
     d.state.idleTimer = undefined
-    d.state.inflight = (async () => fire(d, rec, await d.now(), atLoad))().catch(() => undefined)
+    d.state.inflight = (async () => {
+      const t = await d.now()
+      if (d.state.idleGen !== gen) return
+      if (t < rec.due) return schedule(d, rec, t, atLoad)
+      await fire(d, rec, t, atLoad)
+    })().catch(() => undefined)
   })
 }
 
@@ -257,15 +279,16 @@ async function policy(d: Deps, sid: string): Promise<Policy> {
   const native = await d.nativeIdle()
   const env = await d.idleEnv()
   // A headless session submits no model turn, and (until lane B1) gets no idle compaction.
-  const turnOn = d.cfg.idle_handoff_turn === 'auto' && !s.headless
-  const compactOn = d.cfg.idle_compact === 'auto' && s.idleCompactOff === undefined && !s.headless
+  const { turnOn, compactOn } = idleSwitches(d)
   const live = native === 'on' || native === 'unknown'
   const pluginTurn = live ? (turnOn ? 'check' : 'off') : turnOn ? 'on' : 'off'
-  const pluginCompact = native === 'vetoed' ? (compactOn ? 'on' : (s.idleCompactOff ?? 'off')) : pluginTurn === 'check' ? 'agents' : 'off'
-  const served = pluginTurn === 'check' ? await d.servedHint() : undefined
+  // `check` (lane B): the 55.5-min check compacts itself when Claude Code stayed silent (with
+  // agents running, or at the minimum or more with none: owner Q2). Lane A wrote `agents` there.
+  const pluginCompact = native === 'compaction-off' ? 'off' : compactOn ? (live ? 'check' : 'on') : (s.idleCompactOff ?? 'off')
+  const served = live && (turnOn || compactOn) ? await d.servedHint() : undefined
   const fields = {
     native, plugin_turn: pluginTurn, plugin_compact: pluginCompact,
-    ...(pluginCompact === 'on' || pluginCompact === 'agents' ? { compact_min: env.compactMin } : {}),
+    ...(pluginCompact === 'on' || pluginCompact === 'check' ? { compact_min: env.compactMin } : {}),
     ...(served !== undefined ? { served_hint: served } : {}),
     ...(env.cacheS !== undefined ? { cache_s: env.cacheS } : {}),
   }
@@ -277,9 +300,27 @@ async function policy(d: Deps, sid: string): Promise<Policy> {
   return { native, turnOn, compactOn, env }
 }
 
+/**
+ * The plugin's two idle paths as the options and this load allow them: the handoff turn
+ * (`idle_handoff_turn`) and its own idle compaction (`idle_compact`, off for the load after D7).
+ * A headless load has neither (no model turn; lane B1 has the headless compaction).
+ */
+function idleSwitches(d: Deps): { turnOn: boolean; compactOn: boolean } {
+  const s = d.state
+  return {
+    turnOn: d.cfg.idle_handoff_turn === 'auto' && !s.headless,
+    compactOn: d.cfg.idle_compact === 'auto' && s.idleCompactOff === undefined && !s.headless,
+  }
+}
+
 /** §1.2: the kind a turn end at this context size arms. Tokens cannot grow without a main turn. */
 function pickKind(p: Policy, tokens: number | undefined): IdleKind | 'off' {
-  if (p.native === 'on' || p.native === 'unknown') return p.turnOn ? 'check' : 'off'
+  // Lane B: the check is armed for the turn, or for the plugin's compaction at it, which needs
+  // Claude Code's idle minimum (with agents running too: G10).
+  if (p.native === 'on' || p.native === 'unknown') {
+    if (p.turnOn) return 'check'
+    return p.compactOn && (tokens === undefined || tokens >= p.env.compactMin) ? 'check' : 'off'
+  }
   if (p.native === 'vetoed' && p.compactOn && (tokens === undefined || tokens >= p.env.compactMin)) return 'compact'
   return p.turnOn ? 'turn' : 'off'
 }
@@ -317,7 +358,8 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
     : endAt + (kind === 'turn' ? IDLE_FIRE_MS : IDLE_CHECK_MS) * scale
   let cc: string | null = null
   let model: string | null = null
-  if (kind === 'compact') {
+  // G3a: the check may compact too (lane B), so it keeps the prefix it was armed with as well.
+  if (kind === 'compact' || kind === 'check') {
     try {
       cc = (await d.version()).version
     } catch {
@@ -501,36 +543,26 @@ async function turnBlocked(d: Deps, sid: string, rec: Due, now: number, atLoad: 
   return laterChecks(d, sid, eff, await usageOrNone(d), rec)
 }
 
-/** The plugin's own idle compaction while agents run (owner 2026-10-27): its `idle_compact` row. */
+/** The plugin's own idle compaction at the check (owner 2026-10-27, owner Q2): its `idle_compact` row. */
 type Compact = { compact: true; gapS: number; tokens: number; agents: number }
-
-/**
- * Owner 2026-10-27 03:4x ("Compact (Recommended)", replaces xxxxxxxx-38 "Measure more first"):
- * native idle compaction does not run while agents run (EXPERIMENT-RESULTS §11), so the check
- * compacts itself, as native would have: `triggers` on, a window large enough for plugin
- * compactions, a context at Claude Code's idle floor or more (below it native would not compact
- * either), not in halt mode (no plugin compactions there) and no question open.
- */
-async function compactBlocked(d: Deps, sid: string, u: Use): Promise<string | undefined> {
-  if (!d.cfg.triggers) return 'triggers-off'
-  if ((await effective(d, sid)).disabled) return 'small-window'
-  if (u?.tokens === undefined || u.tokens < NATIVE_IDLE_FLOOR) return 'small'
-  if (d.state.halt.active) return 'halted'
-  if (d.state.askOpen > 0) return 'asks-user'
-  return undefined
-}
 
 /**
  * Owner xxxxxxxx-17: the 55.5-min outcome check. A check that fires more than a minute late is
  * `lapsed` (§3.4). A main compaction since the turn end stands down (`native-fired` for an idle
- * one, else `compacted`); a busy session is no idle break. Otherwise native stayed silent: one
- * `idle_silent` row at 200K and more, then, while agents run, the plugin's own idle compaction
- * (owner 2026-10-27) or its skip reason; else the checks of the turn. A check this load fires late
- * at its start (`atLoad`, §3.4) skips `present` (G7) before any of that: a person who just
- * launched or resumed the session gets neither a turn nor a compaction in front of them.
+ * one, else `compacted`); a busy session is no idle break. A check this load fires late at its
+ * start (`atLoad`, §3.4) skips `present` (G7): a person who just launched or resumed the session
+ * gets neither a turn nor a compaction in front of them. Otherwise native stayed silent: one
+ * `idle_silent` row at 200K and more, then, with `idle_compact` auto, the plugin's own idle
+ * compaction behind the guards it shares with the `compact` timer (`compactGuards`, D4: lane A
+ * had a shorter list here, without the cache and the limits): while agents run (owner 2026-10-27
+ * 03:4x; native never compacts then), and with none running at Claude Code's idle minimum or
+ * more, or with the turn off (owner Q2, 18:54: compact instead of the turn; a refusal is the
+ * check's one row, no turn after it, as D2 rules for `compact`). Else the turn's checks, or
+ * `agents-running` while agents run (the skip of before 2026-10-27, with `idle_compact: off`).
  */
 async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: number, atLoad: boolean): Promise<string | Go | Compact> {
-  if (d.cfg.idle_handoff_turn !== 'auto' || d.state.headless) return 'disabled'
+  const on = idleSwitches(d)
+  if (!on.turnOn && !on.compactOn) return 'disabled'
   if (now - rec.due > IDLE_LATE_MS) return 'lapsed'
   const end = rec.end
   const c = end === null ? undefined : await compactedSince(d, sid, end)
@@ -545,12 +577,15 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
     const served = await d.servedHint()
     await log(d, sid, 'idle_silent', { gap_s: gap, tokens: u.tokens, agents, ...(served !== undefined ? { served_hint: served } : {}) })
   }
-  if (agents > 0) {
-    const why = await compactBlocked(d, sid, u)
-    if (why !== undefined) return why
-    // compactBlocked found the tokens; the gap is the timer's own (about 3,330 s) when unknown.
-    return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: u?.tokens ?? 0, agents }
+  const env = await d.idleEnv()
+  const tokens = u?.tokens ?? rec.tokens ?? undefined
+  if (on.compactOn && (agents > 0 || !on.turnOn || tokens === undefined || tokens >= env.compactMin)) {
+    const g = await compactGuards(d, sid, rec, now, env)
+    if ('why' in g) return g.why
+    // The gap is the timer's own (about 3,330 s) when the turn end is unknown.
+    return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents }
   }
+  if (agents > 0) return 'agents-running'
   if (!d.cfg.triggers) return 'triggers-off'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'
@@ -573,7 +608,9 @@ async function idleBoundary(d: Deps, sid: string, kind: IdleKind, opts: Paramete
 /**
  * D7: a success resets the count of failed idle compactions; a failure of a counted class adds
  * one, and the second in a row turns the plugin's idle compaction off for the load (one
- * `idle_compact_off` row; the 49-min turn path takes over at the next turn end).
+ * `idle_compact_off` row; the 49-min turn path takes over at the next turn end, and the check's
+ * turn, or `agents-running`, at the next check). The timer's and the check's compactions count
+ * together (lane B, D4).
  */
 export async function countIdleCompact(d: Deps, sid: string, r: BoundaryResult): Promise<void> {
   const s = d.state
@@ -656,16 +693,19 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   const b = rec.kind === 'check' ? await checkBlocked(d, sid, rec, now, scale, atLoad) : await turnBlocked(d, sid, rec, now, atLoad)
   if (typeof b === 'string') return skip(b, b === 'lapsed' ? secs(now - rec.due) : undefined)
   if ('compact' in b) {
-    // Owner 2026-10-27: one shaped compaction instead of the turn. A rejection (a turn started,
-    // or a headless host that cannot compact between turns) is one `compact_rejected` row from
-    // boundary(), never retried: the next check comes only after another main turn end. A
-    // refusal before the compaction is one skip row (D13).
+    // Owner 2026-10-27 and owner Q2: one shaped compaction instead of the turn, run as the
+    // `compact` timer runs its own (D4): asked once more after the checkpoint (`idleRecheck`),
+    // exempt from halt for the auto-continue cap (D5), its failures counted (D7). A rejection (a
+    // turn started, or a headless host that cannot compact between turns) is one
+    // `compact_rejected` row from boundary(), never retried: the next check comes only after
+    // another main turn end. A refusal before the compaction is one skip row (D13).
     out.done = true
     await log(d, sid, 'idle_compact', {
       gap_s: b.gapS, tokens: b.tokens, agents: b.agents, at: 'check', late_s: Math.max(0, secs(now - rec.due)), adopted: s.idleAdopted,
     })
-    const r = await idleBoundary(d, sid, 'check', { idle: { gapS: b.gapS } })
+    const r = await idleBoundary(d, sid, 'check', { idle: { gapS: b.gapS }, idleRecheck: recheckOf(d, sid, rec), exemptHalt: capHalt(s) })
     if (!r.ran) await idleSkip(d, sid, r.why, 'check')
+    else await countIdleCompact(d, sid, r)
     return
   }
   const h = newTurn('idle', b.tokens, b.allowance, b.native, b.calls)
@@ -700,7 +740,8 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
 
 /**
  * The AT-IA-03 pattern (G0a): native idle came back on since the timer was armed, so the outcome
- * check is armed for the same turn end, when that is still ahead and the check is on at all.
+ * check is armed for the same turn end, when that is still ahead and the check is on at all (its
+ * turn or, lane B, the plugin's compaction at it).
  */
 async function rearmCheck(d: Deps, rec: Due, now: number, scale: number): Promise<void> {
   const end = rec.end
@@ -734,7 +775,7 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   // G0a: native came back on (or unreadable): the outcome check for the same turn end.
   if (p.native === 'on' || p.native === 'unknown') {
     await skip(p.native === 'on' ? 'native-on' : 'native-unknown')
-    if (p.turnOn) await rearmCheck(d, rec, now, scaleOf(p.env))
+    if (p.turnOn || p.compactOn) await rearmCheck(d, rec, now, scaleOf(p.env))
     return
   }
   // G0b, G0c: automatic compaction switched off; the plugin's idle compaction off (the option,
@@ -752,19 +793,7 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   const gapS = secs(now - (rec.end ?? now))
   out.done = true
   await log(d, sid, 'idle_compact', { gap_s: gapS, tokens: g.tokens, agents, at: 'timer', late_s: Math.max(0, lateS), adopted: s.idleAdopted })
-  // G4 (a turn, or a compaction other than ours: the boundary's own native check looks only after
-  // a handoff turn), G5, G6 and G7 once more after the checkpoint, which can take seconds: a person
-  // who came back meanwhile, or a `/compact` typed or sent meanwhile, is not compacted over (one
-  // skip row from the boundary's result).
-  const idleRecheck = async (): Promise<string | undefined> => {
-    if (s.mainTurnRunning || s.foreignPrompts > 0 || s.handoffTurn !== undefined || s.ourSubmitPending) return 'busy'
-    if (s.nativeCompacting > 0 || s.ownCompact !== undefined) return 'busy'
-    if (newerTurn(s, rec)) return 'newer-turn'
-    if ((await compactedSince(d, sid, rec.end ?? 0)) !== undefined) return 'compacted'
-    if (present(s, await d.now())) return 'present'
-    return undefined
-  }
-  const r = await idleBoundary(d, sid, 'compact', { idle: { gapS }, idleRecheck, exemptHalt: s.halt.active && s.halt.reason === 'cap' })
+  const r = await idleBoundary(d, sid, 'compact', { idle: { gapS }, idleRecheck: recheckOf(d, sid, rec), exemptHalt: capHalt(s) })
   if (!r.ran) {
     await skip(r.why)
     return
@@ -772,11 +801,36 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   await countIdleCompact(d, sid, r)
 }
 
+/** D5: halt for the auto-continue cap does not stop an idle compaction (no continue follows it). */
+function capHalt(s: Deps['state']): boolean {
+  return s.halt.active && s.halt.reason === 'cap'
+}
+
+/**
+ * §2.4 `idleRecheck` for the plugin's idle compaction, at the timer and at the check (lane B, D4):
+ * G4 (a turn, or a compaction other than ours: the boundary's own native check looks only after
+ * a handoff turn), G5, G6 and G7 once more after the checkpoint, which can take seconds: a person
+ * who came back meanwhile, or a `/compact` typed or sent meanwhile, is not compacted over (one
+ * skip row from the boundary's result).
+ */
+function recheckOf(d: Deps, sid: string, rec: Due): () => Promise<string | undefined> {
+  const s = d.state
+  return async () => {
+    if (s.mainTurnRunning || s.foreignPrompts > 0 || s.handoffTurn !== undefined || s.ourSubmitPending) return 'busy'
+    if (s.nativeCompacting > 0 || s.ownCompact !== undefined) return 'busy'
+    if (newerTurn(s, rec)) return 'newer-turn'
+    if ((await compactedSince(d, sid, rec.end ?? 0)) !== undefined) return 'compacted'
+    if (present(s, await d.now())) return 'present'
+    return undefined
+  }
+}
+
 /**
  * G3-G14 of the plugin's idle compaction (§2.1), in order: the first that fails is the reason,
- * else the context size the compaction goes by. No G1 and no read of the due record (G1 ran once
- * at the top of `fire`, before the record was cleared). `adoptedOk` is ADOPTED_IDLE_COMPACT (a
- * parameter for its unit test).
+ * else the context size the compaction goes by. The `compact` timer and the 55.5-min check's
+ * compaction (lane B, D4: one compaction, one rule set) both call it. No G1 and no read of the
+ * due record (G1 ran once at the top of `fire`, before the record was cleared). `adoptedOk` is
+ * ADOPTED_IDLE_COMPACT (a parameter for its unit test).
  */
 export async function compactGuards(d: Deps, sid: string, rec: Due, now: number, env: IdleEnv, adoptedOk = ADOPTED_IDLE_COMPACT): Promise<{ why: string } | { tokens: number }> {
   const s = d.state

@@ -353,6 +353,11 @@ export type LoadState = {
   /** The pre-idle timer (§9.4). */
   idleTimer: { cancel: () => void } | undefined
   /**
+   * D12 (lane B): bumped by every cancel of the idle timer, synchronously, so a tick that was
+   * reading the clock when a turn started, a prompt entered or the session ended re-arms nothing.
+   */
+  idleGen: number
+  /**
    * The sid whose `idle_due` this load wrote or re-armed and has not cleared yet. Kept apart
    * from `idleTimer`: the hooks cancel the timer synchronously before `cancelIdle` runs.
    */
@@ -577,6 +582,7 @@ export function newState(loadId: string): LoadState {
     idleAdopted: false,
     idleEnvMemo: undefined,
     idleTimer: undefined,
+    idleGen: 0,
     idleDueSid: undefined,
     idleTombDeletes: new Map(),
     idleEpisode: undefined,

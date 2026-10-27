@@ -1,7 +1,8 @@
-// U tests through the kit: the plugin's own idle compaction (IDLE-COMPACT-SPEC revision 2, lane A;
-// idle kind `compact`). With `"idleCompaction": false` (native `vetoed`) and automatic compaction
-// on, the mod compacts an idle main session itself about 54 minutes after its last request, at
-// Claude Code's idle minimum or more, behind the guards of §2.1, and replaces the 49-min turn (D2).
+// U tests through the kit: the plugin's own idle compaction (IDLE-COMPACT-SPEC revisions 2 and 3,
+// lanes A and B; idle kind `compact`, and the 55.5-min check's compaction of lane B). With
+// `"idleCompaction": false` (native `vetoed`) and automatic compaction on, the mod compacts an idle
+// main session itself about 54 minutes after its last request, at Claude Code's idle minimum or
+// more, behind the guards of §2.1, and replaces the 49-min turn (D2).
 // Test ids are AT-IC-Cnn: idle.test.ts already uses AT-IC-01..14 for the IC-1 cases. Cases that
 // run the pre-idle turn need the `[submit-idle]` lines of handoff-turn.txt; a build without them
 // answers `no-asset`, and those cases accept that instead.
@@ -12,7 +13,7 @@ import { DEFAULTS } from '../../hooks/lib/config'
 import type { Deps, PendingResume } from '../../hooks/lib/deps'
 import { TTL_ENV_NONE, cacheTtlOf, newState, ttlEnvOf } from '../../hooks/lib/deps'
 import type { Due } from '../../hooks/lib/idle'
-import { compactGuards, countIdleCompact } from '../../hooks/lib/idle'
+import { IDLE_TICK_MS, cancelIdleTimer, compactGuards, countIdleCompact, schedule } from '../../hooks/lib/idle'
 import { PENDING_FILE, ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
 
@@ -193,7 +194,7 @@ test('AT-IC-C07: DISABLE_COMPACT with native idle on: compaction-off too (it use
   expect(modes(w)).toEqual(['compaction-off/on/off'])
 })
 
-test('AT-IC-C08: native on: nothing at 54 min; the 55.5-min check (idle_silent, then the turn or no-asset); idle_mode on/check/agents', { options: ON }, async ($, on) => {
+test('AT-IC-C08 (lane B, owner Q2): native on and silent, no agents: nothing at 54 min; at 55.5 min idle_silent, then the plugin\'s own compaction (at check, agents 0), no turn; idle_mode on/check/check', { options: ON }, async ($, on) => {
   const w = world(on)
   w.policy = {}
   await w.start($)
@@ -202,9 +203,25 @@ test('AT-IC-C08: native on: nothing at 54 min; the 55.5-min check (idle_silent, 
   expect([ic(w).length, skips(w).length, w.submits.length]).toEqual([0, 0, 0])
   await w.advance(MIN)
   expect(w.rowsOf('idle_silent').length).toBe(1)
-  expect(w.submits.length + skips(w).length).toBe(1)
-  expect(modes(w)).toEqual(['on/check/agents'])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.tokens, r.agents, r.late_s, r.adopted])).toEqual([['check', 3330, 260000, 0, 0, false]])
+  expect([selfCompacts(w), w.rowsOf('compacted').map(r => r.skip), skips(w), w.submits.length]).toEqual([1, [null], [], 0])
+  expect(dispatchArgs(w)).toContain('--idle=true')
+  expect(modes(w)).toEqual(['on/check/check'])
   expect(w.rowsOf('idle_mode')[0]?.compact_min).toBe(200000)
+})
+
+test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check runs the turn (or no-asset), no compaction; idle_mode on/check/off', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = {}
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect(w.rowsOf('idle_silent').length).toBe(1)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'check']])
+  expect(modes(w)).toEqual(['on/check/off'])
+  expect(w.rowsOf('idle_mode')[0]?.compact_min).toBe(undefined)
 })
 
 test('AT-IC-C09: armed vetoed; native switched on at 30 min: [native-on, compact] at 54, then the check re-armed for end + 55.5 min runs', { options: ON }, async ($, on) => {
@@ -216,11 +233,11 @@ test('AT-IC-C09: armed vetoed; native switched on at 30 min: [native-on, compact
   await w.advance(24 * MIN)
   expect(skips(w)).toEqual([['native-on', 'compact']])
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
-  expect(modes(w)).toEqual(['vetoed/on/on', 'on/check/agents'])
+  expect(modes(w)).toEqual(['vetoed/on/on', 'on/check/check'])
   await w.advance(2 * MIN)
   expect(w.rowsOf('idle_silent').length).toBe(1)
-  if (IDLE) expect(w.submits.length).toBe(1)
-  else expect(skips(w)).toEqual([['native-on', 'compact'], ['no-asset', 'check']])
+  // Lane B (owner Q2): native stayed silent, so the check compacts instead of running the turn.
+  expect([ic(w).map(r => r.at), selfCompacts(w), w.submits.length]).toEqual([['check'], 1, 0])
 })
 
 test('AT-IC-C09 (G0a): the settings unreadable at the fire: [native-unknown, compact], and the check armed for end + 55.5 min', { options: ON }, async ($, on) => {
@@ -235,7 +252,7 @@ test('AT-IC-C09 (G0a): the settings unreadable at the fire: [native-unknown, com
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
   const next = w.storeGet(KEY) as Record<string, unknown>
   expect([next.kind, next.due]).toEqual(['check', (rec.end as number) + 55.5 * MIN])
-  expect(modes(w)).toEqual(['vetoed/on/on', 'unknown/check/agents'])
+  expect(modes(w)).toEqual(['vetoed/on/on', 'unknown/check/check'])
 })
 
 test('AT-IC-C07 (G0b): automatic compaction switched off after the arm (DISABLE_AUTO_COMPACT at 30 min): [compaction-off, compact] at 54, no compaction', { options: ON }, async ($, on) => {
@@ -1175,7 +1192,16 @@ const checkRec = () => ({
   [KEY]: { kind: 'check', due: T0 - 30 * 1000, sid: SID_A, end: T0 - 56 * MIN, answer: true, published: false, episode: { since: T0 - 56 * MIN, done: false } },
 })
 
-test('AT-IC-C31 (§3.4, check): a 55.5-min check record 30 s past at load, with no person\'s session.start: the check runs (idle_silent, then the turn or no-asset)', { options: ON }, async ($, on) => {
+test('AT-IC-C31 (§3.4, check): a 55.5-min check record 30 s past at load, with no person\'s session.start: the check runs (idle_silent, then, lane B, the plugin\'s compaction; with idle_compact off the turn or no-asset)', { options: ON }, async ($, on) => {
+  const w = world(on, { tokens: 260000 }, checkRec())
+  w.policy = {}
+  await $.prompt.context({ blocks: [] })
+  await w.settle()
+  expect(w.rowsOf('idle_silent').length).toBe(1)
+  expect([ic(w).map(r => [r.at, r.late_s, r.adopted]), selfCompacts(w), w.submits.length, skips(w)]).toEqual([[['check', 30, true]], 1, 0, []])
+})
+
+test('AT-IC-C31 (§3.4, check, idle_compact off): the same record runs the turn (or no-asset)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, checkRec())
   w.policy = {}
   await $.prompt.context({ blocks: [] })
@@ -1209,22 +1235,63 @@ test('AT-IC-C33 (§3.4): a legacy record past its due (no turn end): nothing (AT
   expect([w.rowsOf('handoff_skipped').length, w.submits.length]).toEqual([0, 0])
 })
 
-test('AT-IC-C34 (a): the computer sleeps through the due (the wait comes 10 min late): [lapsed, compact] with late_s about 600', { options: ON }, async ($, on) => {
+/**
+ * D12 ticks (lane B): the computer sleeps through one idle wait, the first full tick started at or
+ * after `from` (the clock's own reading picks it), which comes `late` later. Registered before
+ * World.install, so it stands outside the clock (first is outermost); a hook on `clock.after`
+ * needs a filter beside the clock's own, so it sees the full ticks only (the last one before a
+ * due on a whole minute is full too).
+ */
+function sleepAt(on: Parameters<World['install']>[0], clock: () => number | undefined, from: number, late: number): () => boolean {
   let slept = false
-  // Registered before World.install, so it stands outside the clock (first is outermost).
-  on('clock.after', { ms: 54 * MIN }, (_$, e, next) => {
-    if (slept) return next(e)
+  on('clock.after', { ms: IDLE_TICK_MS }, (_$, e, next) => {
+    const now = clock()
+    if (slept || now === undefined || now < from) return next(e)
     slept = true
-    return next({ ...e, ms: e.ms + 10 * MIN })
+    return next({ ...e, ms: e.ms + late })
+  })
+  return () => slept
+}
+
+test('AT-IC-C34 (a): the computer sleeps through the due (the last tick before it comes 10 min late): [lapsed, compact] with late_s about 600', { options: ON }, async ($, on) => {
+  let w: World | undefined
+  const slept = sleepAt(on, () => w?.clock.now(), T0 + 53 * MIN, 10 * MIN)
+  w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(65 * MIN)
+  expect(slept()).toBe(true)
+  const r = w.rowsOf('handoff_skipped').map(x => [x.why, x.kind, typeof x.late_s === 'number' && x.late_s >= 60])
+  expect(r).toEqual([['lapsed', 'compact', true]])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-IC-C34 (b, D12): the computer sleeps 20 min from minute 10 and wakes before the due: the next tick reads the clock, the compaction comes on time (T0 + 54 min, late_s 0)', { options: ON }, async ($, on) => {
+  let w: World | undefined
+  const slept = sleepAt(on, () => w?.clock.now(), T0 + 10 * MIN, 20 * MIN)
+  w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(54 * MIN - 1)
+  expect(slept()).toBe(true)
+  expect(ic(w).length).toBe(0)
+  await w.advance(1)
+  expect(ic(w).map(r => [r.at, r.late_s, r.gap_s])).toEqual([['timer', 0, 3240]])
+  expect(skips(w)).toEqual([])
+})
+
+test('AT-IC-C34 (D12): no idle wait is longer than a tick: the due is reached minute by minute, the compaction on time', { options: ON }, async ($, on) => {
+  let long = 0
+  on('clock.after', { ms: 54 * MIN }, (_$, e, next) => {
+    long++
+    return next(e)
   })
   const w = world(on)
   await w.start($)
   await humanTurn($, w)
-  await w.advance(65 * MIN)
-  expect(slept).toBe(true)
-  const r = w.rowsOf('handoff_skipped').map(x => [x.why, x.kind, typeof x.late_s === 'number' && x.late_s >= 60])
-  expect(r).toEqual([['lapsed', 'compact', true]])
-  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  await w.advance(54 * MIN)
+  expect(ic(w).map(r => r.late_s)).toEqual([0])
+  expect(long).toBe(0)
 })
 
 test('AT-IC-C34 (G3, the second bound): a turn that ends 57.5 min after its last request: due = end + 60 s, on time but 58.5 min after the anchor: [lapsed, compact], late_s 0', { options: ON }, async ($, on) => {
@@ -1242,19 +1309,14 @@ test('AT-IC-C34 (G3, the second bound): a turn that ends 57.5 min after its last
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-IC-C34 (turn, §3.4): the computer sleeps through the 49-min due past minute 55.5 (the wait comes 10 min late): [lapsed, turn] with late_s 600, no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
-  let slept = false
-  // Registered before World.install, so it stands outside the clock (first is outermost).
-  on('clock.after', { ms: 49 * MIN }, (_$, e, next) => {
-    if (slept) return next(e)
-    slept = true
-    return next({ ...e, ms: e.ms + 10 * MIN })
-  })
-  const w = world(on)
+test('AT-IC-C34 (turn, §3.4): the computer sleeps through the 49-min due past minute 55.5 (the last tick comes 10 min late): [lapsed, turn] with late_s 600, no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  let w: World | undefined
+  const slept = sleepAt(on, () => w?.clock.now(), T0 + 48 * MIN, 10 * MIN)
+  w = world(on)
   await w.start($)
   await humanTurn($, w)
   await w.advance(65 * MIN)
-  expect(slept).toBe(true)
+  expect(slept()).toBe(true)
   expect(w.rowsOf('handoff_skipped').map(x => [x.why, x.kind, x.late_s])).toEqual([['lapsed', 'turn', 600]])
   expect(w.submits.length).toBe(0)
 })
@@ -1393,4 +1455,260 @@ test('AT-IC-C44 (D16): idle_digest return: no turn (digest_submit skipped:return
   await w.advance(54 * MIN + 5000)
   expect(w.submits).toEqual([])
   if (DONE) expect(w.rowsOf('digest_submit').map(r => r.result)).toEqual(['skipped:return'])
+})
+
+// ---- Lane B: the 55.5-min check's compaction runs behind the guards of the `compact` timer (D4),
+// also with no agent running when Claude Code stayed silent (owner Q2, 18:54); the check is armed
+// for the turn or for that compaction; ticks (D12).
+const NATIVE_ON: Record<string, unknown> = {}
+
+test('AT-IC-C38 (D4, D14): native on, agents running: G1 holds and the record is a tombstone at the fire; the check still compacts (at check, one mod-self dispatch); the guards read the store once (G1)', { options: ON }, async ($, on) => {
+  let reads = 0
+  // Registered before World.install, so it stands outside mock.store (first is outermost).
+  on('store.get', { key: KEY }, (_$, e, next) => {
+    reads++
+    return next(e)
+  })
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  reads = 0
+  await w.advance(MIN)
+  expect(reads).toBe(1)
+  expect(isTomb(w.storeGet(KEY))).toBe(true)
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 1]])
+  expect([modSelfDispatches(w), selfCompacts(w), skips(w)]).toEqual([1, 1, []])
+})
+
+/** The plugin's own idle dispatches (`--channel mod-self`). */
+const modSelfDispatches = (w: World) => w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').length
+
+// D4: the guards lane A's check path did not have (it read only triggers, the window, 200K, halt and
+// an open question): the cache, the limits, a person at the prompt, a changed prompt prefix; and
+// the D5 halt rule (the cap does not stop it).
+for (const c of [
+  { name: 'no plan window at the fire (rate limits gone)', why: 'ttl-5m', at55: (w: World) => { w.rateLimits = [] } },
+  { name: 'a window at 95%', why: 'near-limit', at55: (w: World) => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] } },
+  { name: 'the promptCacheTtl setting 5m (read at the fire)', why: 'ttl-5m', at55: (w: World) => { w.policy = { promptCacheTtl: '5m' } } },
+  { name: 'a keystroke 30 s before the check', why: 'present', at55: (w: World, $: Engine) => w.edit($) },
+  { name: '/model since the last request', why: 'prefix-changed', at55: (w: World) => { w.model = 'claude-other-model' } },
+]) {
+  test(`AT-IC-C45 (D4): the check's compaction while agents run: ${c.name}: [${c.why}, check], no compaction`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    w.agents = RUNNING
+    await w.start($)
+    await humanTurn($, w)
+    await w.advance(55 * MIN)
+    await c.at55(w, $)
+    await w.advance(MIN)
+    expect(w.rowsOf('idle_silent').length).toBe(1)
+    expect(skips(w)).toEqual([[c.why, 'check']])
+    expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
+  })
+}
+
+for (const c of [{ reason: 'cap', why: null }, { reason: 'thrash', why: 'halted' }]) {
+  test(`AT-IC-C45 (D4, D5): halt for ${c.reason === 'cap' ? 'the auto-continue cap does not stop the check\'s compaction (lane A: halted)' : 'a thrash stops it: [halted, check]'}`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    w.agents = RUNNING
+    w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: c.reason }))
+    await w.start($)
+    // A person's turn clears halt: here a background result's turn ends the last one.
+    await w.userTurn($, 'Background task finished.', 'task-notification')
+    w.tokens = 260000
+    await w.turnEnd($)
+    await w.advance(56 * MIN)
+    if (c.why === null) expect([skips(w), ic(w).map(r => r.at), selfCompacts(w), w.rowsOf('continue').length]).toEqual([[], ['check'], 1, 0])
+    else expect([skips(w), ic(w).length, selfCompacts(w)]).toEqual([[[c.why, 'check']], 0, 0])
+  })
+}
+
+for (const c of [
+  { name: 'a person\'s whole turn', why: 'newer-turn', act: async (w: World, $: Engine) => { await w.userTurn($); w.tokens = 260000; await w.turnEnd($) } },
+  { name: 'a keystroke', why: 'present', act: (w: World, $: Engine) => w.edit($) },
+]) {
+  test(`AT-IC-C45 (D4, §2.4): ${c.name} while the check's checkpoint runs: idle_compact (at check), then [${c.why}, check] before the dispatch record; no compaction`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    w.agents = RUNNING
+    await w.start($)
+    await humanTurn($, w)
+    let acted = false
+    w.atHelper = async sub => {
+      if (acted || sub !== 'checkpoint') return
+      acted = true
+      await c.act(w, $)
+    }
+    await w.advance(56 * MIN)
+    expect(acted).toBe(true)
+    expect(ic(w).map(r => r.at)).toEqual(['check'])
+    expect(skips(w)).toEqual([[c.why, 'check']])
+    expect([modSelfDispatches(w), selfCompacts(w), w.rowsOf('idle_compact_off').length]).toEqual([0, 0, 0])
+  })
+}
+
+test('AT-IC-C45 (D4, D7): the check\'s compaction skipped twice in a row: idle_compact_off {failed, 2}; then on/check/failed, agents-running while agents run, and the turn (or no-asset) when none do', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.agents = RUNNING
+  w.compactMode = { skip: 'hook' }
+  await w.start($)
+  for (let i = 0; i < 2; i++) {
+    await humanTurn($, w)
+    await w.advance(56 * MIN)
+  }
+  expect(w.rowsOf('compacted').map(r => r.skip)).toEqual(['hook', 'hook'])
+  expect(w.rowsOf('idle_compact_off').map(r => [r.why, r.fails])).toEqual([['failed', 2]])
+  await humanTurn($, w)
+  expect(modes(w)).toEqual(['on/check/check', 'on/check/failed'])
+  await w.advance(56 * MIN)
+  expect(skips(w)).toEqual([['agents-running', 'check']])
+  w.agents = []
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect(ic(w).length).toBe(2)
+  if (IDLE) expect([w.submits.length, skips(w).length]).toEqual([1, 1])
+  else expect(skips(w)).toEqual([['agents-running', 'check'], ['no-asset', 'check']])
+})
+
+test('AT-IC-C45 (D7): the timer\'s and the check\'s failures count together: one at the timer (vetoed), one at the check (native on): idle_compact_off', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.compactMode = { skip: 'hook' }
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  w.policy = NATIVE_ON
+  w.agents = RUNNING
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect(ic(w).map(r => r.at)).toEqual(['timer', 'check'])
+  expect(w.rowsOf('idle_compact_off').map(r => [r.why, r.fails])).toEqual([['failed', 2]])
+})
+
+test('AT-IC-C45 (owner Q2): idle_compact off with agents running: [agents-running, check] (the skip of before 2026-10-27), no compaction; idle_mode on/check/off', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect(skips(w)).toEqual([['agents-running', 'check']])
+  expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
+  expect(modes(w)).toEqual(['on/check/off'])
+})
+
+test('AT-IC-C45 (owner Q2): below Claude Code\'s idle minimum (CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS 300000, 260K) the check runs the turn (or no-asset), no compaction; with agents running [small, check]', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.env = { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' }
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'check']])
+})
+
+test('AT-IC-C45 (owner Q2): below the minimum with agents running: [small, check] (they cannot get the turn), no compaction', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.env = { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' }
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect([skips(w), selfCompacts(w), w.submits.length]).toEqual([[['small', 'check']], 0, 0])
+})
+
+test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, idle_compact auto: the check is armed for the compaction (on/off/check) and compacts at 55.5 min, with or without agents; lane A armed nothing', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await humanTurn($, w)
+  expect(modes(w)).toEqual(['on/off/check'])
+  await w.advance(56 * MIN)
+  expect([ic(w).map(r => [r.at, r.agents]), selfCompacts(w), w.submits.length]).toEqual([[['check', 0]], 1, 0])
+  w.agents = RUNNING
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect([ic(w).map(r => r.agents), selfCompacts(w), w.submits.length]).toEqual([[0, 1], 2, 0])
+})
+
+test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, below the minimum (150K): nothing armed (the check could only skip small); both off: nothing armed, on/off/off', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await humanTurn($, w, 150000)
+  await w.advance(120 * MIN)
+  expect([w.rowsOf('handoff_skipped').length, w.rowsOf('idle_silent').length, ic(w).length]).toEqual([0, 0, 0])
+  expect(modes(w)).toEqual(['on/off/check'])
+})
+
+test('AT-IC-C46 (lane B arming): native on with idle_handoff_turn and idle_compact off: nothing armed; idle_mode on/off/off', { options: { ...ON, idle_handoff_turn: 'off', idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(120 * MIN)
+  expect([w.rowsOf('handoff_skipped').length, w.rowsOf('idle_silent').length, ic(w).length, w.storeGet(KEY)]).toEqual([0, 0, 0, undefined])
+  expect(modes(w)).toEqual(['on/off/off'])
+})
+
+test('AT-IC-C46 (owner Q2, D16): native on and silent, a finished lane, nothing running: the check compacts, then the away digest turn (digest_submit submitted)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.resumeHere = FINISHED
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect([ic(w).map(r => r.at), selfCompacts(w)]).toEqual([['check'], 1])
+  await w.advance(5000)
+  if (DONE) expect(w.rowsOf('digest_submit').map(r => r.result)).toEqual(['submitted'])
+})
+
+test('AT-IC-C35 (D12): a cancel (a turn start) while a tick reads the clock: that tick re-arms nothing and fires nothing; without one it ticks on, the last wait exact', async () => {
+  const waits: number[] = []
+  const fns: (() => void)[] = []
+  let release: ((t: number) => void) | undefined
+  let reads = 0
+  const state = newState('load-1')
+  const d = {
+    state, cfg: DEFAULTS,
+    after: (ms: number, fn: () => void) => {
+      waits.push(ms)
+      fns.push(fn)
+      return { cancel: () => undefined }
+    },
+    now: () => new Promise<number>(r => { release = r }),
+    storeGet: async () => {
+      reads++
+      return undefined
+    },
+  } as unknown as Deps
+  const rec: Due = {
+    due: T0 + 54 * MIN, sid: SID_A, episode: null, kind: 'compact', end: T0, answer: true, published: false, load: 'load-1',
+    anchor: T0, tokens: 260000, ttl: '1h', pct: 30, cc: null, model: null,
+  }
+  schedule(d, rec, T0 + 29 * MIN)
+  expect(waits).toEqual([IDLE_TICK_MS])
+  // The tick at minute 30 reads the clock; a turn starts meanwhile (alive.ts cancels the timer).
+  fns[0]?.()
+  cancelIdleTimer(d)
+  release?.(T0 + 30 * MIN)
+  await state.inflight
+  expect([waits.length, reads]).toEqual([1, 0])
+  // Uncancelled, the same tick arms the next one; the one 30 s before the due waits exactly 30 s.
+  schedule(d, rec, T0 + 29 * MIN)
+  fns[1]?.()
+  release?.(T0 + 53.5 * MIN)
+  await state.inflight
+  expect(waits).toEqual([IDLE_TICK_MS, IDLE_TICK_MS, 30000])
+  expect(reads).toBe(0)
 })

@@ -38,8 +38,9 @@ export type Config = {
   /**
    * `auto`: while Claude Code's own idle compaction is off in the settings (`"idleCompaction":
    * false`) and automatic compaction is on, the plugin compacts an idle main session itself about
-   * 54 minutes after its last request (idle.ts, kind `compact`); `off`: never (the pre-idle
-   * handoff turn runs in its place).
+   * 54 minutes after its last request (idle.ts, kind `compact`); while Claude Code's own is on or
+   * unreadable, it compacts at the 55.5-min check when that one stayed silent (lane B; owner Q2);
+   * `off`: never (the pre-idle handoff turn runs in its place).
    */
   idle_compact: 'auto' | 'off'
   /**
@@ -80,7 +81,7 @@ export const DEFAULTS: Config = {
   unattended_prod_reads: 'forbid',
   idle_handoff_turn: 'auto',
   idle_handoff_min_tokens: 200000,
-  // Pending the owner's answer on the default (IDLE-COMPACT-SPEC Q3); the release note says it.
+  // Owner Q3 (2026-10-27 18:54, "auto ig. will set myself"); the release note says it.
   idle_compact: 'auto',
   // Owner xxxxxxxx-09 (2026-10-27 12:5x): "default setting: submit right away".
   idle_digest: 'submit',

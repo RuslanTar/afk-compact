@@ -18,6 +18,8 @@ const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code' }
 // IDLE-COMPACT D2: with `"idleCompaction": false` at 200K and more the plugin's own idle
 // compaction replaces the 49-min turn; the turn's own cases switch it off (`idle_compact: off`).
 const TURN = { ...ON, idle_compact: 'off' }
+// Lane B (owner Q2): with native idle on and silent, the 55.5-min check compacts at 200K and more
+// instead of running the turn; the check's turn cases switch the plugin's compaction off the same way.
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
 // D15: only a five-hour or seven-day window shows the one-hour cache.
@@ -821,7 +823,7 @@ test('BG-IDLE-01: a moved session re-arms the 49-min due of an answered turn: th
   expect(w.rowsOf('handoff_turn_start').map(r => [r.reason, r.gap_s])).toEqual([['idle', 49 * 60]])
 })
 
-test('BG-IDLE-02: a moved session re-arms the 55.5-min check of an answered turn: the check runs the turn, not skipped aborted', { options: ON }, async ($, on) => {
+test('BG-IDLE-02: a moved session re-arms the 55.5-min check of an answered turn: the check runs the turn, not skipped aborted', { options: TURN }, async ($, on) => {
   const w = new World().install(on, moved('check', true))
   w.rateLimits = LIMITS
   w.tokens = 260000
@@ -980,7 +982,7 @@ test('AT-IA-02: auto with autoCompactEnabled false: compaction-off (idle never f
 // Owner xxxxxxxx-17 ("Check outcome at 55.5m"; D3 reworded "off when native actually compacts",
 // O-9 "unreadable means check what happened"): native on or unreadable arms the outcome check.
 for (const c of [{ name: 'idleCompaction true', policy: { idleCompaction: true } }, { name: 'the key absent', policy: {} }]) {
-  test(`AT-IA-02: auto with ${c.name}: native on, no turn at 49 min, the 55.5-min check armed; idle_mode on/check`, { options: ON }, async ($, on) => {
+  test(`AT-IA-02: auto with ${c.name}: native on, no turn at 49 min, the 55.5-min check armed; idle_mode on/check`, { options: TURN }, async ($, on) => {
     const w = new World().install(on)
     w.policy = c.policy
     w.rateLimits = LIMITS
@@ -994,7 +996,7 @@ for (const c of [{ name: 'idleCompaction true', policy: { idleCompaction: true }
   })
 }
 
-test('AT-IA-02: the settings read throws: native unknown, the 55.5-min check armed (O-9: check what happened)', { options: ON }, async ($, on) => {
+test('AT-IA-02: the settings read throws: native unknown, the 55.5-min check armed (O-9: check what happened)', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.settingsThrow = true
   w.rateLimits = LIMITS
@@ -1064,7 +1066,7 @@ const silentRows = (w: World) => w.rowsOf('idle_silent').map(r => [r.gap_s, r.to
 const opens = (w: World) => w.callsOf('handoff-turn').filter(c => c.args[0] === 'open').map(c => w.flag(c, '--reason'))
 const served = (mode: string) => JSON.stringify({ numStartups: 3, cachedGrowthBookFeatures: { tengu_other: true, tengu_sunny_locket: { mode } } })
 
-test('AT-IS-01: native on, no compaction since the turn end: nothing at 49 min; at 55.5 min one idle_silent row and the handoff turn (idle for 55 minutes); no compaction or continue after it', { options: ON }, async ($, on) => {
+test('AT-IS-01: native on, no compaction since the turn end: nothing at 49 min; at 55.5 min one idle_silent row and the handoff turn (idle for 55 minutes); no compaction or continue after it', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
   await w.start($)
@@ -1100,7 +1102,7 @@ test('AT-IS-02: an idle compaction at 54 min: handoff_skipped native-fired at 55
   expect([w.submits.length, w.rowsOf('idle_silent').length]).toEqual([0, 0])
 })
 
-test('AT-IS-02: another main compaction since the turn end (manual): compacted; one before the turn end does not count', { options: ON }, async ($, on) => {
+test('AT-IS-02: another main compaction since the turn end (manual): compacted; one before the turn end does not count', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
   await w.start($)
@@ -1151,15 +1153,16 @@ test('AT-IS-03: agents running at the check (a listed subagent, or a workflow ag
   expect(idleCompacts(w).map(r => r[2])).toEqual([1, 1])
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([1, 1])
   expect(w.compacts.length).toBe(2)
-  // Its turn ends: the next check runs the handoff turn (or says no-asset), no compaction.
+  // Its turn ends: with no agent left the next check compacts all the same at 200K and more (lane
+  // B, owner Q2: instead of the handoff turn), with agents 0.
   await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 'wf-t1', reason: 'answer', agentId: 'wf-agent-1' } as never)
   w.agents = [{ id: 'sub-1', status: 'completed' }]
   await w.advance(10 * MIN)
   await humanTurn($, w)
   await w.advance(56 * MIN)
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([1, 1, 0])
-  expect([w.compacts.length, idleCompacts(w).length]).toEqual([2, 2])
-  expect(w.submits.length + idleSkips(w).length).toBe(1)
+  expect([w.compacts.length, idleCompacts(w).map(r => r[2])]).toEqual([3, [1, 1, 0]])
+  expect(w.submits.length + idleSkips(w).length).toBe(0)
 })
 
 test('AT-IS-08: after the idle compaction while agents run: no continue; the turn an agent\'s result opens gets the idle resume block; not counted for the thrash rule', { options: ON }, async ($, on) => {
@@ -1236,7 +1239,7 @@ for (const c of AGENT_SKIPS) {
   })
 }
 
-test('AT-IS-04: the served hint (2b) is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: ON }, async ($, on) => {
+test('AT-IS-04: the served hint (2b) is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
   w.files.set(HOME + '/.claude.json', served('off'))
