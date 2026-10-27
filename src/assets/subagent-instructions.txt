@@ -1,11 +1,11 @@
-[fallback] Only if this is a subagent's assigned task from a parent agent, use this form instead of the one above; otherwise ignore this part.
+[fallback] Only if this is a subagent's assigned task from a parent, use this form, not the one above; otherwise ignore this part. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-14): reworded, same rule, to pay for "incidental too" under the hard 1,100 B AT-W-02 gate with a 16-character plugin name -->
 The user's {{plugin}} plugin asks for this form, not any list above; this subagent resumes cold. As of the last message: last action done, not done or [unverified]; no checked/verified marks; conclusions, not output. <!-- size-fix 2026-10-21: wording trimmed to the ~900 soft target (KNOWLEDGE §4.6); no rule or heading removed -->
 <summary> starts ⟪{{plugin}} v1 n=@nonce@ s=sub⟫; its last line before </summary>: ⟪/{{plugin}} n=@nonce@⟫; in order: <!-- P5-FOLD A1 -->
 ## Task as assigned: quoted
 ## Constraints from the parent: quoted
 ## Report: where, how (default text to parent)
 ## Done: with proof
-## Findings: exact ids, numbers, paths
+## Findings: exact ids, numbers, paths, incidental too
 ## Produced but not yet delivered: verbatim if short, else path
 ## Own background tasks: <id> · until <wait spec> · due · output <path>; wait yourself, never end a turn on it. None: none (not checked)
 ## Next action: one exact command or edit

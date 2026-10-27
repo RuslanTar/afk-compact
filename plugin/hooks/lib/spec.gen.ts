@@ -143,7 +143,7 @@ export const SPEC = {
     "agent",
     "external"
   ],
-  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|answered: .+)$",
+  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|no answer \\(.+\\)|answered: .+)$",
   "restart_classes": [
     "auto",
     "ask",

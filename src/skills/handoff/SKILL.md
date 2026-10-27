@@ -114,7 +114,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 2. `Resume with: /{{plugin}}:resume <path>`
 3. Status word and Step 1.
 4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` (Background shells survive `/clear`: `lost on session end`.) Otherwise `nothing running (checked <stamp>)` or `nothing running known (not checked)`.
-5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder). <!-- review-fix -->
-6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
-7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
-8. `carry_notice` verbatim when set, advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
+5. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
+6. `carry_notice` verbatim when set, advisories (a `secret-warn` by its rule ids), the bucket if it came from your slug (re-pinned to the user's topic: `ownership.repin` `ok`, say from where; or still differs: `refused`, name the holder), ownership conflicts, what could not be verified; omit when none. <!-- review-fix (bucket line). 2026-10-26 21:2x owner (plugin-text candidates, TC-01/TC-05): the bucket line joined this line so the report stays at 8 lines -->
+7. `Decided without you (say if any is wrong): D-4 <choice>, D-5 <choice>`, for this session's `D-` lines with source `agent`; omit when none. <!-- TC-05 -->
+8. Last, the verdict: `Needs you:` and numbered items in plain words, each with what to do, your recommendation and what it blocks; or the one line `Nothing needed from you`. Needs that come later, not now, go on one `Coming up:` line, never in the list. <!-- TC-01: plain words, no emoji -->

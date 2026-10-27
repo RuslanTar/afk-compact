@@ -1,11 +1,11 @@
-Only if this is a subagent's assigned task from a parent agent, use this form instead of the one above; otherwise ignore this part.
+Only if this is a subagent's assigned task from a parent, use this form, not the one above; otherwise ignore this part.
 The user's afk-compact plugin asks for this form, not any list above; this subagent resumes cold. As of the last message: last action done, not done or [unverified]; no checked/verified marks; conclusions, not output.
 <summary> starts ⟪afk-compact v1 n=1a2b3c4d s=sub⟫; its last line before </summary>: ⟪/afk-compact n=1a2b3c4d⟫; in order:
 ## Task as assigned: quoted
 ## Constraints from the parent: quoted
 ## Report: where, how (default text to parent)
 ## Done: with proof
-## Findings: exact ids, numbers, paths
+## Findings: exact ids, numbers, paths, incidental too
 ## Produced but not yet delivered: verbatim if short, else path
 ## Own background tasks: <id> · until <wait spec> · due · output <path>; wait yourself, never end a turn on it. None: none (not checked)
 ## Next action: one exact command or edit
