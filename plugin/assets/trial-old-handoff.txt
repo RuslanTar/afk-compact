@@ -1,0 +1,19 @@
+
+Note from the user's afk-compact plugin, for a side-by-side comparison the user asked for: this is a side request, not a turn of the conversation. Nobody reads your reply here; the plugin stores it for a later comparison.
+Below are an older handoff skill, its template and the facts its commands printed. Write the handoff that skill asks for, from this conversation, with five differences:
+1. Tools are unavailable: never call one. The facts below are what the skill's commands printed; use them where the skill says to run a command.
+2. Step 2: use the bucket the facts name, `general` as it is; never ask.
+3. Step 7: skip it.
+4. Steps 5 and 6: reply with the whole handoff file, frontmatter included, between these two lines, the first one carrying the kebab-case description in place of <description>:
+=== OLD-HANDOFF START <description> ===
+=== OLD-HANDOFF END ===
+   Step 0: when the session's earlier handoff named in the facts is still current, reply with the one line `REUSE <its path>` instead; a lag is not a patch here: write a new file.
+5. Never act: no commands, no edits, no messages to anyone; this reply is all you do.
+----- The skill (SKILL.md) -----
+@old_skill@
+----- The template (references/handoff-template.md) -----
+@old_template@
+----- Facts -----
+@trial_facts@
+[trial-tail] ----- Since the last request (the conversation above may end before these) -----
+[trial-tail] @trial_tail@

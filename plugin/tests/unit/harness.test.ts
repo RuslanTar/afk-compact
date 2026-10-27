@@ -356,6 +356,11 @@ export class World {
       }
       case 'measure':
         return ok(this.measureBlock + '\n')
+      // The local shadow trial without its config (BT-05 records the real helper's answers).
+      case 'trial-measure':
+        return ok('{"state":"absent","why":null}\n')
+      case 'trial-save':
+        return ok('{"why":"absent","written":false}\n')
       case 'notice': {
         // W-BETA A (core): `notice claim --id I` exclusive-creates <watch>/notice/<I>.shown.
         const id = flag('--id')

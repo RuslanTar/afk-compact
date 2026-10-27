@@ -15,6 +15,7 @@ import { isHuman } from './deps'
 import { log, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
+import { shadowPrepM3, startShadow } from './shadow'
 
 /** MOD-SPEC §9: the nudged turn ended on a user-owned question (`?` on the last non-blank line). */
 export function endsWithQuestion(answer: string): boolean {
@@ -288,6 +289,9 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
         ...(ah ? { handoffHt: ah.ht } : {}),
       })
     }
+    // The shadow trial's M3 moment for a plugin compaction with no handoff turn before it (off
+    // without its local config); its forks start right before the call below, not awaited.
+    const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: 'm3-plugin', nonce, trigger: 'plugin' })
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
     // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
     // await sits between that check and the call.
@@ -302,6 +306,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       return
     }
     let r
+    startShadow(d, shadow)
     try {
       r = await d.compact(text)
     } catch {

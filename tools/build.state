@@ -16,6 +16,8 @@
     "plugin/assets/queue.md",
     "plugin/assets/resume-context.txt",
     "plugin/assets/subagent-instructions.txt",
+    "plugin/assets/trial-native-tail.txt",
+    "plugin/assets/trial-old-handoff.txt",
     "plugin/hooks/hooks.json",
     "plugin/hooks/lib/assets.gen.ts",
     "plugin/hooks/lib/meta.gen.ts",

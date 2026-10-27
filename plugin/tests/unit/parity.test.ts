@@ -12,6 +12,7 @@ import { detectSummary } from '../../hooks/lib/detect'
 import type { Deps, RunResult } from '../../hooks/lib/deps'
 import { LAUNCHER_DIR, launcherPath, storeWord } from '../../hooks/lib/deps'
 import { checkpoint, claim, handoffState, handoffTurnOpen, handoffTurnSupersede, ident, logJobs, measure, parseHandoffState, parseSave, prevCopy } from '../../hooks/lib/helper'
+import { parseMeasure } from '../../hooks/lib/shadow'
 import { BRAND } from './_gen/brand.gen'
 import * as CORPUS_GEN from './_gen/corpus.gen'
 import { CORPUS } from './_gen/corpus.gen'
@@ -169,6 +170,9 @@ describe('BT-05 recorded helper replies', () => {
     const jr = await logJobs(depsFor(jobs), REPLY_SID, join(jobs.stdin ?? []).split('\n').filter(l => l !== ''))
     expect(jr?.exitCode).toBe(3)
     expect(reply('dispatch-handoff-ht').exitCode).toBe(0)
+    // The local shadow trial without its config: absent, nothing written.
+    expect(parseMeasure(join(reply('trial-measure-absent').stdout))).toEqual({ state: 'absent', why: null })
+    expect([reply('trial-save-absent').exitCode, JSON.parse(join(reply('trial-save-absent').stdout))]).toEqual([0, { why: 'absent', written: false }])
   })
 
   test('the fake helper answers the same argv with the same exit code and form', () => {

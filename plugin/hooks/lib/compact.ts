@@ -19,6 +19,7 @@ import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
 import { buildBlockWith, claimedElsewhere, logOutcome, prodAllowed } from './resume'
+import { shadowPrepM3, startShadow } from './shadow'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -269,7 +270,16 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     ...(handoffHt !== undefined ? { handoffHt } : {}),
     ...(idle && gapS !== undefined ? { idle: { gapS } } : {}),
   })
+  // The shadow trial's M3 moment (off without its local config): a main compaction of Claude
+  // Code's with no handoff turn before it; its forks start right before `next`, not awaited.
+  const shadow = main && handoffHt === undefined && (trigger === 'auto' || trigger === 'manual')
+    ? await shadowPrepM3(d, sid, {
+      kind: idle ? 'm3-idle' : trigger === 'manual' ? 'm3-manual' : 'm3-auto', nonce, trigger,
+      ...(trigger === 'manual' && e.instructions !== undefined ? { compactText: e.instructions } : {}),
+    })
+    : undefined
   const t0 = await d.now()
+  startShadow(d, shadow)
   const r = await next({ ...e, instructions: [e.instructions, text].filter(Boolean).join('\n\n') })
   if (r.skip !== undefined) {
     await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0 }, actor)

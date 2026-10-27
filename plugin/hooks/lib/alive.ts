@@ -13,6 +13,7 @@ import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
 import { ensureIdent, isoLocal, log } from './log'
 import { logOutcome } from './resume'
 import { showNotice } from './notice'
+import { shadowPluginSide } from './shadow'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
   const p = await d.paths()
@@ -117,6 +118,7 @@ export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
   s.idleAgain = undefined
   const h = s.handoffTurn
   s.handoffTurn = undefined
+  if (h && h.phase !== 'running') shadowPluginSide(d, h, 'cancelled')
   const pend = s.pending
   s.pending = undefined
   await cancelIdle(d, endedSid)
