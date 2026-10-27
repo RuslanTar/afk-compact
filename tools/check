@@ -23,9 +23,10 @@ goldens.gen.ts), each byte for byte (BH-4, BH-5).
 X-launcher (SESSION-RESTART §3.3, §7.1): tools/launcher-flags (the restart launcher's flag
 table against `claude --help` of the newest installed Claude Code), then tests/launcher/run.sh
 (its cases with a stub claude under every installed POSIX shell); integration adds
-tests/launcher/docker.sh (the same cases on Linux: debian:bookworm-slim, dash as /bin/sh, no
-network, no credentials; the image must be present locally). LAUNCHER_DOCKER=skip skips the
-Docker part and says so.
+tests/launcher/docker.sh (the same cases on Linux: debian:bookworm-slim with dash as /bin/sh
+and bash, and the local launcher-test-alpine:1 with busybox ash and zsh; no network, no
+credentials; both images must be present locally, the alpine one from docker.sh
+--build-alpine). LAUNCHER_DOCKER=skip skips the Docker part and says so.
 
 X-tools: plant known faults in temp copies of the work tree (tmp/selftest/) and confirm that
 the tool reports every one, while the unplanted copy passes the same command: CRLF line ends
@@ -1123,8 +1124,8 @@ def x_launcher(phase, root=REPO):
     """X-launcher (SESSION-RESTART §3.3, §7.1): the restart launcher's flag table against
     `claude --help` (tools/launcher-flags), then its cases under every installed POSIX shell
     (tests/launcher/run.sh). integration also runs the cases on Linux in Docker
-    (tests/launcher/docker.sh, debian with dash as /bin/sh, no network, no credentials);
-    LAUNCHER_DOCKER=skip skips that part and says so."""
+    (tests/launcher/docker.sh: debian with dash and bash, alpine with busybox ash and zsh; no
+    network, no credentials); LAUNCHER_DOCKER=skip skips that part and says so."""
     run([os.path.join(root, "tools", "launcher-flags")], "X-launcher flag table", cwd=root)
     run(["/bin/sh", os.path.join(root, "tests", "launcher", "run.sh")], "X-launcher cases",
         cwd=root, capture=True)

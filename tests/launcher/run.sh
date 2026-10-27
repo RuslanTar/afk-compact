@@ -15,8 +15,9 @@
 # Writes only under one new folder in ${TMPDIR:-/tmp} (kept when a case fails; removed, with
 # every run stopped, on INT, TERM or HUP); never into the repo, which may be read-only
 # (tests/launcher/docker.sh mounts it so).
-# LAUNCHER_TEST_FOREIGN_BASE (set by docker.sh): a folder holding <brand>-<uid> that another
-# user owns, for the real foreign-owner case; without it that case uses a stub id.
+# LAUNCHER_TEST_FOREIGN_BASE (set by docker.sh): a cache folder holding <brand> that another
+# user owns, for the real foreign-owner case; without it that case uses a stub id. Each case
+# has its own HOME (its cache folder HOME/.cache, 0700) and TMPDIR.
 # Output: TAP lines (`ok N - <shell> <case> <title>`), then `# passed N, failed M, skipped K`.
 # Exit 0 when nothing failed, else 1.
 set -u
@@ -145,8 +146,8 @@ new_case() {
     done
     [ -z "$CQUIET" ] || CSKIP=unselected
   fi
-  mkdir -p "$C/work" "$C/tmp" "$C/home" "$C/bin"
-  chmod 700 "$C/tmp"
+  mkdir -p "$C/work" "$C/tmp" "$C/home/.cache" "$C/bin"
+  chmod 700 "$C/tmp" "$C/home/.cache"
   : >"$C/scenario"
   CWD=$(cd "$C/work" && pwd -P)
   if [ "${3-}" = needs-pty ] && [ -z "$have_pty" ]; then
@@ -199,7 +200,7 @@ run_launcher() {
   [ -z "$r_os" ] || r_path=$here/stub-os:$r_path
   {
     printf 'cd %s || exit 99\n' "$(q "$C/work")"
-    printf 'unset CLAUDECODE XDG_RUNTIME_DIR %s\n' "$envname"
+    printf 'unset CLAUDECODE XDG_RUNTIME_DIR XDG_CACHE_HOME %s\n' "$envname"
     printf 'export PATH=%s:"$PATH" TMPDIR=%s HOME=%s STUB_DIR=%s STUB_LAUNCH_ENV=%s STUB_NOTES=%s\n' \
       "$(q "$r_path")" "$(q "$C/tmp")" "$(q "$C/home")" "$(q "$C")" "$envname" "$(q "$here/notes")"
     printf '%s\n' "$r_env"
@@ -288,7 +289,9 @@ want_no_lj() {
 }
 
 rt() {
-  printf '%s\n' "$C/tmp/$brand-$uid"
+  # The runtime folder: <cache>/<brand>, the cache folder being $HOME/.cache in every case
+  # that does not set XDG_CACHE_HOME.
+  printf '%s\n' "$C/home/.cache/$brand"
 }
 
 want_gone() {
@@ -391,21 +394,67 @@ case_30() {
   want_lj 1 "\"token\":\"$w_tok\""
   want_lj 1 "\"cwd\":\"$CWD\""
   want_lj 1 "\"uname\":\"$host\""
-  want_lj 1 "\"relaunches\":0,\"bypass_ok\":false,\"file_flags\":[],\"stamps\":\"stamps\"}"
+  want_lj 1 "\"relaunches\":0,\"bypass_ok\":false,\"file_flags\":[],\"stamps\":\"stamps\",\"launch_mode\":\"\"}"
   want_gone
   want_err_lines 0
   end_case
 }
 
 case_30b() {
-  new_case AT-RS-30b "XDG_RUNTIME_DIR is the runtime base when set" needs-pty
-  mkdir -m 700 "$C/xdg"
-  run_launcher --env "XDG_RUNTIME_DIR=$C/xdg/" --
+  new_case AT-RS-30b "the cache folder: XDG_CACHE_HOME when absolute, else HOME/.cache; never TMPDIR or XDG_RUNTIME_DIR" needs-pty
+  mkdir -m 700 "$C/xdg" "$C/run"
+  run_launcher --env "XDG_CACHE_HOME=$C/xdg/" --env "XDG_RUNTIME_DIR=$C/run" --
   want_rc 0
   case $(val 1 launch) in
-  "$C/xdg/$brand-$uid"/L-*) ;;
-  *) fail "launch folder $(val 1 launch) is not under XDG_RUNTIME_DIR" ;;
+  "$C/xdg/$brand"/L-*) ;;
+  *) fail "launch folder $(val 1 launch) is not under XDG_CACHE_HOME" ;;
   esac
+  # A relative XDG_CACHE_HOME is ignored (the XDG rule): HOME/.cache.
+  rm -f "$C/runs" "$C/err"
+  run_launcher --env "XDG_CACHE_HOME=rel/cache" --
+  case $(val 1 launch) in
+  "$(rt)"/L-*) ;;
+  *) fail "relative XDG_CACHE_HOME: launch folder $(val 1 launch) is not under HOME/.cache" ;;
+  esac
+  [ ! -e "$C/work/rel" ] || fail "a relative XDG_CACHE_HOME was used"
+  [ -z "$(ls -A "$C/tmp" "$C/run" 2>/dev/null | grep -v ':$' | grep -v '^$')" ] || fail "something was made under TMPDIR or XDG_RUNTIME_DIR"
+  # HOME/.cache missing: made 0700; HOME relative: pass-through.
+  rm -f "$C/runs" "$C/err"
+  rm -rf "${C:?}/home/.cache"
+  scen "1 exit 0"
+  run_launcher --
+  want_val 1 launchset yes
+  case $(ls -ldn "$C/home/.cache" 2>/dev/null | awk '{print $1}') in
+  drwx------*) ;;
+  *) fail "HOME/.cache made with mode $(ls -ldn "$C/home/.cache" 2>/dev/null | awk '{print $1}')" ;;
+  esac
+  rm -f "$C/runs" "$C/err"
+  run_launcher --env "HOME=relhome" -- --verbose
+  want_passthrough "no cache folder (HOME is not an absolute path)"
+  end_case
+}
+
+case_30d() {
+  new_case AT-RS-30d "launch_mode: the launch's own mode (internal name), bypass from --dangerously-skip-permissions, the note's mode after a relaunch" needs-pty
+  for w_pair in "plan:--permission-mode plan" "default:--permission-mode=manual" \
+    "bypassPermissions:--dangerously-skip-permissions --permission-mode plan" \
+    ":--allow-dangerously-skip-permissions" ":--inherit-permission-mode plan" \
+    "acceptEdits:--permission-mode plan --permission-mode acceptEdits" ":--permission-mode nonsense" ":--verbose"; do
+    rm -f "$C/runs" "$C/err" "$C"/run*.lj
+    : >"$C/scenario"
+    scen "1 exit 0"
+    set -f
+    run_launcher -- ${w_pair#*:}
+    set +f
+    want_lj 1 "\"launch_mode\":\"${w_pair%%:*}\"}"
+  done
+  rm -f "$C/runs" "$C/err" "$C"/run*.lj
+  : >"$C/scenario"
+  go_scen
+  run_launcher -- --permission-mode plan
+  want_lj 1 "\"launch_mode\":\"plan\"}"
+  want_lj 2 "\"relaunches\":1"
+  want_lj 2 "\"launch_mode\":\"acceptEdits\"}"
   end_case
 }
 
@@ -945,7 +994,7 @@ case_40() {
   if [ -z "${LAUNCHER_TEST_FOREIGN_BASE-}" ]; then
     CSKIP="no LAUNCHER_TEST_FOREIGN_BASE (docker.sh sets it)"
   fi
-  run_launcher --env "TMPDIR=${LAUNCHER_TEST_FOREIGN_BASE-}" -- --verbose
+  run_launcher --env "XDG_CACHE_HOME=${LAUNCHER_TEST_FOREIGN_BASE-}" -- --verbose
   [ -n "$CSKIP" ] || want_passthrough "the runtime folder is not private (a symlink, another owner or not 0700)"
   end_case
 
@@ -960,22 +1009,22 @@ case_40() {
   [ -n "$CSKIP" ] || want_passthrough "the runtime folder is not private (a symlink, another owner or not 0700)"
   end_case
 
-  new_case AT-RS-40g "a runtime base others may write to without the sticky bit: pass-through; with it: arms" needs-pty
+  new_case AT-RS-40g "a cache folder others may write to without the sticky bit: pass-through; with it: arms" needs-pty
   for w_m in 777 770 757; do
     rm -rf "${C:?}/shared"
     mkdir "$C/shared"
     chmod "$w_m" "$C/shared"
     rm -f "$C/runs" "$C/err"
-    run_launcher --env "TMPDIR=$C/shared" -- --verbose
-    want_passthrough "the runtime base is writable by others and not sticky"
-    [ ! -e "$C/shared/$brand-$uid" ] || fail "mode $w_m: a runtime folder was made in the shared base"
+    run_launcher --env "XDG_CACHE_HOME=$C/shared" -- --verbose
+    want_passthrough "the cache folder is writable by others and not sticky"
+    [ ! -e "$C/shared/$brand" ] || fail "mode $w_m: a runtime folder was made in the shared cache folder"
   done
   rm -rf "${C:?}/shared"
   mkdir "$C/shared"
   chmod 1777 "$C/shared"
   rm -f "$C/runs" "$C/err"
   scen "1 exit 0"
-  run_launcher --env "TMPDIR=$C/shared" -- --verbose
+  run_launcher --env "XDG_CACHE_HOME=$C/shared" -- --verbose
   want_runs 1
   want_val 1 launchset yes
   end_case
@@ -1057,7 +1106,7 @@ run_shell() {
   WS=$work/$T
   mkdir -p "$WS"
   N=0
-  for w_c in 30 30b 30c 31a 31b 31c 31d 31e 31f 32a 32b 32c 33a 33b 33c 33d 34 35a 35b 35c 35d 36a 36b 36c 37 38 39 40 43; do
+  for w_c in 30 30b 30c 30d 31a 31b 31c 31d 31e 31f 32a 32b 32c 33a 33b 33c 33d 34 35a 35b 35c 35d 36a 36b 36c 37 38 39 40 43; do
     want_case "AT-RS-$w_c" || continue
     [ -z "$quick" ] || [ "$w_c" != 36c ] || continue
     "case_$w_c"

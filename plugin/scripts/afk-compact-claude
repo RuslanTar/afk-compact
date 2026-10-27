@@ -14,10 +14,12 @@
 # widens permissions, stops at Ctrl+C during its 3-second countdown, relaunches at most 3 times
 # an hour, and stops when a relaunched claude fails within 15 seconds.
 #
-# The launch folder is <runtime>/afk-compact-<uid>/L-<token>/ (0700), where <runtime> is
-# $XDG_RUNTIME_DIR, else $TMPDIR, else /tmp. The launcher writes launcher.json and stamps
-# there; the plugin writes sid, restart.note and restart.mode-end. Claude Code gets the folder
-# in AFK_COMPACT_LAUNCH. The file contract is in tests/launcher/README.md of the plugin's source.
+# The launch folder is <cache>/afk-compact/L-<token>/ (0700), where <cache> is $XDG_CACHE_HOME
+# (when it is an absolute path), else $HOME/.cache. Not a temporary folder: macOS removes files
+# in $TMPDIR that were not used for about 3 days, and a session can live longer. The launcher
+# writes launcher.json and stamps there; the plugin writes sid, restart.note and
+# restart.mode-end. Claude Code gets the folder in AFK_COMPACT_LAUNCH. The file contract is in
+# tests/launcher/README.md of the plugin's source.
 #
 # Every variable of this file starts with `_`. A shell keeps the export flag of a variable it
 # got from the environment, so assigning a name the person exported (cwd, base, os, ...) would
@@ -215,6 +217,7 @@ on_value() {
     --model) _m0=$2 _m0_set=1 ;;
     --effort) _e0=$2 _e0_set=1 ;;
     --permission-mode) _w_pm=$2 ;;
+    --inherit-permission-mode) _w_ipm=1 ;;
     esac
     ;;
   esac
@@ -226,7 +229,8 @@ on_flag() {
   keep) _w_keep=1 ;;
   state)
     case $1 in
-    --dangerously-skip-permissions|--allow-dangerously-skip-permissions) _w_bp=1 ;;
+    --dangerously-skip-permissions) _w_bp=1 _w_dsp=1 ;;
+    --allow-dangerously-skip-permissions) _w_bp=1 ;;
     esac
     ;;
   refuse) _why=$1 ;;
@@ -256,8 +260,8 @@ positional() {
 walk() {
   _w_mode=$1
   shift
-  _why= _bypass_ok=false _ff= _m0= _m0_set= _e0= _e0_set=
-  _w_need= _w_flag= _w_end= _w_pos= _w_pm= _w_bp=
+  _why= _bypass_ok=false _ff= _m0= _m0_set= _e0= _e0_set= _launch_mode=
+  _w_need= _w_flag= _w_end= _w_pos= _w_pm= _w_bp= _w_dsp= _w_ipm=
   for _w_arg in "$@"; do
     shift
     _w_keep=
@@ -333,6 +337,19 @@ walk() {
   done
   if [ -n "$_w_bp" ] || [ "$_w_pm" = bypassPermissions ]; then
     _bypass_ok=true
+  fi
+  # The mode this launch starts in, as the internal name (manual is default), for the plugin's
+  # "never wider than the launch" rule: --dangerously-skip-permissions wins over
+  # --permission-mode at start (Claude Code 2.1.311). Empty when the launch names no mode (the
+  # settings decide) or names it in a way the launcher does not read (--inherit-permission-mode,
+  # an unknown value).
+  if [ -n "$_w_dsp" ]; then
+    _launch_mode=bypassPermissions
+  elif [ -z "$_w_ipm" ]; then
+    case $_w_pm in
+    manual|default) _launch_mode=default ;;
+    acceptEdits|auto|bypassPermissions|dontAsk|plan) _launch_mode=$_w_pm ;;
+    esac
   fi
   if [ "$_w_mode" = run ]; then
     set -- "$@" --resume "$_n_sid"
@@ -443,8 +460,8 @@ sweep() {
 }
 
 write_lj() {
-  (umask 077 && printf '{"proto":%s,"launcher_version":"%s","pid":%s,"token":"%s","started":%s,"cwd":"%s","uname":"%s","relaunches":%s,"bypass_ok":%s,"file_flags":[%s],"stamps":"stamps"}\n' \
-    "$_proto" "$_launcher_version" "$$" "$_tok" "$_started" "$_cwd" "$_os" "$1" "$_bypass_ok" "$_ff_json" \
+  (umask 077 && printf '{"proto":%s,"launcher_version":"%s","pid":%s,"token":"%s","started":%s,"cwd":"%s","uname":"%s","relaunches":%s,"bypass_ok":%s,"file_flags":[%s],"stamps":"stamps","launch_mode":"%s"}\n' \
+    "$_proto" "$_launcher_version" "$$" "$_tok" "$_started" "$_cwd" "$_os" "$1" "$_bypass_ok" "$_ff_json" "$_launch_mode" \
     >"$_ld/launcher.json.tmp") && mv -f "$_ld/launcher.json.tmp" "$_ld/launcher.json"
 }
 
@@ -802,21 +819,35 @@ _uid=$(id -u 2>/dev/null)
 case $_uid in
 ''|*[!0123456789]*) passthrough "no user id" "$@" ;;
 esac
-_base=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
+# The cache folder (XDG): $XDG_CACHE_HOME when it is an absolute path (the XDG rule ignores a
+# relative one), else $HOME/.cache, made 0700 when missing. Not $TMPDIR or /tmp: macOS removes
+# files there that were not used for about 3 days, and a session can live longer.
+_base=
+case ${XDG_CACHE_HOME-} in
+/*) _base=$XDG_CACHE_HOME ;;
+esac
+if [ -z "$_base" ]; then
+  case ${HOME-} in
+  /*) _base=${HOME%/}/.cache ;;
+  *) passthrough "no cache folder (HOME is not an absolute path)" "$@" ;;
+  esac
+fi
 while :; do
   case $_base in
   ?*/) _base=${_base%/} ;;
   *) break ;;
   esac
 done
-case $_base in
-/*) ;;
-*) passthrough "the runtime folder is not an absolute path" "$@" ;;
-esac
-if shared_base "$_base"; then
-  passthrough "the runtime base is writable by others and not sticky" "$@"
+if [ ! -L "$_base" ] && [ ! -d "$_base" ]; then
+  (umask 077 && mkdir -p "$_base") 2>/dev/null
 fi
-_rt=$_base/$_me-$_uid
+if [ ! -d "$_base" ]; then
+  passthrough "no cache folder" "$@"
+fi
+if shared_base "$_base"; then
+  passthrough "the cache folder is writable by others and not sticky" "$@"
+fi
+_rt=$_base/$_me
 if [ ! -L "$_rt" ] && [ ! -d "$_rt" ]; then
   mkdir -m 700 "$_rt" 2>/dev/null
 fi
@@ -862,6 +893,8 @@ while decide "$_rc"; do
   fi
   trap ':' INT
   _n=$((_n + 1))
+  # The relaunched claude starts in the note's mode: that is its launch mode now.
+  _launch_mode=$_n_mode
   write_lj "$_n"
   (umask 077 && date +%s >>"$_ld/stamps")
   _t0=$(date +%s)
