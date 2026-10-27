@@ -58,7 +58,8 @@ const GSD_TIMEOUT = /^GSD: not measured \(timeout\)$/m
 export function keepGsdLines(fresh: string, stored: string | undefined): string {
   if (stored === undefined || !GSD_TIMEOUT.test(fresh)) return fresh
   const kept = stored.match(GSD_LINES)
-  return kept && kept.length > 0 ? fresh.replace(GSD_TIMEOUT, kept.join('\n')) : fresh
+  // A replacer function: the kept lines carry STATE.md text, whose `$&` or `$'` must stay literal.
+  return kept && kept.length > 0 ? fresh.replace(GSD_TIMEOUT, () => kept.join('\n')) : fresh
 }
 
 /** IC-1 D3: a block delivered later than this after it was built is built again. */

@@ -13,7 +13,7 @@ import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
-import { BLOCK_MAX, BLOCK_SOFT, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -500,4 +500,14 @@ describe('MOD-04 resume-block tags and the store token', () => {
     expect(hasTag('resume-context', 'submit-idle')).toBe(false)
     expect(hasTag('no-such-asset', 'midturn')).toBe(false)
   })
+})
+
+// Fourth review of the GSD re-entry: the stored GSD line carries STATE.md text, so `$&`, `$'`, `` $` ``
+// and `$$` in it stay literal when it replaces a timed-out GSD step.
+test('AT-GR-08: keepGsdLines keeps replacement patterns in a stored GSD line literal', () => {
+  const gsd = "GSD (this session): no workstream named · /r/.planning/STATE.md: status executing · stopped at fix $& and $' in costs $$ $`"
+  const fresh = 'Git: main @ 9e9e9e9\nGSD: not measured (timeout)\nIn flight: none listed'
+  const out = keepGsdLines(fresh, `Git: main @ 3f9c2e1\n${gsd}\nIn flight: none listed`)
+  expect(out).toBe(`Git: main @ 9e9e9e9\n${gsd}\nIn flight: none listed`)
+  expect(keepGsdLines(fresh, undefined)).toBe(fresh)
 })

@@ -919,6 +919,34 @@
    }
   },
   {
+   "name": "a handoff that copies the template's layout: the GSD lines indented in a code block under a list item",
+   "setup": [
+    {
+     "write": "$TMP/foreign/indented.md",
+     "content": "---\nkind: handoff\nsession_id: 22222222-2222-4222-8222-222222222222\n---\n# LAB-9 indented\n## Location\n- **GSD**, copied as `begin` printed it:\n  ```\n  GSD (this session): workstream workstream-a · $TMP/repo/.planning/workstreams/workstream-a/STATE.md: status executing\n  Active driver: /phase-loop --ws workstream-a resume (Skill, 2026-10-26 13:02 +0300) · re-enter: /phase-loop --ws workstream-a resume\n  ```\n"
+    }
+   ]
+  },
+  {
+   "name": "measure <handoff> with the indented driver line: Driver now is still measured (its session paused the loop)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000029-0000-4000-8000-000000000029",
+    "$TMP/foreign/indented.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Driver now \\(22222222\\): Paused driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300; paused 2026-10-26 13:08 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a resume$"
+    ],
+    "stdout_lacks": [
+     "^Driver now \\S+: Active driver"
+    ]
+   }
+  },
+  {
    "name": "plain: begin",
    "cwd": "$TMP/repo",
    "argv": [

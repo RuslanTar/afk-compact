@@ -93,8 +93,9 @@ sub run {
     }
     # Root ruling R4 (2026-10-27): a handoff that names a driver gets the driver of its session as
     # that session's transcript shows it now (lib/gsd.pm), so a loop that paused itself or ended
-    # after the handoff was written is shown, never run.
-    if ($d->{body} =~ /^(?:Active driver|Paused driver|Was driving): /m) {
+    # after the handoff was written is shown, never run. The line may sit indented in a code block
+    # under a list item (the template's layout), quoted, or as a list item.
+    if ($d->{body} =~ /^[ \t]*(?:>[ \t]*)*(?:[-*+][ \t]+)?`?(?:Active driver|Paused driver|Was driving): /m) {
         push @out, _driver_now($fm->{session_id}, $cwd, $g->{in_git} ? $g->{worktree} : undef);
     }
     if ($g->{in_git}) {
