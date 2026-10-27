@@ -51,7 +51,7 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 - **Claim tags**: `[verified <stamp>: <cmd>]` · `[unverified]` · `[inherited: <stem>]` · `Superseded: <id> by <id> (<stamp>)`. Live state tags: `measured` · `verified` · `unverified` · `inherited`.
 - **Stamp** (RV-24): a time is always `YYYY-MM-DD HH:MM ±hhmm` (local date, local time, numeric UTC offset, all three, e.g. `2026-10-21 14:05 +0300`). The helper prints stamps; in a shell, `date '+%Y-%m-%d %H:%M %z'`. Older files may hold `HH:MM` or `MM-DD HH:MM` (`time_legacy_re`): read them, never write them. Frontmatter `date` stays ISO with a colon offset.
 - **Ids**, one per item, never ranges, kept across a chain: `U-n` user constraint, approval or ask · `D-n` decision · `X-n` rejected option, refuted finding or failed approach · `Q-n` question · `B-n` in-flight row (plus its runtime id).
-- **Questions**: owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` · `answered: <answer>`.
+- **Questions**: owner `next-agent` · `user` · `external:<who>` · `bg:<B-n>`; raised by `user` · `agent` · `external`; status `unasked` · `asked <stamp>` · `timed out` (only when the tool result says it timed out) · `no answer (<the tool's words>)` (an empty dialog result or no reply) · `answered: <answer>`. Only the user answers a user-owned question: a background result, a notification or a peer message never changes its status. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-09) -->
 - **Restart classes**: `auto` · `ask` · `never`.
 - **Acuity** (Resume here, first line, after the status word): `stable` · `watch` · `unstable`. `unstable`: broken build, half-applied migration or destructive step, red test mid-fix, or `MID-STEP`. `watch`: jobs running, or a pending merge request, pipeline, review or answer, or a time limit. `stable`: none of these. It is the writer's rating. The **floor** is what code measured: a merge, rebase, cherry-pick or revert in progress → `unstable`; a measured in-flight row → `watch`; otherwise `stable`. A reader raises the rating to the floor and never lowers it. Missing in older files: read as `-` (no rating). <!-- T-TEXT E2, OD-15 -->
 - **Stalled** (an agent or teammate a workflow did not start): (a) idle while the output it waits on has ended. That one gets a wake message with its id. (b) No progress past due plus grace, which is only reported in the post-compaction light path. A workflow is never "stalled" in this sense (the workflow gate applies). <!-- T-TEXT E2, compaction-rem-6 -->
@@ -353,7 +353,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "id_range_re": "\\b[UDXQB]-[0-9]+(\\.\\.|–|—)([UDXQB]-)?[0-9]+\\b",
   "question_owners_re": "^(next-agent|user|external:.+|bg:B-[0-9]+)$",
   "question_raised_by": ["user", "agent", "external"],
-  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|answered: .+)$",
+  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|no answer \\(.+\\)|answered: .+)$",
   "restart_classes": ["auto", "ask", "never"],
   "kinds": ["agent", "teammate", "workflow", "monitor", "cron", "shell", "server", "peer", "external"],
   "dies_on": ["/clear", "exit", "7-day expiry", "nothing"],
@@ -418,7 +418,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "secret-hard": {"why": "the file would hold a live credential", "fix": "remove the value and say where it lives; the rule ids name the pattern"},
     "queue-off": {"why": "no queue is configured, so nothing was queued", "fix": "keep the question in full and drop the Queued: line and the · queued mark"},
     "size": {"why": "past 20 KB the next session reads less of what matters", "fix": "cut in the template §2 order"},
-    "section-cap": {"why": "one section crowds out the others", "fix": "cut that section toward its template §2 cap"},
+    "section-cap": {"why": "one section crowds out the others", "fix": "cut that section toward its template §2 cap if §2 lets you cut it; else keep it and list the advisory in the report"},
     "code-block": {"why": "code is recoverable from the repository", "fix": "point to path#Symbol; keep ≤5 lines only mid-edit"},
     "log-lines": {"why": "pasted logs push out decisions", "fix": "write the conclusion and a reproducer command"},
     "hash-lines": {"why": "hash lists are recoverable from git", "fix": "write the commit range <base>..<head>"},

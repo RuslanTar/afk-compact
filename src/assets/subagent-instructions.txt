@@ -5,7 +5,7 @@ The user's {{plugin}} plugin asks for this form, not any list above; this subage
 ## Constraints from the parent: quoted
 ## Report: where, how (default text to parent)
 ## Done: with proof
-## Findings: exact ids, numbers, paths
+## Findings: exact ids, numbers, paths, incidental too
 ## Produced but not yet delivered: verbatim if short, else path
 ## Own background tasks: <id> · until <wait spec> · due · output <path>; wait yourself, never end a turn on it. None: none (not checked)
 ## Next action: one exact command or edit
