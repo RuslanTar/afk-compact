@@ -28,7 +28,10 @@ package gsd;
 # no driver open, is a look (a plain ask: "what phase is workstream-a at?"): it names no workstream
 # of the session's own and alone gives no GSD line; once the session's own GSD work named a
 # workstream, a read of another one only looks at it too ("meanwhile, what phase is B at?": it names
-# nothing and moves no GSD root). Its workstream is the newest one named by
+# nothing and moves no GSD root), and once that work used a GSD root (a GSD command, a gsd-tools run
+# that changes state, a state-file write), a read in another checkout only looks at it (another
+# session's question about it moves neither the GSD line nor its re-entry). Its workstream is the
+# newest one named by
 # those (`--ws <name>`, `--ws=<name>`, `gsd-workstreams switch|resume <name>`, a state-file
 # write under workstreams/<name>/) or by its driver's own `--ws`, whose folder exists under a GSD
 # root the session touched (the row's cwd, `--cwd`, `--repo`, a state-file write's root; GSD's own
@@ -58,36 +61,49 @@ package gsd;
 #   - a prompt of any kind: a user row a person wrote, a command a person typed (a status look, a
 #     pause, this plugin's own skills, /loop and the other Claude Code commands that start a turn;
 #     not a local one such as /compact, /model or /effort), a shell command typed with `!`, or a
-#     prompt Claude Code delivers inside a running turn (a queued_command attachment: a person's
-#     prompt typed meanwhile, an auto-continuation, a coordinator's correction);
-#   - an interruption mark ("[Request interrupted by user]", also "… for tool use");
+#     prompt typed while a turn runs, from the moment Claude Code queues it (a queue-operation
+#     enqueue of plain text, not a prompt the session scheduled itself with CronCreate or
+#     ScheduleWakeup) to its delivery inside the running turn (a queued_command attachment: a
+#     person's prompt typed meanwhile, an auto-continuation, a coordinator's correction);
+#   - an interruption mark ("[Request interrupted by user]", also "… for tool use"), and Claude
+#     Code's notice that the person stopped background agents ("… stopped by the user");
 #   - another session's message (a cross-session message, a cross-session notice, a teammate's or a
 #     background agent's message that names no background work of the loop's, running or finished,
 #     by its name, its id or its task id) and anything else that opens a turn and is not the loop's;
 #   - a turn end (an assistant row with stop reason end_turn, or an API error that ends the turn)
-#     with no agent, workflow, teammate or wake-up of its own still running;
+#     with no agent, workflow, teammate, wake-up or background command of its own still running;
+#   - the session resumed in a new process (Claude Code's SessionStart:resume hook rows): the old
+#     process's turn and the background work it ran are gone;
 #   - a pause (below), the checkpoint this plugin's nudge asked for saying `Step 1: none: task
 #     done` (`Step 1:` on its line or the next, any dash after `none`), a single-phase loop's
 #     (%STEP) own `phase.complete`, a bounded gsd-autonomous run (`--only N`, `--to N`) marking its
 #     last phase complete in its context, a GSD command the model invokes after a single-phase loop,
 #     and a GSD command or a gsd-tools run for a workstream not the driver's.
 # Live at the cut is then: its context holds and a turn of its own runs (one of its steps is
-# mid-turn), or an agent, workflow, teammate or ScheduleWakeup it launched in its context still
-# runs. A turn of its own is the one its invocation runs in, or one that the notification of
-# background work opens while its context holds (an agent's or workflow's task notification, a
-# hand-back, its teammate's message, also one Claude Code queued while a turn ran and delivers as
-# the next turn), or this plugin's auto-continue note after its compaction. Two turns are no stop:
-# the turn this plugin's checkpoint nudge asked to close (the loop's step was mid-turn when the
-# plugin asked; the loop goes on after the plugin's compaction), and a turn of this plugin's own
-# (opened by its handoff note): the driver stays what it was. A background Bash command, a Monitor
-# or a CronCreate task may be a server or a watch that outlives the loop: at a turn end the hint
+# mid-turn), or an agent, workflow, teammate, ScheduleWakeup or background Bash command it launched
+# in its context still runs. A turn of its own is the one its invocation runs in, or one that the
+# notification of background work opens while its context holds (an agent's or workflow's task
+# notification, a hand-back, its teammate's message, also one Claude Code queued while a turn ran
+# and delivers as the next turn), or this plugin's auto-continue note after its compaction. Two
+# turns are no stop: the turn this plugin's [continue] checkpoint nudge asked to close (the loop's
+# step was mid-turn when the plugin asked, and the plugin compacts and resumes the work by itself),
+# and a turn of this plugin's own (opened by its handoff note): the driver stays what it was. The
+# nudge counts only as Claude Code adds it to a tool call (_nudge), never quoted in a tool's output,
+# and not its [halt] form (the plugin says it will not resume the work), nor a nudged turn that asks
+# the user something (an AskUserQuestion in it, or a closing text whose last line ends with `?`, as
+# the plugin's own turn-end hook reads it: then it does not resume the work either). A Monitor or
+# a CronCreate task is a watch or a schedule that may outlive the loop: at a turn end the hint
 # names it, never an Active line.
 # Background work is the loop's when it launched it in its own context (never in a turn of this
 # plugin's own): live are an Agent or Workflow until a task notification names its tool call or
-# its task id, the agent hands back or a TaskStop names it; a teammate until its idle notification
-# (not one sent before a SendMessage woke it), its shutdown approval, Claude Code's notice that it
-# was terminated, or a TaskStop (a SendMessage that was sent sets it running again, under its own
-# owner); a ScheduleWakeup until it is due. The same loop invoked again owns what it launched before.
+# its task id, the agent hands back or a TaskStop names it (an agent a SendMessage resumed ends only
+# with the notification of that run, which names that call: one of its earlier run that crossed the
+# wake ends nothing); a teammate until its idle notification (not one sent before a SendMessage woke
+# it), its shutdown approval, Claude Code's notice that it was terminated, or a TaskStop (a
+# SendMessage that was sent sets it running again, under its own owner); a ScheduleWakeup until it
+# is due; a background Bash command until a task notification names it, or a KillShell or TaskStop
+# (a server the loop left running keeps it live too: the owner's ruling names background tasks). The
+# same loop invoked again owns what it launched before.
 # A pause: `/gsd-pause-work` (of the driver's workstream, or naming none; typed, invoked, or named in
 # a prompt's prose: "when finished — /gsd-pause-work") pauses it once the pause's own HANDOFF.json or
 # .continue-here file is written (an Edit or Write, a Bash redirect or tee into one, a commit naming
@@ -100,8 +116,10 @@ package gsd;
 # gsd-tools run that changes state other than a commit, a spawn, a write of a phase file, ROADMAP,
 # REQUIREMENTS or PROJECT; after a later prompt only a phase file of these writes: the rest is an
 # edit the person asked for) makes it `paused, then other work`; nothing a turn or a skill of this
-# plugin's own does (its resume reconciling STATE.md, its handoff) ever counts. Only invoking the
-# loop again ends a pause (R4: a resume shows the re-entry command of a paused loop, never runs it).
+# plugin's own does (its resume reconciling STATE.md, its handoff) ever counts. A GSD loop the model
+# invokes for the paused loop's workstream with no prompt since its pause is that loop going on past
+# its pause (R1: its step, named in the hint, never a new driver). Only invoking the loop again ends
+# a pause (R4: a resume shows the re-entry command of a paused loop, never runs it).
 # It has ended after a finishing skill (%FINISH), a GSD work command for another workstream, or, for
 # a single-phase loop, a GSD work command the user typed. While it was invoked with arguments that
 # cannot be shown, none of them kept for its re-enter command, and no GSD work of its workstream
@@ -133,7 +151,7 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 13;
+our $CACHE_V = 14;
 our $BG_KEEP = 32;                    # newest background tasks kept while no notification names them
 our %DRIVERS = map { $_ => 1 } qw(gsd-autonomous gsd-execute-phase gsd-manager
                                   superpowers:executing-plans superpowers:subagent-driven-development);
@@ -357,8 +375,9 @@ sub _wsn { my ($w) = @_; return undef unless defined $w; $w =~ s/\.+\z//; return
 # ended its context, step => the GSD loop it ran as its step once its context had ended, pause =>
 # {seq, ts, done => its files were written, self => it paused itself}, after => work after the
 # pause, own => a turn of this plugin's own runs, oskill => one of this plugin's skills ran inside
-# the loop's turn (until that turn ends), nudged / nmid => the turn this plugin's checkpoint nudge
-# asked to close, and the message that closed it}.
+# the loop's turn (until that turn ends), nudged / nmid => the turn this plugin's [continue]
+# checkpoint nudge asked to close, and the message that closed it, ask => an AskUserQuestion ran in
+# the current turn}.
 sub _start {
     my ($st, $e) = @_;
     my $D = $st->{drv};
@@ -367,11 +386,12 @@ sub _start {
         # R1: a loop the model invokes (or the user stacked after it in the same message) in the
         # driver's own context is that driver's step, unless the driver runs no other loop.
         if ($D->{mode} eq 'active' && $D->{lv}) { $D->{mt} = 1; return }
-        # R1 once that context ended (a prompt, a pause asked, a stop): a GSD loop for the driver's
-        # workstream (or naming none) is still its step (gsd-manager's typed choice, then its
-        # gsd-execute-phase), named in the hint so the session sees which step it was in; never the
-        # driver, never Active (owner 20:57).
-        my $pend = ($D->{mode} eq 'paused' && !$D->{pause}{done}) ? 1 : 0;
+        # R1 once that context ended (a prompt, a pause asked or written, a stop): a GSD loop for the
+        # driver's workstream (or naming none) is still its step (gsd-manager's typed choice, then
+        # its gsd-execute-phase), named in the hint so the session sees which step it was in; never
+        # the driver, never Active (owner 20:57). After a pause whose files are written, only while
+        # no prompt came since (the loop going on past its own pause: `then other work`).
+        my $pend = ($D->{mode} eq 'paused' && (!$D->{pause}{done} || !$D->{pause}{prompted})) ? 1 : 0;
         my $ws = _wsn($e->{ws});
         if (($D->{mode} eq 'active' || $pend) && $e->{name} =~ /\Agsd-/ && (!defined $ws || !defined $D->{ws} || $ws eq $D->{ws})) {
             $D->{step} = { map { defined $e->{$_} ? ($_ => $e->{$_}) : () } qw(via name args hidden keep ws root) };
@@ -439,11 +459,12 @@ sub _new_work {
     return ($base eq 'state' && ($b->{sub} // '') eq 'begin-phase') ? 1 : 0;
 }
 
-# The driver's background work at time ts: (live, loose). live: an agent, workflow or teammate or a
-# ScheduleWakeup (before it is due) it launched still runs. loose: what else of its own still runs
-# (a background command, a Monitor, persistent or one that times out before its time is up, a
-# scheduled task): it may outlive the loop or only watch (a server, a stall watch while the loop
-# waits for the user), so it never keeps the driver Active.
+# The driver's background work at time ts: (live, loose). live: an agent, workflow or teammate, a
+# ScheduleWakeup (before it is due) or a background Bash command it launched still runs (owner
+# 2026-10-27 20:57: "a background task, agent or workflow it started is still running"). loose:
+# what else of its own still runs (a Monitor, persistent or one that times out before its time is
+# up, a scheduled task): a watch or a schedule that may outlive the loop (a stall watch while the
+# loop waits for the user), so it never keeps the driver Active.
 sub _running {
     my ($st, $D, $ts) = @_;
     my $bg = $st->{bg};
@@ -454,8 +475,8 @@ sub _running {
         next unless ref $x eq 'HASH' && defined $x->{d} && defined $D->{id} && $x->{d} == $D->{id};
         if (defined $x->{u} && defined $ts && $ts > $x->{u}) { delete $bg->{$k}; next }    # its time is up
         my $kd = $x->{k} // 'a';
-        if ($kd eq 'a' || $kd eq 'w') { $live = 1 }
-        else { $loose{ $kd eq 'm' ? 'monitor' : $kd eq 'c' ? 'scheduled task' : 'background command' } = 1 }
+        if ($kd eq 'a' || $kd eq 'w' || $kd eq 'b') { $live = 1 }
+        else { $loose{ $kd eq 'm' ? 'monitor' : 'scheduled task' } = 1 }
     }
     my @l = sort keys %loose;
     return ($live, @l ? join(' or ', @l) : undef);
@@ -480,7 +501,7 @@ sub _opened {
     my ($st, $kind, $ts, $why) = @_;
     my $D = $st->{drv};
     return unless $D && $D->{mode} ne 'ended';
-    delete @$D{qw(own oskill nudged nmid)};
+    delete @$D{qw(own oskill nudged nmid ask)};
     if ($kind eq 'loop') { $D->{mt} = 1 if $D->{lv} }
     elsif ($kind eq 'plugin') { $D->{own} = 1 }
     else { _kill($D, $why, $ts) }
@@ -493,7 +514,7 @@ sub _prompt {
     delete $st->{look};
     my $D = $st->{drv};
     return unless $D && $D->{mode} ne 'ended';
-    delete @$D{qw(own oskill nudged nmid)} unless $mid;
+    delete @$D{qw(own oskill nudged nmid ask)} unless $mid;
     $why = ($why // 'a prompt') . ($ts ? ' ' . util::stamp($ts) : '');
     if ($D->{mode} eq 'paused' && !$D->{pause}{done}) {
         # A pause asked for whose files are not written yet holds only until the next prompt (which
@@ -656,8 +677,10 @@ sub _drv_write {
 my $PAUSE_FILE = qr{(?:HANDOFF\.json|\.continue-here)};
 
 # The end of an assistant turn (err: an API error ended it): with none of the driver's agents,
-# workflows, teammates or wake-ups live, its context ends; never the end of a turn of this plugin's
-# own, nor of the turn this plugin's checkpoint nudge asked to close.
+# workflows, teammates, wake-ups or background commands live, its context ends; never the end of a
+# turn of this plugin's own, nor of the turn this plugin's [continue] checkpoint nudge asked to
+# close, unless that turn asks the user something (an AskUserQuestion in it here, a closing text
+# that ends on a question in _row: the plugin does not resume the work then, cont.ts asks-user).
 sub _turn_end {
     my ($st, $ts, $mid, $err) = @_;
     # one assistant message is written as several rows (thinking, text): its turn ends once
@@ -666,20 +689,39 @@ sub _turn_end {
     my $D = $st->{drv} or return;
     return if $D->{mode} eq 'ended';
     delete $D->{oskill};
+    my $ask = delete $D->{ask};
+    my $nudged = delete $D->{nudged};
     if (!$err) {
         # a turn of this plugin's own (its handoff turn, a skill of its own the person typed): the
         # driver stays what it was
-        if (delete $D->{own}) { delete @$D{qw(nudged nmid)}; return }
-        # the turn the plugin's checkpoint nudge closed: the loop goes on after the plugin's
-        # compaction (unless that checkpoint says the task is done: _row reads it)
-        if (delete $D->{nudged}) { $D->{nmid} = $mid // ''; return }
+        if (delete $D->{own}) { delete $D->{nmid}; return }
+        # the turn the plugin's [continue] nudge closed: the plugin compacts and resumes the work by
+        # itself (unless that checkpoint says the task is done, or its closing text asks the user
+        # something: _row reads both)
+        if ($nudged && !$ask) { $D->{nmid} = $mid // ''; return }
     }
-    delete @$D{qw(own nudged nmid mt)};
+    delete @$D{qw(own nmid)};
+    _stop($st, $D, $ts, $err ? 'its turn stopped on an API error' : 'its turn ended', ($nudged && $ask) ? ' on a question to the user' : '');
+}
+
+# An ordinary end of the loop's turn: its context ends unless background work of its own that
+# keeps it live still runs (_running). why, tail: what ended it.
+sub _stop {
+    my ($st, $D, $ts, $why, $tail) = @_;
+    delete $D->{mt};
     return unless $D->{lv};
     my ($live, $loose) = _running($st, $D, $ts);
     return if $live;
-    _kill($D, $err ? 'its turn stopped on an API error' : 'its turn ended', $ts,
-          defined $loose ? " with only a $loose still running" : ' with nothing of its own running');
+    _kill($D, $why, $ts, ($tail // '') . (defined $loose ? " with only a $loose still running" : ' with nothing of its own running'));
+}
+
+# Whether an answer ends on a question to the user: its last non-blank line ends with `?` (as the
+# plugin's turn-end hook reads it, boundary.ts endsWithQuestion).
+sub _asks {
+    my ($t) = @_;
+    return 0 unless defined $t && !ref $t;
+    my ($last) = grep { /\S/ } reverse split /\n/, $t;
+    return (defined $last && $last =~ /\?[ \t\r]*\z/) ? 1 : 0;
 }
 
 # Whether a Bash command writes or commits a pause's own files (HANDOFF.json, .continue-here*):
@@ -812,7 +854,7 @@ sub _invoked {
     if ($gsd) {
         $st->{gsd} = { %e };
         _push_root($st, $root);
-        if ($LOOK{$name}) { $st->{look} = 1 } else { $st->{wseq} = $e{seq} }
+        if ($LOOK{$name}) { $st->{look} = 1 } else { $st->{wseq} = $e{seq}; my $r = _gsd_root($root); $st->{wroot} = $r if defined $r }
     } elsif (defined $named && defined $ws && !$own) {
         _push_root($st, $named);    # where a loop's --ws resolves
     }
@@ -877,8 +919,10 @@ sub _row {
         _bg_user($st, $j, $c, $ts) if ($st->{drv} && ($st->{drv}{mode} // '') ne 'ended') || (ref $st->{bg} eq 'HASH' && %{ $st->{bg} });
         my $t = _text($c);
         my $o = ref $j->{origin} eq 'HASH' ? $j->{origin} : undef;
-        # (the notification of the loop's own background work: this row's, or a queued one it delivers)
-        my $mine = ($st->{ntfhit} || $st->{ntfq}) ? 1 : 0;
+        # (the notification of the loop's own background work: this row's, or a queued one it
+        # delivers, when this row is a notification itself; never another session's message that
+        # happens to open the turn after one was queued)
+        my $mine = ($st->{ntfhit} || ($st->{ntfq} && $t =~ m{\A\s*(?:Another Claude session sent a message:\s*)?<(?:task-notification|agent-message|teammate-message)\b})) ? 1 : 0;
         if ($j->{isMeta}) {
             # Rows Claude Code writes as meta that open a turn: a background agent's hand-back or
             # message (the loop's own when it names the loop's agent; a hand-back is a notification
@@ -912,6 +956,9 @@ sub _row {
             if ($t =~ /\A\s*\[Request interrupted by user/) {
                 # the person stopped the turn (Esc), whatever ran in it
                 _opened($st, 'stop', $ts, 'its turn was interrupted');
+            } elsif (_agents_stopped($t)) {
+                # the person stopped background agents (a task notification of its own kind)
+                _opened($st, 'stop', $ts, 'its background agents were stopped by the user');
             } elsif ($t =~ /\A\s*<bash-input>/) {
                 # a shell command the person typed with `!`
                 _opened($st, 'stop', $ts, 'a prompt');
@@ -934,6 +981,8 @@ sub _row {
     for my $it (@$c) {
         next unless ref $it eq 'HASH' && ($it->{type} // '') eq 'tool_use' && ref $it->{input} eq 'HASH';
         my ($n, $in) = ($it->{name} // '', $it->{input});
+        # (a prompt this session schedules itself is no person's prompt when it fires: _enqueued)
+        _sched($st, $in->{prompt}, 1) if ($n eq 'CronCreate' || $n eq 'ScheduleWakeup') && !$in->{stop};
         if ($n eq 'Skill') {
             _invoked($st, 'Skill', $in->{skill}, $in->{args}, $cwd, $ts) if defined $in->{skill} && !ref $in->{skill};
         } elsif ($n eq 'Bash') {
@@ -959,6 +1008,15 @@ sub _row {
                     _drv_tool($st, $b, $ts, $root);
                     next;
                 }
+                # So does a read in another checkout than the GSD root the session's own GSD work used
+                # (another session's "what does the other checkout say?"): it moves neither the GSD
+                # line nor its re-entry (R3).
+                my $rr = _gsd_root($root);
+                if (!$peek && $read && defined $st->{wroot} && defined $rr && $rr ne $st->{wroot}) {
+                    _drv_tool($st, $b, $ts, $root);
+                    next;
+                }
+                $st->{wroot} = $rr if !$read && defined $rr;
                 $st->{gsd} = { via => 'Bash', name => "gsd-tools $b->{verb}", args => '', hidden => 0, ts => $ts, root => $root } unless $peek;
                 _push_root($st, $root);
                 # a status look's own reads name no workstream of the session's
@@ -979,6 +1037,7 @@ sub _row {
             $short =~ s{\A(?:[^/]+/)+}{…/};
             $short = $pre . $short;
             $st->{gsd} = { via => $n, name => ".planning/$short", args => '', hidden => 0, ts => $ts, root => $root, file => 1 };
+            $st->{wroot} = $root if -d "$root/.planning";
             _push_root($st, $root);
             $st->{wseq} = ($st->{seq} // 0) + 1;
             _drv_write($st, $ws, $rel, $ts, $n, $root);
@@ -994,6 +1053,10 @@ sub _row {
             my $sm = $st->{bgsm} = ref $st->{bgsm} eq 'HASH' ? $st->{bgsm} : {};
             %$sm = () if keys %$sm > $BG_KEEP;
             $sm->{ $it->{id} } = $k;
+        } elsif ($n eq 'AskUserQuestion') {
+            # (a question to the user in this turn: a nudged turn that asks one is not resumed)
+            my $D = $st->{drv};
+            $D->{ask} = 1 if $D && $D->{mode} ne 'ended';
         } elsif ($n eq 'TaskStop' || $n eq 'KillShell') {
             # a stopped task sends no notification (a teammate by its name, a task by its id)
             _bg_close($st, $_) for grep { defined && !ref } @$in{qw(task_id shell_id)};
@@ -1021,13 +1084,18 @@ sub _row {
         my $D = $st->{drv};
         # The checkpoint this plugin's nudge asked for, in the turn it closed (any row of its last
         # message): `Step 1: none: task done` says the loop finished.
-        if ($sr eq 'end_turn' && $D && $D->{mode} ne 'ended' && ($D->{nudged} || (defined $mid && defined $D->{nmid} && $mid eq $D->{nmid}))) {
-            my $t = _text($c);
-            # (`Step 1:` on the Checkpoint line or the next one; any dash, colon or comma after `none`)
-            _kill($D, 'its checkpoint', $ts, ' said the task is done')
-                if $t =~ /(?:\A|\n)[ \t>*_-]*Checkpoint:[^\n]*?(?:\n[ \t>*_-]*)?\bStep 1:[ \t*_]*none\b[^\w\n]{0,8}task done/;
-        }
+        my $nud = ($sr eq 'end_turn' && $D && $D->{mode} ne 'ended' && ($D->{nudged} || (defined $mid && defined $D->{nmid} && $mid eq $D->{nmid}))) ? 1 : 0;
+        my $t = $nud ? _text($c) : '';
+        # (`Step 1:` on the Checkpoint line or the next one; any dash, colon or comma after `none`)
+        _kill($D, 'its checkpoint', $ts, ' said the task is done')
+            if $nud && $t =~ /(?:\A|\n)[ \t>*_-]*Checkpoint:[^\n]*?(?:\n[ \t>*_-]*)?\bStep 1:[ \t*_]*none\b[^\w\n]{0,8}task done/;
         _turn_end($st, $ts, $mid, $sr eq 'end_turn' ? 0 : 1);
+        # The nudged turn's closing text ends on a question to the user: the plugin does not resume
+        # the work (cont.ts asks-user), so this is an ordinary turn end.
+        if ($nud && defined $mid && defined $D->{nmid} && $mid eq $D->{nmid} && _asks($t)) {
+            delete $D->{nmid};
+            _stop($st, $D, $ts, 'its turn ended', ' on a question to the user');
+        }
     }
 }
 
@@ -1065,11 +1133,15 @@ sub _bg_user {
                 return _bg_add($st, $k, 'c', $ts, [ $r->{id} ], (defined $u ? (u => $u) : ()));
             }
             return _bg_close($st, $r->{task_id}) if defined $r->{task_type} && defined $r->{task_id} && !ref $r->{task_id};    # TaskStop
-            # A SendMessage that was sent (not refused, not a shutdown request) woke its agent.
+            # A SendMessage that was sent (not refused, not a shutdown request) woke its agent. One
+            # that resumed a stopped agent ("Resuming agent …", "… resumed it in the background")
+            # starts a new run, whose notification names this call (wk); a message queued for a
+            # running agent or sent to a teammate's inbox starts none.
             my $sent = ref $st->{bgsm} eq 'HASH' ? delete $st->{bgsm}{$k} : undef;
             if ((defined $sent || defined $r->{resumedAgentId}) && $r->{success} && !defined $r->{request_id}) {
                 my $key = $sent // _bg_key($st, $r->{resumedAgentId});
-                return _bg_add($st, $key, 'a', $ts, [ $k ]) if defined $key;
+                my $wake = (defined $r->{resumedAgentId} || (!ref $r->{message} && ($r->{message} // '') =~ /\bresum(?:ed|ing)\b/i)) ? 1 : 0;
+                return _bg_add($st, $key, 'a', $ts, [ $k ], ($wake ? (wk => $k) : ())) if defined $key;
             }
         }
     }
@@ -1079,32 +1151,48 @@ sub _bg_user {
 }
 
 # A notification's text (a user row's, or one Claude Code queued while a turn ran: a queued_command
-# attachment or a queue-operation row): it closes the background work it names. A task notification
-# names its tool call (the launch, or the SendMessage that woke it) and its task id; a Monitor's
-# event notifications (no status) leave it running. A background agent's message back and a
-# teammate's idle notification close it too; a teammate's other messages are interim.
+# attachment or a queue-operation row; at: the time it was queued, when known): it closes the
+# background work it names. A task notification names its tool call (the launch, or the SendMessage
+# that woke it) and its task id; a Monitor's event notifications (no status) leave it running. A
+# background agent's message back and a teammate's idle notification close it too; a teammate's
+# other messages are interim. An agent a SendMessage resumed (wk) runs again: a notification of its
+# earlier run delivered after the wake (they crossed: it names another call, or was queued before
+# the wake) ends nothing.
 sub _bg_text {
-    my ($st, $t, $turn) = @_;
+    my ($st, $t, $turn, $at) = @_;
     return unless defined $t && !ref $t && ((ref $st->{bg} eq 'HASH' && %{ $st->{bg} }) || (ref $st->{bgend} eq 'HASH' && %{ $st->{bgend} }));
     # (a user row's: whether it names an agent, workflow or teammate of the driver's, running or
     # finished: a later message of a finished one, a second report, is still the loop's own work's)
     # (turn 'q': a queued notification, delivered by the next row that opens a turn)
     my $fin = sub { $st->{ $turn eq 'q' ? 'ntfq' : 'ntfhit' } = 1 if $turn && _own_live($st, $_[0]) };
+    # the live entry an id names, woken by a SendMessage, or undef
+    my $woken = sub {
+        my $k = _bg_key($st, $_[0]) // return undef;
+        my $x = ref $st->{bg} eq 'HASH' ? $st->{bg}{$k} : undef;
+        return (ref $x eq 'HASH' && defined $x->{wk}) ? $x : undef;
+    };
+    my $old = sub { my ($x) = @_; return (defined $at && defined $x->{ts} && $at < $x->{ts}) ? 1 : 0 };
     if ($t =~ m{\A\s*<task-notification>}) {
         while ($t =~ m{<task-notification>(.*?)(?:</task-notification>|\z)}gs) {
             my $b = $1;
             next if $b =~ m{<summary>\s*Monitor event\b};
             # (a task stopped, killed or cancelled is no finished work of the loop's)
             my $ok = $b !~ m{<status>\s*(?:killed|stopped|cancell?ed)\b};
-            if ($b =~ m{<tool-use-id>([^<\s]+)</tool-use-id>}) { my $x = _bg_close($st, $1); $fin->($x) if $ok }
-            if ($b =~ m{<task-id>([^<\s]+)</task-id>}) {
-                my $id = $1;    # the <status> match below would reset $1
-                if ($b =~ m{<status>}) { my $x = _bg_close($st, $id); $fin->($x) if $ok }
-            }
+            my ($tu) = $b =~ m{<tool-use-id>([^<\s]+)</tool-use-id>};
+            my ($id) = $b =~ m{<task-id>([^<\s]+)</task-id>};
+            my $w = (defined $tu ? $woken->($tu) : undef) // (defined $id ? $woken->($id) : undef);
+            if ($w && (defined $tu ? $tu ne $w->{wk} : $old->($w))) { $fin->($w) if $ok; next }    # its earlier run's
+            if (defined $tu) { my $x = _bg_close($st, $tu); $fin->($x) if $ok }
+            if (defined $id && $b =~ m{<status>}) { my $x = _bg_close($st, $id); $fin->($x) if $ok }
         }
         return;
     }
-    $fin->(_bg_close($st, $1) // _ended($st, $1)) while $t =~ m{<agent-message from="([^"\s]+)"}g;
+    while ($t =~ m{<agent-message from="([^"\s]+)"}g) {
+        my $who = $1;
+        my $w = $woken->($who);
+        if ($w && $old->($w)) { $fin->($w); next }    # its earlier run's hand-back, queued before the wake
+        $fin->(_bg_close($st, $who) // _ended($st, $who));
+    }
     # A teammate shut down while it worked sends no idle report: its shutdown approval or Claude
     # Code's termination notice closes it.
     # A message of one of its live teammates (a report, a question; not a shutdown) is a
@@ -1213,6 +1301,38 @@ sub _note {
     return index($1, 'the session was compacted at the checkpoint') == 0 ? 'continue' : 'turn';
 }
 
+# This plugin's checkpoint nudge on a main row (j), as Claude Code adds it to a tool call: a
+# hook_additional_context attachment of a PostToolUse hook whose text starts with the note (as
+# watch/rows.pm reads it), or, in older versions, a text block of its own beside the tool_result in
+# that result's user row. Text inside a tool result (a Read or a grep quoting the note), a prompt
+# or a summary never counts. 'continue': its [continue] form (assets/checkpoint-nudge.txt: the
+# plugin compacts once the turn is over and resumes the work by itself); 'halt': any other form
+# (its [halt] form says the plugin will not resume the work: auto-continue off, the hourly limit,
+# a thrash, a last cycle); undef: no nudge.
+sub _nudge {
+    my ($j) = @_;
+    my $b = eval { ctx::brand() } // '';
+    return undef if $b eq '';
+    my @t;
+    my $type = $j->{type} // '';
+    if ($type eq 'attachment' && ref $j->{attachment} eq 'HASH') {
+        my $a = $j->{attachment};
+        return undef unless ($a->{type} // '') eq 'hook_additional_context'
+            && (($a->{hookEvent} // '') eq 'PostToolUse' || ($a->{hookName} // '') =~ /\APostToolUse(?::|\z)/);
+        my $c = $a->{content};
+        @t = map { ref $_ eq 'HASH' ? $_->{text} : $_ } (ref $c eq 'ARRAY' ? @$c : ($c));
+    } elsif ($type eq 'user' && !$j->{isMeta} && ref $j->{message} eq 'HASH' && ref $j->{message}{content} eq 'ARRAY') {
+        my $c = $j->{message}{content};
+        return undef unless grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c;
+        @t = map { $_->{text} } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c;
+    }
+    for my $t (grep { defined && !ref } @t) {
+        next unless $t =~ /\A\s*Note from the user's \Q$b\E plugin: context is at /;
+        return ($t =~ /\bOnce this turn is over, the plugin compacts\b/ && $t !~ /\bwill not resume the work\b/) ? 'continue' : 'halt';
+    }
+    return undef;
+}
+
 # Whether a user row (not meta, no command) is a prompt a person wrote: Claude Code marks it
 # origin human; a row without an origin (older versions) counts unless it is a teammate message,
 # an interruption mark or a tagged notice. Task notifications, tool results, stacked commands and
@@ -1236,7 +1356,7 @@ sub _human {
 # context (owner 20:57): a prompt a person typed meanwhile ("stop after this wave"; origin human, or
 # none in older versions, read as a user row's text is; with the prose /gsd-pause-work a prompt may
 # name), another session's message, an auto-continuation, a coordinator's correction. This plugin's
-# own note never.
+# own note never. A person's prompt is that whatever tags it quotes: it is read first.
 sub _queued {
     my ($st, $j) = @_;
     my $a = $j->{attachment};
@@ -1245,18 +1365,83 @@ sub _queued {
     my $ts = util::parse_iso($j->{timestamp} // $a->{timestamp} // '');
     # (a queued notification it delivers inside the turn opens no turn of its own)
     delete @$st{qw(ntfq ntfhit)};
-    _bg_text($st, $t, 1);
-    my $mine = delete $st->{ntfhit};
-    $mine ||= _own_sender($st, @{ $a->{origin} }{qw(senderTaskId from)}) if ref $a->{origin} eq 'HASH';
-    return if ($a->{commandMode} // '') eq 'task-notification' || $t =~ /\A\s*<task-notification>/;
-    return if $mine || _note($t) || $t !~ /\S/;
-    if (_human({ (exists $a->{origin} ? (origin => $a->{origin}) : ()) }, $t)) {
+    return _kill($st->{drv}, 'its background agents were stopped by the user', $ts) if _agents_stopped($t);
+    my $ntf = (($a->{commandMode} // '') eq 'task-notification' || $t =~ /\A\s*<task-notification>/) ? 1 : 0;
+    if (!$ntf && _human({ (exists $a->{origin} ? (origin => $a->{origin}) : ()) }, $t)) {
         _prompt($st, $ts, 'a prompt typed mid-turn', 1);
         _prose_pause($st, $t, $ts);
         return;
     }
+    _bg_text($st, $t, 1, $ts);
+    my $mine = delete $st->{ntfhit};
+    $mine ||= _own_sender($st, @{ $a->{origin} }{qw(senderTaskId from)}) if ref $a->{origin} eq 'HASH';
+    return if $ntf || $mine || _note($t) || $t !~ /\S/;
     my $peer = ($t =~ /<(?:agent|teammate|cross-session)-message\b/ || (ref $a->{origin} eq 'HASH' && ($a->{origin}{kind} // '') eq 'peer')) ? 1 : 0;
     _kill($st->{drv}, $peer ? "another session's message" : 'a queued message', $ts);
+}
+
+# A queue-operation enqueue row (j): what was queued while a turn ran, until Claude Code delivers it
+# (a queued_command attachment, or the next turn's user row). Plain text, or a typed command that
+# starts a turn, is a prompt a person typed from here on. None: a notification, another session's
+# message or notice, this plugin's own note, a local Claude Code command (/compact, /model), and a
+# prompt this session scheduled itself (a CronCreate or ScheduleWakeup prompt firing: _sched). A
+# side agent's note is another session's message, a goal's continuation a queued message, and
+# Claude Code's notice that background agents were stopped by the user a stop.
+sub _enqueued {
+    my ($st, $j) = @_;
+    return unless ($j->{type} // '') eq 'queue-operation' && ($j->{operation} // '') eq 'enqueue' && !$j->{isSidechain};
+    my $t = $j->{content};
+    return unless defined $t && !ref $t && $t =~ /\S/;
+    return if $t =~ /\A\s*(?:<|\[Cross-session |\[Request interrupted|Another Claude session sent a message)/ || _note($t) || _sched($st, $t);
+    my $ts = util::parse_iso($j->{timestamp} // '');
+    return _kill($st->{drv}, 'its background agents were stopped by the user', $ts) if _agents_stopped($t);
+    return _kill($st->{drv}, "another session's message", $ts) if $t =~ /\A\s*Here is a note offered by a side agent:/;
+    return _kill($st->{drv}, 'a queued message', $ts) if $t =~ /\A\s*Goal set: /;
+    if ($t =~ m{\A\s*/([A-Za-z0-9][A-Za-z0-9:._-]*)(?=\s|\z)}) {
+        my $n = _norm($1);
+        return if $BUILTIN{$n} && !$TURN_BUILTIN{$n};
+    }
+    # Only the loop's live context ends here: the model sees the prompt at its delivery, where the
+    # rest of a prompt's effects follow (_queued, _row: a pause asked still holds, and may be
+    # written, until then).
+    _kill($st->{drv}, 'a prompt typed mid-turn', $ts);
+}
+
+# Claude Code's notice that the person stopped background agents ("2 background agents were stopped
+# by the user: …", "Background agent "…" was stopped by the user."): a stop, though it comes as a
+# task notification.
+sub _agents_stopped {
+    my ($t) = @_;
+    return (defined $t && !ref $t && $t =~ /\A\s*(?:[0-9]+ background agents were|Background agent "[^\n]*?" was) stopped by the user\b/) ? 1 : 0;
+}
+
+# The prompts this session scheduled itself (a CronCreate or ScheduleWakeup prompt): kept as short
+# hashes of their text ($st->{sched}: {hash => n}, the newest 16), never the text. With text: whether
+# it is one of them (sched($st, $t)); with add: keeps it.
+sub _sched {
+    my ($st, $t, $add) = @_;
+    return 0 unless defined $t && !ref $t && ($add || ref $st->{sched} eq 'HASH');
+    (my $k = $t) =~ s/\s+/ /g;
+    $k =~ s/\A | \z//g;
+    return 0 if $k eq '';
+    $k = substr(sha::hex256(substr($k, 0, 400)), 0, 16);
+    return $st->{sched}{$k} ? 1 : 0 unless $add;
+    my $s = $st->{sched} = ref $st->{sched} eq 'HASH' ? $st->{sched} : {};
+    $s->{$k} = ++$st->{schedn};
+    if (keys %$s > 16) { my ($o) = sort { $s->{$a} <=> $s->{$b} } keys %$s; delete $s->{$o} }
+    return 1;
+}
+
+# The session resumed in a new process (a SessionStart:resume hook row at ts): the old process's
+# turn and its background work (agents, workflows, teammates, wake-ups, commands) are gone, so the
+# driver's context ends.
+sub _resumed {
+    my ($st, $ts) = @_;
+    if (ref $st->{bg} eq 'HASH') { _bg_close($st, $_) for keys %{ $st->{bg} } }
+    my $D = $st->{drv} or return;
+    return if $D->{mode} eq 'ended';
+    delete @$D{qw(own oskill nudged nmid ask)};
+    _kill($D, 'the session was resumed in a new process', $ts);
 }
 
 # The bytes just before offset (up to 256), hashed: a cached offset is reused only while they are
@@ -1300,14 +1485,14 @@ sub scan {
         # Checked before the row counts as read, so a scan that stops here reads it next time.
         if ((++$n % 256 == 0 && util::clock_ms() > $deadline) || ($rows_max && $n > $rows_max)) { $status = 'timeout'; last }
         $off += length $l;
-        # This plugin's checkpoint nudge (a tool call's added context: a hook_additional_context
-        # attachment, or a tool result's text; not a request blob echoing it, a summary or a prompt
-        # quoting it): the turn it asks to close is the plugin's checkpoint, not the loop stopping.
+        # This plugin's checkpoint nudge as Claude Code adds it to a tool call (_nudge; not a tool's
+        # output quoting it, a request blob echoing it, a summary or a prompt): the turn its
+        # [continue] form asks to close is the plugin's checkpoint, not the loop stopping.
         if (index($l, ' plugin: context is at ') >= 0 && $st->{drv} && ($st->{drv}{mode} // '') ne 'ended'
-            && index($l, '"isSidechain":true') < 0
+            && index($l, '"isSidechain":true') < 0 && length($l) <= $ROW_MAX
             && (index($l, '"hook_additional_context"') >= 0 || (index($l, '"type":"user"') >= 0 && index($l, '"tool_result"') >= 0))) {
-            my $b = eval { ctx::brand() } // '';
-            $st->{drv}{nudged} = 1 if $b ne '' && index($l, "Note from the user's $b plugin: context is at ") >= 0;
+            my $j = eval { jsonc::decode($l) };
+            $st->{drv}{nudged} = 1 if ref $j eq 'HASH' && !$j->{isSidechain} && (_nudge($j) // '') eq 'continue';
         }
         # (background work running, or ended work whose later messages are still the loop's own work's)
         my $bgo = ((ref $st->{bg} eq 'HASH' && %{ $st->{bg} }) || (ref $st->{bgend} eq 'HASH' && %{ $st->{bgend} })) ? 1 : 0;
@@ -1319,13 +1504,26 @@ sub scan {
             my $j = eval { jsonc::decode($l) };
             if (ref $j eq 'HASH' && !$j->{isSidechain} && ($j->{type} // '') eq 'attachment') { _queued($st, $j); next }
         }
-        # A notification Claude Code queued while a turn ran (a queue-operation row) closes the
-        # background work it names, as a user row does; it waits for a turn of its own.
-        if ($bgo && (index($l, '<task-notification>') >= 0 || index($l, 'agent-message from=') >= 0 || index($l, 'idle_notification') >= 0
-                     || index($l, 'shutdown_approved') >= 0 || index($l, 'teammate_terminated') >= 0)
+        # The session resumed in a new process (its SessionStart:resume hook rows): _resumed.
+        if (index($l, '"SessionStart:resume"') >= 0 && ($open || $bgo) && index($l, '"isSidechain":true') < 0 && length($l) <= $ROW_MAX) {
+            my $j = eval { jsonc::decode($l) };
+            if (ref $j eq 'HASH' && !$j->{isSidechain} && ($j->{type} // '') eq 'attachment' && ref $j->{attachment} eq 'HASH'
+                && ($j->{attachment}{hookName} // '') eq 'SessionStart:resume') {
+                _resumed($st, util::parse_iso($j->{timestamp} // ''));
+                next;
+            }
+        }
+        if (($open || $bgo) && index($l, '"queue-operation"') >= 0 && index($l, '"enqueue"') >= 0
             && index($l, '"type":"user"') < 0 && index($l, '"type":"assistant"') < 0 && length($l) <= $ROW_MAX) {
             my $j = eval { jsonc::decode($l) };
-            _bg_text($st, $j->{content}, 'q') if ref $j eq 'HASH' && !$j->{isSidechain} && ref $j->{attachment} ne 'HASH';
+            if (ref $j eq 'HASH' && !$j->{isSidechain} && ($j->{type} // '') eq 'queue-operation' && ($j->{operation} // '') eq 'enqueue') {
+                # A prompt a person typed while the turn runs, queued (_enqueued).
+                _enqueued($st, $j) if $open;
+                # A notification Claude Code queued while a turn ran closes the background work it
+                # names, as a user row does; it waits for a turn of its own (the queue's later
+                # remove and dequeue rows repeat it after the fact).
+                _bg_text($st, $j->{content}, 'q', util::parse_iso($j->{timestamp} // '')) if $bgo;
+            }
         }
         # metadata rows (request blobs, titles, modes) lead with their type; message rows do not
         next if index($l, '{"type":"') == 0 && index($l, '{"type":"user"') != 0 && index($l, '{"type":"assistant"') != 0;
@@ -1351,6 +1549,8 @@ sub scan {
                 || (index($l, '"tool_use"') >= 0
                     && (index($l, '"Skill"') >= 0 || index($l, 'gsd') >= 0 || index($l, '.planning/') >= 0
                         || (($open || $bgo) && $l =~ /"name":"(?:Agent|Task|Workflow|SendMessage|TaskStop|KillShell|CronDelete|ScheduleWakeup)"/)
+                        || ($open && index($l, '"name":"AskUserQuestion"') >= 0)
+                        || index($l, '"name":"CronCreate"') >= 0 || index($l, '"name":"ScheduleWakeup"') >= 0
                         || ($open && (index($l, 'HANDOFF.json') >= 0 || index($l, '.continue-here') >= 0))));
         }
         next if length($l) > $ROW_MAX;
