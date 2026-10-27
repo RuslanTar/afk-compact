@@ -48,8 +48,14 @@ function dueKey(sid: string): string {
 /** `turn`: the 49-min handoff turn (native off); `check`: the 55.5-min outcome check (native on or unreadable). */
 export type IdleKind = 'turn' | 'check'
 
-/** The persisted timer: when it fires, its kind, the turn end it was armed at, and the idle episode it belongs to. */
-type Due = { due: number; sid: string; episode: { since: number; done: boolean } | null; kind: IdleKind; end: number | null }
+/**
+ * The persisted timer: when it fires, its kind, the turn end it was armed at, the idle episode it
+ * belongs to, and whether that turn ended `answer`. A load that re-arms the timer (a background
+ * session moved to a new version, `claude --resume` or `claude respawn` with no SessionEnd before)
+ * has seen no turn end of its own, so the `aborted` check reads `answer` from here; a record
+ * written before the field reads as not answered (the old verdict).
+ */
+type Due = { due: number; sid: string; episode: { since: number; done: boolean } | null; kind: IdleKind; end: number | null; answer: boolean }
 
 function readDue(v: unknown): Due | undefined {
   if (typeof v !== 'object' || v === null) return undefined
@@ -58,7 +64,7 @@ function readDue(v: unknown): Due | undefined {
   const e = o.episode as Record<string, unknown> | null | undefined
   const episode = e && typeof e.since === 'number' && typeof e.done === 'boolean' ? { since: e.since, done: e.done } : null
   // A record written before the outcome check has no kind: it is the 49-min turn.
-  return { due: o.due, sid: o.sid, episode, kind: o.kind === 'check' ? 'check' : 'turn', end: typeof o.end === 'number' ? o.end : null }
+  return { due: o.due, sid: o.sid, episode, kind: o.kind === 'check' ? 'check' : 'turn', end: typeof o.end === 'number' ? o.end : null, answer: o.answer === true }
 }
 
 /** Cancels the timer (synchronous: safe before any await in a hook). */
@@ -126,7 +132,7 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
     return
   }
   const due = endAt + (m.kind === 'turn' ? IDLE_FIRE_MS : IDLE_CHECK_MS)
-  await persist(d, { due, sid, episode: d.state.idleEpisode ?? null, kind: m.kind, end: endAt })
+  await persist(d, { due, sid, episode: d.state.idleEpisode ?? null, kind: m.kind, end: endAt, answer: d.state.lastTurnAnswer })
 }
 
 /** Once per load (AT-IC-14): a persisted due still in the future for this sid is armed again. */
@@ -137,6 +143,8 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   const now = await d.now()
   if (rec.due <= now) return
   if (rec.episode && !d.state.idleEpisode) d.state.idleEpisode = rec.episode
+  // No turn ended in this load yet: the last turn is the one the record was armed at.
+  if (d.state.lastTurnEndAt === undefined) d.state.lastTurnAnswer = rec.answer
   d.state.idleDueSid = sid
   schedule(d, rec, now)
 }
@@ -239,7 +247,7 @@ export async function fire(d: Deps, sid: string, kind: IdleKind = 'turn', end: n
     if (m.kind === 'check') {
       await skipped(d, sid, m.native === 'on' ? 'native-on' : 'native-unknown', null, 'idle')
       if (end !== null && end + IDLE_CHECK_MS > (await d.now())) {
-        await persist(d, { due: end + IDLE_CHECK_MS, sid, episode: s.idleEpisode ?? null, kind: 'check', end })
+        await persist(d, { due: end + IDLE_CHECK_MS, sid, episode: s.idleEpisode ?? null, kind: 'check', end, answer: s.lastTurnAnswer })
       }
       return
     }
