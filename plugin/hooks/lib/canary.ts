@@ -3,7 +3,21 @@ import type { Deps } from './deps'
 import { escalate, log } from './log'
 import { sha8 } from './normalize'
 
-/** C1 at `session.start`: `$.session.version()` vs `$.store` `lastVersion`, mirrored to version.json. */
+/** `$.store` key: the Claude Code version this session last ran (C1, per session). */
+export function sessionVersionKey(sid: string): string {
+  return `cc_version:${sid}`
+}
+
+/**
+ * C1 at `session.start`, in two parts.
+ * - The row: `version_change {from, to}` only when this session itself ran another version before
+ *   (`$.store` `cc_version:<sid>`): a background session the supervisor moved to a new version, a
+ *   `claude --resume` or `claude respawn` on another binary. A new session never logs another
+ *   session's version (probe 2026-10-27: P5's fresh session logged P12's version as a downgrade).
+ * - The smoke check (machine-wide, `$.store` `lastVersion`/`smokeDue`, mirrored to version.json):
+ *   a version other than the last one any session saw, or a dev build not yet due, sets smokeDue.
+ * Either one escalates once per load.
+ */
 export async function versionCanary(d: Deps, sid: string): Promise<void> {
   let v: { version: string; base?: string }
   try {
@@ -12,6 +26,11 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
     return
   }
   const to = v.version
+  const own = await d.storeGet(sessionVersionKey(sid))
+  const ownFrom = typeof own === 'string' ? own : undefined
+  if (ownFrom !== to) await d.storeSet(sessionVersionKey(sid), to)
+  const moved = ownFrom !== undefined && ownFrom !== to
+  if (moved) await log(d, sid, 'version_change', { from: ownFrom, to })
   const isDev = to.endsWith('-dev') || (v.base ?? '').endsWith('-dev')
   const p = await d.paths()
   const mirrorPath = p ? `${p.watch}/version.json` : undefined
@@ -32,17 +51,14 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
   const due = typeof dueStored === 'string' ? dueStored : typeof mirror.smokeDue === 'string' ? mirror.smokeDue : null
   const trips = (from !== undefined && from !== to) || (isDev && due !== to)
   if (trips) {
-    await log(d, sid, 'version_change', { from: from ?? null, to })
     await d.storeSet('lastVersion', to)
     await d.storeSet('smokeDue', to)
     if (mirrorPath) await d.write(mirrorPath, JSON.stringify({ lastVersion: to, smokeDue: to }) + '\n')
-    escalate(d, 'version-change')
-    return
-  }
-  if (from === undefined) {
+  } else if (from === undefined) {
     await d.storeSet('lastVersion', to)
     if (mirrorPath) await d.write(mirrorPath, JSON.stringify({ lastVersion: to, smokeDue: due }) + '\n')
   }
+  if (moved || trips) escalate(d, 'version-change')
 }
 
 /** The four `session.compact` triggers this build knows (C7). */

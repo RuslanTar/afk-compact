@@ -33,14 +33,43 @@ test('session.start rows: policy flags and the session row', async ($, on) => {
   for (const r of w.rows) for (const k of ['v', 'ts', 'ev', 'sid', 'actor', 'writer', 'pid', 'plugin_version', 'cc_version', 'turn_seq']) expect(Object.keys(r)).toContain(k)
 })
 
-test('AT-M3-08: lastVersion 2.1.304, version 2.1.305: one version_change, smokeDue, one toast; again: nothing', async ($, on) => {
+test('AT-M3-08: lastVersion 2.1.304, version 2.1.305: smokeDue, one toast; again: nothing. A new session logs no version_change (per session)', async ($, on) => {
   const w = new World({ version: { version: '2.1.305' } })
   w.install(on, { lastVersion: '2.1.304' })
   await w.start($)
   await w.start($)
-  expect(w.rowsOf('version_change').map(r => [r.from, r.to])).toEqual([['2.1.304', '2.1.305']])
+  expect(w.rowsOf('version_change').length).toBe(0)
   expect(JSON.parse(w.files.get(`${WATCH}/version.json`) ?? '{}')).toEqual({ lastVersion: '2.1.305', smokeDue: '2.1.305' })
   expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(1)
+})
+
+test('BG-VER-01: this session ran 2.1.310 before (moved, resumed or respawned): one version_change 2.1.310 -> 2.1.311 under its sid, one toast; again: nothing', async ($, on) => {
+  const w = new World({ version: { version: '2.1.311' } })
+  w.install(on, { lastVersion: '2.1.311', ['cc_version:' + SID_A]: '2.1.310' })
+  await w.start($)
+  await w.start($)
+  expect(w.rowsOf('version_change').map(r => [r.sid, r.from, r.to])).toEqual([[SID_A, '2.1.310', '2.1.311']])
+  expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(1)
+})
+
+test('BG-VER-02: another session ran another version (machine-wide lastVersion 2.1.311): a new session on 2.1.310 logs no version_change', async ($, on) => {
+  const w = new World({ version: { version: '2.1.310' } })
+  w.install(on, { lastVersion: '2.1.311', smokeDue: null, ['cc_version:' + SID_B]: '2.1.311' })
+  await w.start($)
+  expect(w.rowsOf('version_change').length).toBe(0)
+})
+
+test('BG-VER-03: the version a session runs is kept per session id', async ($, on) => {
+  const seen: unknown[] = []
+  on('store.set', { key: 'cc_version:' + SID_A }, (_$, e, next) => {
+    seen.push(e.value)
+    return next(e)
+  })
+  const w = new World({ version: { version: '2.1.311' } })
+  w.install(on)
+  await w.start($)
+  await w.start($)
+  expect(seen).toEqual(['2.1.311'])
 })
 
 test('AT-M3-08 (reload): a load that finds lastVersion equal adds nothing', async ($, on) => {
@@ -52,12 +81,13 @@ test('AT-M3-08 (reload): a load that finds lastVersion equal adds nothing', asyn
   expect(w.toasts.filter(t => t !== shippedNotice(w.name).text).length).toBe(0)
 })
 
-test('AT-M3-09: version 2.1.306-dev sets smokeDue, once', async ($, on) => {
+test('AT-M3-09: version 2.1.306-dev sets smokeDue, once (one toast; no version_change: this session ran no other version)', async ($, on) => {
   const w = new World({ version: { version: '2.1.306-dev', base: '2.1.306-dev' } })
   w.install(on, { lastVersion: '2.1.306-dev' })
   await w.start($)
   await w.start($)
-  expect(w.rowsOf('version_change').length).toBe(1)
+  expect(w.rowsOf('version_change').length).toBe(0)
+  expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(1)
   expect(JSON.parse(w.files.get(`${WATCH}/version.json`) ?? '{}').smokeDue).toBe('2.1.306-dev')
 })
 
