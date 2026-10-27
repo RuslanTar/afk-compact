@@ -3,7 +3,7 @@
 // text (order 3, cont.ts); classic SessionStart (order 1) is the helper's. One exception (owner
 // xxxxxxxx-37, "Full block again on return"): when a background result's turn took an idle
 // compaction's block, the first human-origin prompt gets the full block again, re-measured, with
-// `[idle-again]` noting the earlier use.
+// `[idle-again]` noting the earlier use, beside that prompt (`prompt.submit` context: `againFor`).
 import type { Deps, IdleLane, LoadState, Outcome, PendingResume } from './deps'
 import { isHuman, storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
@@ -176,12 +176,6 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   const s = d.state
   s.ctxSeen = true
   const human = isHuman(s.turnOrigin)
-  const again = await againBlock(d, sid)
-  if (again !== undefined) {
-    // A person is back: the idle episode ends with the block they get.
-    s.idleLane = undefined
-    return again
-  }
   // AT-RP-02: once per session id in this load, a block the classic SessionStart(resume) armed.
   if (!s.pending && s.restoreChecked !== sid) {
     s.restoreChecked = sid
@@ -210,7 +204,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   if (pend.args.idle === true) await laneShown(d, pend, out, human)
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
   // Owner xxxxxxxx-37: a background result (not a person) took an idle compaction's block; the
-  // first human-origin prompt gets it again.
+  // first human-origin prompt gets it again, beside that prompt (`againFor`).
   if (pend.args.idle === true && !isHuman(s.turnOrigin)) {
     s.idleAgain = { sid, pend: { ...pend, args }, usedAt: await d.now(), remeasure: out.remeasure, measuredAt: out.measuredAt }
   }
@@ -337,23 +331,54 @@ function haltNow(d: Deps, a: BlockArgs): BlockArgs {
   return a.idle === true ? { ...a, halt: d.state.halt.active } : a
 }
 
+/** The held `[idle-again]` block `againFor` put beside a person's prompt, and its `idle_return` row. */
+export type AgainSent = {
+  text: string
+  held: NonNullable<LoadState['idleAgain']>
+  row: { nonce: string; age_s: number; remeasured: boolean }
+}
+
 /**
  * Owner xxxxxxxx-37 ("Full block again on return", replaces the ID-3 `[idle-return]` line): after
- * a turn not of a person's took an idle compaction's resume block, the first human-origin turn
+ * a turn not of a person's took an idle compaction's resume block, the first prompt of a person's
  * gets the full block again, always re-measured (3 s budget; when that fails, with the measure the
- * earlier delivery had and its stamp), with `[idle-again]` naming when it went out first. One
- * `idle_return {nonce, age_s, remeasured}` row. A turn not of a person's leaves it held; a newer
- * main compaction (afterStep) or the session's end drops it.
+ * earlier delivery had and its stamp), with `[idle-again]` naming when it went out first. It goes
+ * beside that prompt (`prompt.submit` context, from the hook before the prompt enters):
+ * `prompt.context` is asked once per conversation, and the turn that took the block was that
+ * conversation's first, so it never sees the person's prompt. A prompt not of a person's leaves it
+ * held; a newer main compaction (afterStep) or the session's end drops it. The prompt that carries
+ * it then logs one `idle_return {nonce, age_s, remeasured}` row and ends the idle episode
+ * (`againSent`); one that does not enter hands it back (`againLost`).
  */
-async function againBlock(d: Deps, sid: string): Promise<string | undefined> {
+export async function againFor(d: Deps, kind: string, startsTurn: boolean): Promise<AgainSent | undefined> {
   const s = d.state
   const r = s.idleAgain
-  if (!r || !isHuman(s.turnOrigin)) return undefined
+  if (!r || !isHuman(kind)) return undefined
   s.idleAgain = undefined
-  if (r.sid !== sid) return undefined
-  const out = await freshBlock(d, { ...r.pend, remeasure: r.remeasure, measuredAt: r.measuredAt }, { ...haltNow(d, r.pend.args), again: r.usedAt }, true)
-  await log(d, sid, 'idle_return', { nonce: r.pend.nonce, age_s: Math.round(((await d.now()) - r.usedAt) / 1000), remeasured: out.remeasured })
-  return out.block
+  try {
+    if ((await d.sessionId()) !== r.sid) return undefined
+    // Owner xxxxxxxx-25: the halt variant follows halt mode when the block is read. A person's
+    // prompt that starts its own turn clears halt at that turn's start (IC-1 D6), after this hook;
+    // one typed into a running turn does not.
+    const args = startsTurn ? { ...r.pend.args, ...(r.pend.args.idle === true ? { halt: false } : {}) } : haltNow(d, r.pend.args)
+    const out = await freshBlock(d, { ...r.pend, remeasure: r.remeasure, measuredAt: r.measuredAt }, { ...args, again: r.usedAt }, true)
+    return { text: out.block, held: r, row: { nonce: r.pend.nonce, age_s: Math.round(((await d.now()) - r.usedAt) / 1000), remeasured: out.remeasured } }
+  } catch {
+    // Nothing went beside the prompt: the next prompt of a person's gets it.
+    if (s.idleAgain === undefined) s.idleAgain = r
+    return undefined
+  }
+}
+
+/** The prompt that carried the block entered: its `idle_return` row; a person is back, so the idle episode ends. */
+export async function againSent(d: Deps, a: AgainSent): Promise<void> {
+  d.state.idleLane = undefined
+  await log(d, a.held.sid, 'idle_return', a.row)
+}
+
+/** The prompt that carried the block did not enter: it stays held for the next prompt of a person's. */
+export function againLost(s: LoadState, a: AgainSent): void {
+  if (s.idleAgain === undefined) s.idleAgain = a.held
 }
 
 /**

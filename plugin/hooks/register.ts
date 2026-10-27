@@ -12,7 +12,7 @@ import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { startsWork } from './lib/lane'
-import { blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
+import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 
 export const register: Register = (on, options) => {
@@ -140,16 +140,26 @@ export const register: Register = (on, options) => {
     // conversation, so it cannot carry one); a person's prompt closes the episode. A note whose
     // prompt does not enter goes back to the episode for the next turn.
     const note = own ? undefined : await laneRecheck(realDeps($, options, state), kind, e.text)
-    if (note !== undefined) e = { ...e, context: [...(e.context ?? []), note.text] }
+    // Owner xxxxxxxx-37: a person back after a background result's turn took an idle block gets
+    // the whole block again beside their prompt, for the same reason; one that does not enter
+    // hands it back for their next prompt.
+    const again = own ? undefined : await againFor(realDeps($, options, state), kind, entering)
+    const extra = [note?.text, again?.text].filter((t): t is string => t !== undefined)
+    if (extra.length > 0) e = { ...e, context: [...(e.context ?? []), ...extra] }
     let r
     try {
       r = await next(e)
     } catch (err) {
       if (note !== undefined) laneNoteLost(state, note)
+      if (again !== undefined) againLost(state, again)
       if (entering) promptNotEntered(state, kind)
       throw err
     }
     if (note !== undefined && r.drop !== undefined) laneNoteLost(state, note)
+    if (again !== undefined) {
+      if (r.drop !== undefined) againLost(state, again)
+      else await againSent(realDeps($, options, state), again)
+    }
     if (entering && r.drop !== undefined) promptNotEntered(state, kind)
     if (entering && r.drop === undefined) {
       const d = realDeps($, options, state)
@@ -206,8 +216,8 @@ export const register: Register = (on, options) => {
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
   }).catch(($, e, next) => next(e))
 
-  // The resume block, and the same idle block again when a person comes back after a background
-  // result's turn took it (owner xxxxxxxx-37).
+  // The resume block (the same idle block again for a person back after a background result's turn
+  // took it goes beside their prompt, in prompt.submit: this is asked once per conversation).
   on('prompt.context', async ($, e, next) => {
     const r = await next(e)
     const d = realDeps($, options, state)

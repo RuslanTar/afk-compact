@@ -149,6 +149,8 @@ function lineOf(w: World, tags: Tag[], base: Tag[] = [], rt: Record<string, stri
   return added.length > 0 ? added.join('\n') : undefined
 }
 const blockOf = (w: World, ctx: { blocks: readonly { name: string; text: string }[] }) => ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text
+/** What the model read beside the prompt of the newest turn (the plugin's prompt.submit context). */
+const ctxOf = (w: World): string => (w.submitContexts[w.submitContexts.length - 1] ?? []).join('\n')
 /** The `Measured facts (<stamp>;` head a block's measure was taken at (IC-1 D3: the stamp shows the facts' age). */
 const measuredHead = (at: number) => `Measured facts (${isoLocal(at, false)};`
 
@@ -174,10 +176,12 @@ test('AT-IB-03: halt on at an idle compaction: a task-notification turn gets [id
   }
   await w.turnEnd($)
   await w.advance(120 * 1000)
-  // The person comes back: their turn clears halt, so the block they get again says [idle].
+  // The person comes back: their turn clears halt, so the block they get again (beside their
+  // prompt, built before that turn starts) says [idle].
   await w.userTurn($, 'back')
   expect(w.rowsOf('halt').map(r => r.active)).toEqual([false])
-  const back = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  const back = ctxOf(w)
+  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
   if (idle !== undefined) expect(back).toContain(idle)
   if (halt !== undefined) expect(back).not.toContain(halt)
 })
@@ -205,7 +209,7 @@ test('AT-GR-06: halt on at an idle compaction: the [idle-halt] block keeps the A
   await w.turnEnd($)
   await w.advance(120 * 1000)
   await w.userTurn($, 'back')
-  const back = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  const back = ctxOf(w)
   expect(back).toContain('Active driver: /phase-loop')
   if (driver !== undefined) expect(back).toContain(driver)
 })
@@ -251,6 +255,9 @@ test('AT-IC-04: a block delivered 601 s after it was built is rebuilt with one f
 // Owner xxxxxxxx-37 ("Full block again on return", replaces ID-3's [idle-return] line; SPEC-DELTAS
 // AT-ID-03): the first human prompt after a background result's turn took an idle compaction's
 // block gets the full block again, re-measured, with [idle-again] naming when it went out first.
+// It goes beside that prompt (its prompt.submit context): prompt.context is asked once per
+// conversation, at the turn that took the block, so a live session never asks it at the person's
+// prompt (v012-digest H1). The cases ask prompt.context there too: it must add nothing.
 const AGAIN = hasTag('resume-context', 'idle-again')
 /** When the notification turn of `idleTakenByNotification` took the block. */
 const USED_AT = T0 + 2600 * 1000
@@ -269,10 +276,17 @@ async function idleTakenByNotification($: Engine, w: World): Promise<string> {
   return blockOf(w, ctx) ?? ''
 }
 
+/** A person's prompt and its turn: the block beside it, and what a prompt.context asked then would add. */
+async function personTurn($: Engine, w: World, text: string): Promise<{ ctx: string; block: string | undefined }> {
+  await w.userTurn($, text)
+  const ctx = ctxOf(w)
+  return { ctx, block: blockOf(w, await $.prompt.context({ blocks: [] })) }
+}
+
 const againLine = (w: World, base: Tag = 'idle') => lineOf(w, ['idle-again'], [base], { ...RT, idle_used_at: isoLocal(USED_AT, false) })
 const dispatchNonce = (w: World) => w.flag(w.callsOf('dispatch')[0], '--nonce')
 
-test('AT-ID-03: a composer prompt 300 s after a task-notification turn took the idle block gets the full block again: re-measured, with [idle-again]; the next prompt none', async ($, on) => {
+test('AT-ID-03: a composer prompt 300 s after a task-notification turn took the idle block gets the full block again beside it: re-measured, with [idle-again]; the next prompt none', async ($, on) => {
   const w = new World().install(on)
   const first = await idleTakenByNotification($, w)
   const note = againLine(w)
@@ -284,12 +298,12 @@ test('AT-ID-03: a composer prompt 300 s after a task-notification turn took the 
   await w.advance(300 * 1000)
   w.measureBlock = 'Git: main @ 7a7a7a7, 1 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
   const measures = w.callsOf('measure').length
-  await w.userTurn($, 'back again')
-  let ctx = await $.prompt.context({ blocks: [] })
-  expect(ctx.blocks.map(b => b.name)).toEqual([`${w.name}-resume`])
-  const again = blockOf(w, ctx) ?? ''
+  let t = await personTurn($, w, 'back again')
+  expect(t.block).toBe(undefined)
+  const again = t.ctx
   expect(w.callsOf('measure').length).toBe(measures + 1)
   expect(w.callsOf('measure').some(c => c.args.includes('--brief'))).toBe(false)
+  expect(again).toContain(SID_A)
   expect(again).toContain('7a7a7a7')
   if (note !== undefined) expect(again).toContain(note)
   const idle = lineOf(w, ['idle'])
@@ -297,9 +311,8 @@ test('AT-ID-03: a composer prompt 300 s after a task-notification turn took the 
   expect(w.rowsOf('idle_return').map(r => [r.nonce, r.age_s, r.remeasured])).toEqual([[dispatchNonce(w), 300, true]])
   await w.turnEnd($)
   await w.advance(700 * 1000)
-  await w.userTurn($, 'and again')
-  ctx = await $.prompt.context({ blocks: [] })
-  expect(ctx.blocks).toEqual([])
+  t = await personTurn($, w, 'and again')
+  expect([t.ctx, t.block]).toEqual(['', undefined])
   expect(w.rowsOf('idle_return').length).toBe(1)
 })
 
@@ -318,8 +331,7 @@ test('AT-ID-03: a young block (the notification 60 s after the compaction, the p
   await w.advance(60 * 1000)
   measures = w.callsOf('measure').length
   w.measureBlock = 'Git: main @ 6b6b6b6, 0 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
-  await w.userTurn($, 'back')
-  const again = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  const again = (await personTurn($, w, 'back')).ctx
   expect(w.callsOf('measure').length).toBe(measures + 1)
   expect(again).toContain('6b6b6b6')
   expect(w.rowsOf('idle_return').map(r => [r.age_s, r.remeasured])).toEqual([[60, true]])
@@ -331,8 +343,7 @@ test('AT-ID-03: the re-measure fails: the block goes again with the measure the 
   expect(first).toContain(measuredHead(USED_AT))
   w.replies.measure = () => 'reject'
   await w.advance(7200 * 1000)
-  await w.userTurn($, 'back')
-  const again = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  const again = (await personTurn($, w, 'back')).ctx
   expect(again).toContain('3f9c2e1')
   // The facts are those measured at the first delivery, two hours ago: the stamp says so.
   expect(again).toContain(measuredHead(USED_AT))
@@ -347,13 +358,46 @@ test('AT-ID-03: a second task-notification turn gets nothing; the person still g
   await idleTakenByNotification($, w)
   await w.advance(60 * 1000)
   await w.userTurn($, 'Another background task finished.', 'task-notification')
+  expect(ctxOf(w)).toBe('')
   expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
   await w.turnEnd($)
   await w.advance(60 * 1000)
-  await w.userTurn($, 'back')
-  const again = blockOf(w, await $.prompt.context({ blocks: [] }))
-  expect(again === undefined).toBe(false)
+  const t = await personTurn($, w, 'back')
+  expect([t.ctx === '', t.block]).toEqual([false, undefined])
   expect(w.rowsOf('idle_return').map(r => r.age_s)).toEqual([120])
+})
+
+test('AT-ID-03: a person\'s prompt that does not enter (a hook beneath drops it) hands the block back: their next prompt gets it, one idle_return row', async ($, on) => {
+  const w = new World().install(on)
+  await idleTakenByNotification($, w)
+  await w.advance(60 * 1000)
+  w.submitDrop = 'a hook beneath refused it'
+  await $.prompt.submit({ text: 'back', origin: { kind: 'composer' } } as never)
+  expect(ctxOf(w)).toContain(SID_A)
+  expect(w.rowsOf('idle_return')).toEqual([])
+  w.submitDrop = undefined
+  await w.advance(60 * 1000)
+  const t = await personTurn($, w, 'back, again')
+  expect(t.ctx).toContain(SID_A)
+  expect(w.rowsOf('idle_return').map(r => r.age_s)).toEqual([120])
+})
+
+test('AT-ID-03: a prompt delivered into the running result turn by a person (typed over it) carries the block; the turn after it none', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await humanTurn($, w, 150000)
+  await w.advance(1600 * 1000)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.advance(1000 * 1000)
+  await w.userTurn($, 'Background task finished.', 'task-notification')
+  expect(blockOf(w, await $.prompt.context({ blocks: [] })) === undefined).toBe(false)
+  await w.advance(30 * 1000)
+  await $.prompt.submit({ text: 'what happened?', origin: { kind: 'composer' }, turnId: 't2' } as never)
+  expect(ctxOf(w)).toContain(SID_A)
+  expect(w.rowsOf('idle_return').map(r => r.age_s)).toEqual([30])
+  await w.turnEnd($)
+  const t = await personTurn($, w, 'thanks')
+  expect([t.ctx, t.block]).toEqual(['', undefined])
 })
 
 test('AT-ID-03: a person\'s turn takes the idle block itself: nothing again later; a non-idle block a notification took: nothing either; a newer compaction drops the held block', async ($, on) => {
@@ -367,8 +411,8 @@ test('AT-ID-03: a person\'s turn takes the idle block itself: nothing again late
   await w.turnEnd($)
   // The person's next prompt, with no compaction in between: nothing again.
   await w.advance(700 * 1000)
-  await w.userTurn($, 'next')
-  expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
+  let t = await personTurn($, w, 'next')
+  expect([t.ctx, t.block]).toEqual(['', undefined])
   expect(w.rowsOf('idle_return').length).toBe(0)
   await w.turnEnd($)
   await raiseCompact($, { trigger: 'manual' })
@@ -376,8 +420,8 @@ test('AT-ID-03: a person\'s turn takes the idle block itself: nothing again late
   await $.prompt.context({ blocks: [] })
   await w.turnEnd($)
   await w.advance(700 * 1000)
-  await w.userTurn($, 'back')
-  expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
+  t = await personTurn($, w, 'back')
+  expect([t.ctx, t.block]).toEqual(['', undefined])
   await w.turnEnd($)
   // An idle block a notification took, then a newer (manual) compaction: the person gets the newer
   // block, once, with no [idle-again].
@@ -387,10 +431,10 @@ test('AT-ID-03: a person\'s turn takes the idle block itself: nothing again late
   await $.prompt.context({ blocks: [] })
   await w.turnEnd($)
   await raiseCompact($, { trigger: 'manual' })
-  await w.userTurn($, 'back again')
-  const newer = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  t = await personTurn($, w, 'back again')
+  const newer = t.block ?? ''
   const note = lineOf(w, ['idle-again'], ['idle'], { ...RT, idle_used_at: '\u0001' })
-  expect(newer === '').toBe(false)
+  expect([newer === '', t.ctx]).toEqual([false, ''])
   if (note !== undefined) expect(newer).not.toContain(note.slice(0, note.indexOf('\u0001')))
   expect(w.rowsOf('idle_return').length).toBe(0)
 })

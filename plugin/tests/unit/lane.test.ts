@@ -268,11 +268,14 @@ test('hard-blocked with an agent running: soft-blocked, no digest turn (its resu
   const third = await resultTurn($, w, 'A shell finished.')
   expect([third.ctx, third.block]).toEqual(['', undefined])
   await w.turnEnd($)
-  // The person is back: the episode closes; the again-block carries the [idle-done] pointer branch.
+  // The person is back: the episode closes; the again-block beside their prompt (no lane note)
+  // carries the [idle-done] pointer branch; prompt.context, asked once per conversation, adds none.
   await w.userTurn($, 'back')
-  expect(ctxOf(w)).toBe('')
-  const back = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
-  expect(back).toContain('code reads the work lane as hard-blocked')
+  const back = w.submitContexts[w.submitContexts.length - 1] ?? []
+  expect(back.length).toBe(1)
+  expect(back[0]).toContain('code reads the work lane as hard-blocked')
+  expect(back[0]).toContain("A background result's turn got this block at")
+  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
   await w.turnEnd($)
   // The episode ended with the person's turn: a later result turn gets no note.
   w.agents = []
@@ -337,10 +340,13 @@ test('H1: the note of a later result turn goes beside its prompt (prompt.submit 
   const second = await resultTurn($, w, notif('a2'))
   expect(second.ctx).toContain('code reads the work lane as hard-blocked')
   expect(second.block).toBe(undefined)
-  // A person's prompt ends the episode: no note beside it, and none for a later result turn.
+  // A person's prompt ends the episode: no note beside it (the whole block again instead, as a
+  // result turn took it), and none for a later result turn.
   await w.turnEnd($)
   await w.userTurn($, 'back')
-  expect(ctxOf(w)).toBe('')
+  const back = w.submitContexts[w.submitContexts.length - 1] ?? []
+  expect(back.length).toBe(1)
+  expect(back[0]).toContain("A background result's turn got this block at")
   await w.turnEnd($)
   expect((await resultTurn($, w, notif('a9'))).ctx).toBe('')
 })
