@@ -12,8 +12,9 @@
 # Needs: script(1) for a terminal (BSD script on macOS, util-linux or busybox script on Linux)
 # and perl (it starts each launcher with SIGINT at its default, whatever this shell inherited,
 # and bounds each case's time). Cases that need a terminal are skipped where script is missing.
-# Writes only under one new folder in ${TMPDIR:-/tmp} (kept when a case fails); never into the
-# repo, which may be read-only (tests/launcher/docker.sh mounts it so).
+# Writes only under one new folder in ${TMPDIR:-/tmp} (kept when a case fails; removed, with
+# every run stopped, on INT, TERM or HUP); never into the repo, which may be read-only
+# (tests/launcher/docker.sh mounts it so).
 # LAUNCHER_TEST_FOREIGN_BASE (set by docker.sh): a folder holding <brand>-<uid> that another
 # user owns, for the real foreign-owner case; without it that case uses a stub id.
 # Output: TAP lines (`ok N - <shell> <case> <title>`), then `# passed N, failed M, skipped K`.
@@ -56,6 +57,32 @@ have_pty=
 if command -v script >/dev/null 2>&1; then have_pty=1; fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/launcher-tests.XXXXXX") || exit 2
+pids=
+
+# INT, TERM or HUP (a Ctrl+C, a timeout): stop every shell's run and the case each one is in
+# (its pid file), then remove the work folder.
+interrupted() {
+  trap '' INT TERM HUP
+  for p in $pids; do
+    kill -TERM "$p" 2>/dev/null
+  done
+  for f in "$work"/*/case.pid; do
+    [ -f "$f" ] || continue
+    p=$(cat "$f" 2>/dev/null)
+    case $p in
+    ''|*[!0-9]*) ;;
+    *) kill -TERM "$p" 2>/dev/null ;;
+    esac
+  done
+  wait
+  sleep 1
+  rm -rf "${work:?}"
+  echo "# interrupted: the runs were stopped and the work folder removed" >&2
+  exit "$1"
+}
+trap 'interrupted 130' INT
+trap 'interrupted 143' TERM
+trap 'interrupted 129' HUP
 
 # ---- shells
 
@@ -150,9 +177,10 @@ fail() {
 }
 
 # run_launcher [--notty-in] [--notty-out] [--env NAME=VALUE]... [--stub-os] [--no-pty]
-#              [--limit SECS] -- ARGS...
+#              [--limit SECS] [--self WORD] -- ARGS...
+# --self: the word the shell gets for the launcher file (default: its absolute path).
 run_launcher() {
-  r_in= r_out= r_env= r_os= r_pty=1 r_limit=30
+  r_in= r_out= r_env= r_os= r_pty=1 r_limit=30 r_self=$launcher
   while [ $# -gt 0 ]; do
     case $1 in
     --notty-in) r_in=1; shift ;;
@@ -161,6 +189,7 @@ run_launcher() {
     --stub-os) r_os=1; shift ;;
     --no-pty) r_pty=; shift ;;
     --limit) r_limit=$2; shift 2 ;;
+    --self) r_self=$2; shift 2 ;;
     --) shift; break ;;
     *) echo "run_launcher: bad option $1" >&2; return 2 ;;
     esac
@@ -176,7 +205,7 @@ run_launcher() {
     printf '%s\n' "$r_env"
     printf 'exec 2>%s\n' "$(q "$C/err")"
     [ -z "$r_in" ] || printf 'exec </dev/null\n'
-    printf "perl -e '\$SIG{INT} = \$SIG{QUIT} = \"DEFAULT\"; exec {\$ARGV[0]} @ARGV or exit 127' %s %s" "$SH" "$(q "$launcher")"
+    printf "perl -e '\$SIG{INT} = \$SIG{QUIT} = \"DEFAULT\"; exec {\$ARGV[0]} @ARGV or exit 127' %s %s" "$SH" "$(q "$r_self")"
     for r_a in "$@"; do
       printf ' %s' "$(q "$r_a")"
     done
@@ -185,7 +214,7 @@ run_launcher() {
   } >"$C/cmd"
   # A terminal: BSD script takes the command as words, util-linux and busybox script as one
   # string. perl's alarm bounds the case (SIGALRM ends script; the terminal's session gets
-  # SIGHUP).
+  # SIGHUP). Its pid is in $WS/case.pid while it runs, for the runner's INT/TERM/HUP trap.
   if [ -z "$r_pty" ]; then
     set -- /bin/sh "$C/cmd"
   else
@@ -195,7 +224,11 @@ run_launcher() {
     esac
   fi
   perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec @ARGV or exit 127' "$r_limit" "$@" \
-    >"$C/screen" 2>&1 </dev/null
+    >"$C/screen" 2>&1 </dev/null &
+  r_pid=$!
+  echo "$r_pid" >"$WS/case.pid"
+  wait "$r_pid"
+  rm -f "$WS/case.pid"
   if [ ! -f "$C/rc" ]; then
     fail "the launcher did not finish within ${r_limit}s (no exit code)"
   fi
@@ -376,6 +409,38 @@ case_30b() {
   end_case
 }
 
+case_30c() {
+  new_case AT-RS-30c "the person's exported variables reach claude unchanged; every launcher variable starts with _" needs-pty
+  # A shell keeps the export flag of a variable it got from the environment, so a launcher
+  # variable with a name the person exported would change what claude and its tools see.
+  x_vars="a c f n os rc rt ld me nl ff tab tok uid cwd via why base proto started self0 m0 e0 bypass_ok"
+  x_env=
+  for x_v in $x_vars; do
+    x_env="$x_env --env $x_v=ORIG"
+  done
+  go_scen
+  set -f
+  run_launcher $x_env --env "STUB_VARS=$x_vars" -- --verbose
+  set +f
+  want_runs 2
+  for x_run in 1 2; do
+    for x_v in $x_vars; do
+      w=$(sed -n "s/^$x_v=//p" "$C/run$x_run.vars" 2>/dev/null)
+      [ "$w" = ORIG ] || fail "run $x_run: $x_v reached claude as '${w:-nothing}', want ORIG"
+    done
+  done
+  # Every name the launcher assigns (comments and quoted text left out) starts with _, except
+  # IFS and the launch env.
+  w=$(X_ENVNAME="$envname" perl -ne 'next if /^\s*#/; s/\x27[^\x27]*\x27//g; s/"(?:[^"\\]|\\.)*"//g;
+    while (/(?:^|[\s;&|(){}])([A-Za-z_]\w*)=/g) { $n{$1} = 1 }
+    while (/\bfor\s+(\w+)\s+in\b/g) { $n{$1} = 1 }
+    if (/\bread\s+(?:-r\s+)?([\w ]+)/) { $n{$_} = 1 for grep { length } split / /, $1 }
+    END { print join(" ", grep { !/^_/ && $_ ne "IFS" && $_ ne $ENV{X_ENVNAME} } sort keys %n) }' \
+    "$launcher" 2>&1)
+  [ -z "$w" ] || fail "launcher variables without the _ prefix: $w"
+  end_case
+}
+
 case_31a() {
   new_case AT-RS-31a "argument classes: kept verbatim in order, state replaced, session selection and prompts dropped" needs-pty
   : >"$C/work/s.json"
@@ -463,6 +528,21 @@ case_31e() {
   end_case
 }
 
+case_31f() {
+  new_case AT-RS-31f "a variadic flag in the = form takes its one value only; in the space form it takes the following words (as commander does)" needs-pty
+  go_scen
+  run_launcher -- --add-dir=/x "first words" --allowedTools='Bash(git:*)' "fix the failing tests"
+  want_runs 2
+  want_argv 2 --add-dir=/x '--allowedTools=Bash(git:*)' $STATE_FLAGS
+  rm -f "$C/runs" "$C/err"
+  : >"$C/scenario"
+  go_scen
+  run_launcher -- --allowedTools 'Bash(git:*)' "fix the failing tests"
+  want_runs 2
+  want_argv 2 --allowedTools 'Bash(git:*)' "fix the failing tests" $STATE_FLAGS
+  end_case
+}
+
 case_32a() {
   new_case AT-RS-32a "relaunch through --via: the wrapper words first, then claude, the note consumed" needs-pty
   go_scen
@@ -489,6 +569,23 @@ case_32b() {
   rm -f "$C/runs" "$C/err"
   run_launcher -- --verbose
   want_argv 2 --verbose --resume "$SID" --permission-mode acceptEdits
+  # A launch value starting with - comes back in the = form, never as a word of its own.
+  rm -f "$C/runs" "$C/err"
+  run_launcher -- --model -x --effort=-y --verbose
+  want_argv 2 --verbose --resume "$SID" --model=-x --effort=-y --permission-mode acceptEdits
+  end_case
+}
+
+case_32c() {
+  new_case AT-RS-32c "restart.used a symlink to a folder: no relaunch (consume), the note not moved into it" needs-pty
+  scen "1 sid" "1 note go.note" "1 usedlink" "1 exit 0"
+  run_launcher --
+  want_rc 0
+  want_runs 1
+  refusal consume
+  want_last_refusal consume
+  [ -z "$(ls -A "$C/elsewhere" 2>/dev/null)" ] || fail "the note was moved into the symlinked folder: $(ls -A "$C/elsewhere")"
+  want_gone
   end_case
 }
 
@@ -532,12 +629,26 @@ case_33d() {
     want_lj 1 "\"bypass_ok\":true"
     want_argv 2 --verbose --resume "$SID" --allow-dangerously-skip-permissions \
       --model "claude-opus-5-5[1m]" --effort high --permission-mode bypassPermissions
+    # The countdown names a relaunch into bypass.
+    want_err "$brand: restarting session xxxxxxxx on Claude Code 2.1.312 in 3 s, permission mode bypassPermissions (Ctrl+C stops it)"
     : >"$C/scenario"
   done
   rm -f "$C/runs" "$C/err" "$C"/run*.lj
   scen "1 exit 0"
   run_launcher -- --inherit-permission-mode bypassPermissions
   want_lj 1 "\"bypass_ok\":false"
+  # A repeated --permission-mode: the last one counts (commander keeps the last value).
+  rm -f "$C/runs" "$C/err" "$C"/run*.lj
+  : >"$C/scenario"
+  go_scen go-bypass.note
+  run_launcher -- --permission-mode bypassPermissions --permission-mode=default --verbose
+  want_lj 1 "\"bypass_ok\":false"
+  want_runs 1
+  refusal bypass
+  rm -f "$C/runs" "$C/err" "$C"/run*.lj
+  run_launcher -- --permission-mode default --permission-mode=bypassPermissions --verbose
+  want_lj 1 "\"bypass_ok\":true"
+  want_runs 2
   end_case
 }
 
@@ -578,6 +689,7 @@ case_34() {
   refused_note AT-RS-34s bad-nonce.note pattern
   refused_note AT-RS-34t bad-version.note pattern
   refused_note AT-RS-34u bad-cr.note pattern
+  refused_note AT-RS-34z bad-model-dash.note pattern
 
   new_case AT-RS-34v "a note in a state other than go relaunches nothing and says nothing" needs-pty
   for w_note in armed.note exiting.note cancelled.note; do
@@ -626,6 +738,24 @@ case_34() {
 case_35a() {
   new_case AT-RS-35a "Ctrl+C in the countdown: no relaunch, exit 130" needs-pty
   scen "1 sid" "1 note go.note" "1 bg-int 1" "1 exit 0"
+  run_launcher --
+  want_rc 130
+  want_runs 1
+  refusal cancelled
+  want_last_refusal cancelled
+  want_gone
+  end_case
+}
+
+case_35d() {
+  new_case AT-RS-35d "Ctrl+C right after claude exits, before the countdown line: no relaunch, exit 130" needs-pty
+  # A date that takes a second (first on PATH) holds the launcher in its checks after claude
+  # exits, so a SIGINT sent 0.3 s after the exit lands there, before the countdown. (Sent at
+  # the very instant of the reap it can land in the shell's own bookkeeping before the
+  # launcher's next command, where bash still runs the no-op trap of the child's run.)
+  printf '#!/bin/sh\nsleep 1\nexec /bin/date "$@"\n' >"$C/bin/date"
+  chmod 755 "$C/bin/date"
+  scen "1 sid" "1 note go.note" "1 int-at-exit 0.3" "1 exit 0"
   run_launcher --
   want_rc 130
   want_runs 1
@@ -762,6 +892,14 @@ case_38() {
   [ -x "$C/home/.local/bin/$brand-claude" ] || fail "nothing in ~/.local/bin"
   want_err "alias cl='$brand-claude'"
   end_case
+
+  new_case AT-RS-38d "--install run by its bare file name from its own folder (sh <name> --install)"
+  cp "$launcher" "$C/work/$brand-claude"
+  run_launcher --no-pty --self "$brand-claude" -- --install "$C/inst"
+  want_rc 0
+  cmp -s "$launcher" "$C/inst/$brand-claude" 2>/dev/null || fail "nothing installed, or a different file"
+  want_err "$brand: installed $C/inst/$brand-claude"
+  end_case
 }
 
 case_39() {
@@ -820,6 +958,37 @@ case_40() {
   fi
   run_launcher -- --verbose
   [ -n "$CSKIP" ] || want_passthrough "the runtime folder is not private (a symlink, another owner or not 0700)"
+  end_case
+
+  new_case AT-RS-40g "a runtime base others may write to without the sticky bit: pass-through; with it: arms" needs-pty
+  for w_m in 777 770 757; do
+    rm -rf "${C:?}/shared"
+    mkdir "$C/shared"
+    chmod "$w_m" "$C/shared"
+    rm -f "$C/runs" "$C/err"
+    run_launcher --env "TMPDIR=$C/shared" -- --verbose
+    want_passthrough "the runtime base is writable by others and not sticky"
+    [ ! -e "$C/shared/$brand-$uid" ] || fail "mode $w_m: a runtime folder was made in the shared base"
+  done
+  rm -rf "${C:?}/shared"
+  mkdir "$C/shared"
+  chmod 1777 "$C/shared"
+  rm -f "$C/runs" "$C/err"
+  scen "1 exit 0"
+  run_launcher --env "TMPDIR=$C/shared" -- --verbose
+  want_runs 1
+  want_val 1 launchset yes
+  end_case
+
+  new_case AT-RS-40h "Linux with getfacl: an ACL entry beyond user::, group::, other:: on the runtime folder: pass-through" needs-pty
+  run_launcher --stub-os --env STUB_UNAME=Linux --env "STUB_UID=$uid" --env "STUB_FACL=user:4242:rwx
+mask::rwx" -- --verbose
+  want_passthrough "the runtime folder is not private (a symlink, another owner or not 0700)"
+  rm -f "$C/runs" "$C/err"
+  scen "1 exit 0"
+  run_launcher --stub-os --env STUB_UNAME=Linux --env "STUB_UID=$uid" -- --verbose
+  want_runs 1
+  want_val 1 launchset yes
   end_case
 
   new_case AT-RS-40e "stale launch folders of dead launchers are swept; a live one is kept" needs-pty
@@ -888,7 +1057,7 @@ run_shell() {
   WS=$work/$T
   mkdir -p "$WS"
   N=0
-  for w_c in 30 30b 31a 31b 31c 31d 31e 32a 32b 33a 33b 33c 33d 34 35a 35b 35c 36a 36b 36c 37 38 39 40 43; do
+  for w_c in 30 30b 30c 31a 31b 31c 31d 31e 31f 32a 32b 32c 33a 33b 33c 33d 34 35a 35b 35c 35d 36a 36b 36c 37 38 39 40 43; do
     want_case "AT-RS-$w_c" || continue
     [ -z "$quick" ] || [ "$w_c" != 36c ] || continue
     "case_$w_c"
@@ -900,7 +1069,6 @@ run_shell() {
 echo "# launcher $launcher"
 echo "# shells: $(printf '%s' "$list" | tr '\n' ',' | sed 's/,$//')"
 [ -n "$have_pty" ] || echo "# no script(1): the cases that need a terminal are skipped"
-pids=
 IFS=$nl
 for s in $list; do
   IFS=$IFS_SAVE

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stub getfacl for tests/launcher/run.sh: for `-c -- DIR`, the three base entries of a folder
+# with no ACL, plus the lines of $STUB_FACL (newline-separated) when it is set.
+printf 'user::rwx\ngroup::---\nother::---\n'
+if [ -n "${STUB_FACL-}" ]; then
+  printf '%s\n' "$STUB_FACL"
+fi
+exit 0

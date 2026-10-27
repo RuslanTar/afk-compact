@@ -8,16 +8,26 @@
 #   <run> int-launcher       SIGINT to the launcher, then record whether it is still alive
 #   <run> selfint            record whether a child of this stub dies of SIGINT (default)
 #   <run> bg-int SECS        SIGINT to the launcher SECS seconds after this run ends
+#   <run> int-at-exit SECS   SIGINT to the launcher SECS seconds after it has reaped this run
+#   <run> usedlink           make <launch>/restart.used a symlink to the folder $STUB_DIR/elsewhere
 #   <run> term-launcher | hup-launcher   SIGTERM / SIGHUP to the launcher now
 #   <run> sleep SECS | exit CODE
 # Notes may hold @TOKEN@ and times filled at write time: @NOW@ (epoch s), @NOWMS@ (ms), @OLD@
 # and @OLDMS@ (200 s ago), @FUTURE@ and @FUTUREMS@ (60 s ahead), @LATEMS@ (10 s ago, in ms).
+# STUB_VARS (names, blank-separated): each run records the value claude got for each name, or
+# `unset`, in run<n>.vars (read first, before this stub sets any variable of its own).
+if [ -n "${STUB_VARS-}" ]; then
+  for stub_v in $STUB_VARS; do
+    eval "printf '%s=%s\n' \"\$stub_v\" \"\${$stub_v-unset}\""
+  done >"${STUB_DIR:?}/vars.tmp"
+fi
 D=${STUB_DIR:?STUB_DIR is not set}
 SID=00000000-0000-4000-8000-000000000000
 n=$(cat "$D/runs" 2>/dev/null) || n=0
 n=$((n + 1))
 echo "$n" >"$D/runs"
 printf '%s\n' "$@" >"$D/run$n.argv"
+[ ! -f "$D/vars.tmp" ] || mv -f "$D/vars.tmp" "$D/run$n.vars"
 eval "L=\${${STUB_LAUNCH_ENV:?}-}"
 eval "Lset=\${${STUB_LAUNCH_ENV}+yes}"
 if [ -t 0 ] && [ -t 1 ]; then tty=yes; else tty=no; fi
@@ -75,6 +85,14 @@ while read -r r act arg; do
     if [ -s "$D/run$n.selfint" ]; then echo "childint=ignored" >>"$D/run$n.env"; else echo "childint=default" >>"$D/run$n.env"; fi
     ;;
   bg-int) (sleep "$arg"; kill -INT "$lpid") </dev/null >/dev/null 2>&1 & ;;
+  int-at-exit)
+    # $$ is this stub, the launcher's child: SECS seconds after the launcher has reaped it.
+    (while kill -0 $$ 2>/dev/null; do sleep 0.01; done; sleep "$arg"; kill -INT "$lpid") </dev/null >/dev/null 2>&1 &
+    ;;
+  usedlink)
+    mkdir -p "$D/elsewhere"
+    ln -s "$D/elsewhere" "$L/restart.used"
+    ;;
   term-launcher) kill -TERM "$lpid" ;;
   hup-launcher) kill -HUP "$lpid" ;;
   sleep) sleep "$arg" ;;
