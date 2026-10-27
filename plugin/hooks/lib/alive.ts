@@ -13,6 +13,7 @@ import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
 import { ensureIdent, isoLocal, log, markHeadless } from './log'
 import { claimedElsewhere, logOutcome, settleRecords } from './resume'
 import { showNotice } from './notice'
+import { shadowPluginSide } from './shadow'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
   const p = await d.paths()
@@ -129,6 +130,7 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   s.idleAgain = undefined
   const h = s.handoffTurn
   s.handoffTurn = undefined
+  if (h && h.phase !== 'running') shadowPluginSide(d, h, 'cancelled')
   const pend = s.pending
   s.pending = undefined
   // A later `/resume` of a session id in this process looks for its armed record again.

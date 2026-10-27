@@ -14,12 +14,14 @@ import type { AssetName } from './assets.gen'
  * `idle` or `midturn`) and `idle-again` (owner xxxxxxxx-37: the block again on a person's return).
  * 2026-10-26: the resume block's `driver` (owner, GSD re-entry per session: kept only when the
  * re-measure names this session's `Active driver:`).
+ * 2026-10-27: `trial-tail` of the shadow trial's old-arm adapter (TRIAL-DUAL-HANDOFF §4.1: the last
+ * reply and a newly typed prompt, kept only when there is one).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  | 'driver'
+  | 'driver' | 'trial-tail'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
@@ -28,7 +30,9 @@ export type Runtime = Partial<Record<
   /** `storeWord()` of this plugin's launcher (PKG-RUNTIME A.2); the idle turn's minutes (IC-1 D5). */
   | 'store' | 'idle_min'
   /** Owner xxxxxxxx-37: when a background result's turn took the idle block (`[idle-again]`). */
-  | 'idle_used_at',
+  | 'idle_used_at'
+  /** The shadow trial's fork prompts (TRIAL-DUAL-HANDOFF §4.2): texts read at run time from the user's local files. */
+  | 'old_skill' | 'old_template' | 'trial_facts' | 'trial_tail',
   string
 >>
 

@@ -125,6 +125,12 @@ export interface Deps {
   agentsAlive(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
+  /**
+   * `$.model.fork({ prompt })`, the shadow trial's one model call (TRIAL-DUAL-HANDOFF §4.1): the
+   * engine's answer as given; rejects on a hook's `{ deny }`. Called only while the user's local
+   * trial config is on (shadow.ts).
+   */
+  fork(prompt: string): Promise<unknown>
 }
 
 /** What one module load keeps in memory (a reload starts a fresh one). */
@@ -516,6 +522,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       }
       return state.pathsMemo.then(p => withHelperWatch(p, state.ident))
     },
+    fork: prompt => $.model.fork({ prompt }),
   }
 }
 

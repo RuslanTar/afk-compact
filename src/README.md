@@ -472,9 +472,22 @@ Alerts are listed in `/{{plugin}}:status` with their seven-day counts. In this v
 
 Making a report deletes nothing and leaves the existing logs as they are.
 
+## A local comparison trial (off by default)
+
+The plugin can run a local comparison trial: at each handoff (and, when the file also turns them on, at each compaction) it asks Claude Code for up to two extra replies over the same conversation, one written to an older handoff instruction set and one to a compaction prompt, and saves both for a later side-by-side comparison with what the plugin wrote. It is off unless the file `~/.cache/{{plugin}}-trial/trial.json` exists and turns it on; there is no setting for it in `/config`. Without the file the plugin only checks, at each turn end, that it is still absent.
+
+While it is on:
+
+- **Up to two model calls at each moment**, through the session's own client and credentials, so they use the same allowance as the session; a call whose instruction text is missing locally is not made. Each call sends the conversation plus the facts the older instructions ask for: git branch, HEAD, recent log and diff stat, `.remember/now.md`, the queue list, the previous handoff in the same bucket in full, and the last reply. They do not show in the chat, no turn waits for them, and every tool is denied to them. The plugin's own handoff turn starts up to 3 seconds later while the facts for the first call are measured.
+- **Your texts, checked.** Both instruction texts are read from the paths the file names and checked against the sha256 sums it lists; the plugin ships neither.
+- **Local, redacted, content-free records.** The replies are secret-scanned and redacted, then saved under `~/.cache/{{plugin}}-trial/` (files 0600), with one record per moment. A record holds ids, times, hashes, sizes, statuses, token counts, the model and Claude Code version, the worktree path, branch, HEAD and dirty count, the repository and ticket bucket names, and the paths of the two saved replies; never their text. Nothing is written under the handoff root, and nothing leaves your machine except the two calls above.
+- **Skips.** A moment is skipped, with one record, when a rate-limit window is at 90% or more, when no window is known, when the conversation's last request is more than 58 minutes old (its prompt cache would be cold), on a Claude Code version the file does not list, in a repository the file's skip-list names, at a compaction while the file leaves compactions off, and in a session that runs with another `CLAUDE_CONFIG_DIR` or other handoff and log folders than the file pins.
+
+To turn it off, delete the file or set `"on": false` in it; a change takes effect from the end of the current turn. The trial also ends by itself after its `trial_until` date.
+
 ## Privacy
 
-- **Local only.** No network calls and no telemetry. The watcher reads OpenTelemetry output only from a file you already write and name in `otel_log_path`. A report is a zip on your disk; whether you send it is up to you (see [Sending a report](#sending-a-report)).
+- **Local only.** No network calls and no telemetry. The watcher reads OpenTelemetry output only from a file you already write and name in `otel_log_path`. A report is a zip on your disk; whether you send it is up to you (see [Sending a report](#sending-a-report)). The comparison trial, off by default, makes its model calls through Claude Code (see [A local comparison trial](#a-local-comparison-trial-off-by-default)).
 - **Content-free logs.** Log rows never store summary or handoff text, your or the model's messages, commands, file contents, permission-denial reasons, environment values or secrets. An unknown value is logged as the class `other`. The one file with command text is the job record (`jobs.jsonl`), which the plugin needs to start a lost job again byte for byte. A command with a hard secret hit is stored as a hash and rule ids only; a command with only a weaker hit (such as `password=…`) is stored as typed and can appear in a published restart recipe. See [Lost background jobs](#lost-background-jobs).
 - **In-process reading.** Summaries, transcript rows and commands are read in memory to compute classes and counts, then dropped.
 - **Secrets.** Summary copies with a hard secret hit are saved redacted. Evidence files that look like credentials (`.env`, keys, `.netrc` and similar) are withheld; logs and JSON with a hit are copied redacted; other files with a hard hit are withheld. Only rule ids are logged, never values. `/{{plugin}}:handoff` scans its draft before publishing.

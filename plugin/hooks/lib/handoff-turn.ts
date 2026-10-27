@@ -19,6 +19,7 @@ import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
 import { storeRuntime } from './resume'
 import { IDLE_MIN_TEXT, gapSeconds, submitDropped } from './idle'
+import { shadowPluginSide, shadowPrepM2, shadowPresent, shadowStartM2 } from './shadow'
 
 /** Why a cycle will not auto-continue (the `handoff-turn open --reason` values of a last cycle). */
 export type HaltReason = '2-nonok' | 'thrash' | 'cap' | 'continue-off'
@@ -123,6 +124,11 @@ export type HandoffTurn = {
   firstReadShare?: number | null
   /** `@idle_min@` of a pre-idle turn: 49, or 55 when the 55.5-min outcome check runs it (owner xxxxxxxx-17). */
   idleMin?: string
+  /**
+   * The shadow trial's forks fired for this planned turn (TRIAL-DUAL-HANDOFF §4.1): kept on the
+   * turn, not its ht, so a re-run after a dropped submit (a new ht) fires nothing more.
+   */
+  shadowFired?: boolean
 }
 
 /**
@@ -274,17 +280,28 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   // IC-1 D7 (ii): the session this turn was planned for is still the one running (a `/clear`
   // in the delay leaves it to the old conversation): else nothing is submitted, and nothing
   // compacts in its place.
-  if ((await d.sessionId()) !== sid) {
+  const otherSession = async (ht: string): Promise<boolean> => {
+    if ((await d.sessionId()) === sid) return false
     if (s.handoffTurn === h) s.handoffTurn = undefined
+    shadowPluginSide(d, h, 'cancelled')
     await submitDropped(d, sid, 'handoff-turn')
-    await handoffTurnClose(d, sid, opened, 'cancelled')
+    await handoffTurnClose(d, sid, ht, 'cancelled')
     return true
   }
+  if (await otherSession(opened)) return true
+  // The shadow trial (off without its local config): the capped facts measure, before the last
+  // check below, so a user prompt that comes during it still wins there (TRIAL-DUAL-HANDOFF §4.1).
+  // While the trial config is there the measure can take up to 3 s, so D7 (ii) runs once more.
+  const trial = shadowPresent(d)
+  const shadow = await shadowPrepM2(d, sid, h, opened)
+  if (trial && (await otherSession(opened))) return true
   if (cancelled()) {
     await handoffTurnClose(d, sid, opened, 'cancelled')
     return true
   }
   // No await between the check above and the submit call: a user turn that started meanwhile wins.
+  // The shadow forks start here, not awaited, from the same prefix as this turn.
+  shadowStartM2(d, h, shadow, opened)
   h.phase = 'submitted'
   submitPending(s, text)
   s.handoffSubmitting = true
@@ -303,11 +320,13 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
       }
       return true
     }
+    shadowPluginSide(d, h, 'cancelled')
     await skipped(d, sid, 'submit-failed', opened, h.reason)
     await handoffTurnClose(d, sid, opened, 'cancelled')
     return false
   }
   s.handoffSubmitting = false
+  shadowPluginSide(d, h, 'submitted')
   return true
 }
 
@@ -364,6 +383,7 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
   }
   if (!ours) {
     s.handoffTurn = undefined
+    shadowPluginSide(d, h, 'cancelled')
     await skipped(d, sid, 'user-turn', h.ht, h.reason)
     // CR-F17: a user prompt that entered beside our submit started first. Our prompt is still
     // queued and starts after it (it is still ours: claimTurn kept it pending), where it is
@@ -544,5 +564,6 @@ export async function raceBlock(d: Deps, st: HandoffState): Promise<RaceBlock> {
 export async function dropDeferred(d: Deps, sid: string, h: HandoffTurn): Promise<void> {
   if (d.state.handoffTurn !== h) return
   d.state.handoffTurn = undefined
+  shadowPluginSide(d, h, 'cancelled')
   await skipped(d, sid, 'user-turn', h.ht, h.reason)
 }

@@ -988,5 +988,56 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   "stdout": [
    "ok\n"
   ]
+ },
+ {
+  "name": "trial-measure-absent",
+  "argv": [
+   [
+    "trial-measure"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--budget-ms"
+   ],
+   [
+    "7500"
+   ],
+   [
+    "--cc-version"
+   ],
+   [
+    "2.1.306"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "{\"state\":\"absent\",\"why\":null}\n"
+  ]
+ },
+ {
+  "name": "trial-save-absent",
+  "argv": [
+   [
+    "trial-save"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "{\"why\":\"absent\",\"written\":false}\n"
+  ],
+  "stdin": [
+   "{\"kind\":\"skip\",\"moment_id\":\"5e55a001-1a2b3c4d\",\"moment\":{\"kind\":\"m3-auto\",\"status\":\"skipped:cold\"}}\n"
+  ]
  }
 ]

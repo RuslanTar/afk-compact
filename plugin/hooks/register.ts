@@ -12,6 +12,7 @@ import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { blockName, contextBlock } from './lib/resume'
+import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 
 export const register: Register = (on, options) => {
   const state = newState(randomHex(8))
@@ -47,14 +48,26 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (e.agentId !== undefined) return r
     const d = realDeps($, options, state)
-    await onTurnComplete(d, await prepare(d), { reason: e.reason, answer: e.answer })
+    const sid = await prepare(d)
+    await onTurnComplete(d, sid, { reason: e.reason, answer: e.answer })
+    // The shadow trial: started, not awaited, after the plugin's own turn end (one `fs.exists`
+    // without its local config).
+    shadowTurnEnd(d, sid, e.answer)
     return r
   }).catch(($, e, next) => next(e))
 
   // MG-3 (ratify R4 guard): the handoff turn's first request reports its cache-read share. The
   // step passes through unchanged (model, effort and all); only its result is read, after it.
   // Nothing after the stream may throw: a failure there would hand the step to `.catch`.
+  // The shadow trial stamps a main step's start for its cold rule (nothing without its config).
   on('turn.step', async function* ($, e, next) {
+    if (e.agentId === undefined) {
+      try {
+        shadowStep(state, () => realDeps($, options, state))
+      } catch {
+        // the trial never changes a step
+      }
+    }
     const r = yield* next(e)
     try {
       if (e.agentId === undefined) onStep(realDeps($, options, state), e.turnId, e.index, r.usage)
@@ -82,6 +95,11 @@ export const register: Register = (on, options) => {
       promptEntering(state, kind)
       // §9.4: a prompt entering cancels the pre-idle timer.
       cancelIdleTimer(realDeps($, options, state))
+    }
+    // The shadow trial's M1 moment for this plugin's typed handoff command, before its turn
+    // starts; off (one cheap test) without the local trial config.
+    if (!own && e.command?.name === $.plugin.name + ':handoff') {
+      await shadowOwnerHandoff(realDeps($, options, state), e.command.args, e.text)
     }
     let r
     try {
@@ -119,6 +137,9 @@ export const register: Register = (on, options) => {
     // wait for the helper (one spawn per new path), and nothing is recorded with auto_evidence off.
     if (d.cfg.auto_evidence) trackPaths(state, recordPaths(d, sid, tool, input))
     countCall(d)
+    // The shadow trial's M1 moment for a model-called handoff skill (a name test first; off
+    // without the local trial config).
+    if (tool === 'Skill') await shadowSelfHandoff(d, sid, tool, input)
     let r
     try {
       r = await next(e)
