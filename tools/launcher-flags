@@ -1,0 +1,203 @@
+#!/usr/bin/python3
+"""tools/launcher-flags: check the restart launcher's flag table against `claude --help`
+(SESSION-RESTART §3.3).
+
+Usage: tools/launcher-flags [--claude BIN | --help-file FILE] [--list]
+  The table is the rows of src/claude-launcher.tmpl between `# flag table begin` and
+  `# flag table end` (`<flag>[|<alias>]) c=<class> a=<arity> [f=<file kind>] ;;`), and the
+  subcommand rows between `# subcommand table begin` and `# subcommand table end`.
+  The help text comes from BIN --help: by default the newest version in
+  ~/.local/share/claude/versions/ (as tools/canary-baseline picks it), else `claude` on PATH.
+  Every visible option and command of the help must be in the table, with the arity the help
+  shows (`<v>` val, `<v...>` var, `[v]` opt, none). Hidden flags (in the table only) are fine:
+  the launcher passes any flag it does not know through, which is the safe side.
+  Findings, one line each:
+    LAUNCHER-FLAGS missing <flag>
+    LAUNCHER-FLAGS arity <flag>: table <a>, help <b>
+    LAUNCHER-FLAGS split <flag>: its aliases sit in different rows
+    LAUNCHER-FLAGS missing command <name>
+    LAUNCHER-FLAGS row <line>: <problem>     a malformed row, a duplicate, an unknown class
+  --list  print the parsed table and help instead.
+  Exit: 0 PASS, 1 a finding, 2 no table or no help text.
+"""
+import os, re, shutil, subprocess, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+TEMPLATE = "src/claude-launcher.tmpl"
+CLASSES = {"keep", "state", "drop", "refuse"}
+ARITIES = {"none", "val", "opt", "var"}
+FILE_KINDS = {"file", "json"}
+ROW = re.compile(r"^\s*(\S+)\)\s+c=(\w+)\s+a=(\w+)(?:\s+f=(\w+))?\s*;;\s*$")
+FLAG = re.compile(r"^--?[A-Za-z][A-Za-z0-9-]*$")
+SUB_ROW = re.compile(r"^\s*([a-z][a-z0-9|-]*)\)\s+return 0\s*;;\s*$")
+
+
+def die(msg):
+    print("launcher-flags: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def block(lines, name):
+    """(line number, text) of the lines between `# <name> begin` and `# <name> end`."""
+    begin = end = None
+    for i, ln in enumerate(lines):
+        if ln.strip() == "# {} begin".format(name):
+            begin = i
+        elif ln.strip() == "# {} end".format(name):
+            end = i
+    if begin is None or end is None or end < begin:
+        die("{} has no `# {} begin` ... `# {} end` block".format(TEMPLATE, name, name))
+    return [(i + 1, lines[i]) for i in range(begin + 1, end)]
+
+
+def read_table():
+    with open(os.path.join(REPO, TEMPLATE), encoding="utf-8") as f:
+        lines = f.read().split("\n")
+    rows, findings, where = [], [], {}
+    for no, ln in block(lines, "flag table"):
+        if not ln.strip() or ln.strip().startswith("#"):
+            continue
+        m = ROW.match(ln)
+        if not m:
+            findings.append("row {}: not `<flags>) c=<class> a=<arity> [f=<kind>] ;;`: {}".format(no, ln.strip()))
+            continue
+        flags, cls, ar, fk = m.group(1).split("|"), m.group(2), m.group(3), m.group(4)
+        if cls not in CLASSES:
+            findings.append("row {}: unknown class c={}".format(no, cls))
+        if ar not in ARITIES:
+            findings.append("row {}: unknown arity a={}".format(no, ar))
+        if fk is not None and (fk not in FILE_KINDS or cls != "keep" or ar not in ("val", "var")):
+            findings.append("row {}: f={} needs c=keep and a=val or a=var".format(no, fk))
+        for fl in flags:
+            if not FLAG.match(fl):
+                findings.append("row {}: not a flag: {}".format(no, fl))
+            if fl in where:
+                findings.append("row {}: {} is also in row {}".format(no, fl, where[fl]))
+            where[fl] = no
+        rows.append({"line": no, "flags": flags, "class": cls, "arity": ar, "file": fk})
+    subs = set()
+    for no, ln in block(lines, "subcommand table"):
+        if not ln.strip() or ln.strip().startswith("#"):
+            continue
+        m = SUB_ROW.match(ln)
+        if not m:
+            findings.append("row {}: not `<names>) return 0 ;;`: {}".format(no, ln.strip()))
+            continue
+        subs.update(m.group(1).split("|"))
+    return rows, subs, findings
+
+
+def newest_claude():
+    vdir = os.path.expanduser("~/.local/share/claude/versions")
+    vers = [v for v in os.listdir(vdir) if re.match(r"^\d+\.\d+\.\d+$", v)] if os.path.isdir(vdir) else []
+    vers.sort(key=lambda v: [int(x) for x in v.split(".")])
+    if vers:
+        return os.path.join(vdir, vers[-1])
+    return shutil.which("claude")
+
+
+def help_text(binary, help_file):
+    if help_file:
+        with open(help_file, encoding="utf-8") as f:
+            return f.read(), help_file
+    binary = binary or newest_claude()
+    if not binary:
+        die("no Claude Code binary (install it, or pass --claude BIN or --help-file FILE)")
+    try:
+        r = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        die("{} --help failed: {}".format(binary, e))
+    if r.returncode != 0 or "Options:" not in r.stdout:
+        die("{} --help: exit {}, no Options: section".format(binary, r.returncode))
+    return r.stdout, binary
+
+
+def parse_help(text):
+    """[(flags, arity)] of the Options: section and the names of the Commands: section."""
+    options, commands, section = [], set(), None
+    for ln in text.split("\n"):
+        if re.match(r"^\S", ln):
+            section = ln.strip().rstrip(":") if ln.strip().endswith(":") else None
+            continue
+        m = re.match(r"^  (\S.*?)(?:\s{2,}|$)", ln)
+        if not m:
+            continue
+        sig = m.group(1).strip()
+        if section == "Options" and sig.startswith("-"):
+            cut = min([i for i in (sig.find("<"), sig.find("[")) if i >= 0] or [len(sig)])
+            flags = [t.strip(",") for t in sig[:cut].split() if t.strip(",")]
+            arg = sig[cut:].strip()
+            if not arg:
+                arity = "none"
+            elif arg.startswith("<"):
+                arity = "var" if "..." in arg else "val"
+            else:
+                arity = "opt"
+            options.append((flags, arity))
+        elif section == "Commands":
+            first = sig.split()[0]
+            commands.update(first.split("|"))
+    return options, commands
+
+
+def main(argv):
+    binary = help_file = None
+    listing = False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--claude" and i + 1 < len(argv):
+            binary = argv[i + 1]
+            i += 1
+        elif a == "--help-file" and i + 1 < len(argv):
+            help_file = argv[i + 1]
+            i += 1
+        elif a == "--list":
+            listing = True
+        else:
+            die("unknown argument {}\n{}".format(a, __doc__))
+        i += 1
+    rows, subs, findings = read_table()
+    text, source = help_text(binary, help_file)
+    options, commands = parse_help(text)
+    if not options:
+        die("no options found in the help text of " + source)
+    if listing:
+        for r in rows:
+            print("table {:8} {:5} {:5} {}".format(r["class"], r["arity"], r["file"] or "", "|".join(r["flags"])))
+        for flags, arity in options:
+            print("help  {:5} {}".format(arity, "|".join(flags)))
+        print("commands: " + " ".join(sorted(commands)))
+        print("table subcommands: " + " ".join(sorted(subs)))
+        return 0
+    by_flag = {}
+    for r in rows:
+        for fl in r["flags"]:
+            by_flag[fl] = r
+    for flags, arity in options:
+        seen = [by_flag.get(fl) for fl in flags]
+        for fl, r in zip(flags, seen):
+            if r is None:
+                findings.append("missing " + fl)
+            elif r["arity"] != arity:
+                findings.append("arity {}: table {}, help {}".format(fl, r["arity"], arity))
+        known = [r["line"] for r in seen if r is not None]
+        if len(set(known)) > 1:
+            findings.append("split {}: its aliases sit in different rows".format(flags[0]))
+    for cmd in sorted(commands):
+        if cmd not in subs:
+            findings.append("missing command " + cmd)
+    for f in findings:
+        print("LAUNCHER-FLAGS " + f)
+    ver = os.path.basename(source) if re.match(r"^\d+\.\d+\.\d+$", os.path.basename(source)) else source
+    if findings:
+        print("LAUNCHER-FLAGS: FAIL ({} findings; claude {})".format(len(findings), ver))
+        return 1
+    print("LAUNCHER-FLAGS: PASS ({} help options and {} commands in the table of {} rows; claude {})".format(
+        len(options), len(commands), len(rows), ver))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
