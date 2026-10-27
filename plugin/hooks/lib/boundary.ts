@@ -244,41 +244,60 @@ async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void
  * also marks the load headless: no nudge or plugin compaction follows in it. Reconcile and the
  * watcher's A-17 take such a row as the dispatch's outcome: not unresolved, not `no-after`.
  */
-export async function compactRejected(d: Deps, sid: string, nonce: string, err: unknown): Promise<void> {
+export async function compactRejected(d: Deps, sid: string, nonce: string, err: unknown): Promise<ReturnType<typeof rejectClass>> {
   const error = rejectText(err)
   const errorClass = rejectClass(error)
   await log(d, sid, 'compact_rejected', { nonce, attempt: 1, error_class: errorClass, error })
   if (errorClass === 'headless') await markHeadless(d, sid, 'compact-rejected')
+  return errorClass
 }
 
-/** `nativeCheck` with its rows; true when the compaction is not run now. */
-async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<boolean> {
+/** `nativeCheck` with its rows: `ran` (a native compaction ran since), `wait`, or undefined (go on). */
+async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<'wait' | 'ran' | undefined> {
   const c = nativeCheck(d, opts)
   if (c === 'ran') await nativeRan(d, sid, opts)
-  return c !== undefined
+  return c
 }
+
+/**
+ * D13: how one `boundary()` call went. `ran: false` with the reason when it stopped before a
+ * compaction was asked for (`compact-off`, `busy`, `asks-user`, `halted`, `compacted` when a
+ * native one ran instead, `small-window`, `cooldown`, `small`); `ran: true` once
+ * `$.session.compact` or the `/compact` command was called, `ok` when it compacted through the
+ * plugin, else a `failClass`: `skipped`, a rejection class (`turn-running`, `headless`, `other`)
+ * or the `compact_command` result (`failed`, `unclaimed`, `rejected`). The idle timer logs a
+ * refusal and counts failures from it (idle.ts); the other callers ignore it.
+ */
+export type BoundaryResult = { ran: false; why: string } | { ran: true; ok: boolean; failClass?: string }
+
+const stopped = (c: 'wait' | 'ran'): BoundaryResult => ({ ran: false, why: c === 'ran' ? 'compacted' : 'busy' })
 
 /**
  * MOD-SPEC §4: one plugin compaction at a clean turn end, then the after-step and continue.
  * After a handoff turn (§9.1) it runs despite halt and cooldown, with `[handoff]` when the
- * handoff was published, and no continue follows. The idle compaction while agents run
- * (owner 2026-10-27, idle.ts) skips the cooldown and the target, and no continue follows either.
+ * handoff was published, and no continue follows. An idle compaction (owner 2026-10-27, and the
+ * plugin's own idle compaction, idle.ts) skips the cooldown and the target, and no continue
+ * follows either. Says how it went (BoundaryResult, D13).
  */
-export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> {
+export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<BoundaryResult> {
   const s = d.state
   const ah = opts.afterHandoff
   const idle = opts.idle
-  if (pluginCompactOff(s) || s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
+  if (pluginCompactOff(s)) return { ran: false, why: 'compact-off' }
+  if (s.busy || s.mainTurnRunning) return { ran: false, why: 'busy' }
+  if (s.askOpen > 0) return { ran: false, why: 'asks-user' }
+  if (s.halt.active && !opts.exemptHalt) return { ran: false, why: 'halted' }
   // No await before this check, so a native compaction's end cannot slip past unseen.
-  if (nativeCheck(d, opts) === 'wait') return
+  if (nativeCheck(d, opts) === 'wait') return stopped('wait')
   const sid = await d.sessionId()
-  if (await stopForNative(d, sid, opts)) return
+  const first = await stopForNative(d, sid, opts)
+  if (first !== undefined) return stopped(first)
   const eff = await effective(d, sid)
-  if (eff.disabled) return
+  if (eff.disabled) return { ran: false, why: 'small-window' }
   const now = await d.now()
-  if (!ah && !idle && s.lastPluginCompactAt !== undefined && now - s.lastPluginCompactAt < d.cfg.cooldown_ms) return
+  if (!ah && !idle && s.lastPluginCompactAt !== undefined && now - s.lastPluginCompactAt < d.cfg.cooldown_ms) return { ran: false, why: 'cooldown' }
   const tokens = (await d.usage()).tokens
-  if (!ah && !idle && (tokens === undefined || tokens < eff.target)) return
+  if (!ah && !idle && (tokens === undefined || tokens < eff.target)) return { ran: false, why: 'small' }
   s.busy = true
   try {
     let nonce: string
@@ -312,9 +331,10 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
       // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
       // reuses this checkpoint.
-      if (await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })) {
+      const again = await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })
+      if (again !== undefined) {
         s.nudgeNonce = named
-        return
+        return stopped(again)
       }
       s.selfNonces.add(nonce)
       await writeDispatch(d, {
@@ -337,28 +357,28 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     const late = nativeCheck(d, withRecord)
     if (late !== undefined) {
       if (late === 'ran') await nativeRan(d, sid, withRecord)
-      return
+      return stopped(late)
     }
     const run: SelfRun = { nonce, pref, t0, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
     // Headless: `$.session.compact` always rejects there; the compaction runs as `/compact`.
     if (s.headless) {
-      await commandCompact(d, sid, run, text)
-      return
+      const result = await commandCompact(d, sid, run, text)
+      return result === 'compacted' ? { ran: true, ok: true } : { ran: true, ok: false, failClass: result }
     }
     let r
     startShadow(d, shadow)
     try {
       r = await d.compact(text)
     } catch (err) {
-      await compactRejected(d, sid, nonce, err)
-      return
+      return { ran: true, ok: false, failClass: await compactRejected(d, sid, nonce, err) }
     }
-    if (!(await settleSelf(d, sid, run, r))) return
+    if (!(await settleSelf(d, sid, run, r))) return { ran: true, ok: false, failClass: 'skipped' }
     // Like Claude Code's own idle compaction, the plugin's sends nothing after it: the resume
     // block waits for the next turn (a background result or the person's return).
     if (!idle) await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.
     if (s.pending && s.pending.nonce === nonce) s.pending.outcome.halt = s.halt.active
+    return { ran: true, ok: true }
   } finally {
     s.busy = false
   }
@@ -422,7 +442,7 @@ export const COMMAND_FAILS_MAX = 2
  * retry at once; one that cannot work later in the load (`no-command`, `input-ended`), or the
  * second in a row, turns the path off (`compactOff`).
  */
-async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string): Promise<void> {
+async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string): Promise<string> {
   const s = d.state
   const own: OwnCompact = {
     nonce: run.nonce, text, pref: run.pref, t0: run.t0, claimed: false,
@@ -440,7 +460,7 @@ async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string):
     if (s.ownCompact === own) s.ownCompact = undefined
     ownRuns.delete(own)
   }
-  await commandOutcome(d, sid, own, out)
+  return commandOutcome(d, sid, own, out)
 }
 
 /**
@@ -453,12 +473,12 @@ async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string):
  * `unclaimed` (it compacted without reaching our hook as ours: unshaped, no after-step), and
  * `rejected` (the call rejected) with the class and the text.
  */
-export async function commandOutcome(d: Deps, sid: string, own: OwnCompact, out: CommandOut): Promise<void> {
+export async function commandOutcome(d: Deps, sid: string, own: OwnCompact, out: CommandOut): Promise<string> {
   const s = d.state
   if (own.claimed && own.result !== undefined && own.result.skip === undefined) {
     s.commandFails = 0
     await log(d, sid, 'compact_command', { nonce: own.nonce, result: 'compacted', error_class: null, error: null })
-    return
+    return 'compacted'
   }
   const rejected = 'rejected' in out
   const failText = rejected ? rejectText(out.rejected) : out.text !== undefined ? rejectText(out.text) : undefined
@@ -480,6 +500,7 @@ export async function commandOutcome(d: Deps, sid: string, own: OwnCompact, out:
   s.commandFails++
   const cls = row.error_class
   if (cls === 'no-command' || cls === 'input-ended' || s.commandFails >= COMMAND_FAILS_MAX) await compactOff(d, sid)
+  return row.result
 }
 
 /** What `$.command.run` answered: the command's output text, or the call's rejection. */

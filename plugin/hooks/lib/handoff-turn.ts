@@ -168,9 +168,16 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
   return (await recentTurns(d, sid, await d.now())).length < PER_HOUR
 }
 
-/** One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`). */
-export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason): Promise<void> {
-  await log(d, sid, 'handoff_skipped', { why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}) })
+/**
+ * One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`).
+ * An idle timer's row also names its kind (`turn`, `check`, `compact`) and, when it fired late,
+ * by how many seconds (`late_s`).
+ */
+export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number } = {}): Promise<void> {
+  await log(d, sid, 'handoff_skipped', {
+    why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}),
+    ...(extra.kind !== undefined ? { kind: extra.kind } : {}), ...(extra.late_s !== undefined ? { late_s: extra.late_s } : {}),
+  })
 }
 
 export function newTurn(reason: TurnReason, tokens: number, allowance: number, native: number, maxCalls: number): HandoffTurn {

@@ -13,7 +13,7 @@ import { SID_A, SID_B, World, markerNonce, raiseCompact } from './harness.test'
 
 const HEADLESS_ERR = 'session.compact is not available in a headless (-p / SDK) session yet'
 const MIN = 60000
-const LIMITS = [{ percentUsed: 12 }, { percentUsed: 30 }]
+const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
 
 test('AT-HL-01: rejectText keeps Claude Code\'s error on one line, at most 160 characters; rejectClass names headless, turn-running, other', () => {
   expect(rejectText(new Error('line one\n\tline\u0007 two  '))).toBe('line one line two')

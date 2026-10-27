@@ -108,8 +108,13 @@ export class World {
   submitOrigins: unknown[] = []
   /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
   compactGate: Promise<void> | undefined
-  /** `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). */
-  rateLimits: { percentUsed: number }[] = []
+  /**
+   * `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). Only a
+   * `five_hour` or `seven_day` window shows the one-hour cache (D15); a window without a kind is none.
+   */
+  rateLimits: { kind?: string; percentUsed: number }[] = []
+  /** Environment variables the plugin reads beside HOME (`$.env.get`), read when asked. */
+  env: Record<string, string> = {}
   /** `$.session.model()` (MG-4); undefined: the call rejects. */
   model: string | undefined = 'claude-test-model'
   /** MG-2 spy: the argument keys of every `session.compact` and `prompt.submit` reaching the bottom. */
@@ -134,8 +139,21 @@ export class World {
   install(on: On, store: Record<string, unknown> = {}): this {
     const world = this
     this.clock = mock.clock(on, { now: T0 })
-    mock.store(on, store)
-    mock.env(on, { HOME })
+    // The plugin's store, kept here as mock.store keeps it (JSON values), so a test can write a key
+    // as another process would (`storeSet`) and read what it holds (`storeGet`).
+    for (const [k, v] of Object.entries(store)) this.storeMem.set(k, json(v))
+    on('store.get', (_$, e) => ({ value: json(this.storeMem.get(e.key)) }))
+    on('store.set', (_$, e) => {
+      this.storeMem.set(e.key, json(e.value))
+      return { value: undefined }
+    })
+    on('store.delete', (_$, e) => {
+      this.storeMem.delete(e.key)
+      return { value: undefined }
+    })
+    on('store.keys', () => ({ value: [...this.storeMem.keys()] }))
+    // The environment the plugin reads: HOME, and the test's own variables, read when asked.
+    on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? HOME : this.env[e.name] }))
     on('session.id', () => ({ value: this.sid }))
     on('session.usage', () => ({ value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window } } }))
     on('session.version', () => ({ value: this.version }))
@@ -223,6 +241,8 @@ export class World {
     on('turn.start', (_$, e) => ({ turnId: e.turnId }))
     on('turn.complete', () => ({ text: '' }))
     on('prompt.context', (_$, e) => ({ blocks: e.blocks }))
+    on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
+    on('prompt.change', (_$, e) => ({ text: e.text }))
     on('tool.call', (_$, e) => this.toolAnswer(String(e.tool)) as never)
     return this
   }
@@ -238,6 +258,31 @@ export class World {
   }
 
   private turnNo = 0
+
+  /** The person types one character into the prompt box (`prompt.edit`, D11; the kit raises it, its 2.1.305 types do not list it). */
+  async edit($: Engine): Promise<void> {
+    await (($ as unknown as PromptBoxEngine).prompt.edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: 'x' }))
+  }
+
+  /** The prompt box changes by `origin` (`history`, `clear`, `undo`, `engine`, `plugin`, `app`; D11). */
+  async change($: Engine, origin: string): Promise<void> {
+    const o = origin === 'plugin' ? { kind: 'plugin', name: 'other' } : { kind: origin }
+    await (($ as unknown as PromptBoxEngine).prompt.change({ text: 'an earlier prompt', cursor: 0, origin: o }))
+  }
+
+  /** The plugin's `$.store` (one file for every process in real life). */
+  private storeMem = new Map<string, unknown>()
+
+  /** Another process writes this key of the shared store (undefined: removes it). */
+  storeSet(key: string, value: unknown): void {
+    if (value === undefined) this.storeMem.delete(key)
+    else this.storeMem.set(key, json(value))
+  }
+
+  /** The key as the shared store holds it now (undefined: unset). */
+  storeGet(key: string): unknown {
+    return json(this.storeMem.get(key))
+  }
 
   /** A main turn starts (a user prompt, or our own continue when `text` says so). */
   async turnStart($: Engine, text = 'next step please'): Promise<void> {
@@ -468,6 +513,14 @@ export class World {
     await this.settle()
   }
 }
+
+/** A store value as `$.store` keeps it: `JSON.parse(JSON.stringify(value))`. */
+function json(v: unknown): unknown {
+  return v === undefined ? undefined : JSON.parse(JSON.stringify(v))
+}
+
+/** The prompt-box events the kit raises (Claude Code 2.1.311) beyond the 2.1.305 `Engine` type. */
+type PromptBoxEngine = { prompt: { edit: (e: unknown) => Promise<unknown>; change: (e: unknown) => Promise<unknown> } }
 
 /** The nonce of the last marker of ours in instruction text. */
 export function markerNonce(w: World, text: string | undefined): string | undefined {

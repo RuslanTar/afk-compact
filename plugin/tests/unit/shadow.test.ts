@@ -13,7 +13,7 @@ import { HOME, SID_A, SID_B, World, raiseCompact } from './harness.test'
 
 const OLD = hasAsset('trial-old-handoff')
 const PRE = hasTag('handoff-turn', 'submit-pre')
-const LIMITS = [{ percentUsed: 12 }, { percentUsed: 30 }]
+const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
 const USAGE = { input_tokens: 900, output_tokens: 2500, cache_read_input_tokens: 300000, cache_creation_input_tokens: 100 }
 const HEAD = 'ENGINE-HEAD: summarise the conversation.'
 const TAIL = '\nENGINE-TAIL: text only.'
@@ -192,7 +192,7 @@ test('AT-DH-08: guards cover both forks with one record each: no limits, a windo
   await turn($, w)
   w.rateLimits = []
   await raiseCompact($, { trigger: 'manual' })
-  w.rateLimits = [{ percentUsed: 10 }, { percentUsed: 90 }]
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 10 }, { kind: 'seven_day', percentUsed: 90 }]
   await raiseCompact($, { trigger: 'manual' })
   w.rateLimits = LIMITS
   await w.advance(58 * 60000 + 1000)

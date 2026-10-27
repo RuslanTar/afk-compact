@@ -18,7 +18,50 @@ export type RunResult = {
   error: string
 }
 
-export type Usage = { tokens: number | undefined; window: number; rateLimits: { percentUsed: number }[] }
+/**
+ * `rateLimits` keeps each window's `kind` (`five_hour`, `seven_day`, a gateway's `spend_limit`;
+ * `''` when the engine gave none): only a plan window is evidence of the one-hour cache (D15).
+ */
+export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number }[] }
+
+/** Claude Code's own native idle compaction as the merged settings and its environment say (§1.1). */
+export type NativeIdle = 'on' | 'vetoed' | 'compaction-off' | 'unknown'
+
+/**
+ * The environment the idle timers read once per load (§5): Claude Code's own
+ * `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (`compactMin`, as native parses it), the test seam
+ * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined) and the `DISABLE_PROMPT_CACHING*`
+ * names native's cache check reads (`cacheOff`).
+ */
+export type IdleEnv = { compactMin: number; cacheS: number | undefined; cacheOff: boolean }
+
+/** Native `IXt`: no idle compaction below this context size by default, and never below the floor. */
+export const IDLE_COMPACT_MIN_DEFAULT = 200000
+export const IDLE_COMPACT_MIN_FLOOR = 100000
+/** D10: the test seam's bounds, in seconds of a simulated prompt-cache hour. */
+export const IDLE_CACHE_S_MIN = 120
+export const IDLE_CACHE_S_MAX = 3600
+
+/** An environment flag as Claude Code reads one: trimmed, case-folded `1`, `true`, `yes` or `on`. */
+export function envTruthy(v: string | undefined): boolean {
+  return v !== undefined && ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase())
+}
+
+/** `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (native `IXt`): a positive integer gives max(100,000, v), else 200,000. */
+export function compactMinOf(v: string | undefined): number {
+  const t = (v ?? '').trim()
+  if (!/^[0-9]+$/.test(t)) return IDLE_COMPACT_MIN_DEFAULT
+  const n = Number(t)
+  return Number.isSafeInteger(n) && n > 0 ? Math.max(IDLE_COMPACT_MIN_FLOOR, n) : IDLE_COMPACT_MIN_DEFAULT
+}
+
+/** `STORE_TEST_IDLE_CACHE_S` (D10): an integer from 120 to 3600, else undefined (ignored). */
+export function cacheSOf(v: string | undefined): number | undefined {
+  const t = (v ?? '').trim()
+  if (!/^[0-9]+$/.test(t)) return undefined
+  const n = Number(t)
+  return n >= IDLE_CACHE_S_MIN && n <= IDLE_CACHE_S_MAX ? n : undefined
+}
 
 /** The four token counts of one model request (`ModelUsage`), as far as this module reads them. */
 export type RequestUsage = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
@@ -106,6 +149,8 @@ export interface Deps {
   read(path: string): Promise<string | undefined>
   storeGet(key: string): Promise<unknown>
   storeSet(key: string, value: unknown): Promise<void>
+  /** `$.store.delete`: removes the key (a tombstone past its life, idle.ts). */
+  storeDelete(key: string): Promise<void>
   now(): Promise<number>
   after(ms: number, fn: () => void): { cancel: () => void }
   toast(text: string): void
@@ -113,13 +158,18 @@ export interface Deps {
   notice(text: string, timeoutMs: number): void
   policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
   /**
-   * IA-2 (idle D3): Claude Code's own idle compaction as the merged settings say. `off` when
-   * `idleCompaction` or its precondition `autoCompactEnabled` is `false` (IC-1 F4); `unknown` when a
-   * read throws; else `on`. The server can still keep native idle off while the setting allows it
-   * (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome check (owner xxxxxxxx-17, O-9:
-   * "unreadable means check what happened").
+   * IA-2 (idle D3), split by the plugin's idle compaction (§1.1): Claude Code's own idle
+   * compaction as the merged settings and its environment say, first match wins.
+   * `compaction-off`: `DISABLE_COMPACT` or `DISABLE_AUTO_COMPACT` set, or `autoCompactEnabled`
+   * `false` (native's gate order puts `compaction_off` first; the plugin never compacts against
+   * it). `vetoed`: `idleCompaction` `false` (only native idle is off; the plugin compacts idle
+   * sessions itself). `unknown` when a read throws; else `on`. The server can still keep native
+   * idle off while the setting allows it (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome
+   * check (owner xxxxxxxx-17, O-9: "unreadable means check what happened").
    */
-  nativeIdle(): Promise<'on' | 'off' | 'unknown'>
+  nativeIdle(): Promise<NativeIdle>
+  /** The idle timers' environment (IdleEnv), read once per load (`idleEnvMemo`). */
+  idleEnv(): Promise<IdleEnv>
   /**
    * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
    * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
@@ -236,6 +286,21 @@ export type LoadState = {
   /** When the last main turn ended, and whether it ended `answer` (§9.4, the idle predicate). */
   lastTurnEndAt: number | undefined
   lastTurnAnswer: boolean
+  /** When the last main-thread model request (`turn.step`) started: the idle compaction's anchor (D3). */
+  lastMainReqAt: number | undefined
+  /**
+   * D11: the last sign of a person at the prompt (a `prompt.edit`, a `prompt.change` of theirs, an
+   * interactive `session.start`); the idle compaction skips `present` for a minute after it.
+   */
+  lastInputAt: number | undefined
+  /** D7: the plugin's idle compactions that failed in a row in this load (a success resets it). */
+  idleCompactFails: number
+  /** D7 (`failed`, two in a row) and D8 (`queued`, lane B1): the idle compaction is off for the load. */
+  idleCompactOff: 'failed' | 'queued' | undefined
+  /** The persisted idle due this load runs was adopted from another load or process (§3.4, D6). */
+  idleAdopted: boolean
+  /** `idleEnv()` once per load. */
+  idleEnvMemo: Promise<IdleEnv> | undefined
   /** The pre-idle timer (§9.4). */
   idleTimer: { cancel: () => void } | undefined
   /**
@@ -248,10 +313,11 @@ export type LoadState = {
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
   publishedSinceHuman: boolean
   /**
-   * The `native/plugin_turn/served_hint` triple of the last `idle_mode` row this load wrote (IA-3,
-   * owner xxxxxxxx-17), undefined before the first.
+   * The session id and policy tuple (native, plugin_turn, plugin_compact, compact_min,
+   * served_hint, cache_s) of the last `idle_mode` row this load wrote (IA-3, owner xxxxxxxx-17;
+   * §1.2: one per session id, so a `/clear` gets its own), undefined before the first.
    */
-  idleMode: string | undefined
+  idleMode: { sid: string; tuple: string } | undefined
   /**
    * Owner xxxxxxxx-37 ("Full block again on return"): a turn not of a person's (a background
    * result) took an idle compaction's resume block at `usedAt`; the first human-origin turn gets
@@ -412,6 +478,12 @@ export function newState(loadId: string): LoadState {
     turnOrigin: undefined,
     lastTurnEndAt: undefined,
     lastTurnAnswer: false,
+    lastMainReqAt: undefined,
+    lastInputAt: undefined,
+    idleCompactFails: 0,
+    idleCompactOff: undefined,
+    idleAdopted: false,
+    idleEnvMemo: undefined,
     idleTimer: undefined,
     idleDueSid: undefined,
     idleEpisode: undefined,
@@ -456,7 +528,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     async usage() {
       const u = await $.session.usage()
-      return { tokens: u.context.tokens, window: u.context.window, rateLimits: (u.rateLimits ?? []).map(l => ({ percentUsed: l.percentUsed })) }
+      return {
+        tokens: u.context.tokens, window: u.context.window,
+        rateLimits: (u.rateLimits ?? []).map(l => ({ kind: typeof l.kind === 'string' ? l.kind : '', percentUsed: l.percentUsed })),
+      }
     },
     async version() {
       const v = await $.session.version()
@@ -515,6 +590,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     storeGet: key => $.store.get(key),
     storeSet: (key, value) => $.store.set(key, value),
+    storeDelete: key => $.store.delete(key),
     now: () => $.clock.now(),
     after: (ms, fn) => $.clock.after(ms, fn),
     toast(text) {
@@ -533,12 +609,42 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     async nativeIdle() {
       try {
-        const idle = await $.settings.read({ key: 'idleCompaction' })
-        const auto = await $.settings.read({ key: 'autoCompactEnabled' })
-        return idle === false || auto === false ? 'off' : 'on'
+        // `$.env.get` takes literal names only (the engine lists what a module reads).
+        if (envTruthy(await $.env.get('DISABLE_COMPACT')) || envTruthy(await $.env.get('DISABLE_AUTO_COMPACT'))) return 'compaction-off'
+        if ((await $.settings.read({ key: 'autoCompactEnabled' })) === false) return 'compaction-off'
+        return (await $.settings.read({ key: 'idleCompaction' })) === false ? 'vetoed' : 'on'
       } catch {
         return 'unknown'
       }
+    },
+    idleEnv() {
+      if (!state.idleEnvMemo) {
+        state.idleEnvMemo = (async (): Promise<IdleEnv> => {
+          const get = async (read: () => Promise<string | undefined>): Promise<string | undefined> => {
+            try {
+              return await read()
+            } catch {
+              return undefined
+            }
+          }
+          // Literal names (the engine lists what a module reads): native's cache check (`lce`,
+          // Claude Code 2.1.311) reads these six; any one set counts as no one-hour cache.
+          const caching = await Promise.all([
+            get(() => $.env.get('DISABLE_PROMPT_CACHING')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_HAIKU')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_SONNET')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_OPUS')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_FABLE')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_MYTHOS')),
+          ])
+          return {
+            compactMin: compactMinOf(await get(() => $.env.get('CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS'))),
+            cacheS: cacheSOf(await get(() => $.env.get('STORE_TEST_IDLE_CACHE_S'))),
+            cacheOff: caching.some(envTruthy),
+          }
+        })()
+      }
+      return state.idleEnvMemo
     },
     async servedHint() {
       // `$.env.get` takes literal names only (the engine lists what a module reads).

@@ -19,6 +19,15 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
+    // D11, §3.4: a person launched or resumed this session: present for the next minute, so an
+    // idle compaction the load adopts does not run in front of them (stamped before loadIdle).
+    if (e.isInteractive === true) {
+      try {
+        state.lastInputAt = await $.clock.now()
+      } catch {
+        // no stamp: presence is not known
+      }
+    }
     await onSessionStart(realDeps($, options, state), e.isInteractive)
     return r
   }).catch(($, e, next) => next(e))
@@ -60,8 +69,15 @@ export const register: Register = (on, options) => {
   // step passes through unchanged (model, effort and all); only its result is read, after it.
   // Nothing after the stream may throw: a failure there would hand the step to `.catch`.
   // The shadow trial stamps a main step's start for its cold rule (nothing without its config).
+  // The start of every main-thread request anchors the idle compaction (D3): the prompt cache is
+  // refreshed when a request reads it, not at the turn end.
   on('turn.step', async function* ($, e, next) {
     if (e.agentId === undefined) {
+      try {
+        state.lastMainReqAt = await $.clock.now()
+      } catch {
+        // the anchor stays the last one (or the turn end)
+      }
       try {
         shadowStep(state, () => realDeps($, options, state))
       } catch {
@@ -78,6 +94,22 @@ export const register: Register = (on, options) => {
   }).catch(async function* ($, e, next) {
     return yield* next(e)
   })
+
+  // D11 (G7): a person editing the prompt box is present. Observe only, in the keystroke path:
+  // nothing before `next` and nothing awaited after it.
+  on('prompt.edit', async ($, e, next) => {
+    const r = await next(e)
+    void $.clock.now().then(t => { state.lastInputAt = t }, () => undefined)
+    return r
+  }).catch(($, e, next) => next(e))
+
+  // D11: a recall, an undo, a clear or another write of the box is a person's too; a plugin's
+  // fill and a remote app's own write are not.
+  on('prompt.change', async ($, e, next) => {
+    const r = await next(e)
+    if (e.origin.kind !== 'plugin' && e.origin.kind !== 'app') void $.clock.now().then(t => { state.lastInputAt = t }, () => undefined)
+    return r
+  }).catch(($, e, next) => next(e))
 
   // A user's prompt delivered into the running handoff turn lifts its limits text (MOD-SPEC §9.1).
   // One the user asked to wait its turn (`wait`, ctrl+x enter) is not delivered into it.

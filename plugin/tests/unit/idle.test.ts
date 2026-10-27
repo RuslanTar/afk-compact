@@ -15,9 +15,13 @@ const IDLE = hasTag('handoff-turn', 'submit-idle')
 // IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` arms the pre-idle turn only while Claude
 // Code's own idle compaction is off, read from the settings (`idleCompaction`, `autoCompactEnabled`).
 const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code' }
+// IDLE-COMPACT D2: with `"idleCompaction": false` at 200K and more the plugin's own idle
+// compaction replaces the 49-min turn; the turn's own cases switch it off (`idle_compact: off`).
+const TURN = { ...ON, idle_compact: 'off' }
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
-const LIMITS = [{ percentUsed: 12 }, { percentUsed: 30 }]
+// D15: only a five-hour or seven-day window shows the one-hour cache.
+const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
 const PUBLISHED = HOME + '/.claude/handoffs/r/LAB-42/2026-10-21_15-00-00_5e55a001_handoff.md'
 const SHOWN = '~/.claude/handoffs/r/LAB-42/2026-10-21_15-00-00_5e55a001_handoff.md'
 
@@ -414,7 +418,7 @@ test('AT-IC-04: the re-measure fails (3 s budget) → the stored block goes out,
 
 // ---- IC-1 D5: the pre-idle handoff turn (§9.4)
 
-test('AT-IC-05: on, a turn ends answer at 260K with rate limits → due at 49 min; at fire: handoff-turn open --reason idle and one [submit-idle] submit; at its end no compaction, no continue', { options: ON }, async ($, on) => {
+test('AT-IC-05: on, a turn ends answer at 260K with rate limits → due at 49 min; at fire: handoff-turn open --reason idle and one [submit-idle] submit; at its end no compaction, no continue', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -440,7 +444,7 @@ test('AT-IC-05: on, a turn ends answer at 260K with rate limits → due at 49 mi
   expect(w.rowsOf('handoff_turn_end').map(r => [r.handoff_turn, r.reason, r.compaction, r.cache_read_share])).toEqual([['published', 'idle', false, null]])
 })
 
-test('AT-IC-05: a main turn.start before the due cancels the timer', { options: ON }, async ($, on) => {
+test('AT-IC-05: a main turn.start before the due cancels the timer', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -461,21 +465,23 @@ test('AT-IC-06: off arms no timer: no submit and no row (native idle on as well)
   expect([w.submits.length, w.rowsOf('handoff_skipped').length]).toEqual([0, 0])
 })
 
-const SKIPS: { why: string; options?: Record<string, unknown>; world?: Partial<{ window: number }>; store?: Record<string, unknown>; setup?: (w: World) => void; tokens?: number; aborted?: boolean }[] = [
+const SKIPS: { why: string; options?: Record<string, unknown>; world?: Partial<{ window: number }>; store?: Record<string, unknown>; setup?: (w: World) => void; tokens?: number; aborted?: boolean; limits?: World['rateLimits'] }[] = [
   { why: 'triggers-off', options: { triggers: false } },
   { why: 'small-window', world: { window: 200000 } },
   { why: 'session-changed', setup: w => { w.sid = SID_B } },
   { why: 'small', tokens: 150000 },
   { why: 'ttl-5m', setup: w => { w.rateLimits = [] } },
-  { why: 'near-limit', setup: w => { w.rateLimits = [{ percentUsed: 12 }, { percentUsed: 95 }] } },
+  // D15: a Claude gateway reports only its spend limit, and its cache is the five-minute one.
+  { why: 'ttl-5m', limits: [{ kind: 'spend_limit', percentUsed: 10 }] },
+  { why: 'near-limit', setup: w => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] } },
   { why: 'aborted', aborted: true },
   { why: 'cap', store: { ['ht:' + SID_A]: [T0 + 10 * MIN] } },
 ]
 for (const c of SKIPS) {
-  test(`AT-IC-06 (${c.why}): one handoff_skipped {why: ${c.why}, reason: idle}, no submit`, { options: { ...ON, ...(c.options ?? {}) } }, async ($, on) => {
+  test(`AT-IC-06 (${c.why}${c.limits ? ', spend limit only' : ''}): one handoff_skipped {why: ${c.why}, reason: idle}, no submit`, { options: { ...TURN, ...(c.options ?? {}) } }, async ($, on) => {
     const w = new World(c.world ?? {}).install(on, c.store ?? {})
     w.policy = NATIVE_OFF
-    w.rateLimits = LIMITS
+    w.rateLimits = c.limits ?? LIMITS
     await w.start($)
     await w.userTurn($)
     w.tokens = c.tokens ?? 260000
@@ -488,7 +494,7 @@ for (const c of SKIPS) {
   })
 }
 
-test('AT-IC-06 (busy): a plugin compaction in flight at the due: busy', { options: ON }, async ($, on) => {
+test('AT-IC-06 (busy): a plugin compaction in flight at the due: busy', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -504,7 +510,7 @@ test('AT-IC-06 (busy): a plugin compaction in flight at the due: busy', { option
   await w.settle()
 })
 
-test('AT-IC-06 (episode), AT-IC-07: no human turn ended since the last pre-idle turn: episode; a task-notification turn neither ends nor starts one; a composer turn starts a new one', { options: ON }, async ($, on) => {
+test('AT-IC-06 (episode), AT-IC-07: no human turn ended since the last pre-idle turn: episode; a task-notification turn neither ends nor starts one; a composer turn starts a new one', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -530,7 +536,7 @@ test('AT-IC-06 (episode), AT-IC-07: no human turn ended since the last pre-idle 
   expect(w.submits.length).toBe(2)
 })
 
-test('AT-IC-06 (published): a handoff published since the last human-origin turn: published', { options: { ...ON, max_auto_continues_per_hour: 0 } }, async ($, on) => {
+test('AT-IC-06 (published): a handoff published since the last human-origin turn: published', { options: { ...TURN, max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -648,7 +654,7 @@ test('AT-IC-09 (pending): session.end drops a pending block: mod_outcome resume 
   expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['dropped:session-end'])
 })
 
-test('AT-IC-13: after a published pre-idle handoff and no main turn, a native auto (idle) dispatch gets [handoff] with the path', { options: ON }, async ($, on) => {
+test('AT-IC-13: after a published pre-idle handoff and no main turn, a native auto (idle) dispatch gets [handoff] with the path', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -692,9 +698,10 @@ test('AT-IC-14: a past due and another sid\'s due arm nothing', { options: ON },
   expect(idleSkips(w).length + w.submits.length).toBe(0)
 })
 
-// §9.4: a main turn.start, a prompt entering and session.end cancel the timer and forget the
-// persisted due, so a reload of the same sid re-arms nothing the session already cancelled.
-/** The last value the mod stored for this sid's due (null: forgotten; undefined: never written). */
+// §9.4: a main turn.start, a prompt entering and session.end cancel the timer and clear the
+// persisted due, so a reload of the same sid re-arms nothing the session already cancelled. Every
+// clear is a tombstone (IDLE-COMPACT §3.1), never null: a missing record means a lost write.
+/** The last value the mod stored for this sid's due (undefined: never written). */
 function watchDue(on: Parameters<World['install']>[0]): () => unknown {
   let last: unknown
   // Registered before World.install, so it stands outside mock.store (first is outermost).
@@ -704,8 +711,10 @@ function watchDue(on: Parameters<World['install']>[0]): () => unknown {
   })
   return () => last
 }
+/** A tombstone: the record was cleared (§3.1). */
+const cleared = (v: unknown): boolean => typeof v === 'object' && v !== null && (v as Record<string, unknown>).cancelled === true
 
-test('AT-IC-14: a main turn.start forgets the persisted idle_due', { options: ON }, async ($, on) => {
+test('AT-IC-14: a main turn.start clears the persisted idle_due (a tombstone)', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
   w.policy = NATIVE_OFF
@@ -713,10 +722,10 @@ test('AT-IC-14: a main turn.start forgets the persisted idle_due', { options: ON
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
   await w.turnStart($)
-  expect(dueOf()).toBe(null)
+  expect(cleared(dueOf())).toBe(true)
 })
 
-test('AT-IC-14: a prompt entering forgets the persisted idle_due', { options: ON }, async ($, on) => {
+test('AT-IC-14: a prompt entering clears the persisted idle_due (a tombstone)', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
   w.policy = NATIVE_OFF
@@ -724,10 +733,10 @@ test('AT-IC-14: a prompt entering forgets the persisted idle_due', { options: ON
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
   await $.prompt.submit({ text: 'back again', origin: { kind: 'composer' } } as never)
-  expect(dueOf()).toBe(null)
+  expect(cleared(dueOf())).toBe(true)
 })
 
-test('AT-IC-14: session.end forgets the persisted idle_due', { options: ON }, async ($, on) => {
+test('AT-IC-14: session.end clears the persisted idle_due (a tombstone)', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
   w.policy = NATIVE_OFF
@@ -735,7 +744,7 @@ test('AT-IC-14: session.end forgets the persisted idle_due', { options: ON }, as
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
   await $.session.end(CLEAR as never)
-  expect(dueOf()).toBe(null)
+  expect(cleared(dueOf())).toBe(true)
 })
 
 // ---- A fresh load re-arms the due with no turn end of its own: a background session moved to a
@@ -812,7 +821,7 @@ test('BG-IDLE-04: the persisted due records how the armed turn ended (answer tru
   expect(last?.answer).toBe(false)
 })
 
-test('BG-IDLE-05: session.end {other} (claude respawn, a signal) keeps the persisted idle_due; {prompt_input_exit} forgets it', { options: ON }, async ($, on) => {
+test('BG-IDLE-05: session.end {other} (claude respawn, a signal) keeps the persisted idle_due; {prompt_input_exit} clears it (a tombstone)', { options: ON }, async ($, on) => {
   const dueOf = watchDue(on)
   const w = new World().install(on)
   w.policy = NATIVE_OFF
@@ -828,7 +837,7 @@ test('BG-IDLE-05: session.end {other} (claude respawn, a signal) keeps the persi
   await humanTurn($, w)
   expect(dueOf()).toBeTruthy()
   await $.session.end({ ...CLEAR, reason: 'prompt_input_exit' } as never)
-  expect(dueOf()).toBe(null)
+  expect(cleared(dueOf())).toBe(true)
 })
 
 test('BG-IDLE-06: a re-armed due of a session that published a handoff since the last human turn skips published', { options: ON }, async ($, on) => {
@@ -869,7 +878,9 @@ test('BG-IDLE-07: the turn that publishes a handoff marks the due it armed publi
 
 test('BG-IDLE-08: a due another process on the same sid fired or cancelled (a resumed copy) does nothing here: no row, no submit', { options: ON }, async ($, on) => {
   let gone = false
-  on('store.get', { key: 'idle_due:' + SID_A }, (_$, e, next) => (gone ? { value: undefined } : next(e)))
+  // That process's fire or cancel left its tombstone (IDLE-COMPACT §3.1, G1 held-elsewhere).
+  const tomb = { cancelled: true, sid: SID_A, load: 'other-load', due: T0 + 10 * MIN, at: T0 + 5 * MIN }
+  on('store.get', { key: 'idle_due:' + SID_A }, (_$, e, next) => (gone ? { value: tomb } : next(e)))
   const w = new World().install(on, moved('turn', true))
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -881,11 +892,26 @@ test('BG-IDLE-08: a due another process on the same sid fired or cancelled (a re
   expect(idleSkips(w).length + w.submits.length).toBe(0)
 })
 
+test('BG-IDLE-08 (lost write): a due the store lost (no record, no tombstone) is one due-missing row, not a silent takeover; no submit', { options: ON }, async ($, on) => {
+  let gone = false
+  on('store.get', { key: 'idle_due:' + SID_A }, (_$, e, next) => (gone ? { value: undefined } : next(e)))
+  const w = new World().install(on, moved('turn', true))
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  w.tokens = 260000
+  await w.start($)
+  await w.advance(5 * MIN)
+  gone = true
+  await w.advance(5 * MIN)
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind])).toEqual([['due-missing', 'turn']])
+  expect(w.submits.length).toBe(0)
+})
+
 // ---- IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` = the plugin's pre-idle turn only while
 // Claude Code's own idle compaction is off; a failed settings read counts as on (O-9 provisional).
 const idleModes = (w: World) => w.rowsOf('idle_mode').map(r => `${String(r.native)}/${String(r.plugin_turn)}`)
 
-test('AT-IA-02: auto with idleCompaction false arms the timer; idle_mode off/on', { options: ON }, async ($, on) => {
+test('AT-IA-02: auto with idleCompaction false arms the timer; idle_mode vetoed/on', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -893,10 +919,10 @@ test('AT-IA-02: auto with idleCompaction false arms the timer; idle_mode off/on'
   await humanTurn($, w)
   await w.advance(49 * MIN)
   expect(w.submits.length + idleSkips(w).length).toBe(1)
-  expect(idleModes(w)).toEqual(['off/on'])
+  expect(idleModes(w)).toEqual(['vetoed/on'])
 })
 
-test('AT-IA-02: auto with autoCompactEnabled false: native off (idle never fires without auto-compact), armed', { options: ON }, async ($, on) => {
+test('AT-IA-02: auto with autoCompactEnabled false: compaction-off (idle never fires without auto-compact), the 49-min turn armed', { options: ON }, async ($, on) => {
   const w = new World().install(on)
   w.policy = { autoCompactEnabled: false }
   w.rateLimits = LIMITS
@@ -904,7 +930,7 @@ test('AT-IA-02: auto with autoCompactEnabled false: native off (idle never fires
   await humanTurn($, w)
   await w.advance(49 * MIN)
   expect(w.submits.length + idleSkips(w).length).toBe(1)
-  expect(idleModes(w)).toEqual(['off/on'])
+  expect(idleModes(w)).toEqual(['compaction-off/on'])
 })
 
 // Owner xxxxxxxx-17 ("Check outcome at 55.5m"; D3 reworded "off when native actually compacts",
@@ -937,7 +963,7 @@ test('AT-IA-02: the settings read throws: native unknown, the 55.5-min check arm
   expect(idleModes(w)).toEqual(['unknown/check'])
 })
 
-test('AT-IA-03: armed while native off; native idle switched on before the fire: handoff_skipped {native-on, idle} at 49 min, then the outcome check at 55.5 min', { options: ON }, async ($, on) => {
+test('AT-IA-03: armed while native off; native idle switched on before the fire: handoff_skipped {native-on, idle} at 49 min, then the outcome check at 55.5 min', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -948,14 +974,14 @@ test('AT-IA-03: armed while native off; native idle switched on before the fire:
   await w.advance(19 * MIN)
   expect(idleSkips(w)).toEqual(['native-on'])
   expect(w.submits.length).toBe(0)
-  expect(idleModes(w)).toEqual(['off/on', 'on/check'])
+  expect(idleModes(w)).toEqual(['vetoed/on', 'on/check'])
   await w.advance(7 * MIN)
   expect(w.rowsOf('idle_silent').length).toBe(1)
   if (IDLE) expect(w.submits).toEqual([idleText(w, '55')])
   else expect(idleSkips(w)).toEqual(['native-on', 'no-asset'])
 })
 
-test('AT-IA-04: idle_mode is written once per change, not per turn; off reads native and arms nothing', { options: ON }, async ($, on) => {
+test('AT-IA-04: idle_mode is written once per change, not per turn; off reads native and arms nothing', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -963,11 +989,11 @@ test('AT-IA-04: idle_mode is written once per change, not per turn; off reads na
   await humanTurn($, w)
   await humanTurn($, w)
   await humanTurn($, w)
-  expect(idleModes(w)).toEqual(['off/on'])
+  expect(idleModes(w)).toEqual(['vetoed/on'])
   w.policy = {}
   await humanTurn($, w)
   await humanTurn($, w)
-  expect(idleModes(w)).toEqual(['off/on', 'on/check'])
+  expect(idleModes(w)).toEqual(['vetoed/on', 'on/check'])
   // The 49-min turn armed by the earlier turn ends gave way to the 55.5-min check.
   await w.advance(49 * MIN)
   expect([w.submits.length, idleSkips(w).length]).toEqual([0, 0])
@@ -975,7 +1001,7 @@ test('AT-IA-04: idle_mode is written once per change, not per turn; off reads na
   expect(w.submits.length + idleSkips(w).length).toBe(1)
 })
 
-test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: { ...TURN, idle_handoff_turn: 'off' } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -983,7 +1009,7 @@ test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: {
   await humanTurn($, w)
   await w.advance(120 * MIN)
   expect([w.submits.length, idleSkips(w).length]).toEqual([0, 0])
-  expect(idleModes(w)).toEqual(['off/off'])
+  expect(idleModes(w)).toEqual(['vetoed/off'])
 })
 
 // ---- Owner xxxxxxxx-17 ("Check outcome at 55.5m"): with native idle on or unreadable, the plugin
@@ -1148,7 +1174,7 @@ const AGENT_SKIPS: { name: string; why: string | null; tokens?: number; origin?:
   { name: 'triggers off', why: 'triggers-off', options: { triggers: false }, silent: 1 },
   // A person's turn clears halt: here a background result's turn ends the last one.
   { name: 'halt', why: 'halted', origin: 'task-notification', setup: w => { w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' })) }, silent: 1 },
-  { name: 'native off', why: null, setup: w => { w.policy = NATIVE_OFF }, silent: 0 },
+  { name: 'native off', why: null, options: { idle_compact: 'off' }, setup: w => { w.policy = NATIVE_OFF }, silent: 0 },
 ]
 for (const c of AGENT_SKIPS) {
   test(`AT-IS-10 (${c.name}): agents running, ${c.why === null ? 'the 49-min turn path' : `handoff_skipped {why: ${c.why}, reason: idle}`}: no idle_compact row, no compaction`, { options: { ...ON, ...(c.options ?? {}) } }, async ($, on) => {
@@ -1228,7 +1254,7 @@ test('AT-IS-06: a persisted check with an older compaction record: native silent
   expect(idleSkips(w).includes('native-fired')).toBe(false)
 })
 
-test('AT-IS-07: native off keeps the 49-min turn (no check, no idle_silent); a person\'s prompt cancels the check', { options: ON }, async ($, on) => {
+test('AT-IS-07: native off keeps the 49-min turn (no check, no idle_silent); a person\'s prompt cancels the check', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS

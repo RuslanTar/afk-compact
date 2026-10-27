@@ -35,6 +35,13 @@ export type Config = {
   idle_handoff_turn: 'auto' | 'off'
   /** No pre-idle handoff turn below this context size. */
   idle_handoff_min_tokens: number
+  /**
+   * `auto`: while Claude Code's own idle compaction is off in the settings (`"idleCompaction":
+   * false`) and automatic compaction is on, the plugin compacts an idle main session itself about
+   * 54 minutes after its last request (idle.ts, kind `compact`); `off`: never (the pre-idle
+   * handoff turn runs in its place).
+   */
+  idle_compact: 'auto' | 'off'
   /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
   watcher_off: boolean
   /**
@@ -67,6 +74,8 @@ export const DEFAULTS: Config = {
   unattended_prod_reads: 'forbid',
   idle_handoff_turn: 'auto',
   idle_handoff_min_tokens: 200000,
+  // Pending the owner's answer on the default (IDLE-COMPACT-SPEC Q3); the release note says it.
+  idle_compact: 'auto',
   watcher_off: false,
   notes: { invalid: [], clamped: [] },
 }
@@ -176,6 +185,21 @@ function idleTurn(o: PluginOptions, notes: Config['notes']): Config['idle_handof
   return IDLE_INVALID_READS_AS
 }
 
+/**
+ * `idle_compact`, read like `idle_handoff_turn` (trimmed, case-folded, the same word lists): the
+ * common words read as `off` or `auto`; any other value is IDLE_INVALID_READS_AS plus
+ * `config_invalid`. settings.pm reads it the same way.
+ */
+function idleCompact(o: PluginOptions, notes: Config['notes']): Config['idle_compact'] {
+  const v = o['idle_compact']
+  if (unset(v)) return DEFAULTS.idle_compact
+  const t = typeof v === 'string' ? v.trim().toLowerCase() : typeof v === 'boolean' || typeof v === 'number' ? String(v) : ''
+  if (IDLE_OFF_WORDS.includes(t)) return 'off'
+  if (IDLE_AUTO_WORDS.includes(t)) return 'auto'
+  notes.invalid.push('idle_compact')
+  return IDLE_INVALID_READS_AS
+}
+
 function handoffTokens(o: PluginOptions, notes: Config['notes']): number {
   const n = Math.floor(num(o, 'handoff_turn_max_tokens', DEFAULTS.handoff_turn_max_tokens))
   const c = Math.max(HANDOFF_TOKENS_MIN, Math.min(HANDOFF_TOKENS_MAX, n))
@@ -207,6 +231,7 @@ export function parseOptions(o: PluginOptions): Config {
     unattended_prod_reads: choice(o, 'unattended_prod_reads', ['forbid', 'allow'] as const, 'forbid', 'forbid', notes),
     idle_handoff_turn: idleTurn(o, notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
+    idle_compact: idleCompact(o, notes),
     watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
   }

@@ -66,10 +66,10 @@ test('AT-MG-02: handoff-turn path (precompact_turn model): the handoff-turn subm
   keysClean(w)
 })
 
-test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native auto, manual or idle compaction gets instructions added and nothing else', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native auto, manual or idle compaction gets instructions added and nothing else', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code', idle_compact: 'off' } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = { idleCompaction: false }
-  w.rateLimits = [{ percentUsed: 12 }]
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }]
   await w.start($)
   await w.userTurn($)
   w.tokens = 260000
@@ -80,6 +80,25 @@ test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native aut
   for (const [i, keys] of w.compactKeys.entries()) {
     if (w.compacts[i]?.trigger !== undefined) expect(keys).toEqual(['instructions', 'messages', 'trigger'])
   }
+  keysClean(w)
+})
+
+// IDLE-COMPACT D2: with "idleCompaction": false the plugin's own idle compaction at 54 min takes
+// the 49-min turn's place; it is a plugin compaction like the others, naming no model.
+test('AT-MG-02: idle path (the plugin\'s own idle compaction): one mod-self idle compaction at 54 min with instructions only; nothing submitted', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = { idleCompaction: false }
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }]
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await w.turnEnd($, 'Done with that step.')
+  await w.advance(49 * MIN)
+  expect([w.submits.length, w.compacts.length]).toEqual([0, 0])
+  await w.advance(5 * MIN)
+  expect(w.callsOf('dispatch').map(c => w.flag(c, '--channel'))).toEqual(['mod-self'])
+  expect(w.compacts.map(c => c.trigger)).toEqual([undefined])
+  expect(w.submits.length).toBe(0)
   keysClean(w)
 })
 
