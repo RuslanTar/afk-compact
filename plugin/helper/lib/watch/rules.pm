@@ -24,8 +24,9 @@ use watch::hturn;
 my %OKV = map { $_ => 1 } qw(ok ok-trailer);
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
 my $JOIN_S = 120;
-# A-28 (MG-5): a first request that read under this share of its input from the cache, at this
-# many context tokens or more, is cold.
+# A-28 (MG-5): a handoff turn's first request that read under this share of its input from the
+# cache, at this many context tokens or more, is cold (the mod applies the same share to a
+# compaction's prefix read and writes compaction_cold).
 our $COLD_SHARE = 0.5;
 our $COLD_MIN_TOKENS = 100_000;
 
@@ -746,13 +747,16 @@ sub _event_rules {
     for my $r (rows_of($S, 'thrash')) {
         $R->(rule => 'A-07', severity => 'critical', id_parts => ['mod', $r->{ts}], evidence => { mod_thrash => \1 });
     }
-    # A-28 (MG-5, ratify R4 guard, 2026-10-23): a compaction_cold row, or a handoff turn whose
-    # first request read under $COLD_SHARE of its input from the cache at >= $COLD_MIN_TOKENS
-    # (handoff_turn_end cache_read_share; the context size from its handoff_turn_start t0): the
-    # request may have gone to another model than the session's own.
+    # A-28 (MG-5, ratify R4 guard, 2026-10-23): a compaction_cold row (the mod's prefix read under
+    # its cold share; an older version's row has the read share of all input instead: root ruling
+    # 2026-10-27 23:16), or a handoff turn whose first request read under $COLD_SHARE of its input
+    # from the cache at >= $COLD_MIN_TOKENS (handoff_turn_end cache_read_share; the context size
+    # from its handoff_turn_start t0): the request may have gone to another model than the
+    # session's own.
     for my $r (rows_of($S, 'compaction_cold')) {
+        my %ev = defined $r->{prefix_read} ? (prefix_read => _num($r->{prefix_read})) : (read_share => _num($r->{read_share}));
         $R->(rule => 'A-28', severity => 'warn', id_parts => ['compaction', $r->{nonce} // $r->{ts}],
-             evidence => { read_share => _num($r->{read_share}), kind => 'compaction' });
+             evidence => { %ev, kind => 'compaction' });
     }
     my %t0 = map { ($_->{ht} // '') => $_->{t0} } grep { defined $_->{ht} } rows_of($S, 'handoff_turn_start');
     for my $r (rows_of($S, 'handoff_turn_end')) {

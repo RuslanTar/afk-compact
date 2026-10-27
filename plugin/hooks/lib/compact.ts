@@ -2,7 +2,7 @@
 // after-step (§5.2), shared with the boundary self-call path (§4).
 import type { SessionCompactInput, SessionCompactResult, SessionMessage } from 'claude-code'
 import type { Deps, PendingResume, RequestUsage } from './deps'
-import { readShare } from './deps'
+import { prefixRead, uncoveredInput } from './deps'
 import type { Tag } from './assemble'
 import type { Trigger } from './canary'
 import type { Verdict } from './detect'
@@ -109,26 +109,31 @@ export async function isSelfDispatch(d: Deps, sid: string, nonce: string): Promi
 }
 
 /**
- * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5, provisional until the lab's
- * AT-MG-05 cells measure warm reads): a main compaction from this many tokens up whose
- * summarizer request read under this share of its input from the cache is `compaction_cold`.
+ * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5): a main compaction from this many
+ * tokens up whose summarizer request read under this share of its cached prefix (`prefixRead`,
+ * root ruling 2026-10-27 23:16: L3 0.925 and L1 0.999 warm, a cold L3 about 0.27) is
+ * `compaction_cold`.
  */
 export const COLD_SHARE = 0.5
 export const COLD_MIN_TOKENS = 100000
 
 /**
- * MG-3: `compaction_cache {nonce, read_share}` for a compaction whose result carries the
- * summarizer's usage, and `compaction_cold` for a cold main one (see COLD_SHARE). A different
- * model than the session's cannot read the session's cache, so this is the runtime sign of one.
+ * MG-3: `compaction_cache {nonce, prefix_read, uncovered}` for a compaction whose result carries
+ * the summarizer's usage, and `compaction_cold {nonce, prefix_read}` for a cold main one (see
+ * COLD_SHARE). `uncovered` is the input outside the cache: the compaction request's one cache
+ * marker leaves the context after the last summarized assistant message uncached, warm or cold,
+ * so it is logged apart and never makes a compaction cold (root ruling 2026-10-27 23:16, which
+ * replaced the read share of all input here). A different model than the session's cannot read
+ * the session's cache, so a cold prefix is the runtime sign of one.
  */
 export async function cacheRows(
   d: Deps, sid: string, nonce: string, r: { usage?: RequestUsage; tokensBefore?: number }, main: boolean, actor: string,
 ): Promise<void> {
   if (r.usage === undefined) return
-  const share = readShare(r.usage)
-  await log(d, sid, 'compaction_cache', { nonce, read_share: share }, actor)
-  if (main && share !== null && share < COLD_SHARE && (r.tokensBefore ?? 0) >= COLD_MIN_TOKENS) {
-    await log(d, sid, 'compaction_cold', { nonce, read_share: share }, actor)
+  const prefix = prefixRead(r.usage)
+  await log(d, sid, 'compaction_cache', { nonce, prefix_read: prefix, uncovered: uncoveredInput(r.usage) }, actor)
+  if (main && prefix !== null && prefix < COLD_SHARE && (r.tokensBefore ?? 0) >= COLD_MIN_TOKENS) {
+    await log(d, sid, 'compaction_cold', { nonce, prefix_read: prefix }, actor)
   }
 }
 

@@ -225,9 +225,11 @@ our %SCHEMA = (
     handoff_orphan_abort_failed => { turn_id => 'hash', ht => 'hash', why => [enum => qw(rejected other-text)] },
     handoff_mode => { mode => [enum => qw(private repo)], reason => 'word', declared => 'bool', accepted => 'bool' },
     idle_mismatch => { nonce => 'nonce' },
-    # MG-3 / MG-5 (2026-10-23): the summarizer request's cache-read share, and a cold one (A-28)
-    compaction_cache => { nonce => 'nonce', read_share => 'num' },
-    compaction_cold => { nonce => 'nonce', read_share => 'num' },
+    # MG-3 / MG-5 (2026-10-23): the summarizer request's cache read, and a cold one (A-28). Root
+    # ruling 2026-10-27 23:16: the prefix read (cache reads over reads and writes) and the input
+    # outside the cache (uncovered) replace the read share of all input; older rows keep read_share.
+    compaction_cache => { nonce => 'nonce', prefix_read => 'num', uncovered => 'num', read_share => 'num' },
+    compaction_cold => { nonce => 'nonce', prefix_read => 'num', read_share => 'num' },
     # ID-2 (2026-10-23): a native idle compaction no plugin dispatch shaped (A-29)
     idle_unshaped => { boundary_uuid => 'hash' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
@@ -267,7 +269,7 @@ our %SCHEMA = (
                    cap => 'int', continues_last_hour => 'int', continue_without_nudge => 'bool', result => 'word',
                    relation => 'word', native_thrash => 'bool', mod_thrash => 'bool', batches => 'int',
                    lost_U => 'int', lost_D => 'int', lost_X => 'int', rules => [list => 'word'], hard => 'bool',
-                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num' }],
+                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num', prefix_read => 'num' }],
     },
     watch_error => { stage => 'word', error_class => 'word' },
     # --- other rows of MOD-SPEC (kebab-case there, snake_case on disk) and of the built code ---

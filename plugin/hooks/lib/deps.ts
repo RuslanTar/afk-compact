@@ -110,18 +110,42 @@ export function cacheSOf(v: string | undefined): number | undefined {
 /** The four token counts of one model request (`ModelUsage`), as far as this module reads them. */
 export type RequestUsage = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
 
+/** A token count of a usage as a non-negative number (anything else counts 0). */
+const tokensOf = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
+
 /**
  * MG-3: the share of a request's input the prompt cache served, `cache_read_input_tokens` over
  * all input tokens (uncached + read + written), to 3 places; null with no usage or no input. A
  * request on another model than the session's cannot read the session's cache, so a low share
- * at a large context is the observable sign of one.
+ * at a large context is the observable sign of one. A main request's cache marker sits on its
+ * last message, so its uncached input is small; a compaction's is not (see `prefixRead`).
  */
 export function readShare(u: RequestUsage | null | undefined): number | null {
   if (!u) return null
-  const n = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
-  const read = n(u.cache_read_input_tokens)
-  const total = n(u.input_tokens) + read + n(u.cache_creation_input_tokens)
+  const read = tokensOf(u.cache_read_input_tokens)
+  const total = tokensOf(u.input_tokens) + read + tokensOf(u.cache_creation_input_tokens)
   return total > 0 ? Math.round((read / total) * 1000) / 1000 : null
+}
+
+/**
+ * The cold test of a compaction (root ruling 2026-10-27 23:16, after the L3 probe; replaces the
+ * read share there): the share of the cached prefix the summarizer request read rather than wrote,
+ * `cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)`, to 3 places;
+ * null with no usage or no cache tokens. Claude Code's compaction request puts its one message
+ * cache marker on the last summarized assistant message, so everything after it is uncached input
+ * whatever the cache state (`uncoveredInput`): L3 read 0.045 of its input warm, but 0.925 of its
+ * prefix. A warm cache reads about 0.9 or more of the prefix, a cold one about 0.3 or less.
+ */
+export function prefixRead(u: RequestUsage | null | undefined): number | null {
+  if (!u) return null
+  const read = tokensOf(u.cache_read_input_tokens)
+  const prefix = read + tokensOf(u.cache_creation_input_tokens)
+  return prefix > 0 ? Math.round((read / prefix) * 1000) / 1000 : null
+}
+
+/** The input tokens outside the cache (`input_tokens`): logged beside the prefix read, never part of the cold test. */
+export function uncoveredInput(u: RequestUsage | null | undefined): number | null {
+  return u ? tokensOf(u.input_tokens) : null
 }
 export type Version = { version: string; base?: string; builtAt?: string }
 
