@@ -116,7 +116,7 @@ const WORST = {
   // Away digest phase 1 [idle-done]: the lane word, the longest reason and the longest Basis line
   // lane.ts gives (LANE_WHY_MAX, LANE_BASIS_MAX; tools/assemble budgets with the same values).
   lane: 'hard-blocked', lane_why: 'no Status code could read, but every listed step is marked done',
-  lane_basis: '999+ of 999+ listed steps marked done; 999+ units running; git: 999+ commits not pushed, 999+ files changed',
+  lane_basis: '999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed',
   // The shadow trial's fork texts (TRIAL-DUAL-HANDOFF §4.2): read at run time from local files.
   old_skill: '# Old skill\nStep 1.', old_template: '# Template', trial_facts: 'Repository: r', trial_tail: 'Last reply:\ndone',
 }

@@ -106,7 +106,8 @@ test('measuredRunning, notifiedTasks, startsWork: the units a measure lists, the
     '  w1 · workflow · pending · output /tmp/w1 (exists)\n  m1 · monitor · running\n  c1 · cron · scheduled\nEvidence (automatic copies):\n  x · y · running\n'
   expect(measuredRunning(m)).toEqual(['b1', 'w1'])
   expect(measuredRunning(undefined)).toEqual([])
-  expect(notifiedTasks('<task-notification>\n<task-id>af63d8ad7bcf2ffd4</task-id>\n<status>completed</status>\n</task-notification>\n<task-id>b7</task-id>')).toEqual(['af63d8ad7bcf2ffd4', 'b7'])
+  // An id with no status after it (b7) ends nothing (review of fix round 2: a Monitor's event has none).
+  expect(notifiedTasks('<task-notification>\n<task-id>af63d8ad7bcf2ffd4</task-id>\n<status>completed</status>\n</task-notification>\n<task-id>b7</task-id>')).toEqual(['af63d8ad7bcf2ffd4'])
   expect(notifiedTasks('no ids')).toEqual([])
   expect([startsWork('Agent', {}), startsWork('Workflow', {}), startsWork('Bash', { backgroundTaskId: 'b1' }), startsWork('Bash', { stdout: '' }), startsWork('Read', {})])
     .toEqual([true, true, true, false, false])
@@ -582,6 +583,8 @@ const STEP5 = 'Step 5 finds none left, or all left waits on the user: instead, p
 const SOFT = 'Status: soft-blocked · Acuity: watch · State: waits on you (checkpoint: clean)\nStep 1: none\n'
 /** The measure's git line (measure.pm `git_lines`): 1 file changed, 2 commits not pushed. */
 const GIT = 'git: branch main · HEAD 3f9c2e1 · 1 changed · ahead 2 behind 0'
+/** The `HH:MM` of a block's `Measured facts (<stamp>; …)` line: when its measure was taken. */
+const stampOf = (block: string): string => /Measured facts \(\d{4}-\d\d-\d\dT(\d\d:\d\d):/.exec(block)?.[1] ?? 'no stamp'
 
 test('Q5 (phase 1 item 5): at the plugin\'s idle compaction a step waits on the agent\'s result, so the lane reads working; the result turn\'s [idle] block asks for the digest once nothing is left', async ($, on) => {
   const w = new World().install(on)
@@ -614,10 +617,10 @@ test('M7: the Basis line code renders: the listed steps marked done, the units r
   expect(laneBasis(undefined, 0, undefined)).toBe('no steps code could read; 0 units running; git: not measured')
   expect(laneBasis({ ...F, elsewhere: true }, 2, 'git: not measured (timeout)')).toBe('the steps are in the handoff file; 2 units running; git: not measured')
   expect(laneBasis({ ...F, listed: false, done: 0 }, 0, undefined)).toBe('no Next steps listed; 0 units running; git: not measured')
-  // The longest it can be is the value tools/assemble budgets with.
+  // Within the value tools/assemble budgets with (the longest is a branch with no upstream: R3-2).
   const worst = laneBasis({ ...F, done: 5000, todo: 5000 }, 5000, 'git: branch b · HEAD h · 5000 changed · ahead 5000 behind 0')
   expect(worst).toBe('999+ of 999+ listed steps marked done; 999+ units running; git: 999+ commits not pushed, 999+ files changed')
-  expect(worst.length).toBe(LANE_BASIS_MAX)
+  expect(worst.length <= LANE_BASIS_MAX).toBe(true)
 })
 
 test('M7: the [idle-done] block and a later lane note carry the Basis line, rendered when each goes out', async ($, on) => {
@@ -637,8 +640,9 @@ test('M7: the [idle-done] block and a later lane note carry the Basis line, rend
   expect(first).toContain('Left (each listed step not done, what blocks it; commits not pushed)')
   await w.turnEnd($)
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
+  // The note's git facts are the measure the block went out with: their time is the block's (R3-3).
   expect((await resultTurn($, w, notif('a2'))).ctx)
-    .toContain('the lane is now hard-blocked (Basis: 1 of 2 listed steps marked done; 0 units running; git: 2 commits not pushed, 1 file changed)')
+    .toContain(`the lane is now hard-blocked (Basis: 1 of 2 listed steps marked done; 0 units running; git as of ${stampOf(first)}: 2 commits not pushed, 1 file changed)`)
 })
 
 test('M7: a note that asks for the first digest carries the Basis line too', async ($, on) => {
@@ -651,12 +655,12 @@ test('M7: a note that asks for the first digest carries the Basis line too', asy
   await w.advance(5000)
   if (!HAS) return
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
-  await resultTurn($, w, notif('a1'))
+  const first = (await resultTurn($, w, notif('a1'))).block ?? ''
   await w.turnEnd($)
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
   const note = (await resultTurn($, w, notif('a2'))).ctx
   expect(note).toContain('print the away digest')
-  expect(note).toContain('Basis: 1 of 1 listed step marked done; 0 units running; git: 2 commits not pushed, 1 file changed (by code, as is)')
+  expect(note).toContain(`Basis: 1 of 1 listed step marked done; 0 units running; git as of ${stampOf(first)}: 2 commits not pushed, 1 file changed (by code, as is)`)
 })
 
 test('soft-blocked with nothing running reads hard-blocked (owner xxxxxxxx-06: soft means something still runs)', () => {
@@ -720,11 +724,12 @@ test('a finished Status with no Next steps section (a summary cut near its size 
   await staysWorking($, new World().install(on), FINISHED_HEAD)
 })
 
-test('a notification counts its task as ended only with an ending status (completed, failed, killed) or none', async ($, on) => {
+test('a notification counts its task as ended only with an ending status (completed, failed, killed)', async ($, on) => {
   expect(notifiedTasks('<task-notification>\n<task-id>b1</task-id>\n<status>running</status>\n</task-notification>')).toEqual([])
   expect(notifiedTasks('<task-notification><task-id>b1</task-id><status>failed</status></task-notification><task-notification><task-id>b2</task-id>' +
     '<status>progress</status></task-notification><task-notification><task-id>b3</task-id><status>killed</status></task-notification>')).toEqual(['b1', 'b3'])
-  expect(notifiedTasks('<task-notification>\n<task-id>b4</task-id>\n<summary>x</summary>\n</task-notification>')).toEqual(['b4'])
+  // No status ends nothing (R3-4).
+  expect(notifiedTasks('<task-notification>\n<task-id>b4</task-id>\n<summary>x</summary>\n</task-notification>')).toEqual([])
   // Through the kit: the shell the measure lists runs on after a notification about it that ends nothing.
   const w = new World().install(on)
   w.resumeHere = FINISHED
@@ -785,4 +790,76 @@ test('a lane note whose prompt does not enter (a hook beneath drops it) goes to 
   w.dropIf = undefined
   // The next turn not of a person's gets it.
   expect((await resultTurn($, w, 'A shell finished.')).ctx).toContain('code reads the work lane as hard-blocked')
+})
+
+// ---- review of fix round 2 (fix round 3): each test failed on 25d7ccb
+
+/** The measure's git line on a branch with no upstream (measure.pm `git_lines`): this branch's own, as the review measured it. */
+const NO_UP = 'git: branch v012-digest · HEAD 25d7ccbe891c · 0 changed · no upstream'
+
+test('R3-2: a branch with no upstream (a new local or worktree branch, a detached HEAD) or a gone one: the Basis says commits not pushed are unknown, never 0', () => {
+  const f = { ...F, done: 1 }
+  expect(laneBasis(f, 0, NO_UP + '\nIn flight: none listed')).toBe('1 of 1 listed step marked done; 0 units running; git: no upstream, unpushed unknown, 0 files changed')
+  expect(laneBasis(f, 0, 'git: branch (detached) · HEAD 25d7ccbe891c · 3 changed · no upstream · rebase in progress'))
+    .toBe('1 of 1 listed step marked done; 0 units running; git: no upstream, unpushed unknown, 3 files changed')
+  expect(laneBasis(f, 1, 'git: branch feat/x · HEAD 25d7ccbe891c · 1 changed · upstream gone'))
+    .toBe('1 of 1 listed step marked done; 1 unit running; git: no upstream, unpushed unknown, 1 file changed')
+  // With an upstream the count stays.
+  expect(laneBasis(f, 0, GIT)).toBe('1 of 1 listed step marked done; 0 units running; git: 2 commits not pushed, 1 file changed')
+  // The longest Basis is this one: the value tools/assemble budgets with.
+  const worst = laneBasis({ ...F, done: 5000, todo: 5000 }, 5000, 'git: branch b · HEAD h · 5000 changed · no upstream')
+  expect(worst).toBe('999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed')
+  expect(worst.length).toBe(LANE_BASIS_MAX)
+})
+
+test('R3-2: through the kit, the digest turn of a finished lane on a branch with no upstream prints the unknown, not 0 commits not pushed', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = FINISHED
+  w.measureBlock = NO_UP + '\nIn flight: none listed\nEvidence: none'
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  if (!HAS) return
+  expect(w.submits.length).toBe(1)
+  const sent = w.submits[0] ?? ''
+  expect(sent).toContain('Basis: 1 of 1 listed step marked done; 0 units running; git: no upstream, unpushed unknown, 0 files changed (by code, as is)')
+  expect(sent).not.toContain('0 commits not pushed')
+})
+
+test('R3-3: a later turn\'s note says how old its git facts are: the time of the measure its block went out with, not now', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = HARD + '## Next steps\n1. run the suite — done when green · done\n'
+  w.measureBlock = GIT + '\nIn flight: none listed\nEvidence: none'
+  w.agents = [{ id: 'a1', status: 'running' }]
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  if (!HAS) return
+  // The first result turn gets the block (soft-blocked while a1 runs on a notification that ends nothing).
+  const first = (await resultTurn($, w, '<task-notification>\n<task-id>a1</task-id>\n<status>progress</status>\n</task-notification>')).block ?? ''
+  const at = stampOf(first)
+  expect(at).toMatch(/^\d\d:\d\d$/)
+  await w.turnEnd($)
+  // Ten minutes on, the agent ends: the note's git facts are still the block's.
+  await w.advance(10 * 60 * 1000)
+  w.agents = [{ id: 'a1', status: 'completed' }]
+  const note = (await resultTurn($, w, notif('a1'))).ctx
+  expect(note).toContain('code reads the work lane as hard-blocked')
+  expect(note).toContain(`git as of ${at}: 2 commits not pushed, 1 file changed`)
+})
+
+test('R3-4: a notification with no status (a Monitor\'s event while it runs on) ends nothing: the shell the measure lists still runs', async ($, on) => {
+  // The shape Claude Code sends for a Monitor event: a task id, a summary and the event, no status.
+  const event = '<task-notification>\n<task-id>b7</task-id>\n<summary>Monitor event: "build log"</summary>\n<event>step 3 of 9</event>\n</task-notification>'
+  expect(notifiedTasks(event)).toEqual([])
+  const w = new World().install(on)
+  w.resumeHere = FINISHED
+  w.measureBlock = shell('b7')
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  if (!HAS) return
+  const t = await resultTurn($, w, event)
+  expect(t.block ?? '').not.toContain('code reads the work lane as finished')
+  expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at]).slice(-1)).toEqual([['working', 'delivery']])
 })

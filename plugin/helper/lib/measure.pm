@@ -20,8 +20,13 @@ sub git_lines {
     return ('git: not measured (timeout)') if $g->{status} eq 'timeout';
     return ('git: unavailable') if $g->{status} eq 'unavailable';
     return ('git: not a repository') if $g->{status} eq 'not-git';
-    my $l = sprintf('git: branch %s · HEAD %s · %d changed · ahead %d behind %d%s',
-                    $g->{branch} // '(detached)', $g->{head} // '-', $g->{count}, $g->{ahead}, $g->{behind},
+    # With no upstream (a new local branch, a detached HEAD) or one whose ref is gone, the commits
+    # not pushed are unknown: the line says so instead of `ahead 0` (the away digest's Basis reads
+    # it; review of the away-digest fix round 2).
+    my $u = $g->{upstream} // 'set';
+    my $l = sprintf('git: branch %s · HEAD %s · %d changed · %s%s',
+                    $g->{branch} // '(detached)', $g->{head} // '-', $g->{count},
+                    $u eq 'none' ? 'no upstream' : $u eq 'gone' ? 'upstream gone' : sprintf('ahead %d behind %d', $g->{ahead}, $g->{behind}),
                     $g->{op} ? " · $g->{op} in progress" : '');
     my @out = ($l);
     push @out, map { "  $_" } @{ $g->{porcelain} || [] };

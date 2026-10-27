@@ -317,6 +317,8 @@ export type IdleLane = {
   driver: boolean
   shown: Lane | undefined
   remeasure: string | undefined
+  /** When `remeasure` was measured (epoch ms): a lane note's Basis says how old its git facts are. */
+  measuredAt: number | undefined
   ended: Set<string>
   superseded: boolean
   /** A person's prompt came after a turn got the block: no more re-checks (the held `[idle-again]` block still reads it). */

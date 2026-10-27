@@ -190,7 +190,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     // settled the record as replaced. A restored idle block opens its idle episode (away digest).
     if (!s.pending && r) {
       s.pending = r
-      if (r.args.idle === true && !r.args.midturn) openEpisode(s, sid, r.nonce, r.args, r.remeasure, true)
+      if (r.args.idle === true && !r.args.midturn) openEpisode(s, sid, r.nonce, r.args, r.remeasure, r.measuredAt, true)
     }
   }
   const pend = s.pending
@@ -234,10 +234,12 @@ export async function logLane(
  * Opens the idle episode of an idle block (away digest phase 1): from its after-step, or from its
  * record restored after `claude --resume` (`restored`; no turn has got the block yet).
  */
-export function openEpisode(s: LoadState, sid: string, nonce: string, a: BlockArgs, remeasure: string | undefined, restored = false): void {
+export function openEpisode(
+  s: LoadState, sid: string, nonce: string, a: BlockArgs, remeasure: string | undefined, measuredAt: number | undefined, restored = false,
+): void {
   s.idleLane = {
     sid, nonce, facts: a.lane, nonok: a.nonok, driver: remeasure !== undefined && DRIVER_LINE.test(remeasure), shown: undefined,
-    remeasure, ended: new Set(), superseded: false, closed: false, restored,
+    remeasure, measuredAt, ended: new Set(), superseded: false, closed: false, restored,
   }
 }
 
@@ -252,7 +254,9 @@ function episodeOf(s: LoadState, sid: string, nonce: string | undefined): IdleLa
  * the measure it was built with, are what later turns of the episode are re-checked against; a
  * person's turn ends the episode.
  */
-async function laneShown(d: Deps, pend: PendingResume, out: { remeasure: string | undefined; lane?: LaneResult; running?: number }, human: boolean): Promise<void> {
+async function laneShown(
+  d: Deps, pend: PendingResume, out: { remeasure: string | undefined; measuredAt: number; lane?: LaneResult; running?: number }, human: boolean,
+): Promise<void> {
   const s = d.state
   if (out.lane !== undefined) await logLane(d, pend.sid, pend.nonce, pend.args.lane, out.lane, 'delivery', out.running ?? 0)
   const l = episodeOf(s, pend.sid, pend.nonce)
@@ -264,6 +268,7 @@ async function laneShown(d: Deps, pend: PendingResume, out: { remeasure: string 
   l.shown = out.lane?.lane ?? 'working'
   // The measure this turn's block went out with (re-measured past 600 s): its rows and its driver.
   l.remeasure = out.remeasure
+  l.measuredAt = out.measuredAt
   l.driver = out.remeasure !== undefined && DRIVER_LINE.test(out.remeasure)
 }
 
@@ -298,7 +303,9 @@ export async function laneRecheck(d: Deps, kind: string, text: string): Promise<
   l.shown = r.lane
   await logLane(d, l.sid, l.nonce, l.facts, r, 'recheck', running)
   if (r.lane !== 'finished' && r.lane !== 'hard-blocked') return undefined
-  return { text: laneNote(d.name, r, laneBasis(l.facts, running, l.remeasure), showsDigest(was)), nonce: l.nonce, was, now: r.lane }
+  // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
+  const asOf = l.measuredAt !== undefined ? isoLocal(l.measuredAt, false).slice(11, 16) : undefined
+  return { text: laneNote(d.name, r, laneBasis(l.facts, running, l.remeasure, asOf), showsDigest(was)), nonce: l.nonce, was, now: r.lane }
 }
 
 /** A lane note `laneRecheck` put beside a prompt: the state it told, and the one before. */

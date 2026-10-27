@@ -185,11 +185,17 @@ export function asLaneFacts(x: unknown): LaneFacts | undefined {
 /** Every `why` below is at most this long: tools/assemble fills `@lane_why@` with one this long for the budgets. */
 export const LANE_WHY_MAX = 63
 
-/** The longest Basis `laneBasis` gives: tools/assemble fills `@lane_basis@` with one this long for the budgets. */
-export const LANE_BASIS_MAX = 107
+/**
+ * The longest Basis `laneBasis` gives without a time (the block's): tools/assemble fills
+ * `@lane_basis@` with one this long for the budgets. A note's Basis adds its `as of HH:MM`.
+ */
+export const LANE_BASIS_MAX = 113
 
-/** The measure's git line (measure.pm `git_lines`): files changed, commits ahead of the upstream. */
-const GIT_RE = /^git: branch .*? · HEAD \S+ · (\d+) changed · ahead (\d+) behind \d+/m
+/**
+ * The measure's git line (measure.pm `git_lines`): files changed, then commits ahead of the
+ * upstream, or `no upstream` / `upstream gone` when there is none to count against.
+ */
+const GIT_RE = /^git: branch .*? · HEAD \S+ · (\d+) changed · (?:ahead (\d+) behind \d+|no upstream|upstream gone)/m
 
 function count(n: number, one: string, many: string): string {
   return `${n > 999 ? '999+' : String(n)} ${n === 1 ? one : many}`
@@ -201,14 +207,20 @@ function count(n: number, one: string, many: string): string {
  * summary marks done, the units running now, and the commits not pushed and files changed the
  * measure shows. The model prints it as it is; the rest of the digest is the model's (owner
  * xxxxxxxx-05: the model sets the done and to-do items).
+ * A branch with no upstream (a new local or worktree branch, a detached HEAD) or a gone one has
+ * its commits not pushed unknown, never 0 (review of fix round 2). `asOf` (a note's, `HH:MM`) is
+ * when the measure was taken: a later turn's note reuses the one its block went out with.
  */
-export function laneBasis(f: LaneFacts | undefined, running: number, remeasure: string | undefined): string {
+export function laneBasis(f: LaneFacts | undefined, running: number, remeasure: string | undefined, asOf?: string): string {
   const steps = f === undefined ? 'no steps code could read'
     : f.elsewhere ? 'the steps are in the handoff file'
     : !f.listed ? 'no Next steps listed'
     : `${f.done > 999 ? '999+' : String(f.done)} of ${count(f.done + f.todo + f.unmarked, 'listed step', 'listed steps')} marked done`
   const g = GIT_RE.exec(remeasure ?? '')
-  const git = g ? `git: ${count(Number(g[2]), 'commit', 'commits')} not pushed, ${count(Number(g[1]), 'file', 'files')} changed` : 'git: not measured'
+  const files = g ? count(Number(g[1]), 'file', 'files') + ' changed' : ''
+  const git = !g ? 'git: not measured'
+    : `git${asOf !== undefined ? ` as of ${asOf}` : ''}: ` +
+      (g[2] === undefined ? `no upstream, unpushed unknown, ${files}` : `${count(Number(g[2]), 'commit', 'commits')} not pushed, ${files}`)
   return `${steps}; ${count(running, 'unit', 'units')} running; ${git}`
 }
 
@@ -324,8 +336,11 @@ const ENDED_RE = /^(?:completed|failed|killed|stopped|cancell?ed)$/i
 /**
  * The task ids a background-task notification reports ended (`<task-id>…</task-id>`; several in a
  * batch). Each id takes the `<status>` that follows it inside its own notification, before the
- * next id: an ending word, or no status at all, counts the task as ended; another word (a
- * producer's own, such as one about a task still running) leaves it running.
+ * next id: only an ending word counts the task as ended. No status, or another word, leaves it
+ * running: a Monitor's event comes as a notification with a task id, a summary and an event but
+ * no status while the monitor runs on, and every ended task's notification seen in the session
+ * records carries its status (review of fix round 2). Missing an end keeps the lane working,
+ * the safe side.
  */
 export function notifiedTasks(text: string): string[] {
   const out: string[] = []
@@ -334,7 +349,7 @@ export function notifiedTasks(text: string): string[] {
     ids.forEach((m, i) => {
       const end = ids[i + 1]?.index ?? part.length
       const status = /<status>\s*([^<]*?)\s*<\/status>/.exec(part.slice((m.index ?? 0) + m[0].length, end))?.[1]
-      if (m[1] && (status === undefined || ENDED_RE.test(status))) out.push(m[1])
+      if (m[1] && status !== undefined && ENDED_RE.test(status)) out.push(m[1])
     })
   }
   return out

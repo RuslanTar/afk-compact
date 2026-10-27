@@ -423,8 +423,16 @@ def probes(name):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
 
     def reason_malformed(d):
-        """REVIEW-NIGHT NR-19: an `up_to` that is not a whole number is an error, not "no limit"."""
-        edit(d, "tools/budget-reasons.json", '"up_to": 4420', '"up_to": "4420"')
+        """REVIEW-NIGHT NR-19: an `up_to` that is not a whole number is an error, not "no limit".
+        The resume protocol's `up_to` is quoted at whatever value it has now, so a logged cap
+        raise does not break the probe (review of the away-digest fix round 2)."""
+        p = os.path.join(d, "tools", "budget-reasons.json")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        m = re.search(r'("resume protocol":\s*\{.*?"up_to":\s*)(\d+)', t, re.S)
+        if not m:
+            raise Fail("X-tools: no resume protocol up_to in tools/budget-reasons.json")
+        write_text(p, t[:m.start(2)] + '"' + m.group(2) + '"' + t[m.end(2):])
 
     def prod_exclusive(d):
         """XR-19 (BLD-04): step 4 only as a [prod-forbid] line (the [prod-allow] step-4 line
@@ -954,7 +962,7 @@ def probes(name):
         ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER \(soft; the logged reason covers up to \d+\)$", r"^RESULT: FAIL$"], None),
         ("reason-malformed", "NR-19", ["tools/assemble"], reason_malformed,
-         [r"^budget reasons \(tools/budget-reasons\.json\): resume protocol: up_to '4420' is not a positive whole number  FAIL$",
+         [r"^budget reasons \(tools/budget-reasons\.json\): resume protocol: up_to '\d+' is not a positive whole number  FAIL$",
           r"^RESULT: FAIL$"], None),
         ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
          [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",

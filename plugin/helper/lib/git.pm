@@ -77,7 +77,7 @@ sub where {
 }
 
 # measure(cwd, budget_ms) -> {status: ok|timeout|unavailable|not-git, branch, head,
-#   porcelain => [first 20], count, ahead, behind, ms, op, toplevel}
+#   porcelain => [first 20], count, ahead, behind, upstream (set|none|gone), ms, op, toplevel}
 sub measure {
     my ($cwd, $budget_ms) = @_;
     my $t0 = util::clock_ms();
@@ -91,12 +91,16 @@ sub measure {
     return { status => 'not-git', ms => $ms->() } if $r->{exit} != 0;
     my @lines = split /\n/, util::text($r->{out});    # status lines and the branch are text
     my $head_line = (@lines && $lines[0] =~ /^## /) ? shift @lines : '';
-    my ($branch, $ahead, $behind) = (undef, 0, 0);
+    my ($branch, $ahead, $behind, $upstream) = (undef, 0, 0, 'none');
     if ($head_line =~ /^## (.*)$/) {
         my $rest = $1;
         my $tr = ($rest =~ s/ \[([^\]]*)\]$//) ? $1 : '';
         $rest =~ s/^No commits yet on //;
-        ($branch) = split /\.\.\./, $rest, 2;
+        my $up;
+        ($branch, $up) = split /\.\.\./, $rest, 2;
+        # `branch...remote/branch` names an upstream; ` [gone]` says its ref no longer exists. With
+        # none (a new local branch, a detached HEAD) ahead and behind are not known, not 0.
+        $upstream = !defined $up || $up eq '' ? 'none' : $tr eq 'gone' ? 'gone' : 'set';
         ($ahead) = $tr =~ /ahead (\d+)/;
         ($behind) = $tr =~ /behind (\d+)/;
     }
@@ -117,7 +121,8 @@ sub measure {
     }
     my $count = scalar @lines;
     return { status => 'ok', branch => $branch, head => $head, porcelain => [@lines[0 .. ($count > 20 ? 19 : $count - 1)]],
-             count => $count, ahead => 0 + ($ahead // 0), behind => 0 + ($behind // 0), op => $op, toplevel => $top, ms => $ms->() };
+             count => $count, ahead => 0 + ($ahead // 0), behind => 0 + ($behind // 0), upstream => $upstream, op => $op, toplevel => $top,
+             ms => $ms->() };
 }
 
 1;

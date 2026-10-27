@@ -437,7 +437,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
   // The idle episode of this compaction (a compaction that is not idle closes the one before).
-  if (a.idle === true && !a.midturn) openEpisode(s, a.sid, a.nonce, blockArgs, built.remeasure)
+  if (a.idle === true && !a.midturn) openEpisode(s, a.sid, a.nonce, blockArgs, built.remeasure, built.measuredAt)
   else s.idleLane = undefined
   if (built.lane !== undefined) await logLane(d, a.sid, a.nonce, facts, built.lane, 'build', built.running ?? 0)
   // A block still pending is replaced by this one: its outcome is settled now (no channel
