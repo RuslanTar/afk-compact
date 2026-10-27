@@ -61,6 +61,11 @@ export class World {
    * plugin reads the kit's own text, a class `other` failure).
    */
   commandMode: 'run' | 'unclaimed' | 'reject' | { text: string } = 'run'
+  /**
+   * The bottom opens a main turn (`/compact`) before a `/compact` run's compaction, as Claude
+   * Code may run that command inside a turn; the test ends that turn (`turnEnd`) after the run.
+   */
+  commandTurn = false
   /** Every `command.run` that reached the bottom. */
   commandRuns: { command: string; args: string; origin: unknown }[] = []
   /** The test's engine, kept at `start` (a `/compact` raises its compaction through it). */
@@ -186,6 +191,7 @@ export class World {
         return {}
       }
       if (!this.engine) throw new Error('World.start was not called')
+      if (this.commandTurn) await this.turnStart(this.engine, '/compact')
       const r = await this.engine.session.compact({ trigger: 'manual', messages: [KEPT], ...(e.args ? { instructions: e.args } : {}) } as never)
       return r.skip !== undefined ? { text: 'Not compacted · ' + r.skip } : {}
     })

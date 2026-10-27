@@ -63,6 +63,9 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   s.foreignPrompts = 0
   // Before any await: a native compaction from here on makes the post-handoff one a second one.
   const seq = s.nativeCompactSeq
+  // The turn our own `/compact` ran in (alive.ts): its end starts no plugin compaction.
+  const ownCompactTurn = s.ownCompactTurn
+  s.ownCompactTurn = false
   s.lastTurnAsksUser = s.askedThisTurn || endsWithQuestion(t.answer)
   if (t.reason !== 'answer') s.resumeAfter = false
   // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
@@ -83,7 +86,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   s.lastCycle = null
   // A headless session with no `/compact` path left: no plugin compaction (Claude Code rejects
   // the call there). With the path, no nudge came, so `last` is null: no handoff turn below.
-  if (pluginCompactOff(s)) return
+  // Nor at the end of the turn our own `/compact` ran in: never a repeat without a prompt.
+  if (pluginCompactOff(s) || ownCompactTurn) return
   const eff = await effective(d, sid)
   if (eff.disabled) return
   if (t.reason !== 'answer') return
@@ -392,9 +396,10 @@ export const COMMAND_FAILS_MAX = 2
  * the transcript's command row carries none of our text), which our own `session.compact` hook
  * claims and shapes with `text` (`onOwnCompact`). No continue follows: the session waits for its
  * next prompt, which gets the resume block (prompt.context). One `compact_command` row says how
- * it went. A failure (Claude Code answers with its reason, or the call rejects) starts the
- * cooldown, so the next turn end does not retry at once; one that cannot work later in the load
- * (`no-command`, `input-ended`), or the second in a row, turns the path off (`compactOff`).
+ * it went. Anything but a compaction our hook shaped is a failure (skipped, no result, unclaimed,
+ * Claude Code's reason, a rejected call): it starts the cooldown, so the next turn end does not
+ * retry at once; one that cannot work later in the load (`no-command`, `input-ended`), or the
+ * second in a row, turns the path off (`compactOff`).
  */
 async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string): Promise<void> {
   const s = d.state
@@ -418,33 +423,41 @@ async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string):
 }
 
 /**
- * How our `/compact` went, as one `compact_command` row: `compacted` or `skipped` when our hook
- * claimed it; `unclaimed` when it compacted without reaching our hook as ours; `failed` (Claude
- * Code's reason as its output) or `rejected` (the call rejected) with the class and the text.
+ * How our `/compact` went, as one `compact_command` row. Only `compacted` (our hook claimed it
+ * and it compacted) resets the failure count. Every other outcome is a failure: it starts the
+ * cooldown and counts toward `COMMAND_FAILS_MAX`, so a /compact that did not do its job is never
+ * repeated at once (the end of the turn Claude Code ran it in comes right after it). They are
+ * `skipped` (claimed, the compaction skipped), `failed` with a class (claimed with no result,
+ * as when the compaction beneath our hook threw; or Claude Code's reason as the output),
+ * `unclaimed` (it compacted without reaching our hook as ours: unshaped, no after-step), and
+ * `rejected` (the call rejected) with the class and the text.
  */
 export async function commandOutcome(d: Deps, sid: string, own: OwnCompact, out: CommandOut): Promise<void> {
   const s = d.state
-  if (own.claimed) {
+  if (own.claimed && own.result !== undefined && own.result.skip === undefined) {
     s.commandFails = 0
-    const skipped = own.result === undefined || own.result.skip !== undefined
-    await log(d, sid, 'compact_command', { nonce: own.nonce, result: skipped ? 'skipped' : 'compacted', error_class: null, error: null })
+    await log(d, sid, 'compact_command', { nonce: own.nonce, result: 'compacted', error_class: null, error: null })
     return
   }
   const rejected = 'rejected' in out
   const failText = rejected ? rejectText(out.rejected) : out.text !== undefined ? rejectText(out.text) : undefined
-  if (failText === undefined) {
+  let row: { result: string; error_class: ReturnType<typeof commandClass> | null; error: string | null }
+  if (own.claimed && own.result !== undefined) {
+    row = { result: 'skipped', error_class: null, error: null }
+  } else if (own.claimed) {
+    row = { result: 'failed', error_class: commandClass(failText ?? ''), error: failText ?? null }
+  } else if (failText === undefined) {
     // It compacted, but not through our hook as ours: the dispatch gets no after-step (reconcile
-    // and the watcher report it). It still counts for the cooldown and the thrash rule.
-    s.commandFails = 0
-    s.lastPluginCompactAt = await d.now()
+    // and the watcher report it). It also counts for the thrash rule.
     s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
-    await log(d, sid, 'compact_command', { nonce: own.nonce, result: 'unclaimed', error_class: null, error: null })
-    return
+    row = { result: 'unclaimed', error_class: null, error: null }
+  } else {
+    row = { result: rejected ? 'rejected' : 'failed', error_class: commandClass(failText), error: failText }
   }
-  const cls = commandClass(failText)
-  await log(d, sid, 'compact_command', { nonce: own.nonce, result: rejected ? 'rejected' : 'failed', error_class: cls, error: failText })
+  await log(d, sid, 'compact_command', { nonce: own.nonce, ...row })
   s.lastPluginCompactAt = await d.now()
   s.commandFails++
+  const cls = row.error_class
   if (cls === 'no-command' || cls === 'input-ended' || s.commandFails >= COMMAND_FAILS_MAX) await compactOff(d, sid)
 }
 

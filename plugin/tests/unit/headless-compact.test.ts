@@ -153,20 +153,34 @@ test('AT-HC-05: /compact rejected as unknown (compaction off) or past the host\'
   ])
 })
 
-test('AT-HC-05: claimed by our hook: compacted or skipped, the failure count reset; nothing compacted, no text: unclaimed', async () => {
+test('AT-HC-05: only a claimed compaction that compacted resets the failure count; claimed but skipped, claimed with no result and unclaimed are failures with the cooldown, two in a row turn the path off', async () => {
   const a = rowDeps()
   a.d.state.commandFails = 1
   const o = own('1a2b3c4d', true)
   o.result = { messages: [] }
   await commandOutcome(a.d, 'sid-1', o, { text: undefined })
+  expect([a.d.state.commandFails, a.d.state.lastPluginCompactAt]).toEqual([0, undefined])
   const k = own('5e6f7a8b', true)
   k.result = { skip: 'other-plugin' }
   await commandOutcome(a.d, 'sid-1', k, { text: 'Not compacted \u00b7 other-plugin' })
+  expect([a.d.state.commandFails, a.d.state.lastPluginCompactAt, a.d.state.headlessCompact]).toEqual([1, 0, 'command'])
   await commandOutcome(a.d, 'sid-1', own('9c0d1e2f'), { text: undefined })
-  expect(a.rows.map(r => [r.nonce, r.result, r.error_class])).toEqual([
-    ['1a2b3c4d', 'compacted', null], ['5e6f7a8b', 'skipped', null], ['9c0d1e2f', 'unclaimed', null],
+  expect(a.rows.map(r => [r.ev, r.nonce ?? r.via, r.result ?? r.compact, r.error_class ?? null])).toEqual([
+    ['compact_command', '1a2b3c4d', 'compacted', null], ['compact_command', '5e6f7a8b', 'skipped', null],
+    ['compact_command', '9c0d1e2f', 'unclaimed', null], ['headless', 'command-failed', 'none', null],
   ])
-  expect([a.d.state.commandFails, a.d.state.headlessCompact, a.d.state.pluginCompactions.length]).toEqual([0, 'command', 1])
+  expect([a.d.state.commandFails, a.d.state.headlessCompact, a.d.state.pluginCompactions.length]).toEqual([2, 'none', 1])
+
+  // Claimed, no result (the compaction beneath our hook threw): failed, with Claude Code's text.
+  const b = rowDeps()
+  await commandOutcome(b.d, 'sid-1', own('1a2b3c4d', true), { rejected: new Error('Error during compaction: summarizer failed') })
+  expect(b.rows.map(r => [r.result, r.error_class, r.error])).toEqual([['failed', 'other', 'Error during compaction: summarizer failed']])
+  expect([b.d.state.commandFails, b.d.state.lastPluginCompactAt]).toEqual([1, 0])
+  await commandOutcome(b.d, 'sid-1', own('5e6f7a8b', true), { text: undefined })
+  expect(b.rows.map(r => [r.ev, r.result ?? r.compact, r.error_class ?? null, r.error ?? null])).toEqual([
+    ['compact_command', 'failed', 'other', 'Error during compaction: summarizer failed'], ['compact_command', 'failed', 'other', null],
+    ['headless', 'none', null, null],
+  ])
 })
 
 test('AT-HC-05: a rejection through the kit (class other): one failure, the cooldown holds the next turn end; the second in a row turns the path off', async ($, on) => {
@@ -201,7 +215,7 @@ test('AT-HC-05: failed, compacted, failed: the path stays on (two failures in a 
   expect(w.rowsOf('headless').map(r => r.compact)).toEqual(['command'])
 })
 
-test('AT-HC-06: a /compact that compacted without reaching our hook: compact_command unclaimed, no after-step; it counts for the cooldown', async ($, on) => {
+test('AT-HC-06: a /compact that compacted without reaching our hook: compact_command unclaimed, no after-step; a failure with the cooldown, the second in a row turns the path off', async ($, on) => {
   const w = headlessWorld(on)
   w.commandMode = 'unclaimed'
   await w.start($)
@@ -212,6 +226,13 @@ test('AT-HC-06: a /compact that compacted without reaching our hook: compact_com
   await turnAtTarget($, w)
   expect(w.commandRuns.length).toBe(1)
   expect(w.rowsOf('headless').map(r => r.compact)).toEqual(['command'])
+  await w.advance(MIN)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(2)
+  expect(w.rowsOf('headless').map(r => r.compact)).toEqual(['command', 'none'])
+  await w.advance(MIN)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(2)
 })
 
 test('AT-HC-07: interactive: $.session.compact as before, no /compact command', { options: { precompact_turn: 'code' } }, async ($, on) => {
@@ -279,4 +300,63 @@ test('AT-HC-11: the /compact is never a person\'s prompt: no prompt.submit of ou
   expect(w.commandRuns[0]?.args).toBe('')
   expect(w.rowsOf('halt').length).toBe(0)
   expect(w.rowsOf('headless').map(r => r.sid)).toEqual([SID_A])
+})
+
+test('AT-HC-12: no self-repeating /compact: a claimed /compact that was skipped is a failure with the cooldown, so the end of the turn Claude Code ran it in (after the command answered) runs no second one; the second skip in a row turns the path off', async ($, on) => {
+  const w = headlessWorld(on)
+  w.compactMode = { skip: 'other-plugin' }
+  await w.start($)
+  await turnAtTarget($, w)
+  // The turn the /compact ran in ends after the command answered, at the target, no prompt typed.
+  for (let i = 0; i < 4; i++) {
+    await w.turnStart($, '/compact')
+    await w.turnEnd($, '', 'answer')
+    await w.advance(2000)
+  }
+  expect(w.commandRuns.length).toBe(1)
+  expect([w.callsOf('checkpoint').length, w.callsOf('dispatch').length]).toEqual([1, 1])
+  expect(w.rowsOf('compact_command').map(r => r.result)).toEqual(['skipped'])
+  expect(w.rowsOf('skip').map(r => r.why)).toContain('cooldown')
+  expect(w.rowsOf('headless').map(r => r.compact)).toEqual(['command'])
+  // A person's turn end past the cooldown runs one more; skipped again, the path is off.
+  await w.advance(MIN)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(2)
+  expect(w.rowsOf('headless').map(r => [r.via, r.compact])).toEqual([['session-start', 'command'], ['command-failed', 'none']])
+  await w.advance(MIN)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(2)
+})
+
+test('AT-HC-13: the turn our /compact runs in (started while it is in flight) ends with no plugin compaction, even past the cooldown', async ($, on) => {
+  const w = headlessWorld(on)
+  w.compactMode = { skip: 'other-plugin' }
+  w.commandTurn = true
+  await w.start($)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(1)
+  await w.advance(MIN)
+  await w.turnEnd($, '', 'answer')
+  await w.advance(2000)
+  expect(w.commandRuns.length).toBe(1)
+  expect(w.rowsOf('compact_command').map(r => r.result)).toEqual(['skipped'])
+  // A person's next turn end compacts as usual.
+  w.compactMode = 'ok'
+  await turnAtTarget($, w)
+  expect(w.rowsOf('compact_command').map(r => r.result)).toEqual(['skipped', 'compacted'])
+})
+
+test('AT-HC-14: claimed, but the compaction beneath our hook threw (no result): compact_command failed with a class, not skipped; the cooldown holds the next turn end; the second in a row turns the path off', async ($, on) => {
+  const w = headlessWorld(on)
+  w.compactMode = 'reject'
+  await w.start($)
+  await turnAtTarget($, w)
+  expect(w.rowsOf('compact_command').map(r => [r.result, r.error_class])).toEqual([['failed', 'other']])
+  expect(w.rowsOf('compacted').length).toBe(0)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(1)
+  await w.advance(MIN)
+  await turnAtTarget($, w)
+  expect(w.commandRuns.length).toBe(2)
+  expect(w.rowsOf('headless').map(r => r.compact)).toEqual(['command', 'none'])
 })

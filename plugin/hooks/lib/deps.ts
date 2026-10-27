@@ -279,7 +279,15 @@ export type LoadState = {
   headlessCompact: 'command' | 'none'
   /** Our `/compact` in flight: our `session.compact` hook claims the next main `manual` one. */
   ownCompact: OwnCompact | undefined
-  /** Our `/compact` runs that failed in a row (two make `headlessCompact` `none`). */
+  /**
+   * The running main turn is the one our `/compact` runs in (it started with `/compact` while
+   * ours was in flight): its turn end starts no plugin compaction.
+   */
+  ownCompactTurn: boolean
+  /**
+   * Our `/compact` runs that failed in a row (two make `headlessCompact` `none`); anything but
+   * a compaction our hook shaped counts, a skipped or unclaimed one too.
+   */
   commandFails: number
 }
 
@@ -402,6 +410,7 @@ export function newState(loadId: string): LoadState {
     headlessSid: undefined,
     headlessCompact: 'command',
     ownCompact: undefined,
+    ownCompactTurn: false,
     commandFails: 0,
   }
 }

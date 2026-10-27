@@ -78,6 +78,9 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   cancelBoundary(d)
   cancelIdleTimer(d)
   s.mainTurnRunning = true
+  // Claude Code may run our headless `/compact` inside a turn: that turn's end is not a turn end
+  // to compact at (boundary.ts), or a /compact that did not compact would repeat on its own.
+  s.ownCompactTurn = s.ownCompact !== undefined && /^\/compact\b/.test(text.trim())
   // OT-1 (REVIEW-NIGHT-3 R3-07): with another prompt entering beside ours, a turn whose text is
   // more than ours may carry that prompt too; such a turn is never aborted.
   const otherEntering = s.foreignPrompts > 0
