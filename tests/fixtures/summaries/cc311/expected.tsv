@@ -1,0 +1,6 @@
+file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatch	sentinel_place
+01-installed-reminder-wrapped.txt	ok	1	1	1a2b3c4d	main	f345ccd3771ef1a47c3d8d82cd69f1187dd6c7cb2d5eea2a7545b8c398a7fed6		inside
+02-postcompact.txt	ok	1	1	1a2b3c4d	main	f345ccd3771ef1a47c3d8d82cd69f1187dd6c7cb2d5eea2a7545b8c398a7fed6		inside
+03-installed-reminder-blank-before-summary.txt	ok	1	1	1a2b3c4d	main	f345ccd3771ef1a47c3d8d82cd69f1187dd6c7cb2d5eea2a7545b8c398a7fed6		inside
+04-installed-reminder-multiline-tools.txt	ok	1	1	1a2b3c4d	main	f345ccd3771ef1a47c3d8d82cd69f1187dd6c7cb2d5eea2a7545b8c398a7fed6		inside
+05-installed-reminder-unclosed.txt	ok	4	1	1a2b3c4d	main	0bad95fea35f5e7b4f2908523e21e3c0e57cfad963ede63579c76a03015f53a8		inside

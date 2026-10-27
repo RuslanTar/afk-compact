@@ -1,0 +1,143 @@
+{
+ "id": "CC311-01 (Claude Code 2.1.311 reminder wrapper)",
+ "needs": [
+  "fixture:summaries/cc311/expected.tsv"
+ ],
+ "note": "Live probe 2026-10-27 on Claude Code 2.1.311: the installed summary wraps the tools-used block in a closed <system-reminder> block before `Summary:`. The detector strips it as a header part (MOD-SPEC 5.1), so the installed form reads ok with the marker on body line 1, also with a blank line before `Summary:` and a tools list over several lines, and gives the PostCompact form's body; an unclosed reminder stays body. The probe-shaped pair: PostCompact (postcompact-fallback) saves the copy first, then the mod's after-step save-copy from its stash of the installed form prints EXISTS sha-match (copy row result exists, the mod logs copy_exists), not sha-differs: no copy_mismatch escalation and no kept mismatch stash",
+ "now": "2026-10-27T09:15:38+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "lib": "detect_tsv",
+   "args": {
+    "tsv": "summaries/cc311/expected.tsv"
+   }
+  },
+  {
+   "name": "PostCompact saves the copy",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-self",
+      "trigger": "manual",
+      "age_s": 20
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "manual",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# LAB-123 — retry worker drains, one flaky spec open\n## Resume here\nStatus: active · State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` — for \"make the retry worker drain the queue\"\nGate: none · Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" — scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" — scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries — because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id — because duplicates were seen in staging (agent)\nX-1 rejected a global mutex — it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release · blocks nothing · options now, next · recommendation next · raised by agent · unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented — lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding — spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` — done when it passes 5 runs in a row\n⟪/{{plugin}} n=1a2b3c4d⟫\n</summary>\n"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-1a2b3c.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "result": "saved",
+       "writer": "postcompact-fallback"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "mod after-step: the installed 2.1.311 form matches the copy",
+   "setup": [
+    {
+     "copy": "summaries/cc311/01-installed-reminder-wrapped.txt",
+     "to": "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+     "subst": true
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--from",
+    "$WATCH/$SID/pending/1a2b3c4d.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--tokens",
+    "612000,41000",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^VERDICT ok marker_line=1 sentinel_from_end=1\\nEXISTS: .*_c1-1a2b3c\\.md sha-match\\n$",
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.mismatch.*",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 2
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "fields": {
+       "result": "exists",
+       "writer": "mod"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stash_kept",
+      "count": 0
+     }
+    ]
+   }
+  }
+ ]
+}

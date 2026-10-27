@@ -20,7 +20,9 @@ export type Call = { sub: string; args: string[]; env: Record<string, string>; s
 export type Reply = { exitCode: number; stdout: string } | 'reject'
 export type Row = Record<string, unknown> & { ev: string }
 
-export type SummaryMode = 'ok' | 'unshaped' | 'missing' | 'truncated'
+/** `cc311`: an ok summary in the Claude Code 2.1.311 installed form (the tools-used block in a
+ * closed `<system-reminder>` block before `Summary:`, no summary tags, the engine trailers). */
+export type SummaryMode = 'ok' | 'unshaped' | 'missing' | 'truncated' | 'cc311'
 
 export class World {
   sid = SID_A
@@ -57,6 +59,10 @@ export class World {
   measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
   /** The second line `save-copy` prints, or undefined for `Saved copy: <path>`. */
   saveLine: string | undefined
+  /** The classic PostCompact hook saved this compaction's copy first, from the PostCompact form
+   * (`<summary>…</summary>`) of the same summary: `save-copy` (with no `saveLine`) answers
+   * `EXISTS … sha-match` or `sha-differs` by the normalized sha256 of the stash against it. */
+  postCompactSaved = false
   helperDown = false
   /** The effective watch folder `ident` reports (null: the helper refused every log folder). */
   identWatch: string | null = WATCH
@@ -247,13 +253,24 @@ export class World {
       nonce = m[1] ?? nonce
       scope = m[2] ?? scope
     }
-    const head = 'This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n<summary>\n'
-    const body =
-      this.summaryMode === 'unshaped'
-        ? '# LAB-42 retry work\nNo marker here.\n'
-        : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n' +
+    const continued = 'This session is being continued from a previous conversation that ran out of context.\n\n'
+    const body = this.summaryBody(nonce, scope)
+    if (this.summaryMode === 'cc311') {
+      const head = continued + '<system-reminder>\n<tools-used-before-summary>Bash, Read</tools-used-before-summary>\n</system-reminder>\nSummary:\n'
+      const tail = '\nIf you need specific details from before compaction (like exact code snippets), read the full transcript at: /tmp/t.jsonl\n' +
+        'Continue the conversation from where it left off without asking the user any further questions.\n\n' +
+        'The messages after this summary are the most recent messages from before compaction, kept verbatim.\n'
+      return [{ role: 'user', text: head + body + tail, toolUses: [] }, kept]
+    }
+    return [{ role: 'user', text: continued + 'Summary:\n<summary>\n' + body + '</summary>', toolUses: [] }, kept]
+  }
+
+  /** The summary body (between the summary tags) for this nonce and scope. */
+  summaryBody(nonce: string, scope: string): string {
+    return this.summaryMode === 'unshaped'
+      ? '# LAB-42 retry work\nNo marker here.\n'
+      : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n' +
           (this.summaryMode === 'truncated' ? '' : sentinelText(this.name, nonce) + '\n')
-    return [{ role: 'user', text: head + body + '</summary>', toolUses: [] }, kept]
   }
 
   /** The fake helper: one answer per subcommand, the stdout forms of BUILD-PLAN §3.1. */
@@ -341,7 +358,9 @@ export class World {
         const scope = flag('--scope') === 'sub' ? 'sub' : 'main'
         const det = detectSummary(text, this.name, { dispatchNonce: nonce, scope })
         const l1 = `VERDICT ${det.verdict} marker_line=${det.marker_line ?? '-'} sentinel_from_end=${det.sentinel_from_end ?? '-'}`
-        const l2 = this.saveLine ?? `Saved copy: ~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`
+        const copy = `~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`
+        const post = this.postCompactSaved ? detectSummary(`<summary>\n${this.summaryBody(nonce, scope)}</summary>`, this.name, { dispatchNonce: nonce, scope }) : undefined
+        const l2 = this.saveLine ?? (post ? `EXISTS: ${copy} sha-${post.sha256 === det.sha256 ? 'match' : 'differs'}` : `Saved copy: ${copy}`)
         return { exitCode: l2.startsWith('REFUSED') ? 3 : 0, stdout: `${l1}\n${l2}\n` }
       }
       case 'sweep':

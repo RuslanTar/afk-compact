@@ -63,6 +63,8 @@ export const SPEC = {
     "head_line_prefix": "This session is being continued",
     "tools_block_open": "<tools-used-before-summary>",
     "tools_block_close": "</tools-used-before-summary>",
+    "reminder_block_open": "<system-reminder>",
+    "reminder_block_close": "</system-reminder>",
     "summary_line": "Summary:",
     "summary_open": "<summary>",
     "summary_close": "</summary>"

@@ -7,7 +7,7 @@ One source for the literals that the handoff skill, the resume skill, the compac
 - Marker: `⟪{{plugin}} v1 n=<nonce> s=main|sub|manual⟫`. Sentinel: `⟪/{{plugin}} n=<nonce>⟫`. The nonce is 8 lowercase hex from code.
 - Scope: `main` (main compaction summary) · `sub` (subagent compaction summary) · `manual` (the handoff skill).
 - In a summary or handoff the marker sits in the first 5 body lines after the wrapper lines are stripped, and the sentinel in the last 3 non-blank lines. Non-blank text after the sentinel is a trailer.
-- Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a closed `<analysis>…</analysis>` block (the summarizer's scratch text, kept before `<summary>` in a PostCompact summary), a `Summary:` line, and the `<summary>` / `</summary>` tags. Claude Code's own closing lines after an installed summary (`copy_trailers`) are cut from its end. <!-- idle lab runs 2026-10-23, Claude Code 2.1.309 -->
+- Wrapper lines stripped before the search: the `This session is being continued…` line, a `<tools-used-before-summary>…</tools-used-before-summary>` block, a closed `<analysis>…</analysis>` block (the summarizer's scratch text, kept before `<summary>` in a PostCompact summary), a closed `<system-reminder>…</system-reminder>` block (the installed summary wraps the tools-used block in it), a `Summary:` line, and the `<summary>` / `</summary>` tags. An unclosed `<analysis>` or `<system-reminder>` block is body. Claude Code's own closing lines after an installed summary (`copy_trailers`) are cut from its end. <!-- idle lab runs 2026-10-23, Claude Code 2.1.309; reminder block: Claude Code 2.1.311, live probe 2026-10-27 -->
 - In instructions (the mod's instructions, a classic `custom_instructions`) the marker sits mid-line, so that search is unanchored and the last match counts. It counts as ours only when a dispatch record holds its nonce.
 - Any other bracketed or prefixed header line is someone else's: never ours, left untouched.
 
@@ -322,6 +322,8 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "head_line_prefix": "This session is being continued",
     "tools_block_open": "<tools-used-before-summary>",
     "tools_block_close": "</tools-used-before-summary>",
+    "reminder_block_open": "<system-reminder>",
+    "reminder_block_close": "</system-reminder>",
     "summary_line": "Summary:",
     "summary_open": "<summary>",
     "summary_close": "</summary>"
