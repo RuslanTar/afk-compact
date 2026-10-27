@@ -258,7 +258,7 @@
     "driver_skills": {
       "type": "string",
       "title": "Loop skills to re-enter",
-      "description": "Skill names, separated by ';', that drive a session as a loop beside the shipped list (gsd-autonomous, gsd-execute-phase, gsd-manager, superpowers:executing-plans, superpowers:subagent-driven-development). When a session invoked one, the resume after a compaction or a handoff runs it again (Active driver line). A skill whose own text runs gsd-tools counts without being listed. A loop run as another loop's step never replaces it; a paused, ended or unclear loop is shown, never run. A skill the session never invoked is never run. Empty = the shipped list only.",
+      "description": "Skill names, separated by ';', that drive a session as a loop beside the shipped list (gsd-autonomous, gsd-execute-phase, gsd-manager, superpowers:executing-plans, superpowers:subagent-driven-development). When a session invoked one and the loop is clearly live at the compaction (one of its steps mid-turn, or an agent, workflow or teammate it launched still running), the resume after a compaction or a handoff runs it again (Active driver line). A skill whose own text runs gsd-tools counts without being listed. A loop run as another loop's step never replaces it; a paused, ended, stopped or unclear loop is shown, never run. A skill the session never invoked is never run. Empty = the shipped list only.",
       "default": ""
     }
   }

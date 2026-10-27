@@ -1471,7 +1471,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Driver now \\(0000005a\\): Was driving: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a$"
+     "^Driver now \\(0000005a\\): Was driving: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a$"
     ],
     "stdout_lacks": [
      "^Driver now \\S+: Active driver"

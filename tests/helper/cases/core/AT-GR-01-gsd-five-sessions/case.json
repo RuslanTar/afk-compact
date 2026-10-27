@@ -1,7 +1,7 @@
 {
  "id": "AT-GR-01",
  "sid": "22222222-2222-4222-8222-222222222222",
- "note": "Owner 2026-10-26 21:37 (GSD re-entry per session): five sessions share one worktree with a flat .planning/STATE.md, workstreams workstream-a and workstream-b and a .phase-loop-run file. measure --compact prints a GSD line only for the sessions whose own transcript shows GSD work (typed GSD commands, GSD Skill calls, gsd-tools runs that read or change planning state, state-file writes), each with its own workstream, and an Active driver line only for a real loop skill the session invoked (the shipped list, the driver_skills setting, or a skill chained into a typed GSD command); a GSD-only session gets a passive GSD re-entry line instead. A session that only talked about GSD, searched for it, quoted it, read its files, wrote another file into a workstream folder, ran GSD maintenance or invoked a one-shot skill with --ws gets neither. The shared .planning/active-workstream pointer changes nothing. Also: /clear forgets what came before; rows a fork carried over count; the newest named workstream whose folder exists wins (a prose trailing dot dropped, also in the re-enter command); a GSD root in another checkout adds --cwd; the GSD lines come right after the git header so the 3,000 B cap (it keeps lines from the top) cuts every later line, here porcelain lines, before them; checkpoint --measured, the classic SessionStart(compact) block ([driver] line only beside an Active driver), begin's gsd object and the stage's gsd_state follow the same per-session facts. Root rulings R1, R2, R5 of 2026-10-27: the driver is the outermost unpaused loop (a loop another one runs as its step never replaces it); a pause ends it only when no loop work follows; a finishing skill or GSD work on another workstream ends it; where the transcript leaves it unclear, a Was driving hint replaces the Active driver line; a skill is a loop only when its text's code runs gsd-tools Round 3 (2026-10-27): a turn of this plugin's own (its halt, planned-compaction and idle handoff turns, its skills) is no stop and no loop work; background work is the open driver's (a re-invoked loop keeps it), closed by task id, SendMessage, TaskStop, a Monitor's end or time, and a background command or persistent monitor only names itself in a hint; the nudged checkpoint's `Step 1: none: task done` makes a hint; an absorbed GSD loop is named as a later step (sessions 95-112). Round 4 (2026-10-27): a skill of this plugin's the model runs inside the loop's turn keeps that turn's end a stop; after a prompt or a stopped turn only a phase's own gsd-tools progress is loop work; a step absorbed after a prompt never makes the outer loop Active again; a shut-down teammate, a task-id-only notification and an interruption end what they end; a timed Monitor alone is no live work (sessions 118-147). Round 5 (2026-10-27): a turn or a skill of this plugin's own (its idle or planned-compaction handoff, its resume) never ends a loop's pause; after a pause file only loop work (a GSD work command, a loop skill, a gsd-tools state run other than a commit, a test or build run, a spawn, a phase, roadmap or code write) goes on past it, never the pause's own acts (a commit, a run-state append, a note outside the checkout, stopping its workers, reads), and a pause file written while its earlier background work runs stays a hint until none of it runs; a single-phase loop's phase files are its own phase's; state.update and state.patch are a person's STATE.md notes; a GSD root in another checkout whose path --cwd cannot carry gives a hint (sessions 148-173). Round 6 (2026-10-27): a prompt while the loop's own agents run and its turn has not stopped, or a typed status look, is no stop; after a loop paused itself and a person's prompt, a write never makes it Active (a phase file makes it a hint); a driver with no workstream takes only one its own loop work names; after the loop's report or a prompt a phase-file write is no loop work; a turn another session's message opened is not the loop's; a pause file starts a self-pause also after this plugin's skill or in a turn of its own; five sessions sharing the worktree again (sessions 174-207). Round 7 (2026-10-27): every human prompt counts again, also one while the loop's agents run; the loop shows itself again in a turn its own finished background work's notification opened (a spawn, a woken agent, a progress run, its GSD loop step); a prompt naming /gsd-pause-work asks for the pause; the re-enter command's --cwd is the loop's own GSD root (sessions 208-234). Round 8 (2026-10-27): after a human prompt only the loop's re-invocation or a GSD loop it runs as its step in its own notification turn makes it Active again (no progress run, spawn or plain reply); a pause asked for holds until its files are written, the loop is invoked again or a later prompt comes (new work makes it 'pause asked, then loop work'); an interruption mark is a stop; a session whose only GSD evidence is reads gets no GSD line; a read never moves the loop's GSD root (sessions 235-260).",
+ "note": "Owner 2026-10-26 21:37 (GSD re-entry per session): five sessions share one worktree with a flat .planning/STATE.md, workstreams workstream-a and workstream-b and a .phase-loop-run file. measure --compact prints a GSD line only for the sessions whose own transcript shows GSD work (typed GSD commands, GSD Skill calls, gsd-tools runs that read or change planning state, state-file writes), each with its own workstream, and an Active driver line only for a real loop skill the session invoked (the shipped list, the driver_skills setting, or a skill chained into a typed GSD command); a GSD-only session gets a passive GSD re-entry line instead. A session that only talked about GSD, searched for it, quoted it, read its files, wrote another file into a workstream folder, ran GSD maintenance or invoked a one-shot skill with --ws gets neither. The shared .planning/active-workstream pointer changes nothing. Also: /clear forgets what came before; rows a fork carried over count; the newest named workstream whose folder exists wins (a prose trailing dot dropped, also in the re-enter command); a GSD root in another checkout adds --cwd; the GSD lines come right after the git header so the 3,000 B cap (it keeps lines from the top) cuts every later line, here porcelain lines, before them; checkpoint --measured, the classic SessionStart(compact) block ([driver] line only beside an Active driver), begin's gsd object and the stage's gsd_state follow the same per-session facts. Root rulings R1, R2, R5 of 2026-10-27: the driver is the outermost unpaused loop (a loop another one runs as its step never replaces it); a pause ends it only when no loop work follows; a finishing skill or GSD work on another workstream ends it; where the transcript leaves it unclear, a Was driving hint replaces the Active driver line; a skill is a loop only when its text's code runs gsd-tools Round 3 (2026-10-27): a turn of this plugin's own (its halt, planned-compaction and idle handoff turns, its skills) is no stop and no loop work; background work is the open driver's (a re-invoked loop keeps it), closed by task id, SendMessage, TaskStop, a Monitor's end or time, and a background command or persistent monitor only names itself in a hint; the nudged checkpoint's `Step 1: none: task done` makes a hint; an absorbed GSD loop is named as a later step (sessions 95-112). Round 4 (2026-10-27): a skill of this plugin's the model runs inside the loop's turn keeps that turn's end a stop; after a prompt or a stopped turn only a phase's own gsd-tools progress is loop work; a step absorbed after a prompt never makes the outer loop Active again; a shut-down teammate, a task-id-only notification and an interruption end what they end; a timed Monitor alone is no live work (sessions 118-147). Round 5 (2026-10-27): a turn or a skill of this plugin's own (its idle or planned-compaction handoff, its resume) never ends a loop's pause; after a pause file only loop work (a GSD work command, a loop skill, a gsd-tools state run other than a commit, a test or build run, a spawn, a phase, roadmap or code write) goes on past it, never the pause's own acts (a commit, a run-state append, a note outside the checkout, stopping its workers, reads), and a pause file written while its earlier background work runs stays a hint until none of it runs; a single-phase loop's phase files are its own phase's; state.update and state.patch are a person's STATE.md notes; a GSD root in another checkout whose path --cwd cannot carry gives a hint (sessions 148-173). Round 6 (2026-10-27): a prompt while the loop's own agents run and its turn has not stopped, or a typed status look, is no stop; after a loop paused itself and a person's prompt, a write never makes it Active (a phase file makes it a hint); a driver with no workstream takes only one its own loop work names; after the loop's report or a prompt a phase-file write is no loop work; a turn another session's message opened is not the loop's; a pause file starts a self-pause also after this plugin's skill or in a turn of its own; five sessions sharing the worktree again (sessions 174-207). Round 7 (2026-10-27): every human prompt counts again, also one while the loop's agents run; the loop shows itself again in a turn its own finished background work's notification opened (a spawn, a woken agent, a progress run, its GSD loop step); a prompt naming /gsd-pause-work asks for the pause; the re-enter command's --cwd is the loop's own GSD root (sessions 208-234). Round 8 (2026-10-27): after a human prompt only the loop's re-invocation or a GSD loop it runs as its step in its own notification turn makes it Active again (no progress run, spawn or plain reply); a pause asked for holds until its files are written, the loop is invoked again or a later prompt comes (new work makes it 'pause asked, then loop work'); an interruption mark is a stop; a session whose only GSD evidence is reads gets no GSD line; a read never moves the loop's GSD root (sessions 235-260). Owner ruling 2026-10-27 20:57 (binding; it supersedes what rounds 2-8 inferred from prompts, pauses and progress runs): an Active driver only while the loop is clearly live at the cut (its own context holds since its last invocation, and a turn of its own runs or an agent, workflow, teammate or wake-up it launched still runs); a prompt of any kind (also typed mid-turn, a status look, this plugin's own skill), an interruption, another session's message, a pause or a turn end with nothing of its own running end that context until the loop is invoked again; a pause file the loop writes pauses it at once; a flat hint beside the shared pointer carries its caution. Steps whose expected mode changed say so in their names (owner 20:57); AT-GR-09 covers the ruling's cases.",
  "tmp_base": "short",
  "now": "2026-10-26T14:05:12+03:00",
  "tz": "Etc/GMT-3",
@@ -3842,7 +3842,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): no workstream named · \\S*/repo/\\.planning/STATE\\.md: status executing · phase 3 · last activity 2026-10-20$",
      "^git: [^\\n]*\\nGSD \\(this session\\)",
-     "^Was driving: /gsd-execute-phase 3 \\(Skill, 2026-10-26 13:02 \\+0300; no loop work since 2026-10-26 13:03 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$",
+     "^Was driving: /gsd-execute-phase 3 \\(Skill, 2026-10-26 13:02 \\+0300; a prompt 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work( \\(caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\))?$"
     ],
     "stdout_lacks": [
@@ -3896,7 +3896,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-b \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b$"
+     "^Was driving: /gsd-execute-phase 2 --ws workstream-b \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b$"
     ],
     "stdout_lacks": [
      "workstream-a",
@@ -4003,7 +4003,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): no workstream named · \\S*/repo/\\.planning/STATE\\.md: status executing · phase 3 · last activity 2026-10-20$",
      "^git: [^\\n]*\\nGSD \\(this session\\)",
-     "^Was driving: /gsd-execute-phase 3 \\(Skill, 2026-10-26 13:02 \\+0300; no loop work since 2026-10-26 13:03 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$",
+     "^Was driving: /gsd-execute-phase 3 \\(Skill, 2026-10-26 13:02 \\+0300; a prompt 2026-10-26 13:04 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work( \\(caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\))?$"
     ],
     "stdout_lacks": [
@@ -4057,7 +4057,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-b \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b$"
+     "^Was driving: /gsd-execute-phase 2 --ws workstream-b \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b$"
     ],
     "stdout_lacks": [
      "workstream-a",
@@ -4177,7 +4177,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · ",
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-b \\(Skill, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:01 \\+0300 and a prompt after it\\)"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-b \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:02 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-b$"
     ],
     "stdout_lacks": [
      "workstream-a",
@@ -6156,7 +6156,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /superpowers:subagent-driven-development docs/plans/p\\.md \\(Skill, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:01 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /superpowers:subagent-driven-development docs/plans/p\\.md$"
+     "^Was driving: /superpowers:subagent-driven-development docs/plans/p\\.md \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:02 \\+0300\\) · re-enter only if Step 1 belongs to it: /superpowers:subagent-driven-development docs/plans/p\\.md$"
     ],
     "stdout_lacks": [
      "^GSD",
@@ -6462,7 +6462,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-b$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-b --wave 1 \\(Skill, 2026-10-26 13:01 \\+0300; another GSD command followed\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b --wave 1$"
+     "^Was driving: /gsd-execute-phase 2 --ws workstream-b --wave 1 \\(Skill, 2026-10-26 13:01 \\+0300; another GSD command followed 2026-10-26 13:02 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b --wave 1$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -6511,7 +6511,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-b$",
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; a GSD command for another workstream followed\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:02 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -6600,7 +6600,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300; arguments not shown, no GSD work after it\\) · re-enter only if Step 1 belongs to it: /phase-loop$"
+     "^Was driving: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300; arguments not shown, no GSD work after it; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /phase-loop$"
     ],
     "stdout_lacks": [
      "^GSD",
@@ -9604,7 +9604,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -9681,7 +9681,7 @@
    }
   },
   {
-   "name": "session 46 (R2): a Was driving hint, a pause with its files, then a gsd-tools read for its workstream: still Was driving (paused, then other work), never Active",
+   "name": "session 46 (R2): a Was driving hint, a pause with its files, then a gsd-tools read for its workstream (a read is no work after the pause): a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -9695,16 +9695,16 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
   {
-   "name": "session 47 (R2): the same with a typed /gsd-progress --ws after the pause: Was driving, never Active",
+   "name": "session 47 (R2): the same with a typed /gsd-progress --ws after the pause (a status look is no work after it): a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -9718,11 +9718,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -9741,7 +9741,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; another GSD command followed\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -9971,7 +9971,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:02 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -9992,7 +9992,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /superpowers:subagent-driven-development docs/plans/a\\.md \\(Skill, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:02 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /superpowers:subagent-driven-development docs/plans/a\\.md$"
+     "^Was driving: /superpowers:subagent-driven-development docs/plans/a\\.md \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /superpowers:subagent-driven-development docs/plans/a\\.md$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -10015,7 +10015,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its phase was marked complete\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its phase was marked complete 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -10023,7 +10023,7 @@
    }
   },
   {
-   "name": "session 51 (R2, R9): a handoff of this plugin asked for in prose, or typed, mid-loop: the loop stays the Active driver",
+   "name": "session 51 (R2, R9; owner 20:57): a handoff of this plugin asked for in prose, or typed, mid-loop: a prompt of any kind, a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -10037,10 +10037,10 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -14204,7 +14204,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-manager --ws workstream-a --text \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:01 \\+0300 and a prompt after it; later step: /gsd-execute-phase 3 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-manager --ws workstream-a --text$"
+     "^Was driving: /gsd-manager --ws workstream-a --text \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:02 \\+0300 with nothing of its own running; later step: /gsd-execute-phase 3 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-manager --ws workstream-a --text$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -14228,7 +14228,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:03 \\+0300 and a prompt after it; later step: /gsd-execute-phase 3 --no-transition\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn was interrupted 2026-10-26 13:04 \\+0300; later step: /gsd-execute-phase 3 --no-transition\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -14276,7 +14276,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:01 \\+0300 and a prompt after it; later step: /gsd-execute-phase 4 --no-transition\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:01 \\+0300 with nothing of its own running; later step: /gsd-execute-phase 4 --no-transition\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -14300,7 +14300,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a GSD command for another workstream followed; later step: /gsd-execute-phase 3 --no-transition --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a GSD command for another workstream followed 2026-10-26 13:03 \\+0300; later step: /gsd-execute-phase 3 --no-transition --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -14750,7 +14750,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -15015,7 +15015,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --auto --no-transition --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -15038,7 +15038,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -15061,7 +15061,7 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Was driving: /gsd-execute-phase 4 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:02 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --auto --no-transition --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 4 --auto --no-transition --ws workstream-a \\(Skill, 2026-10-26 13:02 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --auto --no-transition --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -15687,7 +15687,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -15916,7 +15916,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with only a background command still running and no loop work since\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -16159,7 +16159,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -16181,7 +16181,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a background command still running and no loop work since\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:02 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -16189,7 +16189,7 @@
    }
   },
   {
-   "name": "session 93 (R2): a teammate that went idle, then set working again by a SendMessage after the loop's turn ended: the loop is live, Active driver",
+   "name": "session 93 (owner 20:57): a teammate that went idle, then set working again by a SendMessage after the loop's turn ended with nothing of its own running: a Was driving hint (quiet but live is a hint)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -16203,10 +16203,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving"
+     "Active driver",
+     "Paused driver"
     ]
    }
   },
@@ -16225,7 +16226,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; another session's message 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -16233,7 +16234,7 @@
    }
   },
   {
-   "name": "session 72 (R2): a handoff asked for while the loop's teammate controller runs: the loop stays the Active driver",
+   "name": "session 72 (owner 20:57): a handoff asked for while the loop's teammate controller runs: a prompt of any kind, a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -16247,10 +16248,10 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -16617,7 +16618,7 @@
    }
   },
   {
-   "name": "session 77 (R2): a created HANDOFF.json followed by more work in the same turn is no pause; the turn end makes a hint",
+   "name": "session 77 (R2, R4): a HANDOFF.json the loop created, then a test run in the same turn: it paused itself (only its re-invocation ends that), a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -16631,11 +16632,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -16742,7 +16743,7 @@
    ]
   },
   {
-   "name": "session 78 (R2): a pause file created in a turn that has not ended: a Was driving hint",
+   "name": "session 78 (R2, R4): a pause file the loop created, its turn not ended yet: a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -16756,11 +16757,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; it wrote a pause file 2026-10-26 13:03 \\+0300, its turn not ended yet\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -17002,7 +17003,7 @@
    }
   },
   {
-   "name": "session 89 (R2): a loop that paused itself, then its own work after a task notification and before any prompt: the loop went on, Active driver",
+   "name": "session 89 (R4, owner 20:57): a loop that paused itself, then a test run after a task notification and before any prompt: still a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -17016,11 +17017,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver"
+     "Active driver",
+     "Was driving"
     ]
    }
   },
@@ -20964,7 +20965,7 @@
    }
   },
   {
-   "name": "session 96 (R2): the planned-compaction handoff turn, in which the loop's executor finished (its notification queued inside that turn): the driver stays what it was before that turn, Active",
+   "name": "session 96 (owner 20:57): the planned-compaction handoff turn, in which the loop's executor finished (its notification queued inside that turn): nothing of its own runs and no turn of its own followed, a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -20978,10 +20979,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its own background work ended, and no turn of its own followed\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving"
+     "Active driver",
+     "Paused driver"
     ]
    }
   },
@@ -21000,7 +21002,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 1 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:10 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 1 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 1 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:10 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 1 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21022,7 +21024,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 2 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21044,7 +21046,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a monitor still running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a monitor still running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21272,7 +21274,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:09 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a monitor still running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21294,7 +21296,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21316,7 +21318,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 6 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a background command still running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 6 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 6 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 6 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21338,7 +21340,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21360,7 +21362,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:02 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -21742,7 +21744,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:09 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:09 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -22217,7 +22219,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:08 \\+0300 and a prompt after it; later step: /gsd-execute-phase 4 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:09 \\+0300 with nothing of its own running; later step: /gsd-execute-phase 4 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -22263,7 +22265,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn stopped on an API error 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -22286,7 +22288,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-b \\(typed, 2026-10-26 13:06 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-b$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-b \\(typed, 2026-10-26 13:06 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-b$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -22309,7 +22311,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -22331,7 +22333,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -22353,7 +22355,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 2 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -22677,7 +22679,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -22940,7 +22942,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -23476,7 +23478,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing running and no loop work since\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 4 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 4 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -25138,7 +25140,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -25455,7 +25457,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -25648,7 +25650,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -25931,7 +25933,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -27896,7 +27898,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:08 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -28113,7 +28115,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -28612,7 +28614,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -29448,7 +29450,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -29678,7 +29680,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and an interruption after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn was interrupted 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -30284,7 +30286,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a monitor still running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -30509,7 +30511,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -30763,7 +30765,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -31065,7 +31067,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:07 \\+0300; its turn ended 2026-10-26 13:09 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -31279,7 +31281,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -31512,7 +31514,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -31744,7 +31746,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -31982,7 +31984,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -32199,7 +32201,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -32392,7 +32394,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -32637,7 +32639,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*its phase was marked complete.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -36878,7 +36880,7 @@
    ]
   },
   {
-   "name": "session 153 (R2, R4): a loop paused itself (pause files, a commit, a note outside the checkout) while work it started before still runs: a Was driving hint, never Active",
+   "name": "session 153 (R2, R4): a loop paused itself (pause files, a commit, a note outside the checkout) while work it started before still runs: a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -36891,11 +36893,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -37281,7 +37283,7 @@
    ]
   },
   {
-   "name": "session 154 (R2, R4): a run-state append and a commit after the pause file are the pause's own acts: a Was driving hint, never Active",
+   "name": "session 154 (R2, R4): a run-state append and a commit after the pause file are the pause's own acts: a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -37294,11 +37296,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*it wrote a pause file .*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:05 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -37738,7 +37740,7 @@
    ]
   },
   {
-   "name": "session 155 (R2, R4): pause files, a commit and a note outside the checkout while a pre-pause workflow runs: a Was driving hint",
+   "name": "session 155 (R2, R4): pause files, a commit and a note outside the checkout while a pre-pause workflow runs: a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -37751,11 +37753,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -38230,7 +38232,7 @@
    ]
   },
   {
-   "name": "session 155 (R2): a teammate's idle report opens a turn that only answers it: still a Was driving hint",
+   "name": "session 155 (R2): a teammate's idle report opens a turn that only answers it: still a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -38243,11 +38245,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*it wrote a pause file .*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -38793,7 +38795,7 @@
    ]
   },
   {
-   "name": "session 155 (R2): stopping its workers with TaskStop is part of the pause: still a Was driving hint",
+   "name": "session 155 (R2): stopping its workers with TaskStop is part of the pause: still a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -38806,11 +38808,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*it wrote a pause file .*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -39496,7 +39498,7 @@
    ]
   },
   {
-   "name": "session 155 (R2): a notification turn that only reads a result and appends run state: still a Was driving hint, never Active",
+   "name": "session 155 (R2): a notification turn that only reads a result and appends run state: still a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -39509,11 +39511,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*it wrote a pause file .*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -40568,7 +40570,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -40902,7 +40904,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -41274,7 +41276,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -41467,7 +41469,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -41711,7 +41713,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -41956,7 +41958,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -42291,7 +42293,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -42536,7 +42538,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -42871,7 +42873,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -43646,7 +43648,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -44020,7 +44022,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -44657,7 +44659,7 @@
    ]
   },
   {
-   "name": "session 165 (R2): gsd-tools state.begin-phase, a phase's own progress, after a notification: the loop went on, Active driver",
+   "name": "session 165 (owner 20:57): gsd-tools state.begin-phase after its turn ended with nothing of its own running: no progress run brings it back, a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -44670,10 +44672,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -44851,7 +44853,7 @@
    ]
   },
   {
-   "name": "session 166 (R2): gsd-tools roadmap.update-plan-progress, a phase's own progress, after a notification: the loop went on, Active driver",
+   "name": "session 166 (owner 20:57): gsd-tools roadmap.update-plan-progress after its turn ended with nothing of its own running: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -44864,10 +44866,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -45045,7 +45047,7 @@
    ]
   },
   {
-   "name": "session 167 (R2): gsd-tools phase, a phase's own progress, after a notification: the loop went on, Active driver",
+   "name": "session 167 (owner 20:57): gsd-tools phase after its turn ended with nothing of its own running: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -45058,10 +45060,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -47133,7 +47135,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -47349,7 +47351,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -47655,7 +47657,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -47999,7 +48001,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -48253,7 +48255,7 @@
    ]
   },
   {
-   "name": "session 175 (R2): a typed /gsd-progress while its executor runs is a look, no prompt that stops it: Active driver",
+   "name": "session 175 (owner 20:57): a typed /gsd-progress while its executor runs is a prompt of any kind: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -48266,10 +48268,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -48520,7 +48522,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -51252,7 +51254,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:03 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -51534,7 +51536,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*a workstream it never named.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -51854,7 +51856,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*a workstream it never named.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -52172,7 +52174,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop resume \\(.*a workstream it never named.*\\) · re-enter only if Step 1 belongs to it: /phase-loop resume$"
+     "^Was driving: /phase-loop resume \\(Skill, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with nothing of its own running; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /phase-loop resume$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -52517,7 +52519,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -52900,7 +52902,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:06 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -53162,7 +53164,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -53462,7 +53464,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 5 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 5 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -53727,7 +53729,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -54012,7 +54014,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*with nothing running and no loop work since.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -54379,7 +54381,7 @@
    ]
   },
   {
-   "name": "session 190 (R2, R4): pause files the loop writes after this plugin's handoff skill in its own turn, its controller live: a Was driving hint",
+   "name": "session 190 (R2, R4): pause files the loop writes after this plugin's handoff skill in its own turn, its controller live: a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -54392,11 +54394,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Paused driver: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:06 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -55075,7 +55077,7 @@
    ]
   },
   {
-   "name": "session 191 (R2, R4): a .continue-here written with Bash after this plugin's handoff skill, its executor live: a Was driving hint",
+   "name": "session 191 (R2, R4): a .continue-here written with Bash after this plugin's handoff skill, its executor live: a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -55088,11 +55090,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:05 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -55620,7 +55622,7 @@
    ]
   },
   {
-   "name": "session 192 (R2, R4): GSD's .continue-here written in this plugin's idle handoff turn: a Was driving hint, never Active",
+   "name": "session 192 (R2, R4): GSD's .continue-here written in this plugin's idle handoff turn: a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -55633,11 +55635,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*it wrote a pause file.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:07 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -55672,7 +55674,7 @@
    "expect": {
     "exit": 0,
     "context_contains": [
-     "Was driving: /gsd-execute-phase 3 --ws workstream-a"
+     "Paused driver: /gsd-execute-phase 3 --ws workstream-a"
     ],
     "context_absent": [
      "Active driver",
@@ -56204,7 +56206,7 @@
    ]
   },
   {
-   "name": "session 193 (R2, R4): GSD's .continue-here written in this plugin's pre handoff turn: a Was driving hint, never Active",
+   "name": "session 193 (R2, R4): GSD's .continue-here written in this plugin's pre handoff turn: a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -56217,11 +56219,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*it wrote a pause file.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:07 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -56533,7 +56535,7 @@
    ]
   },
   {
-   "name": "session 194 (R2): pause files, then GSD's own pause commit, its executor live: a Was driving hint",
+   "name": "session 194 (R2): pause files, then GSD's own pause commit, its executor live: a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -56546,11 +56548,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -56862,7 +56864,7 @@
    ]
   },
   {
-   "name": "session 195 (R2): pause files, then a commit whose message names make, its executor live: a Was driving hint",
+   "name": "session 195 (R2): pause files, then a commit whose message names make, its executor live: a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -56875,11 +56877,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -57241,7 +57243,7 @@
    ]
   },
   {
-   "name": "session 196 (R2): pause files, then a look at its progress, its executor live: a Was driving hint",
+   "name": "session 196 (R2): pause files, then a look at its progress, its executor live: a Paused driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -57254,11 +57256,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and its background work still ran when its turn ended.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
-     "Paused driver"
+     "Was driving"
     ]
    }
   },
@@ -57521,7 +57523,7 @@
    ]
   },
   {
-   "name": "session 197 (R2): a pause file, then a new executor: the loop went on, Active driver",
+   "name": "session 197 (owner 20:57): a pause file, then a new executor: paused, then other work, a Was driving hint, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -57534,10 +57536,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -57799,7 +57801,7 @@
    ]
   },
   {
-   "name": "session 198 (R2): a pause file, then a GSD work command: the loop went on, Active driver",
+   "name": "session 198 (owner 20:57): a pause file, then a GSD work command: paused, then other work, a Was driving hint, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -57812,10 +57814,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -58078,7 +58080,7 @@
    ]
   },
   {
-   "name": "session 199 (R2): a pause file, then a progress run: the loop went on, Active driver",
+   "name": "session 199 (owner 20:57): a pause file, then a progress run: paused, then other work, a Was driving hint, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -58091,10 +58093,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -58356,7 +58358,7 @@
    ]
   },
   {
-   "name": "session 200 (R2): a pause file, then a phase summary: the loop went on, Active driver",
+   "name": "session 200 (owner 20:57): a pause file, then a phase summary: paused, then other work, a Was driving hint, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -58369,10 +58371,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300, then other work\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -58634,7 +58636,7 @@
    ]
   },
   {
-   "name": "session 201 (R2): a pause file, then a code write: the loop went on, Active driver",
+   "name": "session 201 (owner 20:57): a pause file, then a code write: still a Paused driver, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -58647,11 +58649,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Paused driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; paused 2026-10-26 13:04 \\+0300\\) · re-enter \\(new session only\\): /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver"
+     "Active driver",
+     "Was driving"
     ]
    }
   },
@@ -59530,7 +59532,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): no workstream named · ",
-     "^Was driving: /gsd-execute-phase 3 \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$",
+     "^Was driving: /gsd-execute-phase 3 \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$",
      "^GSD \\(this session\\): no workstream named · "
     ],
     "stdout_lacks": [
@@ -60689,7 +60691,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:07 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -61096,7 +61098,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:07 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "workstream-b",
@@ -61979,7 +61981,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /superpowers:subagent-driven-development docs/plans/b\\.md \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /superpowers:subagent-driven-development docs/plans/b\\.md$"
+     "^Was driving: /superpowers:subagent-driven-development docs/plans/b\\.md \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /superpowers:subagent-driven-development docs/plans/b\\.md$"
     ],
     "stdout_lacks": [
      "GSD \\(this session\\)",
@@ -62228,7 +62230,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -62561,7 +62563,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -62984,7 +62986,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -63339,7 +63341,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -63674,7 +63676,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:07 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -64097,7 +64099,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:07 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -65391,7 +65393,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -65608,7 +65610,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -65862,7 +65864,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -66128,7 +66130,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -66344,7 +66346,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -66701,7 +66703,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -67096,7 +67098,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -67314,7 +67316,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -67905,7 +67907,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:04 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -68099,7 +68101,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*gsd-tools ran for another workstream.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with nothing of its own running; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -68344,7 +68346,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*a workstream it never named.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -68598,7 +68600,7 @@
    ]
   },
   {
-   "name": "session 221 (R3): a read of another checkout in a turn another session's message opened: Active driver, its re-enter command without that --cwd",
+   "name": "session 221 (R3, owner 20:57): a read of another checkout in a turn another session's message opened: a Was driving hint, its re-enter command without that --cwd",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -68611,12 +68613,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 \\([^)]*\\) · re-enter: /gsd-execute-phase 3$"
+     "^Was driving: /gsd-execute-phase 3 \\(typed, 2026-10-26 13:01 \\+0300; another session's message 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver",
-     "--cwd"
+     "^(?:Active driver|Was driving|Paused driver): [^\\n]*--cwd",
+     "Active driver",
+     "Paused driver"
     ]
    }
   },
@@ -69125,7 +69127,7 @@
    ]
   },
   {
-   "name": "session 223 (R2): a typed /gsd-progress after the nudged checkpoint (nothing live) is a look, no prompt: Active driver",
+   "name": "session 223 (owner 20:57): a typed /gsd-progress after the nudged checkpoint (nothing live) is a prompt of any kind: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -69138,10 +69140,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:07 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -69806,7 +69808,7 @@
    ]
   },
   {
-   "name": "session 225 (R1, R2): gsd-autonomous runs gsd-execute-phase 4 in its executor's notification turn: gsd-autonomous, Active driver",
+   "name": "session 225 (R1, owner 20:57): after a prompt, gsd-autonomous runs gsd-execute-phase 4 in its executor's notification turn: gsd-autonomous stays the driver, a Was driving hint naming that later step",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -69819,10 +69821,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:07 \\+0300; later step: /gsd-execute-phase 4 --ws workstream-a --no-transition\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -70194,7 +70196,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:05 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -70513,7 +70515,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -70837,7 +70839,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -71148,7 +71150,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -71363,7 +71365,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -71668,7 +71670,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -71971,7 +71973,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -72253,7 +72255,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -72559,7 +72561,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -73021,7 +73023,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -73343,7 +73345,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -75706,7 +75708,7 @@
    ]
   },
   {
-   "name": "session 238 (R1, R2): a pause asked, a later prompt that takes it back, then gsd-autonomous runs gsd-execute-phase 4 in its executor's notification turn: Active driver",
+   "name": "session 238 (R1, owner 20:57): a pause asked, a later prompt that takes it back, then gsd-autonomous runs gsd-execute-phase 4 in its executor's notification turn: a Was driving hint naming that later step",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -75719,12 +75721,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; later step: /gsd-execute-phase 4 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver",
-     "pause asked"
+     "pause asked",
+     "Active driver",
+     "Paused driver"
     ]
    }
   },
@@ -76053,7 +76055,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:06 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -76424,7 +76426,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:06 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -76756,7 +76758,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -77126,7 +77128,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous --ws workstream-a \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -77447,7 +77449,7 @@
    ]
   },
   {
-   "name": "session 242 (R1, R2): after a prompt, gsd-autonomous runs gsd-execute-phase 4 as its step in its executor's notification turn: gsd-autonomous, Active driver",
+   "name": "session 242 (R1, owner 20:57): after a prompt, gsd-autonomous runs gsd-execute-phase 4 as its step in its executor's notification turn: gsd-autonomous, a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -77460,10 +77462,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; later step: /gsd-execute-phase 4 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -77854,7 +77856,7 @@
    ]
   },
   {
-   "name": "session 242 (R1): its turn ends with the new executor live: still the Active driver",
+   "name": "session 242 (R1, owner 20:57): its turn ends with the new executor live: still that hint (only its re-invocation makes it Active again)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -77867,10 +77869,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; later step: /gsd-execute-phase 4 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -78566,7 +78568,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and an interruption after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn was interrupted 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -78780,7 +78782,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*and an interruption after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn was interrupted 2026-10-26 13:04 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -79122,7 +79124,7 @@
    ]
   },
   {
-   "name": "session 245 (R2): an interruption of this plugin's own command is no stop of the loop: wave 2 in its executor's notification turn, Active driver",
+   "name": "session 245 (owner 20:57): this plugin's own command typed, then interrupted: a prompt of any kind, a Was driving hint in wave 2's notification turn",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -79135,10 +79137,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -80363,7 +80365,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*gsd-tools ran for another workstream.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -81054,7 +81056,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -81387,7 +81389,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /gsd-autonomous \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -81732,7 +81734,7 @@
    ]
   },
   {
-   "name": "session 254 (R3): a flat loop here, another checkout read for another session: Active driver with the caution of this checkout's shared pointer",
+   "name": "session 254 (R3, owner 20:57): a flat loop here, another checkout read for another session: a Was driving hint with the caution of this checkout's shared pointer, no --cwd",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -81745,13 +81747,13 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous \\([^)]*\\) · re-enter: /gsd-autonomous$",
+     "^Was driving: /gsd-autonomous \\(typed, 2026-10-26 13:01 \\+0300; another session's message 2026-10-26 13:05 \\+0300; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous$",
      "caution: \\.planning/active-workstream names workstream-a, and GSD uses it"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver",
-     "--cwd"
+     "^(?:Active driver|Was driving|Paused driver): [^\\n]*--cwd",
+     "Active driver",
+     "Paused driver"
     ]
    }
   },
@@ -83157,7 +83159,7 @@
    ]
   },
   {
-   "name": "session 257 (five sessions, workstream A, R1): gsd-autonomous runs gsd-execute-phase in its notification turn: gsd-autonomous, Active driver, only workstream-a",
+   "name": "session 257 (five sessions, workstream A, R1, owner 20:57): after a prompt, gsd-autonomous runs gsd-execute-phase in its notification turn: gsd-autonomous, a Was driving hint, only workstream-a",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -83170,12 +83172,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-autonomous --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --ws workstream-a$"
+     "^Was driving: /gsd-autonomous --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:05 \\+0300; later step: /gsd-execute-phase 4 --ws workstream-a\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver",
-     "workstream-b"
+     "workstream-b",
+     "Active driver",
+     "Paused driver"
     ]
    }
   },
@@ -83674,7 +83676,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:02 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -83696,7 +83698,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; no loop work since 2026-10-26 13:02 \\+0300 and a prompt after it\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver"
@@ -83718,7 +83720,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(.*its turn was interrupted.*\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; another session's message 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
      "Active driver",
@@ -83828,7 +83830,7 @@
      {
       "path": "$WATCH/$SID/gsd-scan.json",
       "json": {
-       "v": 12
+       "v": 13
       }
      }
     ]
@@ -84308,7 +84310,7 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-b \\(.*and a prompt after it.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b$",
+     "^Was driving: /gsd-execute-phase 2 --ws workstream-b \\(Skill, 2026-10-26 13:01 \\+0300; a prompt 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b$",
      "^git: [^\\n]*\\nGSD \\(this session\\)",
      "^\\(\\+\\d+ lines\\)$"
     ],
