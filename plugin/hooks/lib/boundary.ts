@@ -64,7 +64,8 @@ export type BoundaryOpts = {
   /**
    * The plugin's own idle compaction (idle.ts): its guards asked once more after the checkpoint,
    * which can take seconds, and before the dispatch record is written. A reason (a turn started
-   * or ended, a person at the prompt) stops it there, with no record behind (D13).
+   * or ended, a compaction other than ours started or ran, a person at the prompt) stops it
+   * there, with no record behind (D13).
    */
   idleRecheck?: () => Promise<string | undefined>
 }
@@ -269,7 +270,7 @@ async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<
  * D13: how one `boundary()` call went. `ran: false` with the reason when it stopped before a
  * compaction was asked for (`compact-off`, `busy`, `asks-user`, `halted`, `compacted` when a
  * native one ran instead, `small-window`, `cooldown`, `small`, or what `idleRecheck` answered:
- * `busy`, `newer-turn`, `present`); `ran: true` once
+ * `busy`, `newer-turn`, `compacted`, `present`); `ran: true` once
  * `$.session.compact` or the `/compact` command was called, `ok` when it compacted through the
  * plugin, else a `failClass`: `skipped`, a rejection class (`turn-running`, `headless`, `other`)
  * or the `compact_command` result (`failed`, `unclaimed`, `rejected`). The idle timer logs a

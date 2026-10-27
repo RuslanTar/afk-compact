@@ -255,7 +255,7 @@ To have idle compaction only in sessions where afk-compact is enabled, set `"idl
 It does not run when:
 
 - the cache has probably expired: more than 58 minutes passed since the last request, or the plugin's timer came more than a minute late (for example after the computer slept);
-- Claude Code reports no five-hour or seven-day plan usage window, so its cache is the five-minute one (an API key, Bedrock, Vertex, or a Claude gateway, which reports only a spend limit), prompt caching is turned off (`DISABLE_PROMPT_CACHING`), or any reported limit is at 90% or more;
+- the conversation's prompt cache is the five-minute one: Claude Code is set to it (`"promptCacheTtl": "5m"` in your settings, or `CLAUDE_CODE_PROMPT_CACHE_TTL=5m`, `FORCE_PROMPT_CACHING_5M` or `CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL=5m`), or no cache length is set and Claude Code reports no five-hour or seven-day plan usage window (an API key, Bedrock, Vertex, or a Claude gateway, which reports only a spend limit); or prompt caching is turned off (`DISABLE_PROMPT_CACHING`), or any reported limit is at 90% or more. A one-hour cache set the same way (`"1h"`, or `ENABLE_PROMPT_CACHING_1H`) counts without a plan window;
 - a turn is running, a prompt is arriving, another compaction is running or ran since the turn ended, or you typed in or recalled into the prompt box in the last minute, or you started or resumed the session in the last minute (the plugin does not see scrolling or dialogs);
 - the session changed (for example after `/clear`), or another Claude Code process took it over;
 - the Claude Code version or the model is not the one that set the timer (a new Claude Code process picked up the session, or you switched the model with `/model` since the last request), so its cache would be cold;
@@ -282,7 +282,7 @@ It is skipped when:
 - `triggers` is `false`, or the window is too small for plugin compactions;
 - the context is below `idle_handoff_min_tokens`;
 - a turn is running, a prompt is arriving or a plugin compaction is in flight, or the last turn did not end normally;
-- Claude Code reports no five-hour or seven-day plan usage window (for example with an API key, Bedrock, Vertex or a Claude gateway, which reports only a spend limit, where the cache lasts five minutes), or any reported limit is at 90% or more;
+- the cache lasts five minutes: Claude Code is set to the five-minute cache (as for the plugin's idle compaction above), or no cache length is set and it reports no five-hour or seven-day plan usage window (for example with an API key, Bedrock, Vertex or a Claude gateway, which reports only a spend limit); or prompt caching is turned off, or any reported limit is at 90% or more;
 - a handoff was published since your last message, or any handoff turn ran in the last hour;
 - the session changed (for example after `/clear`);
 - the turn would start after minute 55.5 (for example after the computer slept).
@@ -557,7 +557,7 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 - **Repo mode exports only.** There is no command that accepts a repository for you, and the plugin never stages or commits an export.
 - **Handoff turn limits are advice.** The plugin adds notes to tool results and denies nothing, so a model that ignores a note can run past its budget. Native auto-compaction is the backstop.
 - **Idle compaction outside the plugin's reach.** Claude Code's own idle compaction cannot be limited to plugin sessions (Claude Code 2.1.311 has no such setting). Only `"idleCompaction": false` plus this plugin keeps it to them, and only in sessions that read your user `settings.json`: not Cowork, remote or SSH-remote sessions.
-- **Five-minute cache the plugin cannot see.** Claude Code can give a subscription session the five-minute cache by a server-side setting the plugin cannot read. In such a session the plugin's idle compaction reads a cold cache (about the price of coming back to it uncompacted).
+- **Five-minute cache the plugin cannot see.** Claude Code can give a subscription session the five-minute cache by a server-side setting the plugin cannot read. In such a session the plugin's idle compaction reads a cold cache (about the price of coming back to it uncompacted). A cache length you set yourself (`promptCacheTtl`, or Claude Code's cache variables) the plugin does follow.
 - **Not yet run live:** the end-to-end runs in a real session, on a machine with managed settings, the handoff turn, the idle-compaction path, the pre-idle handoff turn, the plugin's own idle compaction and its compaction while agents run, the report skill, and the week-long shadow run. The wait helper in a subagent and the seated path under a Team organization have been run live.
 
 ## License

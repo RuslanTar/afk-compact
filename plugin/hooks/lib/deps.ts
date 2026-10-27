@@ -30,10 +30,53 @@ export type NativeIdle = 'on' | 'vetoed' | 'compaction-off' | 'unknown'
 /**
  * The environment the idle timers read once per load (§5): Claude Code's own
  * `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (`compactMin`, as native parses it), the test seam
- * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined) and the `DISABLE_PROMPT_CACHING*`
- * names native's cache check reads (`cacheOff`).
+ * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined), the `DISABLE_PROMPT_CACHING*`
+ * names native's cache check reads (`cacheOff`) and Claude Code's prompt-cache TTL switches for
+ * the main conversation (`ttl`, TtlEnv).
  */
-export type IdleEnv = { compactMin: number; cacheS: number | undefined; cacheOff: boolean }
+export type IdleEnv = { compactMin: number; cacheS: number | undefined; cacheOff: boolean; ttl: TtlEnv }
+
+/** A prompt-cache TTL as Claude Code names one (`promptCacheTtl`, `CLAUDE_CODE_PROMPT_CACHE_TTL`). */
+export type CacheTtl = '5m' | '1h'
+
+/**
+ * The main conversation's prompt-cache TTL switches in Claude Code's environment, in its own order
+ * (2.1.311, the TTL pick for the main thread): `first` is `5m` when `FORCE_PROMPT_CACHING_5M` is
+ * set, else `CLAUDE_CODE_PROMPT_CACHE_TTL` (`5m` or `1h`); both outrank the `promptCacheTtl`
+ * setting. `enable1h` (`ENABLE_PROMPT_CACHING_1H`) ranks below the setting. `messages5m`
+ * (`CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL` `5m`) makes the conversation's own cache five minutes
+ * whatever the others say.
+ */
+export type TtlEnv = { first: CacheTtl | undefined; enable1h: boolean; messages5m: boolean }
+
+/** No TTL switch set: the TTL is Claude Code's automatic one. */
+export const TTL_ENV_NONE: TtlEnv = { first: undefined, enable1h: false, messages5m: false }
+
+/** An env TTL value as Claude Code's enum read takes one: trimmed, one of `words` exactly, else undefined. */
+function ttlWord(v: string | undefined, words: readonly CacheTtl[]): CacheTtl | undefined {
+  const t = (v ?? '').trim()
+  return words.find(w => w === t)
+}
+
+/** TtlEnv from the four variables' raw values (undefined: unset). */
+export function ttlEnvOf(v: { force5m?: string; ttl?: string; enable1h?: string; messages?: string }): TtlEnv {
+  return {
+    first: envTruthy(v.force5m) ? '5m' : ttlWord(v.ttl, ['5m', '1h']),
+    enable1h: envTruthy(v.enable1h),
+    messages5m: ttlWord(v.messages, ['5m']) === '5m',
+  }
+}
+
+/**
+ * The main conversation's cache TTL as Claude Code picks it from its switches and the merged
+ * `promptCacheTtl` setting (`setting`, any value: only `5m` and `1h` count), or undefined when
+ * none is set (automatic: one hour on a subscription within its limits, five minutes otherwise).
+ */
+export function cacheTtlOf(t: TtlEnv, setting: unknown): CacheTtl | undefined {
+  const s = setting === '5m' || setting === '1h' ? setting : undefined
+  const v = t.first ?? s ?? (t.enable1h ? '1h' : undefined)
+  return t.messages5m ? '5m' : v
+}
 
 /** Native `IXt`: no idle compaction below this context size by default, and never below the floor. */
 export const IDLE_COMPACT_MIN_DEFAULT = 200000
@@ -170,6 +213,11 @@ export interface Deps {
   nativeIdle(): Promise<NativeIdle>
   /** The idle timers' environment (IdleEnv), read once per load (`idleEnvMemo`). */
   idleEnv(): Promise<IdleEnv>
+  /**
+   * The merged `promptCacheTtl` setting (`5m` or `1h`), read when asked (a settings change takes
+   * effect at once); undefined when unset, any other value, or the read throws.
+   */
+  promptCacheTtl(): Promise<CacheTtl | undefined>
   /**
    * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
    * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
@@ -647,10 +695,25 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
             compactMin: compactMinOf(await get(() => $.env.get('CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS'))),
             cacheS: cacheSOf(await get(() => $.env.get('STORE_TEST_IDLE_CACHE_S'))),
             cacheOff: caching.some(envTruthy),
+            // Claude Code 2.1.311's TTL switches for the main conversation (TtlEnv).
+            ttl: ttlEnvOf({
+              force5m: await get(() => $.env.get('FORCE_PROMPT_CACHING_5M')),
+              ttl: await get(() => $.env.get('CLAUDE_CODE_PROMPT_CACHE_TTL')),
+              enable1h: await get(() => $.env.get('ENABLE_PROMPT_CACHING_1H')),
+              messages: await get(() => $.env.get('CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL')),
+            }),
           }
         })()
       }
       return state.idleEnvMemo
+    },
+    async promptCacheTtl() {
+      try {
+        const v = await $.settings.read({ key: 'promptCacheTtl' })
+        return v === '5m' || v === '1h' ? v : undefined
+      } catch {
+        return undefined
+      }
     },
     async servedHint() {
       // `$.env.get` takes literal names only (the engine lists what a module reads).
