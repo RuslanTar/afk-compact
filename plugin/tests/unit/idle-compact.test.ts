@@ -215,7 +215,7 @@ test('AT-IC-C09: armed vetoed; native switched on at 30 min: [native-on, compact
   w.policy = { idleCompaction: true }
   await w.advance(24 * MIN)
   expect(skips(w)).toEqual([['native-on', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
   expect(modes(w)).toEqual(['vetoed/on/on', 'on/check/agents'])
   await w.advance(2 * MIN)
   expect(w.rowsOf('idle_silent').length).toBe(1)
@@ -250,7 +250,7 @@ test('AT-IC-C11: no plan window at the fire (rate limits gone in this load): [tt
   w.rateLimits = []
   await w.advance(MIN)
   expect(skips(w)).toEqual([['ttl-5m', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C11: a gateway\'s spend_limit only (D15): the record keeps ttl 5m, and the fire skips [ttl-5m, compact]', { options: ON }, async ($, on) => {
@@ -261,7 +261,7 @@ test('AT-IC-C11: a gateway\'s spend_limit only (D15): the record keeps ttl 5m, a
   expect((w.storeGet(KEY) as Record<string, unknown>).ttl).toBe('5m')
   await w.advance(54 * MIN)
   expect(skips(w)).toEqual([['ttl-5m', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C11: DISABLE_PROMPT_CACHING=1: [ttl-5m, compact]; a per-model switch counts too', { options: ON }, async ($, on) => {
@@ -271,7 +271,7 @@ test('AT-IC-C11: DISABLE_PROMPT_CACHING=1: [ttl-5m, compact]; a per-model switch
   await humanTurn($, w)
   await w.advance(54 * MIN)
   expect(skips(w)).toEqual([['ttl-5m', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 for (const [name, limits] of [
@@ -286,7 +286,7 @@ for (const [name, limits] of [
     w.rateLimits = [...limits]
     await w.advance(MIN)
     expect(skips(w)).toEqual([['near-limit', 'compact']])
-    expect(selfCompacts(w)).toBe(0)
+    expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
   })
 }
 
@@ -298,6 +298,7 @@ test('AT-IC-C13: the context fell below the minimum after arming: [small, compac
   w.tokens = 150000
   await w.advance(MIN)
   expect(skips(w)).toEqual([['small', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C14: a turn-end plugin compaction still in flight at 54 min: [busy, compact]', { options: ON }, async ($, on) => {
@@ -325,6 +326,7 @@ test('AT-IC-C14: a native compaction running at 54 min: [busy, compact]', { opti
   const running = raiseCompact($, { trigger: 'auto' })
   await w.advance(MIN)
   expect(skips(w)).toEqual([['busy', 'compact']])
+  expect(ic(w).length).toBe(0)
   release()
   await running
   await w.settle()
@@ -349,7 +351,7 @@ for (const c of [
       expect(selfCompacts(w)).toBe(1)
     } else {
       expect(skips(w)).toEqual([[c.why, 'compact']])
-      expect(selfCompacts(w)).toBe(0)
+      expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
     }
   })
 }
@@ -362,7 +364,7 @@ test('AT-IC-C16: a typed /compact at 30 min, with no turn after it: [compacted, 
   await raiseCompact($, { trigger: 'manual' })
   await w.advance(24 * MIN)
   expect(skips(w)).toEqual([['compacted', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C17: the session id changed at 53 min: [session-changed, compact]', { options: ON }, async ($, on) => {
@@ -373,7 +375,7 @@ test('AT-IC-C17: the session id changed at 53 min: [session-changed, compact]', 
   w.sid = SID_B
   await w.advance(MIN)
   expect(skips(w)).toEqual([['session-changed', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 for (const c of [
@@ -426,12 +428,56 @@ test('AT-IC-C18: a person\'s turn start clears the record with a tombstone (no n
   expect([skips(w).length, ic(w).length, selfCompacts(w)]).toEqual([0, 0, 0])
 })
 
+test('AT-IC-C18 (§3.1): turn after turn leaves one pending tombstone delete per session id, not one per turn start', { options: ON }, async ($, on) => {
+  let reads = 0
+  // Registered before World.install, so it stands outside the store (first is outermost).
+  on('store.get', { key: KEY }, (_$, e, next) => {
+    reads++
+    return next(e)
+  })
+  const w = world(on)
+  await w.start($)
+  for (let i = 0; i < 5; i++) {
+    await humanTurn($, w)
+    await w.advance(MIN)
+  }
+  // A last person's turn starts and runs on: its start clears the record with a tombstone.
+  await w.userTurn($)
+  expect(isTomb(w.storeGet(KEY))).toBe(true)
+  reads = 0
+  await w.advance(60 * MIN)
+  // Only that tombstone's own delete is still pending: one read, and the key is gone.
+  expect(reads).toBe(1)
+  expect(w.storeGet(KEY)).toBeUndefined()
+})
+
+test('AT-IC-C39 (D14): a stale process (the record now held by another load) with native idle switched on: G1 before G0a, so no row, no check armed, the key unchanged', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  const rec = w.storeGet(KEY) as Record<string, unknown>
+  expect(rec.kind).toBe('compact')
+  await w.advance(30 * MIN)
+  const written = { ...rec, load: 'other-load' }
+  w.storeSet(KEY, written)
+  w.policy = {}
+  await w.advance(24 * MIN)
+  expect(w.rowsOf('handoff_skipped')).toEqual([])
+  expect(w.storeGet(KEY)).toEqual(written)
+  // No policy read at that fire (no new idle_mode row) and no 55.5-min check persisted or run.
+  expect(modes(w)).toEqual(['vetoed/on/on'])
+  await w.advance(5 * MIN)
+  expect([w.rowsOf('idle_silent').length, ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0, 0])
+  expect(w.storeGet(KEY)).toEqual(written)
+})
+
 test('AT-IC-C19: triggers false: [triggers-off, compact]', { options: { ...ON, triggers: false } }, async ($, on) => {
   const w = world(on)
   await w.start($)
   await humanTurn($, w)
   await w.advance(54 * MIN)
   expect(skips(w)).toEqual([['triggers-off', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C19: a window too small for plugin compactions (200,000): [small-window, compact]', { options: ON }, async ($, on) => {
@@ -440,6 +486,7 @@ test('AT-IC-C19: a window too small for plugin compactions (200,000): [small-win
   await humanTurn($, w)
   await w.advance(54 * MIN)
   expect(skips(w)).toEqual([['small-window', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C20 (D5): halt for thrash, the last turn a background result\'s: [halted, compact]', { options: ON }, async ($, on) => {
@@ -451,7 +498,7 @@ test('AT-IC-C20 (D5): halt for thrash, the last turn a background result\'s: [ha
   await w.turnEnd($)
   await w.advance(54 * MIN)
   expect(skips(w)).toEqual([['halted', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C20 (D5): halt for the auto-continue cap: the compaction runs (exempt), no continue; the next background turn\'s block has [idle-halt]', { options: ON }, async ($, on) => {
@@ -581,6 +628,116 @@ test('AT-IC-C25 (D13): a main turn starts between the guards and the compaction:
   expect([w.callsOf('dispatch').length, selfCompacts(w)]).toEqual([0, 0])
 })
 
+test('AT-IC-C25 (D13, §9.1): the 55.5-min check\'s compaction while agents run: a main turn starting at its idle_compact row gives [busy, check] from the boundary\'s result', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = {}
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  let started = false
+  w.atHelper = async (sub, args) => {
+    if (started || sub !== 'log' || !(args[args.indexOf('--json') + 1] ?? '').includes('"ev":"idle_compact"')) return
+    started = true
+    await w.turnStart($)
+  }
+  await w.advance(56 * MIN)
+  expect(started).toBe(true)
+  expect(ic(w).map(r => r.at)).toEqual(['check'])
+  expect(skips(w)).toEqual([['busy', 'check']])
+  expect([w.callsOf('dispatch').length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+for (const c of [
+  { name: 'a person\'s whole turn', why: 'newer-turn', act: async (w: World, $: Engine) => { await w.userTurn($); w.tokens = 260000; await w.turnEnd($) } },
+  { name: 'a keystroke', why: 'present', act: (w: World, $: Engine) => w.edit($) },
+]) {
+  test(`AT-IC-C25 (D13): ${c.name} while the checkpoint runs: idle_compact, then [${c.why}, compact] before the dispatch record; no compaction, no failure counted`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    await w.start($)
+    await humanTurn($, w)
+    let acted = false
+    w.atHelper = async sub => {
+      if (acted || sub !== 'checkpoint') return
+      acted = true
+      await c.act(w, $)
+    }
+    await w.advance(54 * MIN)
+    expect(acted).toBe(true)
+    expect(ic(w).length).toBe(1)
+    expect(skips(w)).toEqual([[c.why, 'compact']])
+    expect([w.callsOf('dispatch').length, selfCompacts(w), w.rowsOf('idle_compact_off').length]).toEqual([0, 0, 0])
+  })
+}
+
+test('AT-IC-C25 (§2.3): a guard read that throws at the fire is one [error, compact] row; no idle_compact row, no compaction', { options: ON }, async ($, on) => {
+  let boom = false
+  on('store.get', { key: 'idle_seen:' + SID_A }, (_$, e, next) => {
+    if (boom) throw new Error('store unreadable')
+    return next(e)
+  })
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(53 * MIN)
+  boom = true
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([['error', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-IC-C25 (§2.3, D7): a throw inside the compaction step is one [error, compact] row after idle_compact and counts as a failure (two in a row: idle_compact_off)', { options: ON }, async ($, on) => {
+  let boom = false
+  const w = world(on)
+  // The first usage read after the idle_compact row (the boundary's own) fails once.
+  let tokens: number | undefined = w.tokens
+  Object.defineProperty(w, 'tokens', {
+    configurable: true,
+    get: () => {
+      if (!boom) return tokens
+      boom = false
+      throw new Error('usage unreadable')
+    },
+    set: (v: number | undefined) => { tokens = v },
+  })
+  w.atHelper = async (sub, args) => {
+    if (sub === 'log' && (args[args.indexOf('--json') + 1] ?? '').includes('"ev":"idle_compact"')) boom = true
+  }
+  await w.start($)
+  for (let i = 0; i < 2; i++) {
+    await humanTurn($, w)
+    await w.advance(55 * MIN)
+  }
+  expect(ic(w).length).toBe(2)
+  expect(skips(w)).toEqual([['error', 'compact'], ['error', 'compact']])
+  expect(selfCompacts(w)).toBe(0)
+  expect(w.rowsOf('idle_compact_off').map(r => [r.why, r.fails])).toEqual([['failed', 2]])
+})
+
+test('AT-IC-C25 (§1.7): a throw in the bookkeeping after a compaction that ran is no failure: no error row, and two in a row do not turn it off', { options: ON }, async ($, on) => {
+  let boom = false
+  let thrown = 0
+  // Outside mock.clock: the first clock read after the compaction answered fails once.
+  on('clock.now', {}, (_$, e, next) => {
+    if (!boom) return next(e)
+    boom = false
+    thrown++
+    throw new Error('clock unreadable')
+  })
+  const w = world(on)
+  w.atCompact = () => { boom = true }
+  await w.start($)
+  for (let i = 0; i < 2; i++) {
+    await humanTurn($, w)
+    await w.advance(55 * MIN)
+  }
+  expect(thrown).toBe(2)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([2, 2])
+  // The compacted row is the step that failed: none was written.
+  expect(w.rowsOf('compacted')).toEqual([])
+  expect(skips(w)).toEqual([])
+  expect(w.rowsOf('idle_compact_off')).toEqual([])
+})
+
 // ---- Headless (lane A: nothing armed)
 
 test('AT-IC-C26a: headless, vetoed, 260K: nothing armed, no idle row; idle_mode vetoed/off/off', { options: ON }, async ($, on) => {
@@ -629,6 +786,34 @@ test('AT-IC-C30: a record adopted by a fresh process (no rate-limit or token rea
   expect(selfCompacts(w)).toBe(1)
 })
 
+/** A 49-min turn record another process armed 39 min before T0 (due T0 + 10 min), with what it read at arm. */
+const adoptedTurn = (ttl: string | null) => ({
+  [KEY]: {
+    kind: 'turn', due: T0 + 10 * MIN, sid: SID_A, end: T0 - 39 * MIN, anchor: T0 - 39 * MIN, load: 'old', tokens: 260000, ttl, pct: 30,
+    cc: null, model: null, answer: true, published: false, episode: { since: T0 - 39 * MIN, done: false },
+  },
+})
+
+test('AT-IC-C30 (turn; §9.2, G11/D15): a 49-min turn record adopted by a fresh process with no rate-limit or token reading yet: the record\'s ttl, tokens and pct decide, so the turn runs (or no-asset), not ttl-5m or small', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, {}, adoptedTurn('1h'))
+  w.rateLimits = []
+  w.tokens = undefined
+  await w.start($)
+  await w.advance(10 * MIN)
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'turn']])
+})
+
+test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older build armed it): [ttl-5m, turn], no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, {}, adoptedTurn(null))
+  w.rateLimits = []
+  w.tokens = undefined
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(skips(w)).toEqual([['ttl-5m', 'turn']])
+  expect(w.submits.length).toBe(0)
+})
+
 test('AT-IC-C31 (§3.4): a due 30 s past at load, with no interactive session.start (a hot reload): it fires at once, late_s 30', { options: ON }, async ($, on) => {
   const probe = new World()
   const w = world(on, { tokens: 260000 }, adoptedRecord(probe, { due: T0 - 30 * 1000, end: T0 - 54.5 * MIN, anchor: T0 - 54.5 * MIN }))
@@ -644,7 +829,7 @@ test('AT-IC-C31 (§3.4, D11): the same record when a person resumes the session 
   await w.start($)
   await w.settle()
   expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind, r.late_s])).toEqual([['present', 'compact', 30]])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-IC-C32 (§3.4): a due 90 s past at load: [lapsed, compact] with late_s 90; the record is cleared (a tombstone, deleted once expired)', { options: ON }, async ($, on) => {
@@ -656,7 +841,16 @@ test('AT-IC-C32 (§3.4): a due 90 s past at load: [lapsed, compact] with late_s 
   expect(isTomb(w.storeGet(KEY))).toBe(true)
   await w.advance(MIN)
   expect(w.storeGet(KEY)).toBeUndefined()
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-IC-C32 (§3.4): the load\'s own lapse bound decides before the policy now in force: a due 90 s past with idle_compact off since is [lapsed, compact], not disabled', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, {}, adoptedRecord(probe, { due: T0 - 90 * 1000, end: T0 - 55.5 * MIN, anchor: T0 - 55.5 * MIN }))
+  await w.start($)
+  await w.settle()
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind, r.late_s])).toEqual([['lapsed', 'compact', 90]])
+  expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
 })
 
 for (const c of [
@@ -673,10 +867,21 @@ for (const c of [
       expect([skips(w), selfCompacts(w)]).toEqual([[], 1])
     } else {
       expect(skips(w)).toEqual([[c.why, 'compact']])
-      expect(selfCompacts(w)).toBe(0)
+      expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
     }
   })
 }
+
+test('AT-IC-C40 (G3a): /model in this load since the last request (no request, so nothing re-armed): [prefix-changed, compact], no compaction', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(30 * MIN)
+  w.model = 'claude-other-model'
+  await w.advance(24 * MIN)
+  expect(skips(w)).toEqual([['prefix-changed', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
 
 /** A 49-min turn record 3 min past at T0, armed `endMin` before T0 (null: a legacy record, no end). */
 const turnRec = (endMin: number | null) => ({
@@ -724,7 +929,24 @@ test('AT-IC-C34 (a): the computer sleeps through the due (the wait comes 10 min 
   expect(slept).toBe(true)
   const r = w.rowsOf('handoff_skipped').map(x => [x.why, x.kind, typeof x.late_s === 'number' && x.late_s >= 60])
   expect(r).toEqual([['lapsed', 'compact', true]])
-  expect(selfCompacts(w)).toBe(0)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-IC-C34 (turn, §3.4): the computer sleeps through the 49-min due past minute 55.5 (the wait comes 10 min late): [lapsed, turn] with late_s 600, no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  let slept = false
+  // Registered before World.install, so it stands outside the clock (first is outermost).
+  on('clock.after', { ms: 49 * MIN }, (_$, e, next) => {
+    if (slept) return next(e)
+    slept = true
+    return next({ ...e, ms: e.ms + 10 * MIN })
+  })
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(65 * MIN)
+  expect(slept).toBe(true)
+  expect(w.rowsOf('handoff_skipped').map(x => [x.why, x.kind, x.late_s])).toEqual([['lapsed', 'turn', 600]])
+  expect(w.submits.length).toBe(0)
 })
 
 test('AT-IC-C36 (D10): STORE_TEST_IDLE_CACHE_S=600: the compaction at 540 s; idle_mode cache_s 600', { options: ON }, async ($, on) => {
@@ -765,23 +987,39 @@ for (const v of ['60', 'abc']) {
   })
 }
 
-test('AT-IC-C42 (resume-persist): the idle compaction\'s block is on disk at once; a session end with no /clear keeps it, and a resume of the session id in a load delivers it from disk to the first turn, with [idle]', { options: ON }, async ($, on) => {
+/**
+ * AT-IC-C42: the watch folder and the store as the first process left them, read by the next case
+ * as the next process over the same folder and store (one load per kit test; this file's cases run
+ * in order, and the next case fails at once without it).
+ */
+let c42: { files: [string, string][]; store: Record<string, unknown> } | undefined
+
+test('AT-IC-C42 (resume-persist), first process: the idle compaction\'s block is on disk at once (resume-pending.json, idle); the supervisor then stops the process with no session.end', { options: ON }, async ($, on) => {
   const w = world(on)
   await w.start($)
   await humanTurn($, w)
   await w.advance(54 * MIN)
   expect(selfCompacts(w)).toBe(1)
-  const pending = `${WATCH}/${SID_A}/${PENDING_FILE}`
-  const rec = JSON.parse(w.files.get(pending) ?? '{}') as Record<string, unknown>
-  expect([rec.state, rec.session_id]).toEqual(['pending', SID_A])
-  // The supervisor's stop: the process ends with no /clear; the next process resumes the id.
-  await $.session.end({ reason: 'other', sessionId: SID_A, resume: { id: SID_A } } as never)
+  const text = w.files.get(`${WATCH}/${SID_A}/${PENDING_FILE}`)
+  expect(text).toBeDefined()
+  const rec = JSON.parse(text ?? 'null') as Record<string, unknown>
+  expect([rec.state, rec.session_id, (rec.args as Record<string, unknown> | undefined)?.idle]).toEqual(['pending', SID_A, true])
   expect(w.rowsOf('mod_outcome')).toEqual([])
+  c42 = { files: [...w.files], store: w.storeAll() }
+})
+
+test('AT-IC-C42 (resume-persist), the next process over the same store and watch folder (claude --resume, 2 min later): its first turn gets the idle block from disk, with [idle]', { options: ON }, async ($, on) => {
+  expect(c42).toBeDefined()
+  const w = world(on, {}, c42?.store ?? {})
+  for (const [p, t] of c42?.files ?? []) w.files.set(p, t)
+  // The classic SessionStart(resume) arms the record (helper case AT-RP-04).
+  const pending = `${WATCH}/${SID_A}/${PENDING_FILE}`
   const t = w.files.get(pending)
-  if (t !== undefined) {
-    w.files.delete(pending)
-    w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, t)
-  }
+  expect(t).toBeDefined()
+  w.files.delete(pending)
+  w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, t ?? '')
+  await w.clock.set(T0 + 56 * MIN)
+  await w.start($)
   await w.userTurn($, 'where were we?')
   const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
   expect(block).toContain(SID_A)
