@@ -615,6 +615,28 @@ test('Q5 (phase 1 item 5): at the plugin\'s idle compaction a step waits on the 
   }
 })
 
+test('owner 2026-10-27 22:32: the step-5 digest of [idle] carries the Basis line code renders when the block goes out', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = 'Status: working · Acuity: watch · State: waits for B-1 (checkpoint: clean)\nStep 1: `read B-1 output` — for "review"\nGate: none · Don\'t: x\n' +
+    '## Next steps\n1. run the suite — done when green · done\n2. `read B-1 output` — done when read · todo\n'
+  w.measureBlock = GIT + '\nIn flight: none listed\nEvidence: none'
+  w.agents = [{ id: 'a1', status: 'running' }]
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  w.agents = [{ id: 'a1', status: 'completed' }]
+  const block = (await resultTurn($, w, notif('a1'))).block ?? ''
+  const idle = head(w, 'idle')
+  if (idle === undefined) return
+  expect(block).toContain(idle)
+  expect(block).toContain(STEP5)
+  // The model writes the digest; code fills the Basis when the block goes out (a step still todo
+  // keeps the lane working, so this is [idle], not [idle-done]).
+  expect(block).toContain('lane state and why; Basis: 1 of 2 listed steps marked done; 0 units running; git: 2 commits not pushed, 1 file changed (by code, as is); Done;')
+  expect(block).not.toContain('@lane_basis@')
+  expect(block).not.toContain('code reads the work lane as')
+})
+
 test('M7: the Basis line code renders: the listed steps marked done, the units running, the commits not pushed and files changed the measure shows', () => {
   const f = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: none\n## Next steps\n1. a — done when b · done\n2. c — done when d · todo; ask user: x\n3. e\n')
   expect(laneBasis(f, 1, GIT + '\nIn flight: none listed')).toBe('1 of 3 listed steps marked done; 1 unit running; git: 2 commits not pushed, 1 file changed')

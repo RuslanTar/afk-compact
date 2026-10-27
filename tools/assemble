@@ -101,7 +101,8 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            # Away digest phase 1 [idle-done] (owner 2026-10-27 12:5x): the lane word and the longest
            # reason lane.ts gives (the worst case of every budget; lane.ts LANE_WHY_MAX, 63 chars,
            # which a unit test holds every reason to), and the longest Basis line lane.ts renders
-           # (LANE_BASIS_MAX, 113 chars: a branch with no upstream; review of fix rounds 1 and 2, M7).
+           # (LANE_BASIS_MAX, 113 chars: a branch with no upstream; review of fix rounds 1 and 2, M7),
+           # which [idle]'s step-5 digest carries too (owner 2026-10-27 22:32).
            "lane": "hard-blocked", "lane_why": "no Status code could read, but every listed step is marked done",
            "lane_basis": "999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")

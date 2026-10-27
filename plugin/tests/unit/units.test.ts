@@ -186,11 +186,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // the owner's 2026-10-26 GSD re-entry ruling the [driver] line, and the 2026-10-26 plugin-text
   // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last; 4,590
   // since the away digest's [idle-done] line with its code-rendered Basis, and the step-5 digest
-  // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5).
-  test('resume protocol ≤4,590 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5; 4,620 since that
+  // step-5 digest carries the code-rendered Basis line too, owner 2026-10-27 22:32).
+  test('resume protocol ≤4,620 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 4590).toBe(true)
+      expect(s.length <= 4620).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

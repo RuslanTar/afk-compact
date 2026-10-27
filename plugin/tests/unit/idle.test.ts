@@ -128,8 +128,7 @@ test('AT-IC-03: an idle dispatch gets [idle] in its resume block (when this buil
   const ctx = await $.prompt.context({ blocks: [] })
   const block = ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
   const plain = assemble(w.name, 'resume-context', ['prod-forbid'], { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x' })
-  const idle = assemble(w.name, 'resume-context', ['prod-forbid', 'idle'], { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x' })
-  const line = idle.split('\n').find(l => !plain.split('\n').includes(l))
+  const line = lineOf(w, ['idle'])
   expect(line === undefined).toBe(!hasTag('resume-context', 'idle'))
   if (line !== undefined) expect(block).toContain(line)
   const mid = assemble(w.name, 'resume-context', ['prod-forbid', 'midturn'], { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x' })
@@ -144,12 +143,18 @@ test('AT-IC-03: an idle dispatch gets [idle] in its resume block (when this buil
 // Owner xxxxxxxx-25 ("Stop in halt"; SPEC-DELTAS AT-IB-03): while halt mode is on, the idle line
 // says to handle the background result, then stop and wait for the user.
 const RT = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x', idle_used_at: 'x' }
-/** The lines `tags` add to the plain block (`base` kept in both), joined; undefined when none. */
+/**
+ * The lines `tags` add to the plain block (`base` kept in both), joined; undefined when none. They
+ * end before the step-5 digest's Basis, which code renders from the block's own facts (owner
+ * 2026-10-27 22:32; lane.test.ts checks it).
+ */
 function lineOf(w: World, tags: Tag[], base: Tag[] = [], rt: Record<string, string> = RT): string | undefined {
-  const plain = assemble(w.name, 'resume-context', ['prod-forbid', ...base], rt).split('\n')
-  const added = assemble(w.name, 'resume-context', ['prod-forbid', ...base, ...tags], rt).split('\n').filter(l => !plain.includes(l))
-  return added.length > 0 ? added.join('\n') : undefined
+  const r = { lane_basis: BASIS_CUT, ...rt }
+  const plain = assemble(w.name, 'resume-context', ['prod-forbid', ...base], r).split('\n')
+  const added = assemble(w.name, 'resume-context', ['prod-forbid', ...base, ...tags], r).split('\n').filter(l => !plain.includes(l))
+  return added.length > 0 ? added.join('\n').split(BASIS_CUT)[0] : undefined
 }
+const BASIS_CUT = '\u0002'
 const blockOf = (w: World, ctx: { blocks: readonly { name: string; text: string }[] }) => ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text
 /** What the model read beside the prompt of the newest turn (the plugin's prompt.submit context). */
 const ctxOf = (w: World): string => (w.submitContexts[w.submitContexts.length - 1] ?? []).join('\n')

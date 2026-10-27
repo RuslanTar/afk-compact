@@ -129,7 +129,8 @@ export async function buildBlockWith(
   if (lane !== undefined) {
     runtime.lane = lane.lane
     runtime.lane_why = lane.why
-    // The digest's Basis line, rendered by code now (review of fix round 1, M7).
+    // The digest's Basis line, rendered by code now (review of fix round 1, M7): [idle-done]'s, and
+    // the step-5 digest's of [idle] (owner 2026-10-27 22:32).
     runtime.lane_basis = laneBasis(a.lane, running ?? 0, remeasure)
   }
   const h = a.handoff

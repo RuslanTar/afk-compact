@@ -33,12 +33,17 @@ const dispatchArgs = (w: World, i = 0) => w.callsOf('dispatch')[i]?.args ?? []
 const isTomb = (v: unknown): boolean => typeof v === 'object' && v !== null && (v as Record<string, unknown>).cancelled === true
 const blockOf = (w: World, ctx: { blocks: readonly { name: string; text: string }[] }) => ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text
 
-/** The line a resume-context tag adds to the plain block, or undefined when this build lacks it. */
+/**
+ * The line a resume-context tag adds to the plain block, or undefined when this build lacks it; it
+ * ends before the step-5 digest's Basis, which code renders from the block's own facts (owner
+ * 2026-10-27 22:32; lane.test.ts checks it).
+ */
 function lineOf(w: World, tag: 'idle' | 'idle-halt'): string | undefined {
-  const rt = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x', idle_used_at: 'x' }
+  const cut = '\u0002'
+  const rt = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x', idle_used_at: 'x', lane_basis: cut }
   const plain = assemble(w.name, 'resume-context', ['prod-forbid'], rt).split('\n')
   const added = assemble(w.name, 'resume-context', ['prod-forbid', tag], rt).split('\n').filter(l => !plain.includes(l))
-  return added.length > 0 ? added.join('\n') : undefined
+  return added.length > 0 ? added.join('\n').split(cut)[0] : undefined
 }
 
 /** The default setup (§6): native vetoed, plan windows, 260K. */
