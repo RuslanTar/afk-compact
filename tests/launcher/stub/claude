@@ -1,0 +1,84 @@
+#!/bin/sh
+# Stub `claude` for tests/launcher/run.sh. It never contacts anything. Each run records its
+# arguments and what it sees, then acts out its lines of $STUB_DIR/scenario:
+#   <run> sid [SID]          write <launch>/sid (default: the sid of the hand-written notes)
+#   <run> note FILE          write <launch>/restart.note from tests/launcher/notes/FILE
+#   <run> modeend MODE       write <launch>/restart.mode-end
+#   <run> rmfile REL         remove $STUB_DIR/REL (a file named by a launch flag)
+#   <run> int-launcher       SIGINT to the launcher, then record whether it is still alive
+#   <run> selfint            record whether a child of this stub dies of SIGINT (default)
+#   <run> bg-int SECS        SIGINT to the launcher SECS seconds after this run ends
+#   <run> term-launcher | hup-launcher   SIGTERM / SIGHUP to the launcher now
+#   <run> sleep SECS | exit CODE
+# Notes may hold @TOKEN@ and times filled at write time: @NOW@ (epoch s), @NOWMS@ (ms), @OLD@
+# and @OLDMS@ (200 s ago), @FUTURE@ and @FUTUREMS@ (60 s ahead), @LATEMS@ (10 s ago, in ms).
+D=${STUB_DIR:?STUB_DIR is not set}
+SID=00000000-0000-4000-8000-000000000000
+n=$(cat "$D/runs" 2>/dev/null) || n=0
+n=$((n + 1))
+echo "$n" >"$D/runs"
+printf '%s\n' "$@" >"$D/run$n.argv"
+eval "L=\${${STUB_LAUNCH_ENV:?}-}"
+eval "Lset=\${${STUB_LAUNCH_ENV}+yes}"
+if [ -t 0 ] && [ -t 1 ]; then tty=yes; else tty=no; fi
+lpid=
+tok=
+if [ -n "$L" ] && [ -f "$L/launcher.json" ]; then
+  cp "$L/launcher.json" "$D/run$n.lj"
+  lpid=$(sed -n 's/.*"pid":\([0-9]*\).*/\1/p' "$L/launcher.json")
+  tok=$(sed -n 's/.*"token":"\([0-9a-f]*\)".*/\1/p' "$L/launcher.json")
+fi
+{
+  echo "launchset=${Lset:-no}"
+  echo "launch=$L"
+  echo "tty=$tty"
+  if [ -n "$L" ]; then
+    set -f
+    # shellcheck disable=SC2046
+    set -- $(ls -ldn "$L" 2>/dev/null)
+    set +f
+    echo "perm=${1-}"
+    set -f
+    # shellcheck disable=SC2046
+    set -- $(ls -ln "$L/launcher.json" 2>/dev/null)
+    set +f
+    echo "ljperm=${1-}"
+    [ -e "$L/restart.used" ] && echo "used=yes" || echo "used=no"
+    [ -e "$L/restart.note" ] && echo "note=yes" || echo "note=no"
+    [ -e "$L/restart.mode-end" ] && echo "modeend=yes" || echo "modeend=no"
+  fi
+} >"$D/run$n.env"
+
+note() {
+  now=$(date +%s)
+  sed -e "s/@TOKEN@/$tok/g" -e "s/@NOWMS@/${now}000/g" -e "s/@NOW@/$now/g" \
+    -e "s/@OLDMS@/$((now - 200))000/g" -e "s/@OLD@/$((now - 200))/g" \
+    -e "s/@FUTUREMS@/$((now + 60))000/g" -e "s/@FUTURE@/$((now + 60))/g" \
+    -e "s/@LATEMS@/$((now - 10))000/g" "${STUB_NOTES:?}/$1" >"$L/restart.note.tmp" &&
+    mv -f "$L/restart.note.tmp" "$L/restart.note"
+}
+
+while read -r r act arg; do
+  [ "$r" = "$n" ] || continue
+  case $act in
+  sid) printf '%s\n' "${arg:-$SID}" >"$L/sid" ;;
+  note) note "$arg" ;;
+  modeend) printf '%s\n' "$arg" >"$L/restart.mode-end" ;;
+  rmfile) rm -f "$D/${arg:?}" ;;
+  int-launcher)
+    kill -INT "$lpid"
+    sleep 1
+    if kill -0 "$lpid" 2>/dev/null; then echo "alive=yes" >>"$D/run$n.env"; else echo "alive=no" >>"$D/run$n.env"; fi
+    ;;
+  selfint)
+    /bin/sh -c 'kill -INT $$; echo survived' >"$D/run$n.selfint" 2>/dev/null
+    if [ -s "$D/run$n.selfint" ]; then echo "childint=ignored" >>"$D/run$n.env"; else echo "childint=default" >>"$D/run$n.env"; fi
+    ;;
+  bg-int) (sleep "$arg"; kill -INT "$lpid") </dev/null >/dev/null 2>&1 & ;;
+  term-launcher) kill -TERM "$lpid" ;;
+  hup-launcher) kill -HUP "$lpid" ;;
+  sleep) sleep "$arg" ;;
+  exit) exit "$arg" ;;
+  esac
+done <"$D/scenario"
+exit 0

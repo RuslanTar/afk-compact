@@ -1,0 +1,12 @@
+proto=1
+state=go
+token=@TOKEN@
+sid=00000000-0000-4000-8000-000000000000
+nonce=0123456789abcdef
+at=@NOW@
+exiting_at=@NOWMS@
+from=2.1.311
+to=2.1.312
+model=`touch pwned`
+effort=high
+mode=acceptEdits
