@@ -1,0 +1,63 @@
+{
+ "id": "AD-07-measure-git-upstream",
+ "note": "Away digest phase 1, the Basis line (review of the away-digest fix round 2): the measure's git line counts commits ahead only against an upstream. A branch with no upstream (a new local or worktree branch, a detached HEAD) says `no upstream`, one whose upstream ref is gone says `upstream gone`, never `ahead 0 behind 0`, so lane.ts renders the commits not pushed as unknown, not 0",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "main tracks origin/main, one commit on top: ahead 1",
+   "setup": [
+    {"repo": "$TMP/work", "branch": "main"},
+    {"git": ["init", "-q", "--bare", "$TMP/remote.git"]},
+    {"git": ["remote", "add", "origin", "$TMP/remote.git"], "cwd": "$TMP/work"},
+    {"git": ["push", "-q", "-u", "origin", "main"], "cwd": "$TMP/work"},
+    {"git": ["commit", "-q", "--allow-empty", "-m", "local only"], "cwd": "$TMP/work"}
+   ],
+   "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": ["^git: branch main · HEAD [0-9a-f]{12} · 0 changed · ahead 1 behind 0$"]
+   }
+  },
+  {
+   "name": "a new local branch with no upstream: no upstream, not ahead 0",
+   "setup": [
+    {"git": ["checkout", "-q", "-b", "feat/new"], "cwd": "$TMP/work"},
+    {"git": ["commit", "-q", "--allow-empty", "-m", "on the branch"], "cwd": "$TMP/work"}
+   ],
+   "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": ["^git: branch feat/new · HEAD [0-9a-f]{12} · 0 changed · no upstream$"],
+    "stdout_lacks": ["ahead \\d+ behind"]
+   }
+  },
+  {
+   "name": "a branch whose upstream was deleted on the remote: upstream gone",
+   "setup": [
+    {"git": ["checkout", "-q", "-b", "merged"], "cwd": "$TMP/work"},
+    {"git": ["push", "-q", "-u", "origin", "merged"], "cwd": "$TMP/work"},
+    {"git": ["push", "-q", "origin", "--delete", "merged"], "cwd": "$TMP/work"}
+   ],
+   "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": ["^git: branch merged · HEAD [0-9a-f]{12} · 0 changed · upstream gone$"],
+    "stdout_lacks": ["ahead \\d+ behind"]
+   }
+  },
+  {
+   "name": "a detached HEAD with a changed file: no upstream",
+   "setup": [
+    {"git": ["checkout", "-q", "--detach", "main"], "cwd": "$TMP/work"},
+    {"write": "$TMP/work/README.md", "text": "changed\n"}
+   ],
+   "argv": ["measure", "--sid", "$SID", "--compact", "--cwd", "$TMP/work"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": ["^git: branch \\(detached\\) · HEAD [0-9a-f]{12} · 1 changed · no upstream$"],
+    "stdout_lacks": ["ahead \\d+ behind"]
+   }
+  }
+ ]
+}

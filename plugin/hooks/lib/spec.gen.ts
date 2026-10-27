@@ -92,6 +92,10 @@ export const SPEC = {
     "manual"
   ],
   "status_words": [
+    "working",
+    "finished",
+    "hard-blocked",
+    "soft-blocked",
     "active",
     "blocked",
     "waiting-owner",

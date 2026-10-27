@@ -42,6 +42,12 @@ export type Config = {
    * handoff turn runs in its place).
    */
   idle_compact: 'auto' | 'off'
+  /**
+   * Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): after an idle compaction whose work
+   * lane is finished or blocked with nothing running, `submit` sends the digest turn right away;
+   * `return` waits for the next turn (a person's return gets a short pointer first).
+   */
+  idle_digest: 'submit' | 'return'
   /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
   watcher_off: boolean
   /**
@@ -76,6 +82,8 @@ export const DEFAULTS: Config = {
   idle_handoff_min_tokens: 200000,
   // Pending the owner's answer on the default (IDLE-COMPACT-SPEC Q3); the release note says it.
   idle_compact: 'auto',
+  // Owner xxxxxxxx-09 (2026-10-27 12:5x): "default setting: submit right away".
+  idle_digest: 'submit',
   watcher_off: false,
   notes: { invalid: [], clamped: [] },
 }
@@ -232,6 +240,8 @@ export function parseOptions(o: PluginOptions): Config {
     idle_handoff_turn: idleTurn(o, notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
     idle_compact: idleCompact(o, notes),
+    // Any other value is `return`, the value with no extra plugin turn (as for the other keys).
+    idle_digest: choice(o, 'idle_digest', ['submit', 'return'] as const, DEFAULTS.idle_digest, 'return', notes),
     watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
   }

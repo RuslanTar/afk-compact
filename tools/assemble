@@ -97,7 +97,13 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            "idle_min": "49",
            # Owner xxxxxxxx-37 [idle-again]: when a background result's turn took the idle block
            # (the @measured_at@ form).
-           "idle_used_at": "2026-10-21T04:40:00+03:00"}
+           "idle_used_at": "2026-10-21T04:40:00+03:00",
+           # Away digest phase 1 [idle-done] (owner 2026-10-27 12:5x): the lane word and the longest
+           # reason lane.ts gives (the worst case of every budget; lane.ts LANE_WHY_MAX, 63 chars,
+           # which a unit test holds every reason to), and the longest Basis line lane.ts renders
+           # (LANE_BASIS_MAX, 113 chars: a branch with no upstream; review of fix rounds 1 and 2, M7).
+           "lane": "hard-blocked", "lane_why": "no Status code could read, but every listed step is marked done",
+           "lane_basis": "999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
@@ -111,7 +117,8 @@ FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
 # Q-ADAPTER QA-3 / QA-B3 (owner xxxxxxxx-11): the main text gains [queue], kept only when
 # queue_cmd is set (both paths).
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
-        "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver"],
+        "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
+                "idle-done"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
@@ -119,11 +126,14 @@ TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "s
 # goldens, the step checks and every walk over combinations see only paths that can happen.
 # Owner 2026-10-26 [driver] (review of the first build): the re-enter line never joins [idle-halt],
 # which stops and waits for the user while auto-continue is paused.
-EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "idle-halt", "midturn"), "most"),
-                     (("driver", "idle-halt"), "most")]}
+# Away digest phase 1 (owner 2026-10-27 12:5x): [idle-done] is the idle line of a finished or
+# blocked lane, so it joins the idle group; a measured driver keeps the lane working (lane.ts),
+# so [driver] never joins it either.
+EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"), (("idle", "idle-halt", "idle-done", "midturn"), "most"),
+                     (("driver", "idle-halt"), "most"), (("driver", "idle-done"), "most")]}
 # A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
 # block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
-NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt")}}
+NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt", "idle-done")}}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
@@ -165,9 +175,14 @@ def assemble(text, tags, drop=()):
 # status stays the latest when copied) on the worst path (midturn+chain+measured+handoff+queue:
 # 8,705 B, 8,720 B with a 16-character plugin name), with no rule text removed. It stays the hard
 # guard; the classic total keeps 8,192.
+# Owner 2026-10-27 12:5x (away digest phase 1, xxxxxxxx-05/-06): the model sets the work lane's
+# Status (working, finished, hard-blocked, soft-blocked, with the blocked meaning) and marks each
+# Next step todo or done in the summary; 72 B more on every main path. The total goes to 8,800 B,
+# the least that fits the worst path (8,777 B, 8,792 B with a 16-character plugin name), with no
+# rule text removed.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
-    "mod channel total":     ("bytes", None, 8720),
+    "mod channel total":     ("bytes", None, 8800),
     "classic channel total": ("bytes", None, 8192),
     "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
     "subagent mod":          ("chars", 900, None),
@@ -307,7 +322,9 @@ def combos(asset):
 # beside these tags (6 more goldens: each prod line alone, with [midturn] or [idle]; never with
 # [idle-halt], EXCLUSIVE); the grammar is the same for every tag line, and the budget, step, store and
 # leftover walks still run over every combination (combos).
-GOLDEN_SPARSE = {"res": {"driver": {"prod-forbid", "prod-allow", "midturn", "idle"}}}
+# Away digest phase 1: [idle-done] likewise only beside a prod line and [idle-again] (4 goldens).
+GOLDEN_SPARSE = {"res": {"driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
+                         "idle-done": {"prod-forbid", "prod-allow", "idle-again"}}}
 
 
 def golden_combos(asset):
@@ -623,19 +640,23 @@ def res_label(tags):
 # return after a background result's turn took it adds [idle-again].
 IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"], ["idle", "nonok", "handoff-partial"],
              ["idle", "idle-again", "nonok", "handoff-partial"], ["idle-halt", "nonok", "handoff-partial"],
-             ["idle-halt", "idle-again", "nonok", "handoff-partial"])
+             ["idle-halt", "idle-again", "nonok", "handoff-partial"],
+             # Away digest phase 1 (owner 2026-10-27 12:5x): a finished or blocked lane's idle line.
+             ["idle-done"], ["idle-done", "nonok"], ["idle-done", "nonok", "handoff"], ["idle-done", "nonok", "handoff-partial"],
+             ["idle-done", "idle-again", "nonok", "handoff-partial"])
 # Owner 2026-10-26 (GSD re-entry per session): [driver] can join any block, so every row is
 # checked again with it.
 PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
                  ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS
-for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if "idle-halt" not in b):
+for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if "idle-halt" not in b and "idle-done" not in b):
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
 TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["idle", "nonok"],
               ["idle", "nonok", "handoff-partial"], ["idle", "idle-again", "nonok", "handoff-partial"],
-              ["idle-halt", "idle-again", "nonok", "handoff-partial"])
-for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if "idle-halt" not in b):
+              ["idle-halt", "idle-again", "nonok", "handoff-partial"], ["idle-done", "nonok", "handoff-partial"],
+              ["idle-done", "idle-again", "nonok", "handoff-partial"])
+for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if "idle-halt" not in b and "idle-done" not in b):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")

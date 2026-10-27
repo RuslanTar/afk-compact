@@ -46,7 +46,7 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-tr
 
 ## 4. Vocabularies
 
-- **Status words** (Resume here): `active` · `blocked` · `waiting-owner` · `waiting-job` · `done`.
+- **Status words** (Resume here; the work lane's state): `working` (a step can start, or a job runs whose result the work acts on) · `finished` (every listed step done, nothing runs) · `hard-blocked` (all left waits on the user, nothing runs) · `soft-blocked` (all left waits on the user, a job still runs). Older files may hold `active` · `blocked` · `waiting-owner` · `waiting-job` · `done`: read them, never write them. Next steps items end `· todo` or `· done`.
 - **Work-state ladder**: `proposed` · `queued` · `implemented` · `tested` · `committed` · `pushed` · `in review` · `merged` · `deployed` · `published` · `installed`.
 - **Claim tags**: `[verified <stamp>: <cmd>]` · `[unverified]` · `[inherited: <stem>]` · `Superseded: <id> by <id> (<stamp>)`. Live state tags: `measured` · `verified` · `unverified` · `inherited`.
 - **Stamp** (RV-24): a time is always `YYYY-MM-DD HH:MM ±hhmm` (local date, local time, numeric UTC offset, all three, e.g. `2026-10-21 14:05 +0300`). The helper prints stamps; in a shell, `date '+%Y-%m-%d %H:%M %z'`. Older files may hold `HH:MM` or `MM-DD HH:MM` (`time_legacy_re`): read them, never write them. Frontmatter `date` stays ISO with a colon offset.
@@ -336,7 +336,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "verdicts": ["stale", "scope-leak", "unshaped", "truncated", "ok-trailer", "ok"],
   "ok_verdicts": ["ok", "ok-trailer"],
   "scopes": ["main", "sub", "manual"],
-  "status_words": ["active", "blocked", "waiting-owner", "waiting-job", "done"],
+  "status_words": ["working", "finished", "hard-blocked", "soft-blocked", "active", "blocked", "waiting-owner", "waiting-job", "done"],
   "acuity_words": ["stable", "watch", "unstable"],
   "acuity_re": "(?:^|· )Acuity: (stable|watch|unstable)\\b",
   "ladder": ["proposed", "queued", "implemented", "tested", "committed", "pushed", "in review", "merged", "deployed", "published", "installed"],

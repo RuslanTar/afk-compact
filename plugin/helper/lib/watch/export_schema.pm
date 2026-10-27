@@ -189,6 +189,16 @@ our %SCHEMA = (
     # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
     # for the load (`queued`: lane B1's D8). The other new idle fields and enum values are lane B's.
     idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
+    # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
+    # after an idle compaction (the summary's Status word, the state, how, the units running: agents
+    # and the measure's running background tasks, at which step), and the digest turn submitted
+    # right after one with nothing running, or why not
+    lane_outcome => { nonce => 'nonce', status => [enum => qw(working finished hard-blocked soft-blocked active blocked waiting-owner waiting-job done none other)],
+                      lane => [enum => qw(working finished hard-blocked soft-blocked)], source => [enum => qw(status recheck)],
+                      agents => 'int', at => [enum => qw(build delivery recheck submit)] },
+    digest_submit => { nonce => 'nonce', lane => [enum => qw(finished hard-blocked soft-blocked unknown)],
+                       result => [enum => qw(submitted skipped:return skipped:running skipped:taken skipped:session-changed skipped:busy
+                                            skipped:halt skipped:headless skipped:disabled skipped:cap skipped:claimed skipped:submit-failed)] },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num', model => 'model' },
     handoff_turn_end => {

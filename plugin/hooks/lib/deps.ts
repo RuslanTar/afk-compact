@@ -6,6 +6,7 @@ import type { ResumePref } from './compact'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
 import type { BlockArgs } from './resume'
+import type { Lane, LaneFacts, LaneResult } from './lane'
 import { optionEnv, parseOptions, paths } from './config'
 
 export type RunResult = {
@@ -379,6 +380,19 @@ export type LoadState = {
    */
   idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
   /**
+   * Away digest phase 1 (owner 2026-10-27 12:5x): the open idle episode of the last main idle
+   * compaction (or of its block restored after `claude --resume`), from its after-step to the
+   * first human-origin prompt once a turn got the block: the lane facts its summary gave, the
+   * lane state the last turn was told (`shown`, undefined until a turn got the block), the measure
+   * the block went out with (its running in-flight rows count until a notification ends them),
+   * the task ids this episode's notifications reported ended, and whether the model started work
+   * after the block went out (`superseded`: the summary's Status no longer describes the lane).
+   * Every later prompt not of a person's re-checks the lane (resume.ts `laneRecheck`) and carries a
+   * note beside it when the lane turned finished or hard-blocked. A person's prompt closes it; the
+   * `[idle-again]` block that prompt's turn may get still reads it, then drops it.
+   */
+  idleLane: IdleLane | undefined
+  /**
    * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
    * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
    * end it was armed for. Also kept in `$.store` (`idle_seen:<sid>`), so a reload keeps it.
@@ -458,6 +472,31 @@ export type PendingResume = {
   outcome: Outcome
   /** Its record is on disk (`resume-pending.json`, AT-RP-01): a session end other than `/clear` keeps it for a resume. */
   persisted?: boolean
+  /** An idle block's work lane as code read it when the block was built (away digest phase 1). */
+  lane?: LaneResult
+}
+
+/** The open idle episode of away digest phase 1 (`LoadState.idleLane`). */
+export type IdleLane = {
+  sid: string
+  nonce: string
+  facts: LaneFacts | undefined
+  nonok: boolean
+  driver: boolean
+  shown: Lane | undefined
+  remeasure: string | undefined
+  /** When `remeasure` was measured (epoch ms): a lane note's Basis says how old its git facts are. */
+  measuredAt: number | undefined
+  ended: Set<string>
+  superseded: boolean
+  /** A person's prompt came after a turn got the block: no more re-checks (the held `[idle-again]` block still reads it). */
+  closed: boolean
+  /**
+   * The episode of a block restored after `claude --resume`: the background tasks its measures list
+   * ran in the process that ended, and no notification of this load will end them, so only agents
+   * count as running (review of fix round 1).
+   */
+  restored: boolean
 }
 
 /**
@@ -544,6 +583,7 @@ export function newState(loadId: string): LoadState {
     publishedSinceHuman: false,
     idleMode: undefined,
     idleAgain: undefined,
+    idleLane: undefined,
     compactedAt: undefined,
     agentTurns: new Set(),
     headless: false,

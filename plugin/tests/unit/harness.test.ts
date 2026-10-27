@@ -73,6 +73,8 @@ export class World {
   /** The test's engine, kept at `start` (a `/compact` raises its compaction through it). */
   engine: Engine | undefined
   summaryMode: SummaryMode = 'ok'
+  /** The summary's lines after `## Resume here` (away digest phase 1: the lane's Status line and the rest). */
+  resumeHere = 'Status: active\n'
   claims = new Map<string, string>()
   prevCopy = 'none'
   measured: string | null = null
@@ -106,6 +108,11 @@ export class World {
   rewrite: ((text: string) => string | undefined) | undefined
   /** The origin of every `prompt.submit` that reached the bottom. */
   submitOrigins: unknown[] = []
+  /**
+   * The `context` entries every `prompt.submit` reached the bottom with (a person's prompts of
+   * `userTurn` too): what the model reads beside that prompt (away digest phase 1, the lane note).
+   */
+  submitContexts: (readonly string[])[] = []
   /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
   compactGate: Promise<void> | undefined
   /**
@@ -194,6 +201,7 @@ export class World {
       return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: world.stepUsage }
     })
     on('prompt.submit', async (_$, e) => {
+      this.submitContexts.push(e.context ?? [])
       if (this.quiet) return { text: e.text }
       this.submitKeys.push(Object.keys(e).sort())
       this.submitOrigins.push(e.origin)
@@ -350,7 +358,7 @@ export class World {
   summaryBody(nonce: string, scope: string): string {
     return this.summaryMode === 'unshaped'
       ? '# LAB-42 retry work\nNo marker here.\n'
-      : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n' +
+      : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\n' + this.resumeHere +
           (this.summaryMode === 'truncated' ? '' : sentinelText(this.name, nonce) + '\n')
   }
 
