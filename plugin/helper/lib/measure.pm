@@ -2,10 +2,12 @@ package measure;
 # lib/measure.pm: facts measured by code (MOD-SPEC §2.6 `measure --compact`, §10
 # measured block). Order: the git header line; this session's GSD lines (lib/gsd.pm: from its
 # own transcript, never from the worktree alone; none for a session that worked with neither GSD
-# nor a driver skill; before the porcelain list, so the cap cuts porcelain lines first); the
-# porcelain list (<= 20 lines); in-flight inventory (every listed id);
+# nor a driver skill; right after the git header line); the porcelain list (<= 20 lines); in-flight
+# inventory (every listed id);
 # evidence map (<= 8 rows from this compaction's checkpoint or sweep); the Queued: line when
-# queue_cmd is set. <= 3,000 B, cut at a line boundary with `(+N lines)`. With `--copy`
+# queue_cmd is set. <= 3,000 B, cut at a line boundary with `(+N lines)`: cap() keeps lines from the
+# top, so it drops the Queued:, evidence, in-flight, approvals and porcelain lines, in that order,
+# before a GSD line (on main the GSD lines came after the evidence map and were dropped first). With `--copy`
 # (AP-5) the approvals lines of the summary follow the git and GSD lines (cmd/measure.pl
 # checks them); without it there is none. Times are stamps (`In flight (sidecar 2026-10-21 14:05 +0300)`, RV-24).
 # Owner: WP-core.
@@ -149,8 +151,9 @@ sub compact {
     my @gl = git_lines($g);
     my $wt = $o{worktree} // $g->{toplevel};
     $wt //= git::where($cwd, $left->(2000))->{toplevel} if $g->{status} eq 'ok' && $left->(2000) >= 200;
-    # The GSD lines go right after the git header line, before the porcelain list, so the cap
-    # cuts porcelain lines first and never the re-enter command.
+    # The GSD lines go right after the git header line: the cap (it keeps lines from the top) cuts
+    # every later line (Queued:, evidence, in flight, approvals, porcelain) before them, so the
+    # re-enter command survives.
     my @l = (shift @gl, gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS))), @gl);
     push @l, @{ $o{approvals} } if ref $o{approvals} eq 'ARRAY';
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);

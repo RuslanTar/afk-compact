@@ -45,16 +45,19 @@ package gsd;
 # driver is a listed loop that runs no other loop (%LEAF). After a human prompt, or while the driver
 # is only a hint, a GSD loop the model invokes for the driver's workstream (or naming none) is still
 # that driver's step, and the driver stays what it was (a prompt between makes it at most a hint,
-# never its step Active). The same loop invoked again, a loop the user types, or another loop
+# never its step Active; the step's work after later prompts, a checkpoint's answer, never makes the
+# driver Active again: only its own re-invocation does). The same loop invoked again, a loop the user types, or another loop
 # invoked after a human prompt (a superpowers loop, a GSD loop for another workstream) takes over.
 # A human prompt is a user row a person wrote (not a tool result, a task or teammate notification,
 # an interruption mark, a stacked command, a typed Claude Code command, /gsd-pause-work, one of
 # this plugin's skills or this plugin's own submitted note; nor a prompt this plugin's skill answers
 # right after it). Loop work is the driver's own (re)invocation, a step it runs, a GSD work command
 # or a gsd-tools run that changes planning state or a state-file write for its workstream (while a
-# human prompt waits, only a phase's own files: a STATE.md note the person asked for is not; an
-# Agent, Task or Workflow spawn only while no human prompt waits); never what a skill or command
-# started after a human prompt does, nor what a turn of this plugin's own does (its resume
+# human prompt waits, only a phase's own files: a STATE.md note the person asked for is not; while a
+# human prompt waits or after its turn ended, only a gsd-tools run that records a phase's progress,
+# %PROGRESS: a commit, a todo, a decision or a phase added the person asked for is not; an Agent,
+# Task or Workflow spawn only while no human prompt waits); never what a skill or command started
+# after a human prompt does, nor what a turn or a skill of this plugin's own does (its resume
 # reconciling STATE.md, its handoff). A GSD loop absorbed as the driver's step after a prompt or
 # while the driver is a hint is named in the hint (`later step: …`), never as the driver. Its
 # lifecycle, read in transcript order:
@@ -82,20 +85,25 @@ package gsd;
 #     finished, stopped or was set aside; $IDLE_PROMPTS), a turn end (an assistant row with stop
 #     reason end_turn) with none of its background work live and no loop work after it (the loop's
 #     final report, a stop, or a wait for the user), the checkpoint this plugin's nudge asked for
-#     saying `Step 1: none: task done`, and while it was invoked with arguments that cannot be
+#     saying `Step 1: none: task done` (`Step 1:` on its line or the next, any dash after `none`),
+#     and while it was invoked with arguments that cannot be
 #     shown, none of them kept for its re-enter command, and no GSD work of its workstream followed.
 #     Its background work is what Claude Code ran in the background while it drove (launched by the
 #     same loop, re-invoked, counts too): live are an Agent or Workflow until a task notification
 #     names its tool call or its task id, the agent hands back or a TaskStop names it; a teammate
-#     until its idle notification (not one sent before a SendMessage woke it) or a TaskStop (a
-#     SendMessage to an agent or teammate that was sent sets it running again, and its
-#     notification may name that call); a Monitor that times out, until it
-#     ends, is stopped or its time is up; a ScheduleWakeup until it is due. A background Bash
-#     command, a persistent Monitor and a CronCreate task may be a server or a watch that outlives
-#     the loop: at a turn end they make the hint name them, never an Active line. Never a stop: the
-#     turn this plugin's checkpoint nudge asked to close, and a turn of this plugin's own (opened by
-#     its handoff note, or in which one of its skills ran: the driver stays what it was); an API
-#     error or a turn cut off ends neither.
+#     until its idle notification (not one sent before a SendMessage woke it), its shutdown approval,
+#     Claude Code's notice that it was terminated, or a TaskStop (a SendMessage to an agent or
+#     teammate that was sent sets it running again, and its notification may name that call); a
+#     ScheduleWakeup until it is due. A background Bash command, a Monitor (persistent, or one that
+#     times out, until it ends, is stopped or its time is up) and a CronCreate task may be a server
+#     or a watch that outlives the loop or only watches while it waits for the user: at a turn end
+#     they make the hint name them, never an Active line. Never a stop: the turn this plugin's
+#     checkpoint nudge asked to close, and a turn of this plugin's own (opened by its handoff note,
+#     or by a person typing or asking for one of its skills: the driver stays what it was). One of
+#     its skills the model runs inside the loop's own turn (a handoff before going idle) does no
+#     loop work, but that turn's end is the loop's and the background work it starts after the
+#     skill is the loop's. An API error or a turn cut off ends neither; the next turn (a prompt, a
+#     task or teammate notification, an interruption mark) carries no exemption over.
 # Only an active driver gets an `Active driver:` line (the resume protocol's [driver] re-entry keys
 # on it, and only that line is ever run); a paused one gets `Paused driver:` (re-enter in a new
 # session only), an ambiguous one the weaker `Was driving: … · re-enter only if Step 1 belongs to
@@ -114,7 +122,7 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 7;
+our $CACHE_V = 8;
 our $BG_KEEP = 32;                    # newest background tasks kept while no notification names them
 our $IDLE_PROMPTS = 1;                # human prompts with no loop work after them: an active driver is
                                       # only a `Was driving` hint (R2: it may have finished)
@@ -131,6 +139,11 @@ our %READ_VERB = map { $_ => 1 } qw(state state.load state.get state.json state.
 our %READ_BASE = map { $_ => 1 } qw(init progress stats state-snapshot find-phase phase-plan-index list-todos
                                     list-seeds history-digest summary-extract verify verify-summary verification
                                     validate audit-uat audit-open);
+# gsd-tools runs that record a phase's own progress (`<verb>.<sub>`; verify* too): after a human
+# prompt or a stopped turn, only these are loop work (R2: a person's bookkeeping is not).
+our %PROGRESS = map { $_ => 1 } qw(state.begin-phase state.advance-plan state.update-progress state.record-metric
+                                   state.update state.patch state.sync state.record-session state.complete-phase
+                                   roadmap.update-plan-progress phase.complete phases.complete);
 # GSD status commands that only look at a workstream: their --ws, and that of the reads they run
 # before the next prompt, never names the session's own (a loop typed after one is not bound to it).
 our %LOOK = map { $_ => 1 } qw(gsd-progress gsd-stats);
@@ -336,7 +349,8 @@ sub _wsn { my ($w) = @_; return undef unless defined $w; $w =~ s/\.+\z//; return
 # background command, a monitor, a scheduled task), done => the time its nudged checkpoint said the
 # task is done, sp => {seq, ts}: it created a pause file and its turn has not ended yet, id => its
 # own number (its background work's owner), step => the GSD loop it ran as its step after a prompt
-# or while it was a hint, own => a turn of this plugin's own runs, nudged / nmid => the turn this
+# or while it was a hint, own => a turn of this plugin's own runs, oskill => one of this plugin's
+# skills ran inside the loop's own turn (until that turn ends), nudged / nmid => the turn this
 # plugin's checkpoint nudge asked to close, and the message that closed it}. pause{self}: it paused
 # itself (no /gsd-pause-work); pause{prompted}: a human prompt came after that pause.
 sub _start {
@@ -387,6 +401,23 @@ sub _touch {
 sub _mine {
     my ($D) = @_;
     return ($D && !$D->{idle} && !$D->{other} && !$D->{own}) ? 1 : 0;
+}
+
+# What this plugin does (a turn of its own, or one of its skills the model ran inside the loop's
+# turn): never the loop's work.
+sub _plug {
+    my ($D) = @_;
+    return ($D->{own} || $D->{oskill}) ? 1 : 0;
+}
+
+# Whether a gsd-tools run records a phase's own progress (what a loop runs as it goes; not the
+# bookkeeping a person asks for after the loop stopped: a commit, a todo, a decision or blocker, a
+# phase added, inserted or removed, a milestone, requirements).
+sub _progress {
+    my ($b) = @_;
+    my ($base) = $b->{verb} =~ /\A([^.]+)/;
+    return 1 if $base eq 'verify' || $base eq 'verification';
+    return $PROGRESS{ defined $b->{sub} ? "$base.$b->{sub}" : $base } ? 1 : 0;
 }
 
 # A pause is over: the driver is again what it was before it.
@@ -451,7 +482,11 @@ sub _turn_end {
     $st->{lastend} = $mid;
     my $D = $st->{drv} or return;
     return if $D->{mode} eq 'ended';
-    # a turn of this plugin's own (its handoff turn, its skill): the driver stays what it was
+    # one of this plugin's skills the model ran inside the loop's own turn: its writes were not loop
+    # work, but the turn's end is the loop's
+    delete $D->{oskill};
+    # a turn of this plugin's own (its handoff turn, its command, its skill asked for by a prompt):
+    # the driver stays what it was
     if (delete $D->{own}) { delete @$D{qw(nudged nmid)}; return }
     # the turn the plugin's checkpoint nudge closed: the loop goes on after the plugin's compaction
     # (unless that checkpoint says the task is done: _row reads it)
@@ -470,10 +505,11 @@ sub _turn_end {
     if (defined $loose) { $D->{tw} = $loose } else { delete $D->{tw} }
 }
 
-# The driver's background work at time ts: (live, loose). live: an agent, workflow or teammate, a
-# Monitor that times out (before its time is up) or a ScheduleWakeup (before it is due) still runs.
-# loose: what else still runs (a background command, a persistent monitor, a scheduled task): it
-# may outlive the loop (a server, a watch), so it never keeps the driver Active.
+# The driver's background work at time ts: (live, loose). live: an agent, workflow or teammate or a
+# ScheduleWakeup (before it is due) still runs. loose: what else still runs (a background command, a
+# Monitor, persistent or one that times out before its time is up, a scheduled task): it may
+# outlive the loop or only watch (a server, a stall watch while the loop waits for the user), so it
+# never keeps the driver Active.
 sub _running {
     my ($st, $D, $ts) = @_;
     my $bg = $st->{bg};
@@ -484,7 +520,7 @@ sub _running {
         next unless ref $x eq 'HASH' && defined $x->{d} && defined $D->{id} && $x->{d} == $D->{id};
         if (defined $x->{u} && defined $ts && $ts > $x->{u}) { delete $bg->{$k}; next }    # its time is up
         my $kd = $x->{k} // 'a';
-        if ($kd eq 'a' || $kd eq 'w' || ($kd eq 'm' && !$x->{p})) { $live = 1 }
+        if ($kd eq 'a' || $kd eq 'w') { $live = 1 }
         else { $loose{ $kd eq 'm' ? 'monitor' : $kd eq 'c' ? 'scheduled task' : 'background command' } = 1 }
     }
     my @l = sort keys %loose;
@@ -517,7 +553,19 @@ sub _prompt {
     $D->{plast} = $st->{seq} // 0;
     $D->{pause}{prompted} = 1 if $D->{mode} eq 'paused';
     # the person's prompt opens a turn of its own: no nudge or plugin turn carries over
-    delete @$D{qw(other own nudged nmid)};
+    _turn_open($D);
+    # After a step absorbed after a prompt (or while the driver was a hint), the step's work stays
+    # the step's across later prompts (a checkpoint's answer): only the outer loop's own
+    # re-invocation makes it the driver again (R1, R2: at most a hint).
+    delete $D->{other} unless ref $D->{step} eq 'HASH';
+}
+
+# A user row that opens a turn (a prompt, a task or teammate notification, an interruption mark): no
+# turn of this plugin's own, no plugin skill and no nudged checkpoint carries over from an earlier
+# turn (one cut off has no end row).
+sub _turn_open {
+    my ($D) = @_;
+    delete @$D{qw(own oskill nudged nmid)};
 }
 
 # One of this plugin's own submitted notes (_note): the auto-continue note opens the loop's next
@@ -526,8 +574,8 @@ sub _own_note {
     my ($st, $kind) = @_;
     my $D = $st->{drv} or return;
     return if $D->{mode} eq 'ended';
-    delete @$D{qw(nudged nmid)};
-    if ($kind eq 'turn') { $D->{own} = 1 } else { delete $D->{own} }
+    _turn_open($D);
+    $D->{own} = 1 if $kind eq 'turn';
 }
 
 # A GSD command (typed or through the Skill tool), not the driver itself.
@@ -548,8 +596,8 @@ sub _drv_cmd {
     $D->{ws} //= $cw;
     # After a human prompt the command is the session's, not a step of the loop (nor in a turn of
     # this plugin's own).
-    my $mine = _mine($D);
-    $D->{other} = 1 if !$mine && !$D->{own};
+    my $mine = _mine($D) && !$D->{oskill} ? 1 : 0;
+    $D->{other} = 1 if !$mine && !_plug($D);
     _work($D, $STATUS{$n} ? 1 : 0, $e->{ts}, $mine);
     return if $STATUS{$n} || $D->{mode} eq 'paused';
     if ($e->{via} eq 'typed' && !$e->{stacked}) {
@@ -568,7 +616,11 @@ sub _drv_tool {
     return _hint($D, 'gsd-tools ran for another workstream') if defined $cw && defined $dw && $cw ne $dw;
     $D->{ws} //= $cw;
     return if $D->{mode} eq 'paused' && $b->{verb} =~ /\Acommit(?:\.|\z)/;    # the pause's own commit
-    _work($D, _read_run($b), $ts, $D->{own} ? 0 : 1);
+    # After a human prompt, or once its turn ended with nothing running, only a phase's own progress
+    # (%PROGRESS) is loop work: bookkeeping a person asks for (a commit, a todo, a decision, a phase
+    # added) is not. Nor is anything a turn or a skill of this plugin's own runs.
+    my $mine = _plug($D) ? 0 : (($D->{idle} || defined $D->{tend}) && !_progress($b)) ? 0 : 1;
+    _work($D, _read_run($b), $ts, $mine);
     # A single-phase loop's own completion (GSD's execute-phase runs it last).
     _hint($D, 'its phase was marked complete')
         if $STEP{ $D->{e}{name} } && !$D->{other} && $b->{verb} =~ /\Aphase\z|\Aphase\.complete\z/ && ($b->{sub} // '') eq 'complete';
@@ -591,15 +643,15 @@ sub _drv_write {
     if ($D->{mode} eq 'paused') {
         # After a loop paused itself (its turn ended), a state-file write is its work again; a
         # /gsd-pause-work also writes STATE.md, so after one a write is no loop work.
-        _work($D, 0, $ts, $D->{own} ? 0 : 1) if $D->{pause}{self};
+        _work($D, 0, $ts, _plug($D) ? 0 : 1) if $D->{pause}{self};
         return;
     }
     return if $D->{sp} && $rel =~ m{(?:\A|/)STATE\.md\z};    # a loop pausing itself records it
     # A phase's own files (a plan, a summary, a check) are the loop's work also after a prompt (the
     # person said go on); a STATE.md, ROADMAP, REQUIREMENTS or PROJECT write after a human prompt
     # (a note the person asked for) is not. Neither is a write in a skill a prompt started or in a
-    # turn of this plugin's own (its resume reconciling STATE.md).
-    _work($D, 0, $ts, $rel =~ m{(?:\A|/)phases/} ? ($D->{own} ? 0 : 1) : _mine($D));
+    # turn or a skill of this plugin's own (its resume reconciling STATE.md).
+    _work($D, 0, $ts, _plug($D) ? 0 : $rel =~ m{(?:\A|/)phases/} ? 1 : _mine($D));
 }
 
 # Whether a Bash command writes or commits a pause's own files (HANDOFF.json, .continue-here*):
@@ -711,6 +763,9 @@ sub _invoked {
     return if $BUILTIN{$name};
     my $own = _own($name);
     my $D = $st->{drv};
+    # A skill of this plugin's the person asked for (typed, or the model's first call right after
+    # the prompt) makes the turn the plugin's own.
+    my $asked = $own && $via eq 'typed' ? 1 : 0;
     if ($via eq 'typed' && !$stacked && !$own && $name ne 'gsd-pause-work') {
         _prompt($st);    # a person typed it (a pause is read by the pause rules)
     } elsif ($own && $D && $D->{mode} ne 'ended' && $D->{idle} && ($D->{plast} // -1) == ($st->{seq} // 0)) {
@@ -718,6 +773,7 @@ sub _invoked {
         # for it, not a turn away from the loop.
         $D->{idle}--;
         delete $D->{plast};
+        $asked = 1;
     }
     delete $st->{look} unless $own;
     my $shown = _args($args);
@@ -744,10 +800,17 @@ sub _invoked {
     }
     _push_ws($st, $ws, $root, $ts, $e{seq}, $LOOK{$name}) if $gsd;
     if ($own) {
-        # One of this plugin's skills (its resume, its handoff): the rest of the turn is the
-        # plugin's, not the loop's (its STATE.md reconcile, its Step 1 agents), and its end no stop.
+        # One of this plugin's skills (its resume, its handoff). Asked for by the person (or run in
+        # a turn its note opened): the rest of the turn is the plugin's, not the loop's (its
+        # STATE.md reconcile, its Step 1 agents), and its end no stop. Run by the model inside the
+        # loop's own turn (a handoff before going idle, at the end of a long run): its writes are
+        # not loop work, but the turn's end is the loop's, and background work started after it
+        # is the loop's.
         my $D2 = $st->{drv};
-        $D2->{own} = 1 if $D2 && $D2->{mode} ne 'ended';
+        if ($D2 && $D2->{mode} ne 'ended') {
+            _turn_open($D2) if $via eq 'typed';
+            if ($asked) { $D2->{own} = 1 } elsif (!$D2->{own}) { $D2->{oskill} = 1 }
+        }
         return;
     }
     return if $NOT_WORK{$name};
@@ -800,6 +863,10 @@ sub _row {
             _prompt($st);
         } elsif (my $nk = _note($t)) {
             _own_note($st, $nk);
+        } elsif ($t =~ /\S/ && !(ref $c eq 'ARRAY' && grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c)) {
+            # a task or teammate notification or an interruption mark opens a turn (no tool result)
+            my $D = $st->{drv};
+            _turn_open($D) if $D && $D->{mode} ne 'ended';
         }
         return;
     }
@@ -879,7 +946,9 @@ sub _row {
         my $D = $st->{drv};
         if ($D && $D->{mode} ne 'ended' && ($D->{nudged} || (defined $mid && defined $D->{nmid} && $mid eq $D->{nmid}))) {
             my $t = join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c);
-            $D->{done} //= $ts // 0 if $t =~ /(?:\A|\n)[ \t>*_-]*Checkpoint:[^\n]*?\bStep 1:[ \t*_]*none: task done/;
+            # (`Step 1:` on the Checkpoint line or the next one; any dash, colon or comma after `none`)
+            $D->{done} //= $ts // 0
+                if $t =~ /(?:\A|\n)[ \t>*_-]*Checkpoint:[^\n]*?(?:\n[ \t>*_-]*)?\bStep 1:[ \t*_]*none\b[^\w\n]{0,8}task done/;
         }
         _turn_end($st, $ts, $mid);
     } elsif ($sr ne '' && $sr ne 'tool_use' && $sr ne 'pause_turn' && $st->{drv}) {
@@ -948,11 +1017,18 @@ sub _bg_text {
             my $b = $1;
             next if $b =~ m{<summary>\s*Monitor event\b};
             _bg_close($st, $1) if $b =~ m{<tool-use-id>([^<\s]+)</tool-use-id>};
-            _bg_close($st, $1) if $b =~ m{<task-id>([^<\s]+)</task-id>} && $b =~ m{<status>};
+            if ($b =~ m{<task-id>([^<\s]+)</task-id>}) {
+                my $id = $1;    # the <status> match below would reset $1
+                _bg_close($st, $id) if $b =~ m{<status>};
+            }
         }
         return;
     }
     _bg_close($st, $1) while $t =~ m{<agent-message from="([^"\s]+)"}g;
+    # A teammate shut down while it worked sends no idle report: its shutdown approval or Claude
+    # Code's termination notice closes it.
+    _bg_close($st, $1) while $t =~ m{<teammate-message teammate_id="([^"\s]+)"[^>]*>\s*\{\s*"type"\s*:\s*"shutdown_approved"}g;
+    _bg_close($st, $1) while $t =~ m{\{\s*"type"\s*:\s*"teammate_terminated"\s*,\s*"message"\s*:\s*"([^"\s]+) has shut down}g;
     while ($t =~ m{<teammate-message teammate_id="([^"\s]+)"[^>]*>\s*(\{\s*"type"\s*:\s*"idle_notification"[^\n]*)}g) {
         my ($who, $js) = ($1, $2);
         # an idle report sent before a SendMessage woke the teammate again (they crossed) is old
@@ -1082,7 +1158,8 @@ sub scan {
         my $bgo = ref $st->{bg} eq 'HASH' && %{ $st->{bg} } ? 1 : 0;
         # A notification Claude Code queued while a turn ran (a queued_command attachment, a
         # queue-operation row) closes the background work it names, as a user row does.
-        if ($bgo && (index($l, '<task-notification>') >= 0 || index($l, 'agent-message from=') >= 0 || index($l, 'idle_notification') >= 0)
+        if ($bgo && (index($l, '<task-notification>') >= 0 || index($l, 'agent-message from=') >= 0 || index($l, 'idle_notification') >= 0
+                     || index($l, 'shutdown_approved') >= 0 || index($l, 'teammate_terminated') >= 0)
             && index($l, '"type":"user"') < 0 && index($l, '"type":"assistant"') < 0 && length($l) <= $ROW_MAX) {
             my $j = eval { jsonc::decode($l) };
             if (ref $j eq 'HASH' && !$j->{isSidechain}) {
@@ -1104,7 +1181,7 @@ sub scan {
             my $open = $st->{drv} && ($st->{drv}{mode} // '') ne 'ended';
             next if index($l, '<command-name>') < 0
                 && !(($open || $st->{look}) && index($l, '"isMeta":true') < 0 && index($l, '"type":"tool_result"') < 0)
-                && !(($open || $bgo) && $l =~ /_launched"|"teammate_spawned"|<agent-message from=|"backgroundTaskId"|idle_notification|"timeoutMs"|"scheduledFor"|"humanSchedule"|"task_type"|"resumedAgentId"|"success":true|<task-notification>/);
+                && !(($open || $bgo) && $l =~ /_launched"|"teammate_spawned"|<agent-message from=|"backgroundTaskId"|idle_notification|shutdown_approved|teammate_terminated|"timeoutMs"|"scheduledFor"|"humanSchedule"|"task_type"|"resumedAgentId"|"success":true|<task-notification>/);
         } else {
             # spawns, a pause's files, turn ends and (while a loop pauses itself) any tool call
             # matter only while a driver is open
