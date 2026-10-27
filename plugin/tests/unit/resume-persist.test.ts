@@ -2,7 +2,9 @@
 // 0.1.1", VERSION-REFRESH tier 1 gap). The after-step persists the block as
 // `<watch>/<sid>/resume-pending.json`; a session end other than `/clear` keeps it; the classic
 // SessionStart(resume) renames it to `resume-armed.json` (helper case AT-RP-04); the first
-// prompt.context of the same session id in a load delivers it once, re-measured past 600 s.
+// prompt.context of the same session id in a load delivers it once, built again by that load and
+// re-measured past 600 s. A newer compaction, the load's first turn end and /clear settle a record
+// that was not taken, so it never reaches a later turn or process.
 import { expect, test } from 'claude-code/testing'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, PENDING_FILE, pendingRecord } from '../../hooks/lib/resume'
@@ -41,6 +43,17 @@ function seeded(ageS: number, sid = SID_A, nonce = 'ab0c0001'): string {
   return JSON.stringify(pendingRecord(p, 'f0e1d2c3')) + '\n'
 }
 
+/** A record with a `block` text, as an older build wrote it: the text is never sent. */
+function withText(rec: string, nonce = 'ab0c0001'): string {
+  return JSON.stringify({ ...(JSON.parse(rec) as Record<string, unknown>), block: 'STORED BLOCK ' + nonce }) + '\n'
+}
+
+/** A seeded record with other block arguments. */
+function seededWith(ageS: number, args: Record<string, unknown>): string {
+  const j = JSON.parse(seeded(ageS)) as Record<string, unknown>
+  return JSON.stringify({ ...j, args: { ...(j.args as Record<string, unknown>), ...args } }) + '\n'
+}
+
 test('AT-RP-01: a main compaction persists its pending block; a session end other than /clear keeps it, with no mod_outcome row', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
@@ -49,7 +62,9 @@ test('AT-RP-01: a main compaction persists its pending block; a session end othe
   const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce')
   const rec = json(w, PENDING)
   expect(rec).toMatchObject({ v: 1, state: 'pending', session_id: SID_A, nonce })
-  expect(typeof rec?.block).toBe('string')
+  // The facts the block is built from, not its text.
+  expect(typeof rec?.remeasure).toBe('string')
+  expect(rec?.block).toBeUndefined()
   expect(rec?.built_at).toBe(T0)
   await $.session.end(EXIT as never)
   expect(w.rowsOf('mod_outcome')).toEqual([])
@@ -77,7 +92,8 @@ test('AT-RP-02: back to the same session id after a session end: the first promp
   await w.start($)
   await w.turnStart($)
   await raiseCompact($, { trigger: 'auto' })
-  const stored = String(json(w, PENDING)?.block)
+  const nonce = String(json(w, PENDING)?.nonce)
+  const measures = w.callsOf('measure').length
   // In-process /resume to another session and back (the same path a new process takes).
   await $.session.end(SWITCH as never)
   w.sid = SID_B
@@ -86,7 +102,11 @@ test('AT-RP-02: back to the same session id after a session end: the first promp
   arm(w)
   await w.advance(30 * 1000)
   const ctx = await $.prompt.context({ blocks: [] })
-  expect(blockOf(w, ctx)).toBe(stored)
+  // Built again from the stored measure: no new helper measure, the compaction's own facts.
+  expect(blockOf(w, ctx)).toContain('3f9c2e1')
+  expect(blockOf(w, ctx)).toContain(SID_A)
+  expect(w.callsOf('measure').length).toBe(measures)
+  expect(w.flag(w.callsOf('claim')[0], '--nonce')).toBe(nonce)
   expect(w.callsOf('claim').map(c => w.flag(c, '--channel'))).toEqual(['prompt.context'])
   expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
   expect(json(w, ARMED)).toMatchObject({ state: 'settled', resume: 'delivered:prompt.context' })
@@ -96,15 +116,21 @@ test('AT-RP-02: back to the same session id after a session end: the first promp
   expect(w.rowsOf('mod_outcome').length).toBe(1)
 })
 
-test('AT-RP-02: a new load (claude --resume) delivers an armed block built 60 s ago as stored, with its outcome', async ($, on) => {
+test('AT-RP-02: a new load (claude --resume) delivers an armed block built 60 s ago from its stored facts, with its outcome', async ($, on) => {
   const w = new World()
-  w.files.set(ARMED, seeded(60))
+  w.files.set(ARMED, withText(seeded(60)))
   w.install(on)
   await w.start($)
   await w.userTurn($)
   const measures = w.callsOf('measure').length
   const ctx = await $.prompt.context({ blocks: [] })
-  expect(blockOf(w, ctx)).toBe('STORED BLOCK ab0c0001')
+  const block = blockOf(w, ctx) ?? ''
+  // This load's text and <store> path, the stored measure and its stamp; never an older version's text.
+  expect(block).toContain('1a1a1a1')
+  expect(block).toContain(SAVED)
+  expect(w.root).not.toBe('')
+  expect(block).toContain(`${w.root}/scripts/`)
+  expect(block).not.toContain('STORED BLOCK')
   expect(w.callsOf('measure').length).toBe(measures)
   expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.nudged, r.resume])).toEqual([['ab0c0001', true, 'delivered:prompt.context']])
   expect(json(w, ARMED)?.state).toBe('settled')
@@ -168,3 +194,117 @@ test('AT-RP-03: a block a turn already took is settled on disk, so a later resum
   await raiseCompact($, { trigger: 'auto' })
   expect(json(w, PENDING)).toMatchObject({ state: 'pending', nonce: w.flag(w.callsOf('dispatch')[1], '--nonce') })
 })
+
+test('AT-RP-05: a compaction of the resumed load before its first prompt replaces the armed block: only the new one goes out, the old one is settled', async ($, on) => {
+  const w = new World()
+  w.files.set(ARMED, seeded(60))
+  w.install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  const n2 = w.flag(w.callsOf('dispatch')[0], '--nonce')
+  expect(json(w, ARMED)).toMatchObject({ state: 'settled', nonce: 'ab0c0001', resume: 'undelivered' })
+  await w.userTurn($)
+  const first = await $.prompt.context({ blocks: [] })
+  expect(blockOf(w, first)).toContain(SID_A)
+  await w.turnEnd($)
+  await w.userTurn($)
+  const second = await $.prompt.context({ blocks: [] })
+  expect(second.blocks.length).toBe(0)
+  expect(w.callsOf('claim').map(c => w.flag(c, '--nonce'))).toEqual([n2])
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([['ab0c0001', 'undelivered'], [n2, 'delivered:prompt.context']])
+  // A later resume (the helper arms nothing settled) has nothing to deliver.
+  await $.session.end(EXIT as never)
+  arm(w)
+  await $.prompt.context({ blocks: [] })
+  const later = await $.prompt.context({ blocks: [] })
+  expect(later.blocks.length).toBe(0)
+  expect(w.rowsOf('mod_outcome').length).toBe(2)
+})
+
+test('AT-RP-05: armed after the load\'s first prompt.context: the first turn end settles it, so no later turn or resume gets it', async ($, on) => {
+  const w = new World()
+  w.files.set(PENDING, seeded(60))
+  w.install(on)
+  await w.start($)
+  await w.userTurn($)
+  const c1 = await $.prompt.context({ blocks: [] })
+  arm(w)
+  await w.turnEnd($)
+  expect(c1.blocks.length).toBe(0)
+  expect(json(w, ARMED)).toMatchObject({ state: 'settled', nonce: 'ab0c0001', resume: 'undelivered' })
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([['ab0c0001', 'undelivered']])
+  await $.session.end(EXIT as never)
+  const c2 = await $.prompt.context({ blocks: [] })
+  expect(c2.blocks.length).toBe(0)
+  expect(w.callsOf('claim').length).toBe(0)
+})
+
+test('AT-RP-05: a turn end keeps the block of a compaction inside that turn pending for the next one', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce')
+  await w.turnEnd($)
+  expect(json(w, PENDING)).toMatchObject({ state: 'pending', nonce })
+  expect(w.rowsOf('mod_outcome')).toEqual([])
+})
+
+test('AT-RP-06: /clear before the resumed load\'s first prompt drops the armed block of the old session id', async ($, on) => {
+  const w = new World()
+  w.files.set(ARMED, seeded(60))
+  w.install(on)
+  await w.start($)
+  await $.session.end(CLEAR as never)
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([['ab0c0001', 'dropped:session-end']])
+  expect(json(w, ARMED)).toMatchObject({ state: 'settled', resume: 'dropped:session-end' })
+  expect(json(w, ARMED)?.remeasure).toBeUndefined()
+})
+
+test('AT-RP-06: a session end after another channel delivered the block settles its record with that channel', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  const nonce = String(w.flag(w.callsOf('dispatch')[0], '--nonce'))
+  // The classic SessionStart(compact) won the claim.
+  w.claims.set(nonce, 'sessionstart')
+  w.files.set(`${WATCH}/${SID_A}/resume-claimed/${nonce}`, 'sessionstart')
+  await $.session.end(EXIT as never)
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([[nonce, 'delivered:sessionstart']])
+  expect(json(w, PENDING)).toMatchObject({ state: 'settled', resume: 'delivered:sessionstart' })
+})
+
+test('AT-RP-07: a compaction while the first prompt.context reads the armed record keeps the new block (the read never clears it)', async ($, on) => {
+  const w = new World()
+  let release: () => void = () => undefined
+  const gate = new Promise<void>(r => {
+    release = r
+  })
+  let identCalls = 0
+  w.atHelper = async sub => {
+    if (sub === 'ident' && ++identCalls === 1) await gate
+  }
+  w.install(on)
+  const pc = $.prompt.context({ blocks: [] })
+  await w.settle()
+  await raiseCompact($, { trigger: 'auto' })
+  const n2 = w.flag(w.callsOf('dispatch')[0], '--nonce')
+  release()
+  const ctx = await pc
+  expect(blockOf(w, ctx)).toContain(SID_A)
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([[n2, 'delivered:prompt.context']])
+  expect(json(w, PENDING)).toMatchObject({ state: 'settled', nonce: n2 })
+})
+
+for (const ageS of [60, 700]) {
+  test(`AT-RP-08: a restored block keeps [prod-allow] only when this load's option allows it (built ${ageS} s ago)`, async ($, on) => {
+    const w = new World()
+    w.files.set(ARMED, seededWith(ageS, { prodAllow: true }))
+    w.install(on)
+    await w.start($)
+    await w.userTurn($)
+    const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+    expect(block).not.toContain('your setting allows it')
+    expect(block).toContain('production or self-modifying actions')
+  })
+}

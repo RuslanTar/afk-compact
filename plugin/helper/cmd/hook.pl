@@ -281,6 +281,8 @@ sub on_Stop {
     my $d = rc::sid_dir() // return ('', {});
     eval { sidecar::write($d, $p, 'Stop') };
     eval { util::write_atomic("$d/last-stop", util::iso_ms(util::now()) . "\n", 0600) };
+    # AT-RP-04: a resume block armed for this process's first turn that the turn did not take
+    eval { resumeblock::settle_armed($d, rc::sid()) };
     my $r0 = util::clock_ms();
     my $n = reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000, cutoff => reconcile::cutoff());
     # the cross-session finish pass, only when reconcile left ≥ 500 ms of its 2 s (MOD-SPEC §5.8)

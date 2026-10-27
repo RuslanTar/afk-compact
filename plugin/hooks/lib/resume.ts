@@ -153,7 +153,10 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   // AT-RP-02: once per session id in this load, a block the classic SessionStart(resume) armed.
   if (!s.pending && s.restoreChecked !== sid) {
     s.restoreChecked = sid
-    s.pending = await restorePending(d, sid)
+    const r = await restorePending(d, sid)
+    // A main compaction of this load while the record was read has a newer block; its after-step
+    // settled the record as replaced.
+    if (!s.pending) s.pending = r
   }
   const pend = s.pending
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
@@ -235,6 +238,12 @@ async function freshBlock(
  */
 export async function undeliveredCheck(d: Deps, sid: string): Promise<void> {
   const s = d.state
+  if (s.restoreClosed !== sid) {
+    s.restoreClosed = sid
+    // AT-RP-05: a record of this session id that the load's first main turn did not take (armed
+    // after its prompt.context, or left pending by an earlier load) is never delivered later.
+    await settleRecords(d, sid, n => claimedWhere(d, sid, n), s.pending?.nonce)
+  }
   const pend = s.pending
   if (!pend || pend.turnSeq >= s.turnSeq) return
   s.pending = undefined
@@ -251,8 +260,13 @@ export async function undeliveredCheck(d: Deps, sid: string): Promise<void> {
  * (the classic SessionStart won it), else `undelivered`.
  */
 export async function claimedElsewhere(d: Deps, pend: PendingResume): Promise<string> {
+  return claimedWhere(d, pend.sid, pend.nonce)
+}
+
+/** `claimedElsewhere` for a session id and nonce. */
+export async function claimedWhere(d: Deps, sid: string, nonce: string): Promise<string> {
   const p = await d.paths()
-  const path = p ? `${p.watch}/${pend.sid}/resume-claimed/${pend.nonce}` : undefined
+  const path = p ? `${p.watch}/${sid}/resume-claimed/${nonce}` : undefined
   if (!path || !(await d.exists(path))) return 'undelivered'
   const t = await d.read(path)
   return 'delivered:' + (channelToken(t?.trim().split(/\s+/)[0]) ?? 'unknown')
@@ -273,13 +287,16 @@ export async function logOutcome(d: Deps, sid: string, nonce: string, o: Outcome
  * Owner 2026-10-27 ("Fix in 0.1.1", VERSION-REFRESH tier 1): the pending main block also lives on
  * disk, so a session that exits or restarts between a compaction and its next turn gets it after
  * `claude --resume` of the same session id. The after-step writes `<watch>/<sid>/resume-pending.json`
- * (the helper's vetted watch only, as the summary stash; pruned with the session's folder). The
- * classic SessionStart with `source=resume` renames a pending record of its own session id to
- * `resume-armed.json` (one process wins the rename). The first `prompt.context` of that session id
- * in a load takes an armed record as the pending block: the usual claim, the 600 s re-measure rule
- * and one `mod_outcome` row. Every settle (delivered, replaced, undelivered, dropped by `/clear`)
- * rewrites the record as settled, which drops the block text. A `/clear` or a fork has another
- * session id, so it never matches.
+ * (the helper's vetted watch only, as the summary stash; kept with the session's folder): the
+ * facts the block is built from, not its text. The classic SessionStart with `source=resume`
+ * renames a pending record of its own session id to `resume-armed.json` when no other process of
+ * that session id runs (one process wins the rename). The first `prompt.context` of that session
+ * id in a load takes an armed record as the pending block, built again by this load (its assets,
+ * its `<store>` path, the stricter `[prod-*]` view): the usual claim, the 600 s re-measure rule and
+ * one `mod_outcome` row. Every settle (delivered, replaced by a newer compaction, undelivered,
+ * dropped by `/clear`) rewrites the record as settled, which drops the measured facts; the first
+ * main turn end of a load settles a record it did not take, so it never reaches a later turn. A
+ * `/clear` or a fork has another session id, so it never matches.
  */
 export const PENDING_FILE = 'resume-pending.json'
 export const ARMED_FILE = 'resume-armed.json'
@@ -296,14 +313,13 @@ export type PendingRecord = {
   args: BlockArgs
   remeasure: string | null
   outcome: Outcome
-  block: string
 }
 
 /** The record for a pending block (the one shape the after-step writes and a restore reads). */
 export function pendingRecord(p: PendingResume, loadId: string): PendingRecord {
   return {
     v: 1, state: 'pending', session_id: p.sid, nonce: p.nonce, built_at: p.builtAt, measured_at: p.measuredAt ?? null, load_id: loadId,
-    args: p.args, remeasure: p.remeasure ?? null, outcome: p.outcome, block: p.block,
+    args: p.args, remeasure: p.remeasure ?? null, outcome: p.outcome,
   }
 }
 
@@ -328,7 +344,7 @@ function parseRecord(t: string | undefined): Record<string, unknown> | undefined
   }
 }
 
-/** Rewrites a still-pending record of this nonce (pending or armed) as settled: no block text is kept. */
+/** Rewrites a still-pending record of this nonce (pending or armed) as settled: no measured facts are kept. */
 export async function settlePersisted(d: Deps, sid: string, nonce: string, resume: string): Promise<void> {
   for (const file of [PENDING_FILE, ARMED_FILE]) {
     const path = await recordPath(d, sid, file)
@@ -339,12 +355,34 @@ export async function settlePersisted(d: Deps, sid: string, nonce: string, resum
   }
 }
 
+/**
+ * Settles every still-pending record of this session id (pending and armed) whose nonce is not
+ * `except`, with one `mod_outcome` row each (`resume(nonce)` names how it settled): a newer
+ * compaction replaced it, a `/clear` dropped it, or a turn end passed it by.
+ */
+export async function settleRecords(d: Deps, sid: string, resume: (nonce: string) => Promise<string>, except?: string): Promise<void> {
+  const done = new Set<string>()
+  for (const file of [PENDING_FILE, ARMED_FILE]) {
+    const path = await recordPath(d, sid, file)
+    if (path === undefined) return
+    const j = parseRecord(await d.read(path))
+    if (!j || j.state !== 'pending' || j.session_id !== sid) continue
+    const nonce = j.nonce
+    if (typeof nonce !== 'string' || !NONCE_RE.test(nonce) || nonce === except || done.has(nonce)) continue
+    done.add(nonce)
+    const o = isOutcome(j.outcome) ? j.outcome : { nudged: false, continued: false, halt: false }
+    await logOutcome(d, sid, nonce, o, await resume(nonce))
+  }
+}
+
 const NONCE_RE = /^[0-9a-f]{8}$/
 
 function isArgs(a: unknown): a is BlockArgs {
   if (a === null || typeof a !== 'object') return false
   const o = a as Record<string, unknown>
   return typeof o.midturn === 'boolean' && typeof o.nonok === 'boolean' && (o.savedCopy === null || typeof o.savedCopy === 'string')
+    && (o.notSaved === undefined || typeof o.notSaved === 'string')
+    && (o.handoff === undefined || (o.handoff !== null && typeof o.handoff === 'object'))
 }
 
 function isOutcome(o: unknown): o is Outcome {
@@ -356,18 +394,25 @@ function isOutcome(o: unknown): o is Outcome {
 /**
  * The armed record of this session id as a pending block (AT-RP-02), or undefined: none, settled,
  * another session's, or not of the shape `pendingRecord` writes. Its age counts from `built_at`.
+ * The block is built again here from the stored facts (no new measure; the stored `@measured_at@`),
+ * so a restart that picked up a plugin update never gets the old version's text or `<store>`
+ * path, and `[prod-allow]` stays only when this load's option still allows it (MOD-SPEC §3.4
+ * step 4: the stricter view wins).
  */
 export async function restorePending(d: Deps, sid: string): Promise<PendingResume | undefined> {
   const path = await recordPath(d, sid, ARMED_FILE)
   if (path === undefined) return undefined
   const j = parseRecord(await d.read(path))
   if (!j || j.v !== 1 || j.state !== 'pending' || j.session_id !== sid) return undefined
-  const { nonce, built_at: builtAt, measured_at: measuredAt, args, remeasure, outcome, block } = j
-  if (typeof nonce !== 'string' || !NONCE_RE.test(nonce) || typeof builtAt !== 'number' || typeof block !== 'string' || block === '') return undefined
+  const { nonce, built_at: builtAt, measured_at: measuredAt, args, remeasure, outcome } = j
+  if (typeof nonce !== 'string' || !NONCE_RE.test(nonce) || typeof builtAt !== 'number') return undefined
   if (!isArgs(args) || !isOutcome(outcome) || args.nonce !== nonce) return undefined
+  const a: BlockArgs = { ...args, prodAllow: args.prodAllow === true && d.cfg.unattended_prod_reads === 'allow' }
+  const at = typeof measuredAt === 'number' ? measuredAt : builtAt
+  const built = await buildBlockWith(d, sid, a, typeof remeasure === 'string' ? remeasure : null, at)
   return {
-    sid, nonce, block, builtAt, args, resumePref: 'prompt.context', turnSeq: d.state.turnSeq, outcome, persisted: true,
-    ...(typeof remeasure === 'string' ? { remeasure } : {}),
-    ...(typeof measuredAt === 'number' ? { measuredAt } : {}),
+    sid, nonce, block: built.block, builtAt, args: a, resumePref: 'prompt.context', turnSeq: d.state.turnSeq, outcome, persisted: true,
+    ...(built.remeasure !== undefined ? { remeasure: built.remeasure } : {}),
+    measuredAt: at,
   }
 }

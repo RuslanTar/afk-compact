@@ -177,6 +177,8 @@ export type LoadState = {
   pending: PendingResume | undefined
   /** The session id whose armed resume record this load has looked for (AT-RP-02); reset at session.end. */
   restoreChecked: string | undefined
+  /** The session id whose resume records this load's first main turn end has closed (AT-RP-05); reset at session.end. */
+  restoreClosed: string | undefined
   mainCompactions: number
   fourthToasted: boolean
   selfCallLoggedFor: Set<string>
@@ -321,6 +323,7 @@ export function newState(loadId: string): LoadState {
     selfNonces: new Set(),
     pending: undefined,
     restoreChecked: undefined,
+    restoreClosed: undefined,
     mainCompactions: 0,
     fourthToasted: false,
     selfCallLoggedFor: new Set(),

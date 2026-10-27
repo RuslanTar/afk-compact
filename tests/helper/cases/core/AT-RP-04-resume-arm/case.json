@@ -1,6 +1,6 @@
 {
  "id": "AT-RP-04",
- "note": "Owner 2026-10-27 \"Fix in 0.1.1\" (resume block lost on exit after a compaction), helper half: hook SessionStart with source=resume renames <watch>/<sid>/resume-pending.json, a block the mod persisted at its compaction and has not settled, to resume-armed.json, which the mod's first prompt.context of the session id delivers (unit tests AT-RP-01..03). Only for source=resume and only a record of the same session id, pending, well formed, not a symlink and not claimed; startup, clear, fork and compact arm nothing; the helper prints nothing and writes no claim; an armed record stays armed until a turn takes it, and a newer pending record replaces it",
+ "note": "Owner 2026-10-27 \"Fix in 0.1.1\" (resume block lost on exit after a compaction), helper half: hook SessionStart with source=resume renames <watch>/<sid>/resume-pending.json, a block the mod persisted at its compaction and has not settled, to resume-armed.json, which the mod's first prompt.context of the session id delivers (unit tests AT-RP-01..03). Only for source=resume and only a record of the same session id, pending, well formed, not a symlink and not claimed; startup, clear, fork and compact arm nothing; the helper prints nothing and writes no claim; an armed record stays armed until a turn takes it, and a newer pending record replaces it. Nothing is armed while another process of the session id still runs (a copy started with --resume beside the original). A main Stop (the first turn end of the process) settles an armed record still pending: delivered:<channel> when its nonce is claimed, else undelivered, without the block",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -625,6 +625,187 @@
       "json": {
        "state": "pending",
        "nonce": "ab0c0006"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a main Stop settles an armed record no turn took (undelivered); the facts are dropped",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "v": 1,
+       "state": "settled",
+       "session_id": "$SID",
+       "nonce": "ab0c0006",
+       "resume": "undelivered"
+      }
+     }
+    ],
+    "absent": [
+     "$WATCH/$SID/resume-pending.json"
+    ]
+   }
+  },
+  {
+   "name": "nothing is armed while another process of this session id still runs",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "$SID",
+      "nonce": "ab0c0008",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0008",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      }
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1760000000.live-$SID8.json",
+     "json": {
+      "pid": 1,
+      "pid_lstart": "$LSTART1",
+      "host": "$HOST",
+      "session_id": "$SID",
+      "cwd": "$TMP/work",
+      "source": "startup",
+      "ts": "2026-10-21T09:00:05+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0008"
+      }
+     },
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "state": "settled",
+       "nonce": "ab0c0006"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "once that process has ended, the next resume arms the record",
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1760000000.ended-$SID8.json",
+     "json": {
+      "session_id": "$SID",
+      "reason": "prompt_input_exit",
+      "ts": "2026-10-21T14:00:00+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-pending.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0008"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a main Stop settles an armed record whose nonce another channel claimed as delivered by it",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-claimed/ab0c0008",
+     "text": "prompt.context\n"
+    }
+   ],
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "state": "settled",
+       "nonce": "ab0c0008",
+       "resume": "delivered:prompt.context"
       }
      }
     ]

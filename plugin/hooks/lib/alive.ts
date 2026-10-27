@@ -11,7 +11,7 @@ import { onHandoffTurnStart } from './handoff-turn'
 import { handoffTurnClose } from './helper'
 import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
 import { ensureIdent, isoLocal, log } from './log'
-import { logOutcome } from './resume'
+import { claimedElsewhere, logOutcome, settleRecords } from './resume'
 import { showNotice } from './notice'
 
 export async function writeAlive(d: Deps, sid: string, turnId: string | null): Promise<void> {
@@ -107,8 +107,10 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
  * the pending resume block out of the load, turns off the auto-continue and closes an open
  * handoff turn, so nothing the ended session scheduled is submitted into the next conversation
  * after a `/clear`. The block is dropped (`mod_outcome resume: dropped:session-end`) on a `/clear`
- * or when it has no record on disk; any other end keeps its record for a `claude --resume` of the
- * same session id (AT-RP-01: no row yet, the block has not settled).
+ * or when it has no record on disk, and a `/clear` drops a record an earlier process left for
+ * the ended session id too; any other end keeps its record for a `claude --resume` of the same
+ * session id (AT-RP-01: no row yet, the block has not settled) unless another channel already
+ * delivered it (its `delivered:<channel>` row settles the record).
  */
 export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): Promise<void> {
   const s = d.state
@@ -123,7 +125,15 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   s.pending = undefined
   // A later `/resume` of a session id in this process looks for its armed record again.
   s.restoreChecked = undefined
+  s.restoreClosed = undefined
   await cancelIdle(d, endedSid)
   if (h && h.ht !== null && h.phase !== 'running') await handoffTurnClose(d, endedSid, h.ht, 'cancelled')
   if (pend && (reason === 'clear' || pend.persisted !== true)) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
+  else if (pend) {
+    // Kept for a resume unless another channel (the classic SessionStart) already delivered it.
+    const where = await claimedElsewhere(d, pend)
+    if (where !== 'undelivered') await logOutcome(d, pend.sid, pend.nonce, pend.outcome, where)
+  }
+  // A `/clear` also drops a block an earlier process left for this session id (armed, not yet taken).
+  if (reason === 'clear') await settleRecords(d, endedSid, async () => 'dropped:session-end')
 }
