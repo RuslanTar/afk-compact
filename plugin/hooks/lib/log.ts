@@ -1,6 +1,8 @@
 // Mod rows (MOD-SPEC §2.5, WATCHER-SPEC §6.2 envelope): one `log` helper call per row, in order;
 // when the helper call fails, one file per row under `<watch>/<sid>/events/`. Rows are
-// content-free: ids, counts, enums, byte counts, durations, our own paths.
+// content-free: ids, counts, enums, byte counts, durations, our own paths. One exception:
+// `compact_rejected.error` keeps Claude Code's own rejection text (trimmed, one line, no
+// session content), in the local stream only; the export drops it.
 import type { Deps } from './deps'
 import { PLUGIN_VERSION } from './meta.gen'
 import { randomHex } from './nonce'
@@ -63,10 +65,27 @@ async function fallback(d: Deps, sid: string, row: Row): Promise<void> {
 
 /**
  * A `skip` reason as a row value (WATCHER-SPEC §6.3 `compacted.skip`: null or a class). Any
- * hook can set the reason, so free text is never logged: a short token is kept, else `other`.
+ * hook can set the reason, so its free text is never logged: a short token is kept, else `other`
+ * (the one free-text field is `compact_rejected.error`, see the header).
  */
 export function skipClass(reason: string): string {
   return /^[A-Za-z0-9._:-]{1,40}$/.test(reason) ? reason : 'other'
+}
+
+/**
+ * The load is headless (`claude -p`, the Agent SDK, or an app or editor built on it): from here
+ * on in this load the plugin neither nudges nor starts a compaction. One `headless {via}` row per
+ * session id, from what told it: `session-start` (no person at the prompt), `compact-rejected`
+ * (Claude Code's own answer), or `same-load` (the first main turn of a new session id in a load
+ * already headless, as after a `/clear`, for which no `session.start` fires).
+ */
+export async function markHeadless(d: Deps, sid: string, via: 'session-start' | 'compact-rejected' | 'same-load'): Promise<void> {
+  const s = d.state
+  if (s.headless && s.headlessSid === sid) return
+  if (!s.headless) s.nudgeNonce = undefined
+  s.headless = true
+  s.headlessSid = sid
+  await log(d, sid, 'headless', { via })
 }
 
 /** Records one helper-missing row for a non-log helper call (once per load). */

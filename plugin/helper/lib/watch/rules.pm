@@ -780,8 +780,14 @@ sub _session_rules {
     my $disp = $S->{disp};
     my $excluded = sub { my $d = shift; return !$d || ($d->{trigger} // '') eq 'precompute' || defined $d->{agent_id} };
 
-    # A-17 (a) a skipped after-step, (b) a mod dispatch without `compacted` in 15 min.
+    # A-17 (a) a skipped after-step, (b) a mod dispatch without `compacted` in 15 min. A
+    # dispatch whose call Claude Code rejected as headless (`compact_rejected {error_class:
+    # headless}`, 2026-10-27 headless probe) is explained: Claude Code rejects a plugin's
+    # compaction call in that session, so it is not a missing after-step.
     my %compacted;
+    for my $r (rows_of($S, 'compact_rejected')) {
+        $compacted{ $r->{nonce} } = 1 if defined $r->{nonce} && !ref $r->{nonce} && ($r->{error_class} // '') eq 'headless';
+    }
     for my $r (rows_of($S, 'compacted')) {
         $compacted{ $r->{nonce} } = 1 if defined $r->{nonce};
         next unless defined $r->{skip} && !ref $r->{skip};

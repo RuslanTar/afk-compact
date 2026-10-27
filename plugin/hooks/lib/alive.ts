@@ -10,7 +10,7 @@ import { clearHalt, loadHalt } from './cont'
 import { onHandoffTurnStart } from './handoff-turn'
 import { handoffTurnClose } from './helper'
 import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
-import { ensureIdent, isoLocal, log } from './log'
+import { ensureIdent, isoLocal, log, markHeadless } from './log'
 import { logOutcome } from './resume'
 import { showNotice } from './notice'
 
@@ -43,8 +43,13 @@ export async function prepare(d: Deps): Promise<string> {
   return sid
 }
 
-/** Mod `session.start`: pid cache, liveness, C1, the policy and session rows (MOD-SPEC §3.3). */
-export async function onSessionStart(d: Deps): Promise<void> {
+/**
+ * Mod `session.start`: pid cache, liveness, C1, the policy and session rows (MOD-SPEC §3.3).
+ * `interactive` is the event's `isInteractive`: false (`claude -p`, the Agent SDK) marks the load
+ * headless before anything is armed, with its `headless` row after the `session` row.
+ */
+export async function onSessionStart(d: Deps, interactive?: boolean): Promise<void> {
+  if (interactive === false) d.state.headless = true
   await ensureIdent(d, await d.sessionId())
   const sid = await prepare(d)
   await writeAlive(d, sid, null)
@@ -58,6 +63,7 @@ export async function onSessionStart(d: Deps): Promise<void> {
     phase: 'start', source: null, reason: null, mod_loaded: true, previous_session_id: null, lineage_reason: null,
     pid_lstart: d.state.ident?.pid_lstart ?? null,
   })
+  if (d.state.headless) await markHeadless(d, sid, 'session-start')
 }
 
 /**
@@ -81,6 +87,8 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   const human = !ours && isHuman(s.turnOrigin)
   await ensureIdent(d, await d.sessionId())
   const sid = await prepare(d)
+  // A new session id in a headless load (after a `/clear`): its own `headless` row.
+  if (s.headless && s.headlessSid !== sid) await markHeadless(d, sid, 'same-load')
   s.turnSeq++
   s.turnId = turnId
   s.nudgedThisTurn = false

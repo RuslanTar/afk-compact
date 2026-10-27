@@ -18,7 +18,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
-    await onSessionStart(realDeps($, options, state))
+    await onSessionStart(realDeps($, options, state), e.isInteractive)
     return r
   }).catch(($, e, next) => next(e))
 
