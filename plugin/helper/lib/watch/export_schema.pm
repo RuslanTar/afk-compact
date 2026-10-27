@@ -186,6 +186,9 @@ our %SCHEMA = (
     # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
     # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
     idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int' },
+    # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
+    # for the load (`queued`: lane B1's D8). The other new idle fields and enum values are lane B's.
+    idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num', model => 'model' },
     handoff_turn_end => {
