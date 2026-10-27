@@ -738,6 +738,149 @@ test('AT-IC-14: session.end forgets the persisted idle_due', { options: ON }, as
   expect(dueOf()).toBe(null)
 })
 
+// ---- A fresh load re-arms the due with no turn end of its own: a background session moved to a
+// new version by the supervisor (no SessionEnd), or a `claude respawn` or signal end (SessionEnd
+// `other`, which keeps the due), then resumed under its id; probe P4 2026-10-27 skipped the 49-min
+// turn as `aborted` there. The `aborted` and `published` checks and `gap_s` read the armed turn
+// from the persisted due.
+const moved = (kind: 'turn' | 'check', answer?: boolean, published?: boolean) => ({
+  ['idle_due:' + SID_A]: {
+    due: T0 + 10 * MIN, sid: SID_A, episode: { since: T0 - (kind === 'turn' ? 39 : 45.5) * MIN, done: false }, kind,
+    end: T0 - (kind === 'turn' ? 39 : 45.5) * MIN, ...(answer === undefined ? {} : { answer }), ...(published === undefined ? {} : { published }),
+  },
+})
+
+test('BG-IDLE-01: a moved session re-arms the 49-min due of an answered turn: the turn runs, not skipped aborted', { options: ON }, async ($, on) => {
+  const w = new World().install(on, moved('turn', true))
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  w.tokens = 260000
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(idleSkips(w)).not.toContain('aborted')
+  if (!IDLE) {
+    expect(idleSkips(w)).toEqual(['no-asset'])
+    return
+  }
+  expect(w.submits).toEqual([idleText(w)])
+  // gap_s counts from the armed turn's end, not null.
+  await w.turnStart($, '')
+  expect(w.rowsOf('handoff_turn_start').map(r => [r.reason, r.gap_s])).toEqual([['idle', 49 * 60]])
+})
+
+test('BG-IDLE-02: a moved session re-arms the 55.5-min check of an answered turn: the check runs the turn, not skipped aborted', { options: ON }, async ($, on) => {
+  const w = new World().install(on, moved('check', true))
+  w.rateLimits = LIMITS
+  w.tokens = 260000
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(w.rowsOf('idle_silent').length).toBe(1)
+  expect(idleSkips(w)).not.toContain('aborted')
+  if (!IDLE) {
+    expect(idleSkips(w)).toEqual(['no-asset'])
+    return
+  }
+  expect(w.submits).toEqual([idleText(w, '55')])
+})
+
+for (const [name, answer] of [['an aborted turn', false], ['a record written before the answer field', undefined]] as const) {
+  test(`BG-IDLE-03: a re-armed due of ${name} still skips aborted`, { options: ON }, async ($, on) => {
+    const w = new World().install(on, moved('turn', answer))
+    w.policy = NATIVE_OFF
+    w.rateLimits = LIMITS
+    w.tokens = 260000
+    await w.start($)
+    await w.advance(10 * MIN)
+    expect(idleSkips(w)).toEqual(['aborted'])
+    expect(w.submits.length).toBe(0)
+  })
+}
+
+test('BG-IDLE-04: the persisted due records how the armed turn ended (answer true, aborted false)', { options: ON }, async ($, on) => {
+  let last: Record<string, unknown> | undefined
+  on('store.set', { key: 'idle_due:' + SID_A }, (_$, e, next) => {
+    last = (e.value ?? undefined) as Record<string, unknown> | undefined
+    return next(e)
+  })
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  await w.start($)
+  await humanTurn($, w)
+  expect(last?.answer).toBe(true)
+  await w.turnStart($)
+  await w.turnEnd($, 'Stopped.', 'aborted')
+  expect(last?.answer).toBe(false)
+})
+
+test('BG-IDLE-05: session.end {other} (claude respawn, a signal) keeps the persisted idle_due; {prompt_input_exit} forgets it', { options: ON }, async ($, on) => {
+  const dueOf = watchDue(on)
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  await w.start($)
+  await humanTurn($, w)
+  const armed = dueOf()
+  expect(armed).toBeTruthy()
+  await $.session.end({ ...CLEAR, reason: 'other' } as never)
+  expect(dueOf()).toBe(armed)
+  await w.advance(60 * MIN)
+  expect(w.submits.length + idleSkips(w).length).toBe(0)
+  await w.start($)
+  await humanTurn($, w)
+  expect(dueOf()).toBeTruthy()
+  await $.session.end({ ...CLEAR, reason: 'prompt_input_exit' } as never)
+  expect(dueOf()).toBe(null)
+})
+
+test('BG-IDLE-06: a re-armed due of a session that published a handoff since the last human turn skips published', { options: ON }, async ($, on) => {
+  const w = new World().install(on, moved('turn', true, true))
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  w.tokens = 260000
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(idleSkips(w)).toEqual(['published'])
+  expect(w.submits.length).toBe(0)
+})
+
+test('BG-IDLE-07: the turn that publishes a handoff marks the due it armed published', { options: { ...ON, max_auto_continues_per_hour: 0 } }, async ($, on) => {
+  let last: Record<string, unknown> | undefined
+  on('store.set', { key: 'idle_due:' + SID_A }, (_$, e, next) => {
+    last = (e.value ?? undefined) as Record<string, unknown> | undefined
+    return next(e)
+  })
+  const w = new World().install(on)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  w.tokens = 640000
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  expect(last?.published).toBe(false)
+  await w.advance(2000)
+  if (w.submits.length === 0) return
+  await w.turnStart($, '')
+  w.publish(w.lastHt() ?? '', PUBLISHED)
+  w.tokens = 260000
+  await w.turnEnd($, 'Handoff written.')
+  expect(last?.published).toBe(true)
+})
+
+test('BG-IDLE-08: a due another process on the same sid fired or cancelled (a resumed copy) does nothing here: no row, no submit', { options: ON }, async ($, on) => {
+  let gone = false
+  on('store.get', { key: 'idle_due:' + SID_A }, (_$, e, next) => (gone ? { value: undefined } : next(e)))
+  const w = new World().install(on, moved('turn', true))
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  w.tokens = 260000
+  await w.start($)
+  await w.advance(5 * MIN)
+  gone = true
+  await w.advance(5 * MIN)
+  expect(idleSkips(w).length + w.submits.length).toBe(0)
+})
+
 // ---- IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` = the plugin's pre-idle turn only while
 // Claude Code's own idle compaction is off; a failed settings read counts as on (O-9 provisional).
 const idleModes = (w: World) => w.rowsOf('idle_mode').map(r => `${String(r.native)}/${String(r.plugin_turn)}`)

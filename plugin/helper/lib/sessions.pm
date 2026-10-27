@@ -6,6 +6,9 @@ package sessions;
 #     (head: the work tree's HEAD commit when the record was written, null outside git or on an
 #     unborn branch; owner xxxxxxxx-08, the start HEAD that `risk` compares build files with; additive)
 #   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.ended-<sid8>.json {session_id, reason, ts}
+#     (reason `gone`: written when the same session starts again in another process and the
+#     earlier one ended with no SessionEnd, close_gone; its ts is that later start, not the end,
+#     which is unknown)
 #   <root>/.sessions/<sid>.lineage.json {previous_session_id, lineage_reason}
 use strict;
 use warnings;
@@ -39,6 +42,54 @@ sub write_ended {
     my $f = by_pid() . '/' . _key($c) . '.ended-' . substr($sid, 0, 8) . '.json';
     my $rec = jsonc::obj(session_id => $sid, reason => $reason, ts => util::iso(util::now()));
     return util::write_excl($f, jsonc::encode_bytes($rec) . "\n", 0600);
+}
+
+our $CLOSE_GONE_MS = 300;
+
+# _gone(pid, lstart) -> 1 only when the process surely ended: no such pid, or a start time
+# read now that differs from the recorded one. An unreadable start time is not proof.
+sub _gone {
+    my ($pid, $lstart) = @_;
+    return 0 unless defined $pid && !ref $pid && $pid =~ /^\d+$/ && $pid > 0;
+    return 1 unless kill(0, $pid) || $!{EPERM};
+    return 0 unless defined $lstart && !ref $lstart && $lstart ne '';
+    my $now = identity::start_time($pid);
+    return defined $now && $now ne $lstart ? 1 : 0;
+}
+
+# close_gone(sid, budget_ms => N) -> the number of ended- records written. A process that
+# stops with no SessionEnd leaves its live- record behind: a background session the supervisor
+# moved to a new version (probe 2026-10-27, P4: SessionStart resume in the new process, none
+# ended in the old one), `claude --resume` after a crash. When sid starts again, every live-
+# record of sid on this host with no ended- twin whose process is gone (_gone) gets one,
+# reason `gone`, within the budget. Only sid's own records: another session's record may be a
+# process this one cannot see (another pid namespace under the same host name), and its
+# liveness is judged when it is read (record_live). Records of another host, or with no host,
+# are left alone; no record is deleted (own_start reads every live- record).
+sub close_gone {
+    my ($sid, %o) = @_;
+    return 0 unless defined $sid && !ref $sid && length($sid) >= 8;
+    my $sid8 = substr($sid, 0, 8);
+    my $end = util::clock_ms() + ($o{budget_ms} // $CLOSE_GONE_MS);
+    my $dir = by_pid();
+    my @files = util::list_dir($dir);
+    my %ended = map { /^(\d+-\d+)\.ended-([^.]+)\.json$/ ? ("$1/$2" => 1) : () } @files;
+    my $host = identity::host();
+    my $me = rc::claude();
+    my $n = 0;
+    for my $f (@files) {
+        last if util::clock_ms() > $end;
+        next unless $f =~ /^((\d+)-\d+)\.live-\Q$sid8\E\.json$/;
+        my ($key, $pid) = ($1, $2);
+        next if $ended{"$key/$sid8"} || ($me && defined $me->{pid} && $me->{pid} == $pid);
+        my $j = eval { jsonc::decode(util::read_file("$dir/$f") // '') };
+        next unless ref $j eq 'HASH' && ($j->{session_id} // '') eq $sid;
+        next unless defined $j->{host} && !ref $j->{host} && $j->{host} eq $host;
+        next unless _gone($j->{pid}, $j->{pid_lstart});
+        my $rec = jsonc::obj(session_id => $j->{session_id}, reason => 'gone', ts => util::iso(util::now()));
+        $n++ if util::write_excl("$dir/$key.ended-$sid8.json", jsonc::encode_bytes($rec) . "\n", 0600);
+    }
+    return $n;
 }
 
 # Newest `ended-` record with reason clear for this process (pid + start time).

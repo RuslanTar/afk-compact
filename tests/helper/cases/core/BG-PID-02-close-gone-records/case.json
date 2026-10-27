@@ -1,0 +1,182 @@
+{
+ "id": "BG-PID-02-close-gone-records",
+ "note": "Probe 2026-10-27 (P4): a background session the supervisor moved to a new version fires no SessionEnd in the old process, only SessionStart resume in the new one, so the old live- record stayed with no ended- twin. When the session starts again, each of its own live- records of this host whose process is gone (no such pid, or another start time) gets the twin, reason gone. A running process with its start time, a record of another host or with no host, a record already ended, this process's own record and another session's record are left as they are; no live- record is removed",
+ "steps": [
+  {
+   "name": "SessionStart(resume) of a session with records of earlier processes",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/99999998-1792580000.live-$SID8.json",
+     "json": {
+      "pid": 99999998,
+      "pid_lstart": "Tue Oct 21 09:00:00 2026",
+      "host": "$HOST",
+      "session_id": "$SID",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:01+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580000.live-$SID8.json",
+     "json": {
+      "pid": 1,
+      "pid_lstart": "Sat Jan  6 00:00:00 2001",
+      "host": "$HOST",
+      "session_id": "$SID",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:02+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580001.live-$SID8.json",
+     "json": {
+      "pid": 1,
+      "pid_lstart": "$LSTART1",
+      "host": "$HOST",
+      "session_id": "$SID",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:03+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/99999997-1792580000.live-$SID8.json",
+     "json": {
+      "pid": 99999997,
+      "pid_lstart": "Tue Oct 21 09:00:00 2026",
+      "host": "another-host.example",
+      "session_id": "$SID",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:04+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/99999996-1792580000.live-$SID8.json",
+     "json": {
+      "pid": 99999996,
+      "pid_lstart": "Tue Oct 21 09:00:00 2026",
+      "session_id": "$SID",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:05+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/99999995-1792580000.live-$SID8.json",
+     "json": {
+      "pid": 99999995,
+      "pid_lstart": "Tue Oct 21 09:00:00 2026",
+      "host": "$HOST",
+      "session_id": "$SID",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:06+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/99999995-1792580000.ended-$SID8.json",
+     "json": {
+      "session_id": "$SID",
+      "reason": "prompt_input_exit",
+      "ts": "2026-10-21T09:30:00+00:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/99999994-1792580000.live-aaaaaaaa.json",
+     "json": {
+      "pid": 99999994,
+      "pid_lstart": "Tue Oct 21 09:00:00 2026",
+      "host": "$HOST",
+      "session_id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "cwd": "/x",
+      "worktree": null,
+      "head": null,
+      "source": "startup",
+      "ts": "2026-10-21T09:00:07+00:00"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "session_id": "$SID",
+    "source": "resume",
+    "transcript_path": "$TMP/proj/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/99999998-1792580000.ended-$SID8.json",
+      "contains": [
+       "\"reason\":\"gone\"",
+       "\"session_id\":\"$SID\""
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/1-1792580000.ended-$SID8.json",
+      "contains": [
+       "\"reason\":\"gone\""
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/1-1792580001.ended-$SID8.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/99999997-1792580000.ended-$SID8.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/99999996-1792580000.ended-$SID8.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/99999995-1792580000.ended-$SID8.json",
+      "contains": [
+       "prompt_input_exit"
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/99999994-1792580000.ended-aaaaaaaa.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/424242-*.live-$SID8.json",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/424242-*.ended-*.json",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/*.live-*.json",
+      "count": 8
+     }
+    ]
+   }
+  }
+ ]
+}

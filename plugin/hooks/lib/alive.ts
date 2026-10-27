@@ -122,7 +122,10 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
  * or when it has no record on disk, and a `/clear` drops a record an earlier process left for
  * the ended session id too; any other end keeps its record for a `claude --resume` of the same
  * session id (AT-RP-01: no row yet, the block has not settled) unless another channel already
- * delivered it (its `delivered:<channel>` row settles the record).
+ * delivered it (its `delivered:<channel>` row settles the record). The persisted idle due is
+ * forgotten too, except at reason `other` (a `claude respawn`, a signal, a `-p` run done; probe
+ * 2026-10-27 P12): no `/exit`, `/clear`, resume or logout ended it, so a process that resumes it
+ * under its id before the due re-arms it (loadIdle), as after a supervisor move.
  */
 export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): Promise<void> {
   const s = d.state
@@ -139,7 +142,8 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   // A later `/resume` of a session id in this process looks for its armed record again.
   s.restoreChecked = undefined
   s.restoreClosed = undefined
-  await cancelIdle(d, endedSid)
+  if (reason === 'other') d.state.idleDueSid = undefined
+  else await cancelIdle(d, endedSid)
   if (h && h.ht !== null && h.phase !== 'running') await handoffTurnClose(d, endedSid, h.ht, 'cancelled')
   if (pend && (reason === 'clear' || pend.persisted !== true)) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
   else if (pend) {

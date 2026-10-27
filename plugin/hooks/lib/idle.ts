@@ -52,8 +52,18 @@ function dueKey(sid: string): string {
 /** `turn`: the 49-min handoff turn (native off); `check`: the 55.5-min outcome check (native on or unreadable). */
 export type IdleKind = 'turn' | 'check'
 
-/** The persisted timer: when it fires, its kind, the turn end it was armed at, and the idle episode it belongs to. */
-type Due = { due: number; sid: string; episode: { since: number; done: boolean } | null; kind: IdleKind; end: number | null }
+/**
+ * The persisted timer: when it fires, its kind, the turn end it was armed at, the idle episode it
+ * belongs to, whether that turn ended `answer`, and whether a handoff was published since the last
+ * human-origin turn. A load that re-arms the timer has seen no turn end of its own, so the
+ * `aborted` and `published` checks and `gap_s` read the turn from here. Such a load is a
+ * background session the supervisor moved to a new version (no SessionEnd), a `claude respawn` or
+ * a process ended by a signal (SessionEnd `other`, which keeps the due: onSessionEnd), each one
+ * then resumed under its id; after `/exit` (`prompt_input_exit`), `/clear`, `resume` or `logout`
+ * the due is gone. A record written before a field reads as not answered (the old verdict) and
+ * not published.
+ */
+type Due = { due: number; sid: string; episode: { since: number; done: boolean } | null; kind: IdleKind; end: number | null; answer: boolean; published: boolean }
 
 function readDue(v: unknown): Due | undefined {
   if (typeof v !== 'object' || v === null) return undefined
@@ -62,7 +72,7 @@ function readDue(v: unknown): Due | undefined {
   const e = o.episode as Record<string, unknown> | null | undefined
   const episode = e && typeof e.since === 'number' && typeof e.done === 'boolean' ? { since: e.since, done: e.done } : null
   // A record written before the outcome check has no kind: it is the 49-min turn.
-  return { due: o.due, sid: o.sid, episode, kind: o.kind === 'check' ? 'check' : 'turn', end: typeof o.end === 'number' ? o.end : null }
+  return { due: o.due, sid: o.sid, episode, kind: o.kind === 'check' ? 'check' : 'turn', end: typeof o.end === 'number' ? o.end : null, answer: o.answer === true, published: o.published === true }
 }
 
 /** Cancels the timer (synchronous: safe before any await in a hook). */
@@ -90,7 +100,7 @@ function schedule(d: Deps, rec: Due, now: number): void {
   cancelIdleTimer(d)
   d.state.idleTimer = d.after(Math.max(0, rec.due - now), () => {
     d.state.idleTimer = undefined
-    d.state.inflight = fire(d, rec.sid, rec.kind, rec.end).catch(() => undefined)
+    d.state.inflight = fire(d, rec.sid, rec.kind, rec.end, rec.due).catch(() => undefined)
   })
 }
 
@@ -131,7 +141,17 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
     return
   }
   const due = endAt + (m.kind === 'turn' ? IDLE_FIRE_MS : IDLE_CHECK_MS)
-  await persist(d, { due, sid, episode: d.state.idleEpisode ?? null, kind: m.kind, end: endAt })
+  await persist(d, { due, sid, episode: d.state.idleEpisode ?? null, kind: m.kind, end: endAt, answer: d.state.lastTurnAnswer, published: d.state.publishedSinceHuman })
+}
+
+/**
+ * A handoff was just published (handoff-turn.ts, at the end of the turn that wrote it, after that
+ * turn armed its due): the persisted due records it, so a load that re-arms it skips `published`.
+ */
+export async function markIdlePublished(d: Deps, sid: string): Promise<void> {
+  const rec = readDue(await d.storeGet(dueKey(sid)))
+  if (!rec || rec.sid !== sid || rec.published) return
+  await d.storeSet(dueKey(sid), { ...rec, published: true })
 }
 
 /** Once per load (AT-IC-14): a persisted due still in the future for this sid is armed again. */
@@ -142,6 +162,12 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   const now = await d.now()
   if (rec.due <= now) return
   if (rec.episode && !d.state.idleEpisode) d.state.idleEpisode = rec.episode
+  // No turn ended in this load yet: the last turn is the one the record was armed at.
+  if (d.state.lastTurnEndAt === undefined) {
+    d.state.lastTurnAnswer = rec.answer
+    if (rec.end !== null) d.state.lastTurnEndAt = rec.end
+    if (rec.published) d.state.publishedSinceHuman = true
+  }
   d.state.idleDueSid = sid
   schedule(d, rec, now)
 }
@@ -258,18 +284,23 @@ async function checkBlocked(d: Deps, sid: string, end: number | null): Promise<s
 /**
  * The timer fired: one `handoff_skipped {why, reason: idle}` row, or the handoff turn. A 49-min
  * turn that finds native idle on or unreadable now logs `native-on` / `native-unknown` and checks
- * the outcome at 55.5 min instead (owner xxxxxxxx-17).
+ * the outcome at 55.5 min instead (owner xxxxxxxx-17). A timer armed for `due` acts only while the
+ * persisted due is still that one: another process on the same sid (a `claude --resume` copy of a
+ * running session) that fired it first, or cancelled it at a turn start, leaves nothing to do here
+ * and no row. Two processes that read it in the same moment can both go on (the store has no
+ * compare-and-set).
  */
-export async function fire(d: Deps, sid: string, kind: IdleKind = 'turn', end: number | null = null): Promise<void> {
+export async function fire(d: Deps, sid: string, kind: IdleKind = 'turn', end: number | null = null, due?: number): Promise<void> {
   const s = d.state
   if (s.idleDueSid === sid) s.idleDueSid = undefined
+  if (due !== undefined && readDue(await d.storeGet(dueKey(sid)))?.due !== due) return
   await d.storeSet(dueKey(sid), null)
   if (kind === 'turn') {
     const m = await idleKind(d, sid)
     if (m.kind === 'check') {
       await skipped(d, sid, m.native === 'on' ? 'native-on' : 'native-unknown', null, 'idle')
       if (end !== null && end + IDLE_CHECK_MS > (await d.now())) {
-        await persist(d, { due: end + IDLE_CHECK_MS, sid, episode: s.idleEpisode ?? null, kind: 'check', end })
+        await persist(d, { due: end + IDLE_CHECK_MS, sid, episode: s.idleEpisode ?? null, kind: 'check', end, answer: s.lastTurnAnswer, published: s.publishedSinceHuman })
       }
       return
     }
