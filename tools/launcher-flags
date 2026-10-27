@@ -4,7 +4,7 @@
 
 Usage: tools/launcher-flags [--claude BIN | --help-file FILE] [--list]
   The table is the rows of src/claude-launcher.tmpl between `# flag table begin` and
-  `# flag table end` (`<flag>[|<alias>]) c=<class> a=<arity> [f=<file kind>] ;;`), and the
+  `# flag table end` (`<flag>[|<alias>]) _c=<class> _a=<arity> [_f=<file kind>] ;;`), and the
   subcommand rows between `# subcommand table begin` and `# subcommand table end`.
   The help text comes from BIN --help: by default the newest version in
   ~/.local/share/claude/versions/ (as tools/canary-baseline picks it), else `claude` on PATH.
@@ -28,7 +28,7 @@ TEMPLATE = "src/claude-launcher.tmpl"
 CLASSES = {"keep", "state", "drop", "refuse"}
 ARITIES = {"none", "val", "opt", "var"}
 FILE_KINDS = {"file", "json"}
-ROW = re.compile(r"^\s*(\S+)\)\s+c=(\w+)\s+a=(\w+)(?:\s+f=(\w+))?\s*;;\s*$")
+ROW = re.compile(r"^\s*(\S+)\)\s+_c=(\w+)\s+_a=(\w+)(?:\s+_f=(\w+))?\s*;;\s*$")
 FLAG = re.compile(r"^--?[A-Za-z][A-Za-z0-9-]*$")
 SUB_ROW = re.compile(r"^\s*([a-z][a-z0-9|-]*)\)\s+return 0\s*;;\s*$")
 
@@ -60,15 +60,15 @@ def read_table():
             continue
         m = ROW.match(ln)
         if not m:
-            findings.append("row {}: not `<flags>) c=<class> a=<arity> [f=<kind>] ;;`: {}".format(no, ln.strip()))
+            findings.append("row {}: not `<flags>) _c=<class> _a=<arity> [_f=<kind>] ;;`: {}".format(no, ln.strip()))
             continue
         flags, cls, ar, fk = m.group(1).split("|"), m.group(2), m.group(3), m.group(4)
         if cls not in CLASSES:
-            findings.append("row {}: unknown class c={}".format(no, cls))
+            findings.append("row {}: unknown class _c={}".format(no, cls))
         if ar not in ARITIES:
-            findings.append("row {}: unknown arity a={}".format(no, ar))
+            findings.append("row {}: unknown arity _a={}".format(no, ar))
         if fk is not None and (fk not in FILE_KINDS or cls != "keep" or ar not in ("val", "var")):
-            findings.append("row {}: f={} needs c=keep and a=val or a=var".format(no, fk))
+            findings.append("row {}: _f={} needs _c=keep and _a=val or _a=var".format(no, fk))
         for fl in flags:
             if not FLAG.match(fl):
                 findings.append("row {}: not a flag: {}".format(no, fl))

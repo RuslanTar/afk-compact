@@ -315,8 +315,8 @@ def probes(name):
         p = os.path.join(d, "src", "claude-launcher.tmpl")
         with open(p, encoding="utf-8") as f:
             t = f.read()
-        for old, new in (("  --verbose) c=keep a=none ;;\n", ""),
-                         ("  --tools) c=keep a=var ;;", "  --tools) c=keep a=val ;;"),
+        for old, new in (("  --verbose) _c=keep _a=none ;;\n", ""),
+                         ("  --tools) _c=keep _a=var ;;", "  --tools) _c=keep _a=val ;;"),
                          ("|auto-mode|doctor|", "|auto-mode|")):
             if old not in t:
                 raise Fail("X-tools launcher-flags: the template has no " + old.strip())

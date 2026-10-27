@@ -13,13 +13,20 @@ fills `{{plugin}}`, `{{launch_env}}` and `{{version}}`).
 ## 1. The launch folder
 
 - Runtime base: `$XDG_RUNTIME_DIR` when set and not empty, else `$TMPDIR`, else `/tmp`, with
-  trailing `/` removed. A base that is not an absolute path makes the launch a pass-through.
+  trailing `/` removed. A base that is not an absolute path makes the launch a pass-through, and
+  so does a base that others may write to without the sticky bit (`ls -ldn "<base>/."` field 1
+  with `w` for group or other and no `t`/`T` at the end): another user could rename the runtime
+  folder away after its check and put one of their own in its place. `/tmp` (sticky), the macOS
+  per-user `$TMPDIR` and `/run/user/<uid>` pass. The base's owner and any ACL on the base are
+  not checked, so `$TMPDIR` and `$XDG_RUNTIME_DIR` must not name a folder another user owns.
 - `<base>/afk-compact-<uid>/` (the runtime folder): created with `mkdir -m 700` when missing.
   It must not be a symlink, `ls -ldn` must show the uid as owner (field 3) and a mode (field 1)
   of `drwx------`, optionally followed by `@` (macOS extended attributes; macOS 13+ tags every
   new folder with `com.apple.provenance`) or `.` (an SELinux context). A `+` (an ACL) refuses,
   and on macOS `/bin/ls -lde` must print no ACL line (macOS shows `@`, not `+`, when a folder
-  has both). Anything else: pass-through.
+  has both). On Linux, when `getfacl` is installed, `getfacl -c` must list only the `user::`,
+  `group::` and `other::` entries. busybox `ls` never shows `+`, so on a busybox system without
+  `getfacl` an ACL on the folder is not seen. Anything else: pass-through.
 - `L-<token>/` inside it (the launch folder), `mkdir -m 700`, the same checks. The token is 16
   lower-case hex characters from `od -An -N8 -tx1 /dev/urandom`.
 - `AFK_COMPACT_LAUNCH` holds the launch folder's path, exported to claude only when the launcher
@@ -54,9 +61,11 @@ fills `{{plugin}}`, `{{launch_env}}` and `{{version}}`).
   passes through instead, so the JSON needs no escapes.
 - `pid` is the launcher shell (an ancestor of claude; with `--via`, a wrapper sits between).
 - `relaunches` counts the relaunches of this launcher.
-- `bypass_ok` is true when the launch arguments hold `--dangerously-skip-permissions`,
-  `--allow-dangerously-skip-permissions` or `--permission-mode bypassPermissions` (`=` form
-  too). Nothing else counts: not bypass allowed in settings, and not
+- `bypass_ok` is true when the launch arguments hold `--dangerously-skip-permissions` or
+  `--allow-dangerously-skip-permissions`, or when the last `--permission-mode` (`=` form too) is
+  `bypassPermissions` (commander keeps the last value of a repeated flag, so
+  `--permission-mode bypassPermissions --permission-mode manual` is false). Nothing else
+  counts: not bypass allowed in settings, and not
   `--inherit-permission-mode bypassPermissions` (Claude Code counts that one as bypass in some
   paths; leaving it out is the safe side).
 - `file_flags` lists the values of `--settings`, `--mcp-config` (each value),
@@ -82,7 +91,7 @@ its pattern exactly.
 | `at` | epoch seconds of the last state change (no leading zero) |
 | `exiting_at` | epoch milliseconds, set at `exiting`; empty before (required for `go`) |
 | `from`, `to` | the running and the target version, `x.y.z` digits |
-| `model` | empty, or 1-100 of `A-Z a-z 0-9 . _ : / [ ] -` |
+| `model` | empty, or 1-100 of `A-Z a-z 0-9 . _ : / [ ] -`, not starting with `-` (so it can never read as a flag) |
 | `effort` | empty, `low`, `medium`, `high`, `xhigh` or `max` |
 | `mode` | `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk` or `plan` (the internal name; the launcher writes `default` as `manual` on the command line) |
 
@@ -110,20 +119,31 @@ its pattern exactly.
    | `mode-changed` | `restart.mode-end` exists and differs from `mode` |
    | `launch-file` | a `file_flags` path is not a readable regular file |
    | `cap` | `stamps` holds 3 or more times from the last 3600 s |
-   | `consume` | the rename to `restart.used` failed |
+   | `no-terminal` | stdin or stdout is no longer a terminal (a relaunched claude would start in print mode) |
+   | `consume` | `restart.used` exists and is a symlink or not a regular file (a rename would move the note into a folder), or the rename to `restart.used` failed |
 
 5. Rename `restart.note` to `restart.used`, print
    `afk-compact: restarting session <first 8 of sid> on Claude Code <to> in 3 s (Ctrl+C stops it)`
-   and count down. Ctrl+C: `not restarting (cancelled)`, `last-refusal`, exit 130. HUP or TERM
-   at any point: exit 129 or 143, never a relaunch.
+   (`... in 3 s, permission mode bypassPermissions (Ctrl+C stops it)` when the note's mode is
+   `bypassPermissions`) and count down. Ctrl+C: `not restarting (cancelled)`, `last-refusal`,
+   exit 130. A Ctrl+C counts from the moment claude has exited, so one pressed before the
+   countdown line stops the relaunch too (the line is then not printed). HUP or TERM: exit 129
+   or 143, never a relaunch. While claude runs, the shell runs these traps only once claude has
+   exited (POSIX: a trap waits for the foreground command), so `kill <launcher pid>` alone
+   leaves claude running and the launcher waiting; a closed terminal sends HUP to claude as
+   well.
 6. Rewrite `launcher.json` with `relaunches` + 1, append a stamp, and run
    `<--via words> claude <kept arguments> --resume <sid> [--allow-dangerously-skip-permissions] [--model <m>] [--effort <e>] --permission-mode <mode>`:
    - kept arguments: the launch arguments of class `keep` (the flag table in the template), in
      their original order, values included;
    - `--allow-dangerously-skip-permissions` exactly when `bypass_ok`; the launch's own
      `--dangerously-skip-permissions` never comes back;
-   - `--model`: the note's `model`; when empty, the launch `--model` value (if there was one);
+   - `--model`: the note's `model`; when empty, the launch `--model` value (if there was one),
+     as `--model=<value>` when that value starts with `-`;
    - `--effort`: the same with `effort` and the launch `--effort`;
+   - a variadic flag (`--add-dir`, `--allowedTools`, `--mcp-config`, ...) takes the following
+     words only in its space form, as commander does: after `--allowedTools=X` the next plain
+     word is a prompt word and is dropped; after `--allowedTools X` it is a value and is kept;
    - `--permission-mode`: the note's `mode`, `default` written `manual`.
 7. A relaunched claude that exits non-zero within 15 s: the line
    `afk-compact: Claude Code <to> did not start (exit <n>). Your session is saved; start it the way you usually do with --resume <sid>.`,
@@ -165,10 +185,28 @@ a flag or a fixed condition, never a value: a refuse-class flag (`-p`, `--bg`, `
 `--remote-control`, `--no-session-persistence`, ...), an unknown flag, combined short flags, a
 value given to a flag that takes none, a subcommand as the first positional word, stdin or
 stdout not a terminal, a file path with a quote, backslash or control character, a working
-folder path with one, a runtime folder that is not private, no random token or clock, a launch
-folder that could not be made, or a system other than macOS and Linux. On Windows (MINGW, MSYS,
-CYGWIN) the line is `afk-compact: restart on update: not supported on Windows`. Inside a Claude
-Code session (`CLAUDECODE` set) the launcher does not start at all: exit 2.
+folder path with one, a runtime base that others may write to without the sticky bit, a
+runtime folder that is not private, no random token or clock, a launch folder that could not
+be made, or a system other than macOS and Linux. On Windows (MINGW, MSYS, CYGWIN) the line is
+`afk-compact: restart on update: not supported on Windows`. Inside a Claude Code session
+(`CLAUDECODE` set) the launcher does not start at all: exit 2.
+
+## 7a. Limits
+
+- **Anything running as you can ask for a relaunch.** `AFK_COMPACT_LAUNCH` is in the
+  environment of claude and so of every command it runs, and the launch folder is yours. A
+  process that writes a valid `go` note there (with the `sid` file) gets a relaunch, and when
+  the launch had a bypass flag (`bypass_ok`) the relaunch can come back in
+  `bypassPermissions` even if you had left it; the countdown line then names that mode. This
+  is no new power (such a process can already edit your settings), but "a bypass you left is
+  never restored" holds only for notes the plugin writes.
+- **The launch folder lives in a temporary folder.** macOS removes files in `/tmp` and
+  `$TMPDIR` that were not used for about 3 days, and some Linux systems clean `/tmp` after
+  about 10 days. When that removes the launch folder during a long session, restart on update
+  ends for that session (no `launcher.json` for the plugin, no note for the launcher: the
+  session simply exits as usual) and the hourly cap starts again.
+- **ACLs under busybox:** see §1 (`getfacl`).
+- **HUP and TERM** reach the launcher's traps only after claude has exited (§5 step 5).
 
 ## 8. Running the tests
 
@@ -178,6 +216,9 @@ Code session (`CLAUDECODE` set) the launcher does not start at all: exit 2.
 - `tests/launcher/docker.sh [IMAGE...]`: the same on Linux in Docker (default
   `debian:bookworm-slim`: dash as `/bin/sh`, bash), no network, no credentials, the repo
   read-only, as uid 1000, plus the real foreign-owner case. The image must be present locally.
+  The image needs perl and `script(1)`; no local alpine image has both, so busybox ash and zsh
+  on Linux are not in the suite yet and are checked by hand (`docker run -t` gives the
+  launcher a terminal).
 - `tools/launcher-flags`: the flag table against `claude --help` of the newest installed
   Claude Code (every visible option and command, and each option's arity).
 - `tools/check phase0` and `integration` run `tools/launcher-flags` and `run.sh` in their
