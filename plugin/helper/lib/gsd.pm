@@ -53,10 +53,12 @@ package gsd;
 # this plugin's skills or this plugin's own submitted note; nor a prompt this plugin's skill answers
 # right after it). Loop work is the driver's own (re)invocation, a step it runs, a GSD work command
 # or a gsd-tools run that changes planning state or a state-file write for its workstream (while a
-# human prompt waits, only a phase's own files: a STATE.md note the person asked for is not; while a
+# human prompt waits, only a phase's own files, of its own phase for a single-phase loop with a
+# phase number: a STATE.md note the person asked for is not, nor a next phase run by hand; while a
 # human prompt waits or after its turn ended, only a gsd-tools run that records a phase's progress,
-# %PROGRESS: a commit, a todo, a decision or a phase added the person asked for is not; an Agent,
-# Task or Workflow spawn only while no human prompt waits); never what a skill or command started
+# %PROGRESS: a commit, a todo, a decision, a phase added or a STATE.md note (state.update,
+# state.patch) the person asked for is not; an Agent, Task or Workflow spawn only while no human
+# prompt waits); never what a skill or command started
 # after a human prompt does, nor what a turn or a skill of this plugin's own does (its resume
 # reconciling STATE.md, its handoff). A GSD loop absorbed as the driver's step after a prompt or
 # while the driver is a hint is named in the hint (`later step: …`), never as the driver. Its
@@ -67,15 +69,20 @@ package gsd;
 #     ambiguous (a pause asked "when finished"). A loop that pauses itself without the command
 #     creates one of those files (a Write, a `>` redirect or a tee into one; not an Edit or an
 #     append, nor a commit, which a routine checkpoint or a resume consuming the file also makes)
-#     as the last act of its turn: until that turn ends with nothing running it is ambiguous, and
-#     any other work in between (a Bash command that names no pause file or STATE.md, a spawn, a
-#     message, an MCP call, a skill, another file written) cancels it. Loop work for a paused loop
-#     (a GSD work command, or a gsd-tools run for that workstream that changes state other than a
-#     commit; not a state-file write after /gsd-pause-work, as the pause writes STATE.md too) makes
-#     it again what it was before the pause (active, or ambiguous); before the files are written a
-#     read or a status command does too, and after a loop paused itself, any work before the next
-#     human prompt or a state-file write. After the files, only reads, status commands or an Agent,
-#     Task or Workflow spawn leave it ambiguous;
+#     as the last act of its turn: until a turn ends with none of its background work live it is
+#     ambiguous, and loop work in between cancels it (a GSD work command or a loop skill invoked, a
+#     gsd-tools run that changes state other than a commit, a test or build run, an Agent, Task or
+#     Workflow spawn, a write of a phase file, ROADMAP, REQUIREMENTS, PROJECT or of the checkout's
+#     code; not the pause's own acts: a commit, a run-state append or another file under .planning/,
+#     STATE.md, a note outside the checkout, stopping its work, a message, a read, this plugin's
+#     skills). Loop work for a paused loop (a GSD work command, or a gsd-tools run for that
+#     workstream that changes state other than a commit; not a state-file write after
+#     /gsd-pause-work, as the pause writes STATE.md too) makes it again what it was before the pause
+#     (active, or ambiguous); before the files are written a read or a status command does too, and
+#     after a loop paused itself, that loop work before the next human prompt, or a write of a phase
+#     file, ROADMAP, REQUIREMENTS or PROJECT (not STATE.md). Nothing a turn or a skill of this
+#     plugin's own does ends a pause (R4: its handoff and its resume only show the re-entry). After
+#     the files, only reads, status commands or an Agent, Task or Workflow spawn leave it ambiguous;
 #   - it has ended after a finishing skill (%FINISH), a GSD work command for another workstream, or,
 #     for a single-phase loop (%STEP), a GSD work command the user typed;
 #   - it is ambiguous after a GSD status command or a gsd-tools run for another workstream, a GSD
@@ -107,8 +114,10 @@ package gsd;
 # Only an active driver gets an `Active driver:` line (the resume protocol's [driver] re-entry keys
 # on it, and only that line is ever run); a paused one gets `Paused driver:` (re-enter in a new
 # session only), an ambiguous one the weaker `Was driving: … · re-enter only if Step 1 belongs to
-# it: …` hint, an ended one no line. A session that used GSD with no active GSD-command driver also
-# gets a passive `GSD re-entry` line.
+# it: …` hint, an ended one no line; a GSD loop whose GSD root is another checkout whose path
+# cannot be passed as a plain --cwd (a space, a non-ASCII letter) is at most that hint (R3: its
+# command would run in this checkout). A session that used GSD with no active GSD-command driver
+# also gets a passive `GSD re-entry` line (with a caution for such a root).
 use strict;
 use warnings;
 use utf8;
@@ -122,7 +131,7 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 8;
+our $CACHE_V = 9;
 our $BG_KEEP = 32;                    # newest background tasks kept while no notification names them
 our $IDLE_PROMPTS = 1;                # human prompts with no loop work after them: an active driver is
                                       # only a `Was driving` hint (R2: it may have finished)
@@ -141,8 +150,9 @@ our %READ_BASE = map { $_ => 1 } qw(init progress stats state-snapshot find-phas
                                     validate audit-uat audit-open);
 # gsd-tools runs that record a phase's own progress (`<verb>.<sub>`; verify* too): after a human
 # prompt or a stopped turn, only these are loop work (R2: a person's bookkeeping is not).
+# Not state.update or state.patch: GSD sends every STATE.md note a person asks for through them.
 our %PROGRESS = map { $_ => 1 } qw(state.begin-phase state.advance-plan state.update-progress state.record-metric
-                                   state.update state.patch state.sync state.record-session state.complete-phase
+                                   state.sync state.record-session state.complete-phase
                                    roadmap.update-plan-progress phase.complete phases.complete);
 # GSD status commands that only look at a workstream: their --ws, and that of the reads they run
 # before the next prompt, never names the session's own (a loop typed after one is not bound to it).
@@ -434,6 +444,9 @@ sub _unpause {
 # the pause; only a read after a pause whose files were written is other work.
 sub _work {
     my ($D, $read, $ts, $mine) = @_;
+    # A turn or a skill of this plugin's own (its resume reconciling STATE.md, its handoff) never
+    # ends a pause (R2, R4).
+    return if $D->{mode} eq 'paused' && _plug($D);
     if ($D->{mode} eq 'paused') {
         if ($read && $D->{pause}{done}) { $D->{after} = 1; return }
         _unpause($D);
@@ -447,20 +460,71 @@ my %QUIET = map { $_ => 1 } qw(Read Grep Glob LS NotebookRead ToolSearch TodoWri
                                TaskGet TaskOutput AskUserQuestion);
 my $PAUSE_FILE = qr{(?:HANDOFF\.json|\.continue-here)};
 
-# Whether a tool call is work beyond a pause's own acts: not a quiet tool, not an edit of STATE.md
-# or a pause file, not a Bash command that names one of them (adding or committing them).
+# A test or build run at a command position (what a loop that goes on runs; a pause does not).
+my $TEST_RUN = qr{$CMD_AT(?:(?:npm|pnpm|yarn|bun)[ \t]+(?:run[ \t]+)?(?:test|build|ci|check|lint|typecheck)\b
+                          |npx[ \t]+(?:jest|vitest|tsc|playwright|mocha|eslint)\b
+                          |(?:bundle[ \t]+exec[ \t]+)?(?:rspec|rake|rubocop)\b|(?:bin/)?rails[ \t]+test\b|bin/rspec\b
+                          |(?:python3?[ \t]+-m[ \t]+)?pytest\b|go[ \t]+(?:test|build|vet)\b|cargo[ \t]+(?:test|build|check)\b
+                          |make\b|mvn\b|gradlew?\b|(?:\./)?tools/(?:check|build|test|typecheck)\b)}x;
+
+# Whether a tool call after a pause file the loop created is loop work that goes on past the pause
+# (R2): a GSD work command or a loop skill invoked, a gsd-tools run that changes planning state
+# other than a commit (of the driver's workstream or none), a test or build run, an Agent, Task or
+# Workflow spawn, a write of a phase file, ROADMAP, REQUIREMENTS or PROJECT, or of a file of the
+# checkout outside .planning/ (code). The pause's own acts are not: a read, the task list, a
+# question, STATE.md, a pause file, another file under .planning/ (a run-state table), a note
+# outside the checkout, a commit or any other command, stopping its work (TaskStop, KillShell,
+# CronDelete, a message to a worker), a monitor or a wake-up, another tool, this plugin's skills.
 sub _activity {
-    my ($n, $in) = @_;
+    my ($st, $n, $in, $cwd) = @_;
     return 0 if $QUIET{$n};
+    return 1 if $n eq 'Agent' || $n eq 'Task' || $n eq 'Workflow';
+    if ($n eq 'Skill') {
+        my $s = $in->{skill};
+        return 0 unless defined $s && !ref $s;
+        my $name = _norm($s);
+        return 0 if _own($name) || $BUILTIN{$name} || $STATUS{$name} || $name eq 'gsd-pause-work';
+        return (_is_gsd_cmd($name, $in->{args}) || _is_loop($st, $name)) ? 1 : 0;
+    }
     if ($EDIT{$n}) {
-        my $p = $in->{file_path} // $in->{notebook_path} // '';
-        return (!ref $p && $p =~ m{(?:\A|/)(?:STATE\.md|HANDOFF\.json|\.continue-here[^/]*)\z}) ? 0 : 1;
+        my $p = $in->{file_path} // $in->{notebook_path};
+        return 0 unless defined $p && !ref $p && $p ne '';
+        return 0 if $p =~ m{(?:\A|/)(?:STATE\.md|HANDOFF\.json|\.continue-here[^/]*)\z};
+        $p = "$cwd/$p" if $p !~ m{\A/} && defined $cwd;
+        return ($2 =~ m{\A(?:workstreams/[^/]+/)?(?:phases/|(?:ROADMAP|REQUIREMENTS|PROJECT)\.md\z)} ? 1 : 0)
+            if $p =~ m{\A(/.*?)/\.planning/(.+)\z};
+        my %seen;
+        for my $r (grep { defined && $_ ne '' && $_ ne '/' && !$seen{$_}++ } _checkout($cwd), _gsd_root($cwd), @{ $st->{roots} || [] }) {
+            return 1 if index($p, "$r/") == 0;
+        }
+        return 0;
     }
     if ($n eq 'Bash') {
-        my $c = $in->{command} // '';
-        return (!ref $c && ($c =~ $PAUSE_FILE || index($c, 'STATE.md') >= 0)) ? 0 : 1;
+        my $c = $in->{command};
+        return 0 unless defined $c && !ref $c;
+        my $dw = ref $st->{drv} eq 'HASH' ? $st->{drv}{ws} : undef;
+        for my $b (@{ bash_calls($c) }) {
+            next if _read_run($b) || $b->{verb} =~ /\Acommit(?:\.|-|\z)/;
+            return 1 if !defined $b->{ws} || !defined $dw || _wsn($b->{ws}) eq $dw;
+        }
+        (my $u = $c) =~ s/<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n.*?\n[ \t]*\2[ \t]*(?=\n|\z)//gs;
+        return _unquote($u) =~ $TEST_RUN ? 1 : 0;
     }
-    return 1;
+    return 0;
+}
+
+# The checkout at or above dir (the first folder holding .git), or dir itself.
+sub _checkout {
+    my ($dir) = @_;
+    return undef unless defined $dir && $dir =~ m{\A/};
+    my $d = $dir;
+    for (1 .. 24) {
+        return $d if -e "$d/.git";
+        last if $d eq '/' || $d eq '';
+        $d =~ s{/[^/]*\z}{};
+        $d = '/' if $d eq '';
+    }
+    return $dir;
 }
 
 # Work after the driver created a pause file in this turn cancels that self-pause; work after a
@@ -493,7 +557,9 @@ sub _turn_end {
     if (delete $D->{nudged}) { $D->{nmid} = $mid // ''; return }
     delete $D->{nmid};
     my ($live, $loose) = _running($st, $D, $ts);
-    return if $live;
+    # a pause file it created in a turn that ends while its background work still runs: unclear
+    # until a turn ends with none of it live (no loop work between cancels it)
+    if ($live) { $D->{sp}{tl} = $ts // 0 if ref $D->{sp} eq 'HASH'; return }
     if (my $sp = delete $D->{sp}) {
         _pause($D, $sp, 1);
         $D->{pause}{self} = 1;
@@ -637,21 +703,30 @@ sub _drv_write {
     # (an Edit of an existing one is a checkpoint note, no pause).
     if ($rel =~ m{(?:\A|/)(?:HANDOFF\.json|\.continue-here[^/]*)\z}) {
         if ($D->{mode} eq 'paused') { $D->{pause}{done} = 1 }
-        elsif (($tool // '') eq 'Write') { $D->{sp} //= { seq => $st->{seq}, ts => $ts } }
+        elsif (($tool // '') eq 'Write' && !_plug($D)) { $D->{sp} //= { seq => $st->{seq}, ts => $ts } }
         return;
     }
     if ($D->{mode} eq 'paused') {
-        # After a loop paused itself (its turn ended), a state-file write is its work again; a
+        # After a loop paused itself (its turn ended), a write of a phase file, ROADMAP,
+        # REQUIREMENTS or PROJECT is its work again (not STATE.md, which the pause's own
+        # bookkeeping writes; nor anything a turn or a skill of this plugin's own writes); a
         # /gsd-pause-work also writes STATE.md, so after one a write is no loop work.
-        _work($D, 0, $ts, _plug($D) ? 0 : 1) if $D->{pause}{self};
+        _work($D, 0, $ts, 1) if $D->{pause}{self} && !_plug($D) && $rel !~ m{(?:\A|/)STATE\.md\z};
         return;
     }
     return if $D->{sp} && $rel =~ m{(?:\A|/)STATE\.md\z};    # a loop pausing itself records it
     # A phase's own files (a plan, a summary, a check) are the loop's work also after a prompt (the
     # person said go on); a STATE.md, ROADMAP, REQUIREMENTS or PROJECT write after a human prompt
     # (a note the person asked for) is not. Neither is a write in a skill a prompt started or in a
-    # turn or a skill of this plugin's own (its resume reconciling STATE.md).
-    _work($D, 0, $ts, _plug($D) ? 0 : $rel =~ m{(?:\A|/)phases/} ? 1 : _mine($D));
+    # turn or a skill of this plugin's own (its resume reconciling STATE.md). A single-phase loop's
+    # phase files are its own phase's only: another phase's folder is the session's work after
+    # the loop's report (a next phase run by hand), loop work only in its own loop context.
+    my $ph = $rel =~ m{(?:\A|/)phases/([^/]+)/} ? $1 : $rel =~ m{(?:\A|/)phases/} ? '' : undef;
+    if (defined $ph && $STEP{ $D->{e}{name} } && ($D->{e}{args} // $D->{e}{keep} // '') =~ /\A\s*0*([0-9]+(?:\.[0-9]+)*)(?:\s|\z)/) {
+        my $n = $1;
+        $ph = undef unless $ph =~ /\A0*\Q$n\E(?:-|\z)/;
+    }
+    _work($D, 0, $ts, _plug($D) ? 0 : defined $ph ? 1 : _mine($D));
 }
 
 # Whether a Bash command writes or commits a pause's own files (HANDOFF.json, .continue-here*):
@@ -875,14 +950,16 @@ sub _row {
         next unless ref $it eq 'HASH' && ($it->{type} // '') eq 'tool_use' && ref $it->{input} eq 'HASH';
         my ($n, $in) = ($it->{name} // '', $it->{input});
         my $D0 = $st->{drv};
-        _act($D0) if $D0 && ($D0->{sp} || ($D0->{mode} eq 'paused' && $D0->{pause}{self})) && _activity($n, $in);
+        # (never in a turn or a skill of this plugin's own: its handoff and its resume are no loop work)
+        _act($D0) if $D0 && ($D0->{sp} || ($D0->{mode} eq 'paused' && $D0->{pause}{self})) && !_plug($D0)
+            && _activity($st, $n, $in, $cwd);
         if ($n eq 'Skill') {
             _invoked($st, 'Skill', $in->{skill}, $in->{args}, $cwd, $ts) if defined $in->{skill} && !ref $in->{skill};
         } elsif ($n eq 'Bash') {
             my $D = $st->{drv};
             if ($D && $D->{mode} eq 'paused') {
                 $D->{pause}{done} = 1 if !$D->{pause}{self} && _pause_write($in->{command});
-            } elsif ($D && $D->{mode} ne 'ended' && _self_pause($in->{command}, $D->{ws})) {
+            } elsif ($D && $D->{mode} ne 'ended' && !_plug($D) && _self_pause($in->{command}, $D->{ws})) {
                 $D->{sp} //= { seq => $st->{seq}, ts => $ts };
             }
             for my $b (@{ bash_calls($in->{command}) }) {
@@ -1342,7 +1419,7 @@ sub session {
     }
     return { status => 'none', lines => [] } unless $g || $d;
     my %out = (status => ($g ? 'gsd' : 'driver'), lines => []);
-    my ($ws, $root, $cwdflag, $caution) = (undef, undef, '', '');
+    my ($ws, $root, $cwdflag, $caution, $nocwd) = (undef, undef, '', '', undef);
     if ($g) {
         # The newest workstream named by GSD work, or by the driver's own --ws.
         # (a status look's workstream only while no other GSD work followed it)
@@ -1367,10 +1444,15 @@ sub session {
         $out{state} = $sp if defined $sp && -f $sp;
         # GSD work in another checkout than this session's: its commands need --cwd.
         my $hr = _gsd_root($here);
-        $cwdflag = " --cwd $root" if defined $root && (!defined $hr || $hr ne $root) && $root =~ $PLAIN_PATH;
+        # A root whose path cannot be written as a plain --cwd (a space, a non-ASCII letter): never an
+        # imperative command that would run in this checkout instead (R2, R3).
+        if (defined $root && (!defined $hr || $hr ne $root)) {
+            if ($root =~ $PLAIN_PATH) { $cwdflag = " --cwd $root" } else { $nocwd = 1 }
+        }
         # Flat work beside a shared pointer: GSD sends a command without --ws to that workstream.
         my $sh = defined $ws ? undef : _shared($root);
         $caution = " (caution: .planning/active-workstream names $sh, and GSD uses it)" if defined $sh;
+        $caution .= " (caution: its GSD root is another checkout whose path cannot be passed as --cwd: run it there)" if defined $nocwd;
     }
     my $gsd_cmd = '/gsd-resume-work' . (defined $ws ? " --ws $ws" : '') . $cwdflag;
     my ($re, $mode);
@@ -1422,7 +1504,12 @@ sub session {
                              . (defined $D->{tw} ? " with only a $D->{tw} still running" : ' with nothing running') . ' and no loop work since');
         }
         if (($mode eq 'active' || $mode eq 'hint') && ref $D->{sp} eq 'HASH') {
-            ($mode, $why) = ('hint', 'it wrote a pause file' . (defined $D->{sp}{ts} ? ' ' . util::stamp($D->{sp}{ts}) : '') . ', its turn not ended yet');
+            ($mode, $why) = ('hint', 'it wrote a pause file' . (defined $D->{sp}{ts} ? ' ' . util::stamp($D->{sp}{ts}) : '')
+                             . (defined $D->{sp}{tl} ? ', and its background work still ran when its turn ended' : ', its turn not ended yet'));
+        }
+        # R2, R3: a GSD loop whose GSD root is another checkout that --cwd cannot name would run here.
+        if ($mode eq 'active' && defined $nocwd && $e{name} =~ /\Agsd-/ && $re !~ /(?:\A|\s)--(?:cwd|repo|project-dir)(?:\s|=)/) {
+            ($mode, $why) = ('hint', "its GSD root is another checkout whose path cannot be passed as --cwd");
         }
         # R1: a GSD loop it ran as its step after a prompt or while it was a hint: named, never run.
         if ($mode eq 'hint' && ref $D->{step} eq 'HASH') {
