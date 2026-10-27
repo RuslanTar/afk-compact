@@ -261,6 +261,12 @@
       "description": "Extra branch names or globs, separated by ';', that count as protected beside the shipped list (the remote's default branch, main, master, trunk, develop, stable, staging, gh-pages, prod…, release…, hotfix/…): a push to one always asks again, whatever was approved before. * matches within one part of the name, ** across /, ? one character. They can only add: no entry removes a shipped branch. Read from your settings file only (flags and env are ignored). Empty = the shipped list only.",
       "default": ""
     },
+    "restart_on_update": {
+      "type": "string",
+      "title": "Restart on update",
+      "description": "on = right after a compaction, with nothing running in the background, no question open and nobody typing, the plugin moves the session onto a newly installed Claude Code by itself and keeps the same session (background sessions by claude respawn; terminal sessions through the plugin's launcher, not enabled in this version yet, see /{{plugin}}:status). shadow = log what it would do, restart nothing. off = never. Any other value counts as off. Read from your settings file only (flags and env are ignored).",
+      "default": "off"
+    },
     "driver_skills": {
       "type": "string",
       "title": "Loop skills to re-enter",
