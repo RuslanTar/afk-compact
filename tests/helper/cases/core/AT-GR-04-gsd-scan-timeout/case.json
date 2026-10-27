@@ -4410,7 +4410,7 @@
      {
       "path": "$WATCH/$SID/gsd-scan.json",
       "json": {
-       "v": 6
+       "v": 7
       }
      }
     ]
@@ -4437,5 +4437,6 @@
     ]
    }
   }
- ]
+ ],
+ "tmp_base": "short"
 }

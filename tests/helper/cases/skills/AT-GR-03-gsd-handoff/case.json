@@ -1479,6 +1479,210 @@
    }
   },
   {
+   "name": "a loop's nudged checkpoint, then this plugin's halt handoff turn (its note, its handoff skill, the turn's end)",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000071-0000-4000-8000-000000000071.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-13001",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-13003",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_13002",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "attachment",
+       "uuid": "row-13004",
+       "version": "2.1.310",
+       "attachment": {
+        "type": "hook_additional_context",
+        "hookName": "PostToolUse",
+        "content": [
+         "Note from the user's $BRAND plugin: context is at 412,000 tokens.\nOnce this turn is over, the plugin compacts."
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-13006",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_13005",
+          "name": "Bash",
+          "input": {
+           "command": "git status --porcelain",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-13007",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Checkpoint: clean · Step 1: run task 3 of plan 3.2"
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-13008",
+       "version": "2.1.310",
+       "origin": {
+        "kind": "plugin",
+        "name": "$BRAND"
+       },
+       "message": {
+        "role": "user",
+        "content": "The $BRAND plugin sent a message:\nNote from the user's $BRAND plugin: auto-continue is paused (the hourly auto-continue limit is reached), so the plugin asks for a handoff while the context is still here. This is not the user's answer; their open questions stay open."
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "assistant",
+       "uuid": "row-13010",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_13009",
+          "name": "Skill",
+          "input": {
+           "skill": "$BRAND:handoff"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0000-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:07:00.000Z",
+       "type": "assistant",
+       "uuid": "row-13011",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Handoff published."
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "write": "$TMP/foreign/halt.md",
+     "content": "---\nkind: handoff\nsession_id: 00000071-0000-4000-8000-000000000071\n---\n# LAB-9 x\n\n- Active driver: /gsd-execute-phase 3 --ws workstream-a (typed, 2026-10-26 13:01 +0300) · re-enter: /gsd-execute-phase 3 --ws workstream-a\n"
+    }
+   ]
+  },
+  {
+   "name": "measure <handoff> of that session: Driver now is still its Active driver (a turn of this plugin's own is no stop of the loop)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000029-0000-4000-8000-000000000029",
+    "$TMP/foreign/halt.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Driver now \\(00000071\\): Active driver: /gsd-execute-phase 3 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "^Driver now \\S+: Was driving"
+    ]
+   }
+  },
+  {
    "name": "a Claude Code worktree nested in this checkout (<repo>/.claude/worktrees/feat, a .git file) with its own .planning",
    "setup": [
     {
