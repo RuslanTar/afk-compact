@@ -182,6 +182,10 @@ sub on_SessionStart {
     if (rc::root_ok('handoff_root')) {
         $where = git::where($p->{cwd});
         eval { sessions::write_live($sid, $p->{cwd}, $where->{toplevel}, $src, $where->{head}) };
+        # This session's records of earlier processes that ended with no SessionEnd (a
+        # background session moved to a new version, a resume after a crash) get their
+        # ended- twin here.
+        eval { sessions::close_gone($sid) };
         $lin = eval { sessions::write_lineage($sid, $src) } if $src eq 'clear' || $src eq 'fork';
     }
     $lin = sessions::lineage($sid) if !$lin || $lin->{exists};

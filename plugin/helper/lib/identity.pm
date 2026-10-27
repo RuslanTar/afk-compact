@@ -1,8 +1,10 @@
 package identity;
 # lib/identity.pm: Claude Code process id and start time (MOD-SPEC §2.1, S-17).
 # Owner: WP-core. Ancestor walk to the first process whose command is the Claude
-# Code binary. Start time: Linux /proc/<pid>/stat field 22 + btime (R-4); else
-# `ps -o lstart=`. Every start-time read in the helper goes through _read_start.
+# Code binary (or whose pid CLAUDE_PID names); a nearer process whose command hides the
+# binary but whose executable is it wins (a background session's worker). Start time:
+# Linux /proc/<pid>/stat field 22 + btime (R-4); else `ps -o lstart=`. Every start-time
+# read in the helper goes through _read_start.
 # Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk.
 use strict;
 use warnings;
@@ -108,6 +110,72 @@ sub _parent_and_comm {
     return ($1, $2);
 }
 
+# _exe(pid) -> the process's executable path, or undef. Linux: /proc/<pid>/exe; elsewhere
+# the first `txt` file lsof lists for it (the executable on macOS, also when argv[0] was set
+# to another name).
+sub _exe {
+    my ($pid) = @_;
+    return undef unless defined $pid && $pid =~ /^\d+$/;
+    return scalar readlink("/proc/$pid/exe") if $^O eq 'linux';
+    my $lsof = -x '/usr/sbin/lsof' ? '/usr/sbin/lsof' : (util::which('lsof') // return undef);
+    my $r = util::run([$lsof, '-a', '-p', $pid, '-d', 'txt', '-Fn'], timeout_ms => 1000, env => { LC_ALL => 'C' });
+    return undef unless $r->{exit} == 0;
+    for my $l (split /\n/, $r->{out} // '') { return substr($l, 1) if $l =~ m{^n/} }
+    return undef;
+}
+
+# Command names that are never the Claude Code binary: the walk reads no executable for them.
+my %NOT_CLAUDE = map { $_ => 1 } qw(sh bash zsh dash ash ksh mksh fish env perl sudo timeout gtimeout nice nohup);
+sub _never_claude {
+    my ($comm) = @_;
+    return 1 unless defined $comm && $comm ne '';
+    (my $b = $comm) =~ s/\s.*//s;
+    $b = util::basename($b);
+    $b =~ s/^-//;
+    return $NOT_CLAUDE{$b} ? 1 : 0;
+}
+
+# At most this many executables are read per walk (each an lsof call on macOS, ~70 ms).
+our $EXE_PROBES = 3;
+
+# _by_exe([[pid, comm]...]) -> the first pid whose executable is the Claude Code binary, or undef.
+sub _by_exe {
+    my ($hops) = @_;
+    my $n = 0;
+    for my $h (@$hops) {
+        next if _never_claude($h->[1]);
+        last if ++$n > $EXE_PROBES;
+        return $h->[0] if _is_claude(_exe($h->[0]));
+    }
+    return undef;
+}
+
+# _walk(pid) -> (claude pid, 1) or (undef, 0): from pid (the helper's parent) up at most 12
+# processes. The anchor is the first one whose command is the binary, or whose pid CLAUDE_PID
+# names (Claude Code sets it to its own pid for hooks). Probe 2026-10-27: a background session's
+# worker runs under a name that hides the binary, so the walk passed it and took its supervisor
+# (`claude daemon`), whose pid every background session then shared. So the hops below the
+# anchor are checked by their executable first, nearest first; a foreground session's helper,
+# whose parent is the anchor, reads none.
+sub _walk {
+    my ($pid) = @_;
+    my $env = (defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /^[1-9][0-9]*$/) ? 0 + $ENV{CLAUDE_PID} : 0;
+    my @below;
+    for (1 .. 12) {
+        last if !$pid || $pid <= 1;
+        my ($ppid, $comm) = _parent_and_comm($pid);
+        last unless defined $ppid;
+        if ($pid == $env || _is_claude($comm)) {
+            my $w = _by_exe(\@below);
+            return (defined $w ? 0 + $w : 0 + $pid, 1);
+        }
+        push @below, [$pid, $comm];
+        $pid = $ppid;
+    }
+    my $w = _by_exe(\@below);
+    return defined $w ? (0 + $w, 1) : (undef, 0);
+}
+
 my $CACHED;
 # claude_pid() -> {pid, lstart, found}
 sub claude_pid {
@@ -117,19 +185,10 @@ sub claude_pid {
         $START{$1} = $2;
         return $CACHED;
     }
-    my $pid = getppid();
-    my $first = $pid;
-    for (1 .. 12) {
-        last if !$pid || $pid <= 1;
-        my ($ppid, $comm) = _parent_and_comm($pid);
-        last unless defined $ppid;
-        if (_is_claude($comm)) {
-            $CACHED = { pid => 0 + $pid, lstart => start_time($pid), found => 1 };
-            return $CACHED;
-        }
-        $pid = $ppid;
-    }
-    $CACHED = { pid => 0 + $first, lstart => start_time($first), found => 0 };
+    my $first = getppid();
+    my ($pid, $found) = _walk($first);
+    $pid //= $first;
+    $CACHED = { pid => 0 + $pid, lstart => start_time($pid), found => $found };
     return $CACHED;
 }
 

@@ -1347,6 +1347,8 @@ sub invoke {
 #   sha_vectors       {}: embedded SHA-256 vs Digest::SHA and a known vector
 #   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
 #   proc_stat_lines   {file}: identity::_proc_stat over recorded Linux /proc/<pid>/stat lines (R-4)
+#   claude_pid_walk   {chains: [{id, start, env?, procs {pid: {ppid, comm, exe?}}, want, found,
+#                     exe_calls?}]}: identity::_walk over a recorded process table (no ps, no lsof)
 #   linux_start_time  {image | images, probe, mb, steps}: identity::start_time on Linux in Docker
 #                     (R-4; a subprocess: the case "needs" ["docker-image:<image>"]; images: the
 #                     first one held here, none: a note and not run)
@@ -2769,6 +2771,25 @@ sub builtin {
             push @e, "$l->{id}: ppid $got[1], want $l->{ppid}" if $got[1] != $l->{ppid};
             push @e, "$l->{id}: start ticks $got[2], want $l->{starttime} (field 22)"
                 . ($got[2] == ($l->{vsize} // -1) ? ' - that is field 23, vsize' : '') if $got[2] != $l->{starttime};
+        }
+        return @e;
+    }
+    if ($name eq 'claude_pid_walk') {
+        # BG-PID: the walk from the helper's parent to the Claude Code process, over a process
+        # table given in the case ({pid: {ppid, comm, exe}}; exe is what /proc/<pid>/exe or lsof
+        # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read.
+        return ('no chains') unless ref $a->{chains} eq 'ARRAY' && @{ $a->{chains} };
+        no warnings qw(redefine once);
+        for my $c (@{ $a->{chains} }) {
+            my %t = %{ $c->{procs} || {} };
+            my $calls = 0;
+            local *identity::_parent_and_comm = sub { my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
+            local *identity::_exe = sub { $calls++; my $p = $t{ $_[0] } or return undef; return $p->{exe} };
+            local $ENV{CLAUDE_PID} = defined $c->{env} ? $c->{env} : '';
+            my ($pid, $found) = identity::_walk($c->{start});
+            push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($c->{want} // 'null') if ($pid // 'null') ne ($c->{want} // 'null');
+            push @e, "$c->{id}: found $found, want $c->{found}" if $found != ($c->{found} ? 1 : 0);
+            push @e, "$c->{id}: $calls executable reads, want $c->{exe_calls}" if defined $c->{exe_calls} && $calls != $c->{exe_calls};
         }
         return @e;
     }
