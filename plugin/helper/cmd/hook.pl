@@ -190,6 +190,10 @@ sub on_SessionStart {
         util::write_atomic("$d/classic-alive.json",
             jsonc::encode_bytes(jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, source => $src, ts => util::iso(util::now()))) . "\n", 0600);
     }
+    # AT-RP-04: a block still pending when this session id last ended goes to its first turn
+    # (the mod delivers it). Only a resume of the same session id: /clear and a fork start
+    # under another id, and a compaction's own block is the session_compact path above.
+    eval { resumeblock::arm($d, $sid) } if $src eq 'resume';
     if ($src =~ /^(startup|resume)$/) {
         my $ev = rc::exec_version();
         my $pd = $ENV{CLAUDE_PLUGIN_DATA};

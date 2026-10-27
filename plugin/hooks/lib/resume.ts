@@ -10,7 +10,7 @@ import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
-import { escalate, helperMissing, isoLocal, log } from './log'
+import { escalate, helperMissing, isoLocal, log, vettedWatch } from './log'
 
 /**
  * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
@@ -150,6 +150,11 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   s.ctxSeen = true
   const again = await againBlock(d, sid)
   if (again !== undefined) return again
+  // AT-RP-02: once per session id in this load, a block the classic SessionStart(resume) armed.
+  if (!s.pending && s.restoreChecked !== sid) {
+    s.restoreChecked = sid
+    s.pending = await restorePending(d, sid)
+  }
   const pend = s.pending
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
   const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
@@ -260,4 +265,109 @@ export async function claimedElsewhere(d: Deps, pend: PendingResume): Promise<st
  */
 export async function logOutcome(d: Deps, sid: string, nonce: string, o: Outcome, resume: string, actor = 'main'): Promise<void> {
   await log(d, sid, 'mod_outcome', { nonce, nudged: o.nudged, continued: o.continued, halt: o.halt, resume, ...(o.handoff ?? {}) }, actor)
+  // A main block that settled is never delivered again after a restart (AT-RP-03).
+  if (actor === 'main') await settlePersisted(d, sid, nonce, resume)
+}
+
+/**
+ * Owner 2026-10-27 ("Fix in 0.1.1", VERSION-REFRESH tier 1): the pending main block also lives on
+ * disk, so a session that exits or restarts between a compaction and its next turn gets it after
+ * `claude --resume` of the same session id. The after-step writes `<watch>/<sid>/resume-pending.json`
+ * (the helper's vetted watch only, as the summary stash; pruned with the session's folder). The
+ * classic SessionStart with `source=resume` renames a pending record of its own session id to
+ * `resume-armed.json` (one process wins the rename). The first `prompt.context` of that session id
+ * in a load takes an armed record as the pending block: the usual claim, the 600 s re-measure rule
+ * and one `mod_outcome` row. Every settle (delivered, replaced, undelivered, dropped by `/clear`)
+ * rewrites the record as settled, which drops the block text. A `/clear` or a fork has another
+ * session id, so it never matches.
+ */
+export const PENDING_FILE = 'resume-pending.json'
+export const ARMED_FILE = 'resume-armed.json'
+
+/** The record a pending block is persisted as (AT-RP-01). Times in `$.clock.now()` milliseconds. */
+export type PendingRecord = {
+  v: 1
+  state: 'pending'
+  session_id: string
+  nonce: string
+  built_at: number
+  measured_at: number | null
+  load_id: string
+  args: BlockArgs
+  remeasure: string | null
+  outcome: Outcome
+  block: string
+}
+
+/** The record for a pending block (the one shape the after-step writes and a restore reads). */
+export function pendingRecord(p: PendingResume, loadId: string): PendingRecord {
+  return {
+    v: 1, state: 'pending', session_id: p.sid, nonce: p.nonce, built_at: p.builtAt, measured_at: p.measuredAt ?? null, load_id: loadId,
+    args: p.args, remeasure: p.remeasure ?? null, outcome: p.outcome, block: p.block,
+  }
+}
+
+async function recordPath(d: Deps, sid: string, file: string): Promise<string | undefined> {
+  const w = await vettedWatch(d, sid)
+  return w === undefined ? undefined : `${w}/${sid}/${file}`
+}
+
+/** Writes this pending block's record; false when there is no vetted watch or the write failed. */
+export async function persistPending(d: Deps, p: PendingResume): Promise<boolean> {
+  const path = await recordPath(d, p.sid, PENDING_FILE)
+  return path !== undefined && (await d.write(path, JSON.stringify(pendingRecord(p, d.state.loadId)) + '\n'))
+}
+
+function parseRecord(t: string | undefined): Record<string, unknown> | undefined {
+  if (t === undefined) return undefined
+  try {
+    const j = JSON.parse(t) as unknown
+    return j !== null && typeof j === 'object' && !Array.isArray(j) ? (j as Record<string, unknown>) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Rewrites a still-pending record of this nonce (pending or armed) as settled: no block text is kept. */
+export async function settlePersisted(d: Deps, sid: string, nonce: string, resume: string): Promise<void> {
+  for (const file of [PENDING_FILE, ARMED_FILE]) {
+    const path = await recordPath(d, sid, file)
+    if (path === undefined) return
+    const j = parseRecord(await d.read(path))
+    if (!j || j.state !== 'pending' || j.nonce !== nonce) continue
+    await d.write(path, JSON.stringify({ v: 1, state: 'settled', session_id: sid, nonce, resume, ts: isoLocal(await d.now(), false) }) + '\n')
+  }
+}
+
+const NONCE_RE = /^[0-9a-f]{8}$/
+
+function isArgs(a: unknown): a is BlockArgs {
+  if (a === null || typeof a !== 'object') return false
+  const o = a as Record<string, unknown>
+  return typeof o.midturn === 'boolean' && typeof o.nonok === 'boolean' && (o.savedCopy === null || typeof o.savedCopy === 'string')
+}
+
+function isOutcome(o: unknown): o is Outcome {
+  if (o === null || typeof o !== 'object') return false
+  const r = o as Record<string, unknown>
+  return typeof r.nudged === 'boolean' && typeof r.continued === 'boolean' && typeof r.halt === 'boolean'
+}
+
+/**
+ * The armed record of this session id as a pending block (AT-RP-02), or undefined: none, settled,
+ * another session's, or not of the shape `pendingRecord` writes. Its age counts from `built_at`.
+ */
+export async function restorePending(d: Deps, sid: string): Promise<PendingResume | undefined> {
+  const path = await recordPath(d, sid, ARMED_FILE)
+  if (path === undefined) return undefined
+  const j = parseRecord(await d.read(path))
+  if (!j || j.v !== 1 || j.state !== 'pending' || j.session_id !== sid) return undefined
+  const { nonce, built_at: builtAt, measured_at: measuredAt, args, remeasure, outcome, block } = j
+  if (typeof nonce !== 'string' || !NONCE_RE.test(nonce) || typeof builtAt !== 'number' || typeof block !== 'string' || block === '') return undefined
+  if (!isArgs(args) || !isOutcome(outcome) || args.nonce !== nonce) return undefined
+  return {
+    sid, nonce, block, builtAt, args, resumePref: 'prompt.context', turnSeq: d.state.turnSeq, outcome, persisted: true,
+    ...(typeof remeasure === 'string' ? { remeasure } : {}),
+    ...(typeof measuredAt === 'number' ? { measuredAt } : {}),
+  }
 }

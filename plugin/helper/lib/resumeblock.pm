@@ -78,4 +78,28 @@ sub claim {
     return ('TAKEN', $who // 'unknown');
 }
 
+# arm(sid_dir, sid) -> the armed nonce, or undef (owner 2026-10-27 "Fix in 0.1.1", AT-RP-04).
+# SessionStart with source=resume: the mod's record of a block still pending for this session
+# id (<sid_dir>/resume-pending.json, written at its compaction) becomes resume-armed.json by one
+# rename, so one process wins it. The mod's first prompt.context of this session id delivers it
+# (claim, 600 s re-measure rule, settle). Nothing is armed for a record of another session id, a
+# settled or malformed one, a symlink, or one whose nonce is claimed already. An armed record
+# that no turn took yet stays armed for the next resume.
+sub arm {
+    my ($d, $sid) = @_;
+    return undef unless defined $d && defined $sid;
+    my $f = "$d/resume-pending.json";
+    return undef if -l $f || !-f _;
+    my $raw = util::read_file($f, 1024 * 1024) // return undef;
+    my $j = eval { jsonc::decode($raw) };
+    return undef unless ref $j eq 'HASH' && ($j->{v} // 0) eq '1' && ($j->{state} // '') eq 'pending';
+    return undef unless defined $j->{session_id} && !ref $j->{session_id} && $j->{session_id} eq $sid;
+    my $nonce = $j->{nonce};
+    return undef unless !ref $nonce && nonce::valid($nonce);
+    return undef if -e "$d/resume-claimed/$nonce";
+    return undef if -l "$d/resume-armed.json";
+    rename($f, "$d/resume-armed.json") or return undef;
+    return $nonce;
+}
+
 1;

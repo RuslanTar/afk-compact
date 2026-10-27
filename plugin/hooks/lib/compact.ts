@@ -18,7 +18,7 @@ import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWat
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlockWith, claimedElsewhere, logOutcome, prodAllowed } from './resume'
+import { buildBlockWith, claimedElsewhere, logOutcome, persistPending, prodAllowed } from './resume'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -430,6 +430,9 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     ...(built.remeasure !== undefined ? { remeasure: built.remeasure } : {}),
     measuredAt: built.measuredAt,
   }
+  // AT-RP-01: on disk too, for a `claude --resume` of this session before its next turn; written
+  // before the block is pending, so a channel that settles it finds the record to settle.
+  pend.persisted = await persistPending(d, pend)
   s.pending = pend
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)
   if (!s.fourthToasted && (s.mainCompactions >= 4 || chars > 12000)) {

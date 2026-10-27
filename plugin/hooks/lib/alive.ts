@@ -103,12 +103,14 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
 }
 
 /**
- * Mod `session.end`, any reason (IC-1 D7 (i)): cancels the boundary and pre-idle timers, drops
- * the pending resume block (`mod_outcome resume: dropped:session-end`), turns off the
- * auto-continue and closes an open handoff turn, so nothing the ended session scheduled is
- * submitted into the next conversation after a `/clear`.
+ * Mod `session.end`, any reason (IC-1 D7 (i)): cancels the boundary and pre-idle timers, takes
+ * the pending resume block out of the load, turns off the auto-continue and closes an open
+ * handoff turn, so nothing the ended session scheduled is submitted into the next conversation
+ * after a `/clear`. The block is dropped (`mod_outcome resume: dropped:session-end`) on a `/clear`
+ * or when it has no record on disk; any other end keeps its record for a `claude --resume` of the
+ * same session id (AT-RP-01: no row yet, the block has not settled).
  */
-export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
+export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): Promise<void> {
   const s = d.state
   cancelBoundary(d)
   cancelIdleTimer(d)
@@ -119,7 +121,9 @@ export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
   s.handoffTurn = undefined
   const pend = s.pending
   s.pending = undefined
+  // A later `/resume` of a session id in this process looks for its armed record again.
+  s.restoreChecked = undefined
   await cancelIdle(d, endedSid)
   if (h && h.ht !== null && h.phase !== 'running') await handoffTurnClose(d, endedSid, h.ht, 'cancelled')
-  if (pend) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
+  if (pend && (reason === 'clear' || pend.persisted !== true)) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
 }

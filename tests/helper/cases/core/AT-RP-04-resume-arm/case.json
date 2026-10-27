@@ -1,0 +1,634 @@
+{
+ "id": "AT-RP-04",
+ "note": "Owner 2026-10-27 \"Fix in 0.1.1\" (resume block lost on exit after a compaction), helper half: hook SessionStart with source=resume renames <watch>/<sid>/resume-pending.json, a block the mod persisted at its compaction and has not settled, to resume-armed.json, which the mod's first prompt.context of the session id delivers (unit tests AT-RP-01..03). Only for source=resume and only a record of the same session id, pending, well formed, not a symlink and not claimed; startup, clear, fork and compact arm nothing; the helper prints nothing and writes no claim; an armed record stays armed until a turn takes it, and a newer pending record replaces it",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "a block still pending for this session id",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "$SID",
+      "nonce": "ab0c0001",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0001",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      },
+      "block": "BLOCK ab0c0001"
+     }
+    }
+   ]
+  },
+  {
+   "name": "SessionStart startup arms nothing",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0001"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "watch_error"
+     }
+    ]
+   }
+  },
+  {
+   "name": "SessionStart clear arms nothing",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "clear"
+   },
+   "expect": {
+    "exit": 0,
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0001"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "watch_error"
+     }
+    ]
+   }
+  },
+  {
+   "name": "SessionStart fork arms nothing",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "fork"
+   },
+   "expect": {
+    "exit": 0,
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0001"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "watch_error"
+     }
+    ]
+   }
+  },
+  {
+   "name": "SessionStart compact arms nothing",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0001"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "watch_error"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a resume of another session id arms nothing here",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "22222222-3333-4444-8555-666666666666",
+    "transcript_path": "$TMP/proj/22222222-3333-4444-8555-666666666666.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-armed.json",
+     "$WATCH/22222222-3333-4444-8555-666666666666/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "a symlinked record is not armed",
+   "setup": [
+    {
+     "write": "$TMP/elsewhere.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "22222222-3333-4444-8555-666666666666",
+      "nonce": "ab0c0007",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0007",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      },
+      "block": "BLOCK ab0c0001"
+     }
+    },
+    {
+     "mkdir": "$WATCH/22222222-3333-4444-8555-666666666666"
+    },
+    {
+     "symlink": "$WATCH/22222222-3333-4444-8555-666666666666/resume-pending.json",
+     "to": "$TMP/elsewhere.json"
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "22222222-3333-4444-8555-666666666666",
+    "transcript_path": "$TMP/proj/22222222-3333-4444-8555-666666666666.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/22222222-3333-4444-8555-666666666666/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$TMP/elsewhere.json",
+      "json": {
+       "state": "pending"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a record naming another session id is not armed",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "22222222-3333-4444-8555-666666666666",
+      "nonce": "ab0c0002",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0002",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      },
+      "block": "BLOCK ab0c0002"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "a settled record is not armed",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "settled",
+      "session_id": "$SID",
+      "nonce": "ab0c0003",
+      "resume": "delivered:prompt.context",
+      "ts": "2026-10-21T14:05:00+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "a record whose nonce is claimed is not armed",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "$SID",
+      "nonce": "ab0c0004",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0004",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      },
+      "block": "BLOCK ab0c0004"
+     }
+    },
+    {
+     "write": "$WATCH/$SID/resume-claimed/ab0c0004",
+     "text": "prompt.context\n"
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "a malformed record is not armed",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "text": "{\"v\":1,\"state\":\"pending\",\"session_id\":\"$SID\",\"nonce\":\"AB0C\"}\n"
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-armed.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-pending.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "SessionStart resume of the same session id arms the pending record; the helper prints nothing (the mod delivers)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "$SID",
+      "nonce": "ab0c0005",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0005",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      },
+      "block": "BLOCK ab0c0005"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-pending.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "state": "pending",
+       "session_id": "$SID",
+       "nonce": "ab0c0005",
+       "block": "BLOCK ab0c0005"
+      }
+     },
+     {
+      "path": "$WATCH/$SID/resume-claimed/ab0c0005",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "session",
+      "fields": {
+       "source": "resume"
+      }
+     }
+    ],
+    "rows_absent": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "watch_error"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a second resume before any turn keeps the armed record",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-pending.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0005"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a newer pending record replaces the armed one at the next resume",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/resume-pending.json",
+     "json": {
+      "v": 1,
+      "state": "pending",
+      "session_id": "$SID",
+      "nonce": "ab0c0006",
+      "built_at": 1792580700000,
+      "measured_at": 1792580700000,
+      "load_id": "0a1b2c3d",
+      "args": {
+       "nonce": "ab0c0006",
+       "midturn": false,
+       "nonok": false,
+       "savedCopy": null,
+       "notSaved": "summary-not-found",
+       "prodAllow": false
+      },
+      "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked",
+      "outcome": {
+       "nudged": false,
+       "continued": false,
+       "halt": false
+      },
+      "block": "BLOCK ab0c0006"
+     }
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$WATCH/$SID/resume-pending.json"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/resume-armed.json",
+      "json": {
+       "state": "pending",
+       "nonce": "ab0c0006"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

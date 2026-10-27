@@ -175,6 +175,8 @@ export type LoadState = {
   selfNonces: Set<string>
   /** The pending main resume block for prompt.context or the continue text. */
   pending: PendingResume | undefined
+  /** The session id whose armed resume record this load has looked for (AT-RP-02); reset at session.end. */
+  restoreChecked: string | undefined
   mainCompactions: number
   fourthToasted: boolean
   selfCallLoggedFor: Set<string>
@@ -268,6 +270,8 @@ export type PendingResume = {
   turnSeq: number
   /** What the mod decided for this compaction, logged as `mod_outcome` once the block settles. */
   outcome: Outcome
+  /** Its record is on disk (`resume-pending.json`, AT-RP-01): a session end other than `/clear` keeps it for a resume. */
+  persisted?: boolean
 }
 
 /**
@@ -316,6 +320,7 @@ export function newState(loadId: string): LoadState {
     ctxSeen: false,
     selfNonces: new Set(),
     pending: undefined,
+    restoreChecked: undefined,
     mainCompactions: 0,
     fourthToasted: false,
     selfCallLoggedFor: new Set(),

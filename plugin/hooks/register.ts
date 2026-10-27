@@ -23,10 +23,11 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // IC-1 D7: a `/clear` (or any end) cancels every timer that would submit into the next
-  // conversation, drops the pending block and closes an open handoff turn.
+  // conversation, takes the pending block out of the load (dropped on a `/clear`, else kept on
+  // disk for a resume of the same session id) and closes an open handoff turn.
   on('session.end', async ($, e, next) => {
     cancelIdleTimer(realDeps($, options, state))
-    await onSessionEnd(realDeps($, options, state), e.sessionId)
+    await onSessionEnd(realDeps($, options, state), e.sessionId, e.reason)
     return next(e)
   }).catch(($, e, next) => next(e))
 
