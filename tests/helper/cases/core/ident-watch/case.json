@@ -20,7 +20,9 @@
      "pid",
      "pid_lstart",
      "execpath_version",
-     "watch"
+     "watch",
+     "restart",
+     "restart_reports"
     ],
     "json": {
      "watch": "$TMP/r/.watch"

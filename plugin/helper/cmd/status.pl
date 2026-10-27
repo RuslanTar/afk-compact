@@ -17,6 +17,10 @@
 # 2026-10-27 (headless probe): `automatic compaction: not available here …` and `pre-idle
 # handoff turn: off (headless session)` for a headless load, from the mod's `headless` row;
 # `automatic compaction: by /compact …` while its `/compact` path is on (`compact: command`).
+# 2026-10-27 (SESSION-RESTART §6.1): the `restart on update` lines after the automatic relaunch
+# lines: the setting and the route (the launcher's install line when a terminal session was not
+# started through it), the drift, this session's last outcome, and store-wide the background
+# restarts that failed after the kill and the launcher's refusals, each with its resume command.
 use strict;
 use warnings;
 use utf8;
@@ -71,7 +75,7 @@ sub run {
         push @out, sprintf('thresholds: settings only (target %s · soft max %s · min_window %s)',
                            rc::val('compact_target_tokens'), rc::val('compact_soft_max_tokens'), min_window());
         push @out, smoke_lines(), allow_lines($opt->{cwd}), user_run_lines(undef);
-        push @out, store_lines($opt->{cwd}, undef);
+        push @out, store_lines($opt->{cwd}, undef, undef, undef, undef, []);
         push @out, watch_lines(undef);
         args::out(@out);
         return 0;
@@ -149,7 +153,7 @@ sub run {
     push @out, $pol ? sprintf('policy: mods managed only %s · hooks managed only %s',
                               ($pol->{mods_managed_only} ? 'yes' : 'no'), ($pol->{hooks_managed_only} ? 'yes' : 'no'))
                     : 'policy: no mod row yet';
-    push @out, store_lines($opt->{cwd}, $d, $classic, $headless);
+    push @out, store_lines($opt->{cwd}, $d, $classic, $headless, $sid, $mod);
 
     my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
     push @out, 'last hook row: ' . ($last_row // 'none');
@@ -178,7 +182,7 @@ sub smoke_lines {
 # The U-06 pattern warnings read this session's hook rows (classic), so without a session id
 # there are none to show.
 sub store_lines {
-    my ($cwd, $d, $classic, $headless) = @_;
+    my ($cwd, $d, $classic, $headless, $sid, $mod) = @_;
     my @out;
     for my $key (qw(handoff_root log_dir disposable_root)) {
         push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
@@ -186,6 +190,7 @@ sub store_lines {
     }
     push @out, mode_lines($cwd);
     push @out, relaunch_lines($d);
+    push @out, restart_lines($sid, $mod || []);
     push @out, prod_lines();
     push @out, protected_lines();
     push @out, regex_lines($classic);
@@ -263,6 +268,85 @@ sub relaunch_lines {
         push @l, '  relaunch unmatched: ' . ($p->{task_id} // '-') . ' (no recorded job ran the bumped command)';
     }
     return @l;
+}
+
+# ---------------------------------------------------------------- restart on update
+# SESSION-RESTART §6.1: read only; `claude --version` (5 s) only while the setting is on.
+my %RESTART_LAST = (
+    'background-work' => 'background tasks would be lost', crons => 'session crons would be lost', draft => 'a draft in the prompt box',
+    present => 'someone at the prompt', remote => 'a remote client', attached => 'a client attached', 'session-rules' => 'rules set for this session',
+    'session-dirs' => 'folders added in this session', worktree => 'in a worktree', 'mode-changed' => 'the permission mode changed',
+    'no-launcher' => 'not started through the launcher', 'fg-not-shipped' => 'terminal restarts not enabled in this version yet',
+    'on-hold' => 'that release is on hold', 'bypass-left' => 'a permission bypass would come back',
+);
+sub _hm { my ($ms) = @_; return defined $ms && $ms =~ /\A[0-9]+\z/ ? util::hhmm(int($ms / 1000)) : '--:--' }
+sub restart_lines {
+    my ($sid, $mod) = @_;
+    my @l;
+    my $brand = ctx::brand();
+    my $set = rc::val('restart_on_update') // 'off';
+    my $src = rc::settings()->{source}{restart_on_update} // 'default';
+    if ($^O ne 'darwin' && $^O ne 'linux') {
+        push @l, 'restart on update: not available on Windows yet';
+    } elsif ($set eq 'off') {
+        push @l, 'restart on update: off' . ($src eq 'default' ? ' (default) · set restart_on_update in ~/.claude/settings.json to turn it on' : '');
+    } elsif ($set eq 'shadow') {
+        push @l, 'restart on update: shadow (logs would-restart, restarts nothing)';
+    } else {
+        my $route;
+        if (($ENV{CLAUDE_CODE_SESSION_KIND} // '') eq 'bg') {
+            $route = 'background session (claude respawn)';
+        } else {
+            my $launch = $ENV{ restart::launch_env_name() };
+            my $lr = (defined $launch && $launch ne '' && defined $sid) ? restart::launcher($launch, $sid) : undef;
+            if ($lr && $lr->{ok}) {
+                $route = "launcher $brand-claude (proto $restart::PROTO, pid $lr->{pid})"
+                         . (restart::fg_route() ? '' : ' · terminal restarts are not enabled in this version yet');
+            } else {
+                my $path = util::text(ctx::root()) . "/scripts/$brand-claude";
+                push @l, 'restart on update: on · this session was not started through the launcher; foreground sessions need it:',
+                         qq(  install: "$path" --install), "  then start sessions with: $brand-claude [your claude arguments]";
+            }
+        }
+        push @l, "restart on update: on · $route · " . _drift_text() if defined $route;
+    }
+    my ($last) = reverse grep { ($_->{ev} // '') =~ /\Arefresh_(done|skipped|failed|would|start)\z/ } @$mod;
+    if ($last) {
+        my $t = util::hhmm(util::parse_iso($last->{ts} // '') // util::now());
+        my ($ev, $why) = ($last->{ev}, $last->{why} // 'other');
+        my $ft = join(' → ', grep { defined } $last->{from}, $last->{to});
+        if ($ev eq 'refresh_done') { push @l, "  last: restarted $ft at $t (same session)" }
+        elsif ($ev eq 'refresh_would') { push @l, "  last: would restart $ft ($t)" }
+        elsif ($ev eq 'refresh_start') { push @l, "  last: restarting on $last->{to} ($t)" }
+        elsif ($ev eq 'refresh_skipped') {
+            my $w = $RESTART_LAST{$why} // $why;
+            $w .= ' (' . join(', ', @{ $last->{types} }) . ')' if ref $last->{types} eq 'ARRAY' && @{ $last->{types} };
+            push @l, "  last: waiting, $w (as of $t)";
+        } else {
+            my $retry = (grep { $_ eq $why } qw(exit-not-run exit-refused respawn-refused not-respawned)) ? '; one more try at the next compaction' : '';
+            push @l, "  last: failed, $why ($t)$retry";
+        }
+    }
+    my $now = restart::now_ms();
+    for my $f (restart::failed_bg(rc::watch(), $now, 1)) {
+        push @l, "  restart of background session $f->{short} failed ($f->{code}, " . _hm($f->{at}) . "). Start it again with: claude respawn $f->{short}   or look at it with: claude attach $f->{short}";
+    }
+    for my $r (restart::refusals()) {
+        next unless defined $r->{sid} && $now - $r->{at} * 1000 < $restart::REPORT_MS;
+        push @l, '  launcher did not restart session ' . substr($r->{sid}, 0, 8) . " ($r->{reason}, " . util::hhmm($r->{at}) . "). Resume with: claude --resume $r->{sid}";
+    }
+    return @l;
+}
+
+# _drift_text() -> `Claude Code X running, Y installed → restarts at the next compaction`, or
+# `up to date (X)`, or `installed version unknown`.
+sub _drift_text {
+    my $run = rc::exec_version() // rc::cc_version();
+    my $bin = restart::claude_bin();
+    my $r = defined $bin ? util::run([$bin, '--version'], timeout_ms => 5000) : { exit => -1, out => '' };
+    my ($inst) = ($r->{exit} == 0 ? $r->{out} : '') =~ /\A\s*([0-9]+\.[0-9]+\.[0-9]+)(?:\s|\z)/;
+    return 'installed version unknown' unless defined $inst && restart::is_ver($run // '');
+    return restart::vcmp($inst, $run) > 0 ? "Claude Code $run running, $inst installed → restarts at the next compaction" : "up to date ($run)";
 }
 
 # ---------------------------------------------------------------- watcher (W-BETA A)

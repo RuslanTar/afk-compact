@@ -62,6 +62,14 @@ our @BUILTIN_TOOLS = qw(Agent AskUserQuestion Bash BashOutput CronCreate CronDel
 my %BUILTIN_TOOL = map { $_ => 1 } @BUILTIN_TOOLS;
 sub builtin_tool { my ($v) = @_; return defined $v && !ref $v && $BUILTIN_TOOL{$v} ? 1 : 0 }
 my @SEVERITY = qw(critical warn info);
+# SESSION-RESTART §4.1: a gate's or a failure's reason, a class word or `launcher-invalid:<word>`
+my @RESTART_WHY = qw(off headless no-launcher job-unknown note-pattern bypass-not-available launch-file launcher-cap
+                     bypass-left attached unsupported-os no-drift version-unknown on-hold busy aborted asks-user halted
+                     agents background-work crons draft present remote session-rules session-dirs worktree mode-unknown
+                     mode-changed block-not-saved transcript tried cap cooldown fg-not-shipped no-watch helper-failed
+                     arm-failed stale-exit exit-not-run exit-refused respawn-refused respawn-failed not-respawned
+                     same-version not-confirmed launcher-refused);
+my $RESTART_WHY = [pre => [@RESTART_WHY], [qw(launcher-invalid)]];
 
 my %ENVELOPE = (
     v => 'int', ts => 'ts', ev => 'word', sid => 'hash', actor => 'actor', writer => [enum => @WRITER],
@@ -132,7 +140,7 @@ our %SCHEMA = (
     resume_inject => { nonce => 'nonce', channel => [enum => @CHANNEL], bytes => 'int', nonok_note => 'bool' },
     nudge => { tokens => 'num', turn_seq => 'int', askq_open => 'bool', halt => 'bool', active => 'bool', last_cycle => 'bool' },
     continue => { result => [pre => [qw(submitted)], [qw(skipped halt)]], continues_last_hour => 'int', halt => 'word',
-                  skipped => 'word' },
+                  skipped => 'word', after => [enum => qw(restart)] },
     # 2026-10-27 (headless probe): the rejection's class; Claude Code's own error text stays local
     compact_rejected => { nonce => 'nonce', attempt => 'int', error_class => [enum => qw(headless turn-running other)], error => 'drop' },
     # a headless load (`claude -p`, the Agent SDK, an app or editor built on it): no nudge in it;
@@ -313,6 +321,13 @@ our %SCHEMA = (
     verdict => { nonce => 'nonce', verdict => [enum => @VERDICT] },
     verdict_mismatch => { nonce => 'nonce', postcompact => [enum => @VERDICT], after_step => [enum => @VERDICT] },
     version_change => { from => 'version', to => 'version' },
+    # SESSION-RESTART §6.3: restart on update, content-free (no argv, model, path or env value)
+    version_drift => { running => 'version', installed => 'version' },
+    refresh_skipped => { why => $RESTART_WHY, route => [enum => qw(fg bg)], to => 'version', types => [list => 'word'] },
+    refresh_would => { route => [enum => qw(fg bg)], from => 'version', to => 'version', continue => 'bool' },
+    refresh_start => { route => [enum => qw(fg bg)], from => 'version', to => 'version', continue => 'bool' },
+    refresh_done => { route => [enum => qw(fg bg supervisor)], from => 'version', to => 'version', gap_s => 'num' },
+    refresh_failed => { route => [enum => qw(fg bg)], why => $RESTART_WHY, to => 'version', code => 'word' },
     version_hint => { from => 'version', to => 'version' },
     warn_quota => { bucket => 'hash', mb => 'num', quota_mb => 'num' },
     watch_prune => { days => 'int', files => 'int', bytes => 'int', sessions => 'int', kept => 'int' },

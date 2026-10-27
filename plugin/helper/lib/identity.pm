@@ -97,8 +97,21 @@ sub lstart_epoch {
     return POSIX::mktime($5, $4, $3, $2, $mon{$1} - 1, $6 - 1900, 0, 0, -1);
 }
 
+# Test mode: STORE_TEST_PROC=<file> holds a fake process table, one `pid ppid command` line per
+# process; _parent_and_comm reads it instead of /proc or ps (the restart launcher's ancestor
+# check, SESSION-RESTART G3, helper cases AT-RS-21 and AT-RS-29).
+sub _fake_proc {
+    my ($pid) = @_;
+    my $raw = util::read_file($ENV{STORE_TEST_PROC}) // return;
+    for my $l (split /\n/, $raw) {
+        return ($2, $3) if $l =~ /^\s*(\d+)\s+(\d+)\s+(.*?)\s*$/ && $1 == $pid;
+    }
+    return;
+}
+
 sub _parent_and_comm {
     my ($pid) = @_;
+    return _fake_proc($pid) if util::test_mode() && defined $ENV{STORE_TEST_PROC} && $ENV{STORE_TEST_PROC} ne '';
     if ($^O eq 'linux' && -r "/proc/$pid/stat") {
         my ($comm, $ppid) = _proc_stat($pid);
         my $exe = readlink("/proc/$pid/exe");
@@ -214,6 +227,25 @@ sub alive {
     my $now = start_time($pid);
     return 0 unless defined $now;
     return $now eq $lstart ? 1 : 0;
+}
+
+# launcher_above(pid, launcher, max) -> 'ok', 'nested' or 'not-ancestor' (SESSION-RESTART G3):
+# the walk from pid's parent up at most max processes reaches the launcher pid with no
+# process whose command is the Claude Code binary between them. A wrapper (teamclaude, node, a
+# shell) between them is fine; another claude there means pid is a nested session.
+sub launcher_above {
+    my ($pid, $launcher, $max) = @_;
+    return 'not-ancestor' unless defined $pid && $pid =~ /^\d+$/ && defined $launcher && $launcher =~ /^\d+$/;
+    my ($cur) = _parent_and_comm($pid);
+    for (1 .. ($max // 8)) {
+        last unless defined $cur;
+        return 'ok' if $cur == $launcher;
+        last if $cur <= 1;
+        my ($ppid, $comm) = _parent_and_comm($cur);
+        return 'nested' if _is_claude($comm);
+        $cur = $ppid;
+    }
+    return 'not-ancestor';
 }
 
 sub host { my @u = POSIX::uname(); return $u[1] // 'unknown' }

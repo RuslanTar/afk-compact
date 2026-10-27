@@ -58,6 +58,8 @@ plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,clai
 plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
 # The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-MEAS/P-DH-SAVE): two read/save commands beside lib/trial.pm.
 plugin/helper/cmd/{trial-measure,trial-save}.*	core
+# Restart on update (SESSION-RESTART §8.1, lane RS-A): the helper's restart command.
+plugin/helper/cmd/restart.*	core
 plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt,risk}.*	skills
 plugin/helper/cmd/{wait,project}.*	skills
 plugin/helper/cmd/{watch,report}.*	watch
