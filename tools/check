@@ -2,7 +2,9 @@
 """tools/check: run one phase's exit checks (BUILD-PLAN §4) in order; stop at the first failure.
 
 Usage: tools/check PHASE [--names FILE] [--no-drill]
-  PHASE    phase0       X-validate (skeleton), X-test, X-types, X-gen, X-assemble, X-gates,
+  PHASE    phase0       X-validate (Claude Code's `claude plugin validate plugin --strict`, which
+                        compiles the hooks module under the installed Claude Code's module
+                        rules, then the skeleton), X-test, X-types, X-gen, X-assemble, X-gates,
                         X-name, X-tools, BT-02 rename drill
            integration  the same with every skill required, plus X-variants (the E-1 H11 builds
                         skills-only and triggers-off, each validated) and X-H (every helper case:
@@ -45,7 +47,9 @@ launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP
 (owners-check), a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
 repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), an X-H runner
-that dies after a KNOWN_RED case (CR-F42), a `.planning/` note in the index or in a commit
+that dies after a KNOWN_RED case (CR-F42), a hooks module that breaks a Claude Code module rule
+(X-validate: `$` passed to a function not declared at the top of register.ts, the rule of
+Claude Code 2.1.312; root call 2026-10-27 23:34), a `.planning/` note in the index or in a commit
 (work home xxxxxxxx-36: the planning gate fails the build) and the pre-rename name outside its
 one FORMER_NAMES line (rename order xxxxxxxx-32). The copies never hold `.planning/`.
 
@@ -59,7 +63,7 @@ repo's own tree unchanged.
 
 Environment: CC_TYPES_DIR (tools/typecheck), NODE or node on PATH, `claude` on PATH.
 """
-import importlib.machinery, importlib.util, json, os, re, shutil, subprocess, sys
+import contextlib, importlib.machinery, importlib.util, io, json, os, re, shutil, subprocess, sys
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -114,11 +118,37 @@ def brand(root=REPO):
         return json.load(f)
 
 
+def validate_errors(rep):
+    """The errors of a `claude plugin validate --json` report, as (where, message) pairs: the
+    manifest's, and each content file's (the hooks module's compile and module rules among them)."""
+    out = []
+    for part in [rep.get("manifest") or {}] + list(rep.get("contents") or []):
+        for e in part.get("errors") or []:
+            where = os.path.basename(part.get("file") or "?") + (" " + e["path"] if e.get("path") else "")
+            out.append((where, str(e.get("message", ""))))
+    return out
+
+
 def x_validate(plugin_dir, root_dir, name, skills_required):
-    r = run(["claude", "plugin", "validate", plugin_dir, "--strict", "--json"], "X-validate plugin", capture=True)
-    rep = json.loads(r.stdout)
-    if not rep.get("success"):
-        raise Fail("X-validate: success is false")
+    """Claude Code's own `claude plugin validate --strict` first: it compiles the hooks module and
+    applies the module rules of the installed Claude Code (2.1.312 added one: `$` may go only to a
+    function declared at the top of the module, or one it imports from its own files), so a new
+    rule fails here, offline, before a session refuses to load the plugin (root call 2026-10-27
+    23:34; the X-tools probe `module-rule` plants such a fault). Then the plugin's own layout."""
+    argv = ["claude", "plugin", "validate", plugin_dir, "--strict", "--json"]
+    print("$ " + " ".join(argv), flush=True)
+    r = subprocess.run(argv, capture_output=True, text=True)
+    try:
+        rep = json.loads(r.stdout)
+    except ValueError:
+        sys.stdout.write((r.stdout or "")[-4000:] + (r.stderr or "")[-2000:])
+        raise Fail("X-validate plugin: exit {}, no JSON report".format(r.returncode))
+    errors = validate_errors(rep) if isinstance(rep, dict) else []
+    for where, msg in errors:
+        print("X-validate error {}: {}".format(where, msg))
+    if r.returncode != 0 or not isinstance(rep, dict) or not rep.get("success"):
+        raise Fail("X-validate plugin: exit {}, {} error(s), success is {}".format(
+            r.returncode, len(errors), rep.get("success") if isinstance(rep, dict) else None))
     hooks = [c for c in rep.get("contents", []) if c.get("type") == "hooks"]
     if len(hooks) != 1 or not any(n.startswith("./register.ts hooks:") for n in hooks[0].get("notes", [])):
         raise Fail("X-validate: the report does not name one hooks module (./register.ts)")
@@ -788,6 +818,23 @@ def probes(name):
     def xh_die(d):
         write_text(os.path.join(d, "die"), "")
 
+    def validate_copy(d):
+        """X-validate on the copy, as every phase runs it first (Claude Code's own validator)."""
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                x_validate(os.path.join(d, "plugin"), d, name, ["handoff", "resume"])
+            return 0, buf.getvalue()
+        except Fail as e:
+            return 1, buf.getvalue() + "X-validate REFUSED: {}\n".format(e)
+
+    def module_rule(d):
+        """Root call 2026-10-27 23:34: a `$` handed to a function that is not declared at the top
+        of the module, the rule Claude Code 2.1.312 added (a probe witness tripped it that night).
+        Should a later Claude Code drop this rule, the probe fails and wants a new planted fault."""
+        edit(d, "plugin/hooks/register.ts", "    const r = await next(e)\n",
+             "    const r = await next(e)\n    const locate = (x: unknown) => x\n    locate($)\n")
+
     readme = r"plugin/README\.md:\d+: "
     v, pinned = pinned_claude()
     canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
@@ -990,6 +1037,8 @@ def probes(name):
          [r"^VARIANT REFUSED: build: --variant: 1 paths differ from HEAD: plugin/helper/lib/foo\.pm\.orig"], git_repo),
         ("xh-truncated", "CR-F42", xh_truncated, xh_die,
          [r"^X-H REFUSED: X-H: exit 255; the runner did not finish"], None),
+        ("module-rule", "X-validate (Claude Code module rules)", validate_copy, module_rule,
+         [r"^X-validate error hooks\.json \S*register\.ts: .*register\.ts", r"^X-validate REFUSED: X-validate plugin: exit 1, [1-9]"], None),
         ("planning", "xxxxxxxx-36", ["tools/gates", "plugin", "--names", os.devnull, "--brand", name, "--only", "planning"],
          planning_track,
          [r"^GATE planning plugin/\.planning/nested\.md: xxxxxxxx-36 tracked",
