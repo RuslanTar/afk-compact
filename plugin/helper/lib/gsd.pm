@@ -42,33 +42,48 @@ package gsd;
 # the model invokes through the Skill tool (or the user stacks after it in the same message) while
 # the driver is active, with no human prompt since the driver's last loop work, is that driver's
 # own step (gsd-autonomous or gsd-manager running gsd-execute-phase), never a new driver, unless the
-# driver is a listed loop that runs no other loop (%LEAF). The same loop invoked again, a loop the
-# user types, or one invoked after a human prompt takes over. A human prompt is a user row a person
-# wrote (not a tool result, a task or teammate notification, an interruption mark, a stacked
-# command, a typed Claude Code command, /gsd-pause-work or one of this plugin's skills; nor a prompt
-# this plugin's skill answers right after it). Loop work is the driver's
-# own (re)invocation, a step it runs, a GSD work command or a gsd-tools run that changes planning
-# state or a state-file write for its workstream (an Agent, Task or Workflow spawn only while no
-# human prompt waits); never what a skill or command started after a human prompt does. Its
-# lifecycle, read in transcript order:
+# driver is a listed loop that runs no other loop (%LEAF). After a human prompt, or while the driver
+# is only a hint, a GSD loop the model invokes for the driver's workstream (or naming none) is still
+# that driver's step, and the driver stays what it was (a prompt between makes it at most a hint,
+# never its step Active). The same loop invoked again, a loop the user types, or another loop
+# invoked after a human prompt (a superpowers loop, a GSD loop for another workstream) takes over.
+# A human prompt is a user row a person wrote (not a tool result, a task or teammate notification,
+# an interruption mark, a stacked command, a typed Claude Code command, /gsd-pause-work, one of
+# this plugin's skills or this plugin's own submitted note; nor a prompt this plugin's skill answers
+# right after it). Loop work is the driver's own (re)invocation, a step it runs, a GSD work command
+# or a gsd-tools run that changes planning state or a state-file write for its workstream (an
+# Agent, Task or Workflow spawn only while no human prompt waits); never what a skill or command
+# started after a human prompt does. Its lifecycle, read in transcript order:
 #   - `/gsd-pause-work` (of the driver's workstream, or naming none) pauses it once the pause's
 #     own HANDOFF.json or .continue-here file is written (an Edit or Write, a Bash redirect or tee
-#     into one, a commit naming one); before that it is ambiguous (a pause asked "when finished").
-#     A loop that pauses itself without the command (the session writes those files itself: an
-#     Edit or Write, a redirect or tee, a `git add` or commit naming one outside quoted text) is
-#     paused at once. Loop work for it after the pause (a GSD work command, or a gsd-tools run for
-#     that workstream that changes state other than a commit; not a state-file write, as the pause
-#     writes STATE.md too) makes it again what it was before the pause (active, or ambiguous);
-#     before the files are written a read or a status command does too. After the files, only
-#     reads, status commands or an Agent, Task or Workflow spawn leave it ambiguous;
+#     into one, a commit naming one; never a `git rm`, `rm` or `mv` of one); before that it is
+#     ambiguous (a pause asked "when finished"). A loop that pauses itself without the command
+#     creates one of those files (a Write, a `>` redirect or a tee into one; not an Edit or an
+#     append, nor a commit, which a routine checkpoint or a resume consuming the file also makes)
+#     as the last act of its turn: until that turn ends with nothing running it is ambiguous, and
+#     any other work in between (a Bash command that names no pause file or STATE.md, a spawn, a
+#     message, an MCP call, a skill, another file written) cancels it. Loop work for a paused loop
+#     (a GSD work command, or a gsd-tools run for that workstream that changes state other than a
+#     commit; not a state-file write after /gsd-pause-work, as the pause writes STATE.md too) makes
+#     it again what it was before the pause (active, or ambiguous); before the files are written a
+#     read or a status command does too, and after a loop paused itself, any work before the next
+#     human prompt or a state-file write. After the files, only reads, status commands or an Agent,
+#     Task or Workflow spawn leave it ambiguous;
 #   - it has ended after a finishing skill (%FINISH), a GSD work command for another workstream, or,
 #     for a single-phase loop (%STEP), a GSD work command the user typed;
 #   - it is ambiguous after a GSD status command or a gsd-tools run for another workstream, a GSD
 #     work command typed during a multi-phase loop, a GSD command the model invoked after a
 #     single-phase loop (its own step hook or the session moving on), a `phase.complete` run after a
 #     single-phase loop (its own completion), a human prompt with no loop work after it (the loop
-#     finished, stopped or was set aside; $IDLE_PROMPTS), and while it was invoked with arguments
-#     that cannot be shown, none of them kept for its re-enter command, and no GSD work of its
+#     finished, stopped or was set aside; $IDLE_PROMPTS), a turn end (an assistant row with stop
+#     reason end_turn) with nothing running and no loop work after it (the loop's final report, a
+#     stop, or a wait for the user; an Agent or Workflow Claude Code launched in the background
+#     runs until a task notification names its tool call or the agent hands back, a teammate until
+#     its idle notification, and a SendMessage to either sets it running again; a Bash command run
+#     in the background until a task notification names it, if it started after the loop's last
+#     work (a server started before it does not count); never the turn
+#     this plugin's checkpoint nudge asked to close), and while it was invoked with arguments that
+#     cannot be shown, none of them kept for its re-enter command, and no GSD work of its
 #     workstream followed.
 # Only an active driver gets an `Active driver:` line (the resume protocol's [driver] re-entry keys
 # on it, and only that line is ever run); a paused one gets `Paused driver:` (re-enter in a new
@@ -88,7 +103,8 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 5;
+our $CACHE_V = 6;
+our $BG_KEEP = 32;                    # newest background spawns kept while no notification names them
 our $IDLE_PROMPTS = 1;                # human prompts with no loop work after them: an active driver is
                                       # only a `Was driving` hint (R2: it may have finished)
 our %DRIVERS = map { $_ => 1 } qw(gsd-autonomous gsd-execute-phase gsd-manager
@@ -304,17 +320,27 @@ sub _wsn { my ($w) = @_; return undef unless defined $w; $w =~ s/\.+\z//; return
 # followed it, pause => {seq, ts, done => its files were written, was => [mode, why] before it},
 # after => other work followed the pause, why => why it is a hint, idle => human prompts since its
 # last loop work, wts => that work's time, other => a skill or command started after the newest
-# human prompt does what follows, plast => the seq of that prompt}.
+# human prompt does what follows, plast => the seq of that prompt, tend => the time its turn ended
+# with nothing running after its last loop work, sp => {seq, ts}: it created a pause file and its
+# turn has not ended yet}. pause{self}: it paused itself (no /gsd-pause-work); pause{prompted}: a
+# human prompt came after that pause.
 sub _start {
     my ($st, $e) = @_;
     my $D = $st->{drv};
-    # R1: a loop the model invokes (or the user stacked after it in the same message) while the
-    # outer driver is active, with no human prompt since that driver's last loop work, is that
-    # driver's own step, unless the driver runs no other loop.
-    if ($D && $D->{mode} eq 'active' && $D->{e}{name} ne $e->{name} && ($e->{via} ne 'typed' || $e->{stacked})
-        && !$LEAF{ $D->{e}{name} } && !$D->{idle} && !$D->{other}) {
-        _touch($D, $e->{ts});
-        return;
+    if ($D && $D->{e}{name} ne $e->{name} && ($e->{via} ne 'typed' || $e->{stacked}) && !$LEAF{ $D->{e}{name} }
+        && ($D->{mode} eq 'active' || $D->{mode} eq 'hint')) {
+        # R1: a loop the model invokes (or the user stacked after it in the same message) while the
+        # outer driver is active, with no human prompt since that driver's last loop work, is that
+        # driver's own step (loop work), unless the driver runs no other loop.
+        if ($D->{mode} eq 'active' && !$D->{idle} && !$D->{other}) {
+            _touch($D, $e->{ts});
+            return;
+        }
+        # R1 after a prompt, or while the driver is a hint: a GSD loop for the driver's workstream
+        # (or naming none) is still its step (gsd-manager's typed choice, then its gsd-execute-phase),
+        # and the driver stays what it was, at most a hint; never the step as the driver.
+        my $ws = _wsn($e->{ws});
+        return if $e->{name} =~ /\Agsd-/ && (!defined $ws || !defined $D->{ws} || $ws eq $D->{ws});
     }
     my $ws = _wsn($e->{ws});
     $ws //= $D->{ws} if $D && $D->{e}{name} eq $e->{name};
@@ -328,7 +354,16 @@ sub _touch {
     my ($D, $ts) = @_;
     $D->{idle} = 0;
     $D->{wts} = $ts if defined $ts;
-    delete $D->{plast};
+    delete @$D{qw(plast tend)};
+}
+
+# A pause is over: the driver is again what it was before it.
+sub _unpause {
+    my ($D) = @_;
+    my ($m, $w) = @{ $D->{pause}{was} || ['active'] };
+    $D->{mode} = $m // 'active';
+    if (defined $w) { $D->{why} = $w } else { delete $D->{why} }
+    delete @$D{qw(pause after)};
 }
 
 # Loop work of the driver (read: it only read planning state; mine: no skill or command started
@@ -338,13 +373,64 @@ sub _work {
     my ($D, $read, $ts, $mine) = @_;
     if ($D->{mode} eq 'paused') {
         if ($read && $D->{pause}{done}) { $D->{after} = 1; return }
-        my ($m, $w) = @{ $D->{pause}{was} || ['active'] };
-        $D->{mode} = $m // 'active';
-        if (defined $w) { $D->{why} = $w } else { delete $D->{why} }
-        delete @$D{qw(pause after)};
+        _unpause($D);
     }
     $D->{work} = 1;
     _touch($D, $ts) if $mine && !$read && !$D->{other};
+}
+
+# Tools that do no work of their own (reads, the task list, a question to the user).
+my %QUIET = map { $_ => 1 } qw(Read Grep Glob LS NotebookRead ToolSearch TodoWrite TaskCreate TaskUpdate TaskList
+                               TaskGet TaskOutput AskUserQuestion);
+my $PAUSE_FILE = qr{(?:HANDOFF\.json|\.continue-here)};
+
+# Whether a tool call is work beyond a pause's own acts: not a quiet tool, not an edit of STATE.md
+# or a pause file, not a Bash command that names one of them (adding or committing them).
+sub _activity {
+    my ($n, $in) = @_;
+    return 0 if $QUIET{$n};
+    if ($EDIT{$n}) {
+        my $p = $in->{file_path} // $in->{notebook_path} // '';
+        return (!ref $p && $p =~ m{(?:\A|/)(?:STATE\.md|HANDOFF\.json|\.continue-here[^/]*)\z}) ? 0 : 1;
+    }
+    if ($n eq 'Bash') {
+        my $c = $in->{command} // '';
+        return (!ref $c && ($c =~ $PAUSE_FILE || index($c, 'STATE.md') >= 0)) ? 0 : 1;
+    }
+    return 1;
+}
+
+# Work after the driver created a pause file in this turn cancels that self-pause; work after a
+# loop paused itself and before the next human prompt ends that pause (the loop went on).
+sub _act {
+    my ($D) = @_;
+    return unless $D && $D->{mode} ne 'ended';
+    delete $D->{sp};
+    _unpause($D) if $D->{mode} eq 'paused' && $D->{pause}{self} && !$D->{pause}{prompted};
+}
+
+# The end of an assistant turn: with nothing running, a pause file the driver created in it pauses
+# it, and else a driver with no loop work since is at most a hint; never the turn this plugin's
+# checkpoint nudge asked to close.
+sub _turn_end {
+    my ($st, $ts, $mid) = @_;
+    # one assistant message is written as several rows (thinking, text): its turn ends once
+    return if defined $mid && defined $st->{lastend} && $mid eq $st->{lastend};
+    $st->{lastend} = $mid;
+    my $D = $st->{drv} or return;
+    # the turn the plugin's checkpoint nudge closed: the loop goes on after the plugin's compaction
+    return if delete $D->{nudged};
+    return if $D->{mode} eq 'ended' || (ref $st->{bg} eq 'HASH' && %{ $st->{bg} });
+    # a background Bash command (a test suite) runs for the loop when it started after the loop's
+    # last work; one started before that (a server) does not keep the loop live
+    return if ref $st->{bgb} eq 'HASH'
+        && grep { !defined $D->{wts} || !defined $_->{ts} || $_->{ts} >= $D->{wts} } values %{ $st->{bgb} };
+    if (my $sp = delete $D->{sp}) {
+        _pause($D, $sp, 1);
+        $D->{pause}{self} = 1;
+        return;
+    }
+    $D->{tend} //= $ts // 0;
 }
 
 sub _hint {
@@ -371,6 +457,7 @@ sub _prompt {
     return if $D->{mode} eq 'ended';
     $D->{idle} = ($D->{idle} // 0) + 1;
     $D->{plast} = $st->{seq} // 0;
+    $D->{pause}{prompted} = 1 if $D->{mode} eq 'paused';
     delete $D->{other};
 }
 
@@ -417,45 +504,62 @@ sub _drv_tool {
         if $STEP{ $D->{e}{name} } && !$D->{other} && $b->{verb} =~ /\Aphase\z|\Aphase\.complete\z/ && ($b->{sub} // '') eq 'complete';
 }
 
-# A state-file write (rel: the path under .planning/).
+# A state-file write (rel: the path under .planning/; tool: Edit, Write, …).
 sub _drv_write {
-    my ($st, $ws, $rel, $ts) = @_;
+    my ($st, $ws, $rel, $ts, $tool) = @_;
     my $D = $st->{drv} or return;
     return if $D->{mode} eq 'ended';
     my ($cw, $dw) = (_wsn($ws), $D->{ws});
     return if defined $cw && defined $dw && $cw ne $dw;
-    # A pause's own files: the pause took place, or the loop paused itself without the command.
+    # A pause's own files: the asked-for pause took place, or the loop created one to pause itself
+    # (an Edit of an existing one is a checkpoint note, no pause).
     if ($rel =~ m{(?:\A|/)(?:HANDOFF\.json|\.continue-here[^/]*)\z}) {
-        if ($D->{mode} eq 'paused') { $D->{pause}{done} = 1 } else { _pause($D, { seq => $st->{seq}, ts => $ts }, 1) }
+        if ($D->{mode} eq 'paused') { $D->{pause}{done} = 1 }
+        elsif (($tool // '') eq 'Write') { $D->{sp} //= { seq => $st->{seq}, ts => $ts } }
         return;
     }
-    # A pause also writes STATE.md: after one, a write is no loop work.
-    return if $D->{mode} eq 'paused';
+    if ($D->{mode} eq 'paused') {
+        # After a loop paused itself (its turn ended), a state-file write is its work again; a
+        # /gsd-pause-work also writes STATE.md, so after one a write is no loop work.
+        _work($D, 0, $ts, 1) if $D->{pause}{self};
+        return;
+    }
+    return if $D->{sp} && $rel =~ m{(?:\A|/)STATE\.md\z};    # a loop pausing itself records it
     _work($D, 0, $ts, 1);
 }
 
 # Whether a Bash command writes or commits a pause's own files (HANDOFF.json, .continue-here*):
-# a redirect or tee into one, or a commit or `git add` naming one.
+# a redirect or tee into one, or a commit or `git add` naming one; never a command that removes
+# or moves one (`git rm`, `rm`, `mv`: a resume consuming the handoff).
 sub _pause_write {
     my ($c) = @_;
-    return 0 unless defined $c && !ref $c && (index($c, 'HANDOFF.json') >= 0 || index($c, '.continue-here') >= 0);
-    return 1 if $c =~ m{(?:>>?|\btee(?:[ \t]+-a)?)[ \t]*["']?[^\s;&|<>"']*(?:HANDOFF\.json|\.continue-here)};
-    return 1 if $c =~ m{\b(?:add|commit)\b[^\n]*(?:HANDOFF\.json|\.continue-here)};
+    return 0 unless defined $c && !ref $c && $c =~ $PAUSE_FILE;
+    return 0 if $c =~ m{(?:\A|[\s;&|(])(?:git[ \t]+)?(?:rm|mv)[ \t][^\n;&|]*$PAUSE_FILE};
+    return 1 if $c =~ m{(?:>>?|\btee(?:[ \t]+-a)?)[ \t]*["']?[^\s;&|<>"']*$PAUSE_FILE};
+    return 1 if $c =~ m{\b(?:add|commit)\b[^\n]*$PAUSE_FILE};
     return 0;
 }
 
-# Whether a Bash command is a loop pausing itself (no /gsd-pause-work): it writes one of a pause's
-# own files (a redirect or tee into one), or adds or commits one named outside quoted text (a commit
-# message that names one is no write), of the driver's workstream (dw) or of none.
+# Whether a Bash command creates one of a pause's own files, of the driver's workstream (dw) or of
+# none: a `>` redirect or a tee (not `>>`, `tee -a`, a commit or `git add`, which a routine
+# checkpoint or a resume consuming the file also makes), outside quoted text.
 sub _self_pause {
     my ($c, $dw) = @_;
     return 0 unless _pause_write($c);
     my $F = qr{[^\s;&|<>"'`]*(?:HANDOFF\.json|\.continue-here[^\s;&|<>"'`]*)};
-    my $hit = $c =~ m{(?:>>?|\btee(?:[ \t]+-a)?)[ \t]*["']?($F)} ? $1 : undef;
-    $hit //= $1 if _unquote($c) =~ m{\b(?:add|commit)\b[^\n;&|]*?($F)};
+    (my $u = $c) =~ s/<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1([^\n]*)\n.*?\n[ \t]*\2[ \t]*(?=\n|\z)/<<$2$3/gs;
+    $u = _unquote_paths($u);
+    my $hit = $u =~ m{(?:(?<![>&0-9])>(?![>&])|\btee(?![ \t]+-a\b))[ \t]*["']?($F)} ? $1 : undef;
     return 0 unless defined $hit;
     return 0 if defined $dw && $hit =~ m{workstreams/($WS)/} && _wsn($1) ne $dw;
     return 1;
+}
+
+# Quoted text blanked except a span that is only a path (a redirect target in quotes stays).
+sub _unquote_paths {
+    my ($c) = @_;
+    $c =~ s{("(?:[^"\\]|\\.)*"|'[^']*')}{ my $q = $1; $q =~ m{\A(["'])[^\s"'|;&<>`]*\1\z} ? $q : 'Q' }gse;
+    return $c;
 }
 
 # The skill text Claude Code loads right after an invocation (a meta row that starts `Base
@@ -603,6 +707,7 @@ sub _row {
     my $cwd = (defined $j->{cwd} && !ref $j->{cwd} && $j->{cwd} ne '') ? $j->{cwd} : $cwd0;
     my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
     if ($type eq 'user') {
+        _bg_user($st, $j, $c, $ts) if $st->{drv} && ($st->{drv}{mode} // '') ne 'ended';
         return if $j->{isMeta} || $j->{isCompactSummary} || $j->{isVisibleInTranscriptOnly};
         my $t = !ref $c ? ($c // '')
               : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : '';
@@ -619,14 +724,16 @@ sub _row {
     for my $it (@$c) {
         next unless ref $it eq 'HASH' && ($it->{type} // '') eq 'tool_use' && ref $it->{input} eq 'HASH';
         my ($n, $in) = ($it->{name} // '', $it->{input});
+        my $D0 = $st->{drv};
+        _act($D0) if $D0 && ($D0->{sp} || ($D0->{mode} eq 'paused' && $D0->{pause}{self})) && _activity($n, $in);
         if ($n eq 'Skill') {
             _invoked($st, 'Skill', $in->{skill}, $in->{args}, $cwd, $ts) if defined $in->{skill} && !ref $in->{skill};
         } elsif ($n eq 'Bash') {
             my $D = $st->{drv};
             if ($D && $D->{mode} eq 'paused') {
-                $D->{pause}{done} = 1 if _pause_write($in->{command});
+                $D->{pause}{done} = 1 if !$D->{pause}{self} && _pause_write($in->{command});
             } elsif ($D && $D->{mode} ne 'ended' && _self_pause($in->{command}, $D->{ws})) {
-                _pause($D, { seq => $st->{seq}, ts => $ts }, 1);
+                $D->{sp} //= { seq => $st->{seq}, ts => $ts };
             }
             for my $b (@{ bash_calls($in->{command}) }) {
                 my $root = $b->{cwd} // $cwd;
@@ -652,8 +759,13 @@ sub _row {
             $st->{gsd} = { via => $n, name => ".planning/$short", args => '', hidden => 0, ts => $ts, root => $root, file => 1 };
             _push_root($st, $root);
             $st->{wseq} = ($st->{seq} // 0) + 1;
-            _drv_write($st, $ws, $rel, $ts);
+            _drv_write($st, $ws, $rel, $ts, $n);
             _push_ws($st, $ws, $root, $ts, ++$st->{seq});
+        } elsif ($n eq 'SendMessage') {
+            # A message to a background agent that handed back sets it working again.
+            my $to = $in->{to} // $in->{recipient};
+            my $k = !defined $to || ref $to ? undef : (ref $st->{bga} eq 'HASH' ? $st->{bga}{$to} : undef) // (ref $st->{bgt} eq 'HASH' ? $st->{bgt}{$to} : undef);
+            _bg_open($st, $k) if defined $k && $st->{drv} && $st->{drv}{mode} ne 'ended';
         } elsif ($n eq 'Agent' || $n eq 'Task' || $n eq 'Workflow') {
             my $D = $st->{drv} or next;
             # Work after a pause that the transcript does not tie to the loop: ambiguous.
@@ -663,16 +775,87 @@ sub _row {
             elsif ($D->{mode} ne 'ended' && !$D->{other} && !$D->{idle}) { $D->{wts} = $ts if defined $ts }
         }
     }
+    _turn_end($st, $ts, (defined $j->{message}{id} && !ref $j->{message}{id} ? $j->{message}{id} : undef))
+        if ref $j->{message} eq 'HASH' && ($j->{message}{stop_reason} // '') eq 'end_turn';
+}
+
+# Background work that runs on after a turn (read while a driver is open): a tool result Claude
+# Code marks `async_launched` (an Agent or Workflow in the background) or `teammate_spawned` opens
+# its tool call. A task notification naming that tool call, the background agent's own message
+# back (`<agent-message from="<its agentId>">`) or the teammate's idle notification closes it; a
+# teammate's other messages are interim, and a SendMessage to either opens it again.
+sub _bg_user {
+    my ($st, $j, $c, $ts) = @_;
+    my $r = $j->{toolUseResult};
+    if (ref $r eq 'HASH' && defined $r->{backgroundTaskId} && ref $c eq 'ARRAY') {
+        # a Bash command run in the background: running until a task notification names it
+        my ($tr) = grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' && defined $_->{tool_use_id} && !ref $_->{tool_use_id} } @$c;
+        return unless $tr;
+        my $bb = $st->{bgb} = ref $st->{bgb} eq "HASH" ? $st->{bgb} : {};
+        $bb->{ $tr->{tool_use_id} } = { ts => $ts, n => ++$st->{bgn} };
+        if (keys %$bb > $BG_KEEP) { my ($old) = sort { $bb->{$a}{n} <=> $bb->{$b}{n} } keys %$bb; delete $bb->{$old} }
+        return;
+    }
+    if (ref $r eq 'HASH' && ($r->{status} // '') =~ /\A(?:async_launched|teammate_spawned)\z/ && ref $c eq 'ARRAY') {
+        my ($tr) = grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' && defined $_->{tool_use_id} && !ref $_->{tool_use_id} } @$c;
+        return unless $tr;
+        my $k = $tr->{tool_use_id};
+        _bg_open($st, $k);
+        my $who = $r->{status} eq 'async_launched' ? $r->{agentId} : $r->{name};
+        if (defined $who && !ref $who && $who ne '') {
+            my $m = $r->{status} eq 'async_launched' ? 'bga' : 'bgt';
+            my $a = $st->{$m} = ref $st->{$m} eq 'HASH' ? $st->{$m} : {};
+            $a->{$who} = $k;
+            if (keys %$a > 2 * $BG_KEEP) { my %live = map { $_ => 1 } keys %{ $st->{bg} || {} }; delete $a->{$_} for grep { !$live{ $a->{$_} } } keys %$a }
+        }
+        return;
+    }
+    my $t = !ref $c ? ($c // '')
+          : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : '';
+    _bg_text($st, $t);
+}
+
+# A notification's text (a user row's, or one Claude Code queued while a turn ran: a queued_command
+# attachment or a queue-operation row): it closes the background work it names.
+sub _bg_text {
+    my ($st, $t) = @_;
+    return unless defined $t && !ref $t;
+    if ($t =~ m{\A\s*<task-notification>} && $t =~ m{<tool-use-id>([^<\s]+)</tool-use-id>}) {
+        delete $st->{bg}{$1} if ref $st->{bg} eq 'HASH';
+        delete $st->{bgb}{$1} if ref $st->{bgb} eq 'HASH';
+        return;
+    }
+    return unless ref $st->{bg} eq 'HASH' && %{ $st->{bg} };
+    if (ref $st->{bga} eq 'HASH') {
+        while ($t =~ m{<agent-message from="([^"\s]+)"}g) { delete $st->{bg}{ $st->{bga}{$1} } if defined $st->{bga}{$1} }
+    }
+    if (ref $st->{bgt} eq 'HASH') {
+        while ($t =~ m{<teammate-message teammate_id="([^"\s]+)"[^>]*>\s*\{\s*"type"\s*:\s*"idle_notification"}g) {
+            delete $st->{bg}{ $st->{bgt}{$1} } if defined $st->{bgt}{$1};
+        }
+    }
+}
+
+sub _bg_open {
+    my ($st, $k) = @_;
+    # work running again: an earlier turn end is no stop any longer (a prompt still counts)
+    delete $st->{drv}{tend} if ref $st->{drv} eq "HASH";
+    my $bg = $st->{bg} = ref $st->{bg} eq 'HASH' ? $st->{bg} : {};
+    $bg->{$k} = ++$st->{bgn};
+    if (keys %$bg > $BG_KEEP) { my ($old) = sort { $bg->{$a} <=> $bg->{$b} } keys %$bg; delete $bg->{$old} }
 }
 
 # Whether a user row (not meta, no command) is a prompt a person wrote: Claude Code marks it
 # origin human; a row without an origin (older versions) counts unless it is a teammate message,
-# an interruption mark or a tagged notice. Task notifications, tool results and stacked commands
-# never count.
+# an interruption mark or a tagged notice. Task notifications, tool results, stacked commands and
+# this plugin's own submitted notes (the auto-continue note, a handoff turn's prompt: `Note from
+# the user's <plugin> plugin: …`, whatever origin they carry) never count.
 sub _human {
     my ($j, $t) = @_;
     return 0 if $j->{stackedExpansion} || $j->{isCompactSummary};
     return 0 unless defined $t && $t =~ /\S/;
+    my $b = eval { ctx::brand() } // '';
+    return 0 if $b ne '' && $t =~ /\A\s*Note from the user's \Q$b\E plugin: /;
     return (($j->{origin}{kind} // '') eq 'human' ? 1 : 0) if ref $j->{origin} eq 'HASH';
     return 0 if defined $j->{origin};
     return 0 if $t =~ /\A\s*(?:<|\[Request interrupted|Another Claude session sent a message)/;
@@ -720,6 +903,23 @@ sub scan {
         # Checked before the row counts as read, so a scan that stops here reads it next time.
         if ((++$n % 256 == 0 && util::clock_ms() > $deadline) || ($rows_max && $n > $rows_max)) { $status = 'timeout'; last }
         $off += length $l;
+        # This plugin's checkpoint nudge (a tool call's added context, in whatever row Claude Code
+        # keeps it): the turn it asks to close is the plugin's checkpoint, not the loop stopping.
+        if (index($l, ' plugin: context is at ') >= 0 && $st->{drv} && ($st->{drv}{mode} // '') ne 'ended'
+            && index($l, '"isSidechain":true') < 0) {
+            my $b = eval { ctx::brand() } // '';
+            $st->{drv}{nudged} = 1 if $b ne '' && index($l, "Note from the user's $b plugin: context is at ") >= 0;
+        }
+        # A notification Claude Code queued while a turn ran (a queued_command attachment, a
+        # queue-operation row) closes the background work it names, as a user row does.
+        if ($st->{drv} && ($st->{drv}{mode} // '') ne 'ended' && (%{ $st->{bg} || {} } || %{ $st->{bgb} || {} })
+            && (index($l, '<task-notification>') >= 0 || index($l, 'agent-message from=') >= 0 || index($l, 'idle_notification') >= 0)
+            && index($l, '"type":"user"') < 0 && index($l, '"type":"assistant"') < 0 && length($l) <= $ROW_MAX) {
+            my $j = eval { jsonc::decode($l) };
+            if (ref $j eq 'HASH' && !$j->{isSidechain}) {
+                _bg_text($st, ref $j->{attachment} eq 'HASH' ? $j->{attachment}{prompt} : $j->{content});
+            }
+        }
         # metadata rows (request blobs, titles, modes) lead with their type; message rows do not
         next if index($l, '{"type":"') == 0 && index($l, '{"type":"user"') != 0 && index($l, '{"type":"assistant"') != 0;
         next if index($l, '"isSidechain":true') >= 0;
@@ -730,16 +930,25 @@ sub scan {
                 _skill_text($st, $l);
                 next;
             }
-            # a typed command, or a prompt a person wrote while a driver or a status look is open
+            # a typed command, or a prompt a person wrote while a driver or a status look is open,
+            # or (while a driver is open) background work launched or ending
+            my $open = $st->{drv} && ($st->{drv}{mode} // '') ne 'ended';
             next if index($l, '<command-name>') < 0
-                && !((($st->{drv} && ($st->{drv}{mode} // '') ne 'ended') || $st->{look})
-                     && index($l, '"isMeta":true') < 0 && index($l, '"type":"tool_result"') < 0);
+                && !(($open || $st->{look}) && index($l, '"isMeta":true') < 0 && index($l, '"type":"tool_result"') < 0)
+                && !($open && (index($l, '_launched"') >= 0 || index($l, '"teammate_spawned"') >= 0 || index($l, '<agent-message from=') >= 0
+                               || index($l, '"backgroundTaskId"') >= 0
+                               || index($l, 'idle_notification') >= 0));
         } else {
-            # spawns and a pause's files matter only while a driver is open
-            next unless index($l, '"type":"assistant"') >= 0 && index($l, '"tool_use"') >= 0
-                && (index($l, '"Skill"') >= 0 || index($l, 'gsd') >= 0 || index($l, '.planning/') >= 0
-                    || ($st->{drv} && ($st->{drv}{mode} // '') ne 'ended'
-                        && ($l =~ /"name":"(?:Agent|Task|Workflow)"/ || index($l, 'HANDOFF.json') >= 0 || index($l, '.continue-here') >= 0)));
+            # spawns, a pause's files, turn ends and (while a loop pauses itself) any tool call
+            # matter only while a driver is open
+            next unless index($l, '"type":"assistant"') >= 0;
+            my $D = $st->{drv} && ($st->{drv}{mode} // '') ne 'ended' ? $st->{drv} : undef;
+            next unless ($D && index($l, '"stop_reason":"end_turn"') >= 0)
+                || (index($l, '"tool_use"') >= 0
+                    && (index($l, '"Skill"') >= 0 || index($l, 'gsd') >= 0 || index($l, '.planning/') >= 0
+                        || ($D && ($D->{sp} || ($D->{mode} eq 'paused' && $D->{pause}{self} && !$D->{pause}{prompted})
+                                   || $l =~ /"name":"(?:Agent|Task|Workflow|SendMessage)"/ || index($l, 'HANDOFF.json') >= 0
+                                   || index($l, '.continue-here') >= 0))));
         }
         next if length($l) > $ROW_MAX;
         my $j = eval { jsonc::decode($l) } or next;
@@ -949,12 +1158,23 @@ sub session {
         if ($mode eq 'active' && ($D->{idle} // 0) >= $IDLE_PROMPTS) {
             ($mode, $why) = ('hint', 'no loop work since ' . (defined $D->{wts} ? util::stamp($D->{wts}) : 'it was invoked') . ' and a prompt after it');
         }
+        # R2: its turn ended with nothing running and no loop work after it (its final report, a
+        # stop, a wait for the user), or it created a pause file in a turn that has not ended.
+        if ($mode eq 'active' && defined $D->{tend}) {
+            ($mode, $why) = ('hint', 'its turn ended' . ($D->{tend} ? ' ' . util::stamp($D->{tend}) : '') . ' with nothing running and no loop work since');
+        }
+        if (($mode eq 'active' || $mode eq 'hint') && ref $D->{sp} eq 'HASH') {
+            ($mode, $why) = ('hint', 'it wrote a pause file' . (defined $D->{sp}{ts} ? ' ' . util::stamp($D->{sp}{ts}) : '') . ', its turn not ended yet');
+        }
+        # A flat GSD re-enter command goes where GSD's shared pointer points (no --ws of its own).
+        my $dc = ($caution ne '' && $re !~ /(?:\A|\s)--ws(?:\s|=)/ && ($e{name} =~ /\Agsd-/ || !$DRIVERS{ $e{name} }))
+            ? '; ' . substr($caution, 2, -1) : '';
         $out{driver} = $mode eq 'paused'
             ? 'Paused driver: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . (defined $D->{pause}{ts} ? '; paused ' . util::stamp($D->{pause}{ts}) : '; paused')
-              . ") · re-enter (new session only): $re"
+              . "$dc) · re-enter (new session only): $re"
             : $mode eq 'hint'
             ? 'Was driving: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . '; ' . ($why // 'unclear') . ") · re-enter only if Step 1 belongs to it: $re"
-            : 'Active driver: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . ") · re-enter: $re";
+            : 'Active driver: ' . _cmd(\%e, 1) . ' (' . _when(\%e) . "$dc) · re-enter: $re";
         $out{mode} = $mode;
         $out{paused} = 1 if $mode eq 'paused';
     }

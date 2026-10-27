@@ -163,7 +163,9 @@ sub _commits {
 
 # _gsd_path_bad(path, worktree) -> why the path is not read, or undef: it must be absolute, hold
 # no `..` part and end in `/.planning/STATE.md` or `/.planning/workstreams/<ws>/STATE.md`; with a
-# worktree given ('' = none), it must lie inside it.
+# worktree given ('' = none), it must lie inside it, in this checkout: no folder from its GSD root
+# (the folder holding .planning) up to the worktree, the root included, holds a `.git` folder or
+# file (a nested worktree, such as <repo>/.claude/worktrees/<name>, is another checkout).
 sub _gsd_path_bad {
     my ($p, $wt) = @_;
     return 'not a GSD STATE.md path'
@@ -172,7 +174,13 @@ sub _gsd_path_bad {
     return undef unless defined $wt;
     return 'outside this worktree' if $wt eq '';
     my ($rp, $rw) = ((-e $p ? Cwd::realpath($p) : undef) // $p, (-d $wt ? Cwd::realpath($wt) : undef) // $wt);
+    $rw =~ s{/+\z}{};
     return 'outside this worktree' unless index($rp, "$rw/") == 0;
+    my ($d) = $rp =~ m{\A(.*)/\.planning/(?:workstreams/[^/]+/)?STATE\.md\z};
+    for (my $i = 0; defined $d && length($d) > length($rw) && $i < 64; $i++) {
+        return 'outside this worktree' if -e "$d/.git";
+        $d =~ s{/[^/]*\z}{};
+    }
     return undef;
 }
 
