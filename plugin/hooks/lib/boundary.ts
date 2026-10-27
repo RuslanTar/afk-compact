@@ -1,7 +1,10 @@
 // The turn-end scheduler and the self-call path (MOD-SPEC §4, §9), and the scheduling of the
 // handoff turn and the compaction after it (§9.1). The engine skips our own `session.compact`
-// hook for our `$.session.compact`, so everything happens at the call site.
-import type { Deps } from './deps'
+// hook for our `$.session.compact`, so everything happens at the call site. In a headless
+// session, where that call always rejects, the compaction runs as a `/compact` command instead,
+// and its after-step runs in our own hook (`onOwnCompact`), which that command does reach.
+import type { SessionCompactInput, SessionCompactResult } from 'claude-code'
+import type { Deps, OwnCompact } from './deps'
 import type { ResumePref } from './compact'
 import { afterStep, cacheRows, dispatchExists, guarded, mainText, writeDispatch } from './compact'
 import { effective } from './config'
@@ -11,8 +14,8 @@ import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHan
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { armIdle } from './idle'
-import { isHuman, rejectClass, rejectText } from './deps'
-import { log, markHeadless, skipClass } from './log'
+import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText } from './deps'
+import { compactOff, log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
 
@@ -78,8 +81,9 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   }
   const nudged = s.lastCycle
   s.lastCycle = null
-  // A headless session: no handoff turn, no plugin compaction (Claude Code rejects the call there).
-  if (s.headless) return
+  // A headless session with no `/compact` path left: no plugin compaction (Claude Code rejects
+  // the call there). With the path, no nudge came, so `last` is null: no handoff turn below.
+  if (pluginCompactOff(s)) return
   const eff = await effective(d, sid)
   if (eff.disabled) return
   if (t.reason !== 'answer') return
@@ -121,7 +125,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   if (s.busy) return
   // §9.3: with `precompact_turn: model`, an eligible turn end that was not nudged gets its
   // pre-compaction handoff turn first; a skip leaves the normal compaction, as with `code`.
-  if (!s.nudgedThisTurn && last === null && !s.halt.active) {
+  // A headless session gets no pre-compaction turn: the plugin submits no model turn there.
+  if (!s.nudgedThisTurn && last === null && !s.halt.active && !s.headless) {
     const p = await planPrecompact(d, sid, eff, tokens)
     if (p) {
       startHandoffTimer(d, sid, p)
@@ -249,7 +254,7 @@ async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<
 export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> {
   const s = d.state
   const ah = opts.afterHandoff
-  if (s.headless || s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
+  if (pluginCompactOff(s) || s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
   // No await before this check, so a native compaction's end cannot slip past unseen.
   if (nativeCheck(d, opts) === 'wait') return
   const sid = await d.sessionId()
@@ -316,6 +321,12 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       if (late === 'ran') await nativeRan(d, sid, withRecord)
       return
     }
+    const run: SelfRun = { nonce, pref, t0, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}) }
+    // Headless: `$.session.compact` always rejects there; the compaction runs as `/compact`.
+    if (s.headless) {
+      await commandCompact(d, sid, run, text)
+      return
+    }
     let r
     try {
       r = await d.compact(text)
@@ -323,31 +334,138 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       await compactRejected(d, sid, nonce, err)
       return
     }
-    const ht: Record<string, string> = ah ? { handoff_ht: ah.ht } : {}
-    if (r.skip !== undefined) {
-      await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0, ...ht })
-      return
-    }
-    await log(d, sid, 'compacted', {
-      nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
-      usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...ht,
-    })
-    await cacheRows(d, sid, nonce, r, true, 'main')
-    s.lastPluginCompactAt = await d.now()
-    s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
-    const msgs = r.messages
-    const before = r.tokensBefore
-    const after = r.tokensAfter
-    await guarded(d, sid, 'after-step', () => afterStep(d, {
-      sid, nonce, agentId: null, midturn: false, resumePref: pref, messages: msgs, tokensBefore: before, tokensAfter: after,
-      ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
-      ...(ah ? { stats: ah.stats } : {}),
-      ...(prodConsent !== undefined ? { prodConsent } : {}),
-    }))
+    if (!(await settleSelf(d, sid, run, r))) return
     await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.
     if (s.pending && s.pending.nonce === nonce) s.pending.outcome.halt = s.halt.active
   } finally {
     s.busy = false
   }
+}
+
+/** One plugin compaction's dispatch, as the boundary prepared it, for the steps after its result. */
+type SelfRun = {
+  nonce: string
+  pref: ResumePref
+  t0: number
+  prodConsent?: string
+  ah?: NonNullable<BoundaryOpts['afterHandoff']>
+}
+
+/**
+ * A plugin compaction's result: its `compacted` row, the cache rows, the cooldown and thrash
+ * bookkeeping and the after-step (MOD-SPEC §4, §5.2). False when the compaction was skipped.
+ * Shared by the self-call and, inside our own hook, by a headless session's `/compact`.
+ */
+async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactResult): Promise<boolean> {
+  const s = d.state
+  const { nonce, ah } = run
+  const ht: Record<string, string> = ah ? { handoff_ht: ah.ht } : {}
+  if (r.skip !== undefined) {
+    await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - run.t0, ...ht })
+    return false
+  }
+  await log(d, sid, 'compacted', {
+    nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
+    usage_present: r.usage !== undefined, ms: (await d.now()) - run.t0, ...ht,
+  })
+  await cacheRows(d, sid, nonce, r, true, 'main')
+  s.lastPluginCompactAt = await d.now()
+  s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
+  const msgs = r.messages
+  const before = r.tokensBefore
+  const after = r.tokensAfter
+  await guarded(d, sid, 'after-step', () => afterStep(d, {
+    sid, nonce, agentId: null, midturn: false, resumePref: run.pref, messages: msgs, tokensBefore: before, tokensAfter: after,
+    ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
+    ...(ah ? { stats: ah.stats } : {}),
+    ...(run.prodConsent !== undefined ? { prodConsent: run.prodConsent } : {}),
+  }))
+  return true
+}
+
+/** The `/compact` runs that may fail in a row before the path is off for the load. */
+export const COMMAND_FAILS_MAX = 2
+
+/**
+ * A headless session's plugin compaction: a bare `/compact` (`$.command.run`; no arguments, so
+ * the transcript's command row carries none of our text), which our own `session.compact` hook
+ * claims and shapes with `text` (`onOwnCompact`). No continue follows: the session waits for its
+ * next prompt, which gets the resume block (prompt.context). One `compact_command` row says how
+ * it went. A failure (Claude Code answers with its reason, or the call rejects) starts the
+ * cooldown, so the next turn end does not retry at once; one that cannot work later in the load
+ * (`no-command`, `input-ended`), or the second in a row, turns the path off (`compactOff`).
+ */
+async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string): Promise<void> {
+  const s = d.state
+  const own: OwnCompact = {
+    nonce: run.nonce, text, pref: run.pref, t0: run.t0, claimed: false,
+    ...(run.prodConsent !== undefined ? { prodConsent: run.prodConsent } : {}),
+    ...(run.ah ? { ht: run.ah.ht } : {}),
+  }
+  ownRuns.set(own, run)
+  s.ownCompact = own
+  let out: CommandOut
+  try {
+    out = await d.compactCommand()
+  } catch (err) {
+    out = { rejected: err }
+  } finally {
+    if (s.ownCompact === own) s.ownCompact = undefined
+    ownRuns.delete(own)
+  }
+  await commandOutcome(d, sid, own, out)
+}
+
+/**
+ * How our `/compact` went, as one `compact_command` row: `compacted` or `skipped` when our hook
+ * claimed it; `unclaimed` when it compacted without reaching our hook as ours; `failed` (Claude
+ * Code's reason as its output) or `rejected` (the call rejected) with the class and the text.
+ */
+export async function commandOutcome(d: Deps, sid: string, own: OwnCompact, out: CommandOut): Promise<void> {
+  const s = d.state
+  if (own.claimed) {
+    s.commandFails = 0
+    const skipped = own.result === undefined || own.result.skip !== undefined
+    await log(d, sid, 'compact_command', { nonce: own.nonce, result: skipped ? 'skipped' : 'compacted', error_class: null, error: null })
+    return
+  }
+  const rejected = 'rejected' in out
+  const failText = rejected ? rejectText(out.rejected) : out.text !== undefined ? rejectText(out.text) : undefined
+  if (failText === undefined) {
+    // It compacted, but not through our hook as ours: the dispatch gets no after-step (reconcile
+    // and the watcher report it). It still counts for the cooldown and the thrash rule.
+    s.commandFails = 0
+    s.lastPluginCompactAt = await d.now()
+    s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
+    await log(d, sid, 'compact_command', { nonce: own.nonce, result: 'unclaimed', error_class: null, error: null })
+    return
+  }
+  const cls = commandClass(failText)
+  await log(d, sid, 'compact_command', { nonce: own.nonce, result: rejected ? 'rejected' : 'failed', error_class: cls, error: failText })
+  s.lastPluginCompactAt = await d.now()
+  s.commandFails++
+  if (cls === 'no-command' || cls === 'input-ended' || s.commandFails >= COMMAND_FAILS_MAX) await compactOff(d, sid)
+}
+
+/** What `$.command.run` answered: the command's output text, or the call's rejection. */
+export type CommandOut = { text: string | undefined } | { rejected: unknown }
+
+/** The boundary's run for each `/compact` in flight (read by our hook). */
+const ownRuns = new WeakMap<OwnCompact, SelfRun>()
+
+type CompactNext = (e: SessionCompactInput) => Promise<SessionCompactResult>
+
+/**
+ * Our `session.compact` hook for our own `/compact` (claimed by `claimOwnCompact`): our text
+ * after any instructions already there, then the after-step here, where the summary messages
+ * are (`$.command.run` returns only text). Nothing after `next` may throw: the hook's `.catch`
+ * would replay the result, but the steps after it are ours to finish or log.
+ */
+export async function onOwnCompact(d: Deps, sid: string, e: SessionCompactInput, own: OwnCompact, next: CompactNext): Promise<SessionCompactResult> {
+  const r = await next({ ...e, instructions: [e.instructions, own.text].filter(Boolean).join('\n\n') })
+  own.result = r
+  const run = ownRuns.get(own) ?? { nonce: own.nonce, pref: own.pref, t0: own.t0, ...(own.prodConsent !== undefined ? { prodConsent: own.prodConsent } : {}) }
+  await guarded(d, sid, 'own-compact', () => settleSelf(d, sid, run, r))
+  return r
 }

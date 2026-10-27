@@ -52,6 +52,19 @@ export class World {
   compactMode: 'ok' | 'reject' | { skip: string } = 'ok'
   /** `session.start`'s `isInteractive` (false: a `claude -p` or SDK session). */
   interactive = true
+  /**
+   * How the bottom answers `$.command.run({ command: 'compact' })`: `run` raises a manual
+   * compaction through every `session.compact` hook (ours included), as Claude Code's `/compact`
+   * does, and answers `{}`, or `Not compacted · <skip>` for a skip; `unclaimed` compacts beneath
+   * our hook only (it never sees it); `{ text }` answers that text (a failed `/compact`);
+   * `reject` makes the call reject (the kit passes no message of a test hook's through: the
+   * plugin reads the kit's own text, a class `other` failure).
+   */
+  commandMode: 'run' | 'unclaimed' | 'reject' | { text: string } = 'run'
+  /** Every `command.run` that reached the bottom. */
+  commandRuns: { command: string; args: string; origin: unknown }[] = []
+  /** The test's engine, kept at `start` (a `/compact` raises its compaction through it). */
+  engine: Engine | undefined
   summaryMode: SummaryMode = 'ok'
   claims = new Map<string, string>()
   prevCopy = 'none'
@@ -162,6 +175,20 @@ export class World {
       if (why !== undefined) return { drop: why }
       return { text: this.rewrite?.(e.text) ?? e.text }
     })
+    on('command.run', async (_$, e) => {
+      this.commandRuns.push({ command: e.command, args: e.args, origin: e.origin })
+      const m = this.commandMode
+      if (m === 'reject') throw new Error('rejected')
+      if (typeof m === 'object') return { text: m.text }
+      if (e.command !== 'compact') return { text: 'no such command here' }
+      if (m === 'unclaimed') {
+        this.compacts.push({ instructions: e.args || undefined, trigger: 'manual', agentId: undefined })
+        return {}
+      }
+      if (!this.engine) throw new Error('World.start was not called')
+      const r = await this.engine.session.compact({ trigger: 'manual', messages: [KEPT], ...(e.args ? { instructions: e.args } : {}) } as never)
+      return r.skip !== undefined ? { text: 'Not compacted · ' + r.skip } : {}
+    })
     on('session.compact', async (_$, e) => {
       this.compacts.push({ instructions: e.instructions, trigger: e.trigger, agentId: e.agentId })
       this.compactKeys.push(Object.keys(e).sort())
@@ -194,6 +221,7 @@ export class World {
   // ---- driving the session as the engine would
 
   async start($: Engine): Promise<void> {
+    this.engine = $
     await $.session.start({ cwd: '/w', surface: this.interactive ? 'terminal' : null, isInteractive: this.interactive })
   }
 

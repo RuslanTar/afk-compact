@@ -15,7 +15,8 @@
 # placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
 # U-06: a warning per pattern of the user's stopped at its time bound (lib/userre.pm).
 # 2026-10-27 (headless probe): `automatic compaction: not available here …` and `pre-idle
-# handoff turn: off (headless session)` for a headless load, from the mod's `headless` row.
+# handoff turn: off (headless session)` for a headless load, from the mod's `headless` row;
+# `automatic compaction: by /compact …` while its `/compact` path is on (`compact: command`).
 use strict;
 use warnings;
 use utf8;
@@ -344,19 +345,23 @@ sub min_window {
     return $a > $b ? $a : $b;
 }
 
-# 2026-10-27 (headless probe): true when the mod's `headless` row comes after this session's
-# last `session` start row: Claude Code runs the load headless (`claude -p`, the Agent SDK, or
-# an app or editor built on it) and rejects a plugin's compaction call there, so the mod neither
-# nudges nor starts one. A later interactive load of the same session (its own start row) ends it.
+# 2026-10-27 (headless probe): the load is headless when the mod's last `headless` row comes
+# after this session's last `session` start row: Claude Code runs it headless (`claude -p`, the
+# Agent SDK, or an app or editor built on it) and rejects a plugin's compaction call there, so
+# the mod gives no nudge. A later interactive load of the same session (its own start row) ends
+# it. Returns '' (not headless), `command` (the mod compacts by running `/compact`, the row's
+# `compact: command`) or `none` (that path is off, or a row from before it had the field).
 sub is_headless {
     my ($mod) = @_;
-    my ($start, $headless) = (-1, -1);
+    my ($start, $headless, $compact) = (-1, -1, 'none');
     for my $i (0 .. $#$mod) {
         my $ev = $mod->[$i]{ev} // '';
         $start = $i if $ev eq 'session' && ($mod->[$i]{phase} // '') eq 'start';
-        $headless = $i if $ev eq 'headless';
+        next unless $ev eq 'headless';
+        $headless = $i;
+        $compact = ($mod->[$i]{compact} // '') eq 'command' ? 'command' : 'none';
     }
-    return $headless > $start ? 1 : 0;
+    return $headless > $start ? $compact : '';
 }
 
 # The line for a headless load. Only what was seen live is said: Claude Code rejects the call
@@ -365,9 +370,14 @@ sub is_headless {
 sub headless_lines {
     my ($headless) = @_;
     return () unless $headless;
+    return ('automatic compaction: by /compact; Claude Code runs this session headless (claude -p, the Agent SDK, '
+            . "or an app or editor built on it), where it rejects a plugin's compaction call, so the plugin runs /compact "
+            . 'at a turn end at or above the target and shapes it as usual, with no nudge, handoff turn or continue; '
+            . "Claude Code's own automatic compaction is not affected") if $headless eq 'command';
     return ('automatic compaction: not available here; Claude Code runs this session headless (claude -p, the Agent SDK, '
-            . "or an app or editor built on it), where it rejects a plugin's compaction call, so the plugin does not "
-            . "nudge or start compactions; Claude Code's own automatic compaction is not affected");
+            . "or an app or editor built on it), where it rejects a plugin's compaction call and its /compact did not "
+            . "work for the plugin, so the plugin does not nudge or start compactions; Claude Code's own automatic "
+            . 'compaction is not affected');
 }
 
 # The disabled-for-a-small-window sentence; never a negative number.

@@ -32,7 +32,7 @@ our $COLD_MIN_TOKENS = 100_000;
 # The row kinds the rules read from the classic and mod streams and from the
 # mod's events/ files. Only these are decoded and kept (lib/watch/cache.pm);
 # rows_of() of any other kind is empty, and test mode records the miss.
-our @KINDS = qw(compact_rejected compacted config_effective continue copy copy_exists copy_failed
+our @KINDS = qw(compact_command compact_rejected compacted config_effective continue copy copy_exists copy_failed
                 copy_mismatch dispatch handoff_publish heal keyset_change order_anomaly postcompact
                 precompact precompute_or_failed resume_inject resume_receipt stop_failure sweep_partial
                 thrash trigger_disabled_small_window trigger_unknown triggers_off version_change
@@ -783,10 +783,14 @@ sub _session_rules {
     # A-17 (a) a skipped after-step, (b) a mod dispatch without `compacted` in 15 min. A
     # dispatch whose call Claude Code rejected as headless (`compact_rejected {error_class:
     # headless}`, 2026-10-27 headless probe) is explained: Claude Code rejects a plugin's
-    # compaction call in that session, so it is not a missing after-step.
+    # compaction call in that session, so it is not a missing after-step. So is a headless
+    # `/compact` the host cannot run (`compact_command {error_class: no-command|input-ended}`).
     my %compacted;
     for my $r (rows_of($S, 'compact_rejected')) {
         $compacted{ $r->{nonce} } = 1 if defined $r->{nonce} && !ref $r->{nonce} && ($r->{error_class} // '') eq 'headless';
+    }
+    for my $r (rows_of($S, 'compact_command')) {
+        $compacted{ $r->{nonce} } = 1 if defined $r->{nonce} && !ref $r->{nonce} && ($r->{error_class} // '') =~ /\A(?:no-command|input-ended)\z/;
     }
     for my $r (rows_of($S, 'compacted')) {
         $compacted{ $r->{nonce} } = 1 if defined $r->{nonce};

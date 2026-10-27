@@ -1,8 +1,9 @@
 // Mod rows (MOD-SPEC §2.5, WATCHER-SPEC §6.2 envelope): one `log` helper call per row, in order;
 // when the helper call fails, one file per row under `<watch>/<sid>/events/`. Rows are
 // content-free: ids, counts, enums, byte counts, durations, our own paths. One exception:
-// `compact_rejected.error` keeps Claude Code's own rejection text (trimmed, one line, no
-// session content), in the local stream only; the export drops it.
+// `compact_rejected.error` and `compact_command.error` keep Claude Code's own rejection or
+// failure text (trimmed, one line, no session content), in the local stream only; the export
+// drops it.
 import type { Deps } from './deps'
 import { PLUGIN_VERSION } from './meta.gen'
 import { randomHex } from './nonce'
@@ -66,18 +67,21 @@ async function fallback(d: Deps, sid: string, row: Row): Promise<void> {
 /**
  * A `skip` reason as a row value (WATCHER-SPEC §6.3 `compacted.skip`: null or a class). Any
  * hook can set the reason, so its free text is never logged: a short token is kept, else `other`
- * (the one free-text field is `compact_rejected.error`, see the header).
+ * (the free-text fields are `compact_rejected.error` and `compact_command.error`, see the header).
  */
 export function skipClass(reason: string): string {
   return /^[A-Za-z0-9._:-]{1,40}$/.test(reason) ? reason : 'other'
 }
 
 /**
- * The load is headless (`claude -p`, the Agent SDK, or an app or editor built on it): from here
- * on in this load the plugin neither nudges nor starts a compaction. One `headless {via}` row per
- * session id, from what told it: `session-start` (no person at the prompt), `compact-rejected`
- * (Claude Code's own answer), or `same-load` (the first main turn of a new session id in a load
- * already headless, as after a `/clear`, for which no `session.start` fires).
+ * The load is headless (`claude -p`, the Agent SDK, or an app or editor built on it): Claude Code
+ * rejects a plugin's `$.session.compact` there, so from here on in this load the plugin gives no
+ * nudge, handoff turn or idle turn, and compacts only by running `/compact` at a turn end
+ * (`compact: command`; boundary.ts) until that path is off (`compact: none`, `compactOff`). One
+ * `headless {via, compact}` row per session id, from what told it: `session-start` (no person at
+ * the prompt), `compact-rejected` (Claude Code's own answer), or `same-load` (the first main turn
+ * of a new session id in a load already headless, as after a `/clear`, for which no
+ * `session.start` fires).
  */
 export async function markHeadless(d: Deps, sid: string, via: 'session-start' | 'compact-rejected' | 'same-load'): Promise<void> {
   const s = d.state
@@ -85,7 +89,20 @@ export async function markHeadless(d: Deps, sid: string, via: 'session-start' | 
   if (!s.headless) s.nudgeNonce = undefined
   s.headless = true
   s.headlessSid = sid
-  await log(d, sid, 'headless', { via })
+  await log(d, sid, 'headless', { via, compact: s.headlessCompact })
+}
+
+/**
+ * The `/compact` path cannot work in this headless load (no such command, the host's input
+ * ended) or failed twice in a row: no plugin compaction from here on in it. One more `headless`
+ * row, `{via: command-failed, compact: none}`, which `/status` reads.
+ */
+export async function compactOff(d: Deps, sid: string): Promise<void> {
+  const s = d.state
+  if (s.headlessCompact === 'none') return
+  s.headlessCompact = 'none'
+  s.headlessSid = sid
+  await log(d, sid, 'headless', { via: 'command-failed', compact: 'none' })
 }
 
 /** Records one helper-missing row for a non-log helper call (once per load). */

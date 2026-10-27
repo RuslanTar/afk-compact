@@ -135,9 +135,14 @@ our %SCHEMA = (
                   skipped => 'word' },
     # 2026-10-27 (headless probe): the rejection's class; Claude Code's own error text stays local
     compact_rejected => { nonce => 'nonce', attempt => 'int', error_class => [enum => qw(headless turn-running other)], error => 'drop' },
-    # a headless load (`claude -p`, the Agent SDK, an app or editor built on it): no nudge or plugin
-    # compaction in it; one row per session id (`same-load`: a new id in it, as after a /clear)
-    headless => { via => [enum => qw(session-start compact-rejected same-load)] },
+    # a headless load (`claude -p`, the Agent SDK, an app or editor built on it): no nudge in it;
+    # one row per session id (`same-load`: a new id in it, as after a /clear), and one more when
+    # its `/compact` path goes off (`command-failed`); `compact`: how the plugin compacts there
+    headless => { via => [enum => qw(session-start compact-rejected same-load command-failed)], compact => [enum => qw(command none)] },
+    # a headless load's plugin compaction run as `/compact`: how it went and, for a failure, its
+    # class; Claude Code's own text stays local
+    compact_command => { nonce => 'nonce', result => [enum => qw(compacted skipped unclaimed failed rejected)],
+                         error_class => [enum => qw(no-command input-ended in-hook not-enough other)], error => 'drop' },
     session => { phase => [enum => qw(start end)], source => [enum => qw(startup resume clear compact)], reason => 'word',
                  mod_loaded => 'bool', previous_session_id => 'hash', lineage_reason => 'word', pid_lstart => 'drop',
                  scratchpad => [enum => qw(present absent)], under_temp_root => 'bool' },

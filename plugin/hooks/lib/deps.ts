@@ -2,6 +2,7 @@
 // implementation. Handlers take Deps, never `$`, so a test can run them through the kit (where
 // test hooks answer `$`) or with a fake Deps.
 import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claude-code'
+import type { ResumePref } from './compact'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
 import type { BlockArgs } from './resume'
@@ -80,8 +81,17 @@ export interface Deps {
    * undefined when it cannot be read. Read only to record it: no call of the mod names a model.
    */
   model(): Promise<string | undefined>
-  /** `$.session.compact`; rejects while a turn runs. */
+  /** `$.session.compact`; rejects while a turn runs, and always in a headless session. */
   compact(instructions: string): Promise<SessionCompactResult>
+  /**
+   * `$.command.run({ command: 'compact' })`, a bare `/compact` queued as if typed, run once the
+   * session is idle: a headless session's way to compact (its compaction runs only as a
+   * `/compact` input there). It runs through our own `session.compact` hook (trigger `manual`),
+   * which shapes it (`ownCompact`). Resolves to the command's output: `undefined` when it
+   * compacted, else Claude Code's reason (a failed `/compact` resolves, it does not reject).
+   * Rejects for an unknown command, inside a hook the turn waits on, or past the host's input.
+   */
+  compactCommand(): Promise<{ text: string | undefined }>
   submit(text: string): Promise<void>
   /**
    * OT-2 (owner xxxxxxxx-06, 2026-10-22): `$.turn.abort({ turnId })`, ending the running main
@@ -260,6 +270,37 @@ export type LoadState = {
   headless: boolean
   /** The session id the last `headless` row was logged for (one row per session id, so after a `/clear`). */
   headlessSid: string | undefined
+  /**
+   * How a headless load compacts: `command` runs `/compact` (`compactCommand`) at a turn end at
+   * or above the target, shaped by our own hook; `none` once that failed twice in a row or
+   * cannot work in this host (no `/compact` command, the host's input ended): from then on no
+   * plugin compaction in this load, as before the fallback.
+   */
+  headlessCompact: 'command' | 'none'
+  /** Our `/compact` in flight: our `session.compact` hook claims the next main `manual` one. */
+  ownCompact: OwnCompact | undefined
+  /** Our `/compact` runs that failed in a row (two make `headlessCompact` `none`). */
+  commandFails: number
+}
+
+/**
+ * One plugin compaction run as a `/compact` command in a headless session: what the boundary
+ * prepared (dispatch record written, `mod-self`), handed to our `session.compact` hook, which
+ * appends `text` and runs the after-step there (it needs the summary messages).
+ */
+export type OwnCompact = {
+  nonce: string
+  text: string
+  pref: ResumePref
+  prodConsent?: string
+  /** The `ht` of a handoff turn this compaction follows (none in a headless session today). */
+  ht?: string
+  /** When the dispatch record was written (the `compacted` row's `ms`). */
+  t0: number
+  /** Our hook took this compaction as ours. */
+  claimed: boolean
+  /** The compaction's result, once our hook has it. */
+  result?: SessionCompactResult
 }
 
 export type PendingResume = {
@@ -359,6 +400,9 @@ export function newState(loadId: string): LoadState {
     agentTurns: new Set(),
     headless: false,
     headlessSid: undefined,
+    headlessCompact: 'command',
+    ownCompact: undefined,
+    commandFails: 0,
   }
 }
 
@@ -404,6 +448,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       }
     },
     compact: instructions => $.session.compact({ instructions }),
+    async compactCommand() {
+      const r = await $.command.run({ command: 'compact' })
+      return { text: typeof r.text === 'string' && r.text.trim() !== '' ? r.text : undefined }
+    },
     async submit(text) {
       // A hook or the engine refuses a submit with a resolved `{ drop }`: that is a failed
       // submit too, so the caller's `submit-failed` path runs and `ourSubmitPending` is reset.
@@ -568,6 +616,38 @@ export function rejectClass(text: string): 'headless' | 'turn-running' | 'other'
   if (/headless|-p \/ SDK|\bSDK session\b/i.test(text)) return 'headless'
   if (/\bturn\b.*\brun(s|ning)?\b/i.test(text)) return 'turn-running'
   return 'other'
+}
+
+/**
+ * The class of a failed `/compact` run (its rejection or its output text): `no-command` (no
+ * `/compact` here, as with compaction turned off), `input-ended` (the host ended its input or a
+ * limit, as at the end of a single-prompt `claude -p`), `in-hook` (called where a turn waits),
+ * `not-enough` (too few messages), else `other`. The first two cannot work later in the load.
+ */
+export function commandClass(text: string): 'no-command' | 'input-ended' | 'in-hook' | 'not-enough' | 'other' {
+  if (/no command named|unknown command/i.test(text)) return 'no-command'
+  if (/ended its input|input (has )?ended|host'?s limits?|past a stop/i.test(text)) return 'input-ended'
+  if (/inside a hook|hook the turn waits/i.test(text)) return 'in-hook'
+  if (/not enough messages/i.test(text)) return 'not-enough'
+  return 'other'
+}
+
+/** A headless load whose plugin compaction is off (no `/compact` path left): no nudge, no boundary. */
+export function pluginCompactOff(s: LoadState): boolean {
+  return s.headless && s.headlessCompact === 'none'
+}
+
+/**
+ * At our `session.compact` hook, before any await: our `/compact` in flight takes the first main
+ * `manual` compaction that reaches the hook as ours (once). A person's or the host's own
+ * `/compact` queued just before ours would be taken too; it then gets our instructions after
+ * its own, and ours runs as a plain manual one after it.
+ */
+export function claimOwnCompact(s: LoadState, e: { trigger: string; agentId?: string }): OwnCompact | undefined {
+  const own = s.ownCompact
+  if (!own || own.claimed || e.agentId !== undefined || e.trigger !== 'manual') return undefined
+  own.claimed = true
+  return own
 }
 
 /** Before our `$.prompt.submit`: the next main turn.start is ours (MOD-SPEC §9, §9.1 step 3). */

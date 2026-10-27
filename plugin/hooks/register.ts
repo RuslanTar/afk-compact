@@ -3,9 +3,9 @@
 // the hook's own `next` settled to), so a failure here never blocks the session.
 import type { Register } from 'claude-code'
 import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
-import { onTurnComplete } from './lib/boundary'
+import { onOwnCompact, onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
-import { isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
+import { claimOwnCompact, isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
@@ -131,8 +131,12 @@ export const register: Register = (on, options) => {
     return { ...r, context: [...(r.context ?? []), text] }
   }).catch(($, e, next) => next(e))
 
+  // A headless session's own `/compact` (boundary.ts) is claimed before any await and shaped
+  // with the text the boundary prepared; every other compaction is handled as usual.
   on('session.compact', async ($, e, next) => {
     const d = realDeps($, options, state)
+    const own = claimOwnCompact(state, e)
+    if (own) return onOwnCompact(d, await prepare(d), e, own, x => next(x))
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
   }).catch(($, e, next) => next(e))
 
