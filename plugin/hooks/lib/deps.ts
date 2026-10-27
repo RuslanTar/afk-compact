@@ -321,6 +321,12 @@ export type IdleLane = {
   superseded: boolean
   /** A person's prompt came after a turn got the block: no more re-checks (the held `[idle-again]` block still reads it). */
   closed: boolean
+  /**
+   * The episode of a block restored after `claude --resume`: the background tasks its measures list
+   * ran in the process that ended, and no notification of this load will end them, so only agents
+   * count as running (review of fix round 1).
+   */
+  restored: boolean
 }
 
 /**

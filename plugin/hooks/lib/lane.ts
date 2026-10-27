@@ -32,6 +32,11 @@ export type LaneFacts = {
   free: number
   /** Next steps says `see handoff`: the steps are in a handoff file, so code cannot count them all. */
   elsewhere: boolean
+  /**
+   * The summary has a Next steps section (`## Next steps: none` included). A summary cut near its
+   * size cap can lose it (AWAY-DIGEST §4.3), so a finished Status without one is not believed.
+   */
+  listed: boolean
   /** `Step 1:` is `none`, `proposed`, a step to run, or there is no Step 1 line. */
   step1: 'none' | 'proposed' | 'set' | 'missing'
   /** The `Gate:` line says `none` (and Step 1 names no ask or wait), names a blocker, or is missing. */
@@ -68,15 +73,22 @@ const ITEM_RE = /^\s*\d+\.\s/
  * or `)`, or the next item of a one-line section), so `· done when green` is not one.
  */
 const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
-/** A step that cannot run now: it is gated, asks the user, holds a pending answer or waits on something. */
-const HELD_RE = /\b(?:gated|ask user|pending answer|waits? (?:on|for))\b/i
+/**
+ * A step that cannot run now: it is gated, asks the user, holds a pending answer, waits on
+ * something (`waits for`, `waiting on`, `awaiting`, `blocked on`/`by`) or needs an approval or the
+ * user. A wait on CI or a reviewer counts too: under a blocked Status the model's word leads
+ * (owner xxxxxxxx-05), and code moves a stop toward work only on a step that names no wait at all.
+ */
+const HELD_RE = /\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
 const ELSEWHERE_RE = /\bsee handoff\b/i
+/** Step 1's `— for "<the user's latest request>"` tail (and what follows it). */
+const FOR_TAIL = /\s+—\s+for\s+".*$/
 
-/** The body of one `## <heading>` section (up to the next `## ` heading or the end marker). */
-function section(text: string, heading: string): string[] {
+/** The body of one `## <heading>` section (up to the next `## ` heading or the end marker); undefined when there is none. */
+function section(text: string, heading: string): string[] | undefined {
   const lines = text.split('\n')
   const at = lines.findIndex(l => l.trim().toLowerCase().startsWith('## ' + heading))
-  if (at < 0) return []
+  if (at < 0) return undefined
   const out: string[] = []
   // The heading line may carry the first item inline (`## Next steps: 1. …`).
   const head = lines[at] ?? ''
@@ -125,16 +137,18 @@ function items(lines: string[]): string[] {
 
 /** Reads the lane facts from a summary's text (the installed summary message or a saved copy). */
 export function laneFacts(text: string): LaneFacts {
-  const resume = section(text, 'resume here').join('\n')
+  const resume = (section(text, 'resume here') ?? []).join('\n')
   const where = resume !== '' ? resume : text
   const st = STATUS_RE.exec(where)
   const s1 = STEP1_RE.exec(where)
   const step = s1?.[1]?.trim() ?? ''
   const step1 = s1 === null || step === '' ? 'missing' : /^`?none\b/i.test(step) ? 'none' : /\|\s*proposed\s*$/.test(step) ? 'proposed' : 'set'
   const g = GATE_RE.exec(where)?.[1]?.trim()
-  // A Step 1 that itself asks the user or waits is behind a gate, whatever the Gate line says.
-  const gate = g === undefined || g === '' ? 'missing' : /^`?none\b/i.test(g) && !HELD_RE.test(step) ? 'none' : 'set'
-  const next = section(text, 'next steps')
+  // A Step 1 that itself asks the user or waits is behind a gate, whatever the Gate line says (its
+  // `— for "<the user's request>"` tail is the user's words, not the step's).
+  const gate = g === undefined || g === '' ? 'missing' : /^`?none\b/i.test(g) && !HELD_RE.test(step.replace(FOR_TAIL, '')) ? 'none' : 'set'
+  const found = section(text, 'next steps')
+  const next = found ?? []
   let todo = 0
   let done = 0
   let unmarked = 0
@@ -148,7 +162,7 @@ export function laneFacts(text: string): LaneFacts {
     } else unmarked++
   }
   return {
-    status: st?.[1] ?? null, todo, done, unmarked, free, elsewhere: ELSEWHERE_RE.test(next.join('\n')), step1, gate,
+    status: st?.[1] ?? null, todo, done, unmarked, free, elsewhere: ELSEWHERE_RE.test(next.join('\n')), listed: found !== undefined, step1, gate,
     unstable: ACUITY_UNSTABLE.test(where) || MID_STEP.test(where),
   }
 }
@@ -161,14 +175,42 @@ export function asLaneFacts(x: unknown): LaneFacts | undefined {
   if (!(o.status === null || typeof o.status === 'string') || !['todo', 'done', 'unmarked', 'free'].every(n)) return undefined
   if (typeof o.elsewhere !== 'boolean' || typeof o.unstable !== 'boolean') return undefined
   if (!['none', 'proposed', 'set', 'missing'].includes(o.step1 as string) || !['none', 'set', 'missing'].includes(o.gate as string)) return undefined
+  // A record without `listed` (written before it was read) counts as one with no Next steps: never finished.
   return {
     status: o.status as string | null, todo: o.todo as number, done: o.done as number, unmarked: o.unmarked as number, free: o.free as number,
-    elsewhere: o.elsewhere, step1: o.step1 as LaneFacts['step1'], gate: o.gate as LaneFacts['gate'], unstable: o.unstable,
+    elsewhere: o.elsewhere, listed: o.listed === true, step1: o.step1 as LaneFacts['step1'], gate: o.gate as LaneFacts['gate'], unstable: o.unstable,
   }
 }
 
 /** Every `why` below is at most this long: tools/assemble fills `@lane_why@` with one this long for the budgets. */
 export const LANE_WHY_MAX = 63
+
+/** The longest Basis `laneBasis` gives: tools/assemble fills `@lane_basis@` with one this long for the budgets. */
+export const LANE_BASIS_MAX = 107
+
+/** The measure's git line (measure.pm `git_lines`): files changed, commits ahead of the upstream. */
+const GIT_RE = /^git: branch .*? · HEAD \S+ · (\d+) changed · ahead (\d+) behind \d+/m
+
+function count(n: number, one: string, many: string): string {
+  return `${n > 999 ? '999+' : String(n)} ${n === 1 ? one : many}`
+}
+
+/**
+ * The digest's Basis line, rendered by code when its block or note goes out (AWAY-DIGEST §3.1,
+ * §8 "invented or stale facts"; review of fix round 1, M7): how many of the listed steps the
+ * summary marks done, the units running now, and the commits not pushed and files changed the
+ * measure shows. The model prints it as it is; the rest of the digest is the model's (owner
+ * xxxxxxxx-05: the model sets the done and to-do items).
+ */
+export function laneBasis(f: LaneFacts | undefined, running: number, remeasure: string | undefined): string {
+  const steps = f === undefined ? 'no steps code could read'
+    : f.elsewhere ? 'the steps are in the handoff file'
+    : !f.listed ? 'no Next steps listed'
+    : `${f.done > 999 ? '999+' : String(f.done)} of ${count(f.done + f.todo + f.unmarked, 'listed step', 'listed steps')} marked done`
+  const g = GIT_RE.exec(remeasure ?? '')
+  const git = g ? `git: ${count(Number(g[2]), 'commit', 'commits')} not pushed, ${count(Number(g[1]), 'file', 'files')} changed` : 'git: not measured'
+  return `${steps}; ${count(running, 'unit', 'units')} running; ${git}`
+}
 
 function recheck(lane: Lane, why: string): LaneResult {
   return { lane, source: 'recheck', why }
@@ -181,10 +223,12 @@ function recheck(lane: Lane, why: string): LaneResult {
  * - working, whatever the Status: a mid-turn compaction, a summary not in the handoff form, a
  *   half-done step, a measured loop driver, or work started after the block went out;
  * - `finished` is working while a unit runs, a step is marked todo or has no mark, Step 1 is set
- *   or missing, or the steps are in a handoff file (`see handoff`);
+ *   or missing, the steps are in a handoff file (`see handoff`), or there is no Next steps
+ *   section (a summary cut near its size cap can lose it: AWAY-DIGEST §4.3);
  * - a blocked Status is working while a step can run (marked todo, naming no gate or wait; or
  *   Step 1 set with `Gate: none`: owner xxxxxxxx-08, non-blocking work keeps the lane going);
- *   `hard-blocked` with a unit running is `soft-blocked`;
+ *   `hard-blocked` with a unit running is `soft-blocked`, and `soft-blocked` with none is
+ *   `hard-blocked` (owner xxxxxxxx-06: soft means something still runs);
  * - `working`, an older word or none: `finished` once nothing runs, every listed step is marked
  *   done and Step 1 is none (a Status written while agents ran, as at the plugin's idle
  *   compaction); else working.
@@ -203,12 +247,14 @@ export function laneOf(f: LaneFacts | undefined, m: LaneMeasured): LaneResult {
     if (f.unmarked > 0) return recheck('working', 'the summary says finished, but a step has no done mark')
     if (f.step1 === 'missing') return recheck('working', 'the summary says finished, but has no Step 1 line')
     if (f.elsewhere) return recheck('working', 'the summary says finished, but its steps are in a handoff')
+    if (!f.listed) return recheck('working', 'the summary says finished, but has no Next steps')
     return { lane: 'finished', source: 'status', why: "the summary's Status line" }
   }
   if (w === 'hard-blocked' || w === 'soft-blocked') {
     if (f.free > 0) return recheck('working', `the summary says ${w}, but a step with no gate is to do`)
     if (f.step1 === 'set' && f.gate === 'none') return recheck('working', `the summary says ${w}, but Step 1 has no gate`)
     if (w === 'hard-blocked' && m.running > 0) return recheck('soft-blocked', 'the summary says hard-blocked, but a job still runs')
+    if (w === 'soft-blocked' && m.running === 0) return recheck('hard-blocked', 'the summary says soft-blocked, but nothing runs')
     return { lane: w, source: 'status', why: "the summary's Status line" }
   }
   const allDone = f.done > 0 && f.todo === 0 && f.unmarked === 0 && !f.elsewhere && f.step1 === 'none'
@@ -269,9 +315,29 @@ export async function runningUnits(d: Deps, remeasure: string | undefined, ended
   return ids.size
 }
 
-/** The task ids a background-task notification names (`<task-id>…</task-id>`; several in a batch). */
+/**
+ * The statuses a notification ends its task with (Claude Code's UserMessageTask: `completed`,
+ * `failed` or `killed`; `stopped` and `cancelled` read the same).
+ */
+const ENDED_RE = /^(?:completed|failed|killed|stopped|cancell?ed)$/i
+
+/**
+ * The task ids a background-task notification reports ended (`<task-id>…</task-id>`; several in a
+ * batch). Each id takes the `<status>` that follows it inside its own notification, before the
+ * next id: an ending word, or no status at all, counts the task as ended; another word (a
+ * producer's own, such as one about a task still running) leaves it running.
+ */
 export function notifiedTasks(text: string): string[] {
-  return [...text.matchAll(/<task-id>\s*([A-Za-z0-9._:/-]{1,128})\s*<\/task-id>/g)].map(m => m[1] ?? '').filter(x => x !== '')
+  const out: string[] = []
+  for (const part of text.split(/<\/?task-notification>/)) {
+    const ids = [...part.matchAll(/<task-id>\s*([A-Za-z0-9._:/-]{1,128})\s*<\/task-id>/g)]
+    ids.forEach((m, i) => {
+      const end = ids[i + 1]?.index ?? part.length
+      const status = /<status>\s*([^<]*?)\s*<\/status>/.exec(part.slice((m.index ?? 0) + m[0].length, end))?.[1]
+      if (m[1] && (status === undefined || ENDED_RE.test(status))) out.push(m[1])
+    })
+  }
+  return out
 }
 
 /** A main-session tool call that started work: an agent, a workflow, or a shell sent to the background. */
@@ -294,14 +360,15 @@ export function digestLine(name: string): string {
  * The note of a later turn not of a person's in the same idle episode, when code now reads the
  * lane as finished or hard-blocked though the turn before was told otherwise (a job ended). When
  * an earlier turn of the episode already got a finished or blocked lane (its digest went out),
- * the note asks for one line on the new state, not a second digest.
+ * the note asks for one line on the new state, not a second digest. `basis` is `laneBasis` now.
  */
-export function laneNote(name: string, r: LaneResult, again = false): string {
+export function laneNote(name: string, r: LaneResult, basis: string, again = false): string {
   return `Note from the user's ${name} plugin: after this result code reads the work lane as ${r.lane} (${r.why}). ` +
     'A result that unblocks a step makes it working again: handle it, then continue Step 1 unless it needs the user or hits a gate. ' +
     'A cron or Monitor turn: do its iteration first. ' +
     (again
-      ? `Else start nothing; the away digest went out already: say in one line that the lane is now ${r.lane}, then last, Needs you (numbered, each with what it blocks) or Nothing needed from you.`
-      : 'Else start nothing and print the away digest: the lane state and why; Done; Left (what blocks each); Running; Decided without you; ' +
+      ? `Else start nothing; the away digest went out already: say in one line that the lane is now ${r.lane} (Basis: ${basis}), then last, Needs you (numbered, each with what it blocks) or Nothing needed from you.`
+      : `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done); ` +
+        'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
         'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.')
 }

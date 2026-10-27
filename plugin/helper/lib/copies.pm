@@ -213,23 +213,102 @@ sub _test_corrupt {
 # Away digest phase 1 (owner 2026-10-27 12:5x; AWAY-DIGEST build item 6): the copy's frontmatter
 # status from the summary's own Status word: finished (or the older done) is completed, a blocked
 # lane (hard-blocked, soft-blocked, or the older blocked and waiting-*) is blocked, anything else
-# (working, active, none) is in-progress. The model's word, not a checked fact; finished counts as
-# completed only where the plugin's lane check (hooks/lib/lane.ts laneOf) would not overrule it
-# with the summary's own text: a step still marked todo (a `· todo` that ends its words, never
-# `· done when`), or a Step 1 that is set or missing, is in-progress.
+# (working, active, none) is in-progress. The model's word, not a checked fact, read as the
+# plugin's lane check reads the summary's own text (hooks/lib/lane.ts laneFacts and laneOf, less
+# what only the session measures): the Status, Step 1 and Gate lines from `## Resume here` (the
+# whole body when it has none), the steps from `## Next steps` alone, an item's last `· todo` or
+# `· done` that ends its words (never `· done when`).
+# - finished counts as completed only with a Next steps section (a summary cut near its cap can
+#   lose it), every listed step marked done, the steps in the summary (not `see handoff`), and
+#   Step 1 none or proposed; else in-progress;
+# - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
+#   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
+#   `Gate: none` (Step 1 itself naming none of them).
+my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
+my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+
+sub _trim { my ($s) = @_; $s =~ s/\A\s+|\s+\z//g; return $s }
+
+# (found, lines): the body of the first `## <heading>` section, its heading's inline text first.
+sub _section {
+    my ($t, $heading) = @_;
+    my @lines = split /\n/, $t, -1;
+    my $at;
+    for my $i (0 .. $#lines) {
+        if (lc(_trim($lines[$i])) =~ /\A\Q## $heading\E/) { $at = $i; last }
+    }
+    return (0) unless defined $at;
+    my @out;
+    my $head = $lines[$at];
+    my $c = index($head, ':');
+    push @out, _trim(substr($head, $c + 1)) if $c >= 0 && _trim(substr($head, $c + 1)) ne '';
+    for my $l (@lines[$at + 1 .. $#lines]) {
+        last if $l =~ /\A#{1,2} / || index($l, '⟪/') == 0 || index($l, '</summary>') == 0;
+        push @out, $l;
+    }
+    return (1, @out);
+}
+
+sub _last_mark {
+    my ($item) = @_;
+    my $mark;
+    $mark = $1 while $item =~ /$MARK_RE/g;
+    return $mark;
+}
+
+# The items of a Next steps section, split as lane.ts `items` splits them.
+sub _items {
+    my @out;
+    for my $raw (@_) {
+        my $line = _trim($raw);
+        next unless $line =~ /\A(\d+)\.\s/;
+        my $next = $1 + 1;
+        my $start = 0;
+        while ($line =~ /\s(\d+)\.\s/g) {
+            my ($n, $at) = ($1, $-[0]);
+            next unless $n == $next;
+            my $cur = substr($line, $start, $at - $start);
+            next unless defined _last_mark($cur);
+            push @out, _trim($cur);
+            $start = $at + 1;
+            $next++;
+        }
+        push @out, _trim(substr($line, $start));
+    }
+    return grep { /\A\d+\.\s/ } @out;
+}
+
 sub copy_status {
     my ($body) = @_;
     my $t = $body // '';
     utf8::decode($t) unless utf8::is_utf8($t);
-    my ($w) = $t =~ /^\s*Status:\s*([a-z][a-z-]*)/m;
+    my (undef, @resume) = _section($t, 'resume here');
+    my $where = join("\n", @resume);
+    $where = $t if $where eq '';
+    my ($w) = $where =~ /^\s*Status:\s*([a-z][a-z-]*)/m;
     return 'in-progress' unless defined $w;
-    if ($w eq 'finished' || $w eq 'done') {
-        my ($s1) = $t =~ /^\s*Step 1:[ \t]*(.*)$/m;
-        return 'in-progress' unless defined $s1 && ($s1 =~ /\A`?none\b/i || $s1 =~ /\|\s*proposed\s*\z/);
-        return 'in-progress' if $t =~ /·\s*todo(?=[ \t]*$|\s*[;,.)]|\s+\d+\.\s)/m;
-        return 'completed';
+    my ($s1) = $where =~ /^\s*Step 1:[ \t]*(.*)$/m;
+    my $step = defined $s1 ? _trim($s1) : '';
+    my $step1 = $step eq '' ? 'missing' : $step =~ /\A`?none\b/i ? 'none' : $step =~ /\|\s*proposed\s*\z/ ? 'proposed' : 'set';
+    my ($g) = $where =~ /^\s*Gate:[ \t]*([^·\n]*)/m;
+    $g = defined $g ? _trim($g) : '';
+    (my $cmd = $step) =~ s/\s+—\s+for\s+".*\z//;
+    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && $cmd !~ $HELD_RE) ? 'none' : 'set';
+    my ($listed, @next) = _section($t, 'next steps');
+    my ($todo, $unmarked, $free) = (0, 0, 0);
+    for my $item (_items(@next)) {
+        my $m = _last_mark($item);
+        if (!defined $m) { $unmarked++ }
+        elsif ($m eq 'todo') { $todo++; $free++ unless $item =~ $HELD_RE }
     }
-    return 'blocked' if $w =~ /\A(?:hard-blocked|soft-blocked|blocked|waiting-owner|waiting-job)\z/;
+    if ($w eq 'finished' || $w eq 'done') {
+        return 'in-progress' unless $listed && $todo == 0 && $unmarked == 0 && join("\n", @next) !~ /\bsee handoff\b/i;
+        return $step1 eq 'none' || $step1 eq 'proposed' ? 'completed' : 'in-progress';
+    }
+    if ($w =~ /\A(?:hard-blocked|soft-blocked|blocked|waiting-owner|waiting-job)\z/) {
+        return 'in-progress' if $free > 0 || ($step1 eq 'set' && $gate eq 'none');
+        return 'blocked';
+    }
     return 'in-progress';
 }
 

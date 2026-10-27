@@ -11,8 +11,8 @@ import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log, vettedWatch } from './log'
-import type { LaneFacts, LaneResult } from './lane'
-import { LANES, LEGACY_STATUS, asLaneFacts, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
+import type { Lane, LaneFacts, LaneResult } from './lane'
+import { LANES, LEGACY_STATUS, asLaneFacts, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
 
 /**
  * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
@@ -100,10 +100,11 @@ export async function buildBlockWith(
   const driver = remeasure !== undefined && DRIVER_LINE.test(remeasure)
   const idle = a.idle === true && !a.midturn
   // Away digest phase 1: an idle block outside halt mode reads the work lane now (lane.ts), with
-  // the units running now: agents, the measure's running rows, less what this episode's
+  // the units running now: agents, the measure's running rows (none for a block restored after
+  // `claude --resume`: they ran in the process that ended), less what this episode's
   // notifications reported ended, and with the work the model started since its block went out.
   const ep = episodeOf(d.state, sid, a.nonce)
-  const running = idle && a.halt !== true ? await runningUnits(d, remeasure, ep?.ended ?? new Set()) : undefined
+  const running = idle && a.halt !== true ? await runningUnits(d, ep?.restored === true ? undefined : remeasure, ep?.ended ?? new Set()) : undefined
   const lane = running !== undefined
     ? laneOf(a.lane, { running, midturn: a.midturn, nonok: a.nonok, driver, superseded: ep?.superseded === true })
     : undefined
@@ -128,6 +129,8 @@ export async function buildBlockWith(
   if (lane !== undefined) {
     runtime.lane = lane.lane
     runtime.lane_why = lane.why
+    // The digest's Basis line, rendered by code now (review of fix round 1, M7).
+    runtime.lane_basis = laneBasis(a.lane, running ?? 0, remeasure)
   }
   const h = a.handoff
   if (h && 'published' in h) {
@@ -187,7 +190,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     // settled the record as replaced. A restored idle block opens its idle episode (away digest).
     if (!s.pending && r) {
       s.pending = r
-      if (r.args.idle === true && !r.args.midturn) openEpisode(s, sid, r.nonce, r.args, r.remeasure)
+      if (r.args.idle === true && !r.args.midturn) openEpisode(s, sid, r.nonce, r.args, r.remeasure, true)
     }
   }
   const pend = s.pending
@@ -229,12 +232,12 @@ export async function logLane(
 
 /**
  * Opens the idle episode of an idle block (away digest phase 1): from its after-step, or from its
- * record restored after `claude --resume` (no turn has got the block yet).
+ * record restored after `claude --resume` (`restored`; no turn has got the block yet).
  */
-export function openEpisode(s: LoadState, sid: string, nonce: string, a: BlockArgs, remeasure: string | undefined): void {
+export function openEpisode(s: LoadState, sid: string, nonce: string, a: BlockArgs, remeasure: string | undefined, restored = false): void {
   s.idleLane = {
     sid, nonce, facts: a.lane, nonok: a.nonok, driver: remeasure !== undefined && DRIVER_LINE.test(remeasure), shown: undefined,
-    remeasure, ended: new Set(), superseded: false, closed: false,
+    remeasure, ended: new Set(), superseded: false, closed: false, restored,
   }
 }
 
@@ -274,9 +277,11 @@ async function laneShown(d: Deps, pend: PendingResume, out: { remeasure: string 
  * units running now (no helper call: the facts are the summary's, the in-flight rows the stored
  * measure's): when it turned finished or hard-blocked, the note asks for the digest, or for one
  * line on the new state when an earlier turn already got a finished or blocked lane. No change,
- * or a change toward work: nothing is added.
+ * or a change toward work: nothing is added. The note carries the Basis code renders now
+ * (`laneBasis`). A prompt that then does not enter (dropped, or its hook chain threw) hands the
+ * note back with `laneNoteLost`, so the next turn of the episode gets it.
  */
-export async function laneRecheck(d: Deps, kind: string, text: string): Promise<string | undefined> {
+export async function laneRecheck(d: Deps, kind: string, text: string): Promise<LaneNoteSent | undefined> {
   const s = d.state
   const l = s.idleLane
   if (!l || l.closed || (await d.sessionId()) !== l.sid) return undefined
@@ -286,13 +291,23 @@ export async function laneRecheck(d: Deps, kind: string, text: string): Promise<
   }
   if (kind === 'task-notification') for (const id of notifiedTasks(text)) l.ended.add(id)
   if (l.shown === undefined || s.halt.active) return undefined
-  const running = await runningUnits(d, l.remeasure, l.ended)
+  const running = await runningUnits(d, l.restored ? undefined : l.remeasure, l.ended)
   const r = laneOf(l.facts, { running, midturn: false, nonok: l.nonok, driver: l.driver, superseded: l.superseded })
   if (r.lane === l.shown) return undefined
   const was = l.shown
   l.shown = r.lane
   await logLane(d, l.sid, l.nonce, l.facts, r, 'recheck', running)
-  return r.lane === 'finished' || r.lane === 'hard-blocked' ? laneNote(d.name, r, showsDigest(was)) : undefined
+  if (r.lane !== 'finished' && r.lane !== 'hard-blocked') return undefined
+  return { text: laneNote(d.name, r, laneBasis(l.facts, running, l.remeasure), showsDigest(was)), nonce: l.nonce, was, now: r.lane }
+}
+
+/** A lane note `laneRecheck` put beside a prompt: the state it told, and the one before. */
+export type LaneNoteSent = { text: string; nonce: string; was: Lane | undefined; now: Lane }
+
+/** The prompt that carried this note did not enter: the episode reads as before it, so a later turn gets the note. */
+export function laneNoteLost(s: LoadState, n: LaneNoteSent): void {
+  const l = s.idleLane
+  if (l && l.nonce === n.nonce && !l.closed && l.shown === n.now) l.shown = n.was
 }
 
 /**

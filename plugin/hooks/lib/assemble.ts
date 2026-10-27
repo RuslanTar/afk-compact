@@ -33,8 +33,8 @@ export type Runtime = Partial<Record<
   | 'store' | 'idle_min'
   /** Owner xxxxxxxx-37: when a background result's turn took the idle block (`[idle-again]`). */
   | 'idle_used_at'
-  /** Away digest phase 1 (`[idle-done]`): the work lane's state and the reason code gives for it (lane.ts). */
-  | 'lane' | 'lane_why'
+  /** Away digest phase 1 (`[idle-done]`): the work lane's state, the reason code gives for it, and the digest's Basis line (lane.ts). */
+  | 'lane' | 'lane_why' | 'lane_basis'
   /** The shadow trial's fork prompts (TRIAL-DUAL-HANDOFF §4.2): texts read at run time from the user's local files. */
   | 'old_skill' | 'old_template' | 'trial_facts' | 'trial_tail',
   string

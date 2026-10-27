@@ -12,7 +12,7 @@ import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { startsWork } from './lib/lane'
-import { blockName, contextBlock, laneAgentStarted, laneRecheck, laneWorkStarted } from './lib/resume'
+import { blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 
 export const register: Register = (on, options) => {
@@ -105,18 +105,19 @@ export const register: Register = (on, options) => {
     }
     // Away digest phase 1: a later prompt of an open idle episode, not a person's, carries the lane
     // note beside it when the lane turned finished or hard-blocked (prompt.context is asked once per
-    // conversation, so it cannot carry one); a person's prompt closes the episode.
-    if (!own) {
-      const note = await laneRecheck(realDeps($, options, state), kind, e.text)
-      if (note !== undefined) e = { ...e, context: [...(e.context ?? []), note] }
-    }
+    // conversation, so it cannot carry one); a person's prompt closes the episode. A note whose
+    // prompt does not enter goes back to the episode for the next turn.
+    const note = own ? undefined : await laneRecheck(realDeps($, options, state), kind, e.text)
+    if (note !== undefined) e = { ...e, context: [...(e.context ?? []), note.text] }
     let r
     try {
       r = await next(e)
     } catch (err) {
+      if (note !== undefined) laneNoteLost(state, note)
       if (entering) promptNotEntered(state, kind)
       throw err
     }
+    if (note !== undefined && r.drop !== undefined) laneNoteLost(state, note)
     if (entering && r.drop !== undefined) promptNotEntered(state, kind)
     if (entering && r.drop === undefined) {
       const d = realDeps($, options, state)

@@ -113,6 +113,10 @@ const WORST = {
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
   draft_state: 'present', handoff_finish: '`' + NAME + "-store publish --stage '" + PREV + "' --slug lab-123-retry --status in-progress`",
   idle_used_at: '2026-10-21T04:40:00+03:00',
+  // Away digest phase 1 [idle-done]: the lane word, the longest reason and the longest Basis line
+  // lane.ts gives (LANE_WHY_MAX, LANE_BASIS_MAX; tools/assemble budgets with the same values).
+  lane: 'hard-blocked', lane_why: 'no Status code could read, but every listed step is marked done',
+  lane_basis: '999+ of 999+ listed steps marked done; 999+ units running; git: 999+ commits not pushed, 999+ files changed',
   // The shadow trial's fork texts (TRIAL-DUAL-HANDOFF §4.2): read at run time from local files.
   old_skill: '# Old skill\nStep 1.', old_template: '# Template', trial_facts: 'Repository: r', trial_tail: 'Last reply:\ndone',
 }
@@ -120,7 +124,7 @@ const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
   'trial-old-handoff': ['trial-tail'],
@@ -129,19 +133,20 @@ const TAGS: Record<string, Tag[]> = {
 /**
  * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
  * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
- * (owner xxxxxxxx-25) and `midturn`, `idle-again` (owner xxxxxxxx-37) only with `idle` or
- * `idle-halt`, `handoff` never with `handoff-partial`, `driver` never with `idle-halt`, and one
- * handoff-turn kind at a time.
+ * (owner xxxxxxxx-25), `idle-done` (away digest phase 1) and `midturn`, `idle-again` (owner
+ * xxxxxxxx-37) only with `idle`, `idle-halt` or `idle-done`, `handoff` never with
+ * `handoff-partial`, `driver` never with `idle-halt` or `idle-done`, and one handoff-turn kind at a time.
  */
 function combos(tags: Tag[]): Tag[][] {
   let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
   const has = (c: Tag[], t: Tag) => c.includes(t)
   if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
-  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
-  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt'))
-  // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused).
-  out = out.filter(c => !(has(c, 'driver') && has(c, 'idle-halt')))
+  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'idle-done'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt') || has(c, 'idle-done'))
+  // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused); a measured driver
+  // keeps the work lane working, so never with [idle-done] either (lane.ts).
+  out = out.filter(c => !(has(c, 'driver') && (has(c, 'idle-halt') || has(c, 'idle-done'))))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
@@ -178,11 +183,13 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,130
   // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note,
   // the owner's 2026-10-26 GSD re-entry ruling the [driver] line, and the 2026-10-26 plugin-text
-  // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last).
-  test('resume protocol ≤4,130 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last; 4,590
+  // since the away digest's [idle-done] line with its code-rendered Basis, and the step-5 digest
+  // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5).
+  test('resume protocol ≤4,590 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 4130).toBe(true)
+      expect(s.length <= 4590).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

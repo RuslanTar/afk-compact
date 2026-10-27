@@ -17,5 +17,6 @@
   "idle_min": "49",
   "idle_used_at": "2026-10-21T14:30:00+03:00",
   "lane": "hard-blocked",
-  "lane_why": "the summary's Status line"
+  "lane_why": "the summary's Status line",
+  "lane_basis": "2 of 3 listed steps marked done; 0 units running; git: 1 commit not pushed, 2 files changed"
 }
