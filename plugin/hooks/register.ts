@@ -12,7 +12,7 @@ import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { blockName, contextBlock } from './lib/resume'
-import { shadowOwnerHandoff, shadowSelfHandoff, shadowTurnEnd } from './lib/shadow'
+import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 
 export const register: Register = (on, options) => {
   const state = newState(randomHex(8))
@@ -58,7 +58,15 @@ export const register: Register = (on, options) => {
   // MG-3 (ratify R4 guard): the handoff turn's first request reports its cache-read share. The
   // step passes through unchanged (model, effort and all); only its result is read, after it.
   // Nothing after the stream may throw: a failure there would hand the step to `.catch`.
+  // The shadow trial stamps a main step's start for its cold rule (nothing without its config).
   on('turn.step', async function* ($, e, next) {
+    if (e.agentId === undefined) {
+      try {
+        shadowStep(state, () => realDeps($, options, state))
+      } catch {
+        // the trial never changes a step
+      }
+    }
     const r = yield* next(e)
     try {
       if (e.agentId === undefined) onStep(realDeps($, options, state), e.turnId, e.index, r.usage)

@@ -21,7 +21,10 @@ import { sha256 } from './normalize'
 
 /** A fork with no result after this long is `lost` (it cannot be cancelled; a late result is still saved). */
 export const LOST_MS = 15 * 60 * 1000
-/** Skipped when the last main request is older than this: a fork still starts before the 1-hour cache lapses. */
+/**
+ * Skipped when the last main request (a main step's start, else the last main turn end) is older
+ * than this, whether or not a turn runs: a fork still starts before the 1-hour cache lapses.
+ */
 export const COLD_MS = 58 * 60 * 1000
 /** The M2 facts measure runs inside `openAndSubmit` under this cap (old arm `skipped:facts-timeout` past it). */
 export const M2_MEASURE_MS = 3000
@@ -73,6 +76,8 @@ export type FireSpec = {
   trigger?: string
   nonce?: string
   ht?: string
+  /** The main turn the moment falls in (M1 model-called, M3 mid-turn), for the record's `turn_id`. */
+  turnId?: string
   /** A `/compact` text of the user's: added to the native prompt as the engine adds it. */
   compactText?: string
   /** A prompt typed now (M1 owner): part of the supplied tail. */
@@ -122,6 +127,8 @@ type ShadowLoad = {
   /** M1: the main turn (`turnSeq`) whose forks fired; the owner-typed one marks the turn about to start. */
   firedTurnSeq: number
   firedNonces: Set<string>
+  /** When the last main step (one model request) started, on the session's clock: the cold rule's input. */
+  lastStepAt: number | undefined
   positions: Map<string, number>
   moments: WeakMap<HandoffTurn, Moment>
   inflight: Set<Promise<unknown>>
@@ -133,7 +140,8 @@ function load(d: Deps): ShadowLoad {
   let s = LOADS.get(d.state)
   if (!s) {
     s = {
-      present: false, kept: undefined, lastAnswer: undefined, firedTurnSeq: -1, firedNonces: new Set(), positions: new Map(),
+      present: false, kept: undefined, lastAnswer: undefined, firedTurnSeq: -1, firedNonces: new Set(), lastStepAt: undefined,
+      positions: new Map(),
       moments: new WeakMap(), inflight: new Set(),
     }
     LOADS.set(d.state, s)
@@ -156,6 +164,23 @@ export async function shadowSettled(state: Deps['state']): Promise<void> {
 export function trialPath(home: string | undefined, name: string): string | undefined {
   const h = home?.replace(/\/+$/, '')
   return h ? `${h}/.cache/${name}-trial/trial.json` : undefined
+}
+
+/** The trial config was there at the last main turn end (synchronous; false without it). */
+export function shadowPresent(d: Deps): boolean {
+  return LOADS.get(d.state)?.present === true
+}
+
+/**
+ * A main `turn.step` starts (its request goes out): stamped for the cold rule while the trial
+ * config is there; nothing at all without it. Not awaited; never throws.
+ */
+export function shadowStep(state: Deps['state'], deps: () => Deps): void {
+  const sh = LOADS.get(state)
+  if (sh?.present !== true) return
+  track(sh, deps().now().then(t => {
+    sh.lastStepAt = t
+  }))
 }
 
 /** The trial ran a measure for this session that says on (cheap and synchronous: a hot-path test). */
@@ -271,8 +296,9 @@ async function prepare(d: Deps, sid: string, spec: FireSpec, m: Measure | undefi
   const limits = u?.rateLimits ?? []
   if (limits.length === 0) return { ...base, skip: 'no-limits' }
   if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { ...base, skip: 'near-limit' }
-  const s = d.state
-  if (!s.mainTurnRunning && (s.lastTurnEndAt === undefined || now - s.lastTurnEndAt > COLD_MS)) return { ...base, skip: 'cold' }
+  // The cold rule (§4.5) on the last main request, mid-turn too: a step's start, else the turn end.
+  const last = Math.max(d.state.lastTurnEndAt ?? -Infinity, sh.lastStepAt ?? -Infinity)
+  if (!Number.isFinite(last) || now - last > COLD_MS) return { ...base, skip: 'cold' }
   const tail = tailText(sh, spec)
   const kept = sh.kept
   const old = factsTimeout ? undefined : oldPrompt(d.name, m, tail)
@@ -408,7 +434,19 @@ async function finish(d: Deps, mo: Moment): Promise<void> {
   }
   mo.saved = true
   mo.lostTimer?.cancel()
-  await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify(saveInput(d, mo)) + '\n')
+  const input = saveInput(d, mo)
+  const r = await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify(input) + '\n')
+  if (r.ok) return
+  // §4.7 "trial-save fails: one row": a second, minimal call (no reply, so no scan and no shadow).
+  const strip = (a: Record<string, unknown>) => {
+    const { reply: _reply, ...rest } = a
+    return rest
+  }
+  await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify({
+    kind: 'failed', moment_id: input['moment_id'],
+    moment: { ...(input['moment'] as Record<string, unknown>), status: 'save-failed' },
+    old: strip(input['old'] as Record<string, unknown>), native: strip(input['native'] as Record<string, unknown>),
+  }) + '\n')
 }
 
 function armRecord(r: ArmResult | undefined, fallback: string, tokens: number | null): Record<string, unknown> {
@@ -440,6 +478,7 @@ export function momentFields(mo: { p: Prepared; pluginSide: string; htRerun?: st
     cc_version: p.ccVersion,
     ...(p.spec.trigger !== undefined ? { trigger: p.spec.trigger } : {}),
     ...(p.spec.ht !== undefined ? { ht: p.spec.ht } : {}),
+    ...(p.spec.turnId !== undefined ? { turn_id: p.spec.turnId } : {}),
     ...(mo.htRerun !== undefined ? { ht_rerun: mo.htRerun } : {}),
     ...(p.spec.nonce !== undefined ? { nonce: p.spec.nonce } : {}),
     ...(p.model !== null ? { model: p.model } : {}),
@@ -532,7 +571,8 @@ export async function shadowSelfHandoff(d: Deps, sid: string, tool: string, inpu
     const sh = load(d)
     if (sh.firedTurnSeq === s.turnSeq) return
     sh.firedTurnSeq = s.turnSeq
-    startShadow(d, await prepare(d, sid, { kind: 'm1-self', idPart: randomHex(8) }, sh.kept?.m))
+    const turnId = s.turnId ?? undefined
+    startShadow(d, await prepare(d, sid, { kind: 'm1-self', idPart: randomHex(8), ...(turnId !== undefined ? { turnId } : {}) }, sh.kept?.m))
   } catch {
     // the trial never changes the tool call
   }
@@ -547,9 +587,16 @@ export async function shadowPrepM2(d: Deps, sid: string, h: HandoffTurn, ht: str
   try {
     const sh = load(d)
     if (!sh.present || h.shadowFired) return undefined
+    // The turn end before this handoff turn measured off, ended or not valid: no measure here (the
+    // config is re-read at the next turn end, §4.1).
+    const k = sh.kept
+    if (k !== undefined && k.sid === sid && k.m.state !== 'on') return undefined
     const fresh = await measure(d, sid, M2_MEASURE_MS)
     const timeout = fresh === 'timeout'
-    const m = fresh !== undefined && fresh !== 'timeout' ? fresh : timeout && on(d, sid) ? sh.kept?.m : undefined
+    // Past the cap with no kept facts (nor the native text that comes with them): one
+    // `skipped:facts-timeout` record for the moment.
+    const m = fresh !== undefined && fresh !== 'timeout' ? fresh
+      : timeout ? (on(d, sid) ? sh.kept?.m : { state: 'on' as const, skip: 'facts-timeout' }) : undefined
     if (m && m.state === 'on' && fresh !== 'timeout' && fresh !== undefined) sh.kept = { sid, at: await d.now(), m }
     const kind: MomentKind = h.reason === 'precompact' ? 'm2-precompact' : h.reason === 'idle' ? 'm2-idle' : 'm2-halt'
     return await prepare(d, sid, { kind, idPart: ht, ht }, m, timeout)
@@ -608,8 +655,9 @@ export async function shadowPrepM3(
     const sh = load(d)
     if (sh.firedNonces.has(a.nonce)) return undefined
     sh.firedNonces.add(a.nonce)
+    const turnId = d.state.mainTurnRunning && d.state.turnId !== null ? d.state.turnId : undefined
     return await prepare(d, sid, {
-      kind: a.kind, idPart: a.nonce, nonce: a.nonce, trigger: a.trigger, ...(a.compactText !== undefined ? { compactText: a.compactText } : {}),
+      kind: a.kind, idPart: a.nonce, nonce: a.nonce, trigger: a.trigger, ...(turnId !== undefined ? { turnId } : {}), ...(a.compactText !== undefined ? { compactText: a.compactText } : {}),
     }, sh.kept?.m)
   } catch {
     return undefined

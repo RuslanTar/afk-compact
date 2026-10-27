@@ -29,7 +29,9 @@ sub call {
 
 my $LANE_RE = qr/^(lane|auto):[A-Za-z0-9._\/-]+$/;
 
-# lane(sid, queue_cmd, budget_ms) -> {status: ok|off|unknown|timeout, lane, open, ids, label, queued_line}
+# lane(sid, queue_cmd, budget_ms[, quiet]) -> {status: ok|off|unknown|timeout, lane, open, ids, label, queued_line}
+# `quiet` (the local shadow trial's facts): the reply is read the same way, but nothing is recorded
+# (no queue-state.json, no caps cache, no queue_contract row), so the session's queue mode is unchanged.
 # The `list --json` reply is the v1 contract `queue-stub/v1` (ROOT-RULINGS F2-8,
 # provisional): one object {"schema": "queue-stub/v1", "session", "lane": "lane:<repo>/<name>"
 # | "auto:…" | null, "open": n, "pending": n, "preview": bool, "held_by": sid | null,
@@ -39,18 +41,19 @@ my $LANE_RE = qr/^(lane|auto):[A-Za-z0-9._\/-]+$/;
 # or objects with `id`). `lanes` is informational and ignored.
 our $SCHEMA = 'queue-stub/v1';
 sub lane {
-    my ($sid, $cmd, $budget_ms) = @_;
+    my ($sid, $cmd, $budget_ms, $quiet) = @_;
     return { status => 'off' } unless defined $cmd && $cmd ne '';
     return { status => 'unknown', why => 'not-executable' } unless -f $cmd && -x _;
+    my $contract = $quiet ? sub { } : \&_contract;
     my $r = call([$cmd, 'list', '--json', '--session', $sid], $budget_ms);
-    if ($r->{timed_out}) { _contract($cmd, 'timeout'); return { status => 'timeout' } }
-    if ($r->{exit} != 0) { _contract($cmd, 'exit'); return { status => 'unknown', why => 'exit' } }
+    if ($r->{timed_out}) { $contract->($cmd, 'timeout'); return { status => 'timeout' } }
+    if ($r->{exit} != 0) { $contract->($cmd, 'exit'); return { status => 'unknown', why => 'exit' } }
     my $j = eval { jsonc::decode(util::text($r->{out})) };
-    if (ref $j ne 'HASH') { _contract($cmd, 'not-json'); return { status => 'unknown', why => 'not-json' } }
-    if (!defined $j->{schema}) { _contract($cmd, 'untagged'); return { status => 'unknown', why => 'untagged' } }
-    if (ref $j->{schema} || $j->{schema} ne $SCHEMA) { _contract($cmd, 'schema'); return { status => 'unknown', why => 'schema' } }
-    _contract($cmd, undef);
-    eval { caps_put($cmd, commands => (ref $j->{commands} eq 'ARRAY' ? [grep { defined && !ref } @{ $j->{commands} }] : undef)) };
+    if (ref $j ne 'HASH') { $contract->($cmd, 'not-json'); return { status => 'unknown', why => 'not-json' } }
+    if (!defined $j->{schema}) { $contract->($cmd, 'untagged'); return { status => 'unknown', why => 'untagged' } }
+    if (ref $j->{schema} || $j->{schema} ne $SCHEMA) { $contract->($cmd, 'schema'); return { status => 'unknown', why => 'schema' } }
+    $contract->($cmd, undef);
+    eval { caps_put($cmd, commands => (ref $j->{commands} eq 'ARRAY' ? [grep { defined && !ref } @{ $j->{commands} }] : undef)) } unless $quiet;
     my $lane = $j->{lane};
     return { status => 'unknown', why => 'no-lane' } unless defined $lane && !ref $lane && $lane =~ $LANE_RE;
     return { status => 'unknown', why => 'preview' } if $j->{preview} || $j->{minted};

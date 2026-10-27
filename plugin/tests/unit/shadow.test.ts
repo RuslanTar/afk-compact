@@ -9,7 +9,7 @@ import type { Engine } from 'claude-code/testing'
 import { hasAsset, hasTag } from '../../hooks/lib/assemble'
 import type { Measure } from '../../hooks/lib/shadow'
 import { COMPACT_TEXT_SEP, LOST_MS, armOf, armOfError, nativePrompt, oldPrompt, parseMeasure, trialPath } from '../../hooks/lib/shadow'
-import { HOME, SID_A, World, raiseCompact } from './harness.test'
+import { HOME, SID_A, SID_B, World, raiseCompact } from './harness.test'
 
 const OLD = hasAsset('trial-old-handoff')
 const PRE = hasTag('handoff-turn', 'submit-pre')
@@ -260,6 +260,7 @@ test('AT-DH-11: M1 model-called Skill: once a main turn; another skill, a subage
   await w.settle()
   expect(forks.length).toBe(2)
   expect(saves(w).map(s => s.moment.kind)).toEqual(['m1-self'])
+  expect(saves(w)[0]?.moment.turn_id).toBe('t2')
 })
 
 // ---- M2
@@ -498,4 +499,113 @@ test('AT-DH-18: parseMeasure, armOf and armOfError map every answer; the old pro
   const withTail = oldPrompt(n, m, 'Last reply:\nTAIL-ANSWER') ?? ''
   expect([withTail.includes('TAIL-ANSWER'), o.includes('TAIL-ANSWER')]).toEqual([true, false])
   expect(oldPrompt(n, { ...m, old: { status: 'no-old-skill' } }, undefined)).toBe(undefined)
+})
+
+// ---- review fixes (2026-10-27)
+
+test('AT-DH-26: the cold rule holds mid-turn on the last main step\'s start: a compaction 30 min after it fires (with the turn id), one 59 min after it is skipped:cold', async ($, on) => {
+  const w = new World().install(on)
+  const forks = trialOn(on, w)
+  await started($, w)
+  await turn($, w)
+  await w.userTurn($)
+  await w.step($)
+  await w.advance(30 * 60000)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(forks.length).toBe(2)
+  await w.advance(29 * 60000)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(forks.length).toBe(2)
+  const s = saves(w)
+  expect(s.map(x => [x.kind, x.moment.status, x.moment.turn_id])).toEqual([['moment', undefined, 't2'], ['skip', 'skipped:cold', 't2']])
+})
+
+test('AT-DH-27: a trial-save that fails gets one minimal save-failed call: the arm statuses, no reply', async ($, on) => {
+  const w = new World().install(on)
+  trialOn(on, w)
+  let n = 0
+  w.replies['trial-save'] = () => (n++ === 0 ? { exitCode: 1, stdout: '' } : { exitCode: 0, stdout: '{"written":true}\n' })
+  await started($, w)
+  await turn($, w)
+  await raiseCompact($, { trigger: 'manual' })
+  await w.settle()
+  const s = saves(w)
+  expect(s.map(x => [x.kind, x.moment.status])).toEqual([['moment', undefined], ['failed', 'save-failed']])
+  expect([s[1]?.moment_id, s[1]?.native?.status, s[1]?.native?.reply, s[1]?.old?.reply]).toEqual([s[0]?.moment_id, 'ok', undefined, undefined])
+})
+
+test('AT-DH-28: M2 facts measure past 3 s with no kept facts: one skipped:facts-timeout record, no fork, the handoff turn still submitted', { options: { precompact_turn: 'model' } }, async ($, on) => {
+  const w = new World().install(on)
+  const forks = trialOn(on, w)
+  let k = 0
+  w.replies['trial-measure'] = () => ({ exitCode: 0, stdout: k++ === 0 ? 'not json\n' : JSON.stringify(measureOn()) + '\n' })
+  await started($, w)
+  await turn($, w)
+  w.tokens = 410000
+  if (!PRE) return
+  let release: () => void = () => undefined
+  w.atHelper = async sub => {
+    if (sub === 'trial-measure') await new Promise<void>(r => (release = r))
+  }
+  await turn($, w)
+  await w.advance(2000)
+  await w.advance(3000)
+  release()
+  w.atHelper = undefined
+  await w.settle()
+  expect(w.submits.length).toBe(1)
+  expect(forks.length).toBe(0)
+  expect(saves(w).map(x => [x.kind, x.moment.status, x.moment.kind])).toEqual([['skip', 'skipped:facts-timeout', 'm2-precompact']])
+})
+
+test('AT-DH-29: a turn end that measured the trial off: the handoff turn after it runs no measure of its own', { options: { precompact_turn: 'model' } }, async ($, on) => {
+  const w = new World().install(on)
+  trialOn(on, w, { state: 'off', why: 'off' })
+  await started($, w)
+  await turn($, w)
+  w.tokens = 410000
+  await turn($, w)
+  await w.advance(2000)
+  if (!PRE) return
+  expect(w.submits.length).toBe(1)
+  expect(w.callsOf('trial-measure').length).toBe(2)
+})
+
+test('AT-DH-30: IC-1 D7 (ii) runs again after the M2 measure: a session that changed while it ran gets no submit and no fork', { options: { precompact_turn: 'model' } }, async ($, on) => {
+  const w = new World().install(on)
+  const forks = trialOn(on, w)
+  await started($, w)
+  await turn($, w)
+  w.tokens = 410000
+  await turn($, w)
+  if (!PRE) return
+  let release: () => void = () => undefined
+  w.atHelper = async sub => {
+    if (sub === 'trial-measure') await new Promise<void>(r => (release = r))
+  }
+  await w.advance(2000)
+  w.sid = SID_B
+  release()
+  w.atHelper = undefined
+  await w.settle()
+  expect([w.submits.length, forks.length]).toEqual([0, 0])
+})
+
+test('AT-DH-31: what the mod sends passes the helper\'s field classes: a [1m] model id and the local times (trial.pm $MODEL, $TIME)', async ($, on) => {
+  const w = new World().install(on)
+  trialOn(on, w)
+  w.model = 'claude-opus-5-5[1m]'
+  await started($, w)
+  await turn($, w)
+  await raiseCompact($, { trigger: 'manual' })
+  await w.settle()
+  const s = saves(w)[0]
+  // The same patterns as plugin/helper/lib/trial.pm ($TIME, $MODEL); AT-DH-24 checks the helper keeps them.
+  const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/
+  const MODEL = /^[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?$/
+  expect(s?.moment.model).toBe('claude-opus-5-5[1m]')
+  expect(MODEL.test(String(s?.moment.model))).toBe(true)
+  for (const t of [s?.moment.opened_at, s?.old?.started_at, s?.old?.ended_at, s?.native?.started_at, s?.native?.ended_at]) expect(TIME.test(String(t))).toBe(true)
 })

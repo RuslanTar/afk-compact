@@ -274,19 +274,48 @@ sub _git_out {
     return $o;
 }
 
-# repo_ticket(cwd, branch, common_dir) -> (repo, ticket) by the old skill's own rules: the repo
-# is the folder that holds the git common dir (else the cwd's name); the ticket is the branch's
-# first `[A-Z]+-[0-9]+`, else `general`.
+# repo_ticket(cwd, branch, common_dir) -> (repo, ticket, repo_name) by the old skill's own rules:
+# the repo is the folder that holds the git common dir (else the cwd's name); the ticket is the
+# branch's first `[A-Z]+-[0-9]+`, else `general`. `repo` is that name as one safe path component
+# (bucket()); `repo_name` is the name as found, used only to read the real handoff bucket.
 sub repo_ticket {
     my ($cwd, $branch, $common) = @_;
     my $repo;
     if (defined $common && $common ne '') { (my $c = $common) =~ s{/+$}{}; $repo = util::basename(util::dirname($c)) }
     $repo = util::basename($cwd // '') unless defined $repo && $repo ne '';
     my ($ticket) = (defined $branch ? $branch : '') =~ /([A-Z]+-[0-9]+)/;
-    return ($repo, $ticket // 'general');
+    return (bucket($repo), $ticket // 'general', $repo);
 }
 
 sub component { my ($v) = @_; return defined $v && $v =~ /^[A-Za-z0-9._-]{1,100}$/ && $v ne '.' && $v ne '..' ? 1 : 0 }
+
+# bucket(name) -> the name when it is a safe path component, else a slug of it plus 8 hex of its
+# sha256 (`My Project` -> `My-Project-<8 hex>`), so every repo gets a trial bucket and the name
+# reaches no path as it is (a space, a non-ASCII letter, `.`, `..`, the root's empty name).
+sub bucket {
+    my ($name) = @_;
+    $name = '' unless defined $name;
+    return $name if component($name);
+    my $raw = util::to_bytes($name);
+    (my $s = $raw) =~ s/[^A-Za-z0-9._-]+/-/g;
+    $s =~ s/^[.-]+//;
+    $s =~ s/-+$//;
+    $s = substr($s, 0, 60);
+    $s =~ s/-+$//;
+    return ($s eq '' ? 'repo' : $s) . '-' . substr(sha::hex256($raw), 0, 8);
+}
+
+# skipped_repo(cfg, repo, repo_name) -> 1 when the skip-list names the repo, as found or as its bucket.
+sub skipped_repo {
+    my ($cfg, $repo, $name) = @_;
+    for my $x (@{ $cfg->{skip_repos} || [] }) {
+        return 1 if (defined $name && $x eq $name) || $x eq $repo || bucket($x) eq $repo;
+    }
+    return 0;
+}
+
+# A plain file that is not a symlink (a FIFO, a device or a link out of the folder is never read).
+sub _plain { my ($p) = @_; return -f $p && !-l $p ? 1 : 0 }
 
 sub _stamp_of { my ($n) = @_; return $n =~ /^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})/ ? $1 : '' }
 
@@ -305,20 +334,22 @@ sub _front {
 # before the install or with a previous_handoff that names no file with a `kind:`); never the
 # plugin's own files. `own` is this session's newest old shadow (the old skill's Step 0).
 sub old_chain {
-    my ($cfg, $repo, $ticket, $sid8) = @_;
+    my ($cfg, $repo, $ticket, $sid8, $name) = @_;
     my %r = (prev => undef, flagged => 0, own => undef);
     return \%r unless component($repo) && component($ticket);
     my @cand;
     my $sd = dir() . "/old/$repo/$ticket";
     for my $f (util::list_dir_max($sd, 2000)) {
-        next unless $f =~ /\Q$OLD_EXT\E$/ && -f "$sd/$f";
+        next unless $f =~ /\Q$OLD_EXT\E$/ && _plain("$sd/$f");
         push @cand, { path => "$sd/$f", stamp => _stamp_of($f), name => $f, shadow => 1 };
     }
+    # The real bucket is named as the old skill names it: the repo's name as found.
+    $name = $repo unless defined $name && $name ne '' && $name ne '.' && $name ne '..' && $name !~ m{[/\0]};
     my $root = util::clean_path($cfg->{handoff_root});
-    my $rb = "$root/$repo/$ticket";
+    my $rb = "$root/" . util::to_bytes($name) . "/$ticket";
     my $inst = defined $cfg->{installed} ? $cfg->{installed} : undef;
     for my $f (util::list_dir_max($rb, 2000)) {
-        next unless $f =~ /\.md$/ && -f "$rb/$f" && _stamp_of($f) ne '';
+        next unless $f =~ /\.md$/ && _plain("$rb/$f") && _stamp_of($f) ne '';
         my $head = util::read_file("$rb/$f", 8192);
         my ($kind, $prev) = _front(util::text($head));
         next if $kind;
@@ -339,17 +370,48 @@ sub old_chain {
     if (my $n = $s[0]) { $r{prev} = { path => $n->{path}, text => util::text(util::read_file($n->{path}, $PREV_MAX)) } }
     if (defined $sid8) {
         my ($own) = grep { $_->{shadow} && index($_->{name}, "_${sid8}_") >= 0 } @s;
-        $r{own} = { path => $own->{path} } if $own;
+        # Step 0 reads this session's own shadow: its text too when it is not the previous one.
+        $r{own} = { path => $own->{path}, same => ($r{prev} && $r{prev}{path} eq $own->{path} ? 1 : 0) } if $own;
+        $r{own}{text} = util::text(util::read_file($own->{path}, $PREV_MAX)) if $own && !$r{own}{same};
     }
     return \%r;
 }
 
-# facts(sid, cwd, cfg, budget_ms) -> {text, repo, ticket, worktree, branch, head, dirty, old_chain_flagged}
-sub facts {
-    my ($sid, $cwd, $cfg, $budget_ms) = @_;
+# place(cwd, budget_ms) -> {w (git::where), repo, ticket, repo_name, t0}: the bucket first, so a
+# skipped repo costs one git call and nothing else is gathered (§4.5 skip-list).
+sub place {
+    my ($cwd, $budget_ms) = @_;
     my $t0 = util::clock_ms();
-    my $left = sub { my $l = $t0 + ($budget_ms // 2500) - util::clock_ms(); return $l < 50 ? 50 : ($l > 2000 ? 2000 : $l) };
-    my $w = git::where($cwd, $left->());
+    my $w = git::where($cwd, _left($t0, $budget_ms)->());
+    my ($repo, $ticket, $name) = repo_ticket($cwd, $w->{in_git} ? $w->{branch} : undef, $w->{common_dir});
+    return { w => $w, repo => $repo, ticket => $ticket, repo_name => $name, t0 => $t0 };
+}
+
+sub _left {
+    my ($t0, $budget_ms) = @_;
+    return sub { my $l = $t0 + ($budget_ms // 2500) - util::clock_ms(); return $l < 50 ? 50 : ($l > 2000 ? 2000 : $l) };
+}
+
+# now_md(toplevel) -> the bytes of <toplevel>/.remember/now.md (capped), only when it is a plain
+# file whose real path lies inside the toplevel's (a link out of the repository is never read).
+sub now_md {
+    my ($top) = @_;
+    return undef unless defined $top && $top ne '';
+    my $p = "$top/.remember/now.md";
+    return undef unless _plain($p);
+    my ($rt, $rp) = (_real($top), _real($p));
+    return undef unless defined $rt && defined $rp && inside($rp, $rt) && $rp ne $rt;
+    return util::read_file($p, $NOW_MD_MAX);
+}
+
+# facts(sid, cwd, cfg, budget_ms, place) -> {text, repo, ticket, worktree, branch, head, dirty, old_chain_flagged}
+# Read-only: no file is written, and the queue tool's list is read without the adapter's
+# contract record or caps cache (queue::lane quiet), so the trial changes nothing the plugin shows.
+sub facts {
+    my ($sid, $cwd, $cfg, $budget_ms, $pl) = @_;
+    $pl //= place($cwd, $budget_ms);
+    my $left = _left($pl->{t0}, $budget_ms);
+    my $w = $pl->{w};
     my ($branch, $head, $log, $stat, $dirty) = (undef, undef, undef, undef, undef);
     if ($w->{in_git}) {
         $branch = $w->{branch};
@@ -359,21 +421,22 @@ sub facts {
         my $st = _git_out($cwd, ['status', '--porcelain=v1', '--untracked-files=normal'], $left);
         $dirty = defined $st ? scalar(grep { /\S/ } split /\n/, $st) : undef;
     }
-    my ($repo, $ticket) = repo_ticket($cwd, $branch, $w->{common_dir});
+    my ($repo, $ticket, $name) = @$pl{qw(repo ticket repo_name)};
     my $top = $w->{toplevel} // $cwd;
-    my $now_md = defined $top ? util::read_file("$top/.remember/now.md", $NOW_MD_MAX) : undef;
+    my $now_md = now_md($top);
     my $qcmd = rc::val('queue_cmd');
     my $queue = 'nothing queued (not measured)';
     if (defined $qcmd && $qcmd ne '') {
-        my $l = eval { queue::lane($sid, $qcmd, 1500) } || {};
+        my $l = eval { queue::lane($sid, $qcmd, 1500, 1) } || {};
         $queue = ($l->{status} // '') eq 'ok' ? ($l->{queued_line} // "lane $l->{lane}: nothing queued") : "nothing queued (queue status: " . ($l->{status} // 'unknown') . ")";
     }
     my $sid8 = substr($sid, 0, 8);
-    my $chain = old_chain($cfg, $repo, $ticket, $sid8);
+    my $chain = old_chain($cfg, $repo, $ticket, $sid8, $name);
     my $na = '(not available)';
+    my $own = $chain->{own};
     my @t = (
         "Date: " . util::iso(util::now()),
-        "Repository: $repo",
+        "Repository: $repo" . ($repo ne $name ? ' (the folder ' . util::text($name) . ', as one path part)' : ''),
         "Ticket bucket: $ticket",
         "\$ git branch --show-current\n" . ($branch // $na),
         "\$ git rev-parse --short HEAD\n" . ($head // $na),
@@ -383,7 +446,9 @@ sub facts {
         "Queue list:\n$queue",
         "Previous handoff in this bucket (newest by file name):\n"
             . ($chain->{prev} ? util::abbrev($chain->{prev}{path}) . "\n" . ($chain->{prev}{text} // '') : 'none'),
-        "This session's earlier handoff (Step 0): " . ($chain->{own} ? util::abbrev($chain->{own}{path}) : 'none'),
+        "This session's earlier handoff (Step 0): "
+            . (!$own ? 'none' : $own->{same} ? util::abbrev($own->{path}) . ' (the previous handoff above)'
+                                             : util::abbrev($own->{path}) . "\n" . ($own->{text} // '')),
     );
     return { text => join("\n\n", @t), repo => $repo, ticket => $ticket, worktree => (defined $w->{toplevel} ? util::text($w->{toplevel}) : undef),
              branch => $branch, head => $head, dirty => $dirty, old_chain_flagged => $chain->{flagged} };
@@ -440,6 +505,15 @@ sub old_reply {
     return { kind => 'file', slug => $slug, body => $body };
 }
 
+# clean_slug(slug) -> the slug when the secret scan finds nothing in it, else `handoff`: a file name
+# and the record's path are never a token's carrier (the body copy is redacted, the name cannot be).
+sub clean_slug {
+    my ($slug) = @_;
+    return 'handoff' unless defined $slug && $slug =~ /^[a-z0-9-]{1,60}$/;
+    my ($red, $ids) = scan_redact($slug);
+    return defined $red && ref $ids eq 'ARRAY' && !@$ids ? $slug : 'handoff';
+}
+
 # write_shadow(dir, name stem, ext, text) -> path (exclusive create 0600; `-2`, `-3`… on a clash)
 sub write_shadow {
     my ($d, $stem, $ext, $text) = @_;
@@ -453,14 +527,19 @@ sub write_shadow {
 
 # The moment fields the mod may pass (content-free by type); anything else is dropped.
 my $ID = qr/^[A-Za-z0-9._:\/-]{1,120}$/;
+# The mod's local times (isoLocal: an offset east of UTC is `+HH:MM`), with optional milliseconds.
+our $TIME = qr/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+# The served model by the export's own class (watch/export.pm `model`, MG-4): a plain id with
+# Claude Code's `[1m]`-style suffix kept; a cloud ARN or profile path (an account id) dropped.
+our $MODEL = qr{^[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?$};
 our %MOMENT_FIELD = (
     session_id => $ID, kind => qr/^[a-z0-9-]{1,20}$/, trigger => qr/^[a-z-]{1,20}$/, position => 'int',
-    ht => $ID, ht_rerun => $ID, turn_id => $ID, nonce => qr/^[0-9a-f]{8}$/, opened_at => $ID, plugin_side => qr/^[a-z-]{1,20}$/,
-    facts_age_s => 'int', model => $ID, cc_version => $ID, worktree => 'path', branch => 'text', head => qr/^[0-9a-f]{4,64}$/,
+    ht => $ID, ht_rerun => $ID, turn_id => $ID, nonce => qr/^[0-9a-f]{8}$/, opened_at => $TIME, plugin_side => qr/^[a-z-]{1,20}$/,
+    facts_age_s => 'int', model => $MODEL, cc_version => $ID, worktree => 'path', branch => 'text', head => qr/^[0-9a-f]{4,64}$/,
     dirty => 'int', old_chain_flagged => 'int', tokens => 'int', status => qr/^[a-z:-]{1,40}$/,
 );
 our %ARM_FIELD = (
-    status => qr/^[a-z:-]{1,40}$/, started_at => $ID, ended_at => $ID, http_status => 'int', error => qr/^[a-z_]{1,40}$/,
+    status => qr/^[a-z:-]{1,40}$/, started_at => $TIME, ended_at => $TIME, http_status => 'int', error => qr/^[a-z_]{1,40}$/,
     input_tokens => 'int', output_tokens => 'int', cache_read_input_tokens => 'int', cache_creation_input_tokens => 'int',
     read_share => 'num', reads_est => 'num', late => 'bool',
 );
