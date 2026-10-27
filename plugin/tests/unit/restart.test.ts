@@ -7,8 +7,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { continueLine } from '../../hooks/lib/cont'
 import { LAUNCH_ENV } from '../../hooks/lib/launch.gen'
-import { DRIFT_TTL_MS, EXIT_WINDOW_MS, RESPAWN_WATCH_MS, RESTART_GRACE_MS, launchNote, parseVersion, vcmp } from '../../hooks/lib/restart'
-import type { RestartRun } from '../../hooks/lib/restart'
+import { DRIFT_TTL_MS, EXIT_WINDOW_MS, RESPAWN_WATCH_MS, RESTART_GRACE_MS, parseVersion, vcmp } from '../../hooks/lib/restart'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
@@ -85,7 +84,7 @@ test('AT-RS-03 (shadow): every gate, one refresh_would, nothing armed; the conti
   const w = await session($, on, { setting: 'shadow' })
   await nudgedTurn($, w)
   expect(acts(w)).toEqual(['gate'])
-  expect(w.rowsOf('refresh_would')).toEqual([expect.objectContaining({ route: 'fg', from: '2.1.311', to: '2.1.312', continue: true })])
+  expect(w.rowsOf('refresh_would')).toEqual([expect.objectContaining({ route: 'fg', from: '2.1.311', to: '2.1.312', continue: true, items: [], launcher: 'ok' })])
   expect(w.rowsOf('version_drift')).toEqual([expect.objectContaining({ running: '2.1.311', installed: '2.1.312' })])
   expect(w.submits.length).toBe(1)
   expect(w.uiLogs).toEqual([])
@@ -98,7 +97,9 @@ test('AT-RS-03 (on, fg): gate passes: armed, the transcript line, refresh_start,
   expect(w.flag(gate, '--route')).toBe('fg')
   expect(w.flag(gate, '--launch')).toBe(LAUNCH)
   expect(w.flag(gate, '--model')).toBe('claude-test-model')
-  expect(Number(w.flag(gate, '--since'))).toBeLessThanOrEqual(Number(w.flag(gate, '--now-ms')))
+  // D10: the start of the last main turn goes with it; PostCompact has no mode (no --since).
+  expect(Number(w.flag(gate, '--turn-at'))).toBeLessThanOrEqual(Number(w.flag(gate, '--now-ms')))
+  expect(gate?.args).not.toContain('--since')
   const arm = w.restartCalls('arm')[0]
   expect([w.flag(arm, '--continue'), w.flag(arm, '--mode'), w.flag(arm, '--effort'), w.flag(arm, '--to')]).toEqual(['1', 'acceptEdits', 'high', '2.1.312'])
   expect(w.flag(arm, '--nonce')).toMatch(/^[0-9a-f]{16}$/)
@@ -214,7 +215,7 @@ test('AT-RS-03 (G6 busy, at the grace): a compaction running when the grace ends
   expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
 })
 
-for (const why of ['mode-changed', 'mode-unknown', 'bypass-not-available']) {
+for (const why of ['mode-unknown', 'bypass-not-available']) {
   test(`AT-RS-19 (mod part): the gate's ${why}: one refresh_skipped row, nothing armed, the continue as usual`, async ($, on) => {
     const w = await session($, on)
     w.restartGate = { ok: false, why }
@@ -308,42 +309,42 @@ test('AT-RS-05: a prompt entering during the grace stops it at once; no continue
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-RS-06: our own /exit seen by our hook: passed on while fresh; vetoed with our text once the window passed', async ($, on) => {
+test('AT-RS-06: no own veto: an /exit of our own origin that reaches our hook (a later engine) passes untouched; the notes stay exiting', async ($, on) => {
   const w = await session($, on)
   w.exitGate = new Promise(() => undefined)
   await nudgedTurn($, w)
   await w.advance(RESTART_GRACE_MS)
+  expect(states(w)).toEqual(['exiting'])
   const run = (e: unknown) => (w.engine as unknown as { command: { run: (e: unknown) => Promise<{ text?: string }> } }).command.run(e)
-  // Held open below (exitGate), as a real /exit that ends the process never resolves.
+  // Held open (exitGate), as a real /exit that ends the process never resolves.
   run({ command: 'exit', args: '', origin: { kind: 'plugin', name: w.name } }).catch(() => undefined)
   await w.settle()
-  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBeGreaterThanOrEqual(1)
-  const n = w.commandRuns.length
-  await w.advance(EXIT_WINDOW_MS)
-  const r = await run({ command: 'exit', args: '', origin: { kind: 'plugin', name: w.name } })
-  expect(r.text).toContain('restart cancelled; this session stays open.')
-  expect(w.commandRuns.length).toBe(n)
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(2)
+  expect(states(w)).toEqual(['exiting'])
+  expect(w.rowsOf('refresh_skipped')).toEqual([])
 })
 
-test('AT-RS-06: own /exit with no armed restart: our answer text, no command runs; quit the same', async ($, on) => {
+test('AT-RS-06: an own-origin /exit or /quit with no armed restart runs as given; nothing written', async ($, on) => {
   const w = await session($, on)
   for (const command of ['exit', 'quit']) {
-    const r = await (w.engine as unknown as { command: { run: (e: unknown) => Promise<{ text?: string }> } }).command.run({ command, args: '', origin: { kind: 'plugin', name: w.name } })
-    expect(r.text).toContain('restart cancelled; this session stays open.')
+    await (w.engine as unknown as { command: { run: (e: unknown) => Promise<{ text?: string }> } }).command.run({ command, args: '', origin: { kind: 'plugin', name: w.name } })
   }
-  expect(w.commandRuns.length).toBe(0)
-  expect(whys(w, 'refresh_skipped')).toEqual(['stale-exit', 'stale-exit'])
+  expect(w.commandRuns.map(c => c.command)).toEqual(['exit', 'quit'])
+  expect([w.rowsOf('refresh_skipped').length, w.restartCalls('set').length]).toEqual([0, 0])
 })
 
-test('AT-RS-06: a /exit typed while armed: both notes cancelled, the command runs; nothing relaunches', async ($, on) => {
-  const w = await session($, on)
-  await nudgedTurn($, w)
-  await (w.engine as unknown as { command: { run: (e: unknown) => Promise<unknown> } }).command.run({ command: 'exit', args: '', origin: { kind: 'composer' } })
-  expect(w.commandRuns.map(c => c.command)).toEqual(['exit'])
-  expect(states(w)).toEqual(['cancelled'])
-  await w.advance(RESTART_GRACE_MS)
-  expect(w.commandRuns.length).toBe(1)
-})
+for (const origin of [{ kind: 'composer' }, { kind: 'plugin', name: 'other-plugin' }]) {
+  test(`AT-RS-06: a /exit of origin ${origin.kind} (not ours) while armed: both notes cancelled, refresh_skipped busy, the command runs; nothing relaunches`, async ($, on) => {
+    const w = await session($, on)
+    await nudgedTurn($, w)
+    await (w.engine as unknown as { command: { run: (e: unknown) => Promise<unknown> } }).command.run({ command: 'exit', args: '', origin })
+    expect(w.commandRuns.map(c => c.command)).toEqual(['exit'])
+    expect(states(w)).toEqual(['cancelled'])
+    expect(whys(w, 'refresh_skipped')).toEqual(['busy'])
+    await w.advance(RESTART_GRACE_MS)
+    expect(w.commandRuns.length).toBe(1)
+  })
+}
 
 test('AT-RS-07: session.end prompt_input_exit within 5 s of exiting: the go write is the first helper call, with exiting_at', async ($, on) => {
   const w = await session($, on)
@@ -419,7 +420,7 @@ test('AT-RS-07: the helper wrote no go (the launch note gone, another nonce\'s, 
   expect(w.rowsOf('refresh_failed')).toEqual([expect.objectContaining({ route: 'fg', why: 'helper-failed', code: 'launch-mismatch' })])
 })
 
-test('AT-RS-07: the go call fails: the mod writes the launch note itself; at - floor(exiting_at / 1000) within the launcher\'s 0 to 5', async ($, on) => {
+test('AT-RS-07: the go call fails: the mod never writes the launch note itself (tmp-then-rename only); one refresh_failed row, no relaunch', async ($, on) => {
   const w = await session($, on)
   w.exitGate = new Promise(() => undefined)
   await nudgedTurn($, w)
@@ -427,12 +428,8 @@ test('AT-RS-07: the go call fails: the mod writes the launch note itself; at - f
   await w.advance(EXIT_WINDOW_MS - 1)
   setReplyFor(w, 'go', 'reject')
   await $.session.end(EXIT as never)
-  const note = w.files.get(`${LAUNCH}/restart.note`) ?? ''
-  const v = Object.fromEntries(note.trim().split('\n').map(l => l.split('=') as [string, string]))
-  expect(v.state).toBe('go')
-  const gap = Number(v.at) - Math.floor(Number(v.exiting_at) / 1000)
-  expect(gap >= 0 && gap <= 5).toBe(true)
-  expect(w.rowsOf('refresh_failed')).toEqual([])
+  expect(w.writes.filter(p => p.startsWith(LAUNCH))).toEqual([])
+  expect(w.rowsOf('refresh_failed')).toEqual([expect.objectContaining({ route: 'fg', why: 'helper-failed', code: 'launch-failed' })])
 })
 
 test('AT-RS-12: after a restart the block arrives once, at prompt.context of the continue\'s turn; the continue is the bare line', async ($, on) => {
@@ -550,6 +547,25 @@ test('AT-RS-13: bg: the respawn passes the job folder and the fresh mode (the he
   expect(w.storeGet(`restart_tried:${SID_A}`)).toMatchObject({ targets: { '2.1.312': { n: 1, why: 'bypass-left' } } })
   expect(w.submits.length).toBe(1)
 })
+
+test('AT-RS-13 (B9): bg: the job\'s flags read again at the respawn hold a restriction a restart drops: restriction-lost, a skip, the continue once', async ($, on) => {
+  const w = await session($, on, { route: 'bg' })
+  w.restartRespawn = { ok: false, why: 'restriction-lost' }
+  await nudgedTurn($, w)
+  await w.advance(RESTART_GRACE_MS)
+  expect(acts(w).slice(-3)).toEqual(['respawn', 'respawn-cancel', 'set'])
+  expect(whys(w, 'refresh_skipped')).toEqual(['restriction-lost'])
+  expect([w.rowsOf('refresh_failed').length, w.submits.length]).toEqual([0, 1])
+})
+
+for (const why of ['restriction-lost', 'bg-not-shipped']) {
+  test(`AT-RS-14 (mod part): the gate's ${why} on the background route: one refresh_skipped, nothing armed, the continue as usual`, async ($, on) => {
+    const w = await session($, on, { route: 'bg' })
+    w.restartGate = { ok: false, why }
+    await nudgedTurn($, w)
+    expect([whys(w, 'refresh_skipped'), w.restartCalls('arm').length, w.submits.length]).toEqual([[why], 0, 1])
+  })
+}
 
 test('AT-RS-13: bg: a prompt while the respawn call runs: respawn-cancel at once and again when the call returns; no watchdog, no continue', async ($, on) => {
   const w = await session($, on, { route: 'bg' })
@@ -754,13 +770,55 @@ test('AT-RS-18: refresh rows are content-free: no path, no model string, no argv
   }
 })
 
-test('the fallback launch note is the launcher\'s protocol 1 form: 12 keys, at in seconds, exiting_at in ms', () => {
-  const run: RestartRun = {
-    sid: SID_A, route: 'fg', nonce: '0123456789abcdef', from: '2.1.311', to: '2.1.312', cont: true, contDue: true, armedAt: 1, phase: 'exiting',
-    token: 'fedcba9876543210', mode: 'default', effort: 'high', model: 'opus', exitingAt: 1792580712345,
-  }
-  expect(launchNote(run, 'go', 1792580714999)).toBe([
-    'proto=1', 'state=go', 'token=fedcba9876543210', `sid=${SID_A}`, 'nonce=0123456789abcdef', 'at=1792580714',
-    'exiting_at=1792580712345', 'from=2.1.311', 'to=2.1.312', 'model=opus', 'effort=high', 'mode=default',
-  ].join('\n') + '\n')
+/** Raise a classic hook event the way the engine does (observe-only hooks of the mod). */
+async function classic($: Engine, ev: 'Stop' | 'UserPromptSubmit' | 'PermissionRequest', e: Record<string, unknown>): Promise<void> {
+  await ($ as unknown as { classic: Record<string, (e: unknown) => Promise<unknown>> }).classic[ev]?.(e)
+}
+
+test('AT-RS-19 (D10, mod part): the newest main permission_mode of Stop, UserPromptSubmit or PermissionRequest goes to the gate with its time and the last turn\'s start; a subagent\'s or an unknown mode is not read', async ($, on) => {
+  const w = await session($, on)
+  await w.userTurn($)
+  await classic($, 'UserPromptSubmit', { prompt: 'x', permission_mode: 'default' })
+  await w.advance(1000)
+  await classic($, 'PermissionRequest', { tool_name: 'Bash', tool_input: {}, permission_mode: 'acceptEdits' })
+  await w.advance(1000)
+  await classic($, 'PermissionRequest', { tool_name: 'Bash', tool_input: {}, permission_mode: 'bypassPermissions', agent_id: 'a1' })
+  await classic($, 'Stop', { stop_hook_active: false, permission_mode: 'manual' })
+  await w.settle()
+  w.tokens = 610000
+  await w.tool($)
+  await w.advance(61000)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(500)
+  const gate = w.restartCalls('gate')[0]
+  expect(w.flag(gate, '--seen-mode')).toBe('acceptEdits')
+  const turnAt = Number(w.flag(gate, '--turn-at'))
+  expect(Number(w.flag(gate, '--seen-at'))).toBeGreaterThan(turnAt)
+})
+
+test('AT-RS-19 (D10, mod part): no mode read in this load: no --seen-mode (the helper falls back to its Stop record)', async ($, on) => {
+  const w = await session($, on)
+  await nudgedTurn($, w)
+  const gate = w.restartCalls('gate')[0]
+  expect([gate?.args.includes('--seen-mode'), gate?.args.includes('--turn-at')]).toEqual([false, true])
+})
+
+test('shadow (terminal route trial data): one refresh_would per moment, with the running agents and the gate\'s items and launcher state; a running agent does not refuse there', async ($, on) => {
+  const w = await session($, on, { setting: 'shadow' })
+  w.restartGate = { items: ['shell'], launcher: 'no-launcher' }
+  w.agents = [{ id: 'a1', status: 'running' }]
+  await nudgedTurn($, w)
+  await runContinue($, w)
+  w.agents = []
+  w.restartGate = {}
+  await nudgedTurn($, w)
+  expect(w.rowsOf('refresh_would').map(r => [r.items, r.launcher])).toEqual([[['agent', 'shell'], 'no-launcher'], [[], 'ok']])
+  expect([w.rowsOf('refresh_skipped').length, w.restartCalls('arm').length, w.uiLogs.length]).toEqual([0, 0, 0])
+})
+
+test('shadow on the background route: the would row has items and no launcher field', async ($, on) => {
+  const w = await session($, on, { setting: 'shadow', route: 'bg' })
+  await nudgedTurn($, w)
+  const r = w.rowsOf('refresh_would')[0]
+  expect([r?.route, r?.items, 'launcher' in (r ?? {})]).toEqual(['bg', [], false])
 })

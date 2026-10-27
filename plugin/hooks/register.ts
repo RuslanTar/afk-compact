@@ -13,7 +13,7 @@ import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { blockName, contextBlock } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
-import { onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
+import { noteMode, onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
 
 export const register: Register = (on, options) => {
   const state = newState(randomHex(8))
@@ -48,6 +48,12 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined) {
       state.agentTurns.add(e.agentId)
       return next(e)
+    }
+    // SESSION-RESTART D10: a permission mode read before this turn's start is older than the last turn.
+    try {
+      state.lastMainTurnAt = await $.clock.now()
+    } catch {
+      // no stamp: the newest mode read counts as the last turn's
     }
     await onTurnStart(realDeps($, options, state), e.turnId, e.text)
     return next(e)
@@ -199,12 +205,26 @@ export const register: Register = (on, options) => {
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
   }).catch(($, e, next) => next(e))
 
-  // SESSION-RESTART §3.4 step 5, G9, G10: our own `/exit` passes only for a fresh armed restart
-  // (else our own answer, and no command runs); a person's `/exit` while armed cancels it; the
-  // commands a restart cannot carry block it for the rest of the load.
+  // SESSION-RESTART §3.4 step 5, G9, G10 (observe only): another origin's `/exit` while armed
+  // cancels the restart; the commands a restart cannot carry block it for the rest of the load.
+  // Our own `/exit` never reaches this hook (the engine skips the raising plugin's hooks).
   on('command.run', async ($, e, next) => {
-    const own = await onCommandRun(realDeps($, options, state), e)
-    if (own !== undefined) return own
+    await onCommandRun(realDeps($, options, state), e)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // SESSION-RESTART D10: the permission mode of every main Stop, UserPromptSubmit and
+  // PermissionRequest input (observe only; nothing awaited before `next`).
+  on('classic.Stop', async ($, e, next) => {
+    void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PermissionRequest', async ($, e, next) => {
+    void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
     return next(e)
   }).catch(($, e, next) => next(e))
 

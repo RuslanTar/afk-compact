@@ -7,10 +7,14 @@
 //   worker still alive after 60 s, is a failure, and the normal continue runs.
 // - Terminal sessions started through the plugin's launcher (§3): a transcript line, a 5 s grace,
 //   then the plugin's own `/exit`; the launcher relaunches `--resume` only on the launch note's
-//   `go` (the launcher's file contract, protocol 1). Shipped off until live probe RS-P1 passes:
-//   the helper's gate answers `fg-not-shipped` (lib/restart.pm $FG_ROUTE).
-// `shadow` runs every gate and writes one `refresh_would` row, nothing else. Every failure before
-// the process ends runs the deferred continue once (§4.4). Rows are content-free (§6.3).
+//   `go` (the launcher's file contract, protocol 1). Shipped off pending the owner's decision
+//   (RS-P1 run 2, outcome (c)): the helper's gate answers `fg-not-shipped` (lib/restart.pm
+//   $FG_ROUTE). The background route is shipped off too until its restriction gate and a full
+//   RS-P5 on the real helper pass (`bg-not-shipped`, $BG_ROUTE).
+// `shadow` runs the gates and writes one `refresh_would` row per moment, nothing else: there the
+// launcher's checks and background work do not refuse, and the row says what they found (the
+// trial data of the terminal route's ship decision). Every failure before the process ends runs
+// the deferred continue once (§4.4). Rows are content-free (§6.3).
 import type { Deps } from './deps'
 import { isHuman, isOwnOrigin } from './deps'
 import { autoContinue, continueDecision, submitContinue } from './cont'
@@ -55,12 +59,8 @@ export type RestartRun = {
 
 /** §3.4 step 3, §2.2 step 2: the notice before the restart. */
 export const RESTART_GRACE_MS = 5000
-/** §3.4 step 6: `session.end` this soon after our `/exit` passed our hook is ours. */
+/** §3.4 step 6: `session.end` this soon after the `exiting` write before our `/exit` is ours. */
 export const EXIT_WINDOW_MS = 5000
-/** §3.4 step 5: our `/exit` passes our hook only this soon after the arm. */
-export const ARMED_FRESH_MS = 30000
-// (The go window bounds it more tightly: our hook passes our /exit only within EXIT_WINDOW_MS of
-// the `exiting` write that comes right before it.)
 /** §2.2 step 4: the worker still alive this long after the respawn started is a failure. */
 export const RESPAWN_WATCH_MS = 60000
 export const RESPAWN_POLL_MS = 2000
@@ -113,9 +113,6 @@ export function noticeText(name: string, route: Route, to: string): string {
 }
 export function doneText(name: string, from: string, to: string): string {
   return `${name}: this session restarted on Claude Code ${to} (was ${from}); same session.`
-}
-export function cancelText(name: string): string {
-  return `${name}: restart cancelled; this session stays open.`
 }
 export function lostText(name: string, short: string, to: string | null): string {
   return `${name}: a background session (${short}) did not come back after a restart on Claude Code ${to ?? 'the new version'}; see /${name}:status.`
@@ -172,8 +169,9 @@ async function bounds(d: Deps, sid: string, to: string, now: number): Promise<st
 /**
  * G2, G6, G8, G9, G10, G11 in memory. `moment`: called from inside the compaction's own after-step,
  * where the plugin's own `busy` flag and the native compaction counter are this compaction's.
+ * `items` (shadow): a running agent does not refuse; `agent` is added to the list instead.
  */
-async function liveWhy(d: Deps, sid: string, route: Route, moment: boolean): Promise<string | undefined> {
+async function liveWhy(d: Deps, sid: string, route: Route, moment: boolean, items?: string[]): Promise<string | undefined> {
   const s = d.state
   if (s.headless) return 'headless'
   if (s.mainTurnRunning || s.foreignPrompts > 0 || s.handoffTurn !== undefined || s.ourSubmitPending || s.ownCompact !== undefined) return 'busy'
@@ -181,7 +179,10 @@ async function liveWhy(d: Deps, sid: string, route: Route, moment: boolean): Pro
   if (!s.lastTurnAnswer) return 'aborted'
   if (s.askOpen > 0 || s.lastTurnAsksUser) return 'asks-user'
   if (s.halt.active) return 'halted'
-  if ((await agentsRunning(d)) > 0) return 'agents'
+  if ((await agentsRunning(d)) > 0) {
+    if (items === undefined) return 'agents'
+    items.push('agent')
+  }
   const draft = await d.promptDraft()
   if (draft === undefined || draft.trim() !== '') return 'draft'
   if (s.lastInputAt !== undefined && (await d.now()) - s.lastInputAt < RESTART_PRESENT_MS) return 'present'
@@ -231,6 +232,10 @@ type Gate = {
   job_short: string | null
   token: string | null
   types: string[]
+  /** Shadow: the background task types the newest Stop listed (items the exit dialog counts). */
+  items: string[]
+  /** Shadow, fg: what G3 found about the launcher (`ok`, or its why). */
+  launcher: string | null
 }
 
 function parseGate(out: string): Gate | undefined {
@@ -240,11 +245,15 @@ function parseGate(out: string): Gate | undefined {
     return {
       ok: j.ok === true, why: str(j.why), setting: j.setting === 'on' || j.setting === 'shadow' ? j.setting : 'off',
       route: j.route === 'bg' ? 'bg' : 'fg', mode: str(j.mode), effort: str(j.effort),
-      job_short: str(j.job_short), token: str(j.token), types: Array.isArray(j.types) ? j.types.filter((x): x is string => typeof x === 'string') : [],
+      job_short: str(j.job_short), token: str(j.token), types: words(j.types), items: words(j.items), launcher: str(j.launcher),
     }
   } catch {
     return undefined
   }
+}
+
+function words(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && /^[a-z][a-z0-9_-]{0,39}$/.test(x)) : []
 }
 
 function jsonOf(out: string): Record<string, unknown> | undefined {
@@ -266,13 +275,28 @@ function routeOf(env: RestartEnv): { route: Route; flags: string[]; why?: string
 }
 
 /**
- * The restart moment (D2): called right after a plugin compaction's after-step, before its continue
- * (`cont` true when a continue may follow), or after an idle compaction (`cont` false); `since` is
- * when that compaction started (D10: its PostCompact gives the fresh mode). True when a restart was
- * armed: it now owns the continue (run once on any failure before the process ends); false when
- * the normal path goes on.
+ * D10 (root call 2026-10-28 00:23): a main hook input's permission_mode, observed (Stop,
+ * UserPromptSubmit, PermissionRequest; PreCompact, PostCompact and SessionEnd carry none on 2.1.312).
+ * The newest one goes to the gate with the start of the last main turn of this load.
  */
-export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; since: number }): Promise<boolean> {
+export function noteMode(d: Pick<Deps, 'state'>, e: { permission_mode?: unknown; agent_id?: unknown }, at: number): void {
+  if (e.agent_id !== undefined && e.agent_id !== null) return
+  const m = e.permission_mode
+  if (typeof m !== 'string' || !MODES.includes(m)) return
+  const cur = d.state.modeSeen
+  if (cur === undefined || at >= cur.at) d.state.modeSeen = { mode: m, at }
+}
+
+/** The permission modes by their internal names (R6: the CLI spells `default` as `manual`). */
+export const MODES: readonly string[] = ['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']
+
+/**
+ * The restart moment (D2): called right after a plugin compaction's after-step, before its continue
+ * (`cont` true when a continue may follow), or after an idle compaction (`cont` false). True when a
+ * restart was armed: it now owns the continue (run once on any failure before the process ends);
+ * false when the normal path goes on.
+ */
+export async function restartMoment(d: Deps, sid: string, o: { cont: boolean }): Promise<boolean> {
   const s = d.state
   const setting = s.ident?.restart ?? 'off'
   if (setting === 'off' || s.restart !== undefined) return false
@@ -283,7 +307,9 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; si
   const rt = routeOf(env)
   const route = rt.route
   const model = (await d.model()) ?? ''
-  let why = await liveWhy(d, sid, route, true)
+  // Shadow: the items a restart would refuse for are recorded on the row, not refused for.
+  const items: string[] | undefined = setting === 'shadow' ? [] : undefined
+  let why = await liveWhy(d, sid, route, true, items)
   const now = await d.now()
   // G5 first among what the rows need: a session with nothing newer installed logs nothing.
   let from: string | undefined
@@ -312,8 +338,11 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; si
     await once(d, sid, 'refresh_skipped', `${why}|${to}`, { why, route, to })
     return false
   }
+  const seen = s.modeSeen
   const g = await call(d, ['restart', 'gate', '--sid', sid, '--route', route, ...rt.flags, '--from', from, '--to', to, '--model', model,
-    '--since', String(Math.round(o.since)), '--now-ms', String(Math.round(now))], GATE_MS)
+    ...(seen !== undefined ? ['--seen-mode', seen.mode, '--seen-at', String(Math.round(seen.at))] : []),
+    ...(s.lastMainTurnAt !== undefined ? ['--turn-at', String(Math.round(s.lastMainTurnAt))] : []),
+    '--now-ms', String(Math.round(now))], GATE_MS)
   const gate = g.ok ? parseGate(g.stdout) : undefined
   if (!gate || !gate.ok) {
     const w = gate?.why ?? 'helper-failed'
@@ -323,7 +352,17 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; si
   // G1 as the gate read it: the load's ident is cached, so a setting lowered to `shadow` (or
   // `off`, which the gate refuses) since the load counts from the gate on.
   if (gate.setting !== 'on') {
-    if (gate.setting === 'shadow') await once(d, sid, 'refresh_would', to, { route, from, to, continue: dec.go })
+    // One row per moment (the trial counts them), with the dialog-capable items it saw: the
+    // newest Stop's background tasks and the running agents.
+    if (gate.setting === 'shadow') {
+      const seenItems = [...new Set([...gate.items, ...(items ?? [])])].sort()
+      await log(d, sid, 'refresh_would', { route, from, to, continue: dec.go, items: seenItems, ...(route === 'fg' ? { launcher: gate.launcher ?? 'no-launcher' } : {}) })
+    }
+    return false
+  }
+  // A gate that read `on` while the load's ident said `shadow` collected items instead of refusing.
+  if (items !== undefined && items.length > 0) {
+    await once(d, sid, 'refresh_skipped', `agents|${to}`, { why: 'agents', route, to })
     return false
   }
   const nonce = randomHex(16)
@@ -406,9 +445,9 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
   const why = await liveWhy(d, run.sid, run.route, false)
   if (why !== undefined) return fail(d, run, 'refresh_skipped', why)
   if (run.route === 'fg') {
-    // §3.4 steps 4-5. Both notes become `exiting` (with `exiting_at`) right before our /exit is
-    // queued, so the go window holds whether or not our own `command.run` hook sees our call
-    // (F5 is INFERRED: probe RS-P1 run 3); when it does see it, it passes only this fresh one.
+    // §3.4 step 4. Both notes become `exiting` (with `exiting_at`) before our /exit is queued:
+    // our own `command.run` hook never sees a `$.command.run` of ours (RS-P1: the engine skips the
+    // raising plugin's hooks), so nothing of ours can write it later or veto a stale /exit.
     if (s.restart !== run || run.phase !== 'grace') return
     const at = await d.now()
     // Our /exit follows only when both notes now say `exiting`: a launch note the helper found
@@ -426,6 +465,8 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
     run.timer = d.after(EXIT_WINDOW_MS, () => {
       if (s.restart === run && run.phase === 'exiting' && !s.ending) s.inflight = fail(d, run, 'refresh_failed', 'exit-not-run').catch(() => undefined)
     })
+    // Its resolution is no success signal (`{text: ''}` on a clean exit and on a kill alike):
+    // only a rejection is read (F2); the outcome is `session.end` or the watchdog above.
     void d.commandRun('exit').then(
       () => undefined,
       () => {
@@ -453,9 +494,10 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
     // A refusal, or a call that failed or timed out after the helper may have started the detached
     // respawn: the respawn is cancelled (the note settled first) before the continue runs.
     const why = typeof j?.why === 'string' ? j.why : undefined
-    if (why === 'bypass-left') {
+    // The job's flags read again at the respawn (G3b, B9): refused before anything started.
+    if (why === 'bypass-left' || why === 'restriction-lost') {
       await cancelRespawn(d, run, 'cancelled')
-      return fail(d, run, 'refresh_skipped', 'bypass-left')
+      return fail(d, run, 'refresh_skipped', why)
     }
     await cancelRespawn(d, run, 'failed')
     return fail(d, run, 'refresh_failed', 'respawn-refused', { state: 'failed', code: why ?? 'other' })
@@ -510,51 +552,30 @@ export async function restartInterrupt(d: Deps): Promise<void> {
 }
 
 /**
- * The `command.run` hook (§3.4 step 5, G9, G10). `undefined`: pass the command on (`next(e)`);
- * `{ text }`: our own answer, no command runs (F5).
+ * The `command.run` hook (§3.4 step 5, G9, G10): observe only, the command always passes on.
+ * Our own `/exit` never reaches it (RS-P1: the engine runs no hook of the plugin that raised
+ * `$.command.run`), so there is no own veto; one that did arrive (a later engine) passes
+ * untouched. Another origin's `/exit` while armed (the person, the bridge, another plugin)
+ * cancels the restart: that exit relaunches nothing.
  */
-export async function onCommandRun(d: Deps, e: { command: string; origin: { kind: string; name?: string } }): Promise<{ text: string } | undefined> {
+export async function onCommandRun(d: Deps, e: { command: string; origin: { kind: string; name?: string } }): Promise<undefined> {
   const s = d.state
   const c = e.command
   if (c === 'permissions' || c === 'allowed-tools' || c === 'sandbox') s.restartBlocks.add('session-rules')
   else if (c === 'add-dir') s.restartBlocks.add('session-dirs')
   else if (c === 'remote-control') s.restartBlocks.add('remote')
   if (c !== 'exit' && c !== 'quit') return undefined
+  if (isOwnOrigin(e.origin, d.name)) return undefined
   const run = s.restart
-  const own = isOwnOrigin(e.origin, d.name)
-  if (!own) {
-    // Another origin's /exit while armed: the person exits as usual and nothing relaunches.
-    if (run && run.route === 'fg' && run.phase !== 'done') {
-      s.restart = undefined
-      run.timer?.cancel()
-      run.phase = 'done'
-      await setNotes(d, run, 'cancelled')
-      await noteOutcome(d, run.sid, run.to, 'busy')
-    }
-    return undefined
+  if (run && run.route === 'fg' && run.phase !== 'done') {
+    s.restart = undefined
+    run.timer?.cancel()
+    run.phase = 'done'
+    await setNotes(d, run, 'cancelled')
+    await noteOutcome(d, run.sid, run.to, 'busy')
+    await log(d, run.sid, 'refresh_skipped', { why: 'busy', route: 'fg', to: run.to })
   }
-  const now = await d.now()
-  const fresh = run !== undefined && run.route === 'fg' && run.phase === 'exiting' && run.exitingAt !== undefined
-    && now - run.exitingAt < EXIT_WINDOW_MS && now - run.armedAt < ARMED_FRESH_MS
-    && !s.mainTurnRunning && s.foreignPrompts === 0 && (await d.sessionId()) === run.sid
-  if (fresh) return undefined
-  // A stale /exit of ours (cancelled, a second one, or one a turn came before): no command runs.
-  if (run !== undefined && run.route === 'fg' && run.phase === 'exiting') {
-    s.inflight = fail(d, run, 'refresh_skipped', 'stale-exit').catch(() => undefined)
-  } else {
-    await log(d, await d.sessionId(), 'refresh_skipped', { why: 'stale-exit', route: 'fg', to: run?.to ?? null })
-  }
-  return { text: cancelText(d.name) }
-}
-
-/** The launch note in the launcher's protocol 1 form (contract §4): the fallback write of `go`. */
-export function launchNote(run: RestartRun, state: string, atMs: number): string {
-  const v: Record<string, string> = {
-    proto: '1', state, token: run.token ?? '', sid: run.sid, nonce: run.nonce, at: String(Math.floor(atMs / 1000)),
-    exiting_at: run.exitingAt !== undefined ? String(Math.round(run.exitingAt)) : '', from: run.from, to: run.to,
-    model: run.model, effort: run.effort, mode: run.mode,
-  }
-  return ['proto', 'state', 'token', 'sid', 'nonce', 'at', 'exiting_at', 'from', 'to', 'model', 'effort', 'mode'].map(k => `${k}=${v[k]}\n`).join('')
+  return undefined
 }
 
 /**
@@ -597,17 +618,11 @@ async function endRun(d: Deps, reason: string | undefined): Promise<void> {
   // window check (`at - floor(exiting_at / 1000)` 0 to 5) holds whenever ours did.
   const r = await setNotes(d, run, 'go', { extra: ['--exiting-at', String(Math.round(run.exitingAt ?? now))], timeoutMs: 1000, now })
     .catch((): SetReply => ({ ok: false, l: 'failed', c: 'failed' }))
-  if (!r.ok) {
-    // The helper call failed: the mod writes the launch note itself. `$.fs` has no rename, so this
-    // one write is in place, not the contract's `restart.note.tmp` then rename (§6): a write cut
-    // short leaves a note the launcher refuses with `pattern` (its resume line and
-    // last-refusal), which is still better than an `exiting` note that relaunches nothing silently.
-    if (run.launch !== undefined) await d.write(`${run.launch.replace(/\/+$/, '')}/restart.note`, launchNote(run, 'go', now))
-    return
-  }
-  // The helper did not write the launch note (gone, another nonce's, or already cancelled): no
-  // relaunch follows; one row says why (the note is never written over).
-  if (r.l !== 'written') await log(d, run.sid, 'refresh_failed', { route: 'fg', why: 'helper-failed', to: run.to, code: `launch-${r.l}` })
+  // The helper did not write the launch note (the call failed, or the note is gone, another
+  // nonce's or already cancelled): no relaunch follows; one row says why. The mod never writes
+  // the note itself: `$.fs` has no rename, and the contract's tmp-then-rename rule (§6) holds for
+  // every write of it, so the launcher never reads a note cut short.
+  if (!r.ok || r.l !== 'written') await log(d, run.sid, 'refresh_failed', { route: 'fg', why: 'helper-failed', to: run.to, code: `launch-${r.l}` })
 }
 
 /** `session.attach` / `session.detach` (G3b). */

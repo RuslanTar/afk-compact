@@ -269,6 +269,10 @@ export class World {
     })
     on('session.attach', (_$, e) => ({ clientId: e.clientId }))
     on('session.detach', (_$, e) => ({ clientId: e.clientId }))
+    // The classic hook events the mod observes (SESSION-RESTART D10): no settings hook beneath.
+    on('classic.Stop', () => ({}))
+    on('classic.UserPromptSubmit', () => ({}))
+    on('classic.PermissionRequest', () => ({}))
     on('session.start', (_$, e) => ({ cwd: e.cwd }))
     on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
     on('turn.abort', (_$, e) => {
@@ -532,7 +536,7 @@ export class World {
     const sub = args[0]
     const route = flag('--route') === 'bg' ? 'bg' : 'fg'
     if (sub === 'gate') {
-      return { ok: true, why: null, setting: this.restartSetting ?? 'off', route, mode: 'acceptEdits', effort: 'high', job_short: route === 'bg' ? 'job1' : null, token: route === 'fg' ? '0123456789abcdef' : null, types: [], ...this.restartGate }
+      return { ok: true, why: null, setting: this.restartSetting ?? 'off', route, mode: 'acceptEdits', effort: 'high', job_short: route === 'bg' ? 'job1' : null, token: route === 'fg' ? '0123456789abcdef' : null, types: [], items: [], launcher: route === 'fg' ? 'ok' : null, ...this.restartGate }
     }
     if (sub === 'arm') {
       const at = Number(flag('--now-ms'))

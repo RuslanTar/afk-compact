@@ -318,7 +318,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   }))
   // SESSION-RESTART D2 (b): right after Claude Code's own idle compaction; nothing is submitted
   // after it (the new load waits at the prompt with its block, as after any idle compaction).
-  if (main && idle) await guarded(d, sid, 'restart', () => restartMoment(d, sid, { cont: false, since: t0 }))
+  if (main && idle) await guarded(d, sid, 'restart', () => restartMoment(d, sid, { cont: false }))
   return r
 }
 

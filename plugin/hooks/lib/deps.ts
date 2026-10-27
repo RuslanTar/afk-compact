@@ -456,6 +456,10 @@ export type LoadState = {
   driftLogged: Set<string>
   /** §2.1: this load's session ran another Claude Code version before (versionCanary), for `refresh_done {route: supervisor}`. */
   versionMoved: { from: string; to: string } | undefined
+  /** D10: the newest permission_mode a main hook input carried in this load (Stop, UserPromptSubmit, PermissionRequest), and when. */
+  modeSeen: { mode: string; at: number } | undefined
+  /** D10: when the last main turn of this load started. */
+  lastMainTurnAt: number | undefined
 }
 
 /**
@@ -598,6 +602,8 @@ export function newState(loadId: string): LoadState {
     drift: undefined,
     driftLogged: new Set(),
     versionMoved: undefined,
+    modeSeen: undefined,
+    lastMainTurnAt: undefined,
   }
 }
 

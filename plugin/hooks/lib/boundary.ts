@@ -400,7 +400,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
     // continue (it runs it once if the restart fails before the process ends).
     let restarting = false
     await guarded(d, sid, 'restart', async () => {
-      restarting = await restartMoment(d, sid, { cont: !idle, since: run.t0 })
+      restarting = await restartMoment(d, sid, { cont: !idle })
     })
     // Like Claude Code's own idle compaction, the plugin's sends nothing after it: the resume
     // block waits for the next turn (a background result or the person's return).
