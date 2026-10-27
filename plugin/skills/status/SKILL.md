@@ -13,7 +13,7 @@ Run `<store> status --sid '${CLAUDE_SESSION_ID}'` and relay its lines as printed
 - `seat_state` of the last 5 compactions, with trigger, verdict and copy path;
 - open escalations and open watcher alerts, with the last 7 days' counts by rule;
 - halt state and auto-continues used this hour;
-- `pre-idle handoff turn: …` (whether the plugin's own pre-idle turn is on, from `idle_handoff_turn` and Claude Code's idle compaction setting);
+- `idle compaction: …` (who compacts an idle session — Claude Code, the plugin or nobody — as this session reads your settings, with `idle_compact` and `idle_handoff_turn`; a note while Claude Code's own is on);
 - `smokeDue`;
 - `allow rule (default mode): …` (the rule that lets `wait` run unasked), and `allow rule for an older plugin folder: …` when one still names an old folder;
 - `user-run commands (type them yourself, with the leading !):`, then each `! <store> …` line. Relay them; never run them yourself. `! <store> reconcile --sid <sid> --orphans --full` finishes the saved copies of ended sessions (about 10 s; writes only into the plugin's own store) and ends with `; orphans finished=<n> kept=<n> left=<n>`; that line is not shown without a session id;
