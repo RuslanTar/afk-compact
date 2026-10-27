@@ -9,6 +9,7 @@ import type { ResumePref } from './compact'
 import { afterStep, cacheRows, dispatchExists, guarded, mainText, writeDispatch } from './compact'
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
+import { armDigest } from './digest'
 import type { HandoffTurn } from './handoff-turn'
 import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHandoff, planPrecompact } from './handoff-turn'
 import type { Checkpoint } from './helper'
@@ -448,6 +449,10 @@ async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactR
     ...(run.prodConsent !== undefined ? { prodConsent: run.prodConsent } : {}),
     ...(run.idle ? { idle: true } : {}),
   }))
+  // IDLE-COMPACT D16: the plugin's own idle compaction arms the away digest as Claude Code's does
+  // (compact.ts onCompact): under `"idleCompaction": false` it is the only idle compaction there is.
+  // armDigest skips while anything runs; submitDigest skips a headless session.
+  if (run.idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
   return true
 }
 

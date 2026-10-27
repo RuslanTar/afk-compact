@@ -1351,3 +1351,46 @@ test('AT-IC-C43 (§1.2): after a /clear in the same load, the new session id\'s 
   expect(w.rowsOf('idle_mode').map(r => [r.sid, `${String(r.native)}/${String(r.plugin_turn)}/${String(r.plugin_compact)}`]))
     .toEqual([[SID_A, 'vetoed/on/on'], [SID_B, 'vetoed/on/on']])
 })
+
+// ---- D16 (the merge with v012-digest): the plugin's own idle compaction arms the away digest, as
+// Claude Code's idle compaction does in onCompact; under "idleCompaction": false it is the only one.
+const DONE = hasTag('resume-context', 'idle-done')
+const FINISHED = 'Status: finished · Acuity: stable · State: done (checkpoint: clean)\nStep 1: none\n## Next steps\n1. run the suite — done when green · done\n'
+
+test('AT-IC-C44 (D16): vetoed, a finished lane, nothing running, idle_digest submit: one digest turn after the idle compaction (digest_submit submitted)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.resumeHere = FINISHED
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(54 * MIN)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([1, 1])
+  await w.advance(5000)
+  if (!DONE) return
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['finished', 'submitted']])
+  expect(w.submits.length).toBe(1)
+  const evs = w.rows.map(r => r.ev)
+  expect(evs.indexOf('digest_submit')).toBeGreaterThan(evs.indexOf('compacted'))
+})
+
+test('AT-IC-C44 (D16): a blocked lane with an agent running (soft-blocked): digest_submit skipped:running, no submit', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.resumeHere = 'Status: hard-blocked · Acuity: watch · State: waits on you (checkpoint: clean)\nStep 1: none\n'
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(54 * MIN)
+  expect(ic(w).map(r => r.agents)).toEqual([1])
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  if (DONE) expect(w.rowsOf('digest_submit').map(r => r.result)).toEqual(['skipped:running'])
+})
+
+test('AT-IC-C44 (D16): idle_digest return: no turn (digest_submit skipped:return)', { options: { ...ON, idle_digest: 'return' } }, async ($, on) => {
+  const w = world(on)
+  w.resumeHere = FINISHED
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(54 * MIN + 5000)
+  expect(w.submits).toEqual([])
+  if (DONE) expect(w.rowsOf('digest_submit').map(r => r.result)).toEqual(['skipped:return'])
+})
