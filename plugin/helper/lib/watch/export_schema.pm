@@ -46,7 +46,9 @@ my @HT_END = qw(published none race aborted);
 my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-failed submit-failed again
                   triggers-off small-window session-changed busy aborted small ttl-5m near-limit episode published
                   cooldown disabled halted precompute in-flight native-on native-unknown
-                  native-fired agents-running);
+                  native-fired agents-running
+                  lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
+                  compaction-off error);
 my @IDLE_SRC = qw(mod notice return both none);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
@@ -175,19 +177,25 @@ our %SCHEMA = (
                          approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int' }], approval_classes => [list => 'word'] },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
-    handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash' },
+    # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was
+    handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash',
+                         kind => [enum => qw(turn check compact)], late_s => 'num' },
     # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
     # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
     # cached (2b, a hint only, never used to decide)
-    idle_mode => { native => [enum => qw(on off unknown)], plugin_turn => [enum => qw(on check off)], served_hint => 'word' },
+    # IDLE-COMPACT-SPEC §1.2, §2.3 (lane B): native vetoed / compaction-off (`off` in older rows), the
+    # plugin's own idle compaction (`check`: at the 55.5-min check, lane B and owner Q2; `agents`: lane
+    # A's while agents run), Claude Code's idle minimum and the test seam's cache length
+    idle_mode => { native => [enum => qw(on off unknown vetoed compaction-off)], plugin_turn => [enum => qw(on check off)], served_hint => 'word',
+                   plugin_compact => [enum => qw(on agents check failed queued off)], compact_min => 'num', cache_s => 'num' },
     # owner xxxxxxxx-17: a break of 55.5 min or more at 200K and more with no compaction since the
     # turn end, while the setting allowed native idle compaction (native stayed silent)
     idle_silent => { gap_s => 'num', tokens => 'num', agents => 'int', served_hint => 'word' },
     # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
     # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
-    idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int' },
+    idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int', at => [enum => qw(check timer)], late_s => 'num', adopted => 'bool' },
     # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
-    # for the load (`queued`: lane B1's D8). The other new idle fields and enum values are lane B's.
+    # for the load (`queued`: lane B1's D8).
     idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
