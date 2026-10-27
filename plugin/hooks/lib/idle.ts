@@ -557,8 +557,13 @@ type Compact = { compact: true; gapS: number; tokens: number; agents: number }
  * had a shorter list here, without the cache and the limits): while agents run (owner 2026-10-27
  * 03:4x; native never compacts then), and with none running at Claude Code's idle minimum or
  * more, or with the turn off (owner Q2, 18:54: compact instead of the turn; a refusal is the
- * check's one row, no turn after it, as D2 rules for `compact`). Else the turn's checks, or
- * `agents-running` while agents run (the skip of before 2026-10-27, with `idle_compact: off`).
+ * check's one row, no turn after it, as D2 rules for `compact`). Before the guards it reads
+ * Claude Code's automatic compaction once more (G0b, as the `compact` timer does at its fire):
+ * switched off since the arm, it never compacts (D1). Two refusals still give the turn, as before
+ * lane B, when no agents run and the turn is on (root call on Q2, 2026-10-27): `halted` (a thrash
+ * or bad-summary halt stops plugin compactions, not the turn) and `compaction-off` (D1 keeps the
+ * turn there). Else the turn's checks, or `agents-running` while agents run (the skip of before
+ * 2026-10-27, with `idle_compact: off`).
  */
 async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: number, atLoad: boolean): Promise<string | Go | Compact> {
   const on = idleSwitches(d)
@@ -580,10 +585,13 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   const env = await d.idleEnv()
   const tokens = u?.tokens ?? rec.tokens ?? undefined
   if (on.compactOn && (agents > 0 || !on.turnOn || tokens === undefined || tokens >= env.compactMin)) {
-    const g = await compactGuards(d, sid, rec, now, env)
-    if ('why' in g) return g.why
+    // G0b: the check's policy is the one it was armed with (no `idle_mode` row at its fire), but
+    // `"autoCompactEnabled": false` set since then (`/config`, another session's settings write)
+    // is an explicit user switch: no compaction.
+    const g = (await d.nativeIdle()) === 'compaction-off' ? { why: 'compaction-off' } : await compactGuards(d, sid, rec, now, env)
     // The gap is the timer's own (about 3,330 s) when the turn end is unknown.
-    return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents }
+    if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents }
+    if (agents > 0 || !on.turnOn || (g.why !== 'halted' && g.why !== 'compaction-off')) return g.why
   }
   if (agents > 0) return 'agents-running'
   if (!d.cfg.triggers) return 'triggers-off'

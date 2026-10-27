@@ -1533,6 +1533,103 @@ for (const c of [{ reason: 'cap', why: null }, { reason: 'thrash', why: 'halted'
   })
 }
 
+// Review of lane B (G0b at the check): `"autoCompactEnabled": false` set during the idle wait is an
+// explicit user switch; the check reads it before it compacts, as the `compact` timer does (D1).
+test('AT-IC-C45 (G0b): automatic compaction switched off during the wait, agents running: [compaction-off, check], no compaction, no turn', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  w.policy = { autoCompactEnabled: false }
+  await w.advance(MIN)
+  expect(w.rowsOf('idle_silent').length).toBe(1)
+  expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[['compaction-off', 'check']], 0, 0, 0])
+})
+
+test('AT-IC-C45 (G0b, owner Q2): automatic compaction switched off during the wait, no agents: no compaction; the turn runs (or no-asset), as D1 keeps it', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  w.policy = { autoCompactEnabled: false }
+  await w.advance(MIN)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'check']])
+})
+
+test('AT-IC-C45 (G0b): automatic compaction switched off during the wait, the turn off: [compaction-off, check], nothing runs', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  w.policy = { autoCompactEnabled: false }
+  await w.advance(MIN)
+  expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[['compaction-off', 'check']], 0, 0, 0])
+})
+
+// Root call on Q2 (2026-10-27): with no agents running, a refused check compaction gives no turn
+// after it (D2) for these reasons; a thrash or bad-summary halt falls back to the turn, as before
+// lane B (halt stops plugin compactions, not the turn).
+for (const c of [
+  { name: 'a keystroke 30 s before the check', why: 'present', at55: (w: World, $: Engine) => w.edit($) },
+  { name: '/model since the last request', why: 'prefix-changed', at55: (w: World) => { w.model = 'claude-other-model' } },
+  { name: 'the promptCacheTtl setting 5m (read at the fire)', why: 'ttl-5m', at55: (w: World) => { w.policy = { promptCacheTtl: '5m' } } },
+]) {
+  test(`AT-IC-C45 (owner Q2, root call): no agents, ${c.name}: [${c.why}, check], no compaction and no turn`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    await w.start($)
+    await humanTurn($, w)
+    await w.advance(55 * MIN)
+    await c.at55(w, $)
+    await w.advance(MIN)
+    expect(w.rowsOf('idle_silent').length).toBe(1)
+    expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[[c.why, 'check']], 0, 0, 0])
+  })
+}
+
+test('AT-IC-C45 (owner Q2, root call): no agents, halt for two bad summaries in the person\'s own turn: no compaction; the turn runs (or no-asset), as before lane B', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  // The person's prompt opens the idle episode; two unshaped summaries in their turn halt it.
+  await w.userTurn($)
+  w.summaryMode = 'unshaped'
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  w.summaryMode = 'ok'
+  expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
+  // The turn goes on after them (the compactions are before its end, not since it).
+  await w.advance(1000)
+  w.tokens = 260000
+  await w.turnEnd($, 'Done with that step.')
+  const compacts = w.compacts.length
+  await w.advance(56 * MIN)
+  expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'check']])
+})
+
+for (const c of [{ turn: true, why: 'episode' }, { turn: false, why: 'halted' }]) {
+  test(`AT-IC-C45 (owner Q2, root call): no agents, halt for a thrash, the last turn a background result's${c.turn ? '' : ', the turn off'}: no compaction; [${c.why}, check]${c.turn ? ' (the turn\'s own rule: a background result opens no episode)' : ''}`, { options: c.turn ? ON : { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' }))
+    await w.start($)
+    // A person's turn clears halt: here a background result's turn ends the last one.
+    await w.userTurn($, 'Background task finished.', 'task-notification')
+    w.tokens = 260000
+    await w.turnEnd($)
+    await w.advance(56 * MIN)
+    expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[[c.why, 'check']], 0, 0, 0])
+  })
+}
+
 for (const c of [
   { name: 'a person\'s whole turn', why: 'newer-turn', act: async (w: World, $: Engine) => { await w.userTurn($); w.tokens = 260000; await w.turnEnd($) } },
   { name: 'a keystroke', why: 'present', act: (w: World, $: Engine) => w.edit($) },
