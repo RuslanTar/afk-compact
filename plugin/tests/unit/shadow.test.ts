@@ -183,6 +183,32 @@ test('AT-DH-07: M3 for the plugin\'s own compaction with no handoff turn: two fo
   expect(saves(w).map(s => [s.moment.kind, s.moment.trigger])).toEqual([['m3-plugin', 'plugin']])
 })
 
+// The plugin's own idle compaction is the idle moment (m3-idle), as Claude Code's is: under
+// "idleCompaction": false it takes native's place at the same moment; trigger plugin says who.
+test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoed) is an m3-idle moment with trigger plugin, not m3-plugin; so is the 55.5-min check\'s', { options: { precompact_turn: 'code' } }, async ($, on) => {
+  const w = new World().install(on)
+  const forks = trialOn(on, w)
+  w.policy = { idleCompaction: false }
+  await started($, w)
+  w.tokens = 260000
+  await turn($, w)
+  await w.advance(54 * 60000)
+  await w.settle()
+  expect(w.rowsOf('idle_compact').map(r => r.at)).toEqual(['timer'])
+  expect(forks.map(f => f.compactsBefore)).toEqual([0, 0])
+  expect(saves(w).map(s => [s.moment.kind, s.moment.trigger])).toEqual([['m3-idle', 'plugin']])
+  w.policy = {}
+  w.agents = [{ id: 'sub-1', status: 'running' }]
+  await w.advance(60000)
+  w.tokens = 260000
+  await turn($, w)
+  await w.advance(56 * 60000)
+  await w.settle()
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind])).toEqual([])
+  expect(w.rowsOf('idle_compact').map(r => r.at)).toEqual(['timer', 'check'])
+  expect(saves(w).map(s => [s.moment.kind, s.moment.trigger])).toEqual([['m3-idle', 'plugin'], ['m3-idle', 'plugin']])
+})
+
 // ---- guards
 
 test('AT-DH-08: guards cover both forks with one record each: no limits, a window at 90%, a cold prefix (58 min); no count cap', async ($, on) => {

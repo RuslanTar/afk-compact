@@ -359,8 +359,12 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       })
     }
     // The shadow trial's M3 moment for a plugin compaction with no handoff turn before it (off
-    // without its local config); its forks start right before the call below, not awaited.
-    const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: 'm3-plugin', nonce, trigger: 'plugin' })
+    // without its local config); its forks start right before the call below, not awaited. The
+    // plugin's own idle compaction (the 54-min timer, the 55.5-min check) is the idle moment
+    // `m3-idle`, as Claude Code's idle compaction is: under "idleCompaction": false it takes
+    // native's place at the same moment, so the idle arm stays one stratum (trigger `plugin` tells
+    // who started it); `m3-plugin` stays the turn-end compactions of an active session.
+    const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: idle ? 'm3-idle' : 'm3-plugin', nonce, trigger: 'plugin' })
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
     // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
     // await sits between that check and the call.
