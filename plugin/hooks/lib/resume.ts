@@ -46,6 +46,20 @@ export type BlockArgs = {
 
 /** The helper's `Active driver:` line (lib/gsd.pm) in a re-measure: `[driver]` is kept. */
 export const DRIVER_LINE = /^Active driver: /m
+/** The helper's GSD and driver lines (lib/gsd.pm) in a re-measure. */
+const GSD_LINES = /^(?:GSD \(this session\)|GSD re-entry \(new session only\)|Active driver|Paused driver|Was driving): .*$/gm
+const GSD_TIMEOUT = /^GSD: not measured \(timeout\)$/m
+
+/**
+ * Review of the third build: a delivery-time re-measure whose GSD step ran out of time keeps the
+ * stored measure's GSD and driver lines in its place, so the block does not lose this session's
+ * Active driver (and its `[driver]` line) to a slow `git status`.
+ */
+export function keepGsdLines(fresh: string, stored: string | undefined): string {
+  if (stored === undefined || !GSD_TIMEOUT.test(fresh)) return fresh
+  const kept = stored.match(GSD_LINES)
+  return kept && kept.length > 0 ? fresh.replace(GSD_TIMEOUT, kept.join('\n')) : fresh
+}
 
 /** IC-1 D3: a block delivered later than this after it was built is built again. */
 export const REMEASURE_AFTER_MS = 600000
@@ -221,7 +235,7 @@ async function freshBlock(
     await log(d, pend.sid, 'resume_remeasure_failed', { nonce: pend.nonce, age_s: ageS })
     return stored()
   }
-  const built = await buildBlockWith(d, pend.sid, args, fresh)
+  const built = await buildBlockWith(d, pend.sid, args, keepGsdLines(fresh, pend.remeasure))
   await log(d, pend.sid, 'resume_remeasured', { nonce: pend.nonce, age_s: ageS, ms: (await d.now()) - t0 })
   return { ...built, remeasured: true }
 }

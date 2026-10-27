@@ -78,14 +78,24 @@ sub run {
     # The GSD state file this handoff names (frontmatter `gsd`, its session's own; an export's is
     # repository-relative), re-read now; never every worktree's (owner 2026-10-26 21:37). Only a
     # GSD STATE.md path is read, and for a handoff that is not this session's own (another
-    # session's, an export, an import) only one inside this worktree.
+    # session's, an export, an import) only one inside this worktree. Root ruling R3 (2026-10-27):
+    # the resume reconcile rewrites only this worktree's STATE.md, so one in another checkout (GSD
+    # work run with --cwd) is marked to be reported.
     if (defined $fm->{gsd} && $fm->{gsd} ne '') {
         my $gp = $fm->{gsd};
         $gp = "$g->{worktree}/$gp" if $gp !~ m{\A/} && $g->{in_git};
         my ($own) = eval { skills::approvals::own_relation($d, $ctx, $id->{sid}) };
         my $why = _gsd_path_bad($gp, $own ? undef : ($g->{in_git} ? $g->{worktree} : ''));
         my $l = defined $why ? undef : skills::core::gsd_state($gp);
+        $l .= ' (another checkout: report it, never rewrite it)'
+            if defined $l && defined _gsd_path_bad($gp, $g->{in_git} ? $g->{worktree} : '');
         push @out, defined $why ? "GSD (handoff): not read ($why)" : "GSD (handoff): $l" if defined $why || defined $l;
+    }
+    # Root ruling R4 (2026-10-27): a handoff that names a driver gets the driver of its session as
+    # that session's transcript shows it now (lib/gsd.pm), so a loop that paused itself or ended
+    # after the handoff was written is shown, never run.
+    if ($d->{body} =~ /^(?:Active driver|Paused driver|Was driving): /m) {
+        push @out, _driver_now($fm->{session_id}, $cwd, $g->{in_git} ? $g->{worktree} : undef);
     }
     if ($g->{in_git}) {
         for my $p (@{ skills::ctx::live_peers($ctx, $g->{worktree}, $id->{sid}) }) {
@@ -106,6 +116,17 @@ sub run {
     $ctx->log('approvals_carry', $arow) if $arow;
     push @out, @{ needs_ask($d) };
     return \@out;
+}
+
+# _driver_now(sid, cwd, worktree) -> the `Driver now` line for the handoff's session.
+sub _driver_now {
+    my ($hs, $cwd, $wt) = @_;
+    return 'Driver now: not measured (no session id)' unless defined $hs && skills::ctx::valid_sid($hs);
+    my $r = eval { gsd::session(sid => $hs, cwd => $cwd, worktree => $wt) };
+    my $who = skills::ctx::sid8($hs);
+    return "Driver now ($who): not measured (transcript not found)" unless ref $r eq 'HASH' && $r->{status} ne 'unread';
+    return "Driver now ($who): not measured (timeout)" if $r->{status} eq 'timeout';
+    return "Driver now ($who): " . (defined $r->{driver} ? $r->{driver} : 'none (the loop ended)');
 }
 
 # D-21 commit ownership.
@@ -139,7 +160,6 @@ sub _commits {
     return @l;
 }
 
-# The handoff and its predecessors by previous_handoff, newest first (≤10), across
 # _gsd_path_bad(path, worktree) -> why the path is not read, or undef: it must be absolute, hold
 # no `..` part and end in `/.planning/STATE.md` or `/.planning/workstreams/<ws>/STATE.md`; with a
 # worktree given ('' = none), it must lie inside it.
@@ -155,6 +175,7 @@ sub _gsd_path_bad {
     return undef;
 }
 
+# The handoff and its predecessors by previous_handoff, newest first (≤10), across
 # foreign hops: a predecessor whose session is neither the handoff's nor in its lineage
 # (A-6, 3 hops) is marked {foreign} (small-rulings §2.5).
 sub chain_docs {

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner 2026-10-26 21:37 (GSD re-entry per session), handoff path: begin prints the session's own gsd object (line and Active driver), publish writes frontmatter gsd = that session's STATE.md (workstream-a's for a workstream-a session; none for a session that did not work with GSD, although the worktree has .planning/STATE.md), and measure <handoff> (resume R3) re-reads only the STATE.md the handoff names, never every worktree's",
+ "note": "Owner 2026-10-26 21:37 (GSD re-entry per session), handoff path: begin prints the session's own gsd object (line and Active driver), publish writes frontmatter gsd = that session's STATE.md (workstream-a's for a workstream-a session; none for a session that did not work with GSD, although the worktree has .planning/STATE.md), and measure <handoff> (resume R3) re-reads only the STATE.md the handoff names, never every worktree's. Root rulings of 2026-10-27: R3, a STATE.md in another checkout (GSD work run with --cwd) is marked to be reported, never rewritten; R4, a handoff that names a driver gets a Driver now line from its session's transcript, so a loop that paused itself after the handoff was written is shown as paused and never run",
  "now": "2026-10-26T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -610,6 +610,40 @@
        }
       }
      ]
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/dddddddd-dddd-4ddd-8ddd-dddddddddddd.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/other",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "assistant",
+       "uuid": "row-0101",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_0100",
+          "name": "Skill",
+          "input": {
+           "skill": "gsd-progress",
+           "args": "--ws workstream-a --cwd $TMP/repo"
+          }
+         }
+        ]
+       }
+      }
+     ]
     }
    ]
   },
@@ -706,12 +740,181 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^GSD \\(handoff\\): \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$"
+     "^GSD \\(handoff\\): \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
+     "^Driver now \\(22222222\\): Active driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300\\) · re-enter: /phase-loop --ws workstream-a resume$"
     ],
     "stdout_lacks": [
      "other STATE\\.md",
      "workstream-b",
-     "^GSD:"
+     "^GSD:",
+     "another checkout"
+    ]
+   }
+  },
+  {
+   "name": "gsd-a: the handoff's session then paused its loop",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/22222222-2222-4222-8222-222222222222.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-0011",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-resume-work</command-message>\n<command-name>/gsd-resume-work</command-name>\n<command-args>--ws workstream-a and /phase-loop</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-0013",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_0012",
+          "name": "Skill",
+          "input": {
+           "skill": "phase-loop",
+           "args": "--ws workstream-a resume"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-0014",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "text",
+          "text": "Base directory for this skill: /opt/skills/phase-loop\n\n# Phase loop\n\nDrive a GSD milestone's remaining phases. In every shell block run `gsd_run query roadmap.analyze --ws <name> --cwd <tree>` first.\n\n\nARGUMENTS: --ws workstream-a resume"
+         }
+        ]
+       },
+       "isMeta": true
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-0016",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_0015",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.load --ws workstream-a --cwd $TMP/repo",
+           "description": "load"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:08:00.000Z",
+       "type": "assistant",
+       "uuid": "row-6007",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_6006",
+          "name": "Skill",
+          "input": {
+           "skill": "gsd-pause-work",
+           "args": "--ws workstream-a"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "22222222-2222-4222-8222-222222222222",
+       "timestamp": "2026-10-26T10:08:00.000Z",
+       "type": "assistant",
+       "uuid": "row-6009",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_6008",
+          "name": "Bash",
+          "input": {
+           "command": "cat > .planning/workstreams/workstream-a/HANDOFF.json <<'EOF'\n{}\nEOF",
+           "description": "h"
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gsd-a: measure <handoff> from a new session: Driver now is the Paused driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000029-0000-4000-8000-000000000029",
+    "$PUB2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Driver now \\(22222222\\): Paused driver: /phase-loop --ws workstream-a resume \\(Skill, 2026-10-26 13:02 \\+0300; paused 2026-10-26 13:08 \\+0300\\) · re-enter \\(new session only\\): /phase-loop --ws workstream-a resume$"
+    ],
+    "stdout_lacks": [
+     "^Driver now \\S+: Active driver"
     ]
    }
   },
@@ -806,7 +1009,106 @@
     "exit": 0,
     "stdout_lacks": [
      "GSD",
-     "STATE\\.md"
+     "STATE\\.md",
+     "Driver now"
+    ]
+   }
+  },
+  {
+   "name": "other-co: begin",
+   "cwd": "$TMP/other",
+   "argv": [
+    "begin",
+    "--sid",
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    "--topic",
+    "other-co"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE13": "json:stage",
+    "GL13": "json:gsd.line",
+    "GR13": "json:gsd.reentry"
+   }
+  },
+  {
+   "name": "other-co: stamp",
+   "cwd": "$TMP/other",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE13"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE13/body.md",
+   "content": "# LAB-9 — other-co\n## Resume here\nStatus: active · State: retry fix committed on main (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-26 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 22222222\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-26 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on main, clean | 2026-10-26 14:05 +0300 | `git -C $TMP/other status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo other · worktree $TMP/other · branch main · this handoff: @self@\n### GSD\n$GL13\n$GR13\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "other-co: publish",
+   "cwd": "$TMP/other",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE13",
+    "--slug",
+    "other-co",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ]
+   },
+   "capture": {
+    "PUB13": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "other-co: frontmatter gsd is the other checkout's workstream-a STATE.md",
+   "argv": [
+    "ident",
+    "--sid",
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$PUB13",
+      "has": [
+       "^gsd: \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "other-co: measure <handoff> in the session's own checkout marks that STATE.md to be reported, never rewritten",
+   "cwd": "$TMP/other",
+   "argv": [
+    "measure",
+    "--sid",
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    "$PUB13"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^GSD \\(handoff\\): \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26 \\(another checkout: report it, never rewrite it\\)$"
+    ],
+    "stdout_lacks": [
+     "Driver now"
     ]
    }
   },

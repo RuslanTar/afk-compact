@@ -157,6 +157,23 @@ test('AT-GR-05 (mod): a re-measure whose loop paused itself (a Paused driver lin
   expect(block).not.toContain(line)
 })
 
+// Root rulings R2/R4 (2026-10-27): an ambiguous driver gets the weaker `Was driving:` hint, which
+// is never run: no [driver] line beside it.
+test('AT-GR-05 (mod): a re-measure with a Was driving hint (no Active driver line) has no [driver] line', async ($, on) => {
+  const w = new World().install(on)
+  const line = driverText(w.name) ?? 'no such line'
+  await w.start($)
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\n' +
+    'GSD (this session): workstream workstream-a · /r/.planning/workstreams/workstream-a/STATE.md: status executing · phase 2\n' +
+    'GSD re-entry (new session only): /gsd-resume-work --ws workstream-a\n' +
+    'Was driving: /phase-loop --ws workstream-a resume (Skill, 2026-10-26 14:25 +0300; paused 2026-10-26 15:02 +0300, then other work) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a resume\n' +
+    'In flight: none listed\nEvidence: none'
+  await raiseCompact($, { trigger: 'auto' })
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(block).toContain('Was driving: /phase-loop')
+  expect(block).not.toContain(line)
+})
+
 test('AT-GR-05 (mod): a re-measure with GSD lines but no Active driver line (GSD only) has no [driver] line', async ($, on) => {
   const w = new World().install(on)
   const line = driverText(w.name) ?? 'no such line'
