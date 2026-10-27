@@ -10,8 +10,11 @@
 //   plugin's own records show a main compaction since that turn end it stands down
 //   (`native-fired`); otherwise native stayed silent for whatever reason (served `off`, a keypress,
 //   a dialog, a failure), one `idle_silent` row counts the break, and the handoff turn runs while
-//   the cache is still warm. While agents run (native never compacts then) it does nothing:
-//   owner xxxxxxxx-38 "Measure more first" keeps today's behaviour there (`agents-running`).
+//   the cache is still warm. While agents run (native never compacts then) the plugin compacts
+//   the main session itself instead (owner 2026-10-27 03:4x "Compact (Recommended)", which
+//   replaces xxxxxxxx-38 "Measure more first"): one shaped compaction through the same self-call
+//   as its other compactions (boundary.ts), with an idle dispatch record and resume block and no
+//   continue after it (`idle_compact` row).
 // `off` arms nothing. One `idle_mode {native, plugin_turn, served_hint}` row whenever the triple
 // changes in a load; `served_hint` (2b) is Claude Code's cached server mode, logged only, never
 // used to decide. When the turn's checks pass, one plugin-submitted handoff turn runs on the D-18
@@ -19,6 +22,7 @@
 // not reviewed); at most one per idle episode.
 import type { Deps } from './deps'
 import type { Effective } from './config'
+import { boundary } from './boundary'
 import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
@@ -179,9 +183,9 @@ async function usageOrNone(d: Deps): Promise<Use> {
 }
 
 /**
- * Owner xxxxxxxx-38 ("Measure more first"): the agents of this session still running: the
- * listed subagents and teammates that have not ended, with the agent loops whose turn is running
- * in this load (a workflow's agents are not listed).
+ * The agents of this session still running (owner xxxxxxxx-38; the 2026-10-27 idle compaction):
+ * the listed subagents and teammates that have not ended, with the agent loops whose turn is
+ * running in this load (a workflow's agents are not listed).
  */
 export async function agentsRunning(d: Deps): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
@@ -199,13 +203,33 @@ async function turnBlocked(d: Deps, sid: string): Promise<string | Go> {
   return laterChecks(d, sid, eff, await usageOrNone(d))
 }
 
+/** The plugin's own idle compaction while agents run (owner 2026-10-27): its `idle_compact` row. */
+type Compact = { compact: true; gapS: number; tokens: number; agents: number }
+
+/**
+ * Owner 2026-10-27 03:4x ("Compact (Recommended)", replaces xxxxxxxx-38 "Measure more first"):
+ * native idle compaction does not run while agents run (EXPERIMENT-RESULTS §11), so the check
+ * compacts itself, as native would have: `triggers` on, a window large enough for plugin
+ * compactions, a context at Claude Code's idle floor or more (below it native would not compact
+ * either), not in halt mode (no plugin compactions there) and no question open.
+ */
+async function compactBlocked(d: Deps, sid: string, u: Use): Promise<string | undefined> {
+  if (!d.cfg.triggers) return 'triggers-off'
+  if ((await effective(d, sid)).disabled) return 'small-window'
+  if (u?.tokens === undefined || u.tokens < NATIVE_IDLE_FLOOR) return 'small'
+  if (d.state.halt.active) return 'halted'
+  if (d.state.askOpen > 0) return 'asks-user'
+  return undefined
+}
+
 /**
  * Owner xxxxxxxx-17: the 55.5-min outcome check. A main compaction since the turn end stands
  * down (`native-fired` for an idle one, else `compacted`); a session that changed or is busy is no
- * idle break. Otherwise native stayed silent: one `idle_silent` row at 200K and more, then
- * `agents-running` (owner xxxxxxxx-38) or the checks of the turn.
+ * idle break. Otherwise native stayed silent: one `idle_silent` row at 200K and more, then, while
+ * agents run, the plugin's own idle compaction (owner 2026-10-27) or its skip reason; else the
+ * checks of the turn.
  */
-async function checkBlocked(d: Deps, sid: string, end: number | null): Promise<string | Go> {
+async function checkBlocked(d: Deps, sid: string, end: number | null): Promise<string | Go | Compact> {
   if (d.cfg.idle_handoff_turn !== 'auto' || d.state.headless) return 'disabled'
   const c = end === null ? undefined : await compactedSince(d, sid, end)
   if (c !== undefined) return c.idle ? 'native-fired' : 'compacted'
@@ -214,12 +238,17 @@ async function checkBlocked(d: Deps, sid: string, end: number | null): Promise<s
   if (isBusy(d.state) || d.state.nativeCompacting > 0) return 'busy'
   const u = await usageOrNone(d)
   const agents = await agentsRunning(d)
+  const gap = end === null ? null : Math.round(((await d.now()) - end) / 1000)
   if (u?.tokens !== undefined && u.tokens >= NATIVE_IDLE_FLOOR) {
     const served = await d.servedHint()
-    const gap = end === null ? null : Math.round(((await d.now()) - end) / 1000)
     await log(d, sid, 'idle_silent', { gap_s: gap, tokens: u.tokens, agents, ...(served !== undefined ? { served_hint: served } : {}) })
   }
-  if (agents > 0) return 'agents-running'
+  if (agents > 0) {
+    const why = await compactBlocked(d, sid, u)
+    if (why !== undefined) return why
+    // compactBlocked found the tokens; the gap is the timer's own (about 3,330 s) when unknown.
+    return { compact: true, gapS: gap ?? Math.round(IDLE_CHECK_MS / 1000), tokens: u?.tokens ?? 0, agents }
+  }
   if (!d.cfg.triggers) return 'triggers-off'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'
@@ -252,6 +281,14 @@ export async function fire(d: Deps, sid: string, kind: IdleKind = 'turn', end: n
   const b = kind === 'check' ? await checkBlocked(d, sid, end) : await turnBlocked(d, sid)
   if (typeof b === 'string') {
     await skipped(d, sid, b, null, 'idle')
+    return
+  }
+  if ('compact' in b) {
+    // Owner 2026-10-27: one shaped compaction instead of the turn. A rejection (a turn started,
+    // or a headless host that cannot compact between turns) is one `compact_rejected` row from
+    // boundary(), never retried: the next check comes only after another main turn end.
+    await log(d, sid, 'idle_compact', { gap_s: b.gapS, tokens: b.tokens, agents: b.agents })
+    await boundary(d, { idle: { gapS: b.gapS } })
     return
   }
   const h = newTurn('idle', b.tokens, b.allowance, b.native, b.calls)

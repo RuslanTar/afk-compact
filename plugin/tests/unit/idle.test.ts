@@ -905,32 +905,123 @@ test('AT-IS-02: another main compaction since the turn end (manual): compacted; 
   expect(w.submits.length + idleSkips(w).length).toBe(2)
 })
 
-test('AT-IS-03: agents running at the check (a listed subagent, or a workflow agent\'s turn the list does not show): idle_silent with the count, then agents-running and no submit; ended agents do not count', { options: ON }, async ($, on) => {
+// Owner 2026-10-27 03:4x ("Compact (Recommended)", replaces xxxxxxxx-38 "Measure more first"):
+// while agents run (native never compacts then) the check compacts the session itself: the
+// same self-call as the plugin's other compactions, an idle dispatch record and resume block,
+// no continue. SPEC-DELTAS AT-IS-03, AT-IS-08..AT-IS-10.
+const idleCompacts = (w: World) => w.rowsOf('idle_compact').map(r => [r.gap_s, r.tokens, r.agents])
+const RUNNING = [{ id: 'sub-1', status: 'running' }, { id: 'sub-0', status: 'completed' }]
+
+test('AT-IS-03: agents running at the check (a listed subagent, or a workflow agent\'s turn the list does not show): idle_silent with the count, then one idle_compact row and the plugin\'s own idle compaction (mod-self, idle dispatch), no submit; ended agents do not count', { options: ON }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
-  w.agents = [{ id: 'sub-1', status: 'running' }, { id: 'sub-0', status: 'completed' }]
+  w.agents = RUNNING
   await w.start($)
   await humanTurn($, w)
   await w.advance(56 * MIN)
   expect(silentRows(w)).toEqual([[3330, 260000, 1, null]])
-  expect(idleSkips(w)).toEqual(['agents-running'])
+  expect(idleCompacts(w)).toEqual([[3330, 260000, 1]])
+  expect(idleSkips(w)).toEqual([])
+  expect(w.compacts.length).toBe(1)
+  const d = w.callsOf('dispatch')[0]
+  expect([w.flag(d, '--channel'), w.flag(d, '--trigger'), w.flag(d, '--midturn'), hasIdleFlag(w, 0), d?.args.includes('--idle-gap-s=3330')])
+    .toEqual(['mod-self', 'plugin', 'false', true, true])
+  // Shaped: the plugin's own instructions, with the dispatch's nonce.
+  expect(markerNonce(w, w.compacts[0]?.instructions)).toBe(w.flag(d, '--nonce'))
+  expect(w.rowsOf('compacted').map(r => r.skip)).toEqual([null])
   expect(w.submits.length).toBe(0)
   // A workflow's agent: only its turn shows it; the list cannot be read at all here.
   w.agents = undefined
   await $.turn.start({ text: 'work', turnId: 'wf-t1', agentId: 'wf-agent-1' } as never)
   await humanTurn($, w)
   await w.advance(56 * MIN)
-  expect(idleSkips(w)).toEqual(['agents-running', 'agents-running'])
+  expect(idleCompacts(w).map(r => r[2])).toEqual([1, 1])
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([1, 1])
-  // Its turn ends: the next check runs the handoff turn (or says no-asset).
+  expect(w.compacts.length).toBe(2)
+  // Its turn ends: the next check runs the handoff turn (or says no-asset), no compaction.
   await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 'wf-t1', reason: 'answer', agentId: 'wf-agent-1' } as never)
   w.agents = [{ id: 'sub-1', status: 'completed' }]
   await w.advance(10 * MIN)
   await humanTurn($, w)
   await w.advance(56 * MIN)
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([1, 1, 0])
-  expect(w.submits.length + idleSkips(w).filter(x => x !== 'agents-running').length).toBe(1)
+  expect([w.compacts.length, idleCompacts(w).length]).toEqual([2, 2])
+  expect(w.submits.length + idleSkips(w).length).toBe(1)
 })
+
+test('AT-IS-08: after the idle compaction while agents run: no continue; the turn an agent\'s result opens gets the idle resume block; not counted for the thrash rule', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.rateLimits = LIMITS
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect(w.compacts.length).toBe(1)
+  await w.advance(10 * MIN)
+  expect([w.submits.length, w.rowsOf('continue').length]).toEqual([0, 0])
+  await w.userTurn($, 'Agent sub-1 finished.', 'task-notification')
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(block).toContain(SID_A)
+  const idle = lineOf(w, ['idle'])
+  expect(idle === undefined).toBe(!hasTag('resume-context', 'idle'))
+  if (idle !== undefined) expect(block).toContain(idle)
+  // Two turns that end at the target, with a plugin compaction between them: had the idle
+  // compaction counted, both would read as refilled and make a thrash halt.
+  w.tokens = 610000
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.compacts.length).toBe(2)
+  await w.turnStart($)
+  await w.turnEnd($)
+  expect(w.rowsOf('thrash').length).toBe(0)
+})
+
+test('AT-IS-09: the idle compaction refused (a turn running, or a headless host): one compact_rejected row, no retry, no submit; the next try needs another turn end', { options: ON }, async ($, on) => {
+  const w = new World().install(on)
+  w.rateLimits = LIMITS
+  w.agents = RUNNING
+  w.compactMode = 'reject'
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(56 * MIN)
+  expect([w.compacts.length, w.rowsOf('compact_rejected').map(r => r.attempt)]).toEqual([1, [1]])
+  await w.advance(120 * MIN)
+  expect([w.compacts.length, w.rowsOf('compact_rejected').length, w.submits.length, idleCompacts(w).length]).toEqual([1, 1, 0, 1])
+  // A hook-side skip is logged the same way and not retried either.
+  w.compactMode = { skip: 'not available in a headless session' }
+  await w.userTurn($, 'Agent sub-1 progress.', 'task-notification')
+  w.tokens = 260000
+  await w.turnEnd($)
+  await w.advance(56 * MIN)
+  expect([w.compacts.length, w.rowsOf('compacted').filter(r => r.skip !== null).length]).toEqual([2, 1])
+  await w.advance(120 * MIN)
+  expect([w.compacts.length, w.submits.length]).toEqual([2, 0])
+})
+
+// The idle compaction's own guards (AT-IS-10): below Claude Code's idle floor, `triggers` false,
+// halt mode, and native idle off in the settings (the 49-min path, no check) compact nothing.
+const AGENT_SKIPS: { name: string; why: string | null; tokens?: number; origin?: string; options?: Record<string, unknown>; setup?: (w: World) => void; silent: number }[] = [
+  { name: 'below 200K', why: 'small', tokens: 150000, silent: 0 },
+  { name: 'triggers off', why: 'triggers-off', options: { triggers: false }, silent: 1 },
+  // A person's turn clears halt: here a background result's turn ends the last one.
+  { name: 'halt', why: 'halted', origin: 'task-notification', setup: w => { w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' })) }, silent: 1 },
+  { name: 'native off', why: null, setup: w => { w.policy = NATIVE_OFF }, silent: 0 },
+]
+for (const c of AGENT_SKIPS) {
+  test(`AT-IS-10 (${c.name}): agents running, ${c.why === null ? 'the 49-min turn path' : `handoff_skipped {why: ${c.why}, reason: idle}`}: no idle_compact row, no compaction`, { options: { ...ON, ...(c.options ?? {}) } }, async ($, on) => {
+    const w = new World().install(on)
+    w.rateLimits = LIMITS
+    w.agents = RUNNING
+    c.setup?.(w)
+    await w.start($)
+    await w.userTurn($, 'next step please', c.origin ?? 'composer')
+    w.tokens = c.tokens ?? 260000
+    await w.turnEnd($)
+    await w.advance(56 * MIN)
+    if (c.why !== null) expect(idleSkips(w)).toEqual([c.why])
+    expect([w.compacts.length, idleCompacts(w).length, w.rowsOf('idle_silent').length]).toEqual([0, 0, c.silent])
+  })
+}
 
 test('AT-IS-04: the served hint (2b) is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: ON }, async ($, on) => {
   const w = new World().install(on)
