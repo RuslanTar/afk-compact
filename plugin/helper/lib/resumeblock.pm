@@ -78,4 +78,71 @@ sub claim {
     return ('TAKEN', $who // 'unknown');
 }
 
+# arm(sid_dir, sid) -> the armed nonce, or undef (owner 2026-10-27 "Fix in 0.1.1", AT-RP-04).
+# SessionStart with source=resume: the mod's record of a block still pending for this session
+# id (<sid_dir>/resume-pending.json, written at its compaction) becomes resume-armed.json by one
+# rename, so one process wins it. The mod's first prompt.context of this session id delivers it
+# (claim, 600 s re-measure rule, settle). Nothing is armed for a record of another session id, a
+# settled or malformed one, a symlink, or one whose nonce is claimed already, and nothing while
+# another process of this session id still runs (a copy started with `--resume <id>` beside the
+# original: the original keeps its block). An armed record that no turn took yet stays armed for
+# the next resume; the first turn end of a process settles it (settle_armed).
+sub arm {
+    my ($d, $sid) = @_;
+    return undef unless defined $d && defined $sid;
+    my $f = "$d/resume-pending.json";
+    return undef if -l $f || !-f _;
+    my $j = _record($f) // return undef;
+    return undef unless ($j->{state} // '') eq 'pending';
+    return undef unless defined $j->{session_id} && !ref $j->{session_id} && $j->{session_id} eq $sid;
+    my $nonce = $j->{nonce};
+    return undef unless !ref $nonce && nonce::valid($nonce);
+    return undef if -e "$d/resume-claimed/$nonce";
+    return undef if -l "$d/resume-armed.json";
+    return undef if _other_live($sid);
+    rename($f, "$d/resume-armed.json") or return undef;
+    return $nonce;
+}
+
+# settle_armed(sid_dir, sid) -> the settled nonce, or undef. At a main Stop: the first turn of
+# this process has ended, so an armed record still pending was not taken by it (the mod's
+# prompt.context ran before the arm, or no mod is loaded) and is never delivered to a later turn
+# or process. It is rewritten as settled, without the block: `delivered:<channel>` when its nonce
+# is claimed, else `undelivered`. The mod's own settle writes its `mod_outcome` row; this one
+# writes none.
+sub settle_armed {
+    my ($d, $sid) = @_;
+    return undef unless defined $d && defined $sid;
+    my $f = "$d/resume-armed.json";
+    return undef if -l $f || !-f _;
+    my $j = _record($f) // return undef;
+    return undef unless ($j->{state} // '') eq 'pending';
+    my $nonce = $j->{nonce};
+    return undef unless defined $nonce && !ref $nonce && nonce::valid($nonce);
+    my ($who) = (util::read_file("$d/resume-claimed/$nonce") // '') =~ /^([a-z.]+)/;
+    my $resume = -e "$d/resume-claimed/$nonce" ? 'delivered:' . ($who // 'unknown') : 'undelivered';
+    util::write_atomic($f, jsonc::encode_bytes(jsonc::obj(v => 1, state => 'settled', session_id => $sid, nonce => $nonce,
+                                                          resume => $resume, ts => util::iso(util::now()))) . "\n", 0600);
+    return $nonce;
+}
+
+sub _record {
+    my ($f) = @_;
+    my $raw = util::read_file($f, 1024 * 1024) // return undef;
+    my $j = eval { jsonc::decode($raw) };
+    return ref $j eq 'HASH' && ($j->{v} // 0) eq '1' ? $j : undef;
+}
+
+# Another process of this session id still runs: a per-process record of sid, not this
+# process's, with no ended- twin, that counts as live (sessions::record_live: a pid gone or
+# started again counts as ended; an in-place restart keeps the pid and start time, so it is this
+# process).
+sub _other_live {
+    my ($sid) = @_;
+    return 0 unless rc::root_ok('handoff_root');
+    my $c = rc::claude();
+    my $me = ref $c eq 'HASH' && defined $c->{pid} ? sessions::_key($c) : '';
+    return scalar grep { $_->{_key} ne $me && sessions::record_live($_) } @{ sessions::records_for($sid)->{live} || [] };
+}
+
 1;
