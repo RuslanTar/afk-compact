@@ -308,6 +308,11 @@ export type LoadState = {
    * from `idleTimer`: the hooks cancel the timer synchronously before `cancelIdle` runs.
    */
   idleDueSid: string | undefined
+  /**
+   * Per session id, the one pending delete of the tombstone this load wrote last (§3.1): a newer
+   * tombstone or record of that sid cancels it, so turn starts do not pile up hour-long waits.
+   */
+  idleTombDeletes: Map<string, { cancel: () => void }>
   /** The idle episode: from a human-origin turn's end to the next human-origin turn.start (§9.4). */
   idleEpisode: { since: number; done: boolean } | undefined
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
@@ -486,6 +491,7 @@ export function newState(loadId: string): LoadState {
     idleEnvMemo: undefined,
     idleTimer: undefined,
     idleDueSid: undefined,
+    idleTombDeletes: new Map(),
     idleEpisode: undefined,
     publishedSinceHuman: false,
     idleMode: undefined,

@@ -172,20 +172,30 @@ export function cancelIdleTimer(d: Deps): void {
   d.state.idleTimer = undefined
 }
 
+/** Cancels the pending delete of this load's last tombstone of `sid`: a newer write replaces it. */
+function dropTombDelete(d: Deps, sid: string): void {
+  d.state.idleTombDeletes.get(sid)?.cancel()
+  d.state.idleTombDeletes.delete(sid)
+}
+
 /**
  * Writes a tombstone over the record of `due` (§3.1) and deletes it once every timer that could
  * still hold that record has fired, if it is still this one then (the next arm overwrites it
- * anyway; `loadIdle` deletes an expired one of its own session id).
+ * anyway; `loadIdle` deletes an expired one of its own session id). One pending delete per
+ * session id: the next tombstone or record of the sid cancels this one's.
  */
 async function writeTombstone(d: Deps, sid: string, due: number, at?: number): Promise<void> {
   const t: Tombstone = { cancelled: true, sid, load: d.state.loadId, due, at: at ?? (await d.now()) }
   await d.storeSet(dueKey(sid), t)
-  d.after(Math.max(0, due + TOMBSTONE_LIFE_MS - t.at), () => {
+  dropTombDelete(d, sid)
+  const h = d.after(Math.max(0, due + TOMBSTONE_LIFE_MS - t.at), () => {
+    if (d.state.idleTombDeletes.get(sid) === h) d.state.idleTombDeletes.delete(sid)
     void (async () => {
       const v = readTombstone(await d.storeGet(dueKey(sid)))
       if (v && v.load === t.load && v.due === t.due && v.at === t.at) await d.storeDelete(dueKey(sid))
     })().catch(() => undefined)
   })
+  d.state.idleTombDeletes.set(sid, h)
 }
 
 /** A record's tombstone (§3.1); nothing when the key is already empty or a tombstone. */
@@ -222,6 +232,7 @@ function schedule(d: Deps, rec: Due, now: number): void {
 async function persist(d: Deps, rec: Due): Promise<void> {
   const own: Due = { ...rec, load: d.state.loadId }
   await d.storeSet(dueKey(own.sid), own)
+  dropTombDelete(d, own.sid)
   d.state.idleDueSid = own.sid
   schedule(d, own, await d.now())
 }
@@ -423,6 +434,17 @@ function isBusy(s: Deps['state']): boolean {
   return s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.handoffTurn !== undefined || s.ourSubmitPending
 }
 
+/** G5: a main turn ended, or a main request started, after the ones the record was armed at. */
+function newerTurn(s: Deps['state'], rec: Due): boolean {
+  const end = rec.end ?? 0
+  return (s.lastTurnEndAt ?? 0) > end || (s.lastMainReqAt ?? 0) > (rec.anchor ?? end)
+}
+
+/** G7 (D11): a person was seen at the prompt in the last minute. */
+function present(s: Deps['state'], now: number): boolean {
+  return s.lastInputAt !== undefined && now - s.lastInputAt < IDLE_PRESENT_MS
+}
+
 async function usageOrNone(d: Deps): Promise<Use> {
   try {
     return await d.usage()
@@ -504,11 +526,15 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   return laterChecks(d, sid, eff, u, rec)
 }
 
-/** `boundary()` for an idle compaction; a throw is a failed attempt (`error`). */
-async function idleBoundary(d: Deps, opts: Parameters<typeof boundary>[1]): Promise<BoundaryResult> {
+/**
+ * `boundary()` for an idle compaction. A throw is a failed attempt (`error`) with one skip row of
+ * its own after the `idle_compact` row, so the fire still writes its one outcome (§2.3).
+ */
+async function idleBoundary(d: Deps, sid: string, kind: IdleKind, opts: Parameters<typeof boundary>[1]): Promise<BoundaryResult> {
   try {
     return await boundary(d, opts)
   } catch {
+    await idleSkip(d, sid, 'error', kind)
     return { ran: true, ok: false, failClass: 'error' }
   }
 }
@@ -595,7 +621,7 @@ export async function fire(d: Deps, rec: Due, now: number): Promise<void> {
     await log(d, sid, 'idle_compact', {
       gap_s: b.gapS, tokens: b.tokens, agents: b.agents, at: 'check', late_s: Math.max(0, secs(now - rec.due)), adopted: s.idleAdopted,
     })
-    const r = await idleBoundary(d, { idle: { gapS: b.gapS } })
+    const r = await idleBoundary(d, sid, 'check', { idle: { gapS: b.gapS } })
     if (!r.ran) await idleSkip(d, sid, r.why, 'check')
     return
   }
@@ -631,14 +657,20 @@ async function rearmCheck(d: Deps, rec: Due, now: number, scale: number): Promis
  * `compactGuards`; the first that fails is the one skip row (`handoff_skipped {why, reason: idle,
  * kind: compact, late_s?}`); then one `idle_compact` row and the compaction (boundary.ts, exempt
  * from halt for the auto-continue cap, D5), whose refusal is one more skip row (D13) and whose
- * failure counts for D7.
+ * failure counts for D7. A guard that throws is one `error` skip row: the record is already
+ * cleared, so the episode ends here either way (§2.3).
  */
 async function fireCompact(d: Deps, rec: Due, now: number): Promise<void> {
   const s = d.state
   const sid = rec.sid
-  const p = await policy(d, sid)
   const lateS = secs(now - rec.due)
   const skip = (why: string): Promise<void> => idleSkip(d, sid, why, 'compact', lateS > 0 || why === 'lapsed' ? lateS : undefined)
+  let p: Policy
+  try {
+    p = await policy(d, sid)
+  } catch {
+    return skip('error')
+  }
   // G0a: native came back on (or unreadable): the outcome check for the same turn end.
   if (p.native === 'on' || p.native === 'unknown') {
     await skip(p.native === 'on' ? 'native-on' : 'native-unknown')
@@ -649,12 +681,25 @@ async function fireCompact(d: Deps, rec: Due, now: number): Promise<void> {
   // D7, or a headless load: lane A has no headless path).
   if (p.native === 'compaction-off') return skip('compaction-off')
   if (!p.compactOn) return skip('disabled')
-  const g = await compactGuards(d, sid, rec, now, p.env)
+  let g: { why: string } | { tokens: number }
+  try {
+    g = await compactGuards(d, sid, rec, now, p.env)
+  } catch {
+    g = { why: 'error' }
+  }
   if ('why' in g) return skip(g.why)
   const agents = await agentsRunning(d)
   const gapS = secs(now - (rec.end ?? now))
   await log(d, sid, 'idle_compact', { gap_s: gapS, tokens: g.tokens, agents, at: 'timer', late_s: Math.max(0, lateS), adopted: s.idleAdopted })
-  const r = await idleBoundary(d, { idle: { gapS }, exemptHalt: s.halt.active && s.halt.reason === 'cap' })
+  // G4 (a turn), G5 and G7 once more after the checkpoint, which can take seconds: a person who
+  // came back meanwhile is not compacted in front of (one skip row from the boundary's result).
+  const idleRecheck = async (): Promise<string | undefined> => {
+    if (s.mainTurnRunning || s.foreignPrompts > 0 || s.handoffTurn !== undefined || s.ourSubmitPending) return 'busy'
+    if (newerTurn(s, rec)) return 'newer-turn'
+    if (present(s, await d.now())) return 'present'
+    return undefined
+  }
+  const r = await idleBoundary(d, sid, 'compact', { idle: { gapS }, idleRecheck, exemptHalt: s.halt.active && s.halt.reason === 'cap' })
   if (!r.ran) {
     await skip(r.why)
     return
@@ -673,25 +718,24 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   const no = (why: string) => ({ why })
   // G3: the cache has probably lapsed, or the timer came late (a sleep).
   if (now - rec.due > IDLE_LATE_MS || now - (rec.anchor ?? rec.end ?? rec.due) > IDLE_LAPSE_FRACTION * IDLE_CACHE_MS * scaleOf(env)) return no('lapsed')
-  // G3a, G3b (D6): an adopted load compacts only on the same version and model, and only while
-  // the L1-c4 gate allows adopted loads at all. A read that throws counts as changed.
-  if (s.idleAdopted) {
-    let cc: string | undefined
-    try {
-      cc = (await d.version()).version
-    } catch {
-      cc = undefined
-    }
-    const model = await d.model()
-    if ((rec.cc !== null && rec.cc !== cc) || (rec.model !== null && rec.model !== model)) return no('prefix-changed')
-    if (!adoptedOk) return no('adopted-cold')
+  // G3a (D6 a): the prompt prefix changed since the arm, so the cache is cold: another Claude Code
+  // version (an adopted load) or another main model (an adopted load, or `/model` in this one,
+  // which sends no request and so re-arms nothing). A read that throws counts as changed.
+  let cc: string | undefined
+  try {
+    cc = (await d.version()).version
+  } catch {
+    cc = undefined
   }
+  const model = await d.model()
+  if ((rec.cc !== null && rec.cc !== cc) || (rec.model !== null && rec.model !== model)) return no('prefix-changed')
+  // G3b (D6 b): an adopted load compacts only while the L1-c4 gate allows adopted loads at all.
+  if (s.idleAdopted && !adoptedOk) return no('adopted-cold')
   // G4-G7: busy, a newer turn or request, a compaction since the turn end, a person at the prompt.
   if (isBusy(s) || s.nativeCompacting > 0 || s.ownCompact !== undefined) return no('busy')
-  const end = rec.end ?? 0
-  if ((s.lastTurnEndAt ?? 0) > end || (s.lastMainReqAt ?? 0) > (rec.anchor ?? end)) return no('newer-turn')
-  if ((await compactedSince(d, sid, end)) !== undefined) return no('compacted')
-  if (s.lastInputAt !== undefined && now - s.lastInputAt < IDLE_PRESENT_MS) return no('present')
+  if (newerTurn(s, rec)) return no('newer-turn')
+  if ((await compactedSince(d, sid, rec.end ?? 0)) !== undefined) return no('compacted')
+  if (present(s, now)) return no('present')
   // G8-G14: triggers, the window, the minimum, the cache, the limits, halt, an open question.
   if (!d.cfg.triggers) return no('triggers-off')
   if ((await effective(d, sid)).disabled) return no('small-window')

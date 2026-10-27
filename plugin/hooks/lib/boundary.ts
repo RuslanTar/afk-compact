@@ -61,6 +61,12 @@ export type BoundaryOpts = {
    * record and resume block (`[idle]`), not counted for the thrash rule, and no continue after it.
    */
   idle?: { gapS: number }
+  /**
+   * The plugin's own idle compaction (idle.ts): its guards asked once more after the checkpoint,
+   * which can take seconds, and before the dispatch record is written. A reason (a turn started
+   * or ended, a person at the prompt) stops it there, with no record behind (D13).
+   */
+  idleRecheck?: () => Promise<string | undefined>
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -262,7 +268,8 @@ async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<
 /**
  * D13: how one `boundary()` call went. `ran: false` with the reason when it stopped before a
  * compaction was asked for (`compact-off`, `busy`, `asks-user`, `halted`, `compacted` when a
- * native one ran instead, `small-window`, `cooldown`, `small`); `ran: true` once
+ * native one ran instead, `small-window`, `cooldown`, `small`, or what `idleRecheck` answered:
+ * `busy`, `newer-turn`, `present`); `ran: true` once
  * `$.session.compact` or the `/compact` command was called, `ok` when it compacted through the
  * plugin, else a `failClass`: `skipped`, a rejection class (`turn-running`, `headless`, `other`)
  * or the `compact_command` result (`failed`, `unclaimed`, `rejected`). The idle timer logs a
@@ -327,6 +334,12 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
       pref = await resumePref(d, sid)
+      // The checkpoint above can take seconds: a person may have come back since (idle only).
+      const changed = opts.idleRecheck ? await opts.idleRecheck() : undefined
+      if (changed !== undefined) {
+        s.nudgeNonce = named
+        return { ran: false, why: changed }
+      }
       // The checkpoint above can take seconds: a native compaction may have started or run since.
       // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
       // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
@@ -372,7 +385,15 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
     } catch (err) {
       return { ran: true, ok: false, failClass: await compactRejected(d, sid, nonce, err) }
     }
-    if (!(await settleSelf(d, sid, run, r))) return { ran: true, ok: false, failClass: 'skipped' }
+    let settled: boolean
+    try {
+      settled = await settleSelf(d, sid, run, r)
+    } catch {
+      // Only the bookkeeping after the call failed: it compacted unless Claude Code skipped it,
+      // which is what the idle failure count goes by (§1.7). Nothing follows either way.
+      return r.skip === undefined ? { ran: true, ok: true } : { ran: true, ok: false, failClass: 'skipped' }
+    }
+    if (!settled) return { ran: true, ok: false, failClass: 'skipped' }
     // Like Claude Code's own idle compaction, the plugin's sends nothing after it: the resume
     // block waits for the next turn (a background result or the person's return).
     if (!idle) await guarded(d, sid, 'continue', () => autoContinue(d, sid))

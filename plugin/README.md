@@ -258,7 +258,7 @@ It does not run when:
 - Claude Code reports no five-hour or seven-day plan usage window, so its cache is the five-minute one (an API key, Bedrock, Vertex, or a Claude gateway, which reports only a spend limit), prompt caching is turned off (`DISABLE_PROMPT_CACHING`), or any reported limit is at 90% or more;
 - a turn is running, a prompt is arriving, another compaction is running or ran since the turn ended, or you typed in or recalled into the prompt box in the last minute, or you started or resumed the session in the last minute (the plugin does not see scrolling or dialogs);
 - the session changed (for example after `/clear`), or another Claude Code process took it over;
-- the session was picked up by a new Claude Code process running another Claude Code version or model than the one that set the timer (its cache would be cold);
+- the Claude Code version or the model is not the one that set the timer (a new Claude Code process picked up the session, or you switched the model with `/model` since the last request), so its cache would be cold;
 - `triggers` is `false`, the window is too small for plugin compactions, or halt mode is on after a thrash or after bad summaries (halt for the auto-continue cap does not stop it);
 - the conversation is below the minimum.
 
