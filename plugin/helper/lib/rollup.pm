@@ -84,14 +84,17 @@ sub rows {
 # whose boundary row was read (IC-1 D1, MOD-SPEC §2.5 idle rule). mod = the mod record's `idle`
 # (a classic or missing record: unknown); native = 'notice' | 'return' | undef (the first native
 # idle row after the boundary). idle = mod OR native; idle_source both | mod | notice | return |
-# none; mismatch 1 when the mod said true or false and the native row disagrees.
+# none; mismatch 1 when the mod said true or false and the native row disagrees. An idle
+# `mod-self` record is the plugin's own idle compaction (owner 2026-10-27, while agents run):
+# Claude Code writes no idle notice for it, so no native row is no mismatch.
 sub idle_facts {
     my ($drec, $native) = @_;
     my $mod = ($drec && dispatch::is_mod($drec) && exists $drec->{idle} && defined $drec->{idle}) ? ($drec->{idle} ? 1 : 0) : undef;
     my $nat = defined $native ? 1 : 0;
     my $src = ($mod && $nat) ? 'both' : $mod ? 'mod' : $nat ? $native : 'none';
     my $gap = ($drec && defined $drec->{idle_gap_s} && !ref $drec->{idle_gap_s} && $drec->{idle_gap_s} =~ /\A\d+\z/) ? 0 + $drec->{idle_gap_s} : undef;
-    my $mism = (defined $mod && $mod != $nat) ? 1 : 0;
+    my $own = ($mod && !$nat && ($drec->{channel} // '') eq 'mod-self') ? 1 : 0;
+    my $mism = (defined $mod && $mod != $nat && !$own) ? 1 : 0;
     return (jsonc::bool($mod || $nat), $src, $gap, $mism);
 }
 

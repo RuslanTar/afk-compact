@@ -174,6 +174,9 @@ our %SCHEMA = (
     # owner xxxxxxxx-17: a break of 55.5 min or more at 200K and more with no compaction since the
     # turn end, while the setting allowed native idle compaction (native stayed silent)
     idle_silent => { gap_s => 'num', tokens => 'num', agents => 'int', served_hint => 'word' },
+    # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
+    # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
+    idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int' },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num', model => 'model' },
     handoff_turn_end => {

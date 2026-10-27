@@ -50,6 +50,13 @@ export type BoundaryOpts = {
    * sweep would answer `skipped: swept` with no rows (DP-30 (1)).
    */
   checked?: { nonce: string; named: string | undefined; prev: string | undefined; cp: Checkpoint | undefined }
+  /**
+   * Owner 2026-10-27 03:4x ("Compact (Recommended)"): the idle compaction of the 55.5-min check
+   * while agents run (idle.ts), with the seconds since the last main turn end. Exempt from the
+   * cooldown and the target check (the check applied Claude Code's idle floor); an idle dispatch
+   * record and resume block (`[idle]`), not counted for the thrash rule, and no continue after it.
+   */
+  idle?: { gapS: number }
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -229,11 +236,13 @@ async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<
 /**
  * MOD-SPEC §4: one plugin compaction at a clean turn end, then the after-step and continue.
  * After a handoff turn (§9.1) it runs despite halt and cooldown, with `[handoff]` when the
- * handoff was published, and no continue follows.
+ * handoff was published, and no continue follows. The idle compaction while agents run
+ * (owner 2026-10-27, idle.ts) skips the cooldown and the target, and no continue follows either.
  */
 export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> {
   const s = d.state
   const ah = opts.afterHandoff
+  const idle = opts.idle
   if (s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
   // No await before this check, so a native compaction's end cannot slip past unseen.
   if (nativeCheck(d, opts) === 'wait') return
@@ -242,9 +251,9 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
   const eff = await effective(d, sid)
   if (eff.disabled) return
   const now = await d.now()
-  if (!ah && s.lastPluginCompactAt !== undefined && now - s.lastPluginCompactAt < d.cfg.cooldown_ms) return
+  if (!ah && !idle && s.lastPluginCompactAt !== undefined && now - s.lastPluginCompactAt < d.cfg.cooldown_ms) return
   const tokens = (await d.usage()).tokens
-  if (!ah && (tokens === undefined || tokens < eff.target)) return
+  if (!ah && !idle && (tokens === undefined || tokens < eff.target)) return
   s.busy = true
   try {
     let nonce: string
@@ -286,6 +295,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       await writeDispatch(d, {
         sid, nonce, agentId: null, trigger: 'plugin', channel: 'mod-self', resumePref: pref, midturn: false, tags: main.tags, text,
         ...(ah ? { handoffHt: ah.ht } : {}),
+        ...(idle ? { idle } : {}),
       })
     }
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
@@ -319,7 +329,8 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     })
     await cacheRows(d, sid, nonce, r, true, 'main')
     s.lastPluginCompactAt = await d.now()
-    s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
+    // An idle compaction ends no nudged cycle: the thrash rule does not count it.
+    if (!idle) s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
     const msgs = r.messages
     const before = r.tokensBefore
     const after = r.tokensAfter
@@ -328,8 +339,11 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
       ...(ah ? { stats: ah.stats } : {}),
       ...(prodConsent !== undefined ? { prodConsent } : {}),
+      ...(idle ? { idle: true } : {}),
     }))
-    await guarded(d, sid, 'continue', () => autoContinue(d, sid))
+    // Like Claude Code's own idle compaction, the plugin's sends nothing after it: the resume
+    // block waits for the next turn (a background result or the person's return).
+    if (!idle) await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.
     if (s.pending && s.pending.nonce === nonce) s.pending.outcome.halt = s.halt.active
   } finally {

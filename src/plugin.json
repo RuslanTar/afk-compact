@@ -196,7 +196,7 @@
     "idle_handoff_turn": {
       "type": "string",
       "title": "Pre-idle handoff turn",
-      "description": "auto = when Claude Code's own idle compaction is off, the model gets one turn to write a handoff about 49 minutes into an idle period, before the prompt cache expires; when it is on (or its setting cannot be read), the plugin checks about 55.5 minutes in and runs that turn only if Claude Code did not compact the session and no agents run. off = never. true, yes, 1 and the old on count as auto; false, no, none, disabled and 0 as off; any other value counts as off, with a note in /status.",
+      "description": "auto = when Claude Code's own idle compaction is off, the model gets one turn to write a handoff about 49 minutes into an idle period, before the prompt cache expires; when it is on (or its setting cannot be read), the plugin checks about 55.5 minutes in and runs that turn only if Claude Code did not compact the session and no agents run; while agents run it compacts the session itself instead. off = never. true, yes, 1 and the old on count as auto; false, no, none, disabled and 0 as off; any other value counts as off, with a note in /status.",
       "default": "auto"
     },
     "idle_handoff_min_tokens": {

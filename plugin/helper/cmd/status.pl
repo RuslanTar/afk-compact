@@ -483,7 +483,8 @@ sub regex_lines {
 # Code's idle compaction off (`idleCompaction`, or its precondition `autoCompactEnabled`, false in
 # the user settings file): at 49 minutes. Native on, or a file that cannot be read as JSON (O-9:
 # "unreadable means check what happened"): the plugin checks at 55.5 minutes and runs its turn
-# only when native did not compact (not while agents run, owner xxxxxxxx-38). A missing file or
+# only when native did not compact (while agents run it compacts instead, owner 2026-10-27,
+# which replaced xxxxxxxx-38). A missing file or
 # key is on, as the mod reads the merged settings (deps.nativeIdle). This line reads the user file
 # only; the mod's own reading is the one that arms the timer.
 sub _json_false { my ($v) = @_; return jsonc::is_bool($v) && !$$v ? 1 : 0 }
