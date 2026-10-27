@@ -1,6 +1,6 @@
 // U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
 import { expect, test } from 'claude-code/testing'
-import { markerText, sentinelText } from '../../hooks/lib/detect'
+import { detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
 import { AGENT, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce = record; [midturn]', async ($, on) => {
@@ -180,6 +180,23 @@ test('after-step: EXISTS sha-match → copy_exists; EXISTS sha-differs → copy_
   expect(w.rowsOf('copy_failed').map(r => r.reason)).toEqual(['root-in-git'])
   expect(w.toasts.some(t => t.includes('copy-mismatch'))).toBe(true)
   expect(w.toasts.some(t => t.includes('copy-failed'))).toBe(true)
+})
+
+test('CC311-01: the Claude Code 2.1.311 installed form (tools-used block in a <system-reminder> block) matches the PostCompact copy: copy_exists, verdict ok, marker on line 1, no mismatch', async ($, on) => {
+  const w = new World().install(on)
+  w.summaryMode = 'cc311'
+  w.postCompactSaved = true
+  await raiseCompact($, { trigger: 'auto' })
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  const installed = w.summaryMessages(w.compacts[0]?.instructions)[0]?.text ?? ''
+  expect(installed).toContain('\n<system-reminder>\n<tools-used-before-summary>')
+  const det = detectSummary(installed, w.name, { dispatchNonce: nonce, scope: 'main' })
+  expect({ verdict: det.verdict, marker_line: det.marker_line, sentinel_from_end: det.sentinel_from_end }).toEqual({ verdict: 'ok', marker_line: 1, sentinel_from_end: 1 })
+  expect(det.sha256).toBe(detectSummary(`<summary>\n${w.summaryBody(nonce, 'main')}</summary>`, w.name, { dispatchNonce: nonce, scope: 'main' }).sha256)
+  expect(w.rowsOf('copy_exists').map(r => r.nonce)).toEqual([nonce])
+  expect(w.rowsOf('copy_mismatch').length).toBe(0)
+  expect(w.toasts.some(t => t.includes('copy-mismatch'))).toBe(false)
+  expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
 })
 
 test('RRP-04 (core-to-mod §13): after EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {

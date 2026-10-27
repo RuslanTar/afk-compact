@@ -18,13 +18,17 @@ const SUMMARY_OPEN = '<summary>'
 const SUMMARY_CLOSE = '</summary>'
 const ANALYSIS_OPEN = '<analysis>'
 const ANALYSIS_CLOSE = '</analysis>'
+const REMINDER_OPEN = '<system-reminder>'
+const REMINDER_CLOSE = '</system-reminder>'
 
 /**
  * Strips the header parts MOD-SPEC §5.1 names, repeated at the top until none applies (blank
  * lines between them dropped): a line starting `This session is being continued`, a
  * `<tools-used-before-summary>` block through its closing tag, an `<analysis>` block through its
  * closing tag (the summarizer's scratch text, which a PostCompact `compact_summary` of Claude Code
- * 2.1.309 keeps before `<summary>`; an unclosed one is body, not header), a `Summary:` line, and the
+ * 2.1.309 keeps before `<summary>`; an unclosed one is body, not header), a `<system-reminder>`
+ * block through its closing tag (the installed message of Claude Code 2.1.311 wraps the tools-used
+ * block in it; an unclosed one is body, not header), a `Summary:` line, and the
  * `<summary>` tag (text after the tag on its line is body). The body ends before the first line
  * holding `</summary>` (text before the tag on that line is body); one listed installed-message
  * trailer (`copy_trailers`, line patterns) is cut when no close tag ended the body; trailing blank lines are trimmed. The normalized body is the
@@ -51,6 +55,11 @@ export function strip(raw: string, trailers: readonly string[] = [], sentinel?: 
     } else if (t.startsWith(ANALYSIS_OPEN)) {
       let j = i
       while (j < all.length && !(all[j] ?? '').includes(ANALYSIS_CLOSE)) j++
+      if (j >= all.length) break
+      i = j + 1
+    } else if (t.startsWith(REMINDER_OPEN)) {
+      let j = i
+      while (j < all.length && !(all[j] ?? '').includes(REMINDER_CLOSE)) j++
       if (j >= all.length) break
       i = j + 1
     } else if (t === 'Summary:') i++

@@ -11,7 +11,7 @@ Usage:
   tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
                                      must equal a fresh render; exit 1 on any problem
   tools/fixtures-gen --clean         remove the three generated files (nothing else)
-  tools/fixtures-gen --print-expected [p5|acuity]
+  tools/fixtures-gen --print-expected [p5|acuity|idle|cc311]
                                      print summaries/expected.tsv (or summaries/<table>/expected.tsv)
                                      as the reference detector computes it (authoring aid; never
                                      writes)
@@ -19,7 +19,7 @@ Usage:
 
 Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
   parse     every *.json under tests/fixtures parses; every *.jsonl line parses
-  expected  summaries/expected.tsv and each sub-table (p5/, acuity/) equal the reference
+  expected  summaries/expected.tsv and each sub-table (p5/, acuity/, idle/, cc311/) equal the reference
             detector (MOD-SPEC §5.1, with the P5-FOLD A1 sentinel-after-close rule) on every file
   secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
@@ -104,7 +104,10 @@ EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
 # idle: the three idle compactions of the 2026-10-23 lab runs on Claude Code 2.1.309 (X1, X4, U1h),
 # each as the installed message (3 engine trailers after the sentinel) and as the PostCompact
 # compact_summary (an <analysis> block before <summary>); both forms of one run share one body.
-SUB_TABLES = ("p5", "acuity", "idle")
+# cc311: corpus file 01 in the Claude Code 2.1.311 installed form (the tools-used block wrapped in a
+# closed <system-reminder> block before `Summary:`; a blank line before `Summary:`; a tools list over
+# several lines) and in the PostCompact form, all one body; and an unclosed reminder, which is body.
+SUB_TABLES = ("p5", "acuity", "idle", "cc311")
 PAYLOADS = os.path.join(FIX, "payloads")
 SEQUENCES = os.path.join(FIX, "sequences")
 SECRET_MARK = "$SECRET{"
@@ -191,7 +194,9 @@ def normalize(text, name=None, trailers=()):
 
     Head (repeated until none applies, blank lines between parts dropped): a line starting
     `This session is being continued`; a `<tools-used-before-summary>` block through its closing
-    tag; a closed `<analysis>` block (the PostCompact form keeps it, 2.1.309); a `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
+    tag; a closed `<analysis>` block (the PostCompact form keeps it, 2.1.309); a closed
+    `<system-reminder>` block (the installed form wraps the tools-used block in it, 2.1.311); a
+    `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
     Tail: the body ends before the first line holding `</summary>` (text before the tag on that
     line is body). Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1; needs `name`): when
     the first non-blank text after `</summary>` (the rest of that line, else the next non-blank
@@ -220,6 +225,15 @@ def normalize(text, name=None, trailers=()):
             # an unclosed one is body
             j = i
             while j < len(lines) and "</analysis>" not in lines[j]:
+                j += 1
+            if j >= len(lines):
+                break
+            i = j + 1
+        elif s.startswith("<system-reminder>"):
+            # the reminder block the 2.1.311 installed message wraps the tools-used block in;
+            # an unclosed one is body
+            j = i
+            while j < len(lines) and "</system-reminder>" not in lines[j]:
                 j += 1
             if j >= len(lines):
                 break

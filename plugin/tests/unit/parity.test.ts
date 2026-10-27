@@ -77,6 +77,35 @@ describe('idle 2.1.309 summaries: TS detector vs summaries/idle', () => {
   })
 })
 
+// Live probe 2026-10-27 on Claude Code 2.1.311: the installed message wraps the tools-used block in
+// a closed <system-reminder> block before `Summary:`. Every entry gives its expected.tsv tuple; the
+// installed forms (also with a blank line before `Summary:` and a tools list over several lines)
+// read ok with the marker on body line 1 and share the PostCompact form's body; an unclosed
+// reminder is body, so its first body line is the open tag.
+describe('CC311-01 2.1.311 summaries: TS detector vs summaries/cc311', () => {
+  test('every entry gives its tuple, with the shipped trailers only', () => {
+    const g = CORPUS_GEN as unknown as Record<string, unknown>
+    const cc = g['CORPUS_CC311'] as { file: string; text: string; verdict: string; marker_line: number | null; sentinel_from_end: number | null; nonce: string | null; normalized_sha256: string }[] | undefined
+    expect(cc?.length).toBe(5)
+    for (const c of cc ?? []) {
+      const r = detectSummary(c.text, BRAND.name, { dispatchNonce: c.nonce ?? undefined, scope: 'main' })
+      expect({ file: c.file, verdict: r.verdict, marker_line: r.marker_line, sentinel_from_end: r.sentinel_from_end, sha: r.sha256 })
+        .toEqual({ file: c.file, verdict: c.verdict, marker_line: c.marker_line, sentinel_from_end: c.sentinel_from_end, sha: c.normalized_sha256 })
+    }
+    const post = (cc ?? []).find(c => c.file.includes('postcompact'))
+    const shaped = (cc ?? []).filter(c => !c.file.includes('unclosed'))
+    expect(shaped.length).toBe(4)
+    for (const c of shaped) {
+      expect({ file: c.file, verdict: c.verdict, marker_line: c.marker_line, sha: c.normalized_sha256 })
+        .toEqual({ file: c.file, verdict: 'ok', marker_line: 1, sha: post?.normalized_sha256 })
+    }
+    const open = (cc ?? []).find(c => c.file.includes('unclosed'))
+    const r = detectSummary(open?.text ?? '', BRAND.name, { dispatchNonce: open?.nonce ?? undefined, scope: 'main' })
+    expect(r.normalized.startsWith('<system-reminder>\n')).toBe(true)
+    expect(r.sha256).not.toBe(post?.normalized_sha256)
+  })
+})
+
 describe('AT-C-03 TS detector vs expected.tsv', () => {
   test('every corpus file gives the expected tuple', () => {
     expect(CORPUS.length).toBe(41)

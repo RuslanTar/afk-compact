@@ -5,8 +5,9 @@ package detect;
 # Normalized body: strip the head parts (a `This session is being continued…`
 # line, a <tools-used-before-summary>…</tools-used-before-summary> block, a closed
 # <analysis>…</analysis> block (a PostCompact compact_summary keeps it, 2.1.309), a
-# `Summary:` line, a `<summary>` tag, and blank lines between them), cut before
-# the first `</summary>` when present, else cut installed-message trailers
+# closed <system-reminder>…</system-reminder> block (the installed message wraps the
+# tools-used block in it, 2.1.311), a `Summary:` line, a `<summary>` tag, and blank
+# lines between them), cut before the first `</summary>` when present, else cut installed-message trailers
 # (spec `copy_trailers`, canary-baseline `copy_trailers`), trim trailing blank
 # lines. Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1): when the first non-blank
 # text after `</summary>` (the rest of that line, else the next non-blank line) matches
@@ -68,6 +69,15 @@ sub normalize {
         if ($x =~ /^\s*<analysis>/) {
             my $j = $i;
             $j++ while $j < @l && $l[$j] !~ m{</analysis>};
+            last if $j >= @l;
+            $i = $j + 1;
+            next;
+        }
+        # The reminder block the installed message wraps the tools-used block in (Claude Code
+        # 2.1.311, live probe 2026-10-27); an unclosed one is body.
+        if ($x =~ /^\s*<system-reminder>/) {
+            my $j = $i;
+            $j++ while $j < @l && $l[$j] !~ m{</system-reminder>};
             last if $j >= @l;
             $i = $j + 1;
             next;
