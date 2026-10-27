@@ -26,7 +26,7 @@ export const register: Register = (on, options) => {
   // conversation, drops the pending block and closes an open handoff turn.
   on('session.end', async ($, e, next) => {
     cancelIdleTimer(realDeps($, options, state))
-    await onSessionEnd(realDeps($, options, state), e.sessionId)
+    await onSessionEnd(realDeps($, options, state), e.sessionId, e.reason)
     return next(e)
   }).catch(($, e, next) => next(e))
 

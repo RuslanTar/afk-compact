@@ -106,9 +106,12 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
  * Mod `session.end`, any reason (IC-1 D7 (i)): cancels the boundary and pre-idle timers, drops
  * the pending resume block (`mod_outcome resume: dropped:session-end`), turns off the
  * auto-continue and closes an open handoff turn, so nothing the ended session scheduled is
- * submitted into the next conversation after a `/clear`.
+ * submitted into the next conversation after a `/clear`. The persisted idle due is forgotten too,
+ * except at reason `other` (a `claude respawn`, a signal, a `-p` run done; probe 2026-10-27 P12):
+ * no `/exit`, `/clear`, resume or logout ended it, so a process that resumes it under its id
+ * before the due re-arms it (loadIdle), as after a supervisor move.
  */
-export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
+export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): Promise<void> {
   const s = d.state
   cancelBoundary(d)
   cancelIdleTimer(d)
@@ -119,7 +122,8 @@ export async function onSessionEnd(d: Deps, endedSid: string): Promise<void> {
   s.handoffTurn = undefined
   const pend = s.pending
   s.pending = undefined
-  await cancelIdle(d, endedSid)
+  if (reason === 'other') d.state.idleDueSid = undefined
+  else await cancelIdle(d, endedSid)
   if (h && h.ht !== null && h.phase !== 'running') await handoffTurnClose(d, endedSid, h.ht, 'cancelled')
   if (pend) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
 }

@@ -18,7 +18,7 @@ import { log } from './log'
 import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
 import { storeRuntime } from './resume'
-import { IDLE_MIN_TEXT, gapSeconds, submitDropped } from './idle'
+import { IDLE_MIN_TEXT, gapSeconds, markIdlePublished, submitDropped } from './idle'
 
 /** Why a cycle will not auto-continue (the `handoff-turn open --reason` values of a last cycle). */
 export type HaltReason = '2-nonok' | 'thrash' | 'cap' | 'continue-off'
@@ -483,6 +483,7 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   if (path !== undefined) {
     s.published = { ht: h.ht, path: shown ?? path }
     s.publishedSinceHuman = true
+    await markIdlePublished(d, sid)
   }
   const halt = isHalt(h.reason) ? h.reason : undefined
   // DP-4: a thrash or 2-nonok halt that started since the plan still rules out the compaction.
