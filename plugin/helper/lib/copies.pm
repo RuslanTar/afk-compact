@@ -210,6 +210,19 @@ sub _test_corrupt {
     chmod 0400, $p;
 }
 
+# Away digest phase 1 (owner 2026-10-27 12:5x; AWAY-DIGEST build item 6): the copy's frontmatter
+# status from the summary's own Status word: finished (or the older done) is completed, a blocked
+# lane (hard-blocked, soft-blocked, or the older blocked and waiting-*) is blocked, anything else
+# (working, active, none) is in-progress. The model's word, not a checked fact.
+sub copy_status {
+    my ($body) = @_;
+    my ($w) = ($body // '') =~ /^\s*Status:\s*([a-z][a-z-]*)/m;
+    return 'in-progress' unless defined $w;
+    return 'completed' if $w eq 'finished' || $w eq 'done';
+    return 'blocked' if $w =~ /\A(?:hard-blocked|soft-blocked|blocked|waiting-owner|waiting-job)\z/;
+    return 'in-progress';
+}
+
 sub _seq {
     my ($dir, $sid8, $actor_tag) = @_;
     my $n = 0;
@@ -349,7 +362,7 @@ sub save {
                 worktree            => $where->{toplevel},
                 branch              => $where->{branch},
                 git_commit          => $where->{head},
-                status              => 'in-progress',
+                status              => copy_status($body),
                 queue_lane          => $a{queue_lane},
                 previous_handoff    => (defined $prev ? util::abbrev($prev) : undef),
                 trigger             => $a{trigger} // ($rec ? $rec->{trigger} : undef),

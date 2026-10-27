@@ -59,7 +59,7 @@ The title comes from the state at publish time: `# PAY-12 — retry window fix i
 ### 4.1 Resume here (≤5 lines)
 
 ```
-Status: <active|blocked|waiting-owner|waiting-job|done> · Acuity: <stable|watch|unstable> · State: <one sentence tied to the ticket goal> (checkpoint: clean | MID-STEP <step>, remaining <what>)
+Status: <working|finished|hard-blocked|soft-blocked> · Acuity: <stable|watch|unstable> · State: <one sentence tied to the ticket goal> (checkpoint: clean | MID-STEP <step>, remaining <what>)
 Step 1: `<one exact command or edit>` — for "<user's latest request, quoted when short>" | proposed
 Gate: <blocker | owner gate | stay in this session: <ids> die on /clear or exit | none> · Don't: <the likeliest mistake>
 Live: <N running: B-1 <runtime id>, B-2 <runtime id>; see In flight> | nothing running (checked <stamp>) | nothing running known (not checked)
@@ -210,8 +210,8 @@ Every ephemeral path cited anywhere in the body has a durable copy here or sits 
 ### 4.10 Next steps
 
 ```
-1. <Step 1's command or edit, character for character, without its "— for …" tail> — done when <observable>
-2. <action> — done when <observable>
+1. <Step 1's command or edit, character for character, without its "— for …" tail> — done when <observable> · todo|done
+2. <action> — done when <observable> · todo|done
    if <transition> → <action>          (optional)
 - pending answer: <the unsent table, number or draft, in full> — send if not already sent
 ```

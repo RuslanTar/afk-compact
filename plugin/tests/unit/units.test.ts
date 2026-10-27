@@ -160,18 +160,19 @@ describe('AT-P-07 assembler (14-character name)', () => {
   })
   // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
   // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,720 B since
-  // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS). Classic keeps 8,192.
-  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,720 B (the hard channel total)', () => {
+  // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS), 8,800 B since the
+  // away digest's lane Status and step marks (owner 2026-10-27 12:5x). Classic keeps 8,192.
+  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,800 B (the hard channel total)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'handoff', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8720).toBe(true)
+    expect(byteLength(s) <= 8800).toBe(true)
   })
   test('classic fallback (main [auto]+[chain] + subagent [fallback]) ≤8,192 B', () => {
     const s = assembleText(text('handoff-instructions'), ['auto', 'chain'], WORST, ['measured']) + assembleText(text('subagent-instructions'), ['fallback'], WORST)
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,720 B', () => {
+  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,800 B', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8720).toBe(true)
+    expect(byteLength(s) <= 8800).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
   // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,130

@@ -5,6 +5,7 @@ import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claud
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
 import type { BlockArgs } from './resume'
+import type { Lane, LaneFacts, LaneResult } from './lane'
 import { optionEnv, parseOptions, paths } from './config'
 
 export type RunResult = {
@@ -250,6 +251,14 @@ export type LoadState = {
    */
   idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
   /**
+   * Away digest phase 1 (owner 2026-10-27 12:5x): the open idle episode of the last main idle
+   * compaction, from its after-step to the first human-origin turn: the lane facts its summary
+   * gave, and the lane state the last turn was told (`shown`, undefined until a turn got the
+   * block). Every later turn not of a person's re-checks the lane (lane.ts) and gets a note when
+   * it turned finished or hard-blocked.
+   */
+  idleLane: { sid: string; nonce: string; facts: LaneFacts | undefined; nonok: boolean; driver: boolean; shown: Lane | undefined } | undefined
+  /**
    * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
    * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
    * end it was armed for. Also kept in `$.store` (`idle_seen:<sid>`), so a reload keeps it.
@@ -290,6 +299,8 @@ export type PendingResume = {
   outcome: Outcome
   /** Its record is on disk (`resume-pending.json`, AT-RP-01): a session end other than `/clear` keeps it for a resume. */
   persisted?: boolean
+  /** An idle block's work lane as code read it when the block was built (away digest phase 1). */
+  lane?: LaneResult
 }
 
 /**
@@ -369,6 +380,7 @@ export function newState(loadId: string): LoadState {
     publishedSinceHuman: false,
     idleMode: undefined,
     idleAgain: undefined,
+    idleLane: undefined,
     compactedAt: undefined,
     agentTurns: new Set(),
     headless: false,

@@ -207,6 +207,12 @@
       "min": 100000,
       "max": 1000000
     },
+    "idle_digest": {
+      "type": "string",
+      "title": "Away digest after an idle compaction",
+      "description": "submit = when Claude Code compacts an idle session whose work is finished or blocked on you and nothing still runs, the plugin sends one turn right away that prints the away digest (what is done, what is left, what waits on you); return = no turn: the digest waits for your next message, which opens with a short pointer. With work left or jobs running, the session continues as before.",
+      "default": "submit"
+    },
     "ticket_pattern": {
       "type": "string",
       "title": "Ticket pattern",

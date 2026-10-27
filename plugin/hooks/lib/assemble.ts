@@ -14,6 +14,8 @@ import type { AssetName } from './assets.gen'
  * `idle` or `midturn`) and `idle-again` (owner xxxxxxxx-37: the block again on a person's return).
  * 2026-10-26: the resume block's `driver` (owner, GSD re-entry per session: kept only when the
  * re-measure names this session's `Active driver:`).
+ * 2026-10-27: the resume block's `idle-done` (away digest phase 1, owner 2026-10-27 12:5x: the idle line
+ * of a finished or blocked work lane; never with `idle`, `idle-halt`, `midturn` or `driver`).
  * 2026-10-27: `trial-tail` of the shadow trial's old-arm adapter (TRIAL-DUAL-HANDOFF §4.1: the last
  * reply and a newly typed prompt, kept only when there is one).
  */
@@ -21,7 +23,7 @@ export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  | 'driver' | 'trial-tail'
+  | 'driver' | 'trial-tail' | 'idle-done'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
@@ -31,6 +33,8 @@ export type Runtime = Partial<Record<
   | 'store' | 'idle_min'
   /** Owner xxxxxxxx-37: when a background result's turn took the idle block (`[idle-again]`). */
   | 'idle_used_at'
+  /** Away digest phase 1 (`[idle-done]`): the work lane's state and the reason code gives for it (lane.ts). */
+  | 'lane' | 'lane_why'
   /** The shadow trial's fork prompts (TRIAL-DUAL-HANDOFF §4.2): texts read at run time from the user's local files. */
   | 'old_skill' | 'old_template' | 'trial_facts' | 'trial_tail',
   string

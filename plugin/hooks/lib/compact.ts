@@ -18,7 +18,10 @@ import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWat
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlockWith, claimedElsewhere, claimedWhere, logOutcome, persistPending, prodAllowed, settleRecords } from './resume'
+import { DRIVER_LINE, buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, persistPending, prodAllowed, settleRecords } from './resume'
+import type { LaneFacts } from './lane'
+import { laneFacts } from './lane'
+import { armDigest } from './digest'
 import { shadowPrepM3, startShadow } from './shadow'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
@@ -315,6 +318,9 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     ...(prodConsent !== undefined ? { prodConsent } : {}),
     ...(idle ? { idle: true } : {}),
   }))
+  // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
+  // nothing running gets its digest turn right away (`idle_digest: submit`, the default).
+  if (main && idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
   return r
 }
 
@@ -361,6 +367,9 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   let savedCopy: string | null = null
   let notSaved: string | undefined
   let chars = 0
+  // Away digest phase 1: the lane facts of an idle compaction's summary (the model's own Status
+  // and step marks, parsed; no text kept).
+  let facts: LaneFacts | undefined
   // PRIV-04: the raw summary is stashed only under the watch folder the helper vetted (ident);
   // refused (null) or unknown (no helper answer) means no stash, never the options' folder.
   const stash = await vettedWatch(d, a.sid)
@@ -373,6 +382,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     const det = detectSummary(summary.text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
     verdict = det.verdict
     chars = det.normalized.length
+    if (main && a.idle === true) facts = laneFacts(summary.text)
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
     // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
     // behind is found by another session's cross-session finish. Empty; an existing one is fine.
@@ -423,9 +433,14 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
     // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
-    ...(a.idle === true ? { idle: true, halt: s.halt.active } : {}),
+    ...(a.idle === true ? { idle: true, halt: s.halt.active, ...(facts !== undefined ? { lane: facts } : {}) } : {}),
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
+  // The idle episode of this compaction (a compaction that is not idle closes the one before).
+  s.idleLane = a.idle === true && !a.midturn
+    ? { sid: a.sid, nonce: a.nonce, facts, nonok: blockArgs.nonok, driver: built.remeasure !== undefined && DRIVER_LINE.test(built.remeasure), shown: undefined }
+    : undefined
+  if (built.lane !== undefined) await logLane(d, a.sid, a.nonce, facts, built.lane, 'build')
   // A block still pending is replaced by this one: its outcome is settled now (no channel
   // will try it again). So is a block held for a person's return (owner xxxxxxxx-37).
   const old = s.pending
@@ -443,6 +458,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active, ...(a.stats !== undefined ? { handoff: a.stats } : {}) },
     ...(built.remeasure !== undefined ? { remeasure: built.remeasure } : {}),
     measuredAt: built.measuredAt,
+    ...(built.lane !== undefined ? { lane: built.lane } : {}),
   }
   // AT-RP-01: on disk too, for a `claude --resume` of this session before its next turn; written
   // before the block is pending, so a channel that settles it finds the record to settle.

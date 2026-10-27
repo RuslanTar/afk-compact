@@ -55,6 +55,8 @@ export class World {
   /** `session.start`'s `isInteractive` (false: a `claude -p` or SDK session). */
   interactive = true
   summaryMode: SummaryMode = 'ok'
+  /** The summary's lines after `## Resume here` (away digest phase 1: the lane's Status line and the rest). */
+  resumeHere = 'Status: active\n'
   claims = new Map<string, string>()
   prevCopy = 'none'
   measured: string | null = null
@@ -271,7 +273,7 @@ export class World {
   summaryBody(nonce: string, scope: string): string {
     return this.summaryMode === 'unshaped'
       ? '# LAB-42 retry work\nNo marker here.\n'
-      : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\nStatus: active\n' +
+      : markerText(this.name, nonce, scope === 'sub' ? 'sub' : 'main') + '\n# LAB-42 — retry in progress\n## Resume here\n' + this.resumeHere +
           (this.summaryMode === 'truncated' ? '' : sentinelText(this.name, nonce) + '\n')
   }
 
