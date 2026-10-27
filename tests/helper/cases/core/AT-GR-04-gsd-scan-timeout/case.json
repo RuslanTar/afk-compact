@@ -4410,7 +4410,7 @@
      {
       "path": "$WATCH/$SID/gsd-scan.json",
       "json": {
-       "v": 10
+       "v": 11
       }
      }
     ]
