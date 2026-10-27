@@ -104,7 +104,8 @@ async function persist(d: Deps, rec: Due): Promise<void> {
  */
 async function idleKind(d: Deps, sid: string): Promise<{ kind: IdleKind | 'off'; native: 'on' | 'off' | 'unknown' }> {
   const native = await d.nativeIdle()
-  const kind = d.cfg.idle_handoff_turn !== 'auto' ? 'off' : native === 'off' ? 'turn' : 'check'
+  // A headless session has no idle break a plugin compaction could follow: off.
+  const kind = d.cfg.idle_handoff_turn !== 'auto' || d.state.headless ? 'off' : native === 'off' ? 'turn' : 'check'
   const served = kind === 'check' ? await d.servedHint() : undefined
   const pluginTurn = kind === 'turn' ? 'on' : kind
   const triple = native + '/' + pluginTurn + '/' + (served ?? '')
@@ -205,7 +206,7 @@ async function turnBlocked(d: Deps, sid: string): Promise<string | Go> {
  * `agents-running` (owner xxxxxxxx-38) or the checks of the turn.
  */
 async function checkBlocked(d: Deps, sid: string, end: number | null): Promise<string | Go> {
-  if (d.cfg.idle_handoff_turn !== 'auto') return 'disabled'
+  if (d.cfg.idle_handoff_turn !== 'auto' || d.state.headless) return 'disabled'
   const c = end === null ? undefined : await compactedSince(d, sid, end)
   if (c !== undefined) return c.idle ? 'native-fired' : 'compacted'
   if ((await d.sessionId()) !== sid) return 'session-changed'

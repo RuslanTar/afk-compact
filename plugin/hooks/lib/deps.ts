@@ -250,6 +250,13 @@ export type LoadState = {
    * and has not completed in this load, by agent id.
    */
   agentTurns: Set<string>
+  /**
+   * A headless session (`claude -p`, the Agent SDK): `session.start` said no person is at the
+   * prompt, or `$.session.compact` rejected as not available there. Claude Code offers no plugin
+   * compaction in such a session, so the plugin neither nudges nor starts one (Claude Code's own
+   * automatic compaction still runs and is shaped as usual).
+   */
+  headless: boolean
 }
 
 export type PendingResume = {
@@ -347,6 +354,7 @@ export function newState(loadId: string): LoadState {
     idleAgain: undefined,
     compactedAt: undefined,
     agentTurns: new Set(),
+    headless: false,
   }
 }
 
@@ -537,6 +545,25 @@ export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)
   return String(err).slice(0, 120)
+}
+
+/**
+ * A `$.session.compact` rejection as a row value: Claude Code's own error text on one line,
+ * control characters dropped, at most 160 characters (the local stream only; the export drops it).
+ */
+export function rejectText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  return raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)
+}
+
+/**
+ * The class of a `$.session.compact` rejection: `headless` when Claude Code says the call is not
+ * available in a headless (`-p` / SDK) session, `turn-running` while a turn runs, else `other`.
+ */
+export function rejectClass(text: string): 'headless' | 'turn-running' | 'other' {
+  if (/headless|-p \/ SDK|\bSDK session\b/i.test(text)) return 'headless'
+  if (/\bturn\b.*\brun(s|ning)?\b/i.test(text)) return 'turn-running'
+  return 'other'
 }
 
 /** Before our `$.prompt.submit`: the next main turn.start is ours (MOD-SPEC §9, §9.1 step 3). */

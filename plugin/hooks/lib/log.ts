@@ -69,6 +69,18 @@ export function skipClass(reason: string): string {
   return /^[A-Za-z0-9._:-]{1,40}$/.test(reason) ? reason : 'other'
 }
 
+/**
+ * The session is headless (`claude -p`, the Agent SDK): from here on in this load the plugin
+ * neither nudges nor starts a compaction. One `headless {via}` row per load, from what told it:
+ * `session-start` (no person at the prompt) or `compact-rejected` (Claude Code's own answer).
+ */
+export async function markHeadless(d: Deps, sid: string, via: 'session-start' | 'compact-rejected'): Promise<void> {
+  if (d.state.headless) return
+  d.state.headless = true
+  d.state.nudgeNonce = undefined
+  await log(d, sid, 'headless', { via })
+}
+
 /** Records one helper-missing row for a non-log helper call (once per load). */
 export async function helperMissing(d: Deps, sid: string, stage: string): Promise<void> {
   if (d.state.helperMissingLogged) return

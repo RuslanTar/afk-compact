@@ -133,7 +133,10 @@ our %SCHEMA = (
     nudge => { tokens => 'num', turn_seq => 'int', askq_open => 'bool', halt => 'bool', active => 'bool', last_cycle => 'bool' },
     continue => { result => [pre => [qw(submitted)], [qw(skipped halt)]], continues_last_hour => 'int', halt => 'word',
                   skipped => 'word' },
-    compact_rejected => { nonce => 'nonce', attempt => 'int' },
+    # 2026-10-27 (headless probe): the rejection's class; Claude Code's own error text stays local
+    compact_rejected => { nonce => 'nonce', attempt => 'int', error_class => [enum => qw(headless turn-running other)], error => 'drop' },
+    # a headless session (`claude -p`, the Agent SDK): no nudge or plugin compaction in this load
+    headless => { via => [enum => qw(session-start compact-rejected)] },
     session => { phase => [enum => qw(start end)], source => [enum => qw(startup resume clear compact)], reason => 'word',
                  mod_loaded => 'bool', previous_session_id => 'hash', lineage_reason => 'word', pid_lstart => 'drop',
                  scratchpad => [enum => qw(present absent)], under_temp_root => 'bool' },

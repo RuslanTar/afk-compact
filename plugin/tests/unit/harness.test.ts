@@ -50,6 +50,8 @@ export class World {
   compacts: { instructions: string | undefined; trigger: string | undefined; agentId: string | undefined }[] = []
   /** How the bottom answers `session.compact`. */
   compactMode: 'ok' | 'reject' | { skip: string } = 'ok'
+  /** `session.start`'s `isInteractive` (false: a `claude -p` or SDK session). */
+  interactive = true
   summaryMode: SummaryMode = 'ok'
   claims = new Map<string, string>()
   prevCopy = 'none'
@@ -192,7 +194,7 @@ export class World {
   // ---- driving the session as the engine would
 
   async start($: Engine): Promise<void> {
-    await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+    await $.session.start({ cwd: '/w', surface: this.interactive ? 'terminal' : null, isInteractive: this.interactive })
   }
 
   private turnNo = 0

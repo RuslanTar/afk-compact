@@ -11,8 +11,8 @@ import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHan
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { armIdle } from './idle'
-import { isHuman } from './deps'
-import { log, skipClass } from './log'
+import { isHuman, rejectClass, rejectText } from './deps'
+import { log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
 
@@ -78,6 +78,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   }
   const nudged = s.lastCycle
   s.lastCycle = null
+  // A headless session: no handoff turn, no plugin compaction (Claude Code offers none there).
+  if (s.headless) return
   const eff = await effective(d, sid)
   if (eff.disabled) return
   if (t.reason !== 'answer') return
@@ -219,6 +221,18 @@ async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void
   })
 }
 
+/**
+ * `$.session.compact` rejected: `compact_rejected` with Claude Code's own error text (no session
+ * content; the export drops it) and its class. A headless rejection (`claude -p`, the Agent SDK)
+ * also marks the load headless: no nudge or plugin compaction follows in it.
+ */
+export async function compactRejected(d: Deps, sid: string, nonce: string, err: unknown): Promise<void> {
+  const error = rejectText(err)
+  const errorClass = rejectClass(error)
+  await log(d, sid, 'compact_rejected', { nonce, attempt: 1, error_class: errorClass, error })
+  if (errorClass === 'headless') await markHeadless(d, sid, 'compact-rejected')
+}
+
 /** `nativeCheck` with its rows; true when the compaction is not run now. */
 async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<boolean> {
   const c = nativeCheck(d, opts)
@@ -234,7 +248,7 @@ async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<
 export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> {
   const s = d.state
   const ah = opts.afterHandoff
-  if (s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
+  if (s.headless || s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
   // No await before this check, so a native compaction's end cannot slip past unseen.
   if (nativeCheck(d, opts) === 'wait') return
   const sid = await d.sessionId()
@@ -304,8 +318,8 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     let r
     try {
       r = await d.compact(text)
-    } catch {
-      await log(d, sid, 'compact_rejected', { nonce, attempt: 1 })
+    } catch (err) {
+      await compactRejected(d, sid, nonce, err)
       return
     }
     const ht: Record<string, string> = ah ? { handoff_ht: ah.ht } : {}

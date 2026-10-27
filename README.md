@@ -505,6 +505,7 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 - **claude.ai and Cowork** are not tested yet, so for now the plugin is for Claude Code sessions on your own machine.
 - **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, a perl older than 5.28): the hooks print nothing and exit quietly, and helper commands answer `REFUSED: helper-runtime`. The mod still adds its instructions, but no summary or evidence copies are saved. `/afk-compact:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
 - **Subagents** get shaped summaries and copies, but no resume block. They also get no nudge and no handoff turn.
+- **Headless runs** (`claude -p`, the Agent SDK): Claude Code does not let a plugin start a compaction there yet, so the plugin does not nudge, open a handoff turn or compact on its own. Claude Code's own automatic compaction still runs. `/afk-compact:status` says `automatic compaction: needs an interactive session` in such a session.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
 - **Automatic relaunch covers read-only and allowlisted jobs only.** A production job asks unless `unattended_prod_reads` allows a read-only one, and a job whose output file could not be confirmed asks.
 - **Repo mode exports only.** There is no command that accepts a repository for you, and the plugin never stages or commits an export.

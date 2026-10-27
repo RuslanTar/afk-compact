@@ -14,6 +14,8 @@
 # `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
 # placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
 # U-06: a warning per pattern of the user's stopped at its time bound (lib/userre.pm).
+# 2026-10-27 (headless probe): `automatic compaction: needs an interactive session …` for a
+# headless load (`claude -p`, the Agent SDK), from the mod's `headless` row.
 use strict;
 use warnings;
 use utf8;
@@ -102,6 +104,7 @@ sub run {
                            rc::val('compact_target_tokens'), rc::val('compact_soft_max_tokens'), min_window());
     }
     push @out, 'triggers: off (triggers-off)' if grep { ($_->{ev} // '') eq 'triggers_off' } @$mod;
+    push @out, headless_lines($mod);
 
     # last 5 compactions
     my $rolls = _bytes_deep(rollup::rows($d));
@@ -338,6 +341,23 @@ sub min_window {
     my $a = $need + $c->{native_offset} + $reserve;
     my $b = _ceil($need / $c->{soft_ratio} - 1e-9);
     return $a > $b ? $a : $b;
+}
+
+# 2026-10-27 (headless probe): the mod's `headless` row since this session's last `session`
+# start row: the load runs under `claude -p` or the Agent SDK, where Claude Code offers no plugin
+# compaction, so the mod neither nudges nor starts one. A later interactive load of the same
+# session (its own start row) clears the line.
+sub headless_lines {
+    my ($mod) = @_;
+    my ($start, $headless) = (-1, -1);
+    for my $i (0 .. $#$mod) {
+        my $ev = $mod->[$i]{ev} // '';
+        $start = $i if $ev eq 'session' && ($mod->[$i]{phase} // '') eq 'start';
+        $headless = $i if $ev eq 'headless';
+    }
+    return () unless $headless > $start;
+    return ('automatic compaction: needs an interactive session; this one is headless (claude -p or the Agent SDK), '
+            . "so the plugin does not nudge or start compactions here; Claude Code's own automatic compaction still runs");
 }
 
 # The disabled-for-a-small-window sentence; never a negative number.
