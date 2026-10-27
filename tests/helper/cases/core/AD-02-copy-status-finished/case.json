@@ -1,6 +1,6 @@
 {
  "id": "AD-02-copy-status-finished",
- "note": "Away digest phase 1 (owner 2026-10-27 12:5x; build item 6): the copy's frontmatter status follows the summary's Status word: finished is completed (otherwise as AT-M3-01)",
+ "note": "Away digest phase 1 (owner 2026-10-27 12:5x; build item 6): the copy's frontmatter status follows the summary's Status word: finished, with every step marked done and Step 1 none, is completed (otherwise as AT-M3-01)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -47,7 +47,7 @@
     "cwd": "$TMP/work",
     "hook_event_name": "PostCompact",
     "trigger": "auto",
-    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: finished · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: finished · State: fix in review (checkpoint: clean)\nStep 1: none\n## User constraints: none stated\n## Next steps: 1. git status — done when clean · done\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
    },
    "expect": {
     "exit": 0,

@@ -4,7 +4,7 @@
 // xxxxxxxx-37, "Full block again on return"): when a background result's turn took an idle
 // compaction's block, the first human-origin prompt gets the full block again, re-measured, with
 // `[idle-again]` noting the earlier use.
-import type { Deps, Outcome, PendingResume } from './deps'
+import type { Deps, IdleLane, LoadState, Outcome, PendingResume } from './deps'
 import { isHuman, storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
@@ -12,7 +12,7 @@ import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
 import { escalate, helperMissing, isoLocal, log, vettedWatch } from './log'
 import type { LaneFacts, LaneResult } from './lane'
-import { LANES, LEGACY_STATUS, laneNote, laneOf, runningNow, showsDigest } from './lane'
+import { LANES, LEGACY_STATUS, asLaneFacts, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
 
 /**
  * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
@@ -94,13 +94,19 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
  */
 export async function buildBlockWith(
   d: Deps, sid: string, a: BlockArgs, fresh?: string | null, at?: number,
-): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; lane?: LaneResult }> {
+): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; lane?: LaneResult; running?: number }> {
   // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
   const remeasure = fresh === null ? undefined : fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
   const driver = remeasure !== undefined && DRIVER_LINE.test(remeasure)
   const idle = a.idle === true && !a.midturn
-  // Away digest phase 1: an idle block outside halt mode reads the work lane now (lane.ts).
-  const lane = idle && a.halt !== true ? laneOf(a.lane, { running: await runningNow(d), midturn: a.midturn, nonok: a.nonok, driver }) : undefined
+  // Away digest phase 1: an idle block outside halt mode reads the work lane now (lane.ts), with
+  // the units running now: agents, the measure's running rows, less what this episode's
+  // notifications reported ended, and with the work the model started since its block went out.
+  const ep = episodeOf(d.state, sid, a.nonce)
+  const running = idle && a.halt !== true ? await runningUnits(d, remeasure, ep?.ended ?? new Set()) : undefined
+  const lane = running !== undefined
+    ? laneOf(a.lane, { running, midturn: a.midturn, nonok: a.nonok, driver, superseded: ep?.superseded === true })
+    : undefined
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
@@ -138,7 +144,7 @@ export async function buildBlockWith(
     ? assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
     : fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
   if (block.length > BLOCK_SOFT) await log(d, sid, 'resume_block_over_soft', { nonce: a.nonce ?? null, chars: block.length })
-  return { block, remeasure, measuredAt, ...(lane !== undefined ? { lane } : {}) }
+  return { block, remeasure, measuredAt, ...(lane !== undefined ? { lane, running } : {}) }
 }
 
 /**
@@ -178,11 +184,17 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     s.restoreChecked = sid
     const r = await restorePending(d, sid)
     // A main compaction of this load while the record was read has a newer block; its after-step
-    // settled the record as replaced.
-    if (!s.pending) s.pending = r
+    // settled the record as replaced. A restored idle block opens its idle episode (away digest).
+    if (!s.pending && r) {
+      s.pending = r
+      if (r.args.idle === true && !r.args.midturn) openEpisode(s, sid, r.nonce, r.args, r.remeasure)
+    }
   }
   const pend = s.pending
-  if (!pend || pend.sid !== sid || pend.resumePref === 'none') return laneRecheck(d, sid, human)
+  // Later turns of an idle episode get their lane note beside their prompt (`laneRecheck`, from
+  // `prompt.submit`): `prompt.context` is asked once per conversation, so a note here would not
+  // reach them.
+  if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
   const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
   s.pending = undefined
   if (c.result === 'TAKEN') {
@@ -192,7 +204,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   if (c.result === 'failed') await helperMissing(d, sid, 'claim')
   const args = haltNow(d, pend.args)
   const out = await freshBlock(d, pend, args)
-  if (pend.args.idle === true) await laneShown(d, pend.sid, pend.nonce, out.lane, human)
+  if (pend.args.idle === true) await laneShown(d, pend, out, human)
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
   // Owner xxxxxxxx-37: a background result (not a person) took an idle compaction's block; the
   // first human-origin prompt gets it again.
@@ -202,48 +214,100 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   return out.block
 }
 
-/** One `lane_outcome {nonce, status, lane, source, agents, at}` row (enum values and a count only). */
-export async function logLane(d: Deps, sid: string, nonce: string, facts: LaneFacts | undefined, r: LaneResult, at: 'build' | 'delivery' | 'recheck' | 'submit'): Promise<void> {
+/**
+ * One `lane_outcome {nonce, status, lane, source, agents, at}` row (enum values and a count only);
+ * `agents` is the units counted running (agents and the measure's running background tasks).
+ */
+export async function logLane(
+  d: Deps, sid: string, nonce: string, facts: LaneFacts | undefined, r: LaneResult, at: 'build' | 'delivery' | 'recheck' | 'submit', units: number,
+): Promise<void> {
   // The model's word only when it is one of the known Status words (rows stay content-free).
   const w = facts?.status ?? null
   const status = w === null ? 'none' : (LANES as readonly string[]).includes(w) || LEGACY_STATUS.includes(w) ? w : 'other'
-  await log(d, sid, 'lane_outcome', { nonce, status, lane: r.lane, source: r.source, agents: await runningNow(d), at })
+  await log(d, sid, 'lane_outcome', { nonce, status, lane: r.lane, source: r.source, agents: units, at })
 }
 
 /**
- * An idle block went out to a turn (away digest phase 1): the lane state it told that turn is what
- * later turns of the episode are re-checked against; a person's turn ends the episode.
+ * Opens the idle episode of an idle block (away digest phase 1): from its after-step, or from its
+ * record restored after `claude --resume` (no turn has got the block yet).
  */
-export async function laneShown(d: Deps, sid: string, nonce: string, lane: LaneResult | undefined, human: boolean): Promise<void> {
-  const s = d.state
+export function openEpisode(s: LoadState, sid: string, nonce: string, a: BlockArgs, remeasure: string | undefined): void {
+  s.idleLane = {
+    sid, nonce, facts: a.lane, nonok: a.nonok, driver: remeasure !== undefined && DRIVER_LINE.test(remeasure), shown: undefined,
+    remeasure, ended: new Set(), superseded: false, closed: false,
+  }
+}
+
+/** The open idle episode of this block, or undefined. */
+function episodeOf(s: LoadState, sid: string, nonce: string | undefined): IdleLane | undefined {
   const l = s.idleLane
-  if (lane !== undefined) await logLane(d, sid, nonce, l?.nonce === nonce ? l.facts : undefined, lane, 'delivery')
-  if (human) s.idleLane = undefined
-  else if (l && l.sid === sid && l.nonce === nonce) l.shown = lane?.lane ?? 'working'
+  return l && l.sid === sid && l.nonce === nonce ? l : undefined
 }
 
 /**
- * Away digest phase 1, the re-check channel (AWAY-DIGEST §2.1, owner 2026-10-27 12:5x): a turn
- * not of a person's in an open idle episode, after an earlier turn got the idle block, reads the
- * lane again with the agents running now (no helper call: the lane facts are the summary's).
- * When it turned finished or hard-blocked (the job that ran has ended), the turn gets a short
- * note: a result that unblocks a step makes the lane working again, else the digest. No change,
- * or a change toward work: nothing is added. A person's turn ends the episode.
+ * An idle block went out to a turn (away digest phase 1): the lane state it told that turn, and
+ * the measure it was built with, are what later turns of the episode are re-checked against; a
+ * person's turn ends the episode.
  */
-async function laneRecheck(d: Deps, sid: string, human: boolean): Promise<string | undefined> {
+async function laneShown(d: Deps, pend: PendingResume, out: { remeasure: string | undefined; lane?: LaneResult; running?: number }, human: boolean): Promise<void> {
   const s = d.state
-  const l = s.idleLane
-  if (!l || l.sid !== sid) return undefined
+  if (out.lane !== undefined) await logLane(d, pend.sid, pend.nonce, pend.args.lane, out.lane, 'delivery', out.running ?? 0)
+  const l = episodeOf(s, pend.sid, pend.nonce)
+  if (!l) return
   if (human) {
     s.idleLane = undefined
+    return
+  }
+  l.shown = out.lane?.lane ?? 'working'
+  // The measure this turn's block went out with (re-measured past 600 s): its rows and its driver.
+  l.remeasure = out.remeasure
+  l.driver = out.remeasure !== undefined && DRIVER_LINE.test(out.remeasure)
+}
+
+/**
+ * Away digest phase 1, the re-check channel (AWAY-DIGEST §2.1, owner 2026-10-27 12:5x), from
+ * `prompt.submit` before the prompt enters, for every prompt not of this plugin's: the lane note
+ * goes beside the prompt (its `context`), the channel Claude Code names for text that changes from
+ * turn to turn. A person's prompt closes the episode once a turn got its block (one still pending
+ * goes to that prompt's turn, which ends it). A notification's task ids count as ended from now
+ * on. A later prompt not of a person's, after a turn got the block, reads the lane again with the
+ * units running now (no helper call: the facts are the summary's, the in-flight rows the stored
+ * measure's): when it turned finished or hard-blocked, the note asks for the digest, or for one
+ * line on the new state when an earlier turn already got a finished or blocked lane. No change,
+ * or a change toward work: nothing is added.
+ */
+export async function laneRecheck(d: Deps, kind: string, text: string): Promise<string | undefined> {
+  const s = d.state
+  const l = s.idleLane
+  if (!l || l.closed || (await d.sessionId()) !== l.sid) return undefined
+  if (isHuman(kind)) {
+    if (l.shown !== undefined) l.closed = true
     return undefined
   }
+  if (kind === 'task-notification') for (const id of notifiedTasks(text)) l.ended.add(id)
   if (l.shown === undefined || s.halt.active) return undefined
-  const r = laneOf(l.facts, { running: await runningNow(d), midturn: false, nonok: l.nonok, driver: l.driver })
+  const running = await runningUnits(d, l.remeasure, l.ended)
+  const r = laneOf(l.facts, { running, midturn: false, nonok: l.nonok, driver: l.driver, superseded: l.superseded })
   if (r.lane === l.shown) return undefined
+  const was = l.shown
   l.shown = r.lane
-  await logLane(d, sid, l.nonce, l.facts, r, 'recheck')
-  return r.lane === 'finished' || r.lane === 'hard-blocked' ? laneNote(d.name, r) : undefined
+  await logLane(d, l.sid, l.nonce, l.facts, r, 'recheck', running)
+  return r.lane === 'finished' || r.lane === 'hard-blocked' ? laneNote(d.name, r, showsDigest(was)) : undefined
+}
+
+/**
+ * A main tool call that started work (lane.ts `startsWork`) after a turn got the episode's block:
+ * the summary's Status no longer describes the lane (owner xxxxxxxx-06, "cleared/superseded"), so
+ * the rest of the episode reads it as working and asks for no stop.
+ */
+export function laneWorkStarted(s: LoadState): void {
+  const l = s.idleLane
+  if (l && l.shown !== undefined && !l.closed) l.superseded = true
+}
+
+/** An agent loop starts again (a message woke it): a task a notification ended runs once more. */
+export function laneAgentStarted(s: LoadState, agentId: string): void {
+  s.idleLane?.ended.delete(agentId)
 }
 
 /** Owner xxxxxxxx-25 ("Stop in halt"): an idle block's halt variant follows halt mode at delivery. */
@@ -281,7 +345,7 @@ async function againBlock(d: Deps, sid: string): Promise<string | undefined> {
  */
 async function freshBlock(
   d: Deps, pend: PendingResume, args: BlockArgs, force = false,
-): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; remeasured: boolean; lane?: LaneResult }> {
+): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; remeasured: boolean; lane?: LaneResult; running?: number }> {
   const t0 = await d.now()
   const ageS = Math.round((t0 - pend.builtAt) / 1000)
   // Away digest phase 1: an idle block is built again at delivery (from its stored measure, no
@@ -477,7 +541,11 @@ export async function restorePending(d: Deps, sid: string): Promise<PendingResum
   const { nonce, built_at: builtAt, measured_at: measuredAt, args, remeasure, outcome } = j
   if (typeof nonce !== 'string' || !NONCE_RE.test(nonce) || typeof builtAt !== 'number') return undefined
   if (!isArgs(args) || !isOutcome(outcome) || args.nonce !== nonce) return undefined
+  // Lane facts not of the shape this build reads (an older or damaged record): none (the lane reads working).
+  const facts = asLaneFacts(args.lane)
   const a: BlockArgs = { ...args, prodAllow: args.prodAllow === true && d.cfg.unattended_prod_reads === 'allow' }
+  if (facts !== undefined) a.lane = facts
+  else delete a.lane
   const at = typeof measuredAt === 'number' ? measuredAt : builtAt
   const built = await buildBlockWith(d, sid, a, typeof remeasure === 'string' ? remeasure : null, at)
   return {

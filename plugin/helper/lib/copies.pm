@@ -213,12 +213,22 @@ sub _test_corrupt {
 # Away digest phase 1 (owner 2026-10-27 12:5x; AWAY-DIGEST build item 6): the copy's frontmatter
 # status from the summary's own Status word: finished (or the older done) is completed, a blocked
 # lane (hard-blocked, soft-blocked, or the older blocked and waiting-*) is blocked, anything else
-# (working, active, none) is in-progress. The model's word, not a checked fact.
+# (working, active, none) is in-progress. The model's word, not a checked fact; finished counts as
+# completed only where the plugin's lane check (hooks/lib/lane.ts laneOf) would not overrule it
+# with the summary's own text: a step still marked todo (a `· todo` that ends its words, never
+# `· done when`), or a Step 1 that is set or missing, is in-progress.
 sub copy_status {
     my ($body) = @_;
-    my ($w) = ($body // '') =~ /^\s*Status:\s*([a-z][a-z-]*)/m;
+    my $t = $body // '';
+    utf8::decode($t) unless utf8::is_utf8($t);
+    my ($w) = $t =~ /^\s*Status:\s*([a-z][a-z-]*)/m;
     return 'in-progress' unless defined $w;
-    return 'completed' if $w eq 'finished' || $w eq 'done';
+    if ($w eq 'finished' || $w eq 'done') {
+        my ($s1) = $t =~ /^\s*Step 1:[ \t]*(.*)$/m;
+        return 'in-progress' unless defined $s1 && ($s1 =~ /\A`?none\b/i || $s1 =~ /\|\s*proposed\s*\z/);
+        return 'in-progress' if $t =~ /·\s*todo(?=[ \t]*$|\s*[;,.)]|\s+\d+\.\s)/m;
+        return 'completed';
+    }
     return 'blocked' if $w =~ /\A(?:hard-blocked|soft-blocked|blocked|waiting-owner|waiting-job)\z/;
     return 'in-progress';
 }

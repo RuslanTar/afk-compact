@@ -11,7 +11,8 @@ import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
-import { blockName, contextBlock } from './lib/resume'
+import { startsWork } from './lib/lane'
+import { blockName, contextBlock, laneAgentStarted, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 
 export const register: Register = (on, options) => {
@@ -37,6 +38,7 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) {
       state.agentTurns.add(e.agentId)
+      laneAgentStarted(state, e.agentId)
       return next(e)
     }
     await onTurnStart(realDeps($, options, state), e.turnId, e.text)
@@ -101,6 +103,13 @@ export const register: Register = (on, options) => {
     if (!own && e.command?.name === $.plugin.name + ':handoff') {
       await shadowOwnerHandoff(realDeps($, options, state), e.command.args, e.text)
     }
+    // Away digest phase 1: a later prompt of an open idle episode, not a person's, carries the lane
+    // note beside it when the lane turned finished or hard-blocked (prompt.context is asked once per
+    // conversation, so it cannot carry one); a person's prompt closes the episode.
+    if (!own) {
+      const note = await laneRecheck(realDeps($, options, state), kind, e.text)
+      if (note !== undefined) e = { ...e, context: [...(e.context ?? []), note] }
+    }
     let r
     try {
       r = await next(e)
@@ -147,6 +156,8 @@ export const register: Register = (on, options) => {
       if (isAsk) state.askOpen--
     }
     if (r.deny !== undefined) return r
+    // Away digest phase 1: work the model starts after an idle block went out supersedes its lane.
+    if (r.isError !== true && startsWork(tool, r.result)) laneWorkStarted(state)
     if (job) await recordJob(d, sid, tool, input, r, job)
     const text = (await limitText(d, sid, r.text)) ?? (await nudgeText(d, sid))
     if (text === undefined) return r

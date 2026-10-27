@@ -252,12 +252,17 @@ export type LoadState = {
   idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
   /**
    * Away digest phase 1 (owner 2026-10-27 12:5x): the open idle episode of the last main idle
-   * compaction, from its after-step to the first human-origin turn: the lane facts its summary
-   * gave, and the lane state the last turn was told (`shown`, undefined until a turn got the
-   * block). Every later turn not of a person's re-checks the lane (lane.ts) and gets a note when
-   * it turned finished or hard-blocked.
+   * compaction (or of its block restored after `claude --resume`), from its after-step to the
+   * first human-origin prompt once a turn got the block: the lane facts its summary gave, the
+   * lane state the last turn was told (`shown`, undefined until a turn got the block), the measure
+   * the block went out with (its running in-flight rows count until a notification ends them),
+   * the task ids this episode's notifications reported ended, and whether the model started work
+   * after the block went out (`superseded`: the summary's Status no longer describes the lane).
+   * Every later prompt not of a person's re-checks the lane (resume.ts `laneRecheck`) and carries a
+   * note beside it when the lane turned finished or hard-blocked. A person's prompt closes it; the
+   * `[idle-again]` block that prompt's turn may get still reads it, then drops it.
    */
-  idleLane: { sid: string; nonce: string; facts: LaneFacts | undefined; nonok: boolean; driver: boolean; shown: Lane | undefined } | undefined
+  idleLane: IdleLane | undefined
   /**
    * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
    * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
@@ -301,6 +306,21 @@ export type PendingResume = {
   persisted?: boolean
   /** An idle block's work lane as code read it when the block was built (away digest phase 1). */
   lane?: LaneResult
+}
+
+/** The open idle episode of away digest phase 1 (`LoadState.idleLane`). */
+export type IdleLane = {
+  sid: string
+  nonce: string
+  facts: LaneFacts | undefined
+  nonok: boolean
+  driver: boolean
+  shown: Lane | undefined
+  remeasure: string | undefined
+  ended: Set<string>
+  superseded: boolean
+  /** A person's prompt came after a turn got the block: no more re-checks (the held `[idle-again]` block still reads it). */
+  closed: boolean
 }
 
 /**

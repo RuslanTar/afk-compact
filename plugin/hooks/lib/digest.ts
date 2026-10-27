@@ -1,7 +1,7 @@
 // Away digest phase 1, the digest turn (owner 2026-10-27 12:5x, xxxxxxxx-09: "Pointer on return.
 // default setting: submit right away"; AWAY-DIGEST §11). After an idle compaction whose work lane
-// reads finished, hard-blocked or soft-blocked, with no agent running (nothing would open a turn
-// before the person comes back), `idle_digest: submit` (the default) submits one turn right away:
+// reads finished, hard-blocked or soft-blocked, with nothing running (no agent, and no background
+// task the measure lists: nothing would open a turn before the person comes back), `idle_digest: submit` (the default) submits one turn right away:
 // the digest line with the resume block, whose `[idle-done]` line asks for the full digest.
 // `idle_digest: return` submits nothing: the block waits for the next turn, and a person's own
 // message gets the at most 5-line pointer of the same line before its answer.
@@ -10,7 +10,7 @@ import type { Deps } from './deps'
 import { submitPending, submitSettled } from './deps'
 import { contStamps } from './cont'
 import { claimBy } from './helper'
-import { digestLine, runningNow, showsDigest } from './lane'
+import { digestLine, runningUnits, showsDigest } from './lane'
 import { helperMissing, log } from './log'
 import { claimedElsewhere, logLane, logOutcome } from './resume'
 
@@ -25,8 +25,8 @@ async function row(d: Deps, sid: string, nonce: string, lane: string, result: st
 
 /**
  * Right after the idle compaction's after-step: arms the digest turn when its pending block reads
- * the lane as finished or blocked, the setting is `submit` and no agent runs (an agent's result
- * opens a turn of its own, which gets the block).
+ * the lane as finished or blocked, the setting is `submit` and nothing runs (an agent's or a
+ * background task's result opens a turn of its own, which gets the block).
  */
 export async function armDigest(d: Deps, sid: string, nonce: string): Promise<void> {
   const s = d.state
@@ -34,7 +34,7 @@ export async function armDigest(d: Deps, sid: string, nonce: string): Promise<vo
   if (!pend || pend.nonce !== nonce || pend.sid !== sid || pend.lane === undefined || !showsDigest(pend.lane.lane)) return
   const lane = pend.lane.lane
   if (d.cfg.idle_digest !== 'submit') return row(d, sid, nonce, lane, 'skipped:return')
-  if ((await runningNow(d)) > 0) return row(d, sid, nonce, lane, 'skipped:running')
+  if ((await runningUnits(d, pend.remeasure, new Set())) > 0) return row(d, sid, nonce, lane, 'skipped:running')
   d.after(digestDelayMs(d), () => {
     s.inflight = submitDigest(d, sid, nonce).catch(() => undefined)
   })
@@ -84,7 +84,7 @@ export async function submitDigest(d: Deps, sid: string, nonce: string): Promise
   }
   await row(d, sid, nonce, lane, submitted ? 'submitted' : 'skipped:submit-failed')
   if (submitted) {
-    if (pend.lane !== undefined) await logLane(d, sid, nonce, pend.args.lane, pend.lane, 'submit')
+    if (pend.lane !== undefined) await logLane(d, sid, nonce, pend.args.lane, pend.lane, 'submit', await runningUnits(d, pend.remeasure, new Set()))
     if (s.idleLane && s.idleLane.nonce === nonce) s.idleLane.shown = lane
   }
   pend.outcome.halt = s.halt.active

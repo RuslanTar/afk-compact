@@ -99,7 +99,8 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            # (the @measured_at@ form).
            "idle_used_at": "2026-10-21T04:40:00+03:00",
            # Away digest phase 1 [idle-done] (owner 2026-10-27 12:5x): the lane word and the longest
-           # reason lane.ts gives (the worst case of every budget).
+           # reason lane.ts gives (the worst case of every budget; lane.ts LANE_WHY_MAX, 63 chars,
+           # which a unit test holds every reason to).
            "lane": "hard-blocked", "lane_why": "no Status code could read, but every listed step is marked done"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",

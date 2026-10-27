@@ -182,8 +182,9 @@ our %SCHEMA = (
     # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
     idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int' },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
-    # after an idle compaction (the summary's Status word, the state, how, the agents running, at
-    # which step), and the digest turn submitted right after one with nothing running, or why not
+    # after an idle compaction (the summary's Status word, the state, how, the units running: agents
+    # and the measure's running background tasks, at which step), and the digest turn submitted
+    # right after one with nothing running, or why not
     lane_outcome => { nonce => 'nonce', status => [enum => qw(working finished hard-blocked soft-blocked active blocked waiting-owner waiting-job done none other)],
                       lane => [enum => qw(working finished hard-blocked soft-blocked)], source => [enum => qw(status recheck)],
                       agents => 'int', at => [enum => qw(build delivery recheck submit)] },

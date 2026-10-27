@@ -90,6 +90,11 @@ export class World {
   rewrite: ((text: string) => string | undefined) | undefined
   /** The origin of every `prompt.submit` that reached the bottom. */
   submitOrigins: unknown[] = []
+  /**
+   * The `context` entries every `prompt.submit` reached the bottom with (a person's prompts of
+   * `userTurn` too): what the model reads beside that prompt (away digest phase 1, the lane note).
+   */
+  submitContexts: (readonly string[])[] = []
   /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
   compactGate: Promise<void> | undefined
   /** `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). */
@@ -160,6 +165,7 @@ export class World {
       return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: world.stepUsage }
     })
     on('prompt.submit', async (_$, e) => {
+      this.submitContexts.push(e.context ?? [])
       if (this.quiet) return { text: e.text }
       this.submitKeys.push(Object.keys(e).sort())
       this.submitOrigins.push(e.origin)
