@@ -519,21 +519,39 @@ sub regex_lines {
 
 # ---------------------------------------------------------------- pre-idle turn (IA-4) and SK-7
 # IA-4 (idle D3, owner 2026-10-23 02:4x; reworded by owner xxxxxxxx-17, "Check outcome at
-# 55.5m"): when the plugin's own pre-idle handoff turn runs. `idle_handoff_turn: auto` with Claude
-# Code's idle compaction off (`idleCompaction`, or its precondition `autoCompactEnabled`, false in
-# the user settings file): at 49 minutes. Native on, or a file that cannot be read as JSON (O-9:
-# "unreadable means check what happened"): the plugin checks at 55.5 minutes and runs its turn
-# only when native did not compact (while agents run it compacts instead, owner 2026-10-27,
-# which replaced xxxxxxxx-38). A missing file or
-# key is on, as the mod reads the merged settings (deps.nativeIdle). This line reads the user file
-# only; the mod's own reading is the one that arms the timer.
+# 55.5m"): when the plugin's own pre-idle handoff turn runs, and (IDLE-COMPACT-SPEC §4.1, lane A)
+# when the plugin compacts an idle session itself. Claude Code's own idle compaction as the user
+# settings file says: `autoCompactEnabled` false, or DISABLE_COMPACT / DISABLE_AUTO_COMPACT in the
+# environment (§1.1), is automatic compaction off: the turn at 49 minutes, never a plugin
+# compaction. `idleCompaction` false alone is native idle off: with `idle_compact: auto` the
+# plugin compacts about 54 minutes after the last request at CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS
+# (200,000 by default) or more, below that the turn at 49 minutes; with `idle_compact: off` the
+# turn as before. Native on, or a file that cannot be read as JSON (O-9: "unreadable means check
+# what happened"): the plugin checks at 55.5 minutes and runs its turn only when native did not
+# compact (while agents run it compacts instead, owner 2026-10-27, which replaced xxxxxxxx-38);
+# `idle_handoff_turn: off` turns that compaction off too. A missing file or key is on, as the mod
+# reads the merged settings (deps.nativeIdle). This line reads the user file only; the mod's own
+# reading is the one that arms the timer.
 sub _json_false { my ($v) = @_; return jsonc::is_bool($v) && !$$v ? 1 : 0 }
+# An environment flag as Claude Code reads one (deps.ts envTruthy).
+sub _env_true { my ($v) = @_; return defined $v && $v =~ /\A\s*(?:1|true|yes|on)\s*\z/i ? 1 : 0 }
+# CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS as native reads it (deps.ts compactMinOf): a positive integer
+# gives max(100,000, v), anything else 200,000.
+sub _compact_min {
+    my $v = $ENV{CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS} // '';
+    $v =~ s/\A\s+|\s+\z//g;
+    return 200000 unless $v =~ /\A[0-9]{1,15}\z/ && $v > 0;
+    return $v < 100000 ? 100000 : $v + 0;
+}
+sub _thousands { my ($n) = @_; 1 while $n =~ s/\A(\d+)(\d{3})/$1,$2/; return $n }
 sub idle_lines {
     my ($headless) = @_;
     my $r = rc::settings();
     my $mode = lc($r->{values}{idle_handoff_turn} // 'auto');
-    return ('pre-idle handoff turn: off (idle_handoff_turn: off)') if $mode eq 'off';
-    # A headless load arms no pre-idle check or turn (the mod's idleKind gives `off`).
+    my $compact = lc($r->{values}{idle_compact} // 'auto');
+    my $off = 'pre-idle handoff turn: off (idle_handoff_turn: off)';
+    # A headless load arms no pre-idle check, turn or (lane A) plugin idle compaction.
+    return ($off) if $mode eq 'off' && $headless;
     return ('pre-idle handoff turn: off (headless session)') if $headless;
     my $file = settings::config_dir() . '/settings.json';
     my $native = 'on';
@@ -541,9 +559,19 @@ sub idle_lines {
         my $raw = util::read_file($file);
         my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
         if (ref $j ne 'HASH') { $native = 'unknown' }
-        elsif (_json_false($j->{idleCompaction}) || _json_false($j->{autoCompactEnabled})) { $native = 'off' }
+        elsif (_json_false($j->{autoCompactEnabled})) { $native = 'compaction-off' }
+        elsif (_json_false($j->{idleCompaction})) { $native = 'vetoed' }
     }
-    return ('pre-idle handoff turn: auto (native idle compaction off → the plugin\'s turn at 49 min)') if $native eq 'off';
+    $native = 'compaction-off' if _env_true($ENV{DISABLE_COMPACT}) || _env_true($ENV{DISABLE_AUTO_COMPACT});
+    my $turn = 'pre-idle handoff turn: auto (native idle compaction off → the plugin\'s turn at 49 min)';
+    if ($native eq 'vetoed' && $compact eq 'auto') {
+        return ('pre-idle handoff turn: native idle compaction off → the plugin compacts about 54 min after the last request at '
+                . _thousands(_compact_min()) . ' tokens or more (terminal sessions); below that, '
+                . ($mode eq 'off' ? 'none' : 'the turn at 49 min'));
+    }
+    if ($native eq 'vetoed') { return (($mode eq 'off' ? $off : $turn) . ' (idle_compact: off)') }
+    if ($native eq 'compaction-off') { return ($mode eq 'off' ? $off : $turn) }
+    return ($off . '; no plugin compaction while agents run either') if $mode eq 'off';
     return ('pre-idle handoff turn: auto (native idle compaction ' . ($native eq 'on' ? 'on' : 'unreadable')
             . ' → the plugin checks at 55.5 min and runs its turn only if native did not compact)');
 }

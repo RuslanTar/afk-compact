@@ -59,6 +59,9 @@ our @KEYS = (
     # Claude Code's own idle compaction is off; `off` = never (the old `on` reads as auto)
     [idle_handoff_turn           => 'str',  'auto',                    'enum'],
     [idle_handoff_min_tokens     => 'num',  200000,                    'num'],
+    # IDLE-COMPACT-SPEC (D9): `auto` = the plugin compacts an idle session itself while Claude
+    # Code's own idle compaction is off (`"idleCompaction": false`); `off` = never
+    [idle_compact                => 'str',  'auto',                    'enum'],
     # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
     [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
     [secret_extra_rules          => 'str',  '',                        'list'],
@@ -77,7 +80,7 @@ our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 # The values an enum key exports as is (W-BETA D); any other value exports as `other`.
 our %ENUM = (watcher => [qw(shadow off)], handoff_turn => [qw(halt off)], relaunch_auto => [qw(on shadow off)],
-             unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)],
+             unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
              resume_proceed => [qw(auto confirm)]);
 
 # DP-3: keys that let the plugin act without asking. Read from the settings file only, and
@@ -297,6 +300,21 @@ sub resolve {
         elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
         else { push @notes, "idle_handoff_turn: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
         $val{idle_handoff_turn} = $x;
+    }
+    # idle_compact (IDLE-COMPACT-SPEC §5, as config.ts reads it): the same word lists and invalid
+    # value as idle_handoff_turn; a new key, so no legacy `on` note (`on` is an auto word).
+    {
+        my $x = trim(lc($val{idle_compact} // 'auto'));
+        if ($x eq '') {
+            my $d = ref $uc->{idle_compact} eq 'HASH' && exists $uc->{idle_compact}{default}
+                ? $uc->{idle_compact}{default} : (grep { $_->[0] eq 'idle_compact' } @KEYS)[0]->[2];
+            $x = trim(lc($d // 'auto'));
+            $src{idle_compact} = 'default';
+        }
+        if (grep { $_ eq $x } @IDLE_OFF_WORDS) { $x = 'off' }
+        elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
+        else { push @notes, "idle_compact: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
+        $val{idle_compact} = $x;
     }
     # SK-1 / SK-2: an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
     my $tr = ticket_re({ values => \%val });
