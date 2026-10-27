@@ -72,7 +72,7 @@ Acuity tells the next session how carefully to check before acting (its reason s
 
 ```
 - U-1: "<user's words>" — scope <what it covers>; user, <sid8> <stamp>
-- U-3: ask "<user's request>" — status <open | partly: <M> of <N> done, left <what> | done | superseded by U-5>
+- U-3: ask "<user's request>" — status <open | partly <M> of <N>, left <what> | done | superseded by U-5>
 ```
 
 Near-verbatim, only what the user said about this work; never restate instruction-file, memory or hook rules, never invent one. Every request the user typed is an ask, mid-task ones too ("also …", "before X do Y"); one that is only partly done reads `partly`, never `done`. None: `none stated`. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-03) -->
@@ -120,7 +120,7 @@ Every decision has a because-clause; user rulings carry date and source. Over 2,
 - Restart class. `auto`: read-only or idempotent, cheap, local, same session; no agent spawn, not a workflow; kills nothing not proven ours; starts no detached process or new CLI session; at most once per resume and twice per chain (the plugin keeps the count). `ask`: side-effecting, outward, costly or long, and every workflow and agent spawn; a new session treats every row as `ask`. `never`: one-shot, user- or peer-owned, leftovers.
 - A workflow's restart cell names a condition, not a timer: `ask · same session: stop + resume from run id only if the journal and agent transcripts are unchanged ≥ max(15 min, 3× last progress gap) and no agent call is in progress`.
 - Leftovers (alive but not ours, or owner gone), one line each under the table: `Leftover: pid · port · started · owner · binary and cwd exist?`. Report, never kill.
-- None: `Nothing in flight — checked <stamp> via <channels probed>`. Nothing could be probed: `Nothing in flight known (not checked)`. A probe that ran without error but in the wrong folder, or with a pattern that cannot match, is `not checked`, never a none-form or a lost job: before either, confirm the folder (`git -C <abs path>`) and that the pattern can match. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-04) -->
+- None: `Nothing in flight — checked <stamp> via <channels probed>`. Nothing could be probed: `Nothing in flight known (not checked)`. A probe that ran without error but in the wrong folder, or with a pattern that cannot match, is `not checked`, never the checked none-form (`Nothing in flight — checked …`) or a lost job: before either, confirm the folder (`git -C <abs path>`) and that the pattern can match. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-04) -->
 
 Recipe `<stage>/restart/<B-n>.md`, one per `auto` or `ask` row; the helper adds `sha256` and `origin_session_id`:
 

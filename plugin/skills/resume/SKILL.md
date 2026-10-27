@@ -140,7 +140,7 @@ Compaction keeps background work alive. Background shells survive `/clear` (same
 - `ListAgents`, `CronList`, and the background-task list or `task_status` where available;
 - `<store> inventory <handoff>`: last Stop sidecar, task output files (size, mtime), workflow journals and transcript dirs, recorded pids and ports (start-time match), recipes and restart counters, and one `job:` line per background shell the plugin recorded (its verdict and signals).
 
-Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Listed but on no channel → LOST candidate; a probe run in the wrong folder or with a pattern that cannot match is `not checked`, never LOST. Running but unlisted → LEFTOVER candidate. Workflows are not re-announced after compaction: a workflow whose journal or transcripts changed within grace is RUNNING even if no runtime list shows it.
+Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Listed but on no channel → LOST candidate; a probe run in the wrong folder or with a pattern that cannot match is NOT-CHECKED, never LOST. Running but unlisted → LEFTOVER candidate. Workflows are not re-announced after compaction: a workflow whose journal or transcripts changed within grace is RUNNING even if no runtime list shows it.
 
 **5b–5d** (probe, classify, act), the restart and workflow gates, the lease rule and the leftover rule are in `${CLAUDE_PLUGIN_ROOT}/skills/resume/references/self-heal.md`. Read it once when the union has a row; with none, R5 ends here. A lost or failed item goes through `heal-check`'s re-verification (self-heal.md, Restart gate and Lost shell job): a foreign handoff's recipe is never relaunched; an own handoff's recipe runs only through `heal-check`'s `ok`.
 
@@ -183,7 +183,7 @@ Goal: <ticket goal>; latest request: <quote or paraphrase>
 Drift: <changed rows only> | no drift (checked <stamp>)
 In flight: <B-n id: status → action> | nothing running (checked <stamp>)
 Evidence: <n ok; n missing/withheld/redacted> | no manifest
-Binding: U-1 …, U-2 … (pointer if >5) · approvals carried: U-n (<action>) | none · settled: D-…, X-… · decided without you (say if any is wrong): D-n <choice> (source agent)
+Binding: U-1 …, U-2 … (pointer if >5) · approvals carried: U-n (<action>) | none · settled: D-…, X-… · decided without you (say if any is wrong): D-n <choice> (source agent, the handoff's own session)
 Could not verify: <items> | None
 Next: Starting <Step 1> now | Stopped: <stop rule>
 ```

@@ -171,14 +171,14 @@ describe('AT-P-07 assembler (14-character name)', () => {
     expect(byteLength(s) <= 8680).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
-  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,080
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,120
   // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note,
   // the owner's 2026-10-26 GSD re-entry ruling the [driver] line, and the 2026-10-26 plugin-text
-  // ruling TC-02's idle report and TC-26's unblocked Next steps).
-  test('resume protocol ≤4,080 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last).
+  test('resume protocol ≤4,120 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 4080).toBe(true)
+      expect(s.length <= 4120).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

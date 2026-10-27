@@ -4,7 +4,7 @@
 [submit] Invoke the afk-compact:handoff skill now, with no arguments, and follow it. Plugin limit on top of the skill's: at most @max_calls@ tool calls in this turn. When the plugin says the budget is spent, draft and publish with what you have, or stop if nothing is drafted. Start no new work, ask nothing with a question tool, act outward on nothing.
 [submit-halt] End with the skill's report, and put one plain line above it telling the user that auto-continue paused and why.
 [submit-pre] End with the skill's report. Do not continue the task after it; the user's next message leads.
-[submit-idle] Launch no agents or workflows; a background result arriving now: note it in the handoff only. End with the skill's report; its `Needs you:` list repeats unchanged any question your previous reply asked the user.
+[submit-idle] Launch no agents or workflows; a background result arriving now: note it in the handoff only. End with the skill's report; put any question your previous reply asked the user, unchanged, in its `Needs you:` list (add the list if the report has none).
 [near] Note from the user's afk-compact plugin: the handoff budget is nearly spent. Skip the remaining probes and recipes; draft and publish now (Steps 6–7).
 [spent] Note from the user's afk-compact plugin: the handoff budget is spent. Make no call except `@store@ publish` and edits inside the stage folder: publish the draft, or end the turn with the report.
 [imminent] Note from the user's afk-compact plugin: native compaction is close. End the turn now with the report; the compaction summary carries the rest.
