@@ -1,6 +1,6 @@
 {
  "id": "AT-DH-21-trial-owner",
- "note": "TRIAL-DUAL-HANDOFF 4.3 (P-DH-CFG, the lab case): a valid config read from another CLAUDE_CONFIG_DIR, or with a handoff root or log folder other than the pinned ones -> skip not-owner-config with the reason; a trial folder inside the pinned handoff root -> bad dir-in-handoff_root; a skip-listed repo -> skip repo-skipped",
+ "note": "TRIAL-DUAL-HANDOFF 4.3 (P-DH-CFG, the lab case): a valid config read from another CLAUDE_CONFIG_DIR, or with a handoff root or log folder other than the pinned ones -> skip not-owner-config with the reason; a trial folder inside the pinned handoff root -> bad dir-in-handoff_root; a skip-listed repo -> skip repo-skipped; a CLAUDE_CONFIG_DIR whose settings.json is the account's own file (a symlink to ~/.claude/settings.json: the owner's same-file rule, 2026-10-27 20:38) is the owner's config, so the next check decides",
  "now": "2026-10-27T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -45,6 +45,43 @@
      "state": "on",
      "skip": "not-owner-config",
      "why": "config-dir"
+    }
+   }
+  },
+  {
+   "name": "a config dir whose settings.json is the account's own file: the same file, not config-dir",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {}
+    },
+    {
+     "mkdir": "$TMP/linked-config"
+    },
+    {
+     "symlink": "$TMP/linked-config/settings.json",
+     "to": "$HOME/.claude/settings.json"
+    }
+   ],
+   "argv": [
+    "trial-measure",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work",
+    "--cc-version",
+    "2.1.311"
+   ],
+   "env": {
+    "CLAUDE_CONFIG_DIR": "$TMP/linked-config",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/logs"
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "on",
+     "skip": "not-owner-config",
+     "why": "log-dir"
     }
    }
   },

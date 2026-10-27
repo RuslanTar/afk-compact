@@ -277,7 +277,20 @@ my %RESTART_LAST = (
     present => 'someone at the prompt', remote => 'a remote client', attached => 'a client attached', 'session-rules' => 'rules set for this session',
     'session-dirs' => 'folders added in this session', worktree => 'in a worktree', 'mode-changed' => 'the permission mode changed',
     'no-launcher' => 'not started through the launcher', 'fg-not-shipped' => 'terminal restarts not enabled in this version yet',
+    'bg-not-shipped' => 'background restarts not enabled in this version yet',
     'on-hold' => 'that release is on hold', 'bypass-left' => 'a permission bypass would come back',
+    'restriction-lost' => 'a restriction it was started with would be lost (a launch flag a restart does not apply again)',
+    'mode-unknown' => 'the permission mode to restart in is not known',
+);
+# The launcher's refusal reasons (its file contract §5), for the `launcher did not restart` line.
+my %LAUNCHER_REASON = (
+    'exit-code' => 'Claude Code did not exit cleanly', pattern => 'the note was not valid', proto => 'another note version',
+    token => 'the note was for another launch', age => 'the note was too old', window => 'the exit came too late',
+    'other-session' => 'the launch was bound to another session', bypass => 'bypass was not allowed at launch',
+    'mode-changed' => 'the permission mode changed', 'launch-file' => 'a file it was started with is gone',
+    cap => '3 restarts in the last hour', 'no-terminal' => 'no terminal to start it in',
+    consume => 'the note could not be taken', cancelled => 'stopped with Ctrl+C',
+    'start-failed' => 'the new version did not start',
 );
 sub _hm { my ($ms) = @_; return defined $ms && $ms =~ /\A[0-9]+\z/ ? util::hhmm(int($ms / 1000)) : '--:--' }
 sub restart_lines {
@@ -287,7 +300,7 @@ sub restart_lines {
     my $set = rc::val('restart_on_update') // 'off';
     my $src = rc::settings()->{source}{restart_on_update} // 'default';
     my $os = restart::os_name();
-    my $fg_off = 0;
+    my $route_off = 0;
     if ($os ne 'darwin' && $os ne 'linux') {
         push @l, 'restart on update: not available on Windows yet';
     } elsif ($set eq 'off') {
@@ -297,22 +310,25 @@ sub restart_lines {
     } else {
         my $route;
         if (($ENV{CLAUDE_CODE_SESSION_KIND} // '') eq 'bg') {
-            $route = 'background session (claude respawn)';
+            # Before the background route ships (restriction gate, RS-P5) no `→ restarts` clause follows.
+            $route_off = restart::bg_route() ? 0 : 1;
+            $route = 'background session (claude respawn)'
+                     . ($route_off ? ' · background restarts are not enabled in this version yet' : '');
         } else {
             my $launch = $ENV{ restart::launch_env_name() };
             my $lr = (defined $launch && $launch ne '' && defined $sid) ? restart::launcher($launch, $sid) : undef;
             if ($lr && $lr->{ok}) {
-                # Before RS-P1 the route is off (fg-not-shipped): no `→ restarts` clause follows.
-                $fg_off = restart::fg_route() ? 0 : 1;
+                # Until the owner ships it the route is off (fg-not-shipped): no `→ restarts` clause.
+                $route_off = restart::fg_route() ? 0 : 1;
                 $route = "launcher $brand-claude (proto $restart::PROTO, pid $lr->{pid})"
-                         . ($fg_off ? ' · terminal restarts are not enabled in this version yet' : '');
+                         . ($route_off ? ' · terminal restarts are not enabled in this version yet' : '');
             } else {
                 my $path = util::text(ctx::root()) . "/scripts/$brand-claude";
                 push @l, 'restart on update: on · this session was not started through the launcher; foreground sessions need it:',
                          qq(  install: "$path" --install), "  then start sessions with: $brand-claude [your claude arguments]";
             }
         }
-        push @l, "restart on update: on · $route · " . _drift_text($fg_off) if defined $route;
+        push @l, "restart on update: on · $route · " . _drift_text($route_off) if defined $route;
     }
     my ($last) = reverse grep { ($_->{ev} // '') =~ /\Arefresh_(done|skipped|failed|would|start)\z/ } @$mod;
     if ($last) {
@@ -320,7 +336,10 @@ sub restart_lines {
         my ($ev, $why) = ($last->{ev}, $last->{why} // 'other');
         my $ft = join(' → ', grep { defined } $last->{from}, $last->{to});
         if ($ev eq 'refresh_done') { push @l, "  last: restarted $ft at $t (same session)" }
-        elsif ($ev eq 'refresh_would') { push @l, "  last: would restart $ft ($t)" }
+        elsif ($ev eq 'refresh_would') {
+            my @it = ref $last->{items} eq 'ARRAY' ? @{ $last->{items} } : ();
+            push @l, "  last: would restart $ft ($t)" . (@it ? '; running then: ' . join(', ', @it) : '');
+        }
         elsif ($ev eq 'refresh_start') { push @l, "  last: restarting on $last->{to} ($t)" }
         elsif ($ev eq 'refresh_skipped') {
             my $w = $RESTART_LAST{$why} // $why;
@@ -337,7 +356,9 @@ sub restart_lines {
     }
     for my $r (restart::refusals()) {
         next unless defined $r->{sid} && $now - $r->{at} * 1000 < $restart::REPORT_MS;
-        push @l, '  launcher did not restart session ' . substr($r->{sid}, 0, 8) . " ($r->{reason}, " . util::hhmm($r->{at}) . "). Resume with: claude --resume $r->{sid}";
+        my $why = $LAUNCHER_REASON{ $r->{reason} };
+        push @l, '  launcher did not restart session ' . substr($r->{sid}, 0, 8) . " ($r->{reason}" . (defined $why ? ": $why" : '')
+                 . ', ' . util::hhmm($r->{at}) . "). Resume with: claude --resume $r->{sid}";
     }
     return @l;
 }

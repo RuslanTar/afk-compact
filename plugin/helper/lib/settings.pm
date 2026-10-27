@@ -174,7 +174,7 @@ sub consent_dir {
     return defined $h ? "$h/.claude" : undef;
 }
 # config_dir_other() -> 1 when the settings folder is not the consent folder itself (by its path,
-# real path or device and inode). The owner-local trial keeps this rule (trial::owner_skip).
+# real path or device and inode); config_dir_foreign() adds the same-file rule on top of it.
 sub config_dir_other {
     my $cd = config_dir();
     my $home = consent_dir();

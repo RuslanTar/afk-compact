@@ -1080,10 +1080,22 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
     ""
    ],
    [
-    "--since"
+    "--seen-mode"
+   ],
+   [
+    "default"
+   ],
+   [
+    "--seen-at"
    ],
    [
     "1792580712000"
+   ],
+   [
+    "--turn-at"
+   ],
+   [
+    "1792580700000"
    ],
    [
     "--now-ms"
@@ -1094,7 +1106,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "{\"ok\":false,\"why\":\"off\",\"setting\":\"off\",\"route\":\"fg\",\"mode\":null,\"effort\":null,\"job_short\":null,\"token\":null,\"types\":[]}\n"
+   "{\"ok\":false,\"why\":\"off\",\"setting\":\"off\",\"route\":\"fg\",\"mode\":null,\"effort\":null,\"job_short\":null,\"token\":null,\"types\":[],\"items\":[],\"launcher\":null}\n"
   ]
  },
  {

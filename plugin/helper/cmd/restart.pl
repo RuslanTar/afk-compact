@@ -1,12 +1,14 @@
 # cmd/restart.pl: restart on update (SESSION-RESTART §2, §3.4, §4.1, §5), the helper calls of the
 # mod. One JSON line per call, exit 0; a usage error exits 64. Owner: WP-core.
 #   restart gate --sid S --route fg|bg [--launch DIR | --job-dir DIR] --from V --to V
-#                [--model M] --since MS [--now-ms MS]
-#       -> {ok, why, setting, route, mode, effort, job_short, token, types}
+#                [--model M] [--seen-mode X --seen-at MS] [--turn-at MS] [--now-ms MS]
+#       -> {ok, why, setting, route, mode, effort, job_short, token, types, items, launcher}
+#          (seen: the newest permission_mode the mod read in this load, turn-at: the start of
+#          its last main turn; D10)
 #   restart arm --sid S --route fg|bg --nonce N --from V --to V --continue 0|1 --mode X
 #               [--effort E] [--model M] [--launch DIR | --job-dir DIR] [--load-id L] [--now-ms MS]
-#       -> {ok, why, token}  (the setting read again: not `on` refuses `off`; fg without the
-#          RS-P1 ship gate refuses `fg-not-shipped`)
+#       -> {ok, why, token}  (the setting read again: not `on` refuses `off`; a route without
+#          its ship gate refuses `fg-not-shipped` or `bg-not-shipped`)
 #   restart set --sid S --nonce N --state X [--exiting-at MS] [--launch DIR] [--now-ms MS]
 #       -> {ok, l, c}
 #   restart claim --sid S --load-id L [--launch DIR] [--bg] [--now-ms MS]
@@ -28,8 +30,9 @@ my %SUBS = map { $_ => 1 } qw(gate arm set claim respawn respawn-cancel);
 sub _str { my ($v) = @_; return defined $v && !ref $v && $v ne '' ? $v : undef }
 
 sub run {
-    my ($opt, $rest) = args::parse(\@_, known => [qw(sid root log-dir route launch job-dir from to model since now-ms nonce
-                                                     continue mode effort load-id state exiting-at short wait-ms)],
+    my ($opt, $rest) = args::parse(\@_, known => [qw(sid root log-dir route launch job-dir from to model seen-mode seen-at
+                                                     turn-at now-ms nonce continue mode effort load-id state exiting-at
+                                                     short wait-ms)],
                                    bools => [qw(bg)]);
     my $sub = $rest->[0] // '';
     die "usage: restart gate|arm|set|claim|respawn|respawn-cancel --sid S\n" unless $SUBS{$sub};
@@ -41,10 +44,11 @@ sub run {
     if ($sub eq 'gate') {
         my $r = restart::gate(sid => $sid, sid_dir => $d, setting => rc::val('restart_on_update'), route => $route,
                               launch => _str($opt->{launch}), job_dir => _str($opt->{'job-dir'}), from => $opt->{from},
-                              to => $opt->{to}, model => $opt->{model} // '', since => $opt->{since}, now => $now);
+                              to => $opt->{to}, model => $opt->{model} // '', seen_mode => $opt->{'seen-mode'},
+                              seen_at => $opt->{'seen-at'}, turn_at => $opt->{'turn-at'}, now => $now);
         $o = jsonc::obj(ok => jsonc::bool($r->{ok}), why => $r->{why}, setting => $r->{setting}, route => $r->{route},
                         mode => $r->{mode}, effort => $r->{effort}, job_short => $r->{job_short}, token => $r->{token},
-                        types => $r->{types});
+                        types => $r->{types}, items => $r->{items}, launcher => $r->{launcher});
     } elsif ($sub eq 'arm') {
         my $job = _str($opt->{'job-dir'});
         my $r = restart::arm(sid => $sid, sid_dir => $d, setting => rc::val('restart_on_update'), route => $route,

@@ -68,8 +68,10 @@ my @RESTART_WHY = qw(off headless no-launcher job-unknown note-pattern bypass-no
                      agents background-work crons draft present remote session-rules session-dirs worktree mode-unknown
                      mode-changed block-not-saved transcript tried cap cooldown fg-not-shipped no-watch helper-failed
                      arm-failed stale-exit exit-not-run exit-refused respawn-refused respawn-failed not-respawned
-                     same-version not-confirmed launcher-refused);
+                     same-version not-confirmed launcher-refused bg-not-shipped restriction-lost);
 my $RESTART_WHY = [pre => [@RESTART_WHY], [qw(launcher-invalid)]];
+# What G3 found about the launcher on a shadow row of the terminal route (`ok` or its why)
+my $RESTART_LAUNCHER = [pre => [qw(ok no-launcher)], [qw(launcher-invalid)]];
 
 my %ENVELOPE = (
     v => 'int', ts => 'ts', ev => 'word', sid => 'hash', actor => 'actor', writer => [enum => @WRITER],
@@ -324,7 +326,8 @@ our %SCHEMA = (
     # SESSION-RESTART §6.3: restart on update, content-free (no argv, model, path or env value)
     version_drift => { running => 'version', installed => 'version' },
     refresh_skipped => { why => $RESTART_WHY, route => [enum => qw(fg bg)], to => 'version', types => [list => 'word'] },
-    refresh_would => { route => [enum => qw(fg bg)], from => 'version', to => 'version', continue => 'bool' },
+    refresh_would => { route => [enum => qw(fg bg)], from => 'version', to => 'version', continue => 'bool',
+                       items => [list => 'word'], launcher => $RESTART_LAUNCHER },
     refresh_start => { route => [enum => qw(fg bg)], from => 'version', to => 'version', continue => 'bool' },
     refresh_done => { route => [enum => qw(fg bg supervisor)], from => 'version', to => 'version', gap_s => 'num' },
     refresh_failed => { route => [enum => qw(fg bg)], why => $RESTART_WHY, to => 'version', code => 'word' },

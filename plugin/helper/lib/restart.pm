@@ -15,13 +15,21 @@ use POSIX ();
 use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 
 our $PROTO = 1;
-# The ship gate of live probe RS-P1 (SESSION-RESTART D3, §3.4, §8.4 step 1): the terminal route
-# (the plugin's own /exit, the launcher relaunches) stays off until RS-P1 passes, including its
-# exit-dialog run. 0: an `on` session that passes every gate on that route logs
-# `refresh_skipped {why: fg-not-shipped}` and goes on as if the setting were shadow. Flip to 1
-# once RS-P1 passes. Test seam: STORE_TEST_RESTART_FG=1 in test mode.
+# The ship gate of the terminal route (SESSION-RESTART D3, §3.4, §8.4 step 1): the plugin's own
+# /exit, then the launcher's relaunch. RS-P1 run 2 ended in outcome (c): with an item the plugin
+# cannot see, the exit dialog stays open and blocks queued input, so the route waits for the
+# owner's ship decision. 0: an `on` session that passes every gate on that route logs
+# `refresh_skipped {why: fg-not-shipped}` and goes on as if the setting were shadow. Test seam:
+# STORE_TEST_RESTART_FG=1 in test mode.
 our $FG_ROUTE = 0;
 sub fg_route { return 1 if $FG_ROUTE; return util::test_mode() && ($ENV{STORE_TEST_RESTART_FG} // '') eq '1' ? 1 : 0 }
+# The ship gate of the background route (§2.2, §8.4 step 2): off until the respawn-restriction
+# gate (`restriction-lost`, B9) is in and a full RS-P5 on this helper's own `restart respawn`
+# passes. 0: an `on` background session that passes every gate logs `refresh_skipped {why:
+# bg-not-shipped}` and goes on as if the setting were shadow. Test seam: STORE_TEST_RESTART_BG=1
+# in test mode.
+our $BG_ROUTE = 0;
+sub bg_route { return 1 if $BG_ROUTE; return util::test_mode() && ($ENV{STORE_TEST_RESTART_BG} // '') eq '1' ? 1 : 0 }
 
 # os_name() -> $^O; in test mode STORE_TEST_OS stands in for it (AT-RS-25: MSWin32).
 sub os_name { return util::test_mode() && ($ENV{STORE_TEST_OS} // '') ne '' ? $ENV{STORE_TEST_OS} : $^O }
@@ -56,6 +64,41 @@ our @ST = qw(CLAUDE_CODE_SESSION_KIND CLAUDE_CODE_SESSION_NAME CLAUDE_CODE_RESUM
 # first, the generic spawn failure last.
 our @B6 = qw(job_respawn_kill_unconfirmed cwd_gone crashed_during_spawn in_flight_spawn_failed
              resume_session_live_elsewhere stopped_during_respawn already_alive job_respawn_spawn_failed);
+
+# B9: what a restart of a background job keeps of its respawnFlags (Claude Code 2.1.312, the
+# sanitizer that reads them back, whose warning is "stripped respawnFlags token(s) that a restart
+# does not re-apply"). A flag that takes a value is kept with its value (@KEEP_VAL; @KEEP_VAR
+# takes the following words too); a flag without one is kept by name (@KEEP_BOOL). Every other
+# flag word is dropped, with the words after it up to the next flag. `-m` is dropped too.
+our @KEEP_VAL = qw(--model -m --permission-mode --inherit-permission-mode --proactivity --agent --agents --routine
+                   --effort --fast-mode --add-dir --mcp-config --settings --setting-sources --managed-settings
+                   --client-data-url --system-prompt --system-prompt-file --append-system-prompt
+                   --append-system-prompt-file --system-prompt-snapshot --append-subagent-system-prompt
+                   --append-subagent-system-prompt-file --fallback-model --advisor --channels --watch-artifact
+                   --watch-artifact-no-autoreact --permission-prompt-tool --permission-prompts --allowed-tools
+                   --allowedTools --disallowed-tools --disallowedTools --tools --session-id --debug-file -n --name
+                   --autocompact --betas --file --max-budget-usd --max-thinking-tokens --max-turns --task-budget
+                   --plan-mode-instructions --plugin-dir --plugin-dir-no-mcp --plugin-url --rewind-files --thinking
+                   --thinking-display --remote-control-session-name-prefix --json-schema);
+our @KEEP_VAR = qw(--allowed-tools --allowedTools --disallowed-tools --disallowedTools --tools --mcp-config --betas
+                   --add-dir --file --channels);
+our @KEEP_BOOL = qw(--dangerously-skip-permissions --allow-dangerously-skip-permissions --strict-mcp-config
+                    --dangerously-allow-browser-network-access --restricted --disable-slash-commands
+                    --include-unsupported-models --verbose --reply-on-resume --ide --chrome --no-chrome --bare
+                    --safe-mode --brief --remote-control --rc --local --unsandboxed --personal --allow-other-models);
+# Dropped flags that restrict nothing: session selection, the model's short form (the session
+# keeps its model in --model), debug output, screen and prompt display. Any other dropped flag
+# counts as a restriction the respawned session would lose, unknown ones included.
+our @DROP_OK = qw(-c --continue -r --resume --fork-session -m -d --debug --ax-screen-reader --prompt-suggestions
+                  --exclude-dynamic-system-prompt-sections);
+my %KEEP_VAL = map { $_ => 1 } @KEEP_VAL;
+my %KEEP_VAR = map { $_ => 1 } @KEEP_VAR;
+my %KEEP_BOOL = map { $_ => 1 } @KEEP_BOOL;
+my %DROP_OK = map { $_ => 1 } @DROP_OK;
+
+# Permission modes from the narrowest (D10's "more restrictive"): plan and dontAsk are both
+# below default and are not ordered against each other (narrower() answers undef for that pair).
+my %MODE_RANK = (plan => 0, dontAsk => 0, default => 1, acceptEdits => 2, auto => 3, bypassPermissions => 4);
 
 our @MODES = qw(acceptEdits auto bypassPermissions default dontAsk plan);
 our @EFFORTS = qw(low medium high xhigh max);
@@ -99,16 +142,20 @@ sub launch_env_name {
     return $n . '_LAUNCH';
 }
 
-# runtime_dir() -> <base>/<plugin>-<uid> as the launcher makes it ($XDG_RUNTIME_DIR, else
-# $TMPDIR, else /tmp; trailing `/` removed), or undef when the base is not absolute.
+# runtime_dir() -> <cache>/<plugin> as the launcher makes it (contract §1: $XDG_CACHE_HOME when
+# it is an absolute path, else $HOME/.cache; trailing `/` removed), or undef when HOME is not an
+# absolute path either.
 sub runtime_dir {
-    my $base = $ENV{XDG_RUNTIME_DIR};
-    $base = $ENV{TMPDIR} if !defined $base || $base eq '';
-    $base = '/tmp' if !defined $base || $base eq '';
+    my $base = $ENV{XDG_CACHE_HOME};
+    if (!defined $base || $base !~ m{\A/}) {
+        my $h = $ENV{HOME};
+        return undef unless defined $h && $h =~ m{\A/};
+        $h =~ s{/+\z}{};
+        $base = "$h/.cache";
+    }
     $base =~ s{(?<=.)/+\z}{};
-    return undef unless $base =~ m{\A/};
     $base = '' if $base eq '/';
-    return "$base/" . (ctx::brand() // 'plugin') . "-$<";
+    return "$base/" . (ctx::brand() // 'plugin');
 }
 
 # private_dir(path) -> undef for a folder that is not a symlink, is owned by this uid and has
@@ -143,14 +190,14 @@ sub _json_file {
 
 # ---------------------------------------------------------------- the session file (D10, G12)
 # <watch>/<sid>/restart-mode.json (0600): the newest main Stop's permission_mode and effort level
-# with its time, the newest main PostCompact's permission_mode with its time, and the transcript
-# path the hooks noted. Only names the patterns allow are kept; the path stays in this private
-# file and never enters a row.
+# with its time, and the transcript path the hooks noted. Only names the patterns allow are
+# kept; the path stays in this private file and never enters a row. (PostCompact, PreCompact and
+# SessionEnd inputs carry no permission_mode on Claude Code 2.1.312: RS-P1 run 3.)
 sub read_mode { my ($d) = @_; return defined $d ? (_json_file(mode_path($d)) // {}) : {} }
 
 sub _write_mode {
     my ($d, $m) = @_;
-    my @k = qw(v stop_mode stop_effort stop_at post_mode post_at transcript);
+    my @k = qw(v stop_mode stop_effort stop_at transcript);
     $m->{v} = 1;
     util::write_atomic(mode_path($d), jsonc::encode_bytes(jsonc::obj(map { ($_ => $m->{$_}) } @k)) . "\n", 0600);
 }
@@ -182,32 +229,54 @@ sub note_stop {
     return 1;
 }
 
-# note_post(sid_dir, payload): a main PostCompact keeps the fresh mode with its time (D10).
+# note_post(sid_dir, payload): a main PostCompact notes the transcript path (G12); its input has
+# no permission_mode (F8 is false on 2.1.312).
 sub note_post {
     my ($d, $p) = @_;
     return 0 unless defined $d && ref $p eq 'HASH' && !defined $p->{agent_id};
+    my $t = _payload_transcript($p) // return 0;
     my $m = read_mode($d);
-    $m->{post_mode} = _payload_mode($p);
-    $m->{post_at} = now_ms();
-    my $t = _payload_transcript($p);
-    $m->{transcript} = $t if defined $t;
+    return 1 if ($m->{transcript} // '') eq $t;
+    $m->{transcript} = $t;
     _write_mode($d, $m);
     return 1;
 }
 
-# fresh_mode(sid_dir, since_ms) -> (mode, effort, undef) or (undef, undef, why): the PostCompact
-# mode of the compaction that opened the moment (at or after since), equal to the newest main
-# Stop's (D10: `mode-unknown`, `mode-changed`).
-sub fresh_mode {
-    my ($d, $since) = @_;
-    my $m = read_mode($d);
-    my $post = $m->{post_mode};
-    return (undef, undef, 'mode-unknown') unless is_mode($post) && is_ms($m->{post_at}) && is_ms($since)
-                                                 && $m->{post_at} + $MODE_SLACK_MS >= $since;
-    return (undef, undef, 'mode-unknown') unless is_mode($m->{stop_mode});
-    return (undef, undef, 'mode-changed') unless $m->{stop_mode} eq $post;
+# narrower(a, b) -> the more restrictive of two modes, or undef for plan against dontAsk (not
+# ordered: plan stops edits the rules allow, dontAsk refuses what the rules do not allow).
+sub narrower {
+    my ($x, $y) = @_;
+    return undef unless is_mode($x) && is_mode($y);
+    return $x if $x eq $y;
+    my ($rx, $ry) = ($MODE_RANK{$x}, $MODE_RANK{$y});
+    return undef if $rx == $ry;
+    return $rx < $ry ? $x : $y;
+}
+
+# relaunch_mode(%a) -> (mode, effort, undef) or (undef, undef, 'mode-unknown') (D10, root call
+# 2026-10-28 00:23): the newest permission_mode of a main hook input: the session file's Stop
+# (any process of this session) and the mod's own reads of this load (`seen`: Stop,
+# UserPromptSubmit, PermissionRequest), when it is from the last main turn or later (`turn_at`:
+# that turn's start in this load; none: no turn in this load, so the newest read is the last
+# turn's). Otherwise the narrower of the launch mode (`launch`: launcher.json launch_mode, an
+# empty one counts as default) and the newest read, so a restart never widens past either. None
+# read at all, or plan against dontAsk: mode-unknown. The effort is the Stop's. a: sid_dir,
+# seen_mode, seen_at, turn_at, launch.
+sub relaunch_mode {
+    my (%a) = @_;
+    my $m = read_mode($a{sid_dir});
+    my @c;
+    push @c, [$m->{stop_mode}, 0 + $m->{stop_at}] if is_mode($m->{stop_mode}) && is_ms($m->{stop_at});
+    push @c, [$a{seen_mode}, 0 + $a{seen_at}] if is_mode($a{seen_mode}) && is_ms($a{seen_at});
+    my ($new) = sort { $b->[1] <=> $a->[1] } @c;
+    return (undef, undef, 'mode-unknown') unless $new;
     my $e = $m->{stop_effort};
-    return ($post, (defined $e && $EFFORT{$e}) ? $e : undef, undef);
+    $e = undef unless defined $e && $EFFORT{$e};
+    my $turn = is_ms($a{turn_at}) ? 0 + $a{turn_at} : undef;
+    return ($new->[0], $e, undef) if !defined $turn || $new->[1] + $MODE_SLACK_MS >= $turn;
+    my $launch = is_mode($a{launch}) ? $a{launch} : 'default';
+    my $r = narrower($launch, $new->[0]) // return (undef, undef, 'mode-unknown');
+    return ($r, $e, undef);
 }
 
 # ---------------------------------------------------------------- the launcher (G3, G3a)
@@ -238,21 +307,43 @@ sub launcher {
     my $c = rc::claude();
     my $up = identity::launcher_above($c->{pid}, $pid, $ANCESTOR_MAX);
     return $bad->($up) unless $up eq 'ok';
-    my $bound = bound_sid($dir);
-    return $bad->('other-session') if defined $bound && $bound ne $sid;
-    return { ok => 1, token => $token, pid => 0 + $pid, lj => $lj, dir => $dir };
+    my ($bound, $by) = bound_sid($dir);
+    my $rebind = defined $bound && $bound ne $sid;
+    return $bad->('other-session') if $rebind && !rebindable($by, $c);
+    return { ok => 1, token => $token, pid => 0 + $pid, lj => $lj, dir => $dir, rebind => ($rebind ? 1 : 0) };
 }
 
-# bound_sid(launch) -> the session id in <launch>/sid ('' for an unreadable or linked file), or
-# undef when there is none.
+# bound_sid(launch) -> (the session id in <launch>/sid ('' for an unreadable or linked file),
+# its binder {pid, lstart} from the second line or undef), or () when there is no such file.
 sub bound_sid {
     my ($dir) = @_;
     my $f = "$dir/sid";
-    return undef unless -e $f || -l $f;
-    return '' if -l $f || !-f $f;
-    my $raw = util::read_file($f, 256) // return '';
-    my ($s) = $raw =~ /\A([^\n]*)/;
-    return $s // '';
+    return () unless -e $f || -l $f;
+    return ('', undef) if -l $f || !-f $f;
+    my $raw = util::read_file($f, 512) // return ('', undef);
+    my ($s, $rest) = $raw =~ /\A([^\n]*)(?:\n(.*))?/s;
+    my $by;
+    if (defined $rest && $rest =~ /\A([1-9][0-9]{0,9}) ([^\n]{1,64})\n?\z/) { $by = { pid => 0 + $1, lstart => $2 } }
+    return ($s // '', $by);
+}
+
+# rebindable(binder, claude) -> 1 when the claude process that bound the launch folder is this
+# one (a `/clear` or `/resume` changed the session id in the launcher's own child) or is gone (the
+# launcher's earlier child, before a relaunch; G3 has just shown this claude is the first one
+# under the launcher). A file with no binder line is never taken over.
+sub rebindable {
+    my ($by, $c) = @_;
+    return 0 unless $by && defined $c && defined $c->{pid};
+    return 1 if $by->{pid} == $c->{pid} && defined $c->{lstart} && $by->{lstart} eq $c->{lstart};
+    return identity::alive($by->{pid}, $by->{lstart}) ? 0 : 1;
+}
+
+# bind_text(sid, claude) -> the `sid` file: the session id, then this claude's pid and start time.
+sub bind_text {
+    my ($sid, $c) = @_;
+    my $l = defined $c && defined $c->{pid} && defined $c->{lstart} && $c->{lstart} =~ /\A[^\n]{1,64}\z/
+            ? "$c->{pid} $c->{lstart}\n" : '';
+    return "$sid\n$l";
 }
 
 # stamps(launch, now_s) -> relaunches in the last $CAP_S seconds (the launcher's `stamps` file).
@@ -292,8 +383,48 @@ sub job {
     return { why => 'job-unknown' } unless is_short($short);
     my $st = _json_file("$dir/state.json", 4 * 1024 * 1024) // return { why => 'job-unknown' };
     return { why => 'job-unknown' } unless defined $st->{sessionId} && !ref $st->{sessionId} && $st->{sessionId} eq $sid;
+    # B9: a restriction in the job's flags that a restart would not apply again
+    return { why => 'restriction-lost' } if respawn_drops($st->{respawnFlags});
     return { why => 'bypass-left' } if defined $mode && $mode ne 'bypassPermissions' && bypass_flags($st->{respawnFlags});
     return { ok => 1, short => $short, flags_mode => flags_mode($st->{respawnFlags}) };
+}
+
+# respawn_drops(respawnFlags) -> the names of the flags a restart of the job would drop that may
+# restrict the session (every dropped flag but @DROP_OK, unknown ones included), in order; an
+# empty list when it keeps every restriction. respawnFlags that are not a list of strings count
+# as one unknown flag (`?`). The walk is Claude Code 2.1.311-2.1.312's: a flag word starting
+# with `-`; `--name=value` keeps a @KEEP_VAL flag (and only the name of a @KEEP_BOOL one); a
+# @KEEP_VAL flag in its space form takes the next word as its value (a @KEEP_VAR flag every
+# following word up to the next flag) and is dropped when no word follows; a dropped flag takes
+# the following words up to the next flag with it; a word that is not a flag's is dropped (a
+# prompt).
+sub respawn_drops {
+    my ($f) = @_;
+    return () unless defined $f;
+    return ('?') unless ref $f eq 'ARRAY' && !grep { !defined $_ || ref $_ } @$f;
+    my @a = @$f;
+    my @lost;
+    for (my $i = 0; $i < @a; $i++) {
+        my $w = $a[$i];
+        next unless $w =~ /\A-/;
+        my $eq = index($w, '=');
+        my $name = $eq < 0 ? $w : substr($w, 0, $eq);
+        my $kept;
+        if ($eq >= 0) {
+            $kept = $name ne '-m' && ($KEEP_VAL{$name} || $KEEP_BOOL{$name});
+        } elsif ($KEEP_VAL{$name}) {
+            $kept = $name ne '-m' && $i + 1 < @a;
+            $i++ if $i + 1 < @a;
+            if ($kept && $KEEP_VAR{$name}) { $i++ while $i + 1 < @a && $a[$i + 1] !~ /\A-/ }
+        } else {
+            $kept = $KEEP_BOOL{$name};
+        }
+        if (!$kept) {
+            push @lost, $name unless $DROP_OK{$name};
+            $i++ while $i + 1 < @a && $a[$i + 1] !~ /\A-/;
+        }
+    }
+    return @lost;
 }
 
 # flags_mode(respawnFlags) -> the last --permission-mode value (`=` form too), or undef. Claude
@@ -374,18 +505,23 @@ sub transcript_ok {
 }
 
 # ---------------------------------------------------------------- the gate (§4.1, helper part)
-# gate(%a) -> {ok, why, setting, route, mode, effort, job_short, token, types}. a: sid, sid_dir,
-# setting, route (fg|bg), launch, job_dir, from, to, model, since (ms), now (ms). First failure
-# wins, in this order: off, unsupported-os, the route (no-launcher, launcher-invalid:*,
-# job-unknown), mode-unknown, mode-changed, note-pattern, bypass-not-available, launch-file,
-# launcher-cap, bypass-left, background-work, crons, transcript, on-hold, version-unknown, then
-# fg-not-shipped (the RS-P1 ship gate, not for shadow).
+# gate(%a) -> {ok, why, setting, route, mode, effort, job_short, token, types, items, launcher}.
+# a: sid, sid_dir, setting, route (fg|bg), launch, job_dir, from, to, model, seen_mode, seen_at,
+# turn_at (D10, the mod's reads), now (ms). First failure wins, in this order: off,
+# unsupported-os, the route (no-launcher, launcher-invalid:*, job-unknown, restriction-lost),
+# mode-unknown, note-pattern, bypass-not-available, launch-file, launcher-cap, bypass-left,
+# background-work, crons, transcript, on-hold, version-unknown, then the ship gates
+# fg-not-shipped and bg-not-shipped (not for shadow).
+# Shadow (§6.3, the trial data of the terminal route's ship decision): the launcher's checks and
+# background work do not refuse; `launcher` says what G3 found (`ok` or its why) and `items` lists
+# the background task types the newest Stop listed (items Claude Code's exit dialog would count).
 sub gate {
     my (%a) = @_;
     my %r = (ok => 0, why => undef, setting => $a{setting}, route => $a{route}, mode => undef, effort => undef,
-             job_short => undef, token => undef, types => []);
+             job_short => undef, token => undef, types => [], items => [], launcher => undef);
     my $no = sub { $r{why} = $_[0]; return \%r };
     return $no->('off') unless ($a{setting} // 'off') =~ /\A(?:on|shadow)\z/;
+    my $shadow = $a{setting} eq 'shadow';
     my $os = os_name();
     return $no->('unsupported-os') unless $os eq 'darwin' || $os eq 'linux';
     my $d = $a{sid_dir} // return $no->('no-watch');
@@ -397,28 +533,42 @@ sub gate {
     } else {
         $r{route} = 'fg';
         $lr = launcher($a{launch}, $a{sid});
-        return $no->($lr->{why}) unless $lr->{ok};
-        $r{token} = $lr->{token};
+        $r{launcher} = $lr->{ok} ? 'ok' : $lr->{why};
+        if (!$lr->{ok}) {
+            return $no->($lr->{why}) unless $shadow;
+            $lr = undef;
+        }
+        $r{token} = $lr->{token} if $lr;
     }
-    my ($mode, $effort, $mwhy) = fresh_mode($d, $a{since});
+    my $launch_mode = $lr && is_mode($lr->{lj}{launch_mode}) ? $lr->{lj}{launch_mode} : undef;
+    my ($mode, $effort, $mwhy) = relaunch_mode(sid_dir => $d, seen_mode => $a{seen_mode}, seen_at => $a{seen_at},
+                                               turn_at => $a{turn_at}, launch => $launch_mode);
     return $no->($mwhy) if defined $mwhy;
     ($r{mode}, $r{effort}) = ($mode, $effort);
     my $now_s = int(($a{now} // now_ms()) / 1000);
-    if ($lr) {
+    if (($r{route} // '') eq 'fg') {
         return $no->('note-pattern') unless is_sid($a{sid}) && is_ver($a{from}) && is_ver($a{to}) && is_model($a{model} // '')
                                              && is_effort($effort // '') && is_mode($mode);
-        my $w = launcher_why($lr, $mode, $now_s);
-        return $no->($w) if defined $w;
+        if ($lr) {
+            my $w = launcher_why($lr, $mode, $now_s);
+            return $no->($w) if defined $w;
+        }
     } else {
+        # `bypass-left` against the relaunch mode (D10); the respawn reads the job's flags again and
+        # checks them against the mode they hold then (a Shift+Tab during the grace, B7).
         $jr = job($a{job_dir}, $a{sid}, $mode);
         return $no->($jr->{why}) unless $jr->{ok};
     }
     my ($bw, $types) = background($d);
-    if (defined $bw) { $r{types} = $types; return $no->($bw) }
+    if (defined $bw) {
+        if ($shadow && $bw eq 'background-work') { $r{items} = $types }
+        else { $r{types} = $types; return $no->($bw) }
+    }
     return $no->('transcript') unless transcript_ok($d, $a{sid});
     my $h = hold($a{to});
     return $no->($h) if defined $h;
-    return $no->('fg-not-shipped') if $lr && $a{setting} eq 'on' && !fg_route();
+    return $no->('fg-not-shipped') if $r{route} eq 'fg' && $a{setting} eq 'on' && !fg_route();
+    return $no->('bg-not-shipped') if $r{route} eq 'bg' && $a{setting} eq 'on' && !bg_route();
     $r{ok} = 1;
     return \%r;
 }
@@ -457,19 +607,25 @@ sub parse_l {
 # write_l(launch, note): `restart.note.tmp`, then renamed `restart.note` (contract §6).
 sub write_l {
     my ($dir, $n) = @_;
-    my $tmp = "$dir/restart.note.tmp";
+    return _write_launch_file($dir, 'restart.note', l_text($n));
+}
+
+# _write_launch_file(launch, name, data): `<name>.tmp` (O_EXCL, 0600), then renamed `<name>`: the
+# only names the launcher's cleanup knows (contract §1, §6).
+sub _write_launch_file {
+    my ($dir, $name, $data) = @_;
+    my $tmp = "$dir/$name.tmp";
     unlink $tmp;
     my $fh;
-    sysopen($fh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600) or die "create launch note: $!\n";
-    my $data = l_text($n);
+    sysopen($fh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600) or die "create $name: $!\n";
     my $off = 0;
     while ($off < length $data) {
         my $w = syswrite($fh, $data, length($data) - $off, $off);
-        die "write launch note: $!\n" unless defined $w;
+        die "write $name: $!\n" unless defined $w;
         $off += $w;
     }
-    close($fh) or die "close launch note: $!\n";
-    rename($tmp, "$dir/restart.note") or do { my $e = $!; unlink $tmp; die "rename launch note: $e\n" };
+    close($fh) or die "close $name: $!\n";
+    rename($tmp, "$dir/$name") or do { my $e = $!; unlink $tmp; die "rename $name: $e\n" };
     return 1;
 }
 
@@ -507,14 +663,23 @@ sub arm {
                && is_effort($a{effort} // '') && is_model($a{model} // '') && is_ms($a{now});
     my $route = ($a{route} // '') eq 'bg' ? 'bg' : 'fg';
     return { ok => 0, why => 'fg-not-shipped' } if $route eq 'fg' && !fg_route();
+    return { ok => 0, why => 'bg-not-shipped' } if $route eq 'bg' && !bg_route();
     my ($token, $dir);
     if ($route eq 'fg') {
         my $lr = launcher($a{launch}, $a{sid});
         return { ok => 0, why => $lr->{why} } unless $lr->{ok};
         ($token, $dir) = ($lr->{token}, $lr->{dir});
-        if (!util::write_excl("$dir/sid", "$a{sid}\n", 0600)) {
-            my $b = bound_sid($dir);
-            return { ok => 0, why => 'launcher-invalid:other-session' } unless defined $b && $b eq $a{sid};
+        # The binding (contract §2, §6): once with O_EXCL; rewritten for this session when the
+        # claude that bound it is this one under another session id (`/clear`, `/resume`) or is
+        # gone (before a relaunch), and for this claude when the file names an earlier one.
+        my $c = rc::claude();
+        my $text = bind_text($a{sid}, $c);
+        if (!util::write_excl("$dir/sid", $text, 0600)) {
+            my ($b, $by) = bound_sid($dir);
+            my $same = defined $b && $b eq $a{sid};
+            return { ok => 0, why => 'launcher-invalid:other-session' } unless $same || rebindable($by, $c);
+            my $raw = util::read_file("$dir/sid", 512) // '';
+            _write_launch_file($dir, 'sid', $text) if $raw ne $text && (!$same || rebindable($by, $c));
         }
         write_l($dir, { proto => $PROTO, state => 'armed', token => $token, sid => $a{sid}, nonce => $a{nonce},
                         at => int($a{now} / 1000), exiting_at => '', from => $a{from}, to => $a{to},
@@ -644,11 +809,13 @@ sub parse_used {
 # refusals(sid => S|undef, launch => DIR|undef, take => 0|1) -> ({sid, reason, at}…) from the
 # launcher's last-refusal-<token> files (contract §2: proto, reason, sid, at; no values) in the
 # runtime folder (the launch folder's parent, else runtime_dir()), newest first. With sid only
-# that session's; with take each one read is deleted (the next load of that session reports it).
+# that session's; with take each one read is deleted (the next load of that session reports it),
+# and so is any session's older than $REPORT_MS (the cache folder is not cleaned by the system).
 sub refusals {
     my (%o) = @_;
     my $rt = defined $o{launch} && $o{launch} =~ m{\A/} ? util::dirname($o{launch} =~ s{(?<=.)/+\z}{}r) : runtime_dir();
     return () unless defined $rt && !defined private_dir($rt);
+    my $now_s = int(util::now());
     my @out;
     for my $f (util::list_dir($rt)) {
         next unless $f =~ /\Alast-refusal-[0-9a-f]{16}\z/;
@@ -657,6 +824,10 @@ sub refusals {
         my $raw = util::read_file($p, 4096) // next;
         my %v = $raw =~ /^(proto|reason|sid|at)=([^\n]*)$/mg;
         next unless ($v{proto} // '') eq "$PROTO" && ($v{reason} // '') =~ /\A[a-z][a-z-]{0,31}\z/ && ($v{at} // '') =~ /\A[0-9]{1,11}\z/;
+        if ($o{take} && ($now_s - $v{at}) * 1000 >= $REPORT_MS) {
+            unlink $p;
+            next;
+        }
         my $sid = is_sid($v{sid}) ? $v{sid} : undef;
         next if defined $o{sid} && (!defined $sid || $sid ne $o{sid});
         push @out, { sid => $sid, reason => $v{reason}, at => 0 + $v{at} };
