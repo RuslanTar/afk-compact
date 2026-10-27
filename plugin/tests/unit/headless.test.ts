@@ -1,8 +1,9 @@
 // U tests through the kit: a headless session (`claude -p`, the Agent SDK), where Claude Code
-// rejects a plugin's compaction call (`$.session.compact`). The plugin then neither
-// nudges, opens a handoff or idle turn, nor compacts on its own; Claude Code's own compactions
-// are still shaped. Live probe 2026-10-27: the nudge at 315K, then `compact_rejected` with the
-// error text discarded.
+// rejects a plugin's compaction call (`$.session.compact`). The plugin then neither nudges nor
+// opens a handoff or idle turn; it compacts only by running `/compact` at a turn end
+// (headless-compact.test.ts), and not at all once that path is off. Claude Code's own
+// compactions are still shaped. Live probe 2026-10-27: the nudge at 315K, then
+// `compact_rejected` with the error text discarded.
 import { expect, test } from 'claude-code/testing'
 import type { Deps, RunResult } from '../../hooks/lib/deps'
 import { launcherPath, newState, rejectClass, rejectText } from '../../hooks/lib/deps'
@@ -24,32 +25,34 @@ test('AT-HL-01: rejectText keeps Claude Code\'s error on one line, at most 160 c
   expect(rejectClass('something else')).toBe('other')
 })
 
-test('AT-HL-02: session.start isInteractive false: one headless row after the session row; no nudge, compaction, handoff or idle turn; native compactions still shaped', { options: { idle_handoff_turn: 'auto', precompact_turn: 'model' } }, async ($, on) => {
+test('AT-HL-02: session.start isInteractive false: one headless row after the session row; no nudge, handoff or idle turn; the plugin compaction runs as /compact, never $.session.compact; native compactions still shaped', { options: { idle_handoff_turn: 'auto', precompact_turn: 'model' } }, async ($, on) => {
   const w = new World().install(on)
   w.interactive = false
   w.rateLimits = LIMITS
   await w.start($)
   const evs = w.rows.map(r => r.ev)
   expect(evs.indexOf('headless')).toBeGreaterThan(evs.indexOf('session'))
-  expect(w.rowsOf('headless').map(r => r.via)).toEqual(['session-start'])
+  expect(w.rowsOf('headless').map(r => [r.via, r.compact])).toEqual([['session-start', 'command']])
   await w.userTurn($)
   w.tokens = 610000
   expect((await w.tool($)).context).toBeUndefined()
   expect(w.rowsOf('nudge').length).toBe(0)
   await w.turnEnd($)
   await w.advance(60 * MIN)
-  expect(w.compacts.length).toBe(0)
+  // One plugin compaction, as a bare /compact (manual through our hook), no submit of any turn.
+  expect(w.commandRuns.map(c => [c.command, c.args])).toEqual([['compact', '']])
+  expect(w.compacts.map(c => c.trigger)).toEqual(['manual'])
   expect(w.submits.length).toBe(0)
-  expect(w.callsOf('dispatch').length).toBe(0)
+  expect(w.callsOf('dispatch').map(c => w.flag(c, '--channel'))).toEqual(['mod-self'])
   expect(w.callsOf('handoff-turn').length).toBe(0)
   expect(w.rowsOf('idle_mode').map(r => r.plugin_turn)).toEqual(['off'])
   expect(w.rowsOf('idle_silent').length).toBe(0)
   // Claude Code's own automatic compaction: shaped through the hook as in any session.
   await raiseCompact($, { trigger: 'auto' })
   const d = w.callsOf('dispatch')
-  expect(d.length).toBe(1)
-  expect(w.flag(d[0], '--channel')).toBe('mod-hook')
-  expect(markerNonce(w, w.compacts[0]?.instructions)).toBe(w.flag(d[0], '--nonce'))
+  expect(d.length).toBe(2)
+  expect(w.flag(d[1], '--channel')).toBe('mod-hook')
+  expect(markerNonce(w, w.compacts[1]?.instructions)).toBe(w.flag(d[1], '--nonce'))
   expect(w.rowsOf('headless').length).toBe(1)
 })
 
@@ -68,7 +71,7 @@ function rowDeps(): { d: Deps; rows: Record<string, unknown>[] } {
   return { d, rows }
 }
 
-test('AT-HL-03: a headless rejection logs its class and text and one headless row; after it no nudge and no plugin compaction; another rejection marks nothing', async () => {
+test('AT-HL-03: a headless rejection logs its class and text and one headless row; after it no nudge, and no plugin compaction once the /compact path is off; another rejection marks nothing', async () => {
   const { d, rows } = rowDeps()
   d.state.nudgeNonce = '1a2b3c4d'
   await compactRejected(d, 'sid-1', '1a2b3c4d', new Error(HEADLESS_ERR))
@@ -81,6 +84,7 @@ test('AT-HL-03: a headless rejection logs its class and text and one headless ro
   expect([d.state.headless, d.state.nudgeNonce]).toEqual([true, undefined])
   // Both return before any engine read this Deps lacks (usage, session id): nothing more runs.
   expect(await nudgeText(d, 'sid-1')).toBeUndefined()
+  d.state.headlessCompact = 'none'
   await boundary(d)
   expect(rows.length).toBe(3)
 
@@ -90,7 +94,7 @@ test('AT-HL-03: a headless rejection logs its class and text and one headless ro
   expect(other.d.state.headless).toBe(false)
 })
 
-test('AT-HL-05: a /clear in a headless load: the new session id gets its own headless row (same-load) at its first turn; still no nudge or plugin compaction', async ($, on) => {
+test('AT-HL-05: a /clear in a headless load: the new session id gets its own headless row (same-load) at its first turn; still no nudge or submit; the plugin compaction runs as /compact', async ($, on) => {
   const w = new World().install(on)
   w.interactive = false
   await w.start($)
@@ -108,8 +112,9 @@ test('AT-HL-05: a /clear in a headless load: the new session id gets its own hea
   await w.userTurn($)
   await w.turnEnd($)
   await w.advance(60 * MIN)
-  expect(w.rowsOf('headless').map(r => [r.sid, r.via])).toEqual([[SID_A, 'session-start'], [SID_B, 'same-load']])
-  expect([w.rowsOf('nudge').length, w.compacts.length, w.submits.length]).toEqual([0, 0, 0])
+  expect(w.rowsOf('headless').map(r => [r.sid, r.via, r.compact])).toEqual([[SID_A, 'session-start', 'command'], [SID_B, 'same-load', 'command']])
+  expect([w.rowsOf('nudge').length, w.submits.length]).toEqual([0, 0])
+  expect([w.commandRuns.length, w.rowsOf('compact_command').map(r => [r.sid, r.result])]).toEqual([1, [[SID_B, 'compacted']]])
 })
 
 test('AT-HL-05: an interactive load logs no headless row at its turns', async ($, on) => {

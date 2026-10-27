@@ -32,13 +32,16 @@ sub _resolved {
 }
 
 # Nonces of mod dispatches that will get no after-step: the mod logged the
-# $.session.compact call as rejected, or the compaction as skipped (compacted skip=<class>).
+# $.session.compact call as rejected, the compaction as skipped (compacted skip=<class>), or a
+# headless `/compact` as not compacted through its hook (compact_command result other than
+# compacted).
 sub _mod_closed {
     my %c;
-    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compact_rejected compacted)]) }) {
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compact_rejected compacted compact_command)]) }) {
         my $ev = $row->{ev} // '';
         next unless defined $row->{nonce} && !ref $row->{nonce};
-        $c{ $row->{nonce} } = 1 if $ev eq 'compact_rejected' || ($ev eq 'compacted' && defined $row->{skip});
+        $c{ $row->{nonce} } = 1 if $ev eq 'compact_rejected' || ($ev eq 'compacted' && defined $row->{skip})
+                                || ($ev eq 'compact_command' && ($row->{result} // '') ne 'compacted');
     }
     return \%c;
 }
