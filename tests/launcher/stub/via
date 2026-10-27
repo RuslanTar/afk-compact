@@ -1,0 +1,14 @@
+#!/bin/sh
+# Stub --via wrapper for tests/launcher/run.sh (like `teamclaude run --`): records its
+# arguments, then runs the words after `--`.
+D=${STUB_DIR:?STUB_DIR is not set}
+n=$(cat "$D/vias" 2>/dev/null) || n=0
+n=$((n + 1))
+echo "$n" >"$D/vias"
+printf '%s\n' "$@" >"$D/via$n.argv"
+while [ $# -gt 0 ]; do
+  a=$1
+  shift
+  [ "$a" = -- ] && break
+done
+exec "$@"

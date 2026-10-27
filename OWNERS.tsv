@@ -36,13 +36,16 @@ tsconfig.json	build
 src/plugin.json	build
 src/marketplace.json	build
 src/hooks.json	build
-tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json}	build
+tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json,launcher-flags}	build
 src/assets/**	text
 src/skills/**	text
 tests/fixtures/**	fix
 tools/fixtures-gen	fix
 tools/beta-analyze	watch
 src/launcher.tmpl	core
+# The opt-in restart launcher (SESSION-RESTART §3, lane RS-B) and its shell cases.
+src/claude-launcher.tmpl	core
+tests/launcher/**	core
 plugin/helper/main.*	core
 plugin/helper/lib/watch.*	watch
 plugin/helper/lib/watch/**	watch

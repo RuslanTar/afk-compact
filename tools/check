@@ -2,12 +2,13 @@
 """tools/check: run one phase's exit checks (BUILD-PLAN §4) in order; stop at the first failure.
 
 Usage: tools/check PHASE [--names FILE] [--no-drill]
-  PHASE    phase0       X-validate (skeleton), X-test, X-types, X-gen, X-assemble, X-gates,
-                        X-name, X-tools, BT-02 rename drill
+  PHASE    phase0       X-validate (skeleton), X-test, X-types, X-gen, X-launcher, X-assemble,
+                        X-gates, X-name, X-tools, BT-02 rename drill
            integration  the same with every skill required, plus X-variants (the E-1 H11 builds
                         skills-only and triggers-off, each validated) and X-H (every helper case:
                         tests/helper/run.* over tests/helper/cases, then the WP-watch driver;
-                        only the KNOWN_RED cases may fail, each for its stated reason)
+                        only the KNOWN_RED cases may fail, each for its stated reason); its
+                        X-launcher also runs the launcher cases on Linux in Docker
            selftest     X-tools alone
            xgen         X-gen alone (used by the X-tools probe of the canary baseline)
   --names  the competitor-name list (E-7); default $GATE_NAMES_FILE. Missing = X-gates fails.
@@ -18,6 +19,13 @@ tools/canary-baseline --check (pinned to the Claude Code binary the baseline rec
 update does not make it flaky; when that binary is gone, every part but the C8 counts is
 compared with a render from the newest binary) and tools/assemble --check (goldens and
 goldens.gen.ts), each byte for byte (BH-4, BH-5).
+
+X-launcher (SESSION-RESTART §3.3, §7.1): tools/launcher-flags (the restart launcher's flag
+table against `claude --help` of the newest installed Claude Code), then tests/launcher/run.sh
+(its cases with a stub claude under every installed POSIX shell); integration adds
+tests/launcher/docker.sh (the same cases on Linux: debian:bookworm-slim, dash as /bin/sh, no
+network, no credentials; the image must be present locally). LAUNCHER_DOCKER=skip skips the
+Docker part and says so.
 
 X-tools: plant known faults in temp copies of the work tree (tmp/selftest/) and confirm that
 the tool reports every one, while the unplanted copy passes the same command: CRLF line ends
@@ -39,7 +47,8 @@ scoped approvals, MG-1 model pin, AT-QA-06 queue text; RP-1/RP-3 soft budgets ov
 reason, AT-SR-10 the old never-run rule back; REVIEW-NIGHT fixes: a gate list without the
 production write, a dropped [from …] tag, foreign text inline in a risk call, the old
 README promise, a queue line in the resume SKILL, a malformed budget reason, the AT-SR-09 risk
-corpus against loosened literals),
+corpus against loosened literals), the restart launcher's flag table out of step with `claude
+--help` (a dropped flag, a wrong arity, a dropped subcommand; SESSION-RESTART §3.3),
 the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
@@ -57,7 +66,8 @@ be gone from the copy's plugin/, README.md and marketplace file, the old launche
 from scripts/ and from the old bin/ (which must be gone), the new one in scripts/, and the
 repo's own tree unchanged.
 
-Environment: CC_TYPES_DIR (tools/typecheck), NODE or node on PATH, `claude` on PATH.
+Environment: CC_TYPES_DIR (tools/typecheck), NODE or node on PATH, `claude` on PATH;
+LAUNCHER_DOCKER=skip (X-launcher without its Docker part).
 """
 import importlib.machinery, importlib.util, json, os, re, shutil, subprocess, sys
 
@@ -298,6 +308,20 @@ def probes(name):
         git_in(d, "commit", "-q", "-m", "untrack notes")
         write_text(os.path.join(d, "plugin", ".planning", "nested.md"), "nested notes\n")
         git_in(d, "add", "-f", "plugin/.planning/nested.md")
+
+    def launcher_flags(d):
+        """SESSION-RESTART §3.3: a visible flag dropped from the restart launcher's table, a
+        variadic flag made single-valued and a subcommand dropped."""
+        p = os.path.join(d, "src", "claude-launcher.tmpl")
+        with open(p, encoding="utf-8") as f:
+            t = f.read()
+        for old, new in (("  --verbose) _c=keep _a=none ;;\n", ""),
+                         ("  --tools) _c=keep _a=var ;;", "  --tools) _c=keep _a=val ;;"),
+                         ("|auto-mode|doctor|", "|auto-mode|")):
+            if old not in t:
+                raise Fail("X-tools launcher-flags: the template has no " + old.strip())
+            t = t.replace(old, new)
+        write_text(p, t)
 
     def npm(d):
         write_text(os.path.join(d, "plugin", "package.json"), '{"dependencies":{"left-pad":"1.3.0"}}\n')
@@ -986,6 +1010,10 @@ def probes(name):
          planning_track,
          [r"^GATE planning plugin/\.planning/nested\.md: xxxxxxxx-36 tracked",
           r"^GATE planning commit [0-9a-f]{7,}: xxxxxxxx-36 history: \.planning/old\.md was committed"], git_repo),
+        ("launcher-flags", "SESSION-RESTART §3.3", ["tools/launcher-flags"], launcher_flags,
+         [r"^LAUNCHER-FLAGS missing --verbose$",
+          r"^LAUNCHER-FLAGS arity --tools: table val, help var$",
+          r"^LAUNCHER-FLAGS missing command doctor$"], None),
     ]
     if pinned:
         out += [
@@ -1087,6 +1115,26 @@ def x_gen(phase, root=REPO):
         run([os.path.join(tools, "helper-replies-gen"), "--check"], "X-gen helper replies", cwd=root)
     canary_check(root)
     run([os.path.join(tools, "assemble"), "--check"], "X-gen goldens", cwd=root, capture=True)
+
+
+# ---------------------------------------------------------------- X-launcher
+
+def x_launcher(phase, root=REPO):
+    """X-launcher (SESSION-RESTART §3.3, §7.1): the restart launcher's flag table against
+    `claude --help` (tools/launcher-flags), then its cases under every installed POSIX shell
+    (tests/launcher/run.sh). integration also runs the cases on Linux in Docker
+    (tests/launcher/docker.sh, debian with dash as /bin/sh, no network, no credentials);
+    LAUNCHER_DOCKER=skip skips that part and says so."""
+    run([os.path.join(root, "tools", "launcher-flags")], "X-launcher flag table", cwd=root)
+    run(["/bin/sh", os.path.join(root, "tests", "launcher", "run.sh")], "X-launcher cases",
+        cwd=root, capture=True)
+    if phase != "integration":
+        return
+    if os.environ.get("LAUNCHER_DOCKER") == "skip":
+        print("X-launcher: the Linux cases are SKIPPED (LAUNCHER_DOCKER=skip)")
+        return
+    run(["/bin/sh", os.path.join(root, "tests", "launcher", "docker.sh")],
+        "X-launcher Linux cases (docker.sh; LAUNCHER_DOCKER=skip skips them)", cwd=root, capture=True)
 
 
 # ---------------------------------------------------------------- BT-02 (rename drill)
@@ -1281,6 +1329,8 @@ def main(argv):
         run([os.path.join(tools, "typecheck")], "X-types")
         steps.append("X-gen")
         x_gen(phase)
+        steps.append("X-launcher")
+        x_launcher(phase)
         steps.append("X-assemble")
         x_assemble(name)
         steps.append("X-gates")

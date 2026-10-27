@@ -1,0 +1,878 @@
+#!/bin/sh
+# afk-compact-claude: start Claude Code so that the afk-compact plugin can move the session onto a
+# newly installed Claude Code (setting restart_on_update; launcher protocol 1). POSIX sh: dash,
+# bash 3.2, zsh as sh, busybox ash. It reads nothing from the plugin folder.
+#
+#   afk-compact-claude [--via "<command words>"] [claude arguments]
+#   afk-compact-claude --install [DIR] [--force]
+#
+# It runs `claude` (after the --via words, split on blanks) as a child and waits. When that
+# session ends because the plugin ended it to restart it, and the plugin's note in the launch
+# folder proves it, the launcher starts the same session again: --resume, the arguments it was
+# given (session selection, prompts and the state flags dropped) and the session's current
+# model, effort and permission mode. It never relaunches after an exit of your own, never
+# widens permissions, stops at Ctrl+C during its 3-second countdown, relaunches at most 3 times
+# an hour, and stops when a relaunched claude fails within 15 seconds.
+#
+# The launch folder is <runtime>/afk-compact-<uid>/L-<token>/ (0700), where <runtime> is
+# $XDG_RUNTIME_DIR, else $TMPDIR, else /tmp. The launcher writes launcher.json and stamps
+# there; the plugin writes sid, restart.note and restart.mode-end. Claude Code gets the folder
+# in AFK_COMPACT_LAUNCH. The file contract is in tests/launcher/README.md of the plugin's source.
+#
+# Every variable of this file starts with `_`. A shell keeps the export flag of a variable it
+# got from the environment, so assigning a name the person exported (cwd, base, os, ...) would
+# hand the changed value to claude and every tool it starts. tests/launcher/run.sh checks it.
+
+if [ -n "${ZSH_VERSION+x}" ]; then
+  emulate sh
+fi
+set -f
+_nl='
+'
+_tab='	'
+IFS=" $_tab$_nl"
+_self0=$0
+_me=afk-compact
+_proto=1
+_launcher_version='0.1.0'
+_via=
+_ld=
+
+say() {
+  printf '%s: %s\n' "$_me" "$1" >&2
+}
+
+# launch exec|run ARGS...: run <via words> claude ARGS (exec: replace this process).
+launch() {
+  _l_how=$1
+  shift
+  if [ -n "$_via" ]; then
+    _l_ifs=$IFS
+    IFS=" $_tab"
+    set -- $_via claude "$@"
+    IFS=$_l_ifs
+  else
+    set -- claude "$@"
+  fi
+  if [ "$_l_how" = exec ]; then
+    exec "$@"
+  fi
+  "$@"
+}
+
+# passthrough REASON ARGS...: one line naming the reason (never a value), then claude as given,
+# with no launch folder and no relaunch.
+passthrough() {
+  say "restart on update is not available for this launch ($1)"
+  shift
+  unset AFK_COMPACT_LAUNCH
+  launch exec "$@"
+}
+
+# The flag table (§3.3 of the restart spec). tools/launcher-flags reads the rows between the
+# two marker lines and checks them against `claude --help`. A row: the flag and its aliases,
+# _c= its class, _a= its arity, and _f= for a value Claude Code reads as a file at start.
+#   _c=keep    carried verbatim, in the original order
+#   _c=state   dropped; the session's current state is appended instead (model, effort,
+#             permission mode, bypass availability)
+#   _c=drop    session selection and one-shot input: not carried
+#   _c=refuse  no restart for this launch: claude runs exactly as given
+#   _a=none | val (one value, taken even when it starts with -) | opt (the next word unless
+#   it starts with -) | var (one value, then every word up to one that starts with -)
+#   _f=file (always a path) | _f=json (a path unless the value is inline JSON)
+# A flag missing from the table (an unknown or new one) makes the launch a pass-through.
+flag_info() {
+  _f=
+  case $1 in
+  # flag table begin
+  --add-dir) _c=keep _a=var ;;
+  --agent) _c=keep _a=val ;;
+  --agents) _c=keep _a=val ;;
+  --allowedTools|--allowed-tools) _c=keep _a=var ;;
+  --append-system-prompt) _c=keep _a=val ;;
+  --append-system-prompt-file) _c=keep _a=val _f=file ;;
+  --autocompact) _c=keep _a=val ;;
+  --ax-screen-reader) _c=keep _a=none ;;
+  --bare) _c=keep _a=none ;;
+  --betas) _c=keep _a=var ;;
+  --brief) _c=keep _a=none ;;
+  --chrome) _c=keep _a=none ;;
+  -d|--debug) _c=keep _a=opt ;;
+  --debug-file) _c=keep _a=val ;;
+  --disable-slash-commands) _c=keep _a=none ;;
+  --disallowedTools|--disallowed-tools) _c=keep _a=var ;;
+  --exclude-dynamic-system-prompt-sections) _c=keep _a=none ;;
+  --fallback-model) _c=keep _a=val ;;
+  --fast-mode) _c=keep _a=val ;;
+  --ide) _c=keep _a=none ;;
+  --mcp-config) _c=keep _a=var _f=json ;;
+  -n|--name) _c=keep _a=val ;;
+  --no-chrome) _c=keep _a=none ;;
+  --permission-prompts) _c=keep _a=val ;;
+  --plugin-dir) _c=keep _a=val ;;
+  --plugin-url) _c=keep _a=val ;;
+  --prompt-suggestions) _c=keep _a=opt ;;
+  --restricted) _c=keep _a=none ;;
+  --safe-mode) _c=keep _a=none ;;
+  --setting-sources) _c=keep _a=val ;;
+  --settings) _c=keep _a=val _f=json ;;
+  --strict-mcp-config) _c=keep _a=none ;;
+  --system-prompt) _c=keep _a=val ;;
+  --system-prompt-file) _c=keep _a=val _f=file ;;
+  --system-prompt-snapshot) _c=keep _a=val ;;
+  --tools) _c=keep _a=var ;;
+  --verbose) _c=keep _a=none ;;
+  --allow-dangerously-skip-permissions) _c=state _a=none ;;
+  --dangerously-skip-permissions) _c=state _a=none ;;
+  --effort) _c=state _a=val ;;
+  --inherit-permission-mode) _c=state _a=val ;;
+  --model) _c=state _a=val ;;
+  --permission-mode) _c=state _a=val ;;
+  -c|--continue) _c=drop _a=none ;;
+  --fork-session) _c=drop _a=none ;;
+  -r|--resume) _c=drop _a=opt ;;
+  --session-id) _c=drop _a=val ;;
+  --bg|--background) _c=refuse _a=none ;;
+  --cloud) _c=refuse _a=opt ;;
+  --desktop) _c=refuse _a=none ;;
+  --environment) _c=refuse _a=val ;;
+  --file) _c=refuse _a=var ;;
+  --forward-subagent-text) _c=refuse _a=none ;;
+  --from-pr) _c=refuse _a=opt ;;
+  -h|--help) _c=refuse _a=none ;;
+  --include-hook-events) _c=refuse _a=none ;;
+  --include-partial-messages) _c=refuse _a=none ;;
+  --input-format) _c=refuse _a=val ;;
+  --json-schema) _c=refuse _a=val ;;
+  --max-budget-usd) _c=refuse _a=val ;;
+  --no-session-persistence) _c=refuse _a=none ;;
+  --output-format) _c=refuse _a=val ;;
+  -p|--print) _c=refuse _a=none ;;
+  --remote-control) _c=refuse _a=opt ;;
+  --remote-control-session-name-prefix) _c=refuse _a=val ;;
+  --replay-user-messages) _c=refuse _a=none ;;
+  --teleport) _c=refuse _a=opt ;;
+  --tmux) _c=refuse _a=none ;;
+  -v|--version) _c=refuse _a=none ;;
+  -w|--worktree) _c=refuse _a=opt ;;
+  # flag table end
+  *) _c=unknown _a=none ;;
+  esac
+}
+
+# A first positional word naming a subcommand (commander dispatches it) means pass-through.
+is_subcommand() {
+  case $1 in
+  # subcommand table begin
+  agents|attach|auth|auto-mode|doctor|gateway|help|import|install|logs|mcp) return 0 ;;
+  plugin|plugins|purge|respawn|rm|setup-token|stop|kill|ultrareview|update|upgrade) return 0 ;;
+  # subcommand table end
+  esac
+  return 1
+}
+
+# add_file VALUE: one file_flags entry, made absolute against the start folder.
+add_file() {
+  _a_p=$1
+  case $_a_p in
+  *'"'*|*'\'*|*[[:cntrl:]]*)
+    [ -n "$_why" ] || _why="a file path with a quote, backslash or control character"
+    return
+    ;;
+  esac
+  while :; do
+    case $_a_p in
+    ./*) _a_p=${_a_p#./} ;;
+    *) break ;;
+    esac
+  done
+  case $_a_p in
+  /*) ;;
+  *) _a_p=$_cwd/$_a_p ;;
+  esac
+  _ff=$_ff$_a_p$_nl
+}
+
+# on_value FLAG VALUE: what a flag's value means (files, the launch state, bypass).
+on_value() {
+  case $_c in
+  keep)
+    case $_f in
+    file) add_file "$2" ;;
+    json)
+      _o_v=${2#"${2%%[![:space:]]*}"}
+      case $_o_v in
+      '{'*|'['*|'') ;;
+      *) add_file "$2" ;;
+      esac
+      ;;
+    esac
+    _w_keep=1
+    ;;
+  state)
+    # Commander keeps the last value of a repeated flag, so the last --permission-mode counts.
+    case $1 in
+    --model) _m0=$2 _m0_set=1 ;;
+    --effort) _e0=$2 _e0_set=1 ;;
+    --permission-mode) _w_pm=$2 ;;
+    esac
+    ;;
+  esac
+}
+
+# on_flag FLAG: what a flag word itself means.
+on_flag() {
+  case $_c in
+  keep) _w_keep=1 ;;
+  state)
+    case $1 in
+    --dangerously-skip-permissions|--allow-dangerously-skip-permissions) _w_bp=1 ;;
+    esac
+    ;;
+  refuse) _why=$1 ;;
+  unknown)
+    case $1 in
+    *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-]*) _why="an unknown flag" ;;
+    *) if [ ${#1} -le 40 ]; then _why="unknown flag $1"; else _why="an unknown flag"; fi ;;
+    esac
+    ;;
+  esac
+}
+
+# positional WORD: prompt words are dropped; the first one names a subcommand or not.
+positional() {
+  if [ -z "$_w_pos" ]; then
+    _w_pos=1
+    if is_subcommand "$1"; then _why="subcommand $1"; fi
+  fi
+}
+
+# walk scan|run ARGS...: one pass over the claude arguments with commander's rules.
+#   scan: sets _why (the first reason to pass through, or empty), _bypass_ok, _ff (file paths,
+#         one per line), _m0/_e0 (the launch --model and --effort values).
+#   run:  keeps the carried arguments, appends --resume and the note's state, runs claude.
+# A variadic flag takes the following words only in its space form: commander ends it at
+# `--flag=value` (claude 2.1.311 parseOptions), so the words after that are prompt words.
+walk() {
+  _w_mode=$1
+  shift
+  _why= _bypass_ok=false _ff= _m0= _m0_set= _e0= _e0_set=
+  _w_need= _w_flag= _w_end= _w_pos= _w_pm= _w_bp=
+  for _w_arg in "$@"; do
+    shift
+    _w_keep=
+    _w_word=1
+    if [ -n "$_w_end" ]; then
+      # After --, every word is positional (dropped).
+      _w_word=
+      positional "$_w_arg"
+    else
+      case $_w_need in
+      val|var1)
+        flag_info "$_w_flag"
+        on_value "$_w_flag" "$_w_arg"
+        if [ "$_w_need" = var1 ]; then _w_need=varn; else _w_need=; fi
+        _w_word=
+        ;;
+      opt|varn)
+        case $_w_arg in
+        -?*) _w_need= ;;
+        *)
+          flag_info "$_w_flag"
+          on_value "$_w_flag" "$_w_arg"
+          if [ "$_w_need" = opt ]; then _w_need=; fi
+          _w_word=
+          ;;
+        esac
+        ;;
+      esac
+    fi
+    if [ -n "$_w_word" ]; then
+      case $_w_arg in
+      --)
+        _w_end=1
+        ;;
+      --*=*)
+        _w_flag=${_w_arg%%=*}
+        flag_info "$_w_flag"
+        case $_c in
+        refuse|unknown) on_flag "$_w_flag" ;;
+        *)
+          if [ "$_a" = none ]; then
+            _why="a value given to $_w_flag"
+          else
+            on_value "$_w_flag" "${_w_arg#*=}"
+          fi
+          ;;
+        esac
+        ;;
+      --*|-?)
+        _w_flag=$_w_arg
+        flag_info "$_w_flag"
+        on_flag "$_w_flag"
+        case $_a in
+        val) _w_need=val ;;
+        opt) _w_need=opt ;;
+        var) _w_need=var1 ;;
+        esac
+        ;;
+      -?*)
+        _why="combined short flags"
+        ;;
+      *)
+        positional "$_w_arg"
+        ;;
+      esac
+    fi
+    if [ "$_w_mode" = scan ] && [ -n "$_why" ]; then
+      return 0
+    fi
+    if [ -n "$_w_keep" ]; then
+      set -- "$@" "$_w_arg"
+    fi
+  done
+  if [ -n "$_w_bp" ] || [ "$_w_pm" = bypassPermissions ]; then
+    _bypass_ok=true
+  fi
+  if [ "$_w_mode" = run ]; then
+    set -- "$@" --resume "$_n_sid"
+    if [ "$_bypass_ok" = true ]; then
+      set -- "$@" --allow-dangerously-skip-permissions
+    fi
+    # The note's model never starts with - (is_model). A launch value that does is passed in
+    # the = form, so no scan of the raw arguments can read it as a flag.
+    if [ -n "$_n_model" ]; then
+      set -- "$@" --model "$_n_model"
+    elif [ -n "$_m0_set" ]; then
+      case $_m0 in
+      -*) set -- "$@" "--model=$_m0" ;;
+      *) set -- "$@" --model "$_m0" ;;
+      esac
+    fi
+    if [ -n "$_n_effort" ]; then
+      set -- "$@" --effort "$_n_effort"
+    elif [ -n "$_e0_set" ]; then
+      case $_e0 in
+      -*) set -- "$@" "--effort=$_e0" ;;
+      *) set -- "$@" --effort "$_e0" ;;
+      esac
+    fi
+    if [ "$_n_mode" = default ]; then
+      set -- "$@" --permission-mode manual
+    else
+      set -- "$@" --permission-mode "$_n_mode"
+    fi
+    launch run "$@"
+  fi
+}
+
+# own_dir DIR: DIR is a real folder (not a symlink), mode 0700, owned by this user, with no ACL.
+# A trailing `@` (macOS: extended attributes; macOS 13+ tags every new folder with
+# com.apple.provenance) or `.` (an SELinux context) grants nothing; `+` (an ACL) refuses. macOS
+# prints `@` instead of `+` when a folder has both, so there /bin/ls -lde (BSD ls; a GNU ls
+# earlier on PATH has no -e) must show no ACL line. busybox ls shows no `+` at all, so on Linux
+# getfacl, where it is installed, must list nothing but the user::, group:: and other:: entries.
+own_dir() {
+  [ ! -L "$1" ] && [ -d "$1" ] || return 1
+  if [ "$_os" = Darwin ]; then
+    case $(/bin/ls -lde "$1" 2>/dev/null) in
+    *"$_nl"*) return 1 ;;
+    esac
+  elif command -v getfacl >/dev/null 2>&1; then
+    _o_acl=$(getfacl -c -- "$1" 2>/dev/null) || return 1
+    _o_ifs=$IFS
+    IFS=$_nl
+    for _o_l in $_o_acl; do
+      case $_o_l in
+      user::*|group::*|other::*) ;;
+      *) IFS=$_o_ifs; return 1 ;;
+      esac
+    done
+    IFS=$_o_ifs
+  fi
+  set -- $(ls -ldn "$1" 2>/dev/null)
+  case ${1-} in
+  drwx------|drwx------.|drwx------@) ;;
+  *) return 1 ;;
+  esac
+  [ "${3-}" = "$_uid" ]
+}
+
+# shared_base DIR: 0 when others may write to DIR (group or other w) and it has no sticky bit.
+# They could then rename the runtime folder away after its check and put their own in its
+# place. /tmp (sticky), the macOS per-user TMPDIR and /run/user/<uid> are not shared.
+shared_base() {
+  set -- $(ls -ldn "$1/." 2>/dev/null)
+  case ${1-} in
+  ?????????[tT]*) return 1 ;;
+  ?????w*|????????w*) return 0 ;;
+  esac
+  return 1
+}
+
+# remove_ld DIR: remove a launch folder's own files by name, then the folder if it is empty.
+remove_ld() {
+  rm -f "${1:?}/launcher.json" "${1:?}/launcher.json.tmp" "${1:?}/stamps" "${1:?}/sid" \
+    "${1:?}/sid.tmp" "${1:?}/restart.note" "${1:?}/restart.note.tmp" "${1:?}/restart.used" \
+    "${1:?}/restart.mode-end" "${1:?}/restart.mode-end.tmp" 2>/dev/null
+  rmdir "${1:?}" 2>/dev/null
+}
+
+cleanup() {
+  if [ -n "$_ld" ]; then
+    remove_ld "$_ld"
+    _ld=
+  fi
+}
+
+# sweep: remove the launch folders of launchers that are gone (killed, or a crash).
+sweep() {
+  set +f
+  for _s_d in "$_rt"/L-*; do
+    set -f
+    [ ! -L "$_s_d" ] && [ -d "$_s_d" ] || continue
+    _s_p=$(sed -n 's/.*"pid":\([0123456789][0123456789]*\).*/\1/p' "$_s_d/launcher.json" 2>/dev/null)
+    case $_s_p in
+    ''|*[!0123456789]*) continue ;;
+    esac
+    if ! kill -0 "$_s_p" 2>/dev/null; then
+      remove_ld "$_s_d"
+    fi
+  done
+  set -f
+}
+
+write_lj() {
+  (umask 077 && printf '{"proto":%s,"launcher_version":"%s","pid":%s,"token":"%s","started":%s,"cwd":"%s","uname":"%s","relaunches":%s,"bypass_ok":%s,"file_flags":[%s],"stamps":"stamps"}\n' \
+    "$_proto" "$_launcher_version" "$$" "$_tok" "$_started" "$_cwd" "$_os" "$1" "$_bypass_ok" "$_ff_json" \
+    >"$_ld/launcher.json.tmp") && mv -f "$_ld/launcher.json.tmp" "$_ld/launcher.json"
+}
+
+is_num() {
+  case $1 in
+  ''|0?*|*[!0123456789]*) return 1 ;;
+  esac
+  [ ${#1} -le "$2" ]
+}
+
+is_hex() {
+  case $1 in
+  *[!0123456789abcdef]*) return 1 ;;
+  esac
+  [ ${#1} -eq "$2" ]
+}
+
+is_ver() {
+  case $1 in
+  *[!0123456789.]*|*..*|.*|*.|*.*.*.*) return 1 ;;
+  [0123456789]*.*.*) [ ${#1} -le 32 ] ;;
+  *) return 1 ;;
+  esac
+}
+
+# is_sid VALUE: a lower-case UUID (8-4-4-4-12 hex), so it can never read as a flag.
+is_sid() {
+  case $1 in
+  *[!0123456789abcdef-]*|-*|*-|*--*) return 1 ;;
+  esac
+  _s_ifs=$IFS
+  IFS=-
+  set -- $1
+  IFS=$_s_ifs
+  [ $# -eq 5 ] && [ ${#1} -eq 8 ] && [ ${#2} -eq 4 ] && [ ${#3} -eq 4 ] && [ ${#4} -eq 4 ] && [ ${#5} -eq 12 ]
+}
+
+# is_model VALUE: empty, or 1-100 of A-Z a-z 0-9 . _ : / [ ] -, not starting with - (so it can
+# never read as a flag).
+is_model() {
+  case $1 in
+  -*|*[!]ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:/[-]*) return 1 ;;
+  esac
+  [ ${#1} -le 100 ]
+}
+
+# read_note FILE: the launch note, flat key=value lines, never evaluated. Each value must match
+# its own pattern; anything else (an unknown or repeated key, a line without =, a missing key)
+# sets _n_bad. _n_state and _n_sid are set only when they are valid.
+read_note() {
+  _n_proto= _n_state= _n_token= _n_sid= _n_nonce= _n_at= _n_ex= _n_from= _n_to= _n_model= _n_effort= _n_mode=
+  _n_bad= _r_seen=' ' _r_n=0
+  if [ -L "$1" ] || [ ! -f "$1" ] || [ ! -r "$1" ]; then
+    _n_bad=pattern
+    return
+  fi
+  while IFS= read -r _r_line || [ -n "$_r_line" ]; do
+    _r_n=$((_r_n + 1))
+    if [ $_r_n -gt 24 ]; then
+      _n_bad=pattern
+      break
+    fi
+    case $_r_line in
+    *=*) ;;
+    *) _n_bad=pattern; continue ;;
+    esac
+    _r_k=${_r_line%%=*}
+    _r_v=${_r_line#*=}
+    case $_r_seen in
+    *" $_r_k "*) _n_bad=pattern; continue ;;
+    esac
+    _r_seen="$_r_seen$_r_k "
+    _r_ok=
+    case $_r_k in
+    proto) if is_num "$_r_v" 3; then _n_proto=$_r_v _r_ok=1; fi ;;
+    state)
+      case $_r_v in
+      armed|exiting|go|cancelled) _n_state=$_r_v _r_ok=1 ;;
+      esac
+      ;;
+    token) if is_hex "$_r_v" 16; then _n_token=$_r_v _r_ok=1; fi ;;
+    sid) if is_sid "$_r_v"; then _n_sid=$_r_v _r_ok=1; fi ;;
+    nonce) if is_hex "$_r_v" 16; then _n_nonce=$_r_v _r_ok=1; fi ;;
+    at) if is_num "$_r_v" 11; then _n_at=$_r_v _r_ok=1; fi ;;
+    exiting_at) if [ -z "$_r_v" ] || is_num "$_r_v" 14; then _n_ex=$_r_v _r_ok=1; fi ;;
+    from) if is_ver "$_r_v"; then _n_from=$_r_v _r_ok=1; fi ;;
+    to) if is_ver "$_r_v"; then _n_to=$_r_v _r_ok=1; fi ;;
+    model) if is_model "$_r_v"; then _n_model=$_r_v _r_ok=1; fi ;;
+    effort)
+      case $_r_v in
+      ''|low|medium|high|xhigh|max) _n_effort=$_r_v _r_ok=1 ;;
+      esac
+      ;;
+    mode)
+      case $_r_v in
+      acceptEdits|auto|bypassPermissions|default|dontAsk|plan) _n_mode=$_r_v _r_ok=1 ;;
+      esac
+      ;;
+    esac
+    [ -n "$_r_ok" ] || _n_bad=pattern
+  done <"$1"
+  for _r_k in proto state token sid nonce at exiting_at from to model effort mode; do
+    case $_r_seen in
+    *" $_r_k "*) ;;
+    *) _n_bad=pattern ;;
+    esac
+  done
+}
+
+# last_refusal REASON: for status and the next load of the session (no values, 0600).
+last_refusal() {
+  (umask 077 && printf 'proto=%s\nreason=%s\nsid=%s\nat=%s\n' "$_proto" "$1" "$_n_sid" "$(date +%s)" \
+    >"$_rt/last-refusal-$_tok.tmp") && mv -f "$_rt/last-refusal-$_tok.tmp" "$_rt/last-refusal-$_tok"
+}
+
+# refuse REASON: the one line for a note that was present but failed a check; a `go` note (a
+# plugin-initiated exit) also leaves last-refusal-<token>.
+refuse() {
+  if [ -n "$_n_sid" ]; then
+    say "not restarting ($1). Resume with: claude --resume $_n_sid"
+  else
+    say "not restarting ($1)."
+  fi
+  if [ "$_n_state" = go ]; then
+    last_refusal "$1"
+  fi
+}
+
+# decide RC: 0 when the session that just ended asked for a relaunch and every check holds;
+# the note is then consumed (renamed restart.used).
+decide() {
+  _d_note=$_ld/restart.note
+  if [ ! -e "$_d_note" ] && [ ! -L "$_d_note" ]; then
+    return 1
+  fi
+  read_note "$_d_note"
+  case $_n_state in
+  go) ;;
+  '') refuse pattern; return 1 ;;
+  *) return 1 ;;
+  esac
+  _d_now=$(date +%s)
+  if [ "$1" -ne 0 ]; then refuse exit-code; return 1; fi
+  if [ -n "$_n_bad" ]; then refuse pattern; return 1; fi
+  if [ "$_n_proto" != "$_proto" ]; then refuse proto; return 1; fi
+  if [ "$_n_token" != "$_tok" ]; then refuse token; return 1; fi
+  _d_age=$((_d_now - _n_at))
+  if [ $_d_age -gt 120 ] || [ $_d_age -lt -2 ]; then refuse age; return 1; fi
+  if [ ${#_n_ex} -lt 4 ]; then refuse window; return 1; fi
+  _d_win=$((_n_at - ${_n_ex%???}))
+  if [ $_d_win -lt 0 ] || [ $_d_win -gt 5 ]; then refuse window; return 1; fi
+  _d_sid=
+  if [ ! -L "$_ld/sid" ] && [ -f "$_ld/sid" ]; then
+    IFS= read -r _d_sid <"$_ld/sid" || :
+  fi
+  if [ "$_d_sid" != "$_n_sid" ]; then refuse other-session; return 1; fi
+  if [ "$_n_mode" = bypassPermissions ] && [ "$_bypass_ok" != true ]; then refuse bypass; return 1; fi
+  if [ -e "$_ld/restart.mode-end" ] || [ -L "$_ld/restart.mode-end" ]; then
+    _d_me=
+    if [ ! -L "$_ld/restart.mode-end" ] && [ -f "$_ld/restart.mode-end" ]; then
+      IFS= read -r _d_me <"$_ld/restart.mode-end" || :
+    fi
+    rm -f "$_ld/restart.mode-end"
+    if [ "$_d_me" != "$_n_mode" ]; then refuse mode-changed; return 1; fi
+  fi
+  _d_ifs=$IFS
+  IFS=$_nl
+  for _d_p in $_ff; do
+    if [ ! -f "$_d_p" ] || [ ! -r "$_d_p" ]; then
+      IFS=$_d_ifs
+      refuse launch-file
+      return 1
+    fi
+  done
+  IFS=$_d_ifs
+  _d_n=0
+  if [ -f "$_ld/stamps" ]; then
+    while IFS= read -r _d_t || [ -n "$_d_t" ]; do
+      if is_num "$_d_t" 11 && [ $((_d_now - _d_t)) -lt 3600 ]; then
+        _d_n=$((_d_n + 1))
+      fi
+    done <"$_ld/stamps"
+  fi
+  if [ $_d_n -ge 3 ]; then refuse cap; return 1; fi
+  # A relaunch without a terminal would start claude in print mode (a closed terminal that sent
+  # no HUP here).
+  if [ ! -t 0 ] || [ ! -t 1 ]; then refuse no-terminal; return 1; fi
+  # mv onto a folder, or a symlink to one, would move the note into it.
+  if [ -L "$_ld/restart.used" ] || { [ -e "$_ld/restart.used" ] && [ ! -f "$_ld/restart.used" ]; }; then
+    refuse consume
+    return 1
+  fi
+  if ! mv -f "$_d_note" "$_ld/restart.used"; then refuse consume; return 1; fi
+  return 0
+}
+
+# countdown: 3 seconds in which Ctrl+C stops the relaunch. The caller has had `_c_stop=1` on INT
+# since claude exited, so a Ctrl+C pressed before the countdown line counts too.
+countdown() {
+  [ -z "$_c_stop" ] || return 1
+  if [ "$_n_mode" = bypassPermissions ]; then
+    _c_how=", permission mode bypassPermissions"
+  else
+    _c_how=
+  fi
+  say "restarting session $(printf '%.8s' "$_n_sid") on Claude Code $_n_to in 3 s$_c_how (Ctrl+C stops it)"
+  _c_i=0
+  while [ $_c_i -lt 3 ] && [ -z "$_c_stop" ]; do
+    sleep 1
+    _c_i=$((_c_i + 1))
+  done
+  [ -z "$_c_stop" ]
+}
+
+# install_self [DIR] [--force]: copy this file to DIR (default ~/.local/bin), mode 0755.
+install_self() {
+  _i_dir= _i_force=
+  for _i_a in "$@"; do
+    case $_i_a in
+    --force) _i_force=1 ;;
+    -*) say "--install takes a folder and --force only"; return 2 ;;
+    *)
+      if [ -n "$_i_dir" ]; then say "--install takes one folder"; return 2; fi
+      _i_dir=$_i_a
+      ;;
+    esac
+  done
+  if [ -z "$_i_dir" ]; then
+    if [ -z "${HOME-}" ]; then say "--install: HOME is not set; name the folder"; return 2; fi
+    _i_dir=$HOME/.local/bin
+  fi
+  while :; do
+    case $_i_dir in
+    ?*/) _i_dir=${_i_dir%/} ;;
+    *) break ;;
+    esac
+  done
+  # A bare name: the file in the current folder (`sh <name> --install`), else the one on PATH.
+  case $_self0 in
+  */*) _i_self=$_self0 ;;
+  *)
+    if [ -f "$_self0" ]; then
+      _i_self=./$_self0
+    else
+      _i_self=$(command -v -- "$_self0" 2>/dev/null)
+    fi
+    ;;
+  esac
+  if [ ! -f "$_i_self" ] || [ ! -r "$_i_self" ]; then say "--install: cannot read this launcher's own file"; return 2; fi
+  if ! mkdir -p -- "$_i_dir" 2>/dev/null || [ ! -d "$_i_dir" ]; then say "--install: cannot create $_i_dir"; return 2; fi
+  _i_dest=$_i_dir/$_me-claude
+  if [ -d "$_i_dest" ]; then say "--install: $_i_dest is a folder"; return 2; fi
+  if [ -e "$_i_dest" ] || [ -L "$_i_dest" ]; then
+    if cmp -s -- "$_i_self" "$_i_dest" && [ -x "$_i_dest" ]; then
+      say "already installed: $_i_dest"
+      install_hint
+      return 0
+    fi
+    if [ -z "$_i_force" ]; then
+      say "$_i_dest exists and differs from this launcher; run again with --force to replace it"
+      return 1
+    fi
+  fi
+  _i_tmp=$_i_dir/.$_me-claude.tmp.$$
+  if cp -- "$_i_self" "$_i_tmp" && chmod 755 "$_i_tmp" && mv -f -- "$_i_tmp" "$_i_dest"; then
+    say "installed $_i_dest"
+    install_hint
+    return 0
+  fi
+  rm -f "${_i_tmp:?}" 2>/dev/null
+  say "--install: could not write $_i_dest"
+  return 2
+}
+
+install_hint() {
+  case ":${PATH-}:" in
+  *":$_i_dir:"*) _i_cmd=$_me-claude ;;
+  *) _i_cmd=$_i_dest ;;
+  esac
+  say "start Claude Code through it, for example:  alias cl='$_i_cmd'"
+}
+
+# ---- main
+
+if [ -n "${CLAUDECODE+x}" ]; then
+  say "not starting: this is already inside a Claude Code session"
+  exit 2
+fi
+
+case ${1-} in
+--install)
+  shift
+  install_self "$@"
+  exit $?
+  ;;
+--via)
+  if [ $# -lt 2 ]; then say "--via needs a command"; exit 2; fi
+  _via=$2
+  shift 2
+  case $_via in
+  *[!" $_tab"]*) ;;
+  *) say "--via needs a command"; exit 2 ;;
+  esac
+  ;;
+--via=*)
+  _via=${1#--via=}
+  shift
+  case $_via in
+  *[!" $_tab"]*) ;;
+  *) say "--via needs a command"; exit 2 ;;
+  esac
+  ;;
+esac
+case $_via in
+*"$_nl"*) say "--via takes one line"; exit 2 ;;
+esac
+
+_os=$(uname -s 2>/dev/null)
+case $_os in
+Darwin|Linux) ;;
+MINGW*|MSYS*|CYGWIN*)
+  say "restart on update: not supported on Windows"
+  unset AFK_COMPACT_LAUNCH
+  launch exec "$@"
+  ;;
+*) passthrough "not supported on this system" "$@" ;;
+esac
+
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+  passthrough "not a terminal" "$@"
+fi
+
+_cwd=$(pwd -P 2>/dev/null) || _cwd=
+case $_cwd in
+/*) ;;
+*) passthrough "no working folder" "$@" ;;
+esac
+case $_cwd in
+*'"'*|*'\'*|*[[:cntrl:]]*) passthrough "a working folder path with a quote, backslash or control character" "$@" ;;
+esac
+
+walk scan "$@"
+if [ -n "$_why" ]; then
+  passthrough "$_why" "$@"
+fi
+_ff_json=
+_f_ifs=$IFS
+IFS=$_nl
+for _f_p in $_ff; do
+  _ff_json=$_ff_json${_ff_json:+,}\"$_f_p\"
+done
+IFS=$_f_ifs
+
+_uid=$(id -u 2>/dev/null)
+case $_uid in
+''|*[!0123456789]*) passthrough "no user id" "$@" ;;
+esac
+_base=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
+while :; do
+  case $_base in
+  ?*/) _base=${_base%/} ;;
+  *) break ;;
+  esac
+done
+case $_base in
+/*) ;;
+*) passthrough "the runtime folder is not an absolute path" "$@" ;;
+esac
+if shared_base "$_base"; then
+  passthrough "the runtime base is writable by others and not sticky" "$@"
+fi
+_rt=$_base/$_me-$_uid
+if [ ! -L "$_rt" ] && [ ! -d "$_rt" ]; then
+  mkdir -m 700 "$_rt" 2>/dev/null
+fi
+if ! own_dir "$_rt"; then
+  passthrough "the runtime folder is not private (a symlink, another owner or not 0700)" "$@"
+fi
+sweep
+_tok=$(od -An -N8 -tx1 /dev/urandom 2>/dev/null | tr -d " $_tab$_nl")
+if ! is_hex "$_tok" 16; then
+  passthrough "no random token" "$@"
+fi
+_started=$(date +%s)
+if ! is_num "$_started" 11; then
+  passthrough "no clock" "$@"
+fi
+
+trap 'cleanup' EXIT
+trap 'cleanup; trap - EXIT; exit 129' HUP
+trap 'cleanup; trap - EXIT; exit 143' TERM
+if ! mkdir -m 700 "$_rt/L-$_tok" 2>/dev/null; then
+  passthrough "could not create the launch folder" "$@"
+fi
+_ld=$_rt/L-$_tok
+if ! own_dir "$_ld" || ! write_lj 0; then
+  cleanup
+  passthrough "could not set up the launch folder" "$@"
+fi
+
+AFK_COMPACT_LAUNCH=$_ld
+export AFK_COMPACT_LAUNCH
+# While claude runs, INT has a no-op handler (claude still gets the default action); from its
+# exit to the relaunch, a Ctrl+C sets _c_stop.
+trap ':' INT
+launch run "$@"
+_rc=$?
+_c_stop=
+trap '_c_stop=1' INT
+_n=0
+while decide "$_rc"; do
+  if ! countdown; then
+    refuse cancelled
+    exit 130
+  fi
+  trap ':' INT
+  _n=$((_n + 1))
+  write_lj "$_n"
+  (umask 077 && date +%s >>"$_ld/stamps")
+  _t0=$(date +%s)
+  walk run "$@"
+  _rc=$?
+  _c_stop=
+  trap '_c_stop=1' INT
+  if [ "$_rc" -ne 0 ] && [ $(($(date +%s) - _t0)) -lt 15 ]; then
+    say "Claude Code $_n_to did not start (exit $_rc). Your session is saved; start it the way you usually do with --resume $_n_sid."
+    last_refusal start-failed
+    exit "$_rc"
+  fi
+done
+exit "$_rc"

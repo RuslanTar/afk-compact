@@ -95,11 +95,26 @@ def render_manifest(text, brand):
     return out
 
 
+VERSION_RE = re.compile(r"^[0-9A-Za-z.+-]{1,32}$")
+
+
 def launch_env(name):
     """The env name the restart launcher exports its launch folder in (AFK_COMPACT_LAUNCH for
     afk-compact): the plugin name in upper case, `-` as `_`, then `_LAUNCH`. The plugin side
     reads the same name, so both come from here."""
     return name.upper().replace("-", "_") + "_LAUNCH"
+
+
+def render_claude_launcher(text, brand):
+    """src/claude-launcher.tmpl: the plugin name, its launch env name and the version."""
+    if not VERSION_RE.match(brand["version"]):
+        die("brand.json version {!r} cannot go into the launcher".format(brand["version"]))
+    out = render(text, brand["name"]).replace("{{launch_env}}", launch_env(brand["name"]))
+    out = out.replace("{{version}}", brand["version"])
+    if "{{" in out:
+        die("src/claude-launcher.tmpl has a placeholder tools/build does not fill: " +
+            out[out.index("{{"):out.index("{{") + 40].split("\n")[0])
+    return out
 
 
 def ts_header(src):
@@ -201,6 +216,10 @@ def plan(brand):
         out["plugin/skills/" + os.path.relpath(rel, "src/skills")] = (render(read(rel), name), PLAIN)
 
     out["plugin/{}/{}-store".format(LAUNCHER_DIR, name)] = (render(read("src/launcher.tmpl"), name), EXEC)
+    # The opt-in restart launcher (SESSION-RESTART §3): beside the helper launcher, never in a
+    # bin/ folder (a plugin's bin/ joins the Bash tool's PATH; the model must not start sessions).
+    out["plugin/{}/{}-claude".format(LAUNCHER_DIR, name)] = (
+        render_claude_launcher(read("src/claude-launcher.tmpl"), brand), EXEC)
 
     if os.path.exists(os.path.join(REPO, "src/README.md")):
         readme = render(read("src/README.md"), name)
