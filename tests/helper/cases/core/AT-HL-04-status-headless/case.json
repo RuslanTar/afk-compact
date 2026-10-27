@@ -1,33 +1,41 @@
 {
  "id": "AT-HL-04 (status, headless session)",
- "note": "Headless probe 2026-10-27: under claude -p or the Agent SDK, Claude Code rejects $.session.compact, so the mod logs one headless row (via session-start or compact-rejected) and neither nudges nor compacts. status then says automatic compaction needs an interactive session; a later session start row of the same session (an interactive load) clears the line.",
+ "note": "Headless probe 2026-10-27: under claude -p or the Agent SDK, Claude Code rejects $.session.compact, so the mod logs a headless row per session id (via session-start, compact-rejected or same-load) and neither nudges, arms a pre-idle turn nor compacts. status then says automatic compaction is not available here and the pre-idle turn is off; a later session start row of the same session (an interactive load) clears both.",
  "now": "2026-10-27T10:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
-  {"name": "no headless row: no line",
+  {"name": "no headless row: no line, the usual pre-idle line",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_lacks": ["^automatic compaction: "]}},
-  {"name": "a headless row after the session start: the line",
+   "expect": {"exit": 0, "stdout_has": ["^pre-idle handoff turn: auto "], "stdout_lacks": ["^automatic compaction: ", "headless session"]}},
+  {"name": "a headless row after the session start: the line, pre-idle off",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true},
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "session-start"}]}],
    "argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0,
-    "stdout_has": ["^automatic compaction: needs an interactive session; this one is headless \\(claude -p or the Agent SDK\\), so the plugin does not nudge or start compactions here; Claude Code's own automatic compaction still runs$"]}},
+    "stdout_has": ["^automatic compaction: not available here; Claude Code runs this session headless \\(claude -p, the Agent SDK, or an app or editor built on it\\), where it rejects a plugin's compaction call, so the plugin does not nudge or start compactions; Claude Code's own automatic compaction is not affected$",
+                   "^pre-idle handoff turn: off \\(headless session\\)$"],
+    "stdout_lacks": ["^pre-idle handoff turn: auto ", "55\\.5 min"]}},
   {"name": "found by a rejection, no session row: the line",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:01:00+03:00", "ev": "compact_rejected", "sid": "$SID", "actor": "main", "writer": "mod", "nonce": "1a2b3c4d", "attempt": 1, "error_class": "headless", "error": "not available in a headless (-p / SDK) session yet"},
      {"v": 1, "ts": "2026-10-27T10:01:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "compact-rejected"}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: needs an interactive session; "]}},
+   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^pre-idle handoff turn: off \\(headless session\\)$"]}},
   {"name": "a later interactive start of the same session: no line",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true},
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "session-start"},
      {"v": 1, "ts": "2026-10-27T10:04:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_lacks": ["^automatic compaction: "]}}
+   "expect": {"exit": 0, "stdout_has": ["^pre-idle handoff turn: auto "], "stdout_lacks": ["^automatic compaction: ", "headless session"]}},
+  {"name": "headless after a /clear (same-load), idle_handoff_turn off: the setting's line wins",
+   "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "same-load"}]}],
+   "options": {"idle_handoff_turn": "off"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^pre-idle handoff turn: off \\(idle_handoff_turn: off\\)$"]}}
  ]
 }

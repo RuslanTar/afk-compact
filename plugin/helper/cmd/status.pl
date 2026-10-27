@@ -14,8 +14,8 @@
 # `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
 # placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
 # U-06: a warning per pattern of the user's stopped at its time bound (lib/userre.pm).
-# 2026-10-27 (headless probe): `automatic compaction: needs an interactive session …` for a
-# headless load (`claude -p`, the Agent SDK), from the mod's `headless` row.
+# 2026-10-27 (headless probe): `automatic compaction: not available here …` and `pre-idle
+# handoff turn: off (headless session)` for a headless load, from the mod's `headless` row.
 use strict;
 use warnings;
 use utf8;
@@ -104,7 +104,8 @@ sub run {
                            rc::val('compact_target_tokens'), rc::val('compact_soft_max_tokens'), min_window());
     }
     push @out, 'triggers: off (triggers-off)' if grep { ($_->{ev} // '') eq 'triggers_off' } @$mod;
-    push @out, headless_lines($mod);
+    my $headless = is_headless($mod);
+    push @out, headless_lines($headless);
 
     # last 5 compactions
     my $rolls = _bytes_deep(rollup::rows($d));
@@ -147,7 +148,7 @@ sub run {
     push @out, $pol ? sprintf('policy: mods managed only %s · hooks managed only %s',
                               ($pol->{mods_managed_only} ? 'yes' : 'no'), ($pol->{hooks_managed_only} ? 'yes' : 'no'))
                     : 'policy: no mod row yet';
-    push @out, store_lines($opt->{cwd}, $d, $classic);
+    push @out, store_lines($opt->{cwd}, $d, $classic, $headless);
 
     my $last_row = (sort map { $_->{ts} // '' } @$classic)[-1];
     push @out, 'last hook row: ' . ($last_row // 'none');
@@ -176,7 +177,7 @@ sub smoke_lines {
 # The U-06 pattern warnings read this session's hook rows (classic), so without a session id
 # there are none to show.
 sub store_lines {
-    my ($cwd, $d, $classic) = @_;
+    my ($cwd, $d, $classic, $headless) = @_;
     my @out;
     for my $key (qw(handoff_root log_dir disposable_root)) {
         push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
@@ -187,7 +188,7 @@ sub store_lines {
     push @out, prod_lines();
     push @out, protected_lines();
     push @out, regex_lines($classic);
-    push @out, idle_lines(), settings_keys_line();
+    push @out, idle_lines($headless), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`. Without a
     # session id that outcome is not read, so `on` says so (CW-1 review 2)
@@ -343,11 +344,11 @@ sub min_window {
     return $a > $b ? $a : $b;
 }
 
-# 2026-10-27 (headless probe): the mod's `headless` row since this session's last `session`
-# start row: the load runs under `claude -p` or the Agent SDK, where Claude Code offers no plugin
-# compaction, so the mod neither nudges nor starts one. A later interactive load of the same
-# session (its own start row) clears the line.
-sub headless_lines {
+# 2026-10-27 (headless probe): true when the mod's `headless` row comes after this session's
+# last `session` start row: Claude Code runs the load headless (`claude -p`, the Agent SDK, or
+# an app or editor built on it) and rejects a plugin's compaction call there, so the mod neither
+# nudges nor starts one. A later interactive load of the same session (its own start row) ends it.
+sub is_headless {
     my ($mod) = @_;
     my ($start, $headless) = (-1, -1);
     for my $i (0 .. $#$mod) {
@@ -355,9 +356,18 @@ sub headless_lines {
         $start = $i if $ev eq 'session' && ($mod->[$i]{phase} // '') eq 'start';
         $headless = $i if $ev eq 'headless';
     }
-    return () unless $headless > $start;
-    return ('automatic compaction: needs an interactive session; this one is headless (claude -p or the Agent SDK), '
-            . "so the plugin does not nudge or start compactions here; Claude Code's own automatic compaction still runs");
+    return $headless > $start ? 1 : 0;
+}
+
+# The line for a headless load. Only what was seen live is said: Claude Code rejects the call
+# under `claude -p` and the SDK; an app or editor is named as a possible host, not as tested. The
+# plugin does not turn Claude Code's own automatic compaction on or off, whatever its setting.
+sub headless_lines {
+    my ($headless) = @_;
+    return () unless $headless;
+    return ('automatic compaction: not available here; Claude Code runs this session headless (claude -p, the Agent SDK, '
+            . "or an app or editor built on it), where it rejects a plugin's compaction call, so the plugin does not "
+            . "nudge or start compactions; Claude Code's own automatic compaction is not affected");
 }
 
 # The disabled-for-a-small-window sentence; never a negative number.
@@ -508,9 +518,12 @@ sub regex_lines {
 # only; the mod's own reading is the one that arms the timer.
 sub _json_false { my ($v) = @_; return jsonc::is_bool($v) && !$$v ? 1 : 0 }
 sub idle_lines {
+    my ($headless) = @_;
     my $r = rc::settings();
     my $mode = lc($r->{values}{idle_handoff_turn} // 'auto');
     return ('pre-idle handoff turn: off (idle_handoff_turn: off)') if $mode eq 'off';
+    # A headless load arms no pre-idle check or turn (the mod's idleKind gives `off`).
+    return ('pre-idle handoff turn: off (headless session)') if $headless;
     my $file = settings::config_dir() . '/settings.json';
     my $native = 'on';
     if (-e util::to_bytes($file)) {

@@ -589,7 +589,8 @@ sub _run {
             }
             next if $logged->{"compaction_unresolved:$nn"} || exists $copied->{"n:$nn"} || $post{$nn};
             # DP-29 (E-M-15): the mod closed this dispatch because a native compaction ran first
-            # (compacted {skip: native-ran}): an outcome, not an unresolved compaction
+            # (compacted {skip: native-ran}): an outcome, not an unresolved compaction; so is a
+            # call Claude Code rejected as headless (compact_rejected {error_class: headless})
             $native_ran //= _native_ran();
             next if $native_ran->{$nn};
             next if grep { ($_->{nonce} // '') eq $nn } @{ $st->{rolls_l} };
@@ -680,13 +681,17 @@ sub _idle_settled {
     return ($main_end && ($final || $now - $bd->{e} >= $SETTLE_S)) ? 1 : 0;
 }
 
-# Nonces the mod closed with compacted {skip: native-ran} (DP-29), read from the mod stream
-# (the same rows postcompact::_mod_closed reads; only this skip class closes an unresolved check).
+# Nonces the mod closed with compacted {skip: native-ran} (DP-29), or whose call Claude Code
+# rejected as headless (compact_rejected {error_class: headless}, 2026-10-27 headless probe),
+# read from the mod stream (the same rows postcompact::_mod_closed reads; only these close an
+# unresolved check: another rejection stays unresolved).
 sub _native_ran {
     my %c;
-    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => ['compacted']) }) {
-        next unless ($row->{ev} // '') eq 'compacted' && defined $row->{nonce} && !ref $row->{nonce};
-        $c{ $row->{nonce} } = 1 if ($row->{skip} // '') eq 'native-ran';
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compacted compact_rejected)]) }) {
+        my $ev = $row->{ev} // '';
+        next unless defined $row->{nonce} && !ref $row->{nonce};
+        $c{ $row->{nonce} } = 1 if ($ev eq 'compacted' && ($row->{skip} // '') eq 'native-ran')
+                                || ($ev eq 'compact_rejected' && ($row->{error_class} // '') eq 'headless');
     }
     return \%c;
 }

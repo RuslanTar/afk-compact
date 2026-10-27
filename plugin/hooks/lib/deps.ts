@@ -251,12 +251,15 @@ export type LoadState = {
    */
   agentTurns: Set<string>
   /**
-   * A headless session (`claude -p`, the Agent SDK): `session.start` said no person is at the
-   * prompt, or `$.session.compact` rejected as not available there. Claude Code offers no plugin
-   * compaction in such a session, so the plugin neither nudges nor starts one (Claude Code's own
-   * automatic compaction still runs and is shaped as usual).
+   * A headless load (`claude -p`, the Agent SDK, or an app or editor built on it):
+   * `session.start` said no person is at the prompt, or `$.session.compact` rejected as not
+   * available there. Claude Code rejects a plugin's compaction call in such a session, so the
+   * plugin neither nudges nor starts one; the plugin leaves Claude Code's own compactions alone
+   * and shapes the ones that run, as usual.
    */
   headless: boolean
+  /** The session id the last `headless` row was logged for (one row per session id, so after a `/clear`). */
+  headlessSid: string | undefined
 }
 
 export type PendingResume = {
@@ -355,6 +358,7 @@ export function newState(loadId: string): LoadState {
     compactedAt: undefined,
     agentTurns: new Set(),
     headless: false,
+    headlessSid: undefined,
   }
 }
 

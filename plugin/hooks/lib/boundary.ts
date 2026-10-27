@@ -78,7 +78,7 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   }
   const nudged = s.lastCycle
   s.lastCycle = null
-  // A headless session: no handoff turn, no plugin compaction (Claude Code offers none there).
+  // A headless session: no handoff turn, no plugin compaction (Claude Code rejects the call there).
   if (s.headless) return
   const eff = await effective(d, sid)
   if (eff.disabled) return
@@ -224,7 +224,8 @@ async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void
 /**
  * `$.session.compact` rejected: `compact_rejected` with Claude Code's own error text (no session
  * content; the export drops it) and its class. A headless rejection (`claude -p`, the Agent SDK)
- * also marks the load headless: no nudge or plugin compaction follows in it.
+ * also marks the load headless: no nudge or plugin compaction follows in it. Reconcile and the
+ * watcher's A-17 take such a row as the dispatch's outcome: not unresolved, not `no-after`.
  */
 export async function compactRejected(d: Deps, sid: string, nonce: string, err: unknown): Promise<void> {
   const error = rejectText(err)

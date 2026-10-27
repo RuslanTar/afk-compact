@@ -10,7 +10,7 @@ import { clearHalt, loadHalt } from './cont'
 import { onHandoffTurnStart } from './handoff-turn'
 import { handoffTurnClose } from './helper'
 import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
-import { ensureIdent, isoLocal, log } from './log'
+import { ensureIdent, isoLocal, log, markHeadless } from './log'
 import { logOutcome } from './resume'
 import { showNotice } from './notice'
 
@@ -63,7 +63,7 @@ export async function onSessionStart(d: Deps, interactive?: boolean): Promise<vo
     phase: 'start', source: null, reason: null, mod_loaded: true, previous_session_id: null, lineage_reason: null,
     pid_lstart: d.state.ident?.pid_lstart ?? null,
   })
-  if (d.state.headless) await log(d, sid, 'headless', { via: 'session-start' })
+  if (d.state.headless) await markHeadless(d, sid, 'session-start')
 }
 
 /**
@@ -87,6 +87,8 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   const human = !ours && isHuman(s.turnOrigin)
   await ensureIdent(d, await d.sessionId())
   const sid = await prepare(d)
+  // A new session id in a headless load (after a `/clear`): its own `headless` row.
+  if (s.headless && s.headlessSid !== sid) await markHeadless(d, sid, 'same-load')
   s.turnSeq++
   s.turnId = turnId
   s.nudgedThisTurn = false

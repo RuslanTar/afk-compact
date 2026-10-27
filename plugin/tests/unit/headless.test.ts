@@ -1,5 +1,5 @@
 // U tests through the kit: a headless session (`claude -p`, the Agent SDK), where Claude Code
-// offers no plugin compaction (`$.session.compact` rejects there). The plugin then neither
+// rejects a plugin's compaction call (`$.session.compact`). The plugin then neither
 // nudges, opens a handoff or idle turn, nor compacts on its own; Claude Code's own compactions
 // are still shaped. Live probe 2026-10-27: the nudge at 315K, then `compact_rejected` with the
 // error text discarded.
@@ -8,7 +8,7 @@ import type { Deps, RunResult } from '../../hooks/lib/deps'
 import { launcherPath, newState, rejectClass, rejectText } from '../../hooks/lib/deps'
 import { boundary, compactRejected } from '../../hooks/lib/boundary'
 import { nudgeText } from '../../hooks/lib/nudge'
-import { World, markerNonce, raiseCompact } from './harness.test'
+import { SID_A, SID_B, World, markerNonce, raiseCompact } from './harness.test'
 
 const HEADLESS_ERR = 'session.compact is not available in a headless (-p / SDK) session yet'
 const MIN = 60000
@@ -88,4 +88,38 @@ test('AT-HL-03: a headless rejection logs its class and text and one headless ro
   await compactRejected(other.d, 'sid-2', '1a2b3c4d', new Error('a turn is running'))
   expect(other.rows.map(r => [r.ev, r.error_class, r.error])).toEqual([['compact_rejected', 'turn-running', 'a turn is running']])
   expect(other.d.state.headless).toBe(false)
+})
+
+test('AT-HL-05: a /clear in a headless load: the new session id gets its own headless row (same-load) at its first turn; still no nudge or plugin compaction', async ($, on) => {
+  const w = new World().install(on)
+  w.interactive = false
+  await w.start($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  expect(w.rowsOf('headless').map(r => [r.sid, r.via])).toEqual([[SID_A, 'session-start']])
+  await $.session.end({ reason: 'clear', sessionId: SID_A, resume: { id: SID_A } } as never)
+  w.sid = SID_B
+  await w.userTurn($)
+  w.tokens = 610000
+  expect((await w.tool($)).context).toBeUndefined()
+  await w.turnEnd($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  await w.advance(60 * MIN)
+  expect(w.rowsOf('headless').map(r => [r.sid, r.via])).toEqual([[SID_A, 'session-start'], [SID_B, 'same-load']])
+  expect([w.rowsOf('nudge').length, w.compacts.length, w.submits.length]).toEqual([0, 0, 0])
+})
+
+test('AT-HL-05: an interactive load logs no headless row at its turns', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  await $.session.end({ reason: 'clear', sessionId: SID_A, resume: { id: SID_A } } as never)
+  w.sid = SID_B
+  await w.userTurn($)
+  await w.turnEnd($)
+  expect(w.rowsOf('headless').length).toBe(0)
 })
