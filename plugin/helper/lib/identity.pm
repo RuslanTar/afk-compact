@@ -139,13 +139,17 @@ sub _never_claude {
 our $EXE_PROBES = 3;
 
 # _by_exe([[pid, comm]...]) -> the first pid whose executable is the Claude Code binary, or undef.
+# A hop whose executable cannot be read (lsof failed or timed out) ends the scan: a process past
+# it (a background worker's pty host, which runs the binary too) is never taken in its place.
 sub _by_exe {
     my ($hops) = @_;
     my $n = 0;
     for my $h (@$hops) {
         next if _never_claude($h->[1]);
         last if ++$n > $EXE_PROBES;
-        return $h->[0] if _is_claude(_exe($h->[0]));
+        my $x = _exe($h->[0]);
+        return undef unless defined $x;
+        return $h->[0] if _is_claude($x);
     }
     return undef;
 }
@@ -156,7 +160,8 @@ sub _by_exe {
 # worker runs under a name that hides the binary, so the walk passed it and took its supervisor
 # (`claude daemon`), whose pid every background session then shared. So the hops below the
 # anchor are checked by their executable first, nearest first; a foreground session's helper,
-# whose parent is the anchor, reads none.
+# whose parent is the anchor, reads none, and with no anchor (a helper run from a terminal) none
+# is read either.
 sub _walk {
     my ($pid) = @_;
     my $env = (defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /^[1-9][0-9]*$/) ? 0 + $ENV{CLAUDE_PID} : 0;
@@ -172,11 +177,10 @@ sub _walk {
         push @below, [$pid, $comm];
         $pid = $ppid;
     }
-    my $w = _by_exe(\@below);
-    return defined $w ? (0 + $w, 1) : (undef, 0);
+    return (undef, 0);
 }
 
-my $CACHED;
+our $CACHED;
 # claude_pid() -> {pid, lstart, found}
 sub claude_pid {
     return $CACHED if $CACHED;

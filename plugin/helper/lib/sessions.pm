@@ -7,7 +7,8 @@ package sessions;
 #     unborn branch; owner xxxxxxxx-08, the start HEAD that `risk` compares build files with; additive)
 #   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.ended-<sid8>.json {session_id, reason, ts}
 #     (reason `gone`: written when the same session starts again in another process and the
-#     earlier one ended with no SessionEnd, close_gone)
+#     earlier one ended with no SessionEnd, close_gone; its ts is that later start, not the end,
+#     which is unknown)
 #   <root>/.sessions/<sid>.lineage.json {previous_session_id, lineage_reason}
 use strict;
 use warnings;

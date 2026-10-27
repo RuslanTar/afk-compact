@@ -1,6 +1,6 @@
 {
  "id": "BG-PID-01-claude-pid-walk",
- "note": "Probe 2026-10-27 (P4, P5, P12): in a background session the helper's parent is the worker, whose command hides the Claude Code binary, so the walk passed it and the pty host and took the supervisor (`claude daemon`), whose pid every background session then shared. identity::_walk over recorded process tables: the worker is taken by its executable (one read); a foreground session, a hook under sh and a CLAUDE_PID match read no executable; a nearer non-claude hop does not win; with no claude process the walk finds nothing. Worker command names are stand-ins (the probe did not record them); the supervisor and pty host commands are as the probe saw them",
+ "note": "Probe 2026-10-27 (P4, P5, P12): in a background session the helper's parent is the worker, whose command hides the Claude Code binary, so the walk passed it and the pty host and took the supervisor (`claude daemon`), whose pid every background session then shared. identity::claude_pid (the public entry; a chain's start pid stands for the runner's parent) over recorded process tables: the worker is taken by its executable (one read); a foreground session, a hook under sh and a CLAUDE_PID match read no executable; a nearer non-claude hop does not win; with no claude process the walk finds nothing and reads no executable; a worker whose executable cannot be read leaves the anchor, never the pty host past it. Worker command names are stand-ins (the probe did not record them); the supervisor and pty host commands are as the probe saw them",
  "steps": [
   {
    "lib": "claude_pid_walk",
@@ -15,6 +15,18 @@
        "70303": { "ppid": 1, "comm": "/Users/u/.local/bin/claude", "exe": "/Users/u/.local/share/claude/versions/2.1.311" }
       },
       "want": 72446,
+      "found": true,
+      "exe_calls": 1
+     },
+     {
+      "id": "background worker whose executable cannot be read (lsof failed): the anchor, not the pty host",
+      "start": 72446,
+      "procs": {
+       "72446": { "ppid": 72207, "comm": "claude-bg-worker" },
+       "72207": { "ppid": 70303, "comm": "claude bg-pty-host", "exe": "/Users/u/.local/share/claude/versions/2.1.311" },
+       "70303": { "ppid": 1, "comm": "/Users/u/.local/bin/claude", "exe": "/Users/u/.local/share/claude/versions/2.1.311" }
+      },
+      "want": 70303,
       "found": true,
       "exe_calls": 1
      },
@@ -74,7 +86,7 @@
       },
       "want": null,
       "found": false,
-      "exe_calls": 1
+      "exe_calls": 0
      }
     ]
    }

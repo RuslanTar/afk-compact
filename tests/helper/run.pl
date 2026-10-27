@@ -1348,7 +1348,8 @@ sub invoke {
 #   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
 #   proc_stat_lines   {file}: identity::_proc_stat over recorded Linux /proc/<pid>/stat lines (R-4)
 #   claude_pid_walk   {chains: [{id, start, env?, procs {pid: {ppid, comm, exe?}}, want, found,
-#                     exe_calls?}]}: identity::_walk over a recorded process table (no ps, no lsof)
+#                     exe_calls?}]}: identity::claude_pid over a recorded process table, `start`
+#                     standing for the runner's parent (no ps, no lsof)
 #   linux_start_time  {image | images, probe, mb, steps}: identity::start_time on Linux in Docker
 #                     (R-4; a subprocess: the case "needs" ["docker-image:<image>"]; images: the
 #                     first one held here, none: a note and not run)
@@ -2778,16 +2779,27 @@ sub builtin {
         # BG-PID: the walk from the helper's parent to the Claude Code process, over a process
         # table given in the case ({pid: {ppid, comm, exe}}; exe is what /proc/<pid>/exe or lsof
         # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read.
+        # The public entry, identity::claude_pid, starts at getppid(): the chain's `start` pid is
+        # renamed to it throughout, and start times are stubbed.
         return ('no chains') unless ref $a->{chains} eq 'ARRAY' && @{ $a->{chains} };
         no warnings qw(redefine once);
+        my $real = getppid();
         for my $c (@{ $a->{chains} }) {
-            my %t = %{ $c->{procs} || {} };
+            my $ren = sub { my ($x) = @_; return (defined $x && $x eq "$c->{start}") ? $real : $x };
+            my %t = map { $ren->($_) => { %{ $c->{procs}{$_} }, ppid => $ren->($c->{procs}{$_}{ppid}) } } keys %{ $c->{procs} || {} };
             my $calls = 0;
             local *identity::_parent_and_comm = sub { my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
             local *identity::_exe = sub { $calls++; my $p = $t{ $_[0] } or return undef; return $p->{exe} };
-            local $ENV{CLAUDE_PID} = defined $c->{env} ? $c->{env} : '';
-            my ($pid, $found) = identity::_walk($c->{start});
-            push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($c->{want} // 'null') if ($pid // 'null') ne ($c->{want} // 'null');
+            local *identity::start_time = sub { return 'stub' };
+            local $identity::CACHED;
+            local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
+            local $ENV{STORE_TEST_CLAUDE_PID};
+            delete $ENV{STORE_TEST_CLAUDE_PID};
+            my $r = identity::claude_pid();
+            my ($pid, $found) = ($r->{pid}, $r->{found});
+            $pid = undef if !$found && $pid == $real;
+            my $want = $ren->($c->{want});
+            push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($want // 'null') if ($pid // 'null') ne ($want // 'null');
             push @e, "$c->{id}: found $found, want $c->{found}" if $found != ($c->{found} ? 1 : 0);
             push @e, "$c->{id}: $calls executable reads, want $c->{exe_calls}" if defined $c->{exe_calls} && $calls != $c->{exe_calls};
         }
