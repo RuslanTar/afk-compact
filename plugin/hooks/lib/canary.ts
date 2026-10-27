@@ -3,20 +3,35 @@ import type { Deps } from './deps'
 import { escalate, log } from './log'
 import { sha8 } from './normalize'
 
-/** `$.store` key: the Claude Code version this session last ran (C1, per session). */
-export function sessionVersionKey(sid: string): string {
-  return `cc_version:${sid}`
+/** `$.store` key: the versions any session on this machine ran, oldest first (C1). */
+export const SEEN_KEY = 'cc_versions_seen'
+/** `$.store` key: `{ [sid]: version }`, the version each recent session last ran (C1, per session). */
+export const BY_SID_KEY = 'cc_version_by_sid'
+/** Bounds on the two keys (the store is one JSON file of at most 4 MiB). */
+export const SEEN_MAX = 32
+export const BY_SID_MAX = 256
+
+function strings(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+}
+
+function bySid(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return out
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (typeof x === 'string') out[k] = x
+  return out
 }
 
 /**
- * C1 at `session.start`, in two parts.
- * - The row: `version_change {from, to}` only when this session itself ran another version before
- *   (`$.store` `cc_version:<sid>`): a background session the supervisor moved to a new version, a
- *   `claude --resume` or `claude respawn` on another binary. A new session never logs another
- *   session's version (probe 2026-10-27: P5's fresh session logged P12's version as a downgrade).
- * - The smoke check (machine-wide, `$.store` `lastVersion`/`smokeDue`, mirrored to version.json):
- *   a version other than the last one any session saw, or a dev build not yet due, sets smokeDue.
- * Either one escalates once per load.
+ * C1 at `session.start`: one `version_change {from, to}` row, `smokeDue`, the version.json mirror
+ * and one escalation, when either holds.
+ * - Machine: this version is new to the machine. It differs from `lastVersion` and no session here
+ *   ran it before (`cc_versions_seen`), or it is a dev build not yet due. `from` is `lastVersion`.
+ *   A session on a version another session already ran logs nothing (probe 2026-10-27 P5: a fresh
+ *   session on 2.1.310 after P12's 2.1.311 logged a downgrade and moved smokeDue back).
+ * - Session: this session itself ran another version before (`cc_version_by_sid`): a background
+ *   session the supervisor moved, a `claude --resume` or `claude respawn` on another binary.
+ *   `from` is that version. Only the row and the escalation: the smoke check stays machine-wide.
  */
 export async function versionCanary(d: Deps, sid: string): Promise<void> {
   let v: { version: string; base?: string }
@@ -26,11 +41,6 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
     return
   }
   const to = v.version
-  const own = await d.storeGet(sessionVersionKey(sid))
-  const ownFrom = typeof own === 'string' ? own : undefined
-  if (ownFrom !== to) await d.storeSet(sessionVersionKey(sid), to)
-  const moved = ownFrom !== undefined && ownFrom !== to
-  if (moved) await log(d, sid, 'version_change', { from: ownFrom, to })
   const isDev = to.endsWith('-dev') || (v.base ?? '').endsWith('-dev')
   const p = await d.paths()
   const mirrorPath = p ? `${p.watch}/version.json` : undefined
@@ -49,7 +59,22 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
   const from = typeof stored === 'string' ? stored : typeof mirror.lastVersion === 'string' ? mirror.lastVersion : undefined
   const dueStored = await d.storeGet('smokeDue')
   const due = typeof dueStored === 'string' ? dueStored : typeof mirror.smokeDue === 'string' ? mirror.smokeDue : null
-  const trips = (from !== undefined && from !== to) || (isDev && due !== to)
+  // Before the first write of the set (or with the store lost), the machine has seen lastVersion.
+  const seenStored = strings(await d.storeGet(SEEN_KEY))
+  const seen = seenStored.length > 0 ? seenStored : from !== undefined ? [from] : []
+  const trips = (from !== undefined && from !== to && !seen.includes(to)) || (isDev && due !== to)
+  if (!seen.includes(to) || seenStored.length === 0) await d.storeSet(SEEN_KEY, [...seen.filter(x => x !== to), to].slice(-SEEN_MAX))
+  const sids = bySid(await d.storeGet(BY_SID_KEY))
+  const ownFrom = Object.prototype.hasOwnProperty.call(sids, sid) ? sids[sid] : undefined
+  if (ownFrom !== to) {
+    delete sids[sid]
+    sids[sid] = to
+    const keys = Object.keys(sids)
+    for (const k of keys.slice(0, Math.max(0, keys.length - BY_SID_MAX))) delete sids[k]
+    await d.storeSet(BY_SID_KEY, sids)
+  }
+  const moved = ownFrom !== undefined && ownFrom !== to
+  if (trips || moved) await log(d, sid, 'version_change', { from: (moved ? ownFrom : from) ?? null, to })
   if (trips) {
     await d.storeSet('lastVersion', to)
     await d.storeSet('smokeDue', to)
@@ -58,7 +83,7 @@ export async function versionCanary(d: Deps, sid: string): Promise<void> {
     await d.storeSet('lastVersion', to)
     if (mirrorPath) await d.write(mirrorPath, JSON.stringify({ lastVersion: to, smokeDue: due }) + '\n')
   }
-  if (moved || trips) escalate(d, 'version-change')
+  if (trips || moved) escalate(d, 'version-change')
 }
 
 /** The four `session.compact` triggers this build knows (C7). */
