@@ -173,7 +173,9 @@ sub consent_dir {
     my $h = account_home();
     return defined $h ? "$h/.claude" : undef;
 }
-sub config_dir_foreign {
+# config_dir_other() -> 1 when the settings folder is not the consent folder itself (by its path,
+# real path or device and inode). The owner-local trial keeps this rule (trial::owner_skip).
+sub config_dir_other {
     my $cd = config_dir();
     my $home = consent_dir();
     return 1 unless defined $home;
@@ -183,6 +185,15 @@ sub config_dir_foreign {
     my @a = stat $cd;
     my @b = stat $home;
     return 0 if @a && @b && $a[0] == $b[0] && $a[1] == $b[1];
+    return 1;
+}
+
+# config_dir_foreign() -> 1 when the consent keys take their safe values: another settings folder
+# whose settings.json is not the consent folder's own (owner 2026-10-27 20:38).
+sub config_dir_foreign {
+    return 0 unless config_dir_other();
+    my $cd = config_dir();
+    my $home = consent_dir();
     return same_settings_file("$cd/settings.json", "$home/settings.json") ? 0 : 1;
 }
 

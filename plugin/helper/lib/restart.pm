@@ -23,6 +23,9 @@ our $PROTO = 1;
 our $FG_ROUTE = 0;
 sub fg_route { return 1 if $FG_ROUTE; return util::test_mode() && ($ENV{STORE_TEST_RESTART_FG} // '') eq '1' ? 1 : 0 }
 
+# os_name() -> $^O; in test mode STORE_TEST_OS stands in for it (AT-RS-25: MSWin32).
+sub os_name { return util::test_mode() && ($ENV{STORE_TEST_OS} // '') ne '' ? $ENV{STORE_TEST_OS} : $^O }
+
 # G3: the launcher must be an ancestor of this claude within this many processes.
 our $ANCESTOR_MAX = 8;
 # G3a: the launcher's own cap (contract §5: 3 relaunches in 3600 s).
@@ -70,7 +73,8 @@ my %C_FINAL = (cancelled => 1, failed => 1, reported => 1);
 sub is_sid    { my ($v) = @_; return defined $v && !ref $v && $v =~ /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/ ? 1 : 0 }
 sub is_hex16  { my ($v) = @_; return defined $v && !ref $v && $v =~ /\A[0-9a-f]{16}\z/ ? 1 : 0 }
 sub is_ver    { my ($v) = @_; return defined $v && !ref $v && length($v) <= 32 && $v =~ /\A[0-9]+\.[0-9]+\.[0-9]+\z/ ? 1 : 0 }
-sub is_model  { my ($v) = @_; return defined $v && !ref $v && ($v eq '' || $v =~ m{\A[A-Za-z0-9._:/\[\]-]{1,100}\z}) ? 1 : 0 }
+# a model never starts with `-` (the launcher's is_model: it could read as a flag)
+sub is_model  { my ($v) = @_; return defined $v && !ref $v && ($v eq '' || $v =~ m{\A(?!-)[A-Za-z0-9._:/\[\]-]{1,100}\z}) ? 1 : 0 }
 sub is_effort { my ($v) = @_; return defined $v && !ref $v && ($v eq '' || $EFFORT{$v}) ? 1 : 0 }
 sub is_mode   { my ($v) = @_; return defined $v && !ref $v && $MODE{$v} ? 1 : 0 }
 sub is_short  { my ($v) = @_; return defined $v && !ref $v && $v =~ /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/ ? 1 : 0 }
@@ -121,6 +125,9 @@ sub private_dir {
 }
 
 sub carry_path  { return "$_[0]/restart.json" }
+# The lock of the carry note's read-modify-writes (set, respawn, respawn-cancel and the detached
+# respawn's own check), so a cancel and the respawn's armed -> sent never overwrite each other.
+sub lock_path   { return "$_[0]/restart.lock" }
 sub mode_path   { return "$_[0]/restart-mode.json" }
 sub result_path { return "$_[0]/restart-respawn.json" }
 sub out_path    { return "$_[0]/restart-respawn.out" }
@@ -286,7 +293,20 @@ sub job {
     my $st = _json_file("$dir/state.json", 4 * 1024 * 1024) // return { why => 'job-unknown' };
     return { why => 'job-unknown' } unless defined $st->{sessionId} && !ref $st->{sessionId} && $st->{sessionId} eq $sid;
     return { why => 'bypass-left' } if defined $mode && $mode ne 'bypassPermissions' && bypass_flags($st->{respawnFlags});
-    return { ok => 1, short => $short };
+    return { ok => 1, short => $short, flags_mode => flags_mode($st->{respawnFlags}) };
+}
+
+# flags_mode(respawnFlags) -> the last --permission-mode value (`=` form too), or undef. Claude
+# Code patches it as the mode changes (B7), so it is the mode the respawn would start in.
+sub flags_mode {
+    my ($f) = @_;
+    my @a = ref $f eq 'ARRAY' ? grep { defined && !ref } @$f : (defined $f && !ref $f) ? split(/\s+/, $f) : ();
+    my $m;
+    for my $i (0 .. $#a) {
+        if ($a[$i] =~ /\A--permission-mode=(.*)\z/s) { $m = $1 }
+        elsif ($a[$i] eq '--permission-mode' && defined $a[$i + 1]) { $m = $a[$i + 1] }
+    }
+    return $m;
 }
 
 sub bypass_flags {
@@ -366,7 +386,8 @@ sub gate {
              job_short => undef, token => undef, types => []);
     my $no = sub { $r{why} = $_[0]; return \%r };
     return $no->('off') unless ($a{setting} // 'off') =~ /\A(?:on|shadow)\z/;
-    return $no->('unsupported-os') unless $^O eq 'darwin' || $^O eq 'linux';
+    my $os = os_name();
+    return $no->('unsupported-os') unless $os eq 'darwin' || $os eq 'linux';
     my $d = $a{sid_dir} // return $no->('no-watch');
     my ($lr, $jr);
     if (($a{route} // '') eq 'bg') {
@@ -473,15 +494,19 @@ sub write_c {
 
 # arm(%a) -> {ok, why}: binds the launch folder to this session (fg: `<launch>/sid` once,
 # O_EXCL; another session's id refuses `launcher-invalid:other-session`), then writes the launch
-# note (fg) and the carry note, both `armed` (§3.4 step 1, §2.2 step 1). a: sid, sid_dir,
+# note (fg) and the carry note, both `armed` (§3.4 step 1, §2.2 step 1). The setting read again
+# here must be `on` (`off` otherwise: a `shadow` arms nothing), and the terminal route needs its
+# ship gate (`fg-not-shipped`), a second check behind the gate's. a: sid, sid_dir, setting,
 # route, nonce, from, to, continue, mode, effort, model, launch, job_short, load_id, now (ms).
 sub arm {
     my (%a) = @_;
     my $d = $a{sid_dir} // return { ok => 0, why => 'no-watch' };
+    return { ok => 0, why => 'off' } unless ($a{setting} // 'off') eq 'on';
     return { ok => 0, why => 'note-pattern' }
         unless is_sid($a{sid}) && is_hex16($a{nonce}) && is_ver($a{from}) && is_ver($a{to}) && is_mode($a{mode})
                && is_effort($a{effort} // '') && is_model($a{model} // '') && is_ms($a{now});
     my $route = ($a{route} // '') eq 'bg' ? 'bg' : 'fg';
+    return { ok => 0, why => 'fg-not-shipped' } if $route eq 'fg' && !fg_route();
     my ($token, $dir);
     if ($route eq 'fg') {
         my $lr = launcher($a{launch}, $a{sid});
@@ -510,10 +535,18 @@ sub arm {
 # sid_dir, nonce, state, now (ms), exiting_at (ms, optional), launch (fg).
 sub set_state {
     my (%a) = @_;
-    my ($l, $c) = ('absent', 'absent');
     my $state = $a{state} // '';
+    return { ok => 0, l => 'absent', c => 'absent', why => 'usage' } unless $C_STATE{$state} && is_hex16($a{nonce}) && is_ms($a{now});
+    my $d = $a{sid_dir};
+    return _set_state(%a) unless defined $d;
+    return lock::with(lock_path($d), { sid => $a{sid}, actor => 'restart' }, sub { _set_state(%a) }, wait_ms => 1000);
+}
+
+sub _set_state {
+    my (%a) = @_;
+    my ($l, $c) = ('absent', 'absent');
+    my $state = $a{state};
     my $now = $a{now};
-    return { ok => 0, l => $l, c => $c, why => 'usage' } unless $C_STATE{$state} && is_hex16($a{nonce}) && is_ms($now);
     my $ex = is_ms($a{exiting_at}) ? 0 + $a{exiting_at} : undef;
     if (defined $a{launch} && $a{launch} ne '' && $L_STATE{$state}) {
         (my $dir = $a{launch}) =~ s{(?<=.)/+\z}{};
@@ -652,26 +685,39 @@ sub code_of {
 # respawn(%a) -> {ok, pid, why}: starts `claude respawn <short>` detached, the way /restart starts
 # it (R5): the helper forks; that child forks the grandchild and exits at once, so the grandchild
 # is no descendant of the worker; the grandchild calls setsid (its own session and process
-# group, no terminal), takes stdin from /dev/null, drops every R5 name from its environment, runs
-# the client as its own child (stdout and stderr captured, at most $OUT_MAX bytes) and waits.
-# Then it writes restart-respawn.out (0600), restart-respawn.json {nonce, rc, code, at} and, on a
-# non-zero rc, one `refresh_failed {route: bg, why: respawn-failed, code}` row. The reply holds
-# the grandchild's pid, which is also its process group; restart-respawn.pid keeps it with its
-# start time and the nonce for respawn-cancel. a: sid, sid_dir, short, nonce, to, wait_ms (test
-# mode only: wait that long for the result file before replying).
+# group, no terminal), takes stdin from /dev/null, writes restart-respawn.pid (its pid, which is
+# also its process group, with its start time and the nonce, for respawn-cancel) before anything
+# else, and only then answers the helper. Right before the client runs it reads the carry note
+# once more and stops unless the note is still `sent` with its nonce (a cancel, or a failure the
+# mod settled, since the call). Then it drops every R5 name from its environment, runs the client
+# as its own child (stdout and stderr captured, at most $OUT_MAX bytes) and waits; it writes
+# restart-respawn.out (0600), restart-respawn.json {nonce, rc, code, at} and, on a non-zero rc,
+# one `refresh_failed {route: bg, why: respawn-failed, code}` row. Before any of it, the job's
+# state.json is read again (G3b): this session's, and no bypass in its respawnFlags that the mode
+# they hold now (the last --permission-mode, which Claude Code keeps current, B7; else the
+# gate's fresh mode) has left (`bypass-left`). a: sid, sid_dir, short, nonce, to, job_dir, mode,
+# wait_ms (test mode only: wait that long for the result file before replying).
 sub respawn {
     my (%a) = @_;
     my $d = $a{sid_dir} // return { ok => 0, why => 'no-watch' };
-    return { ok => 0, why => 'usage' } unless is_short($a{short}) && is_hex16($a{nonce});
+    return { ok => 0, why => 'usage' } unless is_short($a{short}) && is_hex16($a{nonce}) && is_mode($a{mode});
     my $claude = claude_bin() // return { ok => 0, why => 'no-claude' };
+    my $jr = job($a{job_dir}, $a{sid}, undef);
+    return { ok => 0, why => $jr->{why} } unless $jr->{ok} && $jr->{short} eq $a{short};
+    my $fm = $jr->{flags_mode};
+    $jr = job($a{job_dir}, $a{sid}, is_mode($fm) ? $fm : $a{mode});
+    return { ok => 0, why => $jr->{why} } unless $jr->{ok};
     # §2.2 step 3: the carry note becomes `sent` in the call that starts the respawn
-    my $c = read_c($d);
-    return { ok => 0, why => 'no-note' } unless $c && ($c->{nonce} // '') eq $a{nonce} && ($c->{route} // '') eq 'bg'
-                                                && ($c->{state} // '') eq 'armed';
-    $c->{state} = 'sent';
-    $c->{at} = now_ms();
-    write_c($d, $c);
-    unlink result_path($d), out_path($d);
+    my $sent = lock::with(lock_path($d), { sid => $a{sid}, actor => 'restart' }, sub {
+        my $c = read_c($d);
+        return 0 unless $c && ($c->{nonce} // '') eq $a{nonce} && ($c->{route} // '') eq 'bg' && ($c->{state} // '') eq 'armed';
+        $c->{state} = 'sent';
+        $c->{at} = now_ms();
+        write_c($d, $c);
+        return 1;
+    }, wait_ms => 1000);
+    return { ok => 0, why => 'no-note' } unless $sent;
+    unlink result_path($d), out_path($d), pid_path($d);
     pipe(my $r, my $w) or return { ok => 0, why => 'pipe' };
     my $kid = fork();
     return { ok => 0, why => 'fork' } unless defined $kid;
@@ -683,6 +729,14 @@ sub respawn {
         open(STDIN, '<', '/dev/null');
         open(STDOUT, '>', '/dev/null');
         open(STDERR, '>', '/dev/null');
+        # §2.2 step 4: the pid record first, so a cancel from here on finds this process group
+        # (the helper above may be stopped by its time bound at any moment)
+        my $rec = eval {
+            util::write_atomic(pid_path($d), jsonc::encode_bytes(jsonc::obj(nonce => $a{nonce}, pid => 0 + $$,
+                                             lstart => identity::start_time($$))) . "\n", 0600);
+            1;
+        };
+        POSIX::_exit(1) unless $rec;
         syswrite($w, "$$\n");
         close $w;
         _grandchild(%a, claude => $claude, sid_dir => $d);
@@ -694,8 +748,6 @@ sub respawn {
     waitpid($kid, 0);
     my ($g) = ($line // '') =~ /\A([0-9]+)/;
     return { ok => 0, why => 'fork' } unless $g;
-    util::write_atomic(pid_path($d), jsonc::encode_bytes(jsonc::obj(nonce => $a{nonce}, pid => 0 + $g,
-                                     lstart => identity::start_time($g))) . "\n", 0600);
     if (util::test_mode() && is_ms($a{wait_ms})) {
         my $t0 = util::clock_ms();
         util::sleep_ms(50) while !-e result_path($d) && util::clock_ms() - $t0 < $a{wait_ms};
@@ -706,10 +758,22 @@ sub respawn {
 sub _grandchild {
     my (%a) = @_;
     $SIG{HUP} = 'IGNORE';
+    my $d = $a{sid_dir};
+    # Test seam: a pause between the pid record and the note check (a cancel in that gap).
+    util::sleep_ms(0 + $ENV{STORE_TEST_RESPAWN_PAUSE_MS}) if util::test_mode() && is_ms($ENV{STORE_TEST_RESPAWN_PAUSE_MS});
+    my $go = eval {
+        lock::with(lock_path($d), { sid => $a{sid}, actor => 'restart' }, sub {
+            my $c = read_c($d);
+            return ($c && ($c->{nonce} // '') eq $a{nonce} && ($c->{state} // '') eq 'sent') ? 1 : 0;
+        }, wait_ms => 1000, log => 0);
+    };
+    if (!$go) {
+        unlink pid_path($d);
+        return;
+    }
     delete $ENV{$_} for @ST, 'CLAUDE_JOB_DIR';
     delete $ENV{$_} for grep { /\ACLAUDE_BG_/ } keys %ENV;
     my ($rc, $out) = _capture([$a{claude}, 'respawn', $a{short}], $RESPAWN_MS);
-    my $d = $a{sid_dir};
     my $code = code_of($out, $rc);
     eval { util::write_atomic(out_path($d), $out, 0600) };
     eval {
@@ -758,18 +822,34 @@ sub _capture {
 # respawn_result(sid_dir) -> {nonce, rc, code, at} of the detached helper, or undef
 sub respawn_result { my ($d) = @_; return defined $d ? _json_file(result_path($d), 4096) : undef }
 
-# respawn_cancel(sid_dir, nonce) -> {ok, killed}: TERM to the grandchild's process group when its
-# record holds this nonce and that process still runs with the start time recorded (§2.2 step 4).
+# respawn_cancel(sid_dir, nonce, state) -> {ok, killed, note}: first the carry note: this nonce's
+# background note still `armed` or `sent` becomes `state` (`cancelled`, or `failed` for the mod's
+# failures), so a detached respawn that has not reached its own check of the note never runs the
+# client (`note` 1 when written); then TERM to the grandchild's process group when its record
+# holds this nonce and that process still runs with the start time recorded (§2.2 step 4).
 sub respawn_cancel {
-    my ($d, $nonce) = @_;
-    my $p = defined $d ? _json_file(pid_path($d), 4096) : undef;
-    return { ok => 1, killed => 0 } unless $p && ($p->{nonce} // '') eq $nonce && ($p->{pid} // '') =~ /\A[1-9][0-9]*\z/;
+    my ($d, $nonce, $state) = @_;
+    $state = 'cancelled' unless defined $state && $state eq 'failed';
+    return { ok => 1, killed => 0, note => 0 } unless defined $d && is_hex16($nonce);
+    my $note = eval {
+        lock::with(lock_path($d), { sid => rc::sid(), actor => 'restart' }, sub {
+            my $c = read_c($d);
+            return 0 unless $c && ($c->{nonce} // '') eq $nonce && ($c->{route} // '') eq 'bg'
+                            && ($c->{state} // '') =~ /\A(?:armed|sent)\z/;
+            $c->{state} = $state;
+            $c->{at} = now_ms();
+            write_c($d, $c);
+            return 1;
+        }, wait_ms => 1000);
+    } ? 1 : 0;
+    my $p = _json_file(pid_path($d), 4096);
+    return { ok => 1, killed => 0, note => $note } unless $p && ($p->{nonce} // '') eq $nonce && ($p->{pid} // '') =~ /\A[1-9][0-9]*\z/;
     my $pid = $p->{pid};
-    return { ok => 1, killed => 0 } unless identity::alive($pid, $p->{lstart});
+    return { ok => 1, killed => 0, note => $note } unless identity::alive($pid, $p->{lstart});
     my $n = kill('TERM', -$pid);
     $n += kill('TERM', $pid);
     unlink pid_path($d);
-    return { ok => 1, killed => $n ? 1 : 0 };
+    return { ok => 1, killed => $n ? 1 : 0, note => $note };
 }
 
 # ---------------------------------------------------------------- after-kill scan (§2.3)

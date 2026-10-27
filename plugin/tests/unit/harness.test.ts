@@ -150,6 +150,8 @@ export class World {
   restartRespawn: Record<string, unknown> = { ok: true, pid: 4321 }
   /** Awaited inside the bottom of `command.run` for `exit` (a `/exit` the test ends itself). */
   exitGate: Promise<void> | undefined
+  /** `$.fs.write` refuses a path this returns true for (a full disk, a folder gone). */
+  writeDeny: ((path: string) => boolean) | undefined
 
   constructor(init: Partial<Pick<World, 'sid' | 'tokens' | 'window' | 'version'>> = {}) {
     Object.assign(this, init)
@@ -191,6 +193,7 @@ export class World {
       return { value: undefined }
     })
     on('fs.write', (_$, e) => {
+      if (this.writeDeny?.(e.path)) return { deny: 'not written' }
       this.writes.push(e.path)
       this.files.set(e.path, e.text)
       return { value: undefined }
@@ -551,7 +554,15 @@ export class World {
     }
     if (sub === 'claim') return { claimed: false, why: 'none', route: null, from: null, to: null, continue: false, nonce: null, at: null, refused: [], ...this.restartClaimReply }
     if (sub === 'respawn') return this.restartRespawn
-    if (sub === 'respawn-cancel') return { ok: true, killed: true }
+    if (sub === 'respawn-cancel') {
+      // The real one settles this nonce's background note still armed or sent first, then kills.
+      const path = `${WATCH}/${sid}/restart.json`
+      const t = this.files.get(path)
+      const c = t === undefined ? undefined : (JSON.parse(t) as Record<string, unknown>)
+      const note = c !== undefined && c.nonce === flag('--nonce') && c.route === 'bg' && (c.state === 'armed' || c.state === 'sent')
+      if (note && c) this.files.set(path, JSON.stringify({ ...c, state: flag('--state') === 'failed' ? 'failed' : 'cancelled' }) + '\n')
+      return { ok: true, killed: true, note }
+    }
     return { ok: false }
   }
 

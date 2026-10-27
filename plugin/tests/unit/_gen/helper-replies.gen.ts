@@ -1193,7 +1193,7 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "{\"ok\":true,\"killed\":false}\n"
+   "{\"ok\":true,\"killed\":false,\"note\":false}\n"
   ]
  }
 ]

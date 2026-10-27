@@ -9,7 +9,9 @@ import { continueLine } from '../../hooks/lib/cont'
 import { LAUNCH_ENV } from '../../hooks/lib/launch.gen'
 import { DRIFT_TTL_MS, EXIT_WINDOW_MS, RESPAWN_WATCH_MS, RESTART_GRACE_MS, launchNote, parseVersion, vcmp } from '../../hooks/lib/restart'
 import type { RestartRun } from '../../hooks/lib/restart'
-import { SID_A, WATCH, World, raiseCompact } from './harness.test'
+import type { PendingResume } from '../../hooks/lib/deps'
+import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
+import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
 
 const LAUNCH = '/rt/x-501/L-0123456789abcdef'
 const JOB = '/jobs/job1'
@@ -139,6 +141,95 @@ for (const c of LIVE) {
     expect(w.submits.length).toBe(1)
   })
 }
+
+test('AT-RS-03 (G1): the setting lowered to shadow since the load: the gate\'s reading wins (refresh_would, nothing armed)', async ($, on) => {
+  const w = await session($, on)
+  // ident said `on` at the load; the gate reads the settings file again and finds `shadow`.
+  w.restartGate = { setting: 'shadow' }
+  await nudgedTurn($, w)
+  expect(acts(w)).toEqual(['gate'])
+  expect(w.rowsOf('refresh_would')).toEqual([expect.objectContaining({ route: 'fg', from: '2.1.311', to: '2.1.312' })])
+  expect([w.rowsOf('refresh_start').length, w.uiLogs.length, w.submits.length]).toEqual([0, 0, 1])
+  await w.advance(RESTART_GRACE_MS + EXIT_WINDOW_MS)
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
+})
+
+test('AT-RS-03 (G11): the resume block not on disk: block-not-saved before the helper gate, the continue as usual', async ($, on) => {
+  const w = await session($, on)
+  w.writeDeny = p => p.endsWith('/resume-pending.json')
+  await nudgedTurn($, w)
+  expect(whys(w, 'refresh_skipped')).toEqual(['block-not-saved'])
+  expect(acts(w)).toEqual([])
+  expect(w.submits.length).toBe(1)
+})
+
+test('AT-RS-03 (G3a, mod part): a model that starts with - is note-pattern before the gate (the launcher would refuse it)', async ($, on) => {
+  const w = await session($, on)
+  w.model = '-x'
+  await nudgedTurn($, w)
+  expect(whys(w, 'refresh_skipped')).toEqual(['note-pattern'])
+  expect(acts(w)).toEqual([])
+})
+
+/** Claude Code's own idle compaction 26 min after a turn that ended with `answer` (the D2b moment). */
+async function idleMoment($: Engine, w: World, answer = 'Done with that step.', reason: 'answer' | 'aborted' = 'answer', kind = 'composer'): Promise<void> {
+  await w.userTurn($, 'next step please', kind)
+  w.tokens = 300000
+  await w.turnEnd($, answer, reason)
+  await w.advance(26 * 60000)
+  await raiseCompact(w.engine as never, { trigger: 'auto' })
+}
+
+const G6: { why: string; name: string; before?: (w: World) => void; answer?: string; reason?: 'aborted'; kind?: string }[] = [
+  { why: 'aborted', name: 'the last turn aborted', reason: 'aborted' },
+  { why: 'asks-user', name: 'the last turn asks the user', answer: 'Should I run the migration now?' },
+  // A task's turn (a person's prompt would clear halt, IC-1 D6).
+  { why: 'halted', name: 'halt mode on', kind: 'task-notification', before: w => { w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' })) } },
+  { why: 'headless', name: 'a headless load (G2)', before: w => { w.interactive = false } },
+]
+for (const c of G6) {
+  test(`AT-RS-03 (in memory): ${c.name} skips ${c.why} before the helper gate`, async ($, on) => {
+    const w = new World({ version: { version: '2.1.311' } }).install(on)
+    w.restartSetting = 'on'
+    w.claudeVersion = '2.1.312 (Claude Code)'
+    w.env = { [LAUNCH_ENV]: LAUNCH }
+    c.before?.(w)
+    await w.start($)
+    await w.advance(61000)
+    await idleMoment($, w, c.answer, c.reason, c.kind)
+    expect(whys(w, 'refresh_skipped')).toEqual([c.why])
+    expect(acts(w)).toEqual([])
+  })
+}
+
+test('AT-RS-03 (G6 busy, at the grace): a compaction running when the grace ends: busy, cancelled, the continue once', async ($, on) => {
+  const w = await session($, on)
+  await nudgedTurn($, w)
+  w.compactGate = new Promise(() => undefined)
+  raiseCompact(w.engine as never, { trigger: 'manual' }).catch(() => undefined)
+  await w.settle()
+  await w.advance(RESTART_GRACE_MS)
+  expect(whys(w, 'refresh_skipped')).toEqual(['busy'])
+  expect(states(w)).toEqual(['cancelled'])
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
+})
+
+for (const why of ['mode-changed', 'mode-unknown', 'bypass-not-available']) {
+  test(`AT-RS-19 (mod part): the gate's ${why}: one refresh_skipped row, nothing armed, the continue as usual`, async ($, on) => {
+    const w = await session($, on)
+    w.restartGate = { ok: false, why }
+    await nudgedTurn($, w)
+    expect([whys(w, 'refresh_skipped'), w.restartCalls('arm').length, w.submits.length]).toEqual([[why], 0, 1])
+  })
+}
+
+test('AT-RS-19 (mod part): the note\'s mode and effort are the gate\'s fresh values', async ($, on) => {
+  const w = await session($, on)
+  w.restartGate = { mode: 'plan', effort: 'max' }
+  await nudgedTurn($, w)
+  const arm = w.restartCalls('arm')[0]
+  expect([w.flag(arm, '--mode'), w.flag(arm, '--effort')]).toEqual(['plan', 'max'])
+})
 
 test('AT-RS-03 (G8 present): a keystroke in the last minute skips present', async ($, on) => {
   const w = await session($, on)
@@ -307,6 +398,69 @@ test('AT-RS-08: an end that began stands the watchdog down', async ($, on) => {
   expect(w.submits.length).toBe(0)
 })
 
+/** The fake helper's `restart` replies with the `set` reply of `state` changed by `patch`. */
+function setReplyFor(w: World, state: string, patch: Record<string, unknown> | 'reject'): void {
+  w.replies.restart = args => {
+    const r = w.restartReply(args, SID_A)
+    const i = args.indexOf('--state')
+    if (args[0] !== 'set' || args[i + 1] !== state) return { exitCode: 0, stdout: JSON.stringify(r) + '\n' }
+    return patch === 'reject' ? 'reject' : { exitCode: 0, stdout: JSON.stringify({ ...r, ...patch }) + '\n' }
+  }
+}
+
+test('AT-RS-07: the helper wrote no go (the launch note gone, another nonce\'s, ended): nothing written over it, one refresh_failed row', async ($, on) => {
+  const w = await session($, on)
+  w.exitGate = new Promise(() => undefined)
+  await nudgedTurn($, w)
+  await w.advance(RESTART_GRACE_MS)
+  setReplyFor(w, 'go', { l: 'mismatch' })
+  await $.session.end(EXIT as never)
+  expect(w.files.has(`${LAUNCH}/restart.note`)).toBe(false)
+  expect(w.rowsOf('refresh_failed')).toEqual([expect.objectContaining({ route: 'fg', why: 'helper-failed', code: 'launch-mismatch' })])
+})
+
+test('AT-RS-07: the go call fails: the mod writes the launch note itself; at - floor(exiting_at / 1000) within the launcher\'s 0 to 5', async ($, on) => {
+  const w = await session($, on)
+  w.exitGate = new Promise(() => undefined)
+  await nudgedTurn($, w)
+  await w.advance(RESTART_GRACE_MS)
+  await w.advance(EXIT_WINDOW_MS - 1)
+  setReplyFor(w, 'go', 'reject')
+  await $.session.end(EXIT as never)
+  const note = w.files.get(`${LAUNCH}/restart.note`) ?? ''
+  const v = Object.fromEntries(note.trim().split('\n').map(l => l.split('=') as [string, string]))
+  expect(v.state).toBe('go')
+  const gap = Number(v.at) - Math.floor(Number(v.exiting_at) / 1000)
+  expect(gap >= 0 && gap <= 5).toBe(true)
+  expect(w.rowsOf('refresh_failed')).toEqual([])
+})
+
+test('AT-RS-12: after a restart the block arrives once, at prompt.context of the continue\'s turn; the continue is the bare line', async ($, on) => {
+  const w = new World({ version: { version: '2.1.312' } })
+  const p: PendingResume = {
+    sid: SID_A, nonce: 'ab0c0001', block: 'STORED BLOCK', builtAt: T0 - 20000, measuredAt: T0 - 20000, resumePref: 'prompt.context', turnSeq: 3,
+    args: { nonce: 'ab0c0001', midturn: false, nonok: false, savedCopy: null, prodAllow: false },
+    remeasure: 'Git: main @ 1a1a1a1, 0 modified, 0 untracked', outcome: { nudged: true, continued: false, halt: false },
+  }
+  // As the classic SessionStart(resume) leaves it: the old load's record, armed.
+  w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, JSON.stringify(pendingRecord(p, 'f0e1d2c3')) + '\n')
+  w.install(on)
+  w.restartSetting = 'on'
+  w.env = { [LAUNCH_ENV]: LAUNCH }
+  w.files.set(CARRY, JSON.stringify({ v: 1, route: 'fg', state: 'go', sid: SID_A }) + '\n')
+  w.restartClaimReply = { claimed: true, why: null, route: 'fg', from: '2.1.311', to: '2.1.312', continue: true, at: 1 }
+  await w.start($)
+  await w.advance(2000)
+  expect(w.submits).toEqual([continueLine(w.name)])
+  await w.turnStart($, w.submits[0])
+  const ctx = await $.prompt.context({ blocks: [] })
+  expect(ctx.blocks.filter(b => b.name === `${w.name}-resume`).length).toBe(1)
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
+  const again = await $.prompt.context({ blocks: [] })
+  expect(again.blocks.length).toBe(0)
+  expect(w.rowsOf('mod_outcome').length).toBe(1)
+})
+
 test('AT-RS-09: $.command.run rejects: exit-refused, cancelled, the continue', async ($, on) => {
   const w = await session($, on)
   await nudgedTurn($, w)
@@ -367,6 +521,96 @@ test('AT-RS-13: bg: a prompt during the wait: respawn-cancel before anything els
   expect(next).toEqual(['respawn-cancel', 'set'])
   expect(states(w)).toEqual(['cancelled'])
   expect(w.submits.length).toBe(0)
+})
+
+test('AT-RS-13: bg: the respawn call fails or runs out of time: respawn-cancel first (the note failed), then respawn-refused and the continue once', async ($, on) => {
+  const w = await session($, on, { route: 'bg' })
+  w.replies.restart = args => (args[0] === 'respawn' ? 'reject' : { exitCode: 0, stdout: JSON.stringify(w.restartReply(args, SID_A)) + '\n' })
+  await nudgedTurn($, w)
+  await w.advance(RESTART_GRACE_MS)
+  expect(acts(w).slice(-3)).toEqual(['respawn', 'respawn-cancel', 'set'])
+  expect(w.flag(w.restartCalls('respawn-cancel')[0], '--state')).toBe('failed')
+  expect(carry(w)).toMatchObject({ state: 'failed' })
+  expect(w.rowsOf('refresh_failed')).toEqual([expect.objectContaining({ route: 'bg', why: 'respawn-refused', code: 'other' })])
+  expect(w.submits.length).toBe(1)
+  await w.advance(RESPAWN_WATCH_MS)
+  expect([w.rowsOf('refresh_failed').length, w.submits.length]).toEqual([1, 1])
+})
+
+test('AT-RS-13: bg: the respawn passes the job folder and the fresh mode (the helper reads respawnFlags again); its bypass-left is a skip, not a retry', async ($, on) => {
+  const w = await session($, on, { route: 'bg' })
+  w.restartRespawn = { ok: false, why: 'bypass-left' }
+  await nudgedTurn($, w)
+  await w.advance(RESTART_GRACE_MS)
+  const r = w.restartCalls('respawn')[0]
+  expect([w.flag(r, '--job-dir'), w.flag(r, '--mode')]).toEqual([JOB, 'acceptEdits'])
+  expect(acts(w).slice(-3)).toEqual(['respawn', 'respawn-cancel', 'set'])
+  expect(whys(w, 'refresh_skipped')).toEqual(['bypass-left'])
+  expect(w.rowsOf('refresh_failed')).toEqual([])
+  expect(w.storeGet(`restart_tried:${SID_A}`)).toMatchObject({ targets: { '2.1.312': { n: 1, why: 'bypass-left' } } })
+  expect(w.submits.length).toBe(1)
+})
+
+test('AT-RS-13: bg: a prompt while the respawn call runs: respawn-cancel at once and again when the call returns; no watchdog, no continue', async ($, on) => {
+  const w = await session($, on, { route: 'bg' })
+  await nudgedTurn($, w)
+  let fired = false
+  w.atHelper = async (sub, args) => {
+    if (sub !== 'restart' || args[0] !== 'respawn' || fired) return
+    fired = true
+    await w.userTurn($, 'wait, one more thing')
+  }
+  await w.advance(RESTART_GRACE_MS)
+  expect(fired).toBe(true)
+  // Recorded in the order the calls reached the helper: the prompt's cancel (the note first,
+  // then the kill) while the respawn call was on its way, then the cancel once it returned.
+  expect(acts(w).slice(-4)).toEqual(['respawn-cancel', 'set', 'respawn', 'respawn-cancel'])
+  expect(w.restartCalls('respawn-cancel').map(c => w.flag(c, '--state'))).toEqual(['cancelled', 'cancelled'])
+  expect(whys(w, 'refresh_skipped')).toEqual(['busy'])
+  await w.advance(RESPAWN_WATCH_MS)
+  expect([w.rowsOf('refresh_failed').length, w.submits.length, w.restartCalls('respawn-cancel').length]).toEqual([0, 0, 2])
+})
+
+test('AT-RS-13: bg: a prompt while a failed respawn is being cancelled: the person\'s turn wins (busy); no refresh_failed, no continue', async ($, on) => {
+  const w = await session($, on, { route: 'bg' })
+  w.replies.restart = args => (args[0] === 'respawn' ? 'reject' : { exitCode: 0, stdout: JSON.stringify(w.restartReply(args, SID_A)) + '\n' })
+  await nudgedTurn($, w)
+  let fired = false
+  w.atHelper = async (sub, args) => {
+    if (sub !== 'restart' || args[0] !== 'respawn-cancel' || fired) return
+    fired = true
+    await w.userTurn($, 'hold on')
+  }
+  await w.advance(RESTART_GRACE_MS)
+  expect(fired).toBe(true)
+  expect(whys(w, 'refresh_skipped')).toEqual(['busy'])
+  expect([w.rowsOf('refresh_failed').length, w.submits.length]).toEqual([0, 0])
+})
+
+test('AT-RS-15: an idle restart that fails runs no continue, even with a nudge left from a compaction that failed', async ($, on) => {
+  const w = await session($, on)
+  w.compactMode = 'reject'
+  await nudgedTurn($, w)
+  expect(w.submits.length).toBe(0)
+  w.compactMode = 'ok'
+  await w.advance(26 * 60000)
+  await raiseCompact(w.engine as never, { trigger: 'auto' })
+  expect(w.flag(w.restartCalls('arm')[0], '--continue')).toBe('0')
+  w.draft = 'x'
+  await w.advance(RESTART_GRACE_MS)
+  expect(whys(w, 'refresh_skipped')).toEqual(['draft'])
+  expect(w.submits.length).toBe(0)
+})
+
+test('AT-RS-05: the launch note not written at exiting (gone, another nonce\'s, ended): no /exit, refresh_failed helper-failed, the continue', async ($, on) => {
+  const w = await session($, on)
+  await nudgedTurn($, w)
+  setReplyFor(w, 'exiting', { l: 'absent' })
+  await w.advance(RESTART_GRACE_MS)
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
+  expect(w.rowsOf('refresh_failed')).toEqual([expect.objectContaining({ route: 'fg', why: 'helper-failed', code: 'launch-absent' })])
+  expect(states(w)).toEqual(['exiting', 'cancelled'])
+  expect(w.submits.length).toBe(1)
 })
 
 test('AT-RS-14 (mod part): bg: a client attached in this load: attached', async ($, on) => {
@@ -512,7 +756,7 @@ test('AT-RS-18: refresh rows are content-free: no path, no model string, no argv
 
 test('the fallback launch note is the launcher\'s protocol 1 form: 12 keys, at in seconds, exiting_at in ms', () => {
   const run: RestartRun = {
-    sid: SID_A, route: 'fg', nonce: '0123456789abcdef', from: '2.1.311', to: '2.1.312', cont: true, armedAt: 1, phase: 'exiting',
+    sid: SID_A, route: 'fg', nonce: '0123456789abcdef', from: '2.1.311', to: '2.1.312', cont: true, contDue: true, armedAt: 1, phase: 'exiting',
     token: 'fedcba9876543210', mode: 'default', effort: 'high', model: 'opus', exitingAt: 1792580712345,
   }
   expect(launchNote(run, 'go', 1792580714999)).toBe([

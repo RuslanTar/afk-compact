@@ -286,7 +286,9 @@ sub restart_lines {
     my $brand = ctx::brand();
     my $set = rc::val('restart_on_update') // 'off';
     my $src = rc::settings()->{source}{restart_on_update} // 'default';
-    if ($^O ne 'darwin' && $^O ne 'linux') {
+    my $os = restart::os_name();
+    my $fg_off = 0;
+    if ($os ne 'darwin' && $os ne 'linux') {
         push @l, 'restart on update: not available on Windows yet';
     } elsif ($set eq 'off') {
         push @l, 'restart on update: off' . ($src eq 'default' ? ' (default) · set restart_on_update in ~/.claude/settings.json to turn it on' : '');
@@ -300,15 +302,17 @@ sub restart_lines {
             my $launch = $ENV{ restart::launch_env_name() };
             my $lr = (defined $launch && $launch ne '' && defined $sid) ? restart::launcher($launch, $sid) : undef;
             if ($lr && $lr->{ok}) {
+                # Before RS-P1 the route is off (fg-not-shipped): no `→ restarts` clause follows.
+                $fg_off = restart::fg_route() ? 0 : 1;
                 $route = "launcher $brand-claude (proto $restart::PROTO, pid $lr->{pid})"
-                         . (restart::fg_route() ? '' : ' · terminal restarts are not enabled in this version yet');
+                         . ($fg_off ? ' · terminal restarts are not enabled in this version yet' : '');
             } else {
                 my $path = util::text(ctx::root()) . "/scripts/$brand-claude";
                 push @l, 'restart on update: on · this session was not started through the launcher; foreground sessions need it:',
                          qq(  install: "$path" --install), "  then start sessions with: $brand-claude [your claude arguments]";
             }
         }
-        push @l, "restart on update: on · $route · " . _drift_text() if defined $route;
+        push @l, "restart on update: on · $route · " . _drift_text($fg_off) if defined $route;
     }
     my ($last) = reverse grep { ($_->{ev} // '') =~ /\Arefresh_(done|skipped|failed|would|start)\z/ } @$mod;
     if ($last) {
@@ -338,15 +342,18 @@ sub restart_lines {
     return @l;
 }
 
-# _drift_text() -> `Claude Code X running, Y installed → restarts at the next compaction`, or
-# `up to date (X)`, or `installed version unknown`.
+# _drift_text(off) -> `Claude Code X running, Y installed → restarts at the next compaction` (with
+# off, a route not enabled yet: no arrow clause), or `up to date (X)`, or `installed version
+# unknown`.
 sub _drift_text {
+    my ($off) = @_;
     my $run = rc::exec_version() // rc::cc_version();
     my $bin = restart::claude_bin();
     my $r = defined $bin ? util::run([$bin, '--version'], timeout_ms => 5000) : { exit => -1, out => '' };
     my ($inst) = ($r->{exit} == 0 ? $r->{out} : '') =~ /\A\s*([0-9]+\.[0-9]+\.[0-9]+)(?:\s|\z)/;
     return 'installed version unknown' unless defined $inst && restart::is_ver($run // '');
-    return restart::vcmp($inst, $run) > 0 ? "Claude Code $run running, $inst installed → restarts at the next compaction" : "up to date ($run)";
+    return "up to date ($run)" unless restart::vcmp($inst, $run) > 0;
+    return "Claude Code $run running, $inst installed" . ($off ? '' : ' → restarts at the next compaction');
 }
 
 # ---------------------------------------------------------------- watcher (W-BETA A)

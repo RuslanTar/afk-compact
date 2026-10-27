@@ -5,15 +5,16 @@
 #       -> {ok, why, setting, route, mode, effort, job_short, token, types}
 #   restart arm --sid S --route fg|bg --nonce N --from V --to V --continue 0|1 --mode X
 #               [--effort E] [--model M] [--launch DIR | --job-dir DIR] [--load-id L] [--now-ms MS]
-#       -> {ok, why, token}
+#       -> {ok, why, token}  (the setting read again: not `on` refuses `off`; fg without the
+#          RS-P1 ship gate refuses `fg-not-shipped`)
 #   restart set --sid S --nonce N --state X [--exiting-at MS] [--launch DIR] [--now-ms MS]
 #       -> {ok, l, c}
 #   restart claim --sid S --load-id L [--launch DIR] [--bg] [--now-ms MS]
 #       -> {claimed, why, route, from, to, continue, nonce, at, refused}
-#   restart respawn --sid S --short J --nonce N --to V [--wait-ms MS (test mode)]
+#   restart respawn --sid S --short J --nonce N --to V --job-dir DIR --mode X [--wait-ms MS (test mode)]
 #       -> {ok, pid, why}
-#   restart respawn-cancel --sid S --nonce N
-#       -> {ok, killed}
+#   restart respawn-cancel --sid S --nonce N [--state cancelled|failed]
+#       -> {ok, killed, note}
 # Paths come from the mod's literal env reads (the launch folder, the job folder) and are
 # checked here; replies and rows carry none of them.
 use strict;
@@ -46,7 +47,8 @@ sub run {
                         types => $r->{types});
     } elsif ($sub eq 'arm') {
         my $job = _str($opt->{'job-dir'});
-        my $r = restart::arm(sid => $sid, sid_dir => $d, route => $route, nonce => $opt->{nonce}, from => $opt->{from},
+        my $r = restart::arm(sid => $sid, sid_dir => $d, setting => rc::val('restart_on_update'), route => $route,
+                             nonce => $opt->{nonce}, from => $opt->{from},
                              to => $opt->{to}, continue => (($opt->{continue} // '0') eq '1'), mode => $opt->{mode},
                              effort => $opt->{effort} // '', model => $opt->{model} // '', launch => _str($opt->{launch}),
                              job_short => (defined $job ? util::basename($job =~ s{(?<=.)/+\z}{}r) : undef),
@@ -67,11 +69,12 @@ sub run {
         # from the grandchild (reparented, in its own session) would find nothing.
         rc::claude();
         my $r = restart::respawn(sid => $sid, sid_dir => $d, short => $opt->{short}, nonce => $opt->{nonce},
-                                 to => (restart::is_ver($opt->{to}) ? $opt->{to} : undef), wait_ms => $opt->{'wait-ms'});
+                                 to => (restart::is_ver($opt->{to}) ? $opt->{to} : undef), job_dir => _str($opt->{'job-dir'}),
+                                 mode => $opt->{mode}, wait_ms => $opt->{'wait-ms'});
         $o = jsonc::obj(ok => jsonc::bool($r->{ok}), pid => $r->{pid}, why => $r->{why});
     } else {
-        my $r = restart::respawn_cancel($d, $opt->{nonce} // '');
-        $o = jsonc::obj(ok => jsonc::bool($r->{ok}), killed => jsonc::bool($r->{killed}));
+        my $r = restart::respawn_cancel($d, $opt->{nonce} // '', $opt->{state});
+        $o = jsonc::obj(ok => jsonc::bool($r->{ok}), killed => jsonc::bool($r->{killed}), note => jsonc::bool($r->{note}));
     }
     args::out(jsonc::encode($o));
     return 0;

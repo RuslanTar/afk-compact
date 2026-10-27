@@ -12,14 +12,15 @@
 #   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N (+ "kill_signal", default KILL),
 #   "expect": {...}}
 # Setup actions: write (text|json|parts|bytes|lines; mode; mtime_ago_s), copy, mkdir, symlink (+ to),
+#   hardlink (+ to: a second name of that file), rename (+ to: a file moved over another),
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
 #   out: a PATH without git), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
 #   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
 #   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
-#   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), plus every
-#   variable a step captured.
+#   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), $LAUNCH_ENV (the restart
+#   launcher's env name; an env name may hold it too), plus every variable a step captured.
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
 #   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
 #                            not the system temp folder (the publish lint treats paths
@@ -637,6 +638,9 @@ sub run_case {
     # writes (ctx::store_cmd, from the real path of main.pl; the temp folder may be a link).
     $V{STORE} = "$V{PLUGIN}/$LAUNCHER_DIR/$BRAND-store";
     $V{STORE} = Cwd::abs_path($V{STORE}) // $V{STORE};
+    # the restart launcher's env name, as tools/build's launch_env(): the name in upper case,
+    # `-` as `_`, then `_LAUNCH` (usable as an env name: "env": {"$LAUNCH_ENV": ...})
+    $V{LAUNCH_ENV} = do { (my $n = uc $BRAND) =~ s/-/_/g; "${n}_LAUNCH" };
     # the staged manifest's version (the backstop cursor of the cross-session finish keys on it)
     $V{PLUGIN_VERSION} = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) }; ref $m eq 'HASH' ? $m->{version} // '0.0.0' : '0.0.0' };
     my %cenv = %{ $case->{env} || {} };
@@ -864,7 +868,7 @@ sub make_repo {
 
 sub is_setup_action {
     my ($s) = @_;
-    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink stub bin_mirror repo dispatch transcript run git bigfile age
+    return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink hardlink rename stub bin_mirror repo dispatch transcript run git bigfile age
                                                tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha append);
 }
 
@@ -1118,6 +1122,18 @@ sub setup {
         symlink($s->{to}, $s->{symlink}) or die "symlink $s->{symlink}: $!\n";
         return;
     }
+    if (exists $s->{hardlink}) {
+        # {"hardlink": path, "to": existing file}: path becomes a second name of that file
+        util::mkdir_p(util::dirname($s->{hardlink}));
+        link($s->{to}, $s->{hardlink}) or die "hardlink $s->{hardlink}: $!\n";
+        return;
+    }
+    if (exists $s->{rename}) {
+        # {"rename": path, "to": path}: the file moved over `to` (a new inode under that name)
+        util::mkdir_p(util::dirname($s->{to}));
+        rename($s->{rename}, $s->{to}) or die "rename $s->{rename}: $!\n";
+        return;
+    }
     if (exists $s->{stub}) {
         my $dir = $s->{dir} // "$V->{TMP}/bin";
         write_text("$dir/$s->{stub}", "#!/bin/sh\n" . ($s->{script} // 'exit 0') . "\n", '0755');
@@ -1250,8 +1266,10 @@ sub child_env {
     $e{STORE_TEST_NOW} = $now if defined $now;
     my %ce = (%{ $case->{env} || {} }, %{ $st->{env} || {} });
     for my $k (keys %ce) {
-        if (!defined $ce{$k}) { delete $e{$k}; next }
-        $e{$k} = subst($ce{$k}, $V);
+        # a name may be a placeholder too ($LAUNCH_ENV)
+        my $n = subst($k, $V);
+        if (!defined $ce{$k}) { delete $e{$n}; next }
+        $e{$n} = subst($ce{$k}, $V);
     }
     # a fixed-offset zone the host has no tz database file for: its exact POSIX form
     $e{TZ} = host_zone($e{TZ}) if defined $e{TZ};

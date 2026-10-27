@@ -147,7 +147,9 @@ sub dir_refused {
 # account home, or a handoff root / log folder other than the pinned ones (lab cells, §4.3).
 sub owner_skip {
     my ($cfg) = @_;
-    return 'config-dir' if settings::config_dir_foreign();
+    # The folder itself, as before the same-settings-file rule of the consent keys (that rule is
+    # theirs; whether the trial follows it is the owner's call).
+    return 'config-dir' if settings::config_dir_other();
     my $acct = settings::consent_dir();
     return 'home' unless defined $acct;
     my $h = _real(util::home());

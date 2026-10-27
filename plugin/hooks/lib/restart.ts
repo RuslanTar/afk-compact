@@ -31,7 +31,14 @@ export type RestartRun = {
   nonce: string
   from: string
   to: string
+  /** The note's `continue`: the new load submits the continue (§5.3). */
   cont: boolean
+  /**
+   * The moment's own path runs autoContinue (a compaction at a turn end, not an idle one): a
+   * failure before the process ends runs it once, as if no restart had been tried (§4.4). An
+   * idle restart (D2b) never does.
+   */
+  contDue: boolean
   armedAt: number
   /** grace: the 5 s notice; exiting: both notes `exiting` and our /exit queued; sent: the respawn started. */
   phase: 'grace' | 'exiting' | 'sent' | 'done'
@@ -74,8 +81,11 @@ export const RESTART_PRESENT_MS = 60000
 /** The helper's gate call (§4.1: one call, 1.5 s). */
 export const GATE_MS = 1500
 
-/** §3.5: the launcher's patterns for the note values the mod supplies. */
-export const MODEL_RE = /^[A-Za-z0-9._:/[\]-]{1,100}$/
+/**
+ * §3.5, the launcher's file contract §4: the launcher's patterns for the note values the mod
+ * supplies. A model never starts with `-` (it could read as a flag).
+ */
+export const MODEL_RE = /^(?!-)[A-Za-z0-9._:/[\]-]{1,100}$/
 const VERSION_RE = /^[0-9]+\.[0-9]+\.[0-9]+$/
 
 /** `x.y.z` from `claude --version` output (`2.1.311 (Claude Code)`), or undefined (a dev build, other text). */
@@ -180,6 +190,9 @@ async function liveWhy(d: Deps, sid: string, route: Route, moment: boolean): Pro
   if (route === 'bg' && (others || s.attached > 0)) return 'attached'
   if (others || s.restartBlocks.has('remote')) return 'remote'
   for (const b of ['session-rules', 'session-dirs', 'worktree']) if (s.restartBlocks.has(b)) return b
+  // G11: the resume block of this compaction is on disk (resume-pending.json), or none is
+  // pending: a session end keeps only a persisted block, so the new process would lose it.
+  if (s.pending && s.pending.sid === sid && s.pending.persisted !== true) return 'block-not-saved'
   if (s.ending || (await d.sessionId()) !== sid) return 'busy'
   return undefined
 }
@@ -207,14 +220,26 @@ async function installed(d: Deps): Promise<string | null> {
   return s.drift.installed
 }
 
-type Gate = { ok: boolean; why: string | null; route: Route; mode: string | null; effort: string | null; job_short: string | null; token: string | null; types: string[] }
+type Gate = {
+  ok: boolean
+  why: string | null
+  /** The setting as the helper read it for this gate (the settings file now, not the load's ident). */
+  setting: RestartSetting
+  route: Route
+  mode: string | null
+  effort: string | null
+  job_short: string | null
+  token: string | null
+  types: string[]
+}
 
 function parseGate(out: string): Gate | undefined {
   try {
     const j = JSON.parse(out.trim()) as Record<string, unknown>
     const str = (v: unknown): string | null => (typeof v === 'string' ? v : null)
     return {
-      ok: j.ok === true, why: str(j.why), route: j.route === 'bg' ? 'bg' : 'fg', mode: str(j.mode), effort: str(j.effort),
+      ok: j.ok === true, why: str(j.why), setting: j.setting === 'on' || j.setting === 'shadow' ? j.setting : 'off',
+      route: j.route === 'bg' ? 'bg' : 'fg', mode: str(j.mode), effort: str(j.effort),
       job_short: str(j.job_short), token: str(j.token), types: Array.isArray(j.types) ? j.types.filter((x): x is string => typeof x === 'string') : [],
     }
   } catch {
@@ -295,8 +320,10 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; si
     await once(d, sid, 'refresh_skipped', `${w}|${to}`, { why: w, route, to, ...(gate && gate.types.length > 0 ? { types: gate.types } : {}) })
     return false
   }
-  if (setting === 'shadow') {
-    await once(d, sid, 'refresh_would', to, { route, from, to, continue: dec.go })
+  // G1 as the gate read it: the load's ident is cached, so a setting lowered to `shadow` (or
+  // `off`, which the gate refuses) since the load counts from the gate on.
+  if (gate.setting !== 'on') {
+    if (gate.setting === 'shadow') await once(d, sid, 'refresh_would', to, { route, from, to, continue: dec.go })
     return false
   }
   const nonce = randomHex(16)
@@ -313,7 +340,7 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; si
     return false
   }
   const run: RestartRun = {
-    sid, route, nonce, from, to, cont: dec.go, armedAt: now, phase: 'grace', mode, effort, model,
+    sid, route, nonce, from, to, cont: dec.go, contDue: o.cont, armedAt: now, phase: 'grace', mode, effort, model,
     ...(route === 'fg' && env.launch !== undefined ? { launch: env.launch } : {}),
     ...(typeof armed.token === 'string' ? { token: armed.token } : {}),
     ...(route === 'bg' && env.jobDir !== undefined ? { jobDir: env.jobDir } : {}),
@@ -328,25 +355,47 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean; si
   return true
 }
 
-/** `restart set` for this run's notes (the launch note first); false when the call failed. */
-async function setNotes(d: Deps, run: RestartRun, state: string, extra: string[] = [], timeoutMs?: number): Promise<boolean> {
-  const now = await d.now()
-  const args = ['restart', 'set', '--sid', run.sid, '--nonce', run.nonce, '--state', state, '--now-ms', String(Math.round(now)), ...extra,
+/**
+ * `restart set` for this run's notes (the launch note first). `ok` false: the call failed (it did
+ * not start, timed out or exited non-zero). Otherwise `l` and `c` say what the helper did with
+ * each note: `written`, `absent`, `mismatch` (another nonce or session) or `final` (already ended).
+ */
+type SetReply = { ok: boolean; l: string; c: string }
+
+async function setNotes(d: Deps, run: RestartRun, state: string, o: { extra?: string[]; timeoutMs?: number; now?: number } = {}): Promise<SetReply> {
+  const now = o.now ?? (await d.now())
+  const args = ['restart', 'set', '--sid', run.sid, '--nonce', run.nonce, '--state', state, '--now-ms', String(Math.round(now)), ...(o.extra ?? []),
     ...(run.route === 'fg' && run.launch !== undefined ? ['--launch', run.launch] : [])]
-  const r = timeoutMs === undefined ? await call(d, args) : await call(d, args, timeoutMs)
-  return r.ok
+  const r = o.timeoutMs === undefined ? await call(d, args) : await call(d, args, o.timeoutMs)
+  const j = r.ok ? jsonOf(r.stdout) : undefined
+  if (!j || j.ok !== true) return { ok: false, l: 'failed', c: 'failed' }
+  return { ok: true, l: typeof j.l === 'string' ? j.l : 'absent', c: typeof j.c === 'string' ? j.c : 'absent' }
+}
+
+/**
+ * `restart respawn-cancel` (§2.2 step 4): in one helper call, the carry note `state` (when it is
+ * still this nonce's `armed` or `sent`), then TERM to the detached respawn's process group when its
+ * record names this nonce. The note goes first, so a respawn that has not reached its own check of
+ * the note yet never starts the client.
+ */
+async function cancelRespawn(d: Deps, run: RestartRun, state: 'cancelled' | 'failed'): Promise<void> {
+  await call(d, ['restart', 'respawn-cancel', '--sid', run.sid, '--nonce', run.nonce, '--state', state])
 }
 
 /** The run ends before the process does: notes, one row, the continue once (§4.4). */
 async function fail(d: Deps, run: RestartRun, ev: 'refresh_skipped' | 'refresh_failed', why: string, opts: { state?: string; code?: string; cont?: boolean } = {}): Promise<void> {
   const s = d.state
+  // A turn or a prompt ended the run during the caller's last await (restartInterrupt settled
+  // it): the person or the task has the session; no second row and no continue.
+  if (run.phase === 'done') return
   run.timer?.cancel()
   run.phase = 'done'
   if (s.restart === run) s.restart = undefined
-  await setNotes(d, run, opts.state ?? 'cancelled').catch(() => false)
+  await setNotes(d, run, opts.state ?? 'cancelled').catch(() => undefined)
   await noteOutcome(d, run.sid, run.to, why)
   await log(d, run.sid, ev, { route: run.route, why, to: run.to, ...(opts.code !== undefined ? { code: opts.code } : {}) })
-  if (opts.cont !== false) await autoContinue(d, run.sid)
+  // Only where the moment's own path would have run it: never after an idle compaction (D2b).
+  if (run.contDue && opts.cont !== false) await autoContinue(d, run.sid)
 }
 
 /** §3.4 step 3, §2.2 step 2: after the grace, the live gates once more, then the exit or the respawn. */
@@ -360,9 +409,16 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
     // §3.4 steps 4-5. Both notes become `exiting` (with `exiting_at`) right before our /exit is
     // queued, so the go window holds whether or not our own `command.run` hook sees our call
     // (F5 is INFERRED: probe RS-P1 run 3); when it does see it, it passes only this fresh one.
-    const at = await d.now()
-    if (!(await setNotes(d, run, 'exiting', ['--exiting-at', String(Math.round(at))]))) return fail(d, run, 'refresh_failed', 'helper-failed')
     if (s.restart !== run || run.phase !== 'grace') return
+    const at = await d.now()
+    // Our /exit follows only when both notes now say `exiting`: a launch note the helper found
+    // absent, another session's or already ended would close the session with no relaunch (D9).
+    const w = await setNotes(d, run, 'exiting', { extra: ['--exiting-at', String(Math.round(at))], now: at })
+    if (s.restart !== run || run.phase !== 'grace') return
+    if (!w.ok) return fail(d, run, 'refresh_failed', 'helper-failed')
+    if (w.l !== 'written' || w.c !== 'written') {
+      return fail(d, run, 'refresh_failed', 'helper-failed', { code: w.l !== 'written' ? `launch-${w.l}` : `carry-${w.c}` })
+    }
     run.phase = 'exiting'
     run.exitingAt = at
     // §3.4 step 7: still alive EXIT_WINDOW_MS later (an exit dialog, a detach, an /exit that never
@@ -378,12 +434,31 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
     )
     return
   }
-  // The background route: the carry note `sent` and the detached respawn in one helper call.
+  // The background route: the carry note `sent` and the detached respawn in one helper call. A
+  // turn or a prompt during the awaits above ended the run (restartInterrupt): nothing starts.
+  if (s.restart !== run || run.phase !== 'grace') return
   run.phase = 'sent'
-  const r = await call(d, ['restart', 'respawn', '--sid', run.sid, '--short', run.short ?? '', '--nonce', run.nonce, '--to', run.to])
+  // The helper reads the job's respawnFlags once more right before it starts the respawn (G3b
+  // `bypass-left` against the mode they hold now, a Shift+Tab during the grace included).
+  const r = await call(d, ['restart', 'respawn', '--sid', run.sid, '--short', run.short ?? '', '--nonce', run.nonce, '--to', run.to,
+    '--mode', run.mode, ...(run.jobDir !== undefined ? ['--job-dir', run.jobDir] : [])])
   const j = r.ok ? jsonOf(r.stdout) : undefined
+  if (s.restart !== run || run.phase !== 'sent') {
+    // A turn or a prompt came while the call ran: restartInterrupt cancelled the run, maybe before
+    // the respawn's pid record existed. Once more now (§2.2 step 4: never a kill during that turn).
+    await cancelRespawn(d, run, 'cancelled')
+    return
+  }
   if (!j || j.ok !== true) {
-    return fail(d, run, 'refresh_failed', 'respawn-refused', { state: 'failed', code: typeof j?.why === 'string' ? j.why : 'other' })
+    // A refusal, or a call that failed or timed out after the helper may have started the detached
+    // respawn: the respawn is cancelled (the note settled first) before the continue runs.
+    const why = typeof j?.why === 'string' ? j.why : undefined
+    if (why === 'bypass-left') {
+      await cancelRespawn(d, run, 'cancelled')
+      return fail(d, run, 'refresh_skipped', 'bypass-left')
+    }
+    await cancelRespawn(d, run, 'failed')
+    return fail(d, run, 'refresh_failed', 'respawn-refused', { state: 'failed', code: why ?? 'other' })
   }
   const started = await d.now()
   const poll = (): void => {
@@ -401,11 +476,13 @@ async function respawnWatch(d: Deps, run: RestartRun, started: number, again: ()
   const p = await d.paths()
   const t = p ? await d.read(`${p.watch}/${run.sid}/restart-respawn.json`) : undefined
   const res = t !== undefined ? jsonOf(t) : undefined
+  const late = (await d.now()) - started >= RESPAWN_WATCH_MS
+  if (s.restart !== run || run.phase !== 'sent' || s.ending) return
   if (res && res.nonce === run.nonce && typeof res.rc === 'number' && res.rc !== 0) {
     return fail(d, run, 'refresh_failed', 'respawn-refused', { state: 'failed', code: typeof res.code === 'string' ? res.code : 'other' })
   }
-  if ((await d.now()) - started >= RESPAWN_WATCH_MS) {
-    await call(d, ['restart', 'respawn-cancel', '--sid', run.sid, '--nonce', run.nonce])
+  if (late) {
+    await cancelRespawn(d, run, 'failed')
     return fail(d, run, 'refresh_failed', 'not-respawned', { state: 'failed' })
   }
   again()
@@ -413,8 +490,10 @@ async function respawnWatch(d: Deps, run: RestartRun, started: number, again: ()
 
 /**
  * A main turn starts or a prompt enters while a restart is under way (§2.2 step 4, §3.4): the
- * person or a task took over. The in-flight respawn is cancelled before anything else, then the
- * notes; no continue follows (the turn is the session's next step).
+ * person or a task took over. The in-flight respawn is cancelled before anything else (one helper
+ * call: the carry note `cancelled`, then the kill), then the notes; no continue follows (the turn
+ * is the session's next step). A respawn call still in flight is cancelled once more when it
+ * returns (graceEnd).
  */
 export async function restartInterrupt(d: Deps): Promise<void> {
   const s = d.state
@@ -424,7 +503,7 @@ export async function restartInterrupt(d: Deps): Promise<void> {
   run.timer?.cancel()
   const was = run.phase
   run.phase = 'done'
-  if (was === 'sent') await call(d, ['restart', 'respawn-cancel', '--sid', run.sid, '--nonce', run.nonce])
+  if (was === 'sent') await cancelRespawn(d, run, 'cancelled')
   await setNotes(d, run, 'cancelled')
   await noteOutcome(d, run.sid, run.to, 'busy')
   await log(d, run.sid, 'refresh_skipped', { why: 'busy', route: run.route, to: run.to })
@@ -511,11 +590,24 @@ async function endRun(d: Deps, reason: string | undefined): Promise<void> {
   run.phase = 'done'
   s.restart = undefined
   if (!go) {
-    await setNotes(d, run, 'cancelled', [], 1000).catch(() => false)
+    await setNotes(d, run, 'cancelled', { timeoutMs: 1000, now }).catch(() => undefined)
     return
   }
-  const ok = await setNotes(d, run, 'go', ['--exiting-at', String(Math.round(run.exitingAt ?? now))], 1000).catch(() => false)
-  if (!ok && run.launch !== undefined) await d.write(`${run.launch.replace(/\/+$/, '')}/restart.note`, launchNote(run, 'go', now))
+  // The note's `at` is this `now`, the one the go window was checked with, so the launcher's
+  // window check (`at - floor(exiting_at / 1000)` 0 to 5) holds whenever ours did.
+  const r = await setNotes(d, run, 'go', { extra: ['--exiting-at', String(Math.round(run.exitingAt ?? now))], timeoutMs: 1000, now })
+    .catch((): SetReply => ({ ok: false, l: 'failed', c: 'failed' }))
+  if (!r.ok) {
+    // The helper call failed: the mod writes the launch note itself. `$.fs` has no rename, so this
+    // one write is in place, not the contract's `restart.note.tmp` then rename (§6): a write cut
+    // short leaves a note the launcher refuses with `pattern` (its resume line and
+    // last-refusal), which is still better than an `exiting` note that relaunches nothing silently.
+    if (run.launch !== undefined) await d.write(`${run.launch.replace(/\/+$/, '')}/restart.note`, launchNote(run, 'go', now))
+    return
+  }
+  // The helper did not write the launch note (gone, another nonce's, or already cancelled): no
+  // relaunch follows; one row says why (the note is never written over).
+  if (r.l !== 'written') await log(d, run.sid, 'refresh_failed', { route: 'fg', why: 'helper-failed', to: run.to, code: `launch-${r.l}` })
 }
 
 /** `session.attach` / `session.detach` (G3b). */
