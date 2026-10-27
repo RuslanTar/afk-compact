@@ -9,11 +9,11 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS } from '../../hooks/lib/config'
-import type { Deps } from '../../hooks/lib/deps'
-import { newState } from '../../hooks/lib/deps'
+import type { Deps, PendingResume } from '../../hooks/lib/deps'
+import { TTL_ENV_NONE, cacheTtlOf, newState, ttlEnvOf } from '../../hooks/lib/deps'
 import type { Due } from '../../hooks/lib/idle'
 import { compactGuards, countIdleCompact } from '../../hooks/lib/idle'
-import { PENDING_FILE, ARMED_FILE } from '../../hooks/lib/resume'
+import { PENDING_FILE, ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
@@ -223,6 +223,33 @@ test('AT-IC-C09: armed vetoed; native switched on at 30 min: [native-on, compact
   else expect(skips(w)).toEqual([['native-on', 'compact'], ['no-asset', 'check']])
 })
 
+test('AT-IC-C09 (G0a): the settings unreadable at the fire: [native-unknown, compact], and the check armed for end + 55.5 min', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  const rec = w.storeGet(KEY) as Record<string, unknown>
+  await w.advance(30 * MIN)
+  w.settingsThrow = true
+  await w.advance(24 * MIN)
+  expect(skips(w)).toEqual([['native-unknown', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  const next = w.storeGet(KEY) as Record<string, unknown>
+  expect([next.kind, next.due]).toEqual(['check', (rec.end as number) + 55.5 * MIN])
+  expect(modes(w)).toEqual(['vetoed/on/on', 'unknown/check/agents'])
+})
+
+test('AT-IC-C07 (G0b): automatic compaction switched off after the arm (DISABLE_AUTO_COMPACT at 30 min): [compaction-off, compact] at 54, no compaction', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(30 * MIN)
+  w.env = { DISABLE_AUTO_COMPACT: '1' }
+  await w.advance(24 * MIN)
+  expect(skips(w)).toEqual([['compaction-off', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  expect(modes(w)).toEqual(['vetoed/on/on', 'compaction-off/on/off'])
+})
+
 test('AT-IC-C10: agents running: the compaction runs with agents 1, no continue; the turn an agent\'s result opens gets the [idle] block', { options: ON }, async ($, on) => {
   const w = world(on)
   w.agents = RUNNING
@@ -272,6 +299,106 @@ test('AT-IC-C11: DISABLE_PROMPT_CACHING=1: [ttl-5m, compact]; a per-model switch
   await w.advance(54 * MIN)
   expect(skips(w)).toEqual([['ttl-5m', 'compact']])
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+/** A TTL switch case: the environment and the settings keys beside `idleCompaction: false`. */
+type TtlCase = { name: string; env: Record<string, string>; set: Record<string, unknown> }
+
+test('AT-IC-C11 (G11): Claude Code\'s own prompt-cache TTL switches, in its order (ttlEnvOf, cacheTtlOf)', () => {
+  const t = (v: Parameters<typeof ttlEnvOf>[0], setting?: unknown) => cacheTtlOf(ttlEnvOf(v), setting)
+  // Unset or not a value Claude Code takes: automatic (the plan windows decide).
+  expect([t({}), t({}, '1H'), t({ ttl: '1H' }), t({ ttl: '2h' }), t({ force5m: '0' }), t({ messages: '1h' }), t({ enable1h: 'no' })])
+    .toEqual([undefined, undefined, undefined, undefined, undefined, undefined, undefined])
+  // FORCE_PROMPT_CACHING_5M, then CLAUDE_CODE_PROMPT_CACHE_TTL, then the setting, then ENABLE_PROMPT_CACHING_1H;
+  // CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL 5m over all of them.
+  expect([t({ force5m: '1' }), t({ force5m: ' Yes ', ttl: '1h' }, '1h'), t({ ttl: ' 5m ' }, '1h'), t({}, '5m'), t({ enable1h: '1' }, '5m'), t({ messages: '5m' }, '1h'), t({ messages: ' 5m ', ttl: '1h', enable1h: 'on' })])
+    .toEqual(['5m', '5m', '5m', '5m', '5m', '5m', '5m'])
+  expect([t({ ttl: '1h' }, '5m'), t({}, '1h'), t({ enable1h: 'true' }), t({ ttl: '1h', enable1h: '1' })]).toEqual(['1h', '1h', '1h', '1h'])
+})
+
+for (const c of [
+  { name: 'FORCE_PROMPT_CACHING_5M=1', env: { FORCE_PROMPT_CACHING_5M: '1' }, set: {} },
+  { name: 'CLAUDE_CODE_PROMPT_CACHE_TTL=5m', env: { CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' }, set: {} },
+  { name: 'the promptCacheTtl setting 5m', env: {}, set: { promptCacheTtl: '5m' } },
+  { name: 'CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL=5m over a 1h setting', env: { CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL: '5m' }, set: { promptCacheTtl: '1h' } },
+  { name: 'FORCE_PROMPT_CACHING_5M over CLAUDE_CODE_PROMPT_CACHE_TTL=1h', env: { FORCE_PROMPT_CACHING_5M: 'true', CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' }, set: {} },
+  { name: 'the setting 5m over ENABLE_PROMPT_CACHING_1H', env: { ENABLE_PROMPT_CACHING_1H: '1' }, set: { promptCacheTtl: '5m' } },
+] as TtlCase[]) {
+  test(`AT-IC-C11 (G11): a five-minute cache set by ${c.name}, plan windows reported: the record keeps ttl 5m; [ttl-5m, compact]`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.env = c.env
+    w.policy = { ...NATIVE_OFF, ...c.set }
+    await w.start($)
+    await humanTurn($, w)
+    expect((w.storeGet(KEY) as Record<string, unknown>).ttl).toBe('5m')
+    await w.advance(54 * MIN)
+    expect(skips(w)).toEqual([['ttl-5m', 'compact']])
+    expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  })
+}
+
+test('AT-IC-C11 (G11): the promptCacheTtl setting changed to 5m after the arm (read at the fire): [ttl-5m, compact]', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  expect((w.storeGet(KEY) as Record<string, unknown>).ttl).toBe('1h')
+  await w.advance(30 * MIN)
+  w.policy = { ...NATIVE_OFF, promptCacheTtl: '5m' }
+  await w.advance(24 * MIN)
+  expect(skips(w)).toEqual([['ttl-5m', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+for (const c of [
+  { name: 'CLAUDE_CODE_PROMPT_CACHE_TTL=1h', env: { CLAUDE_CODE_PROMPT_CACHE_TTL: ' 1h ' }, set: {} },
+  { name: 'the promptCacheTtl setting 1h', env: {}, set: { promptCacheTtl: '1h' } },
+  { name: 'ENABLE_PROMPT_CACHING_1H=1', env: { ENABLE_PROMPT_CACHING_1H: '1' }, set: {} },
+  { name: 'CLAUDE_CODE_PROMPT_CACHE_TTL=1h over a 5m setting', env: { CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' }, set: { promptCacheTtl: '5m' } },
+] as TtlCase[]) {
+  test(`AT-IC-C11 (G11): a one-hour cache set by ${c.name} with no plan window (an API key): the record keeps ttl 1h; the compaction runs`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.env = c.env
+    w.policy = { ...NATIVE_OFF, ...c.set }
+    w.rateLimits = []
+    await w.start($)
+    await humanTurn($, w)
+    expect((w.storeGet(KEY) as Record<string, unknown>).ttl).toBe('1h')
+    await w.advance(54 * MIN)
+    expect(skips(w)).toEqual([])
+    expect([ic(w).length, selfCompacts(w)]).toEqual([1, 1])
+  })
+}
+
+test('AT-IC-C11 (G11): prompt caching off wins over a one-hour switch: DISABLE_PROMPT_CACHING with promptCacheTtl 1h is [ttl-5m, compact]; the record keeps ttl 5m', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.env = { DISABLE_PROMPT_CACHING: '1' }
+  w.policy = { ...NATIVE_OFF, promptCacheTtl: '1h' }
+  await w.start($)
+  await humanTurn($, w)
+  expect((w.storeGet(KEY) as Record<string, unknown>).ttl).toBe('5m')
+  await w.advance(54 * MIN)
+  expect(skips(w)).toEqual([['ttl-5m', 'compact']])
+})
+
+test('AT-IC-C11 (G11, the 49-min turn): CLAUDE_CODE_PROMPT_CACHE_TTL=5m with plan windows: [ttl-5m, turn], no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.env = { CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' }
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(49 * MIN)
+  expect(skips(w)).toEqual([['ttl-5m', 'turn']])
+  expect(w.submits.length).toBe(0)
+})
+
+test('AT-IC-C11 (G11, the 49-min turn): the promptCacheTtl setting 1h with no plan window: the turn runs (or no-asset), not ttl-5m', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = { ...NATIVE_OFF, promptCacheTtl: '1h' }
+  w.rateLimits = []
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(49 * MIN)
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'turn']])
 })
 
 for (const [name, limits] of [
@@ -382,6 +509,7 @@ for (const c of [
   { name: 'held by another load', write: (rec: Record<string, unknown>) => ({ ...rec, load: 'other-load' }), row: null },
   { name: 'cleared by another load (a tombstone)', write: (rec: Record<string, unknown>) => ({ cancelled: true, sid: SID_A, load: 'other-load', due: rec.due, at: T0 + 50 * MIN }), row: null },
   { name: 'lost (null)', write: () => null, row: 'due-missing' },
+  { name: 'rewritten by this load with another due (its older timer still pending)', write: (rec: Record<string, unknown>) => ({ ...rec, due: (rec.due as number) + 5 * MIN }), row: null },
 ]) {
   test(`AT-IC-C18 (G1, D14): the record ${c.name} at 50 min: ${c.row === null ? 'no row at all, the key left as written' : `[${c.row}, compact]`}`, { options: ON }, async ($, on) => {
     const w = world(on)
@@ -527,11 +655,11 @@ function guardDeps(over: Partial<Deps['state']> = {}): { d: Deps; rec: Due } {
   const d = {
     cfg: DEFAULTS, state, now: async () => T0, storeGet: async () => undefined,
     usage: async () => ({ tokens: 260000, window: 1000000, rateLimits: LIMITS }),
-    version: async () => ({ version: '2.1.311' }), model: async () => 'claude-test-model',
+    version: async () => ({ version: '2.1.311' }), model: async () => 'claude-test-model', promptCacheTtl: async () => undefined,
   } as unknown as Deps
   return { d, rec }
 }
-const ENV = { compactMin: 200000, cacheS: undefined, cacheOff: false }
+const ENV = { compactMin: 200000, cacheS: undefined, cacheOff: false, ttl: TTL_ENV_NONE }
 
 test('AT-IC-C21: guard function: a turn end after the record\'s (newer-turn), a request after its anchor (newer-turn), a question open (asks-user); none: the tokens', async () => {
   const a = guardDeps()
@@ -669,6 +797,104 @@ for (const c of [
   })
 }
 
+/** The plugin's own idle dispatches (`--channel mod-self`); a native compaction's record is `mod-hook`. */
+const modSelf = (w: World) => w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').length
+
+/** Lets the engine's pending work run while the test holds a helper call open (no clock involved). */
+async function until(cond: () => boolean, rounds = 20000): Promise<void> {
+  for (let i = 0; i < rounds && !cond(); i++) await Promise.resolve()
+}
+
+test('AT-IC-C25 (D13, G6): a compaction other than ours (a /compact sent from a phone) runs to its end while the checkpoint runs: idle_compact, then [compacted, compact]; no mod-self dispatch, no failure counted', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  let acted = false
+  w.atHelper = async sub => {
+    if (acted || sub !== 'checkpoint') return
+    acted = true
+    await raiseCompact($, { trigger: 'manual' })
+  }
+  await w.advance(54 * MIN)
+  expect(acted).toBe(true)
+  expect(ic(w).length).toBe(1)
+  expect(skips(w)).toEqual([['compacted', 'compact']])
+  expect([modSelf(w), selfCompacts(w), w.rowsOf('idle_compact_off').length]).toEqual([0, 0, 0])
+  expect(w.compacts.filter(c => c.trigger === 'manual').length).toBe(1)
+})
+
+test('AT-IC-C25 (D13, G4): a compaction other than ours starts while the checkpoint runs and is still running after it: idle_compact, then [busy, compact]; no mod-self dispatch', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  let release: (() => void) | undefined
+  let running: Promise<unknown> | undefined
+  w.atHelper = async sub => {
+    if (running !== undefined || sub !== 'checkpoint') return
+    w.compactGate = new Promise<void>(r => { release = r })
+    const n = w.compacts.length
+    running = raiseCompact($, { trigger: 'manual' })
+    await until(() => w.compacts.length > n)
+  }
+  await w.advance(54 * MIN)
+  expect(running).toBeDefined()
+  expect(ic(w).length).toBe(1)
+  expect(skips(w)).toEqual([['busy', 'compact']])
+  expect([modSelf(w), selfCompacts(w), w.rowsOf('idle_compact_off').length]).toEqual([0, 0, 0])
+  release?.()
+  await running
+  await w.settle()
+})
+
+test('AT-IC-C25 (§2.3): G1\'s own store read throws at the fire: one [error, compact] row; no compaction', { options: ON }, async ($, on) => {
+  let boom = false
+  on('store.get', { key: KEY }, (_$, e, next) => {
+    if (boom) throw new Error('store unreadable')
+    return next(e)
+  })
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(53 * MIN)
+  boom = true
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([['error', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-IC-C25 (§2.3, the 49-min turn): a read that throws in the turn\'s checks is one [error, turn] row; no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  let boom = false
+  on('store.get', { key: 'ht:' + SID_A }, (_$, e, next) => {
+    if (boom) throw new Error('store unreadable')
+    return next(e)
+  })
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(48 * MIN)
+  boom = true
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([['error', 'turn']])
+  expect(w.submits.length).toBe(0)
+})
+
+test('AT-IC-C25 (§2.3, the 55.5-min check): a read that throws in the check is one [error, check] row; no idle_silent, no submit', { options: ON }, async ($, on) => {
+  let boom = false
+  on('store.get', { key: 'idle_seen:' + SID_A }, (_$, e, next) => {
+    if (boom) throw new Error('store unreadable')
+    return next(e)
+  })
+  const w = world(on)
+  w.policy = {}
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  boom = true
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([['error', 'check']])
+  expect([w.rowsOf('idle_silent').length, w.submits.length]).toEqual([0, 0])
+})
+
 test('AT-IC-C25 (§2.3): a guard read that throws at the fire is one [error, compact] row; no idle_compact row, no compaction', { options: ON }, async ($, on) => {
   let boom = false
   on('store.get', { key: 'idle_seen:' + SID_A }, (_$, e, next) => {
@@ -786,6 +1012,17 @@ test('AT-IC-C30: a record adopted by a fresh process (no rate-limit or token rea
   expect(selfCompacts(w)).toBe(1)
 })
 
+test('AT-IC-C30 (G12): a record adopted by a fresh process, armed at a 95% window, with no rate-limit reading yet: the record\'s share decides, [near-limit, compact]', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, {}, adoptedRecord(probe, { pct: 95 }))
+  w.rateLimits = []
+  w.tokens = undefined
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(skips(w)).toEqual([['near-limit', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
 /** A 49-min turn record another process armed 39 min before T0 (due T0 + 10 min), with what it read at arm. */
 const adoptedTurn = (ttl: string | null) => ({
   [KEY]: {
@@ -814,7 +1051,7 @@ test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older bu
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-IC-C31 (§3.4): a due 30 s past at load, with no interactive session.start (a hot reload): it fires at once, late_s 30', { options: ON }, async ($, on) => {
+test('AT-IC-C31 (§3.4): a due 30 s past at load, with no person\'s session.start (the load\'s first hook is another): it fires at once, late_s 30', { options: ON }, async ($, on) => {
   const probe = new World()
   const w = world(on, { tokens: 260000 }, adoptedRecord(probe, { due: T0 - 30 * 1000, end: T0 - 54.5 * MIN, anchor: T0 - 54.5 * MIN }))
   await $.prompt.context({ blocks: [] })
@@ -851,6 +1088,32 @@ test('AT-IC-C32 (§3.4): the load\'s own lapse bound decides before the policy n
   await w.settle()
   expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind, r.late_s])).toEqual([['lapsed', 'compact', 90]])
   expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
+})
+
+test('AT-IC-C32 (§3.4, the second bound): a due only 30 s past at load whose last request is 58.5 min old (a turn that ended 57 min after it) is [lapsed, compact] at load, not adopted (idle_compact off since, so only the load\'s bound gives lapsed)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, { tokens: 260000 }, adoptedRecord(probe, { due: T0 - 30 * 1000, end: T0 - 1.5 * MIN, anchor: T0 - 58.5 * MIN }))
+  await $.prompt.context({ blocks: [] })
+  await w.settle()
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind, r.late_s])).toEqual([['lapsed', 'compact', 30]])
+  expect(isTomb(w.storeGet(KEY))).toBe(true)
+  expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
+})
+
+test('AT-IC-C32 (§3.1): a load deletes an expired tombstone of its own session id', { options: ON }, async ($, on) => {
+  const w = world(on, {}, { [KEY]: { cancelled: true, sid: SID_A, load: 'old', due: T0 - 10 * MIN, at: T0 - 10 * MIN } })
+  await w.start($)
+  await w.settle()
+  expect(w.storeGet(KEY)).toBeUndefined()
+  expect(w.rowsOf('handoff_skipped')).toEqual([])
+})
+
+test('AT-IC-C32 (§3.1): a load keeps a tombstone of its own session id that a timer could still hold (due 30 s ago)', { options: ON }, async ($, on) => {
+  const tomb = { cancelled: true, sid: SID_A, load: 'old', due: T0 - 30 * 1000, at: T0 - 30 * 1000 }
+  const w = world(on, {}, { [KEY]: tomb })
+  await w.start($)
+  await w.settle()
+  expect(w.storeGet(KEY)).toEqual(tomb)
 })
 
 for (const c of [
@@ -899,6 +1162,38 @@ test('AT-IC-C33 (§3.4): a 49-min turn record 3 min past at load, armed 52 min a
   else expect(skips(w)).toEqual([['no-asset', 'turn']])
 })
 
+test('AT-IC-C33 (§3.4, G7): the same record when a person resumes the session (interactive session.start): [present, turn], no submit in front of them', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, { tokens: 260000 }, turnRec(52))
+  await w.start($)
+  await w.settle()
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind])).toEqual([['present', 'turn']])
+  expect(w.submits.length).toBe(0)
+})
+
+/** A 55.5-min check record 30 s past at T0 (armed 56 min before T0), native idle on. */
+const checkRec = () => ({
+  [KEY]: { kind: 'check', due: T0 - 30 * 1000, sid: SID_A, end: T0 - 56 * MIN, answer: true, published: false, episode: { since: T0 - 56 * MIN, done: false } },
+})
+
+test('AT-IC-C31 (§3.4, check): a 55.5-min check record 30 s past at load, with no person\'s session.start: the check runs (idle_silent, then the turn or no-asset)', { options: ON }, async ($, on) => {
+  const w = world(on, { tokens: 260000 }, checkRec())
+  w.policy = {}
+  await $.prompt.context({ blocks: [] })
+  await w.settle()
+  expect(w.rowsOf('idle_silent').length).toBe(1)
+  if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'check']])
+})
+
+test('AT-IC-C31 (§3.4, G7, check): the same check record when a person resumes the session (interactive session.start): [present, check]; no idle_silent, no submit', { options: ON }, async ($, on) => {
+  const w = world(on, { tokens: 260000 }, checkRec())
+  w.policy = {}
+  await w.start($)
+  await w.settle()
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind])).toEqual([['present', 'check']])
+  expect([w.rowsOf('idle_silent').length, w.submits.length]).toEqual([0, 0])
+})
+
 test('AT-IC-C33 (§3.4): the same record armed 57 min ago (past minute 55.5): [lapsed, turn] with late_s 180, no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, turnRec(57))
   await $.prompt.context({ blocks: [] })
@@ -929,6 +1224,21 @@ test('AT-IC-C34 (a): the computer sleeps through the due (the wait comes 10 min 
   expect(slept).toBe(true)
   const r = w.rowsOf('handoff_skipped').map(x => [x.why, x.kind, typeof x.late_s === 'number' && x.late_s >= 60])
   expect(r).toEqual([['lapsed', 'compact', true]])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-IC-C34 (G3, the second bound): a turn that ends 57.5 min after its last request: due = end + 60 s, on time but 58.5 min after the anchor: [lapsed, compact], late_s 0', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await w.userTurn($)
+  await w.step($)
+  await w.advance(57.5 * MIN)
+  w.tokens = 260000
+  await w.turnEnd($)
+  await w.advance(MIN - 1)
+  expect(w.rowsOf('handoff_skipped')).toEqual([])
+  await w.advance(1)
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind, r.late_s])).toEqual([['lapsed', 'compact', 0]])
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
@@ -988,11 +1298,20 @@ for (const v of ['60', 'abc']) {
 }
 
 /**
- * AT-IC-C42: the watch folder and the store as the first process left them, read by the next case
- * as the next process over the same folder and store (one load per kit test; this file's cases run
- * in order, and the next case fails at once without it).
+ * AT-IC-C42: the idle block's record as the first process's after-step leaves it at minute 54,
+ * written by `pendingRecord` (the one writer `persistPending` uses), so the second case stands on
+ * its own (one load per kit test) whatever order the cases run in. The first case checks that the
+ * record it writes has this shape.
  */
-let c42: { files: [string, string][]; store: Record<string, unknown> } | undefined
+function c42Record(): string {
+  const nonce = '1a2b3c4d'
+  const p: PendingResume = {
+    sid: SID_A, nonce, block: '', builtAt: T0 + 54 * MIN, measuredAt: T0 + 54 * MIN, resumePref: 'prompt.context', turnSeq: 1, persisted: true,
+    args: { nonce, midturn: false, nonok: false, savedCopy: '/w/handoffs/LAB-42/compact/2026-10-21_15-00-00_5e55a001_c1-1a2b3c.md', idle: true },
+    outcome: { nudged: false, continued: false, halt: false },
+  }
+  return JSON.stringify(pendingRecord(p, 'first-load')) + '\n'
+}
 
 test('AT-IC-C42 (resume-persist), first process: the idle compaction\'s block is on disk at once (resume-pending.json, idle); the supervisor then stops the process with no session.end', { options: ON }, async ($, on) => {
   const w = world(on)
@@ -1004,20 +1323,14 @@ test('AT-IC-C42 (resume-persist), first process: the idle compaction\'s block is
   expect(text).toBeDefined()
   const rec = JSON.parse(text ?? 'null') as Record<string, unknown>
   expect([rec.state, rec.session_id, (rec.args as Record<string, unknown> | undefined)?.idle]).toEqual(['pending', SID_A, true])
+  expect(Object.keys(rec).sort()).toEqual(Object.keys(JSON.parse(c42Record()) as Record<string, unknown>).sort())
   expect(w.rowsOf('mod_outcome')).toEqual([])
-  c42 = { files: [...w.files], store: w.storeAll() }
 })
 
 test('AT-IC-C42 (resume-persist), the next process over the same store and watch folder (claude --resume, 2 min later): its first turn gets the idle block from disk, with [idle]', { options: ON }, async ($, on) => {
-  expect(c42).toBeDefined()
-  const w = world(on, {}, c42?.store ?? {})
-  for (const [p, t] of c42?.files ?? []) w.files.set(p, t)
-  // The classic SessionStart(resume) arms the record (helper case AT-RP-04).
-  const pending = `${WATCH}/${SID_A}/${PENDING_FILE}`
-  const t = w.files.get(pending)
-  expect(t).toBeDefined()
-  w.files.delete(pending)
-  w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, t ?? '')
+  const w = world(on, {}, { [KEY]: { cancelled: true, sid: SID_A, load: 'first-load', due: T0 + 54 * MIN, at: T0 + 54 * MIN } })
+  // The classic SessionStart(resume) has armed the record the first process left (helper case AT-RP-04).
+  w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, c42Record())
   await w.clock.set(T0 + 56 * MIN)
   await w.start($)
   await w.userTurn($, 'where were we?')

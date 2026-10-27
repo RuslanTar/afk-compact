@@ -284,11 +284,6 @@ export class World {
     return json(this.storeMem.get(key))
   }
 
-  /** Every key the shared store holds now (what a next process over the same store reads). */
-  storeAll(): Record<string, unknown> {
-    return Object.fromEntries([...this.storeMem.keys()].map(k => [k, this.storeGet(k)]))
-  }
-
   /** A main turn starts (a user prompt, or our own continue when `text` says so). */
   async turnStart($: Engine, text = 'next step please'): Promise<void> {
     this.turnNo++
