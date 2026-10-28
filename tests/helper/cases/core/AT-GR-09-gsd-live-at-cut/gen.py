@@ -1207,6 +1207,156 @@ t.cut("its gate mid-turn: workstream B only, a Was driving hint, never Active",
       hint(EB5, "another GSD command followed", more=[GB, "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-b$"], lacks=[WS]))
 TS.append(t)
 
+# ---- round 6 review: prompts with no text, tagged prompts queued mid-turn, forms of phase.complete, long rows ----
+IMG = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}}
+DOC = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "JVBERi0x"}}
+
+
+def disp(m):
+    """A row's time (stamp(m)) as the helper shows it in the case's time zone (Etc/GMT-3)."""
+    return (datetime.datetime(2026, 10, 26, 13, 0) + datetime.timedelta(minutes=m)).strftime("%Y-%m-%d %H:%M +0300")
+
+
+t = T(105, "a prompt with only an image (no text block) queued while the loop's step runs")
+ep3(t)
+t.bgagent("wave 1 executor", "a9105i")
+t.cut("before it, mid-turn: Active driver", active(EP3))
+t.queued([IMG], {"kind": "human"}, human_turn=True)
+t.cut("the image-only prompt typed mid-turn: a Was driving hint, never Active", hint(EP3, "a prompt typed mid-turn"))
+TS.append(t)
+
+t = T(106, "a prompt row with only an image (an SDK client's, no text block) while the loop's executor runs")
+ep3(t)
+t.bgagent("wave 1 executor", "a9106i")
+t.end("Waiting for wave 1.")
+t.cut("its turn ended with its executor running: Active driver", active(EP3))
+t.raw("user", {"message": {"role": "user", "content": [IMG]}, "origin": {"kind": "human"}, "promptSource": "sdk"})
+t.cut("the image-only prompt: a Was driving hint, never Active", hint(EP3, "a prompt"))
+t.end("The screenshot shows the header misaligned.")
+t.cut("that prompt's turn ended, its executor still running: still the hint", hint(EP3, "a prompt"))
+TS.append(t)
+
+t = T(107, "a prompt row with only an image and no origin (an older Claude Code) while the loop's executor runs")
+ep3(t)
+t.bgagent("wave 1 executor", "a9107i")
+t.end("Waiting for wave 1.")
+t.raw("user", {"message": {"role": "user", "content": [IMG]}})
+t.cut("a Was driving hint, never Active", hint(EP3, "a prompt"))
+TS.append(t)
+
+t = T(108, "a prompt with only a document and no origin queued while the loop's step runs")
+ep3(t)
+t.bgagent("wave 1 executor", "a9108i")
+t.queued([DOC], None)
+t.cut("a Was driving hint, never Active", hint(EP3, "a prompt typed mid-turn"))
+TS.append(t)
+
+t = T(109, "a prompt queued mid-turn whose text starts with a tag (pasted HTML), from its enqueue")
+ep3(t)
+t.bgagent("wave 1 executor", "a9109q")
+t.cut("before it: Active driver", active(EP3))
+t.qop("<div class=\"hdr\"> is misaligned, stop after this wave and fix it")
+t.cut("the queued prompt (not delivered yet): a Was driving hint, never Active", hint(EP3, "a prompt typed mid-turn"))
+TS.append(t)
+
+t = T(110, "a shell command typed with ! while the loop's turn runs, from its enqueue")
+ep3(t)
+t.bgagent("wave 1 executor", "a9110q")
+t.qop("<bash-input>git status</bash-input>")
+t.cut("a Was driving hint, never Active", hint(EP3, "a prompt typed mid-turn"))
+TS.append(t)
+
+t = T(111, "tagged rows queued mid-turn that are no prompt: its agent's message, a scheduled task, a command's output")
+ep3(t)
+t.bgagent("wave 1 executor", "a9111q")
+t.qop("<agent-message from=\"a9111q\">\nWave 1 plan 1 is done.\n</agent-message>")
+t.qop("<scheduled-task name=\"nightly-deploy-check\" file=\"/x/SKILL.md\">\nCheck the deploy.\n</scheduled-task>")
+t.qop("<local-command-stdout>Set model to Default</local-command-stdout>")
+t.cut("mid-turn: still the Active driver", active(EP3))
+TS.append(t)
+
+t = T(112, "a bounded run (--to 5) marks its last phase complete through a variable gsd-tools path")
+t.typed("gsd-autonomous", "--to 5 --ws " + WS)
+t.gsd("state.begin-phase 5")
+t.cut("mid-turn: Active driver", active(TO5))
+t.bash(GV + "node $G query phase.complete 5 --ws " + WS)
+t.cut("its last phase marked complete in a form the parser does not read: a Was driving hint, never Active",
+      hint(TO5, "its last phase (5) was marked complete"))
+TS.append(t)
+
+t = T(113, "a single-phase loop marks its phase complete in the space form through a variable gsd-tools path")
+ep3(t)
+t.cut("mid-turn: Active driver", active(EP3))
+t.bash(GV + "node $G phase complete 3 --ws " + WS)
+t.cut("a Was driving hint, never Active", hint(EP3, "its phase was marked complete"))
+TS.append(t)
+
+T12L = "/gsd-autonomous --only 12a --ws " + WS
+t = T(114, "a bounded run (--only 12a) whose last phase is marked complete as 12A")
+t.typed("gsd-autonomous", "--only 12a --ws " + WS)
+t.gsd("state.begin-phase 12A")
+t.cut("mid-turn: Active driver", active(T12L))
+t.gsd("phase.complete 12A")
+t.cut("its last phase marked complete (its letter in any case): a Was driving hint, never Active", hint(T12L, "its last phase (12a) was marked complete"))
+TS.append(t)
+
+t = T(115, "arguments hidden only by quotes, with a letter phase (12A): the re-enter command keeps them whole")
+t.typed("gsd-execute-phase", "12A --ws '" + WS + "'")
+t.gsd("state.begin-phase 12A")
+t.cut("mid-turn: the Active driver re-enters with its letter phase", active("/gsd-execute-phase (arguments not shown)", re_cmd="/gsd-execute-phase 12A --ws " + WS))
+TS.append(t)
+
+t = T(116, "a queue-operation enqueue too long to read while the loop's turn runs (its keys in any order)")
+ep3(t)
+t.bgagent("wave 1 executor", "a9116x")
+t.cut("before it: Active driver", active(EP3))
+qm = t.qop("see the log below")
+t.long_row("content")
+t.cut("unclear: a Was driving hint at the row's time, never Active", hint(EP3, "a message too long to read " + disp(qm)))
+TS.append(t)
+
+t = T(117, "another session's message too long to read while the loop's executor runs")
+ep3(t)
+t.bgagent("wave 1 executor", "a9117x")
+t.end("Waiting for wave 1.")
+t.cut("its turn ended with its executor running: Active driver", active(EP3))
+t.xsm("see the log below")
+t.long_row("message.content")
+t.cut("unclear: a Was driving hint, never Active", hint(EP3, "a message too long to read"))
+TS.append(t)
+
+t = T(118, "its executor's notification too long to read, then the loop typed again, whose turn ends")
+ep3(t)
+e1 = t.bgagent("wave 1 executor", "a9118x")
+t.end("Waiting for wave 1.")
+t.cut("its turn ended with its executor running: Active driver", active(EP3))
+t.done(e1, "a9118x")
+t.long_row("message.content")
+t.cut("unclear: a Was driving hint", hint(EP3, "a message too long to read"))
+t.end("Wave 1 is done.")
+t.typed("gsd-execute-phase", "3 --ws " + WS)
+t.gsd("state.begin-phase 3")
+t.cut("the loop typed again, mid-turn: Active driver", active(EP3))
+t.end("Phase 3 wave 2 needs your input.")
+t.cut("its turn ended; the executor that unread row may have ended no longer counts: a Was driving hint, never Active",
+      hint(EP3, "its turn ended", more=["with nothing of its own running\\) · re-enter"]))
+TS.append(t)
+
+t = T(119, "a sidechain row too long to read (an agent's own prompt) is no prompt of the session's")
+ep3(t)
+t.bgagent("wave 1 executor", "a9119x")
+t.raw("user", {"isSidechain": True, "message": {"role": "user", "content": "wave 1 executor prompt"}})
+t.long_row("message.content")
+t.cut("mid-turn: still the Active driver", active(EP3))
+TS.append(t)
+
+t = T(120, "a meta row too long to read that is no other session's message (a skill's text) opens no turn")
+ep3(t)
+t.raw("user", {"isMeta": True, "message": {"role": "user", "content": "Base directory for this skill: /x"}})
+t.long_row("message.content")
+t.cut("mid-turn: still the Active driver", active(EP3))
+TS.append(t)
+
 steps = [{"name": "setup: one worktree (flat .planning, workstreams workstream-a and workstream-b, the shared pointer naming workstream-b)",
           "setup": [{"repo": {"branch": "main", "commits": [{"files": {
               "app/retry.rb": "x = 1\n",
@@ -1254,6 +1404,12 @@ case = {"id": "AT-GR-09",
                  "the verb, a quoted or variable phase) ends a single-phase loop, and a bounded run when it names its last phase or one that "
                  "cannot be read (sessions 95-100, also after a gate); a row too long to read that may open a turn (a pasted prompt, typed or "
                  "queued) is unclear, a long tool result or a long row of another type is not (sessions 101-104). "
+                 "A prompt with only an image or a document is a prompt, queued or not (sessions 105-108); a prompt queued "
+                 "mid-turn whose text starts with a tag that is no notification counts from its enqueue (sessions 109-111); "
+                 "the phase.complete forms of sessions 112-114; arguments hidden only by quotes keep a letter phase (session "
+                 "115); a long enqueue in any key order, a long message of another session and a long notification of the "
+                 "loop's own work are unclear, the last also for the loop invoked again, while a long sidechain row or a "
+                 "long meta row of Claude Code's own is not (sessions 116-120). "
                  "R1: the outermost loop drives, "
                  "also past a pause it wrote (session 50); R4: a paused loop is shown, never run. Five sessions in this one worktree each keep "
                  "their own GSD line and workstream (owner 21:37)."),

@@ -1,7 +1,7 @@
 {
  "id": "AT-GR-09",
  "sid": "00000001-0009-4000-8000-000000000001",
- "note": "Written by gen.py in this folder (python3 gen.py case.json): edit that, not this file. Owner ruling 2026-10-27 20:57 (binding): the imperative `Active driver` line only while the loop is clearly live at the cut: one of its own steps (its skill, a gsd-execute-phase it invoked, its gsd-tools run) is mid-turn, or an agent, workflow or teammate it launched still runs (root call 2026-10-28: a single-phase loop's own code-review or validate gate gives the hint, session 64; a background command, a monitor or a wake-up only names itself in the hint: a server it left running while it waits for the person, sessions 19, 72, 94; a teammate's idle notice is a notification, session 70); the `Was driving` hint in every other case: its turn ended, an interruption, a pause, a stop, a prompt of any kind (a prompt typed mid-turn, from its queue-operation enqueue to its queued_command delivery, a typed status look, /goal or /loop, this plugin's own skill, a shell command typed with !), another session's turn (a cross-session message, a teammate the loop did not start), an API error ending the turn, the session resumed in a new process. A quiet but live loop shown as a hint is accepted. The turn this plugin's checkpoint nudge closes is no stop only in the nudge's [continue] form as the hook adds it (its [halt] sentence wins), and only when that turn asks the user nothing (sessions 40-44, 63); an agent woken by SendMessage is not ended by its earlier run's crossed notification (session 46). A queued prompt ends the loop's live context at its enqueue, but not a prompt the session scheduled itself, and a pause asked still holds until the prompt is delivered (sessions 47, 48, 57, 59, 60, 62); Claude Code's notice that the person stopped background agents is a stop (sessions 58, 61). Arguments that cannot be shown and hold more than the parts a re-enter command keeps give the hint (sessions 66-69: the command would re-enter a wider run). A queued notification of the loop's own makes the next turn's opener the loop's only by its own sender (sessions 56, 73-75). Sessions 76-84 guard what planted bugs got past. A Bash command that names phase.complete in a form the gsd-tools parser does not read (through a variable, a flag before the verb, a quoted or variable phase) ends a single-phase loop, and a bounded run when it names its last phase or one that cannot be read (sessions 95-100, also after a gate); a row too long to read that may open a turn (a pasted prompt, typed or queued) is unclear, a long tool result or a long row of another type is not (sessions 101-104). R1: the outermost loop drives, also past a pause it wrote (session 50); R4: a paused loop is shown, never run. Five sessions in this one worktree each keep their own GSD line and workstream (owner 21:37).",
+ "note": "Written by gen.py in this folder (python3 gen.py case.json): edit that, not this file. Owner ruling 2026-10-27 20:57 (binding): the imperative `Active driver` line only while the loop is clearly live at the cut: one of its own steps (its skill, a gsd-execute-phase it invoked, its gsd-tools run) is mid-turn, or an agent, workflow or teammate it launched still runs (root call 2026-10-28: a single-phase loop's own code-review or validate gate gives the hint, session 64; a background command, a monitor or a wake-up only names itself in the hint: a server it left running while it waits for the person, sessions 19, 72, 94; a teammate's idle notice is a notification, session 70); the `Was driving` hint in every other case: its turn ended, an interruption, a pause, a stop, a prompt of any kind (a prompt typed mid-turn, from its queue-operation enqueue to its queued_command delivery, a typed status look, /goal or /loop, this plugin's own skill, a shell command typed with !), another session's turn (a cross-session message, a teammate the loop did not start), an API error ending the turn, the session resumed in a new process. A quiet but live loop shown as a hint is accepted. The turn this plugin's checkpoint nudge closes is no stop only in the nudge's [continue] form as the hook adds it (its [halt] sentence wins), and only when that turn asks the user nothing (sessions 40-44, 63); an agent woken by SendMessage is not ended by its earlier run's crossed notification (session 46). A queued prompt ends the loop's live context at its enqueue, but not a prompt the session scheduled itself, and a pause asked still holds until the prompt is delivered (sessions 47, 48, 57, 59, 60, 62); Claude Code's notice that the person stopped background agents is a stop (sessions 58, 61). Arguments that cannot be shown and hold more than the parts a re-enter command keeps give the hint (sessions 66-69: the command would re-enter a wider run). A queued notification of the loop's own makes the next turn's opener the loop's only by its own sender (sessions 56, 73-75). Sessions 76-84 guard what planted bugs got past. A Bash command that names phase.complete in a form the gsd-tools parser does not read (through a variable, a flag before the verb, a quoted or variable phase) ends a single-phase loop, and a bounded run when it names its last phase or one that cannot be read (sessions 95-100, also after a gate); a row too long to read that may open a turn (a pasted prompt, typed or queued) is unclear, a long tool result or a long row of another type is not (sessions 101-104). A prompt with only an image or a document is a prompt, queued or not (sessions 105-108); a prompt queued mid-turn whose text starts with a tag that is no notification counts from its enqueue (sessions 109-111); the phase.complete forms of sessions 112-114; arguments hidden only by quotes keep a letter phase (session 115); a long enqueue in any key order, a long message of another session and a long notification of the loop's own work are unclear, the last also for the loop invoked again, while a long sidechain row or a long meta row of Claude Code's own is not (sessions 116-120). R1: the outermost loop drives, also past a pause it wrote (session 50); R4: a paused loop is shown, never run. Five sessions in this one worktree each keep their own GSD line and workstream (owner 21:37).",
  "tmp_base": "short",
  "now": "2026-10-26T14:05:12+03:00",
  "tz": "Etc/GMT-3",
@@ -33064,6 +33064,4892 @@
      "Active driver",
      "Paused driver",
      "workstream-a"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 105",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000069-0009-4000-8000-000000000069.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90688",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90689",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910501",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910501",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90690",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910501",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90691",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910502",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910502",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90692",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910502",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9105i"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 105 (a prompt with only an image (no text block) queued while the loop's step runs): before it, mid-turn: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000069-0009-4000-8000-000000000069",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 105",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000069-0009-4000-8000-000000000069.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90688",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90689",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910501",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910501",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90690",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910501",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90691",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910502",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910502",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90692",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910502",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9105i"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000069-0009-4000-8000-000000000069",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "attachment",
+       "uuid": "row-90693",
+       "version": "2.1.310",
+       "attachment": {
+        "type": "queued_command",
+        "prompt": [
+         {
+          "type": "image",
+          "source": {
+           "type": "base64",
+           "media_type": "image/png",
+           "data": "iVBORw0KGgo="
+          }
+         }
+        ],
+        "source_uuid": "src-3",
+        "commandMode": "prompt",
+        "origin": {
+         "kind": "human"
+        },
+        "timestamp": "2026-10-26T10:04:00.000Z",
+        "humanTurn": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 105 (a prompt with only an image (no text block) queued while the loop's step runs): the image-only prompt typed mid-turn: a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000069-0009-4000-8000-000000000069",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt typed mid-turn.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 106",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006a-0009-4000-8000-00000000006a.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90694",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90695",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910601",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910601",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90696",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910601",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90697",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910602",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910602",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90698",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910602",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9106i"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90699",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9106_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 106 (a prompt row with only an image (an SDK client's, no text block) while the loop's executor runs): its turn ended with its executor running: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006a-0009-4000-8000-00000000006a",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 106",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006a-0009-4000-8000-00000000006a.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90694",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90695",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910601",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910601",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90696",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910601",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90697",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910602",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910602",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90698",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910602",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9106i"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90699",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9106_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90700",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "image",
+          "source": {
+           "type": "base64",
+           "media_type": "image/png",
+           "data": "iVBORw0KGgo="
+          }
+         }
+        ]
+       },
+       "origin": {
+        "kind": "human"
+       },
+       "promptSource": "sdk"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 106 (a prompt row with only an image (an SDK client's, no text block) while the loop's executor runs): the image-only prompt: a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006a-0009-4000-8000-00000000006a",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 3 of session 106",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006a-0009-4000-8000-00000000006a.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90694",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90695",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910601",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910601",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90696",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910601",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90697",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910602",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910602",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90698",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910602",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9106i"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90699",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9106_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90700",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "image",
+          "source": {
+           "type": "base64",
+           "media_type": "image/png",
+           "data": "iVBORw0KGgo="
+          }
+         }
+        ]
+       },
+       "origin": {
+        "kind": "human"
+       },
+       "promptSource": "sdk"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006a-0009-4000-8000-00000000006a",
+       "timestamp": "2026-10-26T10:06:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90701",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9106_6",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "The screenshot shows the header misaligned."
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 106 (a prompt row with only an image (an SDK client's, no text block) while the loop's executor runs): that prompt's turn ended, its executor still running: still the hint",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006a-0009-4000-8000-00000000006a",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 107",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006b-0009-4000-8000-00000000006b.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90702",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90703",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910701",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910701",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90704",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910701",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90705",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910702",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910702",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90706",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910702",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9107i"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90707",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9107_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006b-0009-4000-8000-00000000006b",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90708",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "image",
+          "source": {
+           "type": "base64",
+           "media_type": "image/png",
+           "data": "iVBORw0KGgo="
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 107 (a prompt row with only an image and no origin (an older Claude Code) while the loop's executor runs): a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006b-0009-4000-8000-00000000006b",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 108",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006c-0009-4000-8000-00000000006c.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90709",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90710",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910801",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910801",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90711",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910801",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90712",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910802",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910802",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90713",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910802",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9108i"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006c-0009-4000-8000-00000000006c",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "attachment",
+       "uuid": "row-90714",
+       "version": "2.1.310",
+       "attachment": {
+        "type": "queued_command",
+        "prompt": [
+         {
+          "type": "document",
+          "source": {
+           "type": "base64",
+           "media_type": "application/pdf",
+           "data": "JVBERi0x"
+          }
+         }
+        ],
+        "source_uuid": "src-3",
+        "commandMode": "prompt",
+        "timestamp": "2026-10-26T10:04:00.000Z"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 108 (a prompt with only a document and no origin queued while the loop's step runs): a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006c-0009-4000-8000-00000000006c",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt typed mid-turn.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 109",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006d-0009-4000-8000-00000000006d.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90715",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90716",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910901",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910901",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90717",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910901",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90718",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910902",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910902",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90719",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910902",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9109q"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 109 (a prompt queued mid-turn whose text starts with a tag (pasted HTML), from its enqueue): before it: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006d-0009-4000-8000-00000000006d",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 109",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006d-0009-4000-8000-00000000006d.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90715",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90716",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910901",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910901",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90717",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910901",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90718",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_910902",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_910902",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90719",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_910902",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9109q"
+       }
+      },
+      {
+       "type": "queue-operation",
+       "operation": "enqueue",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "sessionId": "0000006d-0009-4000-8000-00000000006d",
+       "content": "<div class=\"hdr\"> is misaligned, stop after this wave and fix it"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 109 (a prompt queued mid-turn whose text starts with a tag (pasted HTML), from its enqueue): the queued prompt (not delivered yet): a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006d-0009-4000-8000-00000000006d",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt typed mid-turn.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 110",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006e-0009-4000-8000-00000000006e.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90720",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90721",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911001",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911001",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90722",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911001",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90723",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911002",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911002",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90724",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911002",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9110q"
+       }
+      },
+      {
+       "type": "queue-operation",
+       "operation": "enqueue",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "sessionId": "0000006e-0009-4000-8000-00000000006e",
+       "content": "<bash-input>git status</bash-input>"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 110 (a shell command typed with ! while the loop's turn runs, from its enqueue): a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006e-0009-4000-8000-00000000006e",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a prompt typed mid-turn.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 111",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/0000006f-0009-4000-8000-00000000006f.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90725",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90726",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911101",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911101",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90727",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911101",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90728",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911102",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911102",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90729",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911102",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9111q"
+       }
+      },
+      {
+       "type": "queue-operation",
+       "operation": "enqueue",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "content": "<agent-message from=\"a9111q\">\nWave 1 plan 1 is done.\n</agent-message>"
+      },
+      {
+       "type": "queue-operation",
+       "operation": "enqueue",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "content": "<scheduled-task name=\"nightly-deploy-check\" file=\"/x/SKILL.md\">\nCheck the deploy.\n</scheduled-task>"
+      },
+      {
+       "type": "queue-operation",
+       "operation": "enqueue",
+       "timestamp": "2026-10-26T10:06:00.000Z",
+       "sessionId": "0000006f-0009-4000-8000-00000000006f",
+       "content": "<local-command-stdout>Set model to Default</local-command-stdout>"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 111 (tagged rows queued mid-turn that are no prompt: its agent's message, a scheduled task, a command's output): mid-turn: still the Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000006f-0009-4000-8000-00000000006f",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 112",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000070-0009-4000-8000-000000000070.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90730",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-autonomous</command-message>\n<command-name>/gsd-autonomous</command-name>\n<command-args>--to 5 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90731",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911201",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911201",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 5 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90732",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911201",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 112 (a bounded run (--to 5) marks its last phase complete through a variable gsd-tools path): mid-turn: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000070-0009-4000-8000-000000000070",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-autonomous --to 5 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --to 5 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 112",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000070-0009-4000-8000-000000000070.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90730",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-autonomous</command-message>\n<command-name>/gsd-autonomous</command-name>\n<command-args>--to 5 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90731",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911201",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911201",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 5 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90732",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911201",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90733",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911202",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911202",
+          "name": "Bash",
+          "input": {
+           "command": "G=/opt/gsd/bin/gsd-tools.cjs; node $G query phase.complete 5 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000070-0009-4000-8000-000000000070",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90734",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911202",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 112 (a bounded run (--to 5) marks its last phase complete through a variable gsd-tools path): its last phase marked complete in a form the parser does not read: a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000070-0009-4000-8000-000000000070",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-autonomous --to 5 --ws workstream-a \\(.*its last phase \\(5\\) was marked complete.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --to 5 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 113",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000071-0009-4000-8000-000000000071.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90735",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90736",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911301",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911301",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90737",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911301",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 113 (a single-phase loop marks its phase complete in the space form through a variable gsd-tools path): mid-turn: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000071-0009-4000-8000-000000000071",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 113",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000071-0009-4000-8000-000000000071.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90735",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90736",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911301",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911301",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90737",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911301",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90738",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911302",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911302",
+          "name": "Bash",
+          "input": {
+           "command": "G=/opt/gsd/bin/gsd-tools.cjs; node $G phase complete 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000071-0009-4000-8000-000000000071",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90739",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911302",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 113 (a single-phase loop marks its phase complete in the space form through a variable gsd-tools path): a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000071-0009-4000-8000-000000000071",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*its phase was marked complete.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 114",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000072-0009-4000-8000-000000000072.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90740",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-autonomous</command-message>\n<command-name>/gsd-autonomous</command-name>\n<command-args>--only 12a --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90741",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911401",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911401",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 12A --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90742",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911401",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 114 (a bounded run (--only 12a) whose last phase is marked complete as 12A): mid-turn: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000072-0009-4000-8000-000000000072",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-autonomous --only 12a --ws workstream-a \\([^)]*\\) · re-enter: /gsd-autonomous --only 12a --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 114",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000072-0009-4000-8000-000000000072.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90740",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-autonomous</command-message>\n<command-name>/gsd-autonomous</command-name>\n<command-args>--only 12a --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90741",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911401",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911401",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 12A --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90742",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911401",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90743",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911402",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911402",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query phase.complete 12A --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000072-0009-4000-8000-000000000072",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90744",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911402",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 114 (a bounded run (--only 12a) whose last phase is marked complete as 12A): its last phase marked complete (its letter in any case): a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000072-0009-4000-8000-000000000072",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-autonomous --only 12a --ws workstream-a \\(.*its last phase \\(12a\\) was marked complete.*\\) · re-enter only if Step 1 belongs to it: /gsd-autonomous --only 12a --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 115",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000073-0009-4000-8000-000000000073.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000073-0009-4000-8000-000000000073",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000073-0009-4000-8000-000000000073",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90745",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>12A --ws 'workstream-a'</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000073-0009-4000-8000-000000000073",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90746",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911501",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911501",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 12A --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000073-0009-4000-8000-000000000073",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90747",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911501",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 115 (arguments hidden only by quotes, with a letter phase (12A): the re-enter command keeps them whole): mid-turn: the Active driver re-enters with its letter phase",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000073-0009-4000-8000-000000000073",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase \\(arguments not shown\\) \\([^)]*\\) · re-enter: /gsd-execute-phase 12A --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 116",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000074-0009-4000-8000-000000000074.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90748",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90749",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911601",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911601",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90750",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911601",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90751",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911602",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911602",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90752",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911602",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9116x"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 116 (a queue-operation enqueue too long to read while the loop's turn runs (its keys in any order)): before it: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000074-0009-4000-8000-000000000074",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 116",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000074-0009-4000-8000-000000000074.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90748",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90749",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911601",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911601",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90750",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911601",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90751",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911602",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911602",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90752",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911602",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9116x"
+       }
+      },
+      {
+       "type": "queue-operation",
+       "operation": "enqueue",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "sessionId": "00000074-0009-4000-8000-000000000074",
+       "content": "see the log below"
+      }
+     ],
+     "jsonl_pad": {
+      "key": "content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 116 (a queue-operation enqueue too long to read while the loop's turn runs (its keys in any order)): unclear: a Was driving hint at the row's time, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000074-0009-4000-8000-000000000074",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a message too long to read 2026-10-26 13:04 \\+0300.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 117",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000075-0009-4000-8000-000000000075.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90753",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90754",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911701",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911701",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90755",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911701",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90756",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911702",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911702",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90757",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911702",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9117x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90758",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9117_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 117 (another session's message too long to read while the loop's executor runs): its turn ended with its executor running: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000075-0009-4000-8000-000000000075",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 117",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000075-0009-4000-8000-000000000075.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90753",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90754",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911701",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911701",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90755",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911701",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90756",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911702",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911702",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90757",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911702",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9117x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90758",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9117_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000075-0009-4000-8000-000000000075",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90759",
+       "version": "2.1.310",
+       "isMeta": true,
+       "promptSource": "system",
+       "origin": {
+        "kind": "peer",
+        "from": "uds:/tmp/cc-socks/60740.sock",
+        "verifiedPeerPid": 60740,
+        "msg_id": "m-4",
+        "name": "lane-b",
+        "fromMode": "prompting",
+        "body": "see the log below"
+       },
+       "message": {
+        "role": "user",
+        "content": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/60740.sock\" from-name=\"lane-b\" from-mode=\"prompting\">\nsee the log below\n</cross-session-message>"
+       }
+      }
+     ],
+     "jsonl_pad": {
+      "key": "message.content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 7
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 117 (another session's message too long to read while the loop's executor runs): unclear: a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000075-0009-4000-8000-000000000075",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a message too long to read.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 118",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000076-0009-4000-8000-000000000076.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90760",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90761",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911801",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911801",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90762",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911801",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90763",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911802",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911802",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90764",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911802",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9118x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90765",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "session 118 (its executor's notification too long to read, then the loop typed again, whose turn ends): its turn ended with its executor running: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000076-0009-4000-8000-000000000076",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 2 of session 118",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000076-0009-4000-8000-000000000076.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90760",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90761",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911801",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911801",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90762",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911801",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90763",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911802",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911802",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90764",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911802",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9118x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90765",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90766",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<task-notification>\n<task-id>a9118x</task-id>\n<tool-use-id>toolu_911802</tool-use-id>\n<status>completed</status>\n<summary>Agent finished</summary>\n</task-notification>"
+       },
+       "origin": {
+        "kind": "task-notification"
+       }
+      }
+     ],
+     "jsonl_pad": {
+      "key": "message.content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 7
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 118 (its executor's notification too long to read, then the loop typed again, whose turn ends): unclear: a Was driving hint",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000076-0009-4000-8000-000000000076",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*a message too long to read.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 3 of session 118",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000076-0009-4000-8000-000000000076.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90760",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90761",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911801",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911801",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90762",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911801",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90763",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911802",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911802",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90764",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911802",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9118x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90765",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90766",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<task-notification>\n<task-id>a9118x</task-id>\n<tool-use-id>toolu_911802</tool-use-id>\n<status>completed</status>\n<summary>Agent finished</summary>\n</task-notification>"
+       },
+       "origin": {
+        "kind": "task-notification"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:06:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90767",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_6",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Wave 1 is done."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:07:00.000Z",
+       "type": "user",
+       "uuid": "row-90768",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:08:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90769",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911803",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911803",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:08:00.000Z",
+       "type": "user",
+       "uuid": "row-90770",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911803",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      }
+     ],
+     "jsonl_pad": {
+      "key": "message.content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 7
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 118 (its executor's notification too long to read, then the loop typed again, whose turn ends): the loop typed again, mid-turn: Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000076-0009-4000-8000-000000000076",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 4 of session 118",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000076-0009-4000-8000-000000000076.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90760",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90761",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911801",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911801",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90762",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911801",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90763",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911802",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911802",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90764",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911802",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9118x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90765",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_4",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Waiting for wave 1."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:05:00.000Z",
+       "type": "user",
+       "uuid": "row-90766",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<task-notification>\n<task-id>a9118x</task-id>\n<tool-use-id>toolu_911802</tool-use-id>\n<status>completed</status>\n<summary>Agent finished</summary>\n</task-notification>"
+       },
+       "origin": {
+        "kind": "task-notification"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:06:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90767",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_6",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Wave 1 is done."
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:07:00.000Z",
+       "type": "user",
+       "uuid": "row-90768",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:08:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90769",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911803",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911803",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:08:00.000Z",
+       "type": "user",
+       "uuid": "row-90770",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911803",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000076-0009-4000-8000-000000000076",
+       "timestamp": "2026-10-26T10:09:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90771",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_e9118_9",
+        "stop_reason": "end_turn",
+        "content": [
+         {
+          "type": "text",
+          "text": "Phase 3 wave 2 needs your input."
+         }
+        ]
+       }
+      }
+     ],
+     "jsonl_pad": {
+      "key": "message.content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 7
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 118 (its executor's notification too long to read, then the loop typed again, whose turn ends): its turn ended; the executor that unread row may have ended no longer counts: a Was driving hint, never Active",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000076-0009-4000-8000-000000000076",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*its turn ended.*\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$",
+     "with nothing of its own running\\) · re-enter"
+    ],
+    "stdout_lacks": [
+     "Active driver",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 119",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000077-0009-4000-8000-000000000077.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90772",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90773",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911901",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911901",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90774",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911901",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90775",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_911902",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_911902",
+          "name": "Agent",
+          "input": {
+           "description": "wave 1 executor",
+           "prompt": "wave 1 executor",
+           "run_in_background": true
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90776",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_911902",
+          "content": "Async agent launched successfully."
+         }
+        ]
+       },
+       "toolUseResult": {
+        "isAsync": true,
+        "status": "async_launched",
+        "agentId": "a9119x"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": true,
+       "parentUuid": null,
+       "sessionId": "00000077-0009-4000-8000-000000000077",
+       "timestamp": "2026-10-26T10:04:00.000Z",
+       "type": "user",
+       "uuid": "row-90777",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "wave 1 executor prompt"
+       }
+      }
+     ],
+     "jsonl_pad": {
+      "key": "message.content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 119 (a sidechain row too long to read (an agent's own prompt) is no prompt of the session's): mid-turn: still the Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000077-0009-4000-8000-000000000077",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
+    ]
+   }
+  },
+  {
+   "name": "setup: cut 1 of session 120",
+   "setup": [
+    {
+     "write": "$HOME/.claude/projects/-x/00000078-0009-4000-8000-000000000078.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "00000078-0009-4000-8000-000000000078",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000078-0009-4000-8000-000000000078",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "user",
+       "uuid": "row-90778",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "<command-message>gsd-execute-phase</command-message>\n<command-name>/gsd-execute-phase</command-name>\n<command-args>3 --ws workstream-a</command-args>"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000078-0009-4000-8000-000000000078",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "assistant",
+       "uuid": "row-90779",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "id": "msg_toolu_912001",
+        "stop_reason": "tool_use",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_912001",
+          "name": "Bash",
+          "input": {
+           "command": "gsd_run query state.begin-phase 3 --ws workstream-a",
+           "description": "x"
+          }
+         }
+        ]
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000078-0009-4000-8000-000000000078",
+       "timestamp": "2026-10-26T10:02:00.000Z",
+       "type": "user",
+       "uuid": "row-90780",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": [
+         {
+          "type": "tool_result",
+          "tool_use_id": "toolu_912001",
+          "content": "done"
+         }
+        ]
+       },
+       "toolUseResult": {
+        "stdout": "done",
+        "stderr": "",
+        "interrupted": false
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "00000078-0009-4000-8000-000000000078",
+       "timestamp": "2026-10-26T10:03:00.000Z",
+       "type": "user",
+       "uuid": "row-90781",
+       "version": "2.1.310",
+       "isMeta": true,
+       "message": {
+        "role": "user",
+        "content": "Base directory for this skill: /x"
+       }
+      }
+     ],
+     "jsonl_pad": {
+      "key": "message.content",
+      "text": "pasted log line 0123456789 ",
+      "bytes": 4198400,
+      "row": 4
+     }
+    }
+   ]
+  },
+  {
+   "name": "session 120 (a meta row too long to read that is no other session's message (a skill's text) opens no turn): mid-turn: still the Active driver",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "00000078-0009-4000-8000-000000000078",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+    ],
+    "stdout_lacks": [
+     "Was driving",
+     "Paused driver"
     ]
    }
   }

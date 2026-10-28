@@ -58,13 +58,15 @@ package gsd;
 # line only while the loop is CLEARLY LIVE at the cut, else the `Was driving` hint. Its own context
 # opens at its invocation (or re-invocation) and holds while nothing but the loop runs; the first of
 # these ends it for good (only invoking the loop again opens it again):
-#   - a prompt of any kind: a user row a person wrote, a command a person typed (a status look, a
-#     pause, this plugin's own skills, /loop and the other Claude Code commands that start a turn;
-#     not a local one such as /compact, /model or /effort), a shell command typed with `!`, or a
+#   - a prompt of any kind: a user row a person wrote (also one with no text, only an image or a
+#     document), a command a person typed (a status look, a pause, this plugin's own skills, /loop
+#     and the other Claude Code commands that start a turn; not a local one such as /compact,
+#     /model or /effort), a shell command typed with `!`, or a
 #     prompt typed while a turn runs, from the moment Claude Code queues it (a queue-operation
-#     enqueue of plain text, not a prompt the session scheduled itself with CronCreate or
-#     ScheduleWakeup) to its delivery inside the running turn (a queued_command attachment: a
-#     person's prompt typed meanwhile, an auto-continuation, a coordinator's correction);
+#     enqueue of plain text or of a tag that is no notification, not a prompt the session scheduled
+#     itself with CronCreate or ScheduleWakeup) to its delivery inside the running turn (a
+#     queued_command attachment: a person's prompt typed meanwhile, with or without text, an
+#     auto-continuation, a coordinator's correction);
 #   - an interruption mark ("[Request interrupted by user]", also "… for tool use"), and Claude
 #     Code's notice that the person stopped background agents ("… stopped by the user");
 #   - another session's message (a cross-session message, a cross-session notice, a teammate's or a
@@ -77,7 +79,8 @@ package gsd;
 #   - the session resumed in a new process (Claude Code's SessionStart:resume hook rows): the old
 #     process's turn and the background work it ran are gone;
 #   - a row that may open a turn but is too long to read (over $ROW_MAX: a pasted prompt, typed or
-#     queued): unclear;
+#     queued, another session's message, a notification): unclear, and the background work the
+#     loop started no longer counts as running (that row may have ended it);
 #   - a pause (below), the checkpoint this plugin's nudge asked for saying `Step 1: none: task
 #     done` (`Step 1:` on its line or the next, any dash after `none`), a single-phase loop's
 #     (%STEP) own `phase.complete`, a bounded gsd-autonomous run (`--only N`, `--to N`, read from its
@@ -165,7 +168,7 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 16;
+our $CACHE_V = 17;
 our $BG_KEEP = 32;                    # newest background tasks kept while no notification names them
 our %DRIVERS = map { $_ => 1 } qw(gsd-autonomous gsd-execute-phase gsd-manager
                                   superpowers:executing-plans superpowers:subagent-driven-development);
@@ -973,6 +976,12 @@ sub _text {
          : ref $c eq 'ARRAY' ? join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$c) : '';
 }
 
+# Whether a message's content holds an image or a document (a prompt may hold only those).
+sub _att {
+    my ($c) = @_;
+    return (ref $c eq 'ARRAY' && grep { ref $_ eq 'HASH' && ($_->{type} // '') =~ /\A(?:image|document)\z/ } @$c) ? 1 : 0;
+}
+
 sub _row {
     my ($st, $j, $cwd0) = @_;
     return unless ref $j eq 'HASH' && !$j->{isSidechain};
@@ -1006,9 +1015,10 @@ sub _row {
         # anywhere else are quoted in a prompt.
         if ($t =~ m{\A\s*<command-(?:message|name)>} && $t =~ m{<command-name>/?([^<\s]+)</command-name>(?:\s*<command-args>(.*?)</command-args>)?}s) {
             _invoked($st, 'typed', $1, $2, $cwd, $ts, $j->{stackedExpansion} ? 1 : 0);
-        } elsif ($tr || $t !~ /\S/ || $t =~ /\A\s*<(?:local-command-(?:stdout|stderr)|bash-(?:stdout|stderr))>/) {
+        } elsif ($tr || $t =~ /\A\s*<(?:local-command-(?:stdout|stderr)|bash-(?:stdout|stderr))>/) {
             # a tool result; the output of a command the person ran (it opens no turn)
-        } elsif (_human($j, $t)) {
+        } elsif (_human($j, $t, _att($c))) {
+            # (a prompt with no text, only an image or a document, too)
             _prompt($st, $ts);
             _prose_pause($st, $t, $ts);
         } elsif (my $nk = _note($t)) {
@@ -1398,11 +1408,15 @@ sub _nudge {
 # origin human; a row without an origin (older versions) counts unless it is a teammate message,
 # an interruption mark or a tagged notice. Task notifications, tool results, stacked commands and
 # this plugin's own submitted notes (the auto-continue note, a handoff turn's prompt: `Note from
-# the user's <plugin> plugin: …`, whatever origin they carry) never count.
+# the user's <plugin> plugin: …`, whatever origin they carry) never count. A prompt with no text
+# (att: it holds an image or a document; an SDK or bridge client sends one without a text block)
+# counts when its origin is human, or with no origin when it holds one.
 sub _human {
-    my ($j, $t) = @_;
+    my ($j, $t, $att) = @_;
     return 0 if $j->{stackedExpansion} || $j->{isCompactSummary};
-    return 0 unless defined $t && $t =~ /\S/;
+    if (!defined $t || $t !~ /\S/) {
+        return (ref $j->{origin} eq 'HASH' ? ($j->{origin}{kind} // '') eq 'human' : !defined $j->{origin} && $att) ? 1 : 0;
+    }
     my $b = eval { ctx::brand() } // '';
     return 0 if $b ne '' && $t =~ /\A\s*(?:Note from the user's|The) \Q$b\E plugin(?: sent a message)?: /;
     return (($j->{origin}{kind} // '') eq 'human' ? 1 : 0) if ref $j->{origin} eq 'HASH';
@@ -1417,8 +1431,9 @@ sub _human {
 # agent or teammate). Anything else ends the loop's context (owner 20:57): a prompt a person typed
 # meanwhile ("stop after this wave"; origin human, or none in older versions, read as a user row's
 # text is; with the prose /gsd-pause-work a prompt may name), another session's message, an
-# auto-continuation, a coordinator's correction. This plugin's own note never. A person's prompt is
-# that whatever tags it quotes: it is read first.
+# auto-continuation, a coordinator's correction, one with no text that is not a person's. This
+# plugin's own note never. A person's prompt is that whatever tags it quotes, or with no text (only
+# an image or a document): it is read first.
 sub _queued {
     my ($st, $j) = @_;
     my $a = $j->{attachment};
@@ -1428,7 +1443,7 @@ sub _queued {
     delete $st->{ntfhit};
     return _kill($st->{drv}, 'its background agents were stopped by the user', $ts) if _agents_stopped($t);
     my $ntf = (($a->{commandMode} // '') eq 'task-notification' || $t =~ /\A\s*<task-notification>/) ? 1 : 0;
-    if (!$ntf && _human({ (exists $a->{origin} ? (origin => $a->{origin}) : ()) }, $t)) {
+    if (!$ntf && _human({ (exists $a->{origin} ? (origin => $a->{origin}) : ()) }, $t, _att($a->{prompt}))) {
         _prompt($st, $ts, 'a prompt typed mid-turn', 1);
         _prose_pause($st, $t, $ts);
         return;
@@ -1436,24 +1451,29 @@ sub _queued {
     _bg_text($st, $t, 1, $ts);
     my $mine = delete $st->{ntfhit};
     $mine ||= _own_sender($st, @{ $a->{origin} }{qw(senderTaskId from)}) if ref $a->{origin} eq 'HASH';
-    return if $ntf || $mine || _team_notice($t) || _note($t) || $t !~ /\S/;
+    return if $ntf || $mine || _team_notice($t) || _note($t);
     my $peer = ($t =~ /<(?:agent|teammate|cross-session)-message\b/ || (ref $a->{origin} eq 'HASH' && ($a->{origin}{kind} // '') eq 'peer')) ? 1 : 0;
     _kill($st->{drv}, $peer ? "another session's message" : 'a queued message', $ts);
 }
 
 # A queue-operation enqueue row (j): what was queued while a turn ran, until Claude Code delivers it
 # (a queued_command attachment, or the next turn's user row). Plain text, or a typed command that
-# starts a turn, is a prompt a person typed from here on. None: a notification, another session's
-# message or notice, this plugin's own note, a local Claude Code command (/compact, /model), and a
-# prompt this session scheduled itself (a CronCreate or ScheduleWakeup prompt firing: _sched). A
-# side agent's note is another session's message, a goal's continuation a queued message, and
-# Claude Code's notice that background agents were stopped by the user a stop.
+# starts a turn, is a prompt a person typed from here on, and so is text that starts with any other
+# tag (pasted HTML, a shell command typed with `!`: `<bash-input>`, a pasted block). None: a
+# notification (a task notification, a scheduled task firing, an agent's or a teammate's message),
+# another session's message or notice, a command's output, this plugin's own note, a local Claude
+# Code command (/compact, /model), and a prompt this session scheduled itself (a CronCreate or
+# ScheduleWakeup prompt firing: _sched). A side agent's note is another session's message, a goal's
+# continuation a queued message, and Claude Code's notice that background agents were stopped by
+# the user a stop. An enqueue with no text (an SDK or bridge client's prompt, this plugin's note)
+# is read at its delivery, which follows at once as a user row.
 sub _enqueued {
     my ($st, $j) = @_;
     return unless ($j->{type} // '') eq 'queue-operation' && ($j->{operation} // '') eq 'enqueue' && !$j->{isSidechain};
     my $t = $j->{content};
     return unless defined $t && !ref $t && $t =~ /\S/;
-    return if $t =~ /\A\s*(?:<|\[Cross-session |\[Request interrupted|Another Claude session sent a message)/ || _note($t) || _sched($st, $t);
+    return if $t =~ /\A\s*(?:<(?:task-notification|scheduled-task|agent-message|teammate-message|cross-session-message|local-command-[a-z]+|bash-(?:stdout|stderr))[\s>]|\[Cross-session |\[Request interrupted|Another Claude session sent a message)/
+        || _note($t) || _sched($st, $t);
     my $ts = util::parse_iso($j->{timestamp} // '');
     return _kill($st->{drv}, 'its background agents were stopped by the user', $ts) if _agents_stopped($t);
     return _kill($st->{drv}, "another session's message", $ts) if $t =~ /\A\s*Here is a note offered by a side agent:/;
@@ -1469,17 +1489,19 @@ sub _enqueued {
 }
 
 # Whether a row too long to decode (over $ROW_MAX) may open a turn or be delivered inside one: a
-# user row that holds no tool result and is no meta row (a person's pasted prompt or image), a
-# queued_command attachment, a queue-operation enqueue. Text inside a row is JSON-escaped, so these
-# keys match only the row's own structure (a row of another type that nests a user message, such
-# as an agent's progress row, is none).
+# user row that holds no tool result and is no meta row (a person's pasted prompt or image, a
+# notification), a meta row of another session's message or a background agent's hand-back (origin
+# peer, `[Cross-session `), a queued_command attachment, a queue-operation enqueue. Text inside a
+# row is JSON-escaped, so these keys match only the row's own structure, in any order (a row of
+# another type that nests a user message, such as an agent's progress row, is none).
 sub _long_opener {
     my ($l) = @_;
     return 1 if index($l, '"type":"queued_command"') >= 0;
-    return 1 if index($l, '{"type":"queue-operation"') == 0 && index($l, '"operation":"enqueue"') >= 0;
+    return 1 if index($l, '"type":"queue-operation"') >= 0 && index($l, '"operation":"enqueue"') >= 0;
     return 0 if $l =~ /"type":"(?:assistant|progress|system|attachment)"/;
-    return (index($l, '"type":"user"') >= 0 && index($l, '"tool_use_id"') < 0 && index($l, '"isMeta":true') < 0
-            && index($l, '"isCompactSummary":true') < 0) ? 1 : 0;
+    return 0 unless index($l, '"type":"user"') >= 0 && index($l, '"tool_use_id"') < 0 && index($l, '"isCompactSummary":true') < 0;
+    return 1 if index($l, '"isMeta":true') < 0;
+    return (index($l, '"kind":"peer"') >= 0 || index($l, '[Cross-session ') >= 0) ? 1 : 0;
 }
 
 # The time of a row too long to decode (its first timestamp key), or undef.
@@ -1596,9 +1618,16 @@ sub scan {
         my $bgo = ((ref $st->{bg} eq 'HASH' && %{ $st->{bg} }) || (ref $st->{bgend} eq 'HASH' && %{ $st->{bgend} })) ? 1 : 0;
         my $open = $st->{drv} && ($st->{drv}{mode} // '') ne 'ended';
         # A row too long to read that may open a turn or be delivered inside one (a person's pasted
-        # prompt, typed or queued): unclear, so the driver's own context ends (_long_opener).
+        # prompt, typed or queued, another session's message, a notification): unclear, so the
+        # driver's own context ends (_long_opener). It may also end the driver's own background
+        # work (its notification, its hand-back), which no longer counts as running: the same loop
+        # invoked again is then live only while one of its steps is mid-turn.
         if ($open && length($l) > $ROW_MAX && index($l, '"isSidechain":true') < 0 && _long_opener($l)) {
-            _kill($st->{drv}, 'a message too long to read', _long_ts($l));
+            my $D = $st->{drv};
+            _kill($D, 'a message too long to read', _long_ts($l));
+            if (ref $st->{bg} eq 'HASH') {
+                _bg_close($st, $_) for grep { ref $st->{bg}{$_} eq 'HASH' && defined $st->{bg}{$_}{d} && defined $D->{id} && $st->{bg}{$_}{d} == $D->{id} } keys %{ $st->{bg} };
+            }
             next;
         }
         # What Claude Code delivers inside the running turn (a queued_command attachment: a prompt a
