@@ -2,7 +2,8 @@
  "id": "AT-CF-03, AT-CF-06 fit (U-04) long-path",
  "layer": "H",
  "owner": "skills",
- "note": "The real begin steps of AT-CF-03-06-fit-counted with the store root, the disposable root and the repository 246 characters deeper under the temp folder (U-04 and its review: the fit-counted case's exact 20 and 8 failed past a 121-character TMPDIR). Shown + counted = found, the newest first, begin-full.json holds every entry, and the reply stays within 3,072 B at either depth",
+ "tmp_norm": false,
+ "note": "The real begin steps of AT-CF-03-06-fit-counted with the store root, the disposable root and the repository 246 characters deeper under the temp folder (U-04 and its review: the fit-counted case's exact 20 and 8 failed past a 121-character TMPDIR). Shown + counted = found, the newest first, begin-full.json holds every entry, and the reply stays within 3,072 B at either depth. begin trims its reply to the real 3,072 B, so the size bound measures stdout as it is (tmp_norm false): with each $TMP counted at 82 B, a reply of 2,978 B under the Linux rows' 27-byte $TMP counted 3,198 B. AT-CF-02-03-06-long-short-tmpdir runs this case under TMPDIR=/tmp",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

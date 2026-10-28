@@ -26,6 +26,11 @@
 #                            under /tmp, /private/tmp and /var/folders as ephemeral)
 #   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
 #                            case whose helper output depends on its path lengths)
+#   case "tmp_norm": false   stdout_max_bytes measures stdout as it is, also outside the
+#                            repo's tmp/: for a case whose helper trims its own output to a
+#                            real byte size at any path length (begin's 3,072 B fit, the U-04
+#                            long-path twins), where counting $TMP at $TMP_REF_BYTES would
+#                            fail it under a short TMPDIR (/tmp on the Linux rows)
 #   step "cwd"               the helper's working directory (default: the case's $TMP)
 #   step "capture"           {VAR: "json:<dotted path>" | "re:<regex, one group>"} from stdout
 #   case / step "options"  {key: value}: plugin options in $HOME/.claude/settings.json
@@ -36,7 +41,8 @@
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
 #   expect: stdout_max_bytes (for a case in the system temp folder, each $TMP in stdout counts as
-#     $TMP_REF_BYTES bytes, so the cap does not depend on how long TMPDIR is);
+#     $TMP_REF_BYTES bytes, so the cap does not depend on how long TMPDIR is; not with
+#     "tmp_norm": false);
 #     stdout_has / stdout_lacks (regexes, /m); stderr_has (regexes, /m); json_keys; json {dotted path: value |
 #     {re} | {null} | {len} | {len_min} | {len_plus, total} | {present} | {max_bytes}}; files
 #     has / lacks (regexes, /m); {len_plus: "<dotted path>" or a list of them, total: N}: the
@@ -105,8 +111,11 @@ my ($RUN_TMP, $REPO_TMP, $SHORT_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
 # default temp folder (/private/var/folders/<2>/<30>/T/store-h-<pid>-<6 hex>/c<N>, 77 to 82
 # bytes), where the caps were sized. A long TMPDIR then no longer fails a cap, and a short one
 # (/tmp) no longer hides an overrun. Cases under the repo's tmp/ (tmp_base "repo") are measured as
-# they are. A case whose helper output itself depends on its path lengths (begin trims to fit
-# 3,072 B) runs with tmp_base "short": under /tmp, whatever TMPDIR is.
+# they are. A case whose helper output itself depends on its path lengths runs with tmp_base
+# "short" (under /tmp, whatever TMPDIR is) or "repo". A case whose helper trims its output to a
+# real byte size at any path length (begin's 3,072 B fit, the U-04 long-path twins) sets
+# "tmp_norm": false and is measured as it is: with $TMP counted at 82 bytes, a short $TMP (about
+# 27 bytes on the Linux rows) put a reply trimmed to its real 3,072 B over the cap.
 our $TMP_REF_BYTES = 82;
 my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, $FIXTURES_DIR, @ARGS);
 $SIG{$_} = sub { exit 130 } for qw(INT TERM HUP);
@@ -611,7 +620,9 @@ sub run_case {
     util::mkdir_p("$tmp/tmpdir");
     my %V;
     $V{TMP} = Cwd::abs_path($tmp);
-    $V{TMP_NORM} = $tb eq 'repo' ? 0 : 1;    # R6: byte caps count $TMP at $TMP_REF_BYTES
+    # R6: byte caps count $TMP at $TMP_REF_BYTES, except under the repo's tmp/ and with
+    # "tmp_norm": false (a JSON false; any other value keeps the count)
+    $V{TMP_NORM} = $tb eq 'repo' || (jsonc::is_bool($case->{tmp_norm}) && !$case->{tmp_norm}) ? 0 : 1;
     $V{HOME} = "$V{TMP}/home";
     $V{SID} = $case->{sid} // $DEFAULT_SID;
     $V{SID8} = substr($V{SID}, 0, 8);
@@ -2497,11 +2508,23 @@ sub builtin {
         # A child run of this runner on a case-local folder (discovery skips _ folders), with
         # its own TMPDIR: "dir" (under the case), "exit" (wanted), "stdout_has" (regexes the
         # output must match), for runner self-checks whose wanted result is a failing case.
-        my $dir = $a->{dir} // die "runner_child: no dir\n";
-        my $td = ($a->{tmp} // die "runner_child: no tmp\n") . '/child-' . util::rand_hex(4);
+        # "cases" [paths under tests/helper/cases] runs suite cases instead of "dir"; "tmpdir"
+        # is the child's TMPDIR as given ("/tmp": the shortest case folders a host gives, as on
+        # the Linux rows), else a fresh child-<4 hex> folder under "tmp"; "timeout_s" (180).
+        # A failing child keeps its work dir (BH-6); under a given "tmpdir", which outlives the
+        # case, it is removed here once the output is read, and the failure says so.
+        my @cases = @{ $a->{cases} || [] };
+        my $dir = @cases ? join(' ', @cases) : $a->{dir} // die "runner_child: no dir\n";
+        my @targets = @cases ? (map { "$HERE/cases/$_" } @cases) : ("$cdir/$dir");
+        my $td = $a->{tmpdir} // (($a->{tmp} // die "runner_child: no tmp\n") . '/child-' . util::rand_hex(4));
         util::mkdir_p($td);
-        my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", "$cdir/$dir"], timeout_ms => 180000, env => { TMPDIR => $td });
+        my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", @targets], timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { TMPDIR => $td });
         my $out = chars($r->{out} // '');
+        if (defined $a->{tmpdir}) {
+            my ($kept) = $out =~ /^# kept: ([^\n]*)$/m;
+            my %w = map { (util::dirname($_) => 1) } split / /, $kept // '';
+            for my $w (sort keys %w) { next unless _work_dir_ok($w, $td); remove_tree($w, $td); $out .= "# (child work dir $w removed)\n" }
+        }
         push @e, "child run of $dir: exit $r->{exit}, want " . ($a->{exit} // 0) . ': ' . substr($out, -600) if $r->{exit} != ($a->{exit} // 0);
         for my $re (@{ $a->{stdout_has} || [] }) { push @e, "child run of $dir: output has no /$re/: " . substr($out, -600) unless $out =~ /$re/m }
         return @e;
