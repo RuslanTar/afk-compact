@@ -31,6 +31,10 @@ root=$(cd "$here/.." 2>/dev/null && pwd -P) || root=$here/..
 perl=$(command -v perl 2>/dev/null)
 [ -n "$perl" ] || perl=/usr/bin/perl
 if [ -x "$perl" ] && [ -r "$root/helper/main.pl" ] && "$perl" -e 'exit($] < 5.028 ? 1 : 0)' 2>/dev/null; then
+  # A locale the system lacks (LC_ALL, LC_*, LANG) makes perl print five warning lines on
+  # stderr before main.pl runs, which a skill's Bash output would carry; 0 keeps it quiet.
+  PERL_BADLANG=0
+  export PERL_BADLANG
   if [ "${1-}" = hook ]; then
     # Exit 2 from a hook blocks, vetoes or re-prompts; perl exits 2 on its own when it
     # dies with errno ENOENT. A hook always exits 0, whatever main.pl does.

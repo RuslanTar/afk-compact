@@ -214,9 +214,12 @@ sub mkdir_p {
 
 # ---------------------------------------------------------------- files
 
+# read_file(path, max?) -> bytes | undef. A folder is not a readable file (PF-5): open
+# takes one for reading on macOS and the read gives '', which save-copy saved as a copy.
 sub read_file {
     my ($path, $max) = @_;
     open(my $fh, '<:raw', $path) or return undef;
+    if (-d $fh) { close $fh; return undef }
     my $data = '';
     if (defined $max) {
         my $n = read($fh, $data, $max);

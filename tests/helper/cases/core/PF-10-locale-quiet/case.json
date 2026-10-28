@@ -1,0 +1,16 @@
+{
+ "id": "PF-10-locale-quiet",
+ "note": "owner ruling PF-10 (2026-10-27 22:40, small flaw 6; reference scenario pf-locale-quiet on the port branch): under a broken locale (LC_ALL and LANG naming a locale the system lacks) no helper call through the launcher prints a locale warning on stderr. Before the fix perl printed `perl: warning: Setting locale failed.` and four more lines before main.pl ran, for every subcommand but `hook` (whose stderr the launcher sends to /dev/null), so a skill's Bash output carried them. The launcher's Perl route now sets PERL_BADLANG=0",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {"LC_ALL": "xx_YY.UTF-8", "LANG": "xx_YY.UTF-8"},
+ "steps": [
+  {"name": "hook Stop: quiet",
+   "argv": ["hook", "Stop"],
+   "stdin_text": "{\"session_id\":\"$SID\",\"hook_event_name\":\"Stop\",\"cwd\":\"$TMP\",\"transcript_path\":\"$TMP/none.jsonl\"}",
+   "expect": {"exit": 0, "stderr_empty": true}},
+  {"name": "ident: quiet",
+   "argv": ["ident", "--sid", "$SID"],
+   "expect": {"exit": 0, "stderr_empty": true, "stdout_has": ["\\A\\{\"pid\":"]}}
+ ]
+}

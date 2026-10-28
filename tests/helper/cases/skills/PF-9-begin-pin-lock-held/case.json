@@ -1,0 +1,116 @@
+{
+ "id": "PF-9-begin-pin-lock-held",
+ "layer": "H",
+ "owner": "skills",
+ "note": "owner ruling PF-9 (2026-10-27 22:40, small flaw 5; reference scenario pf-begin-pin-lock-held on the port branch): begin's ownership.pin_lock reads the pin lock record's start time from `pid_lstart`, the key the lock writer (lib/lock.pm) puts there. A live holder with its true start time is `held`; a live pid with another start time and a holder that has ended are `stale`; no lock file, or a lock file with no record, is `free`. The runner stands in for the live holder ($RUNNER_PID, $RUNNER_LSTART). Before the fix begin read `lstart`, which the record never holds, so a live holder always read as `stale`",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "a live holder with its own start time: held",
+   "cwd": "$TMP/work",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ownership.pin_lock": "held"
+    }
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$ROOT/.sessions/$SID.json.lock",
+     "content": "{\"sid\":\"$SID\",\"actor\":\"main\",\"pid\":$RUNNER_PID,\"pid_lstart\":\"$RUNNER_LSTART\",\"host\":\"$HOST\",\"ts\":\"2026-10-21T14:05:00+03:00\"}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/22222222-3333-4444-8555-666666666666.json.lock",
+     "content": "{\"sid\":\"22222222-3333-4444-8555-666666666666\",\"actor\":\"main\",\"pid\":$RUNNER_PID,\"pid_lstart\":\"Thu Jan  1 03:00:00 1970\",\"host\":\"$HOST\",\"ts\":\"2026-10-21T14:05:00+03:00\"}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/44444444-5555-4666-8777-888888888888.json.lock",
+     "content": "{\"sid\":\"44444444-5555-4666-8777-888888888888\",\"actor\":\"main\",\"pid\":999999999,\"pid_lstart\":\"Thu Jan  1 03:00:00 1970\",\"host\":\"$HOST\",\"ts\":\"2026-10-21T14:05:00+03:00\"}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/55555555-6666-4777-8888-999999999999.json.lock",
+     "content": ""
+    }
+   ]
+  },
+  {
+   "name": "a live pid with another start time: stale",
+   "cwd": "$TMP/work",
+   "argv": [
+    "begin",
+    "--sid",
+    "22222222-3333-4444-8555-666666666666",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ownership.pin_lock": "stale"
+    }
+   }
+  },
+  {
+   "name": "a holder that has ended: stale",
+   "cwd": "$TMP/work",
+   "argv": [
+    "begin",
+    "--sid",
+    "44444444-5555-4666-8777-888888888888",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ownership.pin_lock": "stale"
+    }
+   }
+  },
+  {
+   "name": "no lock file: free",
+   "cwd": "$TMP/work",
+   "argv": [
+    "begin",
+    "--sid",
+    "33333333-4444-4555-8666-777777777777",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ownership.pin_lock": "free"
+    }
+   }
+  },
+  {
+   "name": "a lock file with no record: free",
+   "cwd": "$TMP/work",
+   "argv": [
+    "begin",
+    "--sid",
+    "55555555-6666-4777-8888-999999999999",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ownership.pin_lock": "free"
+    }
+   }
+  }
+ ]
+}
