@@ -1,7 +1,7 @@
 {
  "id": "AT-GR-01",
  "sid": "22222222-2222-4222-8222-222222222222",
- "note": "Owner 2026-10-26 21:37 (GSD re-entry per session): five sessions share one worktree with a flat .planning/STATE.md, workstreams workstream-a and workstream-b and a .phase-loop-run file. measure --compact prints a GSD line only for the sessions whose own transcript shows GSD work (typed GSD commands, GSD Skill calls, gsd-tools runs that read or change planning state, state-file writes), each with its own workstream, and an Active driver line only for a real loop skill the session invoked (the shipped list, the driver_skills setting, or a skill chained into a typed GSD command); a GSD-only session gets a passive GSD re-entry line instead. A session that only talked about GSD, searched for it, quoted it, read its files, wrote another file into a workstream folder, ran GSD maintenance or invoked a one-shot skill with --ws gets neither. The shared .planning/active-workstream pointer changes nothing. Also: /clear forgets what came before; rows a fork carried over count; the newest named workstream whose folder exists wins (a prose trailing dot dropped, also in the re-enter command); a GSD root in another checkout adds --cwd; the GSD lines come right after the git header so the 3,000 B cap (it keeps lines from the top) cuts every later line, here porcelain lines, before them; checkpoint --measured, the classic SessionStart(compact) block ([driver] line only beside an Active driver), begin's gsd object and the stage's gsd_state follow the same per-session facts. Root rulings R1, R2, R5 of 2026-10-27: the driver is the outermost unpaused loop (a loop another one runs as its step never replaces it); a pause ends it only when no loop work follows; a finishing skill or GSD work on another workstream ends it; where the transcript leaves it unclear, a Was driving hint replaces the Active driver line; a skill is a loop only when its text's code runs gsd-tools Round 3 (2026-10-27): a turn of this plugin's own (its halt, planned-compaction and idle handoff turns, its skills) is no stop and no loop work; background work is the open driver's (a re-invoked loop keeps it), closed by task id, SendMessage, TaskStop, a Monitor's end or time, and a background command or persistent monitor only names itself in a hint; the nudged checkpoint's `Step 1: none: task done` makes a hint; an absorbed GSD loop is named as a later step (sessions 95-112). Round 4 (2026-10-27): a skill of this plugin's the model runs inside the loop's turn keeps that turn's end a stop; after a prompt or a stopped turn only a phase's own gsd-tools progress is loop work; a step absorbed after a prompt never makes the outer loop Active again; a shut-down teammate, a task-id-only notification and an interruption end what they end; a timed Monitor alone is no live work (sessions 118-147). Round 5 (2026-10-27): a turn or a skill of this plugin's own (its idle or planned-compaction handoff, its resume) never ends a loop's pause; after a pause file only loop work (a GSD work command, a loop skill, a gsd-tools state run other than a commit, a test or build run, a spawn, a phase, roadmap or code write) goes on past it, never the pause's own acts (a commit, a run-state append, a note outside the checkout, stopping its workers, reads), and a pause file written while its earlier background work runs stays a hint until none of it runs; a single-phase loop's phase files are its own phase's; state.update and state.patch are a person's STATE.md notes; a GSD root in another checkout whose path --cwd cannot carry gives a hint (sessions 148-173). Round 6 (2026-10-27): a prompt while the loop's own agents run and its turn has not stopped, or a typed status look, is no stop; after a loop paused itself and a person's prompt, a write never makes it Active (a phase file makes it a hint); a driver with no workstream takes only one its own loop work names; after the loop's report or a prompt a phase-file write is no loop work; a turn another session's message opened is not the loop's; a pause file starts a self-pause also after this plugin's skill or in a turn of its own; five sessions sharing the worktree again (sessions 174-207). Round 7 (2026-10-27): every human prompt counts again, also one while the loop's agents run; the loop shows itself again in a turn its own finished background work's notification opened (a spawn, a woken agent, a progress run, its GSD loop step); a prompt naming /gsd-pause-work asks for the pause; the re-enter command's --cwd is the loop's own GSD root (sessions 208-234). Round 8 (2026-10-27): after a human prompt only the loop's re-invocation or a GSD loop it runs as its step in its own notification turn makes it Active again (no progress run, spawn or plain reply); a pause asked for holds until its files are written, the loop is invoked again or a later prompt comes (new work makes it 'pause asked, then loop work'); an interruption mark is a stop; a session whose only GSD evidence is reads gets no GSD line; a read never moves the loop's GSD root (sessions 235-260). Owner ruling 2026-10-27 20:57 (binding; it supersedes what rounds 2-8 inferred from prompts, pauses and progress runs): an Active driver only while the loop is clearly live at the cut (its own context holds since its last invocation, and a turn of its own runs or an agent, workflow, teammate or wake-up it launched still runs); a prompt of any kind (also typed mid-turn, a status look, this plugin's own skill), an interruption, another session's message, a pause or a turn end with nothing of its own running end that context until the loop is invoked again; a pause file the loop writes pauses it at once; a flat hint beside the shared pointer carries its caution. Steps whose expected mode changed say so in their names (owner 20:57); AT-GR-09 covers the ruling's cases. Round 5 review: a background command the loop launched is a background task it started (owner 20:57), live until its notification, KillShell or TaskStop (sessions 91, 101, 222: Active; 92: another session's turn); a read in another checkout than the one the session's own GSD work used only looks, so neither its GSD line nor its re-entry moves (sessions 221, 254: no --cwd anywhere).",
+ "note": "Owner 2026-10-26 21:37 (GSD re-entry per session): five sessions share one worktree with a flat .planning/STATE.md, workstreams workstream-a and workstream-b and a .phase-loop-run file. measure --compact prints a GSD line only for the sessions whose own transcript shows GSD work (typed GSD commands, GSD Skill calls, gsd-tools runs that read or change planning state, state-file writes), each with its own workstream, and an Active driver line only for a real loop skill the session invoked (the shipped list, the driver_skills setting, or a skill chained into a typed GSD command); a GSD-only session gets a passive GSD re-entry line instead. A session that only talked about GSD, searched for it, quoted it, read its files, wrote another file into a workstream folder, ran GSD maintenance or invoked a one-shot skill with --ws gets neither. The shared .planning/active-workstream pointer changes nothing. Also: /clear forgets what came before; rows a fork carried over count; the newest named workstream whose folder exists wins (a prose trailing dot dropped, also in the re-enter command); a GSD root in another checkout adds --cwd; the GSD lines come right after the git header so the 3,000 B cap (it keeps lines from the top) cuts every later line, here porcelain lines, before them; checkpoint --measured, the classic SessionStart(compact) block ([driver] line only beside an Active driver), begin's gsd object and the stage's gsd_state follow the same per-session facts. Root rulings R1, R2, R5 of 2026-10-27: the driver is the outermost unpaused loop (a loop another one runs as its step never replaces it); a pause ends it only when no loop work follows; a finishing skill or GSD work on another workstream ends it; where the transcript leaves it unclear, a Was driving hint replaces the Active driver line; a skill is a loop only when its text's code runs gsd-tools Round 3 (2026-10-27): a turn of this plugin's own (its halt, planned-compaction and idle handoff turns, its skills) is no stop and no loop work; background work is the open driver's (a re-invoked loop keeps it), closed by task id, SendMessage, TaskStop, a Monitor's end or time, and a background command or persistent monitor only names itself in a hint; the nudged checkpoint's `Step 1: none: task done` makes a hint; an absorbed GSD loop is named as a later step (sessions 95-112). Round 4 (2026-10-27): a skill of this plugin's the model runs inside the loop's turn keeps that turn's end a stop; after a prompt or a stopped turn only a phase's own gsd-tools progress is loop work; a step absorbed after a prompt never makes the outer loop Active again; a shut-down teammate, a task-id-only notification and an interruption end what they end; a timed Monitor alone is no live work (sessions 118-147). Round 5 (2026-10-27): a turn or a skill of this plugin's own (its idle or planned-compaction handoff, its resume) never ends a loop's pause; after a pause file only loop work (a GSD work command, a loop skill, a gsd-tools state run other than a commit, a test or build run, a spawn, a phase, roadmap or code write) goes on past it, never the pause's own acts (a commit, a run-state append, a note outside the checkout, stopping its workers, reads), and a pause file written while its earlier background work runs stays a hint until none of it runs; a single-phase loop's phase files are its own phase's; state.update and state.patch are a person's STATE.md notes; a GSD root in another checkout whose path --cwd cannot carry gives a hint (sessions 148-173). Round 6 (2026-10-27): a prompt while the loop's own agents run and its turn has not stopped, or a typed status look, is no stop; after a loop paused itself and a person's prompt, a write never makes it Active (a phase file makes it a hint); a driver with no workstream takes only one its own loop work names; after the loop's report or a prompt a phase-file write is no loop work; a turn another session's message opened is not the loop's; a pause file starts a self-pause also after this plugin's skill or in a turn of its own; five sessions sharing the worktree again (sessions 174-207). Round 7 (2026-10-27): every human prompt counts again, also one while the loop's agents run; the loop shows itself again in a turn its own finished background work's notification opened (a spawn, a woken agent, a progress run, its GSD loop step); a prompt naming /gsd-pause-work asks for the pause; the re-enter command's --cwd is the loop's own GSD root (sessions 208-234). Round 8 (2026-10-27): after a human prompt only the loop's re-invocation or a GSD loop it runs as its step in its own notification turn makes it Active again (no progress run, spawn or plain reply); a pause asked for holds until its files are written, the loop is invoked again or a later prompt comes (new work makes it 'pause asked, then loop work'); an interruption mark is a stop; a session whose only GSD evidence is reads gets no GSD line; a read never moves the loop's GSD root (sessions 235-260). Owner ruling 2026-10-27 20:57 (binding; it supersedes what rounds 2-8 inferred from prompts, pauses and progress runs): an Active driver only while the loop is clearly live at the cut (its own context holds since its last invocation, and a turn of its own runs or an agent, workflow, teammate or wake-up it launched still runs); a prompt of any kind (also typed mid-turn, a status look, this plugin's own skill), an interruption, another session's message, a pause or a turn end with nothing of its own running end that context until the loop is invoked again; a pause file the loop writes pauses it at once; a flat hint beside the shared pointer carries its caution. Steps whose expected mode changed say so in their names (owner 20:57); AT-GR-09 covers the ruling's cases. Round 5 review: a background command the loop launched is tracked until its notification, KillShell or TaskStop; round 6 review: it only names itself in the hint and never keeps the loop Active (a server left running while the loop waits for the person; sessions 91, 92, 101, 222: Was driving); a single-phase loop's own gates through the Skill tool before its phase.complete are its steps (session 33: Active); arguments that cannot be shown and hold more than the parts a re-enter command keeps give the hint, whose command keeps their phase (sessions 15, 21, 39, 163, 164). Also round 5 review: a read in another checkout than the one the session's own GSD work used only looks, so neither its GSD line nor its re-entry moves (sessions 221, 254: no --cwd anywhere).",
  "tmp_base": "short",
  "now": "2026-10-26T14:05:12+03:00",
  "tz": "Etc/GMT-3",
@@ -4703,7 +4703,7 @@
    }
   },
   {
-   "name": "session 21: hidden arguments: the re-enter command keeps --ws, --repo and resume, in their order",
+   "name": "session 21: hidden arguments: the re-enter command keeps --ws, --repo and resume, in their order; the rest (--note) it cannot repeat, so a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -4718,11 +4718,12 @@
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
      "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
-     "^Active driver: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a --repo \\S+/repo resume$"
+     "^Was driving: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300; its arguments are not shown, and its re-enter command keeps only part of them\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a --repo \\S+/repo resume$"
     ],
     "stdout_lacks": [
      "--note",
-     "--cwd"
+     "--cwd",
+     "Active driver"
     ]
    }
   },
@@ -4881,7 +4882,7 @@
    ]
   },
   {
-   "name": "session 15, hidden arguments: re-enter /gsd-execute-phase --ws workstream-b (no trailing dot)",
+   "name": "session 15, hidden arguments: re-enter /gsd-execute-phase 3 --ws workstream-b (its phase kept, no trailing dot); the prose after them makes it a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -4895,10 +4896,12 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
-     "^Active driver: /gsd-execute-phase \\(arguments not shown\\) \\(Skill, 2026-10-26 13:00 \\+0300\\) · re-enter: /gsd-execute-phase --ws workstream-b$"
+     "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-b$",
+     "^Was driving: /gsd-execute-phase \\(arguments not shown\\) \\(Skill, 2026-10-26 13:00 \\+0300; its arguments are not shown, and its re-enter command keeps only part of them\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-b$"
     ],
     "stdout_lacks": [
-     "workstream-b\\."
+     "workstream-b\\.",
+     "Active driver"
     ]
    }
   },
@@ -6447,7 +6450,7 @@
    }
   },
   {
-   "name": "session 33 (R2): a single-phase loop, then GSD commands through the Skill tool (its own step hooks, or the session moving on): a Was driving hint",
+   "name": "session 33 (owner 20:57): a single-phase loop, then its own validate and secure gates through the Skill tool (its phase, or none named) before its phase.complete, mid-turn: its steps, so the Active driver",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -6461,11 +6464,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-b · \\S*/repo/\\.planning/workstreams/workstream-b/STATE\\.md: status planning · phase 5 · last activity 2026-10-25$",
-     "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-b$",
-     "^Was driving: /gsd-execute-phase 2 --ws workstream-b --wave 1 \\(Skill, 2026-10-26 13:01 \\+0300; another GSD command followed 2026-10-26 13:02 \\+0300\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 2 --ws workstream-b --wave 1$"
+     "^Active driver: /gsd-execute-phase 2 --ws workstream-b --wave 1 \\(Skill, 2026-10-26 13:01 \\+0300\\) · re-enter: /gsd-execute-phase 2 --ws workstream-b --wave 1$"
     ],
     "stdout_lacks": [
-     "Active driver",
+     "Was driving",
+     "GSD re-entry",
      "workstream-a"
     ]
    }
@@ -6600,7 +6603,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Was driving: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300; arguments not shown, no GSD work after it; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /phase-loop$"
+     "^Was driving: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300; its arguments are not shown, and its re-enter command keeps only part of them; caution: \\.planning/active-workstream names workstream-a, and GSD uses it\\) · re-enter only if Step 1 belongs to it: /phase-loop$"
     ],
     "stdout_lacks": [
      "^GSD",
@@ -6692,7 +6695,7 @@
    ]
   },
   {
-   "name": "session 39 with GSD work after the invocation: Active driver, re-entered with that workstream",
+   "name": "session 39 with GSD work after the invocation: still a Was driving hint (its command would drop the prose that says not to start yet), re-entered with that workstream",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -6706,10 +6709,11 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a$"
+     "^GSD re-entry \\(new session only\\): /gsd-resume-work --ws workstream-a$",
+     "^Was driving: /phase-loop \\(arguments not shown\\) \\(Skill, 2026-10-26 13:01 \\+0300; its arguments are not shown, and its re-enter command keeps only part of them\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving"
+     "Active driver"
     ]
    }
   },
@@ -15902,7 +15906,7 @@
    ]
   },
   {
-   "name": "session 91 (R2, owner 20:57): turn ends while only a background suite the loop started runs: a background task it started still runs, so Active driver",
+   "name": "session 91 (R2, owner 20:57): turn ends while only a background suite the loop started runs: a Was driving hint that names it (a background command may be a server that outlives the loop), never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -15916,11 +15920,10 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver"
+     "Active driver"
     ]
    }
   },
@@ -16146,7 +16149,7 @@
    ]
   },
   {
-   "name": "session 91 (R2, owner 20:57): the loop's report after its suite's notification, nothing running: a Was driving hint",
+   "name": "session 91 (R2, owner 20:57): the loop's report after its suite's notification, nothing running: still the Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -16160,16 +16163,15 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:07 \\+0300 with nothing of its own running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:03 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Active driver",
-     "Paused driver"
+     "Active driver"
     ]
    }
   },
   {
-   "name": "session 92 (R2, owner 20:57): a background server the loop started still runs, but another session's message opened the turn of its report: a Was driving hint, never Active",
+   "name": "session 92 (R2, owner 20:57): a background server the loop started still runs at its turn end, then another session's message opens the turn of its report: a Was driving hint that names the server, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -16183,11 +16185,10 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; another session's message 2026-10-26 13:03 \\+0300\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
+     "^Was driving: /phase-loop --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:02 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /phase-loop --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Active driver",
-     "Paused driver"
+     "Active driver"
     ]
    }
   },
@@ -21307,7 +21308,7 @@
    }
   },
   {
-   "name": "session 101 (R2, owner 20:57): a background command (a server) the loop started still runs at its turn end: a background task it started still runs, so Active driver",
+   "name": "session 101 (R2, owner 20:57): a background command (a server) the loop started still runs at its turn end, which hands the turn to the person: a Was driving hint that names it, never Active",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -21321,10 +21322,10 @@
     "exit": 0,
     "stdout_has": [
      "^GSD \\(this session\\): workstream workstream-a · \\S*/repo/\\.planning/workstreams/workstream-a/STATE\\.md: status executing · phase 2 · stopped at Plan 2\\.3 task 1 · last activity 2026-10-26$",
-     "^Active driver: /gsd-execute-phase 6 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300\\) · re-enter: /gsd-execute-phase 6 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 6 --ws workstream-a \\(typed, 2026-10-26 13:01 \\+0300; its turn ended 2026-10-26 13:04 \\+0300 with only a background command still running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 6 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -44241,7 +44242,7 @@
    ]
   },
   {
-   "name": "session 163: Skill arguments with a quote are not shown; the re-enter command keeps only --ws: Active driver",
+   "name": "session 163: Skill arguments with a quote are not shown; the re-enter command keeps the phase and --ws, not --note: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -44254,11 +44255,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase \\(arguments not shown\\) \\([^)]*\\) · re-enter: /gsd-execute-phase --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase \\(arguments not shown\\) \\([^)]*its arguments are not shown, and its re-enter command keeps only part of them\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver"
+     "Active driver",
+     "Paused driver",
+     "--note"
     ]
    }
   },
@@ -44469,7 +44471,7 @@
    ]
   },
   {
-   "name": "session 164: Skill arguments with a semicolon are not shown; the re-enter command keeps only --ws: Active driver",
+   "name": "session 164: Skill arguments with a semicolon are not shown; the re-enter command keeps the phase and --ws, not the --cwd it cannot pass: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -44482,11 +44484,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase \\(arguments not shown\\) \\([^)]*\\) · re-enter: /gsd-execute-phase --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase \\(arguments not shown\\) \\([^)]*its arguments are not shown, and its re-enter command keeps only part of them\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
-     "Paused driver"
+     "Active driver",
+     "Paused driver",
+     "other proj"
     ]
    }
   },
@@ -68851,7 +68854,7 @@
    ]
   },
   {
-   "name": "session 222 (R2, owner 20:57): its background command ran past its turn end, and its notification opens the loop's turn: a phase-file write mid-turn is Active",
+   "name": "session 222 (R2, owner 20:57): a phase-file write in a background command's notification turn after its turn ended with only that command running: a Was driving hint",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -68864,10 +68867,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Active driver: /gsd-execute-phase 3 --ws workstream-a \\([^)]*\\) · re-enter: /gsd-execute-phase 3 --ws workstream-a$"
+     "^Was driving: /gsd-execute-phase 3 --ws workstream-a \\(.*its turn ended.* with only a background command still running\\) · re-enter only if Step 1 belongs to it: /gsd-execute-phase 3 --ws workstream-a$"
     ],
     "stdout_lacks": [
-     "Was driving",
+     "Active driver",
      "Paused driver"
     ]
    }
@@ -83834,7 +83837,7 @@
      {
       "path": "$WATCH/$SID/gsd-scan.json",
       "json": {
-       "v": 14
+       "v": 15
       }
      }
     ]
