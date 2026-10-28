@@ -1,6 +1,6 @@
 {
  "id": "AD-11-hold-parity-lane-test",
- "note": "Owner 2026-10-28 digest rules (a), reviews 3 and 4: the saved copy's hold of a step (copies.pm _hold_of) and the lane check's (lane.ts holdOf) are two copies of one rule (with a job trigger the user wins: a person, a pronoun, an approval-like word or a gate anywhere holds the step on the user; with none, release-0.1.1b's reading), so they must agree word for word. copy_status cannot tell a user hold from a job hold, so this reads the wordings the TS lane test checks holdOf with (TRIGGERS: held on a job, USER_WAITS and APPROVAL_WAITS: held on the user, NOT_TRIGGERS: free work) from plugin/tests/unit/lane.test.ts itself and checks that _hold_of gives each the same hold",
+ "note": "Owner 2026-10-28 digest rules (a), reviews 3 to 5: the saved copy's hold of a step (copies.pm _hold_of) and the lane check's (lane.ts holdOf) are two copies of one rule (with a job trigger the user wins: a person, a pronoun or a person's say anywhere, or a name, another wait, an ask or a need outside the job triggers, or a wait's object that goes past its job, holds the step on the user; with none, release-0.1.1b's reading; both copies read \\w, \\b and \\d as ASCII and any space, a no-break one too, as a plain space), so they must agree word for word. copy_status cannot tell a user hold from a job hold, so this reads the wordings the TS lane test checks holdOf with (TRIGGERS: held on a job, USER_WAITS, APPROVAL_WAITS, USER_PARTS and TRADE_OFFS: held on the user, NOT_TRIGGERS and FREE_GAPS: free work; non-ASCII and no-break-space wordings among them) from plugin/tests/unit/lane.test.ts itself and checks that _hold_of gives each the same hold",
  "steps": [
   {
    "name": "copies::_hold_of gives every lane.test.ts wording the hold the TS test expects",
@@ -11,7 +11,10 @@
      "TRIGGERS": "job",
      "USER_WAITS": "user",
      "APPROVAL_WAITS": "user",
-     "NOT_TRIGGERS": "none"
+     "NOT_TRIGGERS": "none",
+     "USER_PARTS": "user",
+     "TRADE_OFFS": "user",
+     "FREE_GAPS": "none"
     },
     "min": 10
    }

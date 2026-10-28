@@ -139,6 +139,15 @@ const LEAD = '^(?:\\d+\\.\\s+)?(?:then,?\\s+)?'
 /** A wait word: `wait for`, `waits on`, `waiting until`, `wait till`, `awaiting`. */
 const WAIT = '(?:wait(?:s|ing)?\\s+(?:on|for|until|till)|await(?:s|ing)?)'
 /**
+ * What may follow a wait's job (`WAIT_END`, read after it): an id (`Build 42`, `Agent B`, `wf_1`)
+ * or a `(s)` / `/tests` twin, then the step's end, a mark, a clause break (`,` `;` `:` `.` `!` `?`
+ * `(` `)` a dash), `then`, `before <doing>`, or the job's end (`to finish`, `to be done`, `passes`).
+ */
+const WAIT_ID = `(?:\\(s\\)|/${JOB})?(?:\\s+(?:[a-z]|[\\w#.-]*\\d[\\w#.-]*))?`
+const WAIT_END =
+  `(?=\\s*(?:$|[,;:.!?()·—–]|-\\s|then\\b|before\\s+\\w+ing\\b|${FINISH}\\b|` +
+  `to\\s+(?:be\\s+(?:done|green|red|over|finished|completed?)\\b|${FINISH}\\b)))`
+/**
  * A step whose trigger is a running job's result (owner 2026-10-28 digest rules (a)):
  * - `On the timer notification, reply …`, `after the agent result, merge …`, `upon the agent's
  *   return`: on, upon or after leading the step, then a job's result (`JOB_RESULT`);
@@ -148,7 +157,9 @@ const WAIT = '(?:wait(?:s|ing)?\\s+(?:on|for|until|till)|await(?:s|ing)?)'
  *   once or as soon as leading the step, then a job or a result, then its end (`FINISH`);
  * - `wait for the timer notification`, `waits on B-1`, `awaiting the build`, `wait till CI passes`:
  *   a wait on a job or a job's result (an article and two `NOUN_WORD`s may come first), anywhere
- *   (any wait reads held already: this only tells the job's from the user's).
+ *   (any wait reads held already: this only tells the job's from the user's). The wait's object
+ *   ends at its job (`WAIT_END`): `Wait for the build and a vote`, `Wait for the build to be
+ *   signed off`, `Wait for the build from the release manager` wait on more than the job.
  * The trigger leads the step, so a step that only mentions a job or a result (`fix the build
  * script`, `add a test for when the task completes`, `log a message when the build is done`, `On
  * completion, commit`, `after the results are reviewed, …`, `After fixing the build, commit`)
@@ -156,56 +167,84 @@ const WAIT = '(?:wait(?:s|ing)?\\s+(?:on|for|until|till)|await(?:s|ing)?)'
  * trigger that does not lead the step (`reply once the timer fires`) reads free too: that errs
  * toward work.
  */
-const JOB_RE = new RegExp(
+const JOB_SRC =
   `${LEAD}(?:on|upon|after)\\s+${WORD}{0,4}?${JOB_RESULT}\\b` +
-    `|${LEAD}(?:upon|after)\\s+(?:(?:the|that|this|its)\\s+)?(?:B-\\d+\\s+)?${JOB}\\s*[,;:]` +
-    `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b` +
-    `|\\b${WAIT}\\s+(?:(?:the|that|this|its)\\s+)?${NOUN_WORD}{0,2}?(?:${JOB_RESULT}|${JOB})\\b`,
-  'i',
-)
+  `|${LEAD}(?:upon|after)\\s+(?:(?:the|that|this|its)\\s+)?(?:B-\\d+\\s+)?${JOB}\\s*[,;:]` +
+  `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b` +
+  `|\\b${WAIT}\\s+(?:(?:the|that|this|its)\\s+)?${NOUN_WORD}{0,2}?(?:${JOB_RESULT}|${JOB})${WAIT_ID}${WAIT_END}`
+const JOB_RE = new RegExp(JOB_SRC, 'i')
+/** Every job trigger of a step, to read what is left of it (`holdOf`). */
+const JOB_ALL_RE = new RegExp(JOB_SRC, 'gi')
 /** A step's done criterion (`— done when the run finishes`, up to its mark or next clause): not a trigger. */
 const CRITERION_RE = /\bdone when\b[^·;]*/gi
-/** A person by a pronoun (`you`, `your`, `me`, `him`, `them`, `us`, `someone`). */
-const PRONOUN = '(?:you|your|me|him|them|us|someone|somebody|anyone|anybody)'
+/** A person by a pronoun (`I`, `my`, `we`, `you`, `his`, `she`, `their`, `someone`, `whoever`). */
+const PRONOUN =
+  '(?:I|me|my|mine|myself|we|us|our|ours|you|your|yours|he|him|his|she|her|hers|they|them|their|theirs|' +
+  'someone|somebody|anyone|anybody|everyone|everybody|nobody|who|whom|whoever)'
 /**
- * A person by a noun: the user, the owner, `her`, a human, or a role or group (a reviewer,
- * approver, maintainer, the team, the client, a customer, QA, the PM, the lead, an operator, an admin).
+ * A person by a noun: the user, the owner, a human, or a role or group (a reviewer, approver,
+ * maintainer, the team, a colleague, the client, a customer, a vendor, a stakeholder, a manager, a
+ * designer, an engineer, a developer, the lead, QA, the PM or PO, the CTO or CEO, SRE, ops, on-call,
+ * the CAB, legal, an operator, an admin).
  */
-const PERSON = '(?:users?|owners?|her|humans?|people|reviewers?|approvers?|maintainers?|teams?|teammates?|clients?|customers?|QA|PMs?|lead|operators?|admins?)'
+const PERSON =
+  '(?:users?|owners?|humans?|people|persons?|reviewers?|approvers?|maintainers?|teams?|teammates?|colleagues?|clients?|customers?|' +
+  'vendors?|stakeholders?|managers?|designers?|engineers?|developers?|leads?|QA|PMs?|POs?|CTO|CEO|SREs?|ops|on-call|CAB|legal|operators?|admins?)'
 /**
- * A person's say on the work: an approval, a permission, a go-ahead, a confirmation, an OK, a
- * clearance, a sign-off, feedback, a review, an answer or a reply, a decision, a yes, consent, an LGTM.
+ * A person's say on the work, in any form: an approval, an acceptance, a permission, an
+ * authorization, an allowance, a go-ahead, a go/no-go, a green light, a say-so or the final say, a
+ * thumbs-up, a nod, a blessing, an ack, a vote, a verdict, consent, a clearance, a sign-off, an
+ * LGTM, an OK, a yes, a confirmation, a review, feedback, an answer, a reply, a response, input,
+ * instructions, direction, guidance, a decision, a choice, a question, an ask, a request, an
+ * agreement, a check with someone, what is pending or needed, a manual step, a gate. (`ack` but
+ * not `acknowledging`: the AD2 kit wording's own reply acknowledges the notification.)
  */
 const APPROVAL =
-  '(?:approv(?:al|als|e|es|ed)|permission|go[- ]ahead|confirm(?:s|ed|ation)?|OK|okay|clearance|sign[- ]?offs?|feedback|' +
-  'reviews?|answers?|repl(?:y|ies)|decisions?|yes|consent|LGTM)'
+  '(?:approv\\w*|accept(?:s|ed|ing|ance)?|permi(?:ssions?|ts?|tted)|authori[sz](?:e|es|ed|ing|ation)|allow(?:s|ed)?|' +
+  'go[- ]ahead|go/no-go|no-go|green[- ]?(?:light(?:s|ed)?|lit)|say-so|final say|thumbs?[- ]?ups?|nods?|bless(?:ing|ed)?|' +
+  'acks?|acked|votes?|voted|verdicts?|consent\\w*|clearance|sign(?:s|ed|ing)?[- ]?offs?|LGTM|OK|okay|yes|' +
+  'confirm\\w*|review\\w*|feedback|answer\\w*|repl(?:y|ies|ied)|respon(?:se|ses|d|ds|ded)|input|instructions?|directions?|' +
+  'guidance|decid(?:e|es|ed|ing)|decisions?|choose|chooses|chose|choices?|questions?|ask(?:s|ed|ing)?|request\\w*|agree\\w*|' +
+  'check(?:s|ed|ing)?\\s+(?:in\\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))'
 /**
  * A word that makes a step the user's whenever a job trigger comes with it (`holdOf`): a person, a
- * pronoun, a person's say (`APPROVAL`) or a gate, anywhere in the step (not inside a longer word:
+ * pronoun or a person's say (`APPROVAL`), anywhere in the step (not inside a longer word:
  * `user-facing`, `us-east-1` are none).
  */
-const USER_WINS_RE = new RegExp(`\\b(?:${PRONOUN}|${PERSON}|${APPROVAL}|gated)(?![\\w-])`, 'i')
+const USER_WINS_RE = new RegExp(`\\b(?:${PRONOUN}|${PERSON}|${APPROVAL})(?![\\w-])`, 'i')
 /**
- * `reply` or `answer` opening the step or one of its clauses (after `,`, `;`, `:`, `—`, `then`,
- * `and`): the session's own reply (`On the timer notification, reply with one line`), not a
- * person's, so `USER_WINS_RE` reads the step without it.
+ * A name: a capitalised word (`Anna`, `Ünal`, `GitHub`), read outside the step's job triggers.
  */
-const OWN_REPLY_RE = /(^|[,;:—]|\b(?:then|and)\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)\b/gi
+const NAME_RE = /(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}/u
+/**
+ * `reply` or `answer` opening the step or a clause after `,`, `—` or `then`, with no object (the
+ * step's end or mark, a clause break, `with`, `and`, `in`): the session's own reply (`On the timer
+ * notification, reply with one line`), not a person's, so `USER_WINS_RE` reads the step without it.
+ * After `;`, `:` or `and`, or with an object (`answer Fran's question`), it counts.
+ */
+const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/gi
 /**
  * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (owner
  * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run).
- * - The user wins: a step with a job trigger (`JOB_RE`) is held on the job only when no person,
- *   pronoun, approval-like word or gate stands anywhere in it (`USER_WINS_RE`); else it is held on
- *   the user (`Wait for approval to run the build`, `wait for the team to run the pipeline`, `Wait
- *   for the agent, then ask the user`, and, erring toward a stop, `Wait for the timer notification,
- *   then reply to the user`). A step that needs the user and a job still needs the user after the
- *   job ends, so a job's result never unblocks a step that names the user's part.
+ * - The user wins: a step with a job trigger (`JOB_RE`) is held on the job only when it is nothing
+ *   but its job triggers and the session's own work: no person, pronoun or person's say anywhere in
+ *   it (`USER_WINS_RE`), and, outside its triggers, no name (`NAME_RE`) and no other wait, ask or
+ *   need (`HELD_RE`). Else it is held on the user (`Wait for approval to run the build`, `When the
+ *   build finishes, wait for input`, `Wait for CI. Then: Anna merges`, and, erring toward a stop,
+ *   `Wait for the timer notification, then reply to the user`). A step that needs the user and a
+ *   job still needs the user after the job ends, so a job's result never unblocks it.
  * - With no job trigger, a step reads as on release-0.1.1b: held on the user when it is gated,
  *   asks the user, holds a pending answer, waits or needs an approval (`HELD_RE`), else free. A
  *   person or approval word alone (`tidy the notes after review`) holds nothing.
+ * Every space (a no-break space too) reads as a plain one, as in copies.pm `_hold_of`.
  */
-function holdOf(text: string): 'user' | 'job' | undefined {
-  if (JOB_RE.test(text.replace(CRITERION_RE, ''))) return USER_WINS_RE.test(text.replace(OWN_REPLY_RE, '$1$2')) ? 'user' : 'job'
+function holdOf(raw: string): 'user' | 'job' | undefined {
+  const text = raw.replace(/\s/g, ' ')
+  const bare = text.replace(CRITERION_RE, '')
+  if (JOB_RE.test(bare)) {
+    const rest = bare.replace(JOB_ALL_RE, ' ')
+    return USER_WINS_RE.test(text.replace(OWN_REPLY_RE, '$1$2')) || NAME_RE.test(rest) || HELD_RE.test(rest) ? 'user' : 'job'
+  }
   return HELD_RE.test(text) ? 'user' : undefined
 }
 const ELSEWHERE_RE = /\bsee handoff\b/i

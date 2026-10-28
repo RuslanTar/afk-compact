@@ -934,6 +934,103 @@ const TRIGGERS = [
   // A reply or an answer that opens a clause is the session's own, not a person's.
   'When the timer fires, answer with one line',
   'after the build ends, reply and tag the release',
+  // Review 5: every pure job trigger and wait both lenses tried, and wait tails that end at the job.
+  'Wait for the build — then reply',
+  'Wait for the build—reply with status',
+  'Wait for the nightly build to finish, then tag it',
+  'When the build finishes, post the summary in the log',
+  'Once the agent returns, merge its branch',
+  'After the tests pass, push the tag',
+  'Wait till CI passes, then deploy',
+  "On the agent's output, update the notes",
+  'As soon as the pipeline completes, rerun the flaky suite',
+  'Wait for B-3, then commit',
+  'When the run fails, open an issue',
+  'Once the workflow is green, tag the release',
+  'Upon the build, deploy to staging',
+  'When the tests are green, update the changelog',
+  'Wait for the tests to finish, then summarise the failures',
+  'When the timer fires, check the queue length',
+  'Then, when CI finishes, reply with the result',
+  'When the build finishes, upload the user-facing docs',
+  'When the build finishes, deploy to us-east-1',
+  'Once the build passes, merge to main',
+  'When the build finishes, push the tag',
+  'When CI passes, merge the branch',
+  'Once the pipeline completes, deploy to staging',
+  'After the tests pass, bump the version',
+  'When the agent returns, summarise its findings',
+  'On the build result, fix any failures',
+  "Upon the subagent's output, collate the list",
+  'After B-2, rerun the linter',
+  'As soon as the workflow ends, write the changelog',
+  'When the timer fires, check the deploy',
+  'Once the tests are green, open the PR',
+  'When the Jenkins build finishes, record the artifact hash',
+  'When the GitHub Actions run completes, read the logs',
+  'After the CircleCI pipeline passes, cut the release',
+  'Once the nightly builds finish, compare timings',
+  'When the subagents report back, dedupe the results',
+  'After the shell exits, check the exit code',
+  'Once the test suite fails, bisect the change',
+  'On the CI notification, rebase onto main',
+  "On B-3's result, update the table",
+  'Wait for the build to finish, then publish the docs',
+  'Wait for CI, then merge',
+  'Waiting on the pipeline; then tag v2',
+  "Awaiting the agent's output before writing the summary",
+  'Wait till the tests pass, then commit',
+  'Wait until the workflow completes, then archive logs',
+  'wait for B-4 then rerun',
+  'Wait for the deploy job to finish, then smoke-test',
+  'Wait for the Docker build',
+  'Wait for the webpack build to finish',
+  'Wait for Bazel tests to pass',
+  'Wait for the e2e suite.',
+  "When CI's result comes in, triage failures",
+  'When the build is done, run it again',
+  'When the timer notification arrives, ping the channel',
+  'After the run: commit the snapshot',
+  'after the build; tag it',
+  'Then, when CI finishes, deploy',
+  'WHEN THE BUILD FINISHES, DEPLOY',
+  'When the build finishes—deploy',
+  'When the build has finished, deploy',
+  'When the builds have completed, deploy',
+  'When the build is complete, deploy',
+  'When the build succeeds, deploy',
+  'Once the job is finished, archive the logs',
+  'When the agents are done, merge notes',
+  'After the build fails, open an issue',
+  'When the npm test run finishes, publish',
+  'When the CI run is green, ship it',
+  'When the build and tests finish, tag',
+  'When the cron job fires, rotate keys',
+  'After the notification, resume the migration',
+  "Upon the run's completion, clean up",
+  'On completion of the build, deploy',
+  'When the agent returns, merge the team-config changes',
+  'When the build finishes , deploy',
+  'When the build finishes: deploy',
+  'Wait for the build(s) to finish',
+  'Wait for the builds/tests to finish',
+  'Wait for the `make` build',
+  'Wait for "nightly" build',
+  'On the B-12 notification, close the loop',
+  'After the job, commit',
+  // A no-break space between two words (it reads as a plain space in both copies).
+  'Wait for the build to finish, then tag',
+  'When the build finishes, deploy',
+  'Wait for the build before merging',
+  'Wait for CI, then merge the PR',
+  'Wait for the build to be done, then tag',
+  'When the build finishes, reply in the log',
+  'When the build finishes, wait for the tests to pass, then merge',
+  'When the build finishes, run i18n checks',
+  'Wait for the build—then tag',
+  'Wait for the build - then tag',
+  'Wait for the build (B-2), then tag',
+  'Wait for the build to finish — done when tagged',
 ]
 /**
  * Ordinary work that only mentions a job, its end or a result, with no trigger leading its clause
@@ -1042,18 +1139,230 @@ const APPROVAL_WAITS = [
   'On the build result, wait for the go-ahead',
 ]
 /**
+ * A job trigger next to a part for a person (review 5 of digest rules (a), two lenses, 133
+ * wordings): another wait, an ask, a check with someone, what is pending; a pronoun or a role
+ * outside the old lists (my, we, she, their, whoever, the manager, the stakeholder, legal, ops); a
+ * person's say in any form (accepted, greenlit, a thumbs-up, a nod, an ack, a vote, a verdict, input,
+ * instructions); a name (`Anna merges`, `have Dana merge it`); a wait's object that goes past its job
+ * (`and their verdict`, `to be signed off`, `from the release manager`); a reply or an answer with
+ * an object or after `;`, `:` or `and`. Held on the user, never on the job: the tie-break closes the
+ * class, so a step that is not only its job trigger and the session's own work is the user's.
+ */
+const USER_PARTS = [
+  'Wait for the build, then ask Anna whether to deploy',
+  'When the build finishes, ask whether to deploy',
+  'Once CI passes, check with the manager before merging',
+  'After the build, wait for the stakeholder to accept the change',
+  'When the tests pass, wait for my manager to merge',
+  'When CI finishes, wait until they merge it',
+  'Wait for the build; she will decide on the deploy',
+  'Wait for CI and a nod from Anna',
+  "Wait for CI and Anna's thumbs-up",
+  'After the build, prompt for input on the release name',
+  'Wait for the build, then wait for input',
+  'Wait for the build and a manual check',
+  'Wait for the build and authorization to deploy',
+  'Wait for the build and authorisation to deploy',
+  'When the build finishes, wait for a response',
+  'Wait for the build to be signed off',
+  'Wait for the build to be accepted by product',
+  'Wait for the build to be reviewed',
+  'Wait for the build; answer pending',
+  'Wait for the build and replies from the mailing list',
+  'Wait for the build and answers to the open questions',
+  'Wait for the pipeline and the green light',
+  'Wait for the pipeline and a thumbs up',
+  'Wait for the pipeline and the say-so to ship',
+  'Wait for the pipeline and his acknowledgement',
+  'Wait for the pipeline and their verdict',
+  'Once the build is green, we decide whether to ship',
+  'Once the build is green, the PO picks the release name',
+  'When the tests finish, the product owner chooses the option',
+  "Wait for CI, then get the CTO's blessing",
+  'Wait for CI, then the manager merges',
+  "Wait for CI and legal's sign off",
+  'On the build result, ask: deploy now or wait?',
+  'On the build result, question for the stakeholder: ship?',
+  'When the agent returns, check in with the designer',
+  'When the agent returns, hand the diff to the designer for sign-off',
+  'After the run, await instructions',
+  'After the run, await direction from product',
+  'Wait for the build plus a go/no-go call',
+  'Wait for the build and a vote',
+  'Wait for the build and the CAB to approve',
+  'Wait for CI and an ack',
+  'Once the tests pass, request a merge from the maintainers',
+  'Once the tests pass, request merge permission',
+  'When CI is green, ping Bob and wait for his OK',
+  'When CI is green, ping Bob and wait for his nod',
+  "Wait for the release build and the user's ok",
+  'Wait for CI. Then: Anna merges',
+  'When the build passes, let Anna decide',
+  'When the build passes, the user decides',
+  'Wait for the build — Anna has the final say',
+  'Wait for CI, then ask for approval',
+  'Wait for CI, reply pending from the owner',
+  "On the timer notification, answer the reviewer's question",
+  'Then, after the build finishes, approval is needed',
+  'Wait for build 42 to be greenlit',
+  "Wait for the deploy job; then get Ops' consent",
+  'Wait for the deploy job; then Ops must agree',
+  'Wait for the deploy job; needs a human eye',
+  'Wait for the deploy job; needs eyes from SRE',
+  'Wait for the deploy job and a reviewer',
+  'After the run, Approve the plan?',
+  'After the run, choose between A and B (ask)',
+  "When CI finishes, pending: Anna's input",
+  'when ci finishes, ask what to name the tag',
+  'Once the build completes, double-check with whoever owns the repo',
+  'Once the build completes, wait for whoever owns the repo',
+  'Wait for the build, then answer: which tag?',
+  'When the build finishes, and answers come back, merge',
+  'Wait for Zoë to run the build',
+  'Wait for the build, then ask José',
+  "When the build finishes, get Renée's sign-off",
+  "wait for the build and Øyvind's OK",
+  'When the build finishes, ask Jürgen',
+  "When the tests pass, answer Ünal's question",
+  'Wait for the 🚀 build, then ask the user',
+  "Wait for the build: answer Fran's question",
+  'Wait for the user’s build',
+  'Wait for the Müller build, then ask Müller',
+  "Wait for André's build",
+  'Wait for the naïve build and the reviewer',
+  "Wait for the pipeline's manual gate",
+  'Wait for the manual test run',
+  'Wait for the build to be accepted',
+  'Wait for the build to be greenlit',
+  'Wait for the build to get a thumbs-up',
+  "Wait for the CI run and Sam's ack",
+  'Wait for the build, then for my go',
+  'When the build finishes, wait for my call',
+  'When CI passes, get the release signed off',
+  'When the tests pass, wait for the stakeholder',
+  'When the tests pass, wait for the product manager',
+  'When the tests pass, wait for the designer',
+  'When the tests pass, wait for legal',
+  'When the tests pass, wait for the on-call engineer',
+  'Wait for the build, then have Dana merge it',
+  'Wait for the deploy pipeline to be unblocked by ops',
+  'Wait for the build from the release manager',
+  'When CI passes, wait for the merge window to be approved by Sam',
+  'When CI passes, wait until Sam says go',
+  'When the build finishes, get a nod from Sam',
+  "When the build finishes, get the vendor's blessing",
+  'When the build finishes, wait for the CAB vote',
+  'When CI passes, wait for authorization to deploy',
+  'When CI passes, wait to be allowed to deploy',
+  'When CI passes, wait for the verdict',
+  'When CI passes, wait for Sam to approve',
+  'When CI passes, wait for the human-in-the-loop step',
+  'When CI passes, I need the go/no-go',
+  'When CI passes, wait for the user’s go',
+  'Wait for the build; we decide then',
+  'Wait for the build, then wait for our go',
+  'When the timer fires, ask Sam whether to ship',
+  'After the build passes, ask the lead dev',
+  'When the build finishes, wait for input',
+  'When the build finishes, wait for instructions',
+  'When the build finishes, check with Sam',
+  'When the build finishes, request approving',
+  // A no-break space between two words (it reads as a plain space in both copies).
+  'Wait for the build and a vote',
+  'Wait for the build before Anna merges',
+  'When CI finishes, Anna merges',
+  'After the run, have Dana merge it',
+  'Wait for the build to be merged',
+  'Wait for the build plus the tests and the owner',
+  'after the build ends; reply to Sam',
+  'When the build finishes, reply to Sam',
+  'When the build finishes, reply to the thread',
+  'Wait for the build: reply pending',
+  'When the build finishes, wait for the tests and Sam',
+  'When the agent returns, I deploy',
+  'When the agent returns, we deploy',
+  'wait for the café build, then deploy',
+  'Wait for the build, the approval and the tag',
+]
+/**
+ * Known trade-offs of the tie-break (accepted, toward a stop): a user-wins word that names a thing
+ * (a file, a path, a metric, a queue, a log, `yes` the command), a pronoun for things, a reply after
+ * `:`, a capitalised word outside the trigger (a product name, a sentence's first word after a
+ * wait), and a non-ASCII word next to a wait's job word: held on the user, in both copies.
+ */
+const TRADE_OFFS = [
+  'When the agent finishes, collect the reviews',
+  "When the build finishes, record the build's output in OK.md",
+  'When the build finishes, copy the outputs to /tmp/yes',
+  'When the build finishes, run the Lead-time report',
+  'When the build finishes, update the lead time metric',
+  'When the tests finish, update the review queue script',
+  'After the build result, refresh the reply templates',
+  'After the run: replies go to the log',
+  'When all agents return, merge their notes',
+  'Once the notifications arrive, process them',
+  'When the build finishes, check if the deploy is OK',
+  'When the build finishes, answer the open lint question in the notes',
+  'When the build finishes, update the review checklist file',
+  'When the test suite passes, write the decision log entry',
+  'When CI finishes, run yes | ./install.sh',
+  'When the build finishes, push to the users table migration',
+  'When CI finishes, push to GitHub',
+  'Wait for CI. Merge the PR',
+  'Wait for the café build',
+]
+/**
+ * Known gaps toward work (accepted, as on release-0.1.1b): a job trigger code does not read, so
+ * the step is free work, in both copies. A non-ASCII word or digit in a leading trigger (both
+ * copies read `\w`, `\b` and `\d` as ASCII), an end word outside the list, a contraction, a curly
+ * apostrophe, a job outside the job words.
+ */
+const FREE_GAPS = [
+  'When the café build finishes, deploy',
+  'When the naïve build finishes, merge',
+  'On the café build result, reply',
+  'After B-٣, rerun the linter',
+  "When Zoë's build finishes, ask Zoë",
+  "When the job's done, open a PR",
+  "When the build's finished, deploy",
+  'When the build’s result comes in, deploy',
+  'When CI goes green, merge',
+  'When the timer elapses, check the deploy',
+  'When the test run times out, retry',
+  'When the pipeline errors, roll back',
+  'When the deploy finishes, verify the site',
+  'When the PR checks pass, merge',
+  'Once GitHub Actions finishes, merge',
+]
+/**
  * release-0.1.1b's `HELD_RE`, kept here as a fixture: what that release read held (on the user);
  * any other step it read free. The tie-break below is checked against it.
  */
 const OLD_HELD_RE = /\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
 /**
- * The user-wins words as the owner's tie-break states them (a person or a pronoun, an
- * approval-like word, a gate; a reply or an answer that opens a clause is the session's own), kept
- * apart from lane.ts so the test does not only read the code back.
+ * The user-wins words as the owner's tie-break states them, kept apart from lane.ts (spelled out
+ * word by word, not as lane.ts's stems) so the test does not only read the code back: a person or
+ * a pronoun, a person's say in any form (review 5: the class, not its instances), a gate. A reply
+ * or an answer with no object that opens the step or a clause after `,`, `—` or `then` is the
+ * session's own.
  */
+const SPEC_WORDS = [
+  'I', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our', 'ours', 'you', 'your', 'yours', 'he', 'him', 'his', 'she', 'her', 'hers',
+  'they', 'them', 'their', 'theirs', 'someone', 'somebody', 'anyone', 'anybody', 'everyone', 'everybody', 'nobody', 'who', 'whom', 'whoever',
+  'user', 'users', 'owner', 'owners', 'human', 'humans', 'people', 'person', 'reviewer', 'reviewers', 'approver', 'maintainer', 'team',
+  'teammate', 'colleague', 'client', 'customer', 'vendor', 'stakeholder', 'manager', 'designer', 'engineer', 'developer', 'lead', 'QA',
+  'PM', 'PO', 'CTO', 'CEO', 'SRE', 'ops', 'on-call', 'CAB', 'legal', 'operator', 'admin',
+  'approve', 'approves', 'approved', 'approving', 'approval', 'accept', 'accepted', 'acceptance', 'permission', 'permit', 'permitted',
+  'authorize', 'authorise', 'authorized', 'authorization', 'authorisation', 'allow', 'allowed', 'go-ahead', 'go ahead', 'go/no-go',
+  'green light', 'greenlit', 'say-so', 'final say', 'thumbs-up', 'thumbs up', 'nod', 'blessing', 'ack', 'vote', 'verdict', 'consent',
+  'clearance', 'sign-off', 'sign off', 'signed off', 'LGTM', 'OK', 'okay', 'yes', 'confirm', 'confirmation', 'review', 'reviewed',
+  'feedback', 'answer', 'answers', 'reply', 'replies', 'response', 'respond', 'input', 'instructions', 'direction', 'guidance',
+  'decide', 'decides', 'decision', 'choose', 'chooses', 'choice', 'question', 'questions', 'ask', 'asks', 'request', 'agree', 'agrees',
+  'check with', 'check in with', 'pending', 'need', 'needs', 'needed', 'manual', 'gate', 'gated',
+]
 const SPEC_USER_WINS = (step: string): boolean =>
-  /\b(?:you|your|me|him|them|us|someone|somebody|anyone|anybody|users?|owners?|her|humans?|people|reviewers?|approvers?|maintainers?|teams?|teammates?|clients?|customers?|QA|PMs?|lead|operators?|admins?|approv(?:al|als|e|es|ed)|permission|go[- ]ahead|confirm(?:s|ed|ation)?|OK|okay|clearance|sign[- ]?offs?|feedback|reviews?|answers?|repl(?:y|ies)|decisions?|yes|consent|LGTM|gated)(?![\w-])/i
-    .test(step.replace(/(^|[,;:—]|\b(?:then|and)\b)(\s*)(?:repl(?:y|ies)|answers?)\b/gi, '$1$2'))
+  new RegExp(`\\b(?:${SPEC_WORDS.join('|')})(?![\\w-])`, 'i')
+    .test(step.replace(/(^|[,—]|\bthen\b)(\s*)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|with\b|and\b|in\b))/gi, '$1$2'))
 /** The hold lane.ts reads for one step, through laneFacts: `job`, `user` or `free`. */
 const holdVia = (step: string): 'job' | 'user' | 'free' => {
   const f = laneFacts('## Resume here\n' + onJob(step))
@@ -1089,8 +1398,9 @@ test('rule (a): not held under a working (or finished) Status; a step that only 
     expect([step, laneOf(f, { ...M, running: 1 }).lane]).toEqual([step, 'working'])
     expect([step, laneOf(f, M).lane]).toEqual([step, 'working'])
   }
-  // A wait on a person or an approval holds the step on the user: a job's result does not unblock it.
-  for (const step of [...USER_WAITS, ...APPROVAL_WAITS]) {
+  // A wait on a person or an approval, or a job trigger next to a part for a person, holds the step on
+  // the user: a job's result does not unblock it.
+  for (const step of [...USER_WAITS, ...APPROVAL_WAITS, ...USER_PARTS, ...TRADE_OFFS]) {
     const f = laneFacts('## Resume here\n' + onJob(step))
     expect([step, f.free, f.onJob, f.onUser]).toEqual([step, 0, 0, 2])
     expect([step, laneOf(f, { ...M, result: true }).lane]).toEqual([step, 'hard-blocked'])
@@ -1116,8 +1426,9 @@ test('rule (a): Step 1 held on a job with `Gate: none` is not a free Step 1: blo
 })
 
 test('rule (a), the user wins: never held on a job when a person or an approval-like word stands in the step; never freer than release-0.1.1b', () => {
-  const all = [...TRIGGERS, ...NOT_TRIGGERS, ...USER_WAITS, ...APPROVAL_WAITS]
+  const all = [...TRIGGERS, ...NOT_TRIGGERS, ...USER_WAITS, ...APPROVAL_WAITS, ...USER_PARTS, ...TRADE_OFFS, ...FREE_GAPS]
   expect(APPROVAL_WAITS.length).toBeGreaterThanOrEqual(30)
+  expect(USER_PARTS.length).toBeGreaterThanOrEqual(100)
   for (const step of all) {
     const now = holdVia(step)
     const old = OLD_HELD_RE.test(step) ? 'user' : 'free'
@@ -1127,9 +1438,16 @@ test('rule (a), the user wins: never held on a job when a person or an approval-
     // A step 0.1.1b read held is never read free now.
     if (old === 'user') expect([step, now]).not.toEqual([step, 'free'])
   }
-  for (const step of [...USER_WAITS, ...APPROVAL_WAITS]) expect([step, holdVia(step)]).toEqual([step, 'user'])
+  for (const step of [...USER_WAITS, ...APPROVAL_WAITS, ...USER_PARTS, ...TRADE_OFFS]) expect([step, holdVia(step)]).toEqual([step, 'user'])
   for (const step of TRIGGERS) expect([step, SPEC_USER_WINS(step), holdVia(step)]).toEqual([step, false, 'job'])
   for (const step of NOT_TRIGGERS) expect([step, holdVia(step)]).toEqual([step, 'free'])
+  // Known gaps toward work read as on 0.1.1b: free, never a job hold.
+  for (const step of FREE_GAPS) expect([step, OLD_HELD_RE.test(step), holdVia(step)]).toEqual([step, false, 'free'])
+  // A step that is more than its job trigger and the session's own work is the user's, with no
+  // user-wins word too: a name, a second wait, or a wait's object that goes past its job.
+  for (const step of ['Wait for CI. Then: Anna merges', 'Wait for the build, then have Dana merge it', 'When the build finishes, wait for the tests and Sam', 'Wait for the build to be merged', 'Wait for the build plus the tests']) {
+    expect([step, SPEC_USER_WINS(step), holdVia(step)]).toEqual([step, false, 'user'])
+  }
   // The AD2 kit wording names no person: held on the timer's job; its `reply to the user` twin is the user's.
   expect(holdVia('On the timer notification, reply with one line acknowledging it')).toBe('job')
   expect(holdVia('On the timer notification, reply to the user')).toBe('user')
