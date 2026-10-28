@@ -126,6 +126,23 @@ sub settle_armed {
     return $nonce;
 }
 
+# waits(sid_dir, nonce) -> 1 when this nonce's block still waits for a turn: no claim, and the
+# mod's record of it (resume-pending.json, or resume-armed.json once a resume armed it) is still
+# pending. A settle (delivered, replaced by a newer compaction, undelivered, dropped by /clear)
+# rewrites the record, so the block no longer waits. The watcher's A-23 hold reads the same files
+# (lib/watch/rules.pm `_block_waits`).
+sub waits {
+    my ($d, $nonce) = @_;
+    return 0 unless defined $d && defined $nonce && !ref $nonce && nonce::valid($nonce);
+    return 0 if -e "$d/resume-claimed/$nonce";
+    for my $f (qw(resume-pending.json resume-armed.json)) {
+        next if -l "$d/$f" || !-f "$d/$f";
+        my $j = _record("$d/$f") // next;
+        return 1 if ($j->{state} // '') eq 'pending' && ($j->{nonce} // '') eq $nonce;
+    }
+    return 0;
+}
+
 sub _record {
     my ($f) = @_;
     my $raw = util::read_file($f, 1024 * 1024) // return undef;
