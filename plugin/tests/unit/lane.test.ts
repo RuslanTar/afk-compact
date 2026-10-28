@@ -916,6 +916,25 @@ const TRIGGERS = [
   'Then, when the build is green, push the tag',
   'once the results arrive, summarise them',
   'Wait for Jenkins build, then read its log',
+  // A capitalised job word right after the wait is the job, not a named person (review 3).
+  'Wait for Build 42 to finish',
+  'Wait for Agent B to finish',
+  'Wait for Agents to return',
+  'Wait for Pipeline 7',
+  'Wait for Timer',
+  'Wait for Workflow wf_1 to end',
+  // Wider job and end words (review 3): till, tests, pass, reports back, succeeds, after a job alone, a return.
+  'wait till CI passes',
+  'When the tests finish, report',
+  'After the tests pass, merge',
+  'When the agent reports back, merge',
+  'When the build succeeds, tag',
+  'After the run, commit',
+  "Upon the agent's return, merge",
+  // A person after the wait's own clause, or one the build follows, is no person the wait is on.
+  'Wait for the timer notification, then reply to the user with one line',
+  'wait for CI to email me',
+  'wait for the client build to finish',
 ]
 /**
  * Ordinary work that only mentions a job, its end or a result, with no trigger leading its clause
@@ -931,10 +950,14 @@ const NOT_TRIGGERS = [
   'on the results page, add a filter',
   'reply once the timer fires',
   'commit the notes; when the build is green, push the tag',
+  'After fixing the build, commit',
 ]
 /**
  * A wait on something that is not a job (a person, an approval): held on the user, never on a job,
- * even when a job word follows the person (review 2 of digest rules (a)).
+ * even when a job word follows the person (review 2 of digest rules (a)), when the person is a
+ * pronoun or a group, or when the person or an ask of the user comes after the job (review 3).
+ * The plugin's helper case AD-11 reads TRIGGERS, NOT_TRIGGERS and USER_WAITS from this file and
+ * checks that the saved copy's status (copies.pm `_hold_of`) gives each the same hold.
  */
 const USER_WAITS = [
   "Wait for the reviewer's result",
@@ -949,6 +972,16 @@ const USER_WAITS = [
   'awaiting the approver to pass the pipeline',
   'wait until the maintainer runs the build',
   'Wait for Anna to run the build',
+  'wait for them to run the build',
+  'wait for him to run the tests',
+  'wait for someone to run the build',
+  'wait for a human to run the build',
+  'wait for the team to run the pipeline',
+  'wait for QA to run the build',
+  'wait for the client to run the job',
+  'wait for us to run CI',
+  'wait for the build and the user, then merge',
+  'Wait for the agent, then ask the user',
 ]
 
 test('rule (a): a step whose only trigger is a running job\'s result is held on the job under a blocked Status, whatever the wording', () => {

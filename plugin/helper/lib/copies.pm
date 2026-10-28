@@ -224,35 +224,45 @@ sub _test_corrupt {
 # - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
 #   `Gate: none` (Step 1 itself naming none of them). A step whose trigger is a running job's
-#   result (`On the timer notification, reply …`, `when CI finishes, …`; owner 2026-10-28 digest
-#   rules (a), lane.ts `JOB_RE`) is held on that job, not a step that can run: the copy is taken
-#   with no result in, so it stays blocked (only the session's result turn reads it working). A
-#   wait for a person (`Wait for the user to run the build`) is held on the user, whatever job
-#   word follows.
+#   result (`On the timer notification, reply …`, `when CI finishes, …`, `After the run, commit`;
+#   owner 2026-10-28 digest rules (a), lane.ts `JOB_RE`) is held on that job, not a step that can
+#   run: the copy is taken with no result in, so it stays blocked (only the session's result turn
+#   reads it working). A wait whose object is or holds a person (`Wait for the user to run the
+#   build`, `wait for the team to run the pipeline`, `wait for the build and the user`) or a step
+#   that asks the user (`then ask the user`) is held on the user, whatever job word comes with it.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
-my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+my $HELD_RE = qr/\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|wait(?:s|ing)? (?:on|for|until|till)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
 # lane.ts `JOB_RE` and its parts, word for word.
 my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
-my $J_JOB = q{(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|B-\d+)};
-my $J_RESULT = q{(?:results?|outputs?|completion|notifications?)};
-my $J_JOB_RESULT = "(?:notifications?|$J_JOB(?:'s)?\\s+$J_RESULT|(?:results?|outputs?|completion)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?$J_WORD?$J_JOB)";
-my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|fires?|fired|exits?|exited|passes|passed|fails|failed|is (?:done|in|back|green|red))};
+my $J_JOB = q{(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|tests?|suites?|B-\d+)};
+my $J_RESULT = q{(?:results?|outputs?|completion|returns?|notifications?)};
+my $J_JOB_RESULT = "(?:notifications?|$J_JOB(?:'s)?\\s+$J_RESULT|(?:results?|outputs?|completion|returns?)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?$J_WORD?$J_JOB)";
+my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|reports? back|reported back|}
+    . q{fires?|fired|exits?|exited|pass(?:es|ed)?|fail(?:s|ed)?|succeed(?:s|ed)?|is (?:done|in|back|green|red|over)|are (?:done|in|back|green|red|over))};
 my $J_LEAD = q{^(?:\d+\.\s+)?(?:then,?\s+)?};
-my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b|\b(?:wait(?:s|ing)?\s+(?:on|for|until)|await(?:s|ing)?)\s+(?:(?:the|that|this|its)\s+)?(?:$J_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)\b/i;
-my $USER_RE = qr/\b(?:gated|ask user|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
-# lane.ts `PERSON_WAIT_RE`, `NAMED_WAIT_RE` and `waitsOnPerson`, word for word: a wait whose
-# object is a person (the user, the owner, you, me, a reviewer, approver or maintainer, or a
-# capitalised name no job word or result follows) holds the step on the user, read before $JOB_RE.
-my $J_WAIT = q{(?:wait(?:s|ing)?\s+(?:on|for|until)|await(?:s|ing)?)};
-my $PERSON_WAIT_RE = qr/\b$J_WAIT\s+(?:(?:the|an?|that|this|your|our|my)\s+)?(?:user|owner|you|me|reviewers?|approvers?|maintainers?)\b/i;
-my $NAMED_WAIT_RE = qr/\b$J_WAIT\s+([A-Za-z]+)\b(?!(?:'s)?\s+(?:$J_JOB|$J_RESULT)\b)/i;
+my $J_WAIT = q{(?:wait(?:s|ing)?\s+(?:on|for|until|till)|await(?:s|ing)?)};
+my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:upon|after)\s+(?:(?:the|that|this|its)\s+)?(?:B-\d+\s+)?$J_JOB\s*[,;:]|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b|\b$J_WAIT\s+(?:(?:the|that|this|its)\s+)?(?:$J_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)\b/i;
+my $USER_RE = qr/\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+# lane.ts `PRONOUN`, `PERSON`, `JOB_NOUN`, `WAIT_OBJECT`, `PERSON_WAIT_RE`, `NAMED_WAIT_RE` and
+# `waitsOnPerson`, word for word: a wait whose object (up to its clause's end) is or holds a person
+# (a pronoun; the user, the owner, a role or group that no job or result follows as a noun; or a
+# capitalised name that is no job word or result and that no job or result follows as a noun)
+# holds the step on the user, read before $JOB_RE. Helper case AD-11 checks this file's _hold_of
+# against the wording lists of plugin/tests/unit/lane.test.ts.
+my $J_PRONOUN = q{(?:you|me|him|them|us|someone|somebody|anyone|anybody)};
+my $J_PERSON = q{(?:users?|owners?|her|humans?|people|reviewers?|approvers?|maintainers?|teams?|teammates?|clients?|customers?|QA|PMs?|lead|operators?|admins?)};
+my $J_JOB_NOUN = q{(?:jobs?|build|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|run|tasks?|test|suites?|B-\d+|results?|outputs?|completion|return|notifications?)};
+my $J_WAIT_OBJECT = q{(?:(?!\b(?:then|to)\b|[,;:·—]|\.(?:\s|$))[^\n])*?};
+my $PERSON_WAIT_RE = qr/\b$J_WAIT\s+$J_WAIT_OBJECT\b(?:$J_PRONOUN(?![\w-])|$J_PERSON(?![\w-])(?!(?:'s)?\s+$J_JOB_NOUN\b))/i;
+my $NAMED_WAIT_RE = qr/\b$J_WAIT\s+([A-Za-z]+)\b(?!(?:'s)?\s+$J_JOB_NOUN\b)/i;
+my $JOB_WORD_RE = qr/\A(?:$J_JOB|$J_RESULT)\z/i;
 
 sub _waits_on_person {
     my ($text) = @_;
     return 1 if $text =~ $PERSON_WAIT_RE;
     while ($text =~ /$NAMED_WAIT_RE/g) {
         my $w = $1;
-        return 1 if $w =~ /\A[A-Z][a-z]+\z/ && $w !~ /\A(?:the|an?|that|this|its|your|our|my)\z/i;
+        return 1 if $w =~ /\A[A-Z][a-z]+\z/ && $w !~ /\A(?:the|an?|that|this|its|your|our|my)\z/i && $w !~ $JOB_WORD_RE;
     }
     return 0;
 }
