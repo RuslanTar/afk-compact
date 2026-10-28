@@ -1,0 +1,336 @@
+#!/usr/bin/python3
+"""tools/respawn-keepset: check what the plugin thinks a background restart keeps of a job's
+respawnFlags against Claude Code's own sanitizer (SESSION-RESTART B9, §2.2).
+
+Usage: tools/respawn-keepset [--claude BIN]... [--record] [--list]
+  The table is plugin/helper/lib/restart.pm: @KEEP_VAL (flags kept with their value),
+  @KEEP_VAR (those of them that take every following word), @KEEP_BOOL (flags kept by name) and
+  @KEEPSET_CHECKED (the versions the table was checked for; a restart onto any other version
+  refuses `keepset-unverified` for a job with a flag whose loss may widen it).
+  The sanitizer is the function of the Claude Code binary whose warning is "stripped
+  respawnFlags token(s) that a restart does not re-apply": its three Sets (read from their
+  `<name>=new Set([...])` definitions) and its walk, every name in it made neutral, which must be
+  the walk respawn_drops follows (WALK below). The binary is only read, never run.
+  Binaries: every version in ~/.local/share/claude/versions/ (else `claude` on PATH), or the
+  --claude ones.
+  Findings, one line each:
+    KEEPSET <v> val|var|bool: <flag> in Claude Code, not in the table
+    KEEPSET <v> val|var|bool: <flag> in the table, not in Claude Code
+    KEEPSET <v> walk: the sanitizer's walk differs from the one respawn_drops follows
+    KEEPSET <v> no sanitizer: <what was not found>
+  Findings count for a version listed in @KEEPSET_CHECKED and for the newest one; an older
+  version not listed only gets a note. A listed version that is not installed gets a note.
+  --record  add every installed version that matches to @KEEPSET_CHECKED (restart.pm rewritten).
+  --list    print each version's Sets instead.
+  Exit: 0 PASS, 1 a finding, 2 no table or no binary.
+"""
+import mmap, os, re, shutil, sys
+
+sys.dont_write_bytecode = True
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+TABLE = "plugin/helper/lib/restart.pm"
+WARNING = b"stripped respawnFlags token(s) that a restart does not re-apply: ${"
+VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+IDENT = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+KEYWORDS = {"let", "const", "var", "for", "if", "else", "continue", "break", "while", "return", "function",
+            "void", "new", "typeof", "of", "in", "true", "false", "null", "undefined"}
+# Claude Code 2.1.309 to 2.1.312: the sanitizer (kAe in 2.1.312) with every name made neutral
+# ($1 its own name, $9 the value Set, $10 the by-name Set, $14 the variadic Set).
+WALK = (
+    "function $1($2){let $3=[],$4=[];for(let $5=0;$5<$2.length;$5++){let $6=$2[$5];"
+    "if(!$6.startsWith(\"-\")){$4.push($6);continue}let $7=$6.indexOf(\"=\"),$8=$7===-1?$6:$6.slice(0,$7);"
+    "if($7!==-1&&!$9.has($8)&&$10.has($8)){$3.push($8),$4.push($6);continue}"
+    "let $11=$7===-1&&$9.has($8),$12=$8!==\"-m\"&&($7===-1?$10.has($8)||$11&&$2[$5+1]!==void 0:$9.has($8)),"
+    "$13=$12?$3:$4;if($13.push($6),$11&&$2[$5+1]!==void 0)$13.push($2[++$5]);"
+    "if(!$12||$11&&$14.has($8))while($2[$5+1]!==void 0&&!$2[$5+1].startsWith(\"-\"))$13.push($2[++$5])}"
+    "if($4.length>0)$15(`[jobs] stripped respawnFlags token(s) that a restart does not re-apply: ${$4.join(\" \")}`,"
+    "{level:\"warn\"});return $16($17($3))}"
+)
+ROLES = {"val": "$9", "var": "$14", "bool": "$10"}
+
+
+def die(msg):
+    print("respawn-keepset: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def vkey(v):
+    return tuple(int(x) for x in v.split("."))
+
+
+def read_table():
+    path = os.path.join(REPO, TABLE)
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError as e:
+        die("{}: {}".format(TABLE, e))
+    out = {}
+    for key, name in (("val", "KEEP_VAL"), ("var", "KEEP_VAR"), ("bool", "KEEP_BOOL"), ("checked", "KEEPSET_CHECKED")):
+        m = re.search(r"^our @" + name + r" = qw\(([^)]*)\);", text, re.M)
+        if not m:
+            die("{} has no `our @{} = qw(...);`".format(TABLE, name))
+        out[key] = m.group(1).split()
+    return out, text, path
+
+
+def binaries(given):
+    if given:
+        out = []
+        for b in given:
+            base = os.path.basename(os.path.realpath(b))
+            if not VERSION.match(base):
+                die("--claude {}: the file name is not a version (x.y.z)".format(b))
+            out.append((base, b))
+        return out
+    d = os.path.join(os.path.expanduser("~"), ".local", "share", "claude", "versions")
+    out = []
+    if os.path.isdir(d):
+        for v in os.listdir(d):
+            p = os.path.join(d, v)
+            if VERSION.match(v) and os.path.isfile(p):
+                out.append((v, p))
+    if not out:
+        c = shutil.which("claude")
+        if c and VERSION.match(os.path.basename(os.path.realpath(c))):
+            out.append((os.path.basename(os.path.realpath(c)), os.path.realpath(c)))
+    if not out:
+        die("no Claude Code binary (~/.local/share/claude/versions/ is empty and `claude` is not a versioned file)")
+    return sorted(out, key=lambda x: vkey(x[0]))
+
+
+def skip_string(t, i):
+    q = t[i]
+    j = i + 1
+    while j < len(t):
+        if t[j] == "\\":
+            j += 2
+            continue
+        if t[j] == q:
+            return j + 1
+        j += 1
+    raise ValueError("an open string")
+
+
+def block_end(t, i):
+    """The index of the `}` that closes the `{` at t[i] (strings and template literals skipped)."""
+    depth = 0
+    j = i
+    while j < len(t):
+        c = t[j]
+        if c in "\"'":
+            j = skip_string(t, j)
+            continue
+        if c == "`":
+            j = template_end(t, j)
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return j
+        j += 1
+    raise ValueError("an open block")
+
+
+def template_end(t, i):
+    j = i + 1
+    while j < len(t):
+        c = t[j]
+        if c == "\\":
+            j += 2
+            continue
+        if c == "`":
+            return j + 1
+        if c == "$" and t[j + 1:j + 2] == "{":
+            j = block_end(t, j + 1) + 1
+            continue
+        j += 1
+    raise ValueError("an open template")
+
+
+def neutral(t):
+    """The function text with every name ($n by first appearance) made neutral; property names
+    (after `.`, or an object literal's key), keywords and the text of strings stay."""
+    names = {}
+    out = []
+    i = 0
+    tmpl = []  # template literal nesting: the brace depth at which each `${` opened
+
+    def name(w):
+        if w not in names:
+            names[w] = "$" + str(len(names) + 1)
+        return names[w]
+
+    depth = 0
+    in_tmpl_text = False
+    while i < len(t):
+        c = t[i]
+        if in_tmpl_text:
+            if c == "\\":
+                out.append(t[i:i + 2])
+                i += 2
+                continue
+            if c == "`":
+                out.append(c)
+                in_tmpl_text = False
+                i += 1
+                continue
+            if c == "$" and t[i + 1:i + 2] == "{":
+                out.append("${")
+                tmpl.append(depth)
+                depth += 1
+                in_tmpl_text = False
+                i += 2
+                continue
+            out.append(c)
+            i += 1
+            continue
+        if c in "\"'":
+            j = skip_string(t, i)
+            out.append(t[i:j])
+            i = j
+            continue
+        if c == "`":
+            out.append(c)
+            in_tmpl_text = True
+            i += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if tmpl and tmpl[-1] == depth:
+                tmpl.pop()
+                out.append(c)
+                in_tmpl_text = True
+                i += 1
+                continue
+        m = IDENT.match(t, i)
+        if m and (i == 0 or not re.match(r"[A-Za-z0-9_$]", t[i - 1])):
+            w = m.group(0)
+            prev = t[i - 1] if i > 0 else ""
+            key = prev in ("{", ",") and t[m.end():m.end() + 1] == ":"  # an object literal's key
+            out.append(w if prev == "." or key or w in KEYWORDS else name(w))
+            i = m.end()
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out), names
+
+
+def sanitizer(path):
+    """(neutral walk, {role: [flags]}, error) of the binary's sanitizer."""
+    with open(path, "rb") as f:
+        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            w = mm.find(WARNING)
+            if w < 0:
+                return None, None, "the warning text"
+            fs = mm.rfind(b"function ", max(0, w - 8000), w)
+            if fs < 0:
+                return None, None, "the function around the warning"
+            lo = max(0, fs - 400000)
+            text = mm[lo:min(len(mm), w + 8000)].decode("latin-1")
+        finally:
+            mm.close()
+    start = fs - lo
+    try:
+        brace = text.index("{", start)
+        end = block_end(text, brace)
+    except ValueError as e:
+        return None, None, "the function's end ({})".format(e)
+    fn = text[start:end + 1]
+    walk, names = neutral(fn)
+    by = {v: k for k, v in names.items()}
+    sets = {}
+    for role, ph in ROLES.items():
+        ident = by.get(ph)
+        if ident is None:
+            return walk, None, "the {} Set".format(role)
+        found = None
+        for m in re.finditer(r"(?<![A-Za-z0-9_$])" + re.escape(ident) + r"=new Set\(\[([^\]]*)\]\)", text[:start]):
+            found = m
+        if found is None:
+            return walk, None, "the {} Set's definition ({})".format(role, ident)
+        body = found.group(1)
+        items = re.findall(r'"([^"\\]*)"', body)
+        if re.sub(r'"[^"\\]*"|,|\s', "", body) != "":
+            return walk, None, "the {} Set is not a plain list of strings".format(role)
+        sets[role] = items
+    return walk, sets, None
+
+
+def record(text, path, versions):
+    new = " ".join(sorted(set(versions), key=vkey))
+    out = re.sub(r"^our @KEEPSET_CHECKED = qw\([^)]*\);", "our @KEEPSET_CHECKED = qw(" + new + ");", text, count=1, flags=re.M)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(out)
+    print("respawn-keepset: @KEEPSET_CHECKED = qw({})".format(new))
+
+
+def main(argv):
+    given, do_record, do_list = [], False, False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--claude" and i + 1 < len(argv):
+            given.append(argv[i + 1])
+            i += 2
+            continue
+        if a == "--record":
+            do_record = True
+        elif a == "--list":
+            do_list = True
+        else:
+            die("usage: tools/respawn-keepset [--claude BIN]... [--record] [--list]")
+        i += 1
+    table, text, path = read_table()
+    bins = binaries(given)
+    newest = bins[-1][0]
+    checked = set(table["checked"])
+    findings, notes, matching = [], [], []
+    for v, p in bins:
+        walk, sets, err = sanitizer(p)
+        counts = v in checked or v == newest
+        mine = []
+        if err:
+            mine.append("KEEPSET {} no sanitizer: {}".format(v, err))
+        else:
+            if walk != WALK:
+                mine.append("KEEPSET {} walk: the sanitizer's walk differs from the one respawn_drops follows".format(v))
+            for role in ("val", "var", "bool"):
+                have, want = set(sets[role]), set(table[role])
+                for f in sorted(have - want):
+                    mine.append("KEEPSET {} {}: {} in Claude Code, not in the table".format(v, role, f))
+                for f in sorted(want - have):
+                    mine.append("KEEPSET {} {}: {} in the table, not in Claude Code".format(v, role, f))
+            if do_list:
+                for role in ("val", "var", "bool"):
+                    print("{} {} ({}): {}".format(v, role, len(sets[role]), " ".join(sets[role])))
+        if not mine:
+            matching.append(v)
+            if v not in checked:
+                notes.append("KEEPSET {}: matches the table, not in @KEEPSET_CHECKED (--record adds it)".format(v))
+        elif counts:
+            findings += mine
+        else:
+            notes.append("KEEPSET {}: differs from the table (an older version not listed; not a finding)".format(v))
+    installed = {v for v, _ in bins}
+    for v in sorted(checked - installed, key=vkey):
+        notes.append("KEEPSET {}: listed, not installed here (not checked)".format(v))
+    for n in notes:
+        print(n)
+    for f in findings:
+        print(f)
+    if do_record and not findings:
+        record(text, path, list(checked) + matching)
+    if findings:
+        return 1
+    print("respawn-keepset: PASS ({} checked: {})".format(len(bins), " ".join(v for v, _ in bins)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

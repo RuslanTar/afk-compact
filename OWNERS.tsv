@@ -36,7 +36,7 @@ tsconfig.json	build
 src/plugin.json	build
 src/marketplace.json	build
 src/hooks.json	build
-tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json,launcher-flags}	build
+tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json,launcher-flags,respawn-keepset}	build
 src/assets/**	text
 src/skills/**	text
 tests/fixtures/**	fix

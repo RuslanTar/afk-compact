@@ -547,14 +547,14 @@ export class World {
     if (sub === 'set') {
       const path = `${WATCH}/${sid}/restart.json`
       const t = this.files.get(path)
-      if (t === undefined) return { ok: true, l: 'absent', c: 'absent' }
+      if (t === undefined) return { ok: true, l: 'absent', c: 'absent', why: null }
       const c = JSON.parse(t) as Record<string, unknown>
-      if (c.nonce !== flag('--nonce')) return { ok: true, l: 'mismatch', c: 'mismatch' }
+      if (c.nonce !== flag('--nonce')) return { ok: true, l: 'mismatch', c: 'mismatch', why: null }
       c.state = flag('--state')
       const ex = flag('--exiting-at')
       if (ex !== undefined) c.exiting_at = Number(ex)
       this.files.set(path, JSON.stringify(c) + '\n')
-      return { ok: true, l: flag('--launch') !== undefined ? 'written' : 'absent', c: 'written' }
+      return { ok: true, l: flag('--launch') !== undefined ? 'written' : 'absent', c: 'written', why: null }
     }
     if (sub === 'claim') return { claimed: false, why: 'none', route: null, from: null, to: null, continue: false, nonce: null, at: null, refused: [], ...this.restartClaimReply }
     if (sub === 'respawn') return this.restartRespawn

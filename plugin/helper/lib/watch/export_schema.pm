@@ -66,9 +66,10 @@ my @SEVERITY = qw(critical warn info);
 my @RESTART_WHY = qw(off headless no-launcher job-unknown note-pattern bypass-not-available launch-file launcher-cap
                      bypass-left attached unsupported-os no-drift version-unknown on-hold busy aborted asks-user halted
                      agents background-work crons draft present remote session-rules session-dirs worktree mode-unknown
-                     mode-changed block-not-saved transcript tried cap cooldown fg-not-shipped no-watch helper-failed
-                     arm-failed stale-exit exit-not-run exit-refused respawn-refused respawn-failed not-respawned
-                     same-version not-confirmed launcher-refused bg-not-shipped restriction-lost);
+                     block-not-saved transcript tried cap cooldown fg-not-shipped no-watch helper-failed
+                     arm-failed exit-not-run exit-refused respawn-refused respawn-failed not-respawned
+                     same-version not-confirmed launcher-refused bg-not-shipped restriction-lost
+                     keepset-unverified);
 my $RESTART_WHY = [pre => [@RESTART_WHY], [qw(launcher-invalid)]];
 # What G3 found about the launcher on a shadow row of the terminal route (`ok` or its why)
 my $RESTART_LAUNCHER = [pre => [qw(ok no-launcher)], [qw(launcher-invalid)]];

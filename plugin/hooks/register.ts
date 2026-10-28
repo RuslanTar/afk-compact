@@ -20,6 +20,13 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
+    // SESSION-RESTART D10: a permission mode read before the load's start (an earlier process's
+    // Stop) is older than any turn of this load.
+    try {
+      state.sessionStartAt = await $.clock.now()
+    } catch {
+      // no stamp: the restart moment uses its own time (every read counts as older)
+    }
     // D11, §3.4: a person launched or resumed this session: present for the next minute, so an
     // idle compaction the load adopts does not run in front of them (stamped before loadIdle).
     if (e.isInteractive === true) {
@@ -53,7 +60,7 @@ export const register: Register = (on, options) => {
     try {
       state.lastMainTurnAt = await $.clock.now()
     } catch {
-      // no stamp: the newest mode read counts as the last turn's
+      // no stamp: the last one stands (or the load's start)
     }
     await onTurnStart(realDeps($, options, state), e.turnId, e.text)
     return next(e)

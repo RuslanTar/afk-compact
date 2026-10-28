@@ -21,7 +21,9 @@ compared with a render from the newest binary) and tools/assemble --check (golde
 goldens.gen.ts), each byte for byte (BH-4, BH-5).
 
 X-launcher (SESSION-RESTART §3.3, §7.1): tools/launcher-flags (the restart launcher's flag
-table against `claude --help` of the newest installed Claude Code), then tests/launcher/run.sh
+table against `claude --help` of the newest installed Claude Code), tools/respawn-keepset (B9:
+the background restart's keep-set in restart.pm against the respawnFlags sanitizer of every
+installed Claude Code, read from the binary, never run), then tests/launcher/run.sh
 (its cases with a stub claude under every installed POSIX shell); integration adds
 tests/launcher/docker.sh (the same cases on Linux: debian:bookworm-slim with dash as /bin/sh
 and bash, and the local launcher-test-alpine:1 with busybox ash and zsh; no network, no
@@ -49,7 +51,9 @@ reason, AT-SR-10 the old never-run rule back; REVIEW-NIGHT fixes: a gate list wi
 production write, a dropped [from …] tag, foreign text inline in a risk call, the old
 README promise, a queue line in the resume SKILL, a malformed budget reason, the AT-SR-09 risk
 corpus against loosened literals), the restart launcher's flag table out of step with `claude
---help` (a dropped flag, a wrong arity, a dropped subcommand; SESSION-RESTART §3.3),
+--help` (a dropped flag, a wrong arity, a dropped subcommand; SESSION-RESTART §3.3), the
+background restart's keep-set out of step with Claude Code's sanitizer (a variadic flag
+dropped, a flag the restart drops added; B9),
 the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
@@ -322,6 +326,19 @@ def probes(name):
             if old not in t:
                 raise Fail("X-tools launcher-flags: the template has no " + old.strip())
             t = t.replace(old, new)
+        write_text(p, t)
+
+    def respawn_keepset(d):
+        """SESSION-RESTART B9: a variadic flag dropped from the keep-set and a flag a restart drops
+        added to it."""
+        p = os.path.join(d, "plugin", "helper", "lib", "restart.pm")
+        with open(p, encoding="utf-8") as f:
+            t = f.read()
+        for old, new in (("--disallowedTools --tools --mcp-config --betas", "--disallowedTools --mcp-config --betas"),
+                         ("--strict-mcp-config\n", "--strict-mcp-config --resume\n")):
+            if old not in t:
+                raise Fail("X-tools respawn-keepset: restart.pm has no " + old.strip())
+            t = t.replace(old, new, 1)
         write_text(p, t)
 
     def npm(d):
@@ -1015,6 +1032,9 @@ def probes(name):
          [r"^LAUNCHER-FLAGS missing --verbose$",
           r"^LAUNCHER-FLAGS arity --tools: table val, help var$",
           r"^LAUNCHER-FLAGS missing command doctor$"], None),
+        ("respawn-keepset", "SESSION-RESTART B9", ["tools/respawn-keepset"], respawn_keepset,
+         [r"^KEEPSET [0-9.]+ var: --tools in Claude Code, not in the table$",
+          r"^KEEPSET [0-9.]+ bool: --resume in the table, not in Claude Code$"], None),
     ]
     if pinned:
         out += [
@@ -1127,6 +1147,7 @@ def x_launcher(phase, root=REPO):
     (tests/launcher/docker.sh: debian with dash and bash, alpine with busybox ash and zsh; no
     network, no credentials); LAUNCHER_DOCKER=skip skips that part and says so."""
     run([os.path.join(root, "tools", "launcher-flags")], "X-launcher flag table", cwd=root)
+    run([os.path.join(root, "tools", "respawn-keepset")], "X-launcher respawn keep-set (B9)", cwd=root)
     run(["/bin/sh", os.path.join(root, "tests", "launcher", "run.sh")], "X-launcher cases",
         cwd=root, capture=True)
     if phase != "integration":

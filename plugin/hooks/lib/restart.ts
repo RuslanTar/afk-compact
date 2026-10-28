@@ -80,6 +80,8 @@ export const CLAIM_CONTINUE_MS = 2000
 export const RESTART_PRESENT_MS = 60000
 /** The helper's gate call (§4.1: one call, 1.5 s). */
 export const GATE_MS = 1500
+/** The respawn call's refusals that start nothing and are skips, not failures (G3b, B9, G1, §8.4). */
+export const RESPAWN_SKIPS: readonly string[] = ['bypass-left', 'restriction-lost', 'keepset-unverified', 'off', 'bg-not-shipped']
 
 /**
  * §3.5, the launcher's file contract §4: the launcher's patterns for the note values the mod
@@ -339,10 +341,13 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean }):
     return false
   }
   const seen = s.modeSeen
+  // D10: the start of this load's last main turn; with none yet (an idle compaction this load
+  // adopted), the load's start, so a Stop an earlier process wrote counts as older than the last
+  // turn and the launch mode narrows it; with no stamp at all, this moment.
+  const turnAt = s.lastMainTurnAt ?? s.sessionStartAt ?? now
   const g = await call(d, ['restart', 'gate', '--sid', sid, '--route', route, ...rt.flags, '--from', from, '--to', to, '--model', model,
     ...(seen !== undefined ? ['--seen-mode', seen.mode, '--seen-at', String(Math.round(seen.at))] : []),
-    ...(s.lastMainTurnAt !== undefined ? ['--turn-at', String(Math.round(s.lastMainTurnAt))] : []),
-    '--now-ms', String(Math.round(now))], GATE_MS)
+    '--turn-at', String(Math.round(turnAt)), '--now-ms', String(Math.round(now))], GATE_MS)
   const gate = g.ok ? parseGate(g.stdout) : undefined
   if (!gate || !gate.ok) {
     const w = gate?.why ?? 'helper-failed'
@@ -399,7 +404,7 @@ export async function restartMoment(d: Deps, sid: string, o: { cont: boolean }):
  * not start, timed out or exited non-zero). Otherwise `l` and `c` say what the helper did with
  * each note: `written`, `absent`, `mismatch` (another nonce or session) or `final` (already ended).
  */
-type SetReply = { ok: boolean; l: string; c: string }
+type SetReply = { ok: boolean; l: string; c: string; why?: string }
 
 async function setNotes(d: Deps, run: RestartRun, state: string, o: { extra?: string[]; timeoutMs?: number; now?: number } = {}): Promise<SetReply> {
   const now = o.now ?? (await d.now())
@@ -407,7 +412,7 @@ async function setNotes(d: Deps, run: RestartRun, state: string, o: { extra?: st
     ...(run.route === 'fg' && run.launch !== undefined ? ['--launch', run.launch] : [])]
   const r = o.timeoutMs === undefined ? await call(d, args) : await call(d, args, o.timeoutMs)
   const j = r.ok ? jsonOf(r.stdout) : undefined
-  if (!j || j.ok !== true) return { ok: false, l: 'failed', c: 'failed' }
+  if (!j || j.ok !== true) return { ok: false, l: 'failed', c: 'failed', ...(typeof j?.why === 'string' ? { why: j.why } : {}) }
   return { ok: true, l: typeof j.l === 'string' ? j.l : 'absent', c: typeof j.c === 'string' ? j.c : 'absent' }
 }
 
@@ -454,6 +459,8 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
     // absent, another session's or already ended would close the session with no relaunch (D9).
     const w = await setNotes(d, run, 'exiting', { extra: ['--exiting-at', String(Math.round(at))], now: at })
     if (s.restart !== run || run.phase !== 'grace') return
+    // The helper's second check: the setting turned off during the grace, or the route not shipped.
+    if (!w.ok && (w.why === 'off' || w.why === 'fg-not-shipped')) return fail(d, run, 'refresh_skipped', w.why)
     if (!w.ok) return fail(d, run, 'refresh_failed', 'helper-failed')
     if (w.l !== 'written' || w.c !== 'written') {
       return fail(d, run, 'refresh_failed', 'helper-failed', { code: w.l !== 'written' ? `launch-${w.l}` : `carry-${w.c}` })
@@ -494,8 +501,9 @@ async function graceEnd(d: Deps, run: RestartRun): Promise<void> {
     // A refusal, or a call that failed or timed out after the helper may have started the detached
     // respawn: the respawn is cancelled (the note settled first) before the continue runs.
     const why = typeof j?.why === 'string' ? j.why : undefined
-    // The job's flags read again at the respawn (G3b, B9): refused before anything started.
-    if (why === 'bypass-left' || why === 'restriction-lost') {
+    // The job's flags read again at the respawn (G3b, B9), the setting turned off during the grace
+    // or the route's ship gate: refused before anything started.
+    if (why !== undefined && RESPAWN_SKIPS.includes(why)) {
       await cancelRespawn(d, run, 'cancelled')
       return fail(d, run, 'refresh_skipped', why)
     }

@@ -151,7 +151,7 @@ describe('BT-05 recorded helper replies', () => {
     // SESSION-RESTART: restart on update off by default: the gate refuses `off`; no note, no record.
     expect(JSON.parse(join(reply('restart-gate-off').stdout))).toMatchObject({ ok: false, why: 'off', setting: 'off' })
     expect(JSON.parse(join(reply('restart-claim-none').stdout))).toMatchObject({ claimed: false, why: 'none', refused: [] })
-    expect(JSON.parse(join(reply('restart-set-absent').stdout))).toEqual({ ok: true, l: 'absent', c: 'absent' })
+    expect(JSON.parse(join(reply('restart-set-absent').stdout))).toEqual({ ok: true, l: 'absent', c: 'absent', why: null })
     expect(JSON.parse(join(reply('restart-respawn-cancel-none').stdout))).toEqual({ ok: true, killed: false, note: false })
     expect(await prevCopy(depsFor(reply('prev-copy-none')), REPLY_SID)).toBeUndefined()
     expect(await prevCopy(depsFor(reply('prev-copy-path')), REPLY_SID)).toMatch(/^~\/.+_c1-1a2b3c\.md$/)

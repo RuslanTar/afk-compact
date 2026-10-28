@@ -275,11 +275,12 @@ sub relaunch_lines {
 my %RESTART_LAST = (
     'background-work' => 'background tasks would be lost', crons => 'session crons would be lost', draft => 'a draft in the prompt box',
     present => 'someone at the prompt', remote => 'a remote client', attached => 'a client attached', 'session-rules' => 'rules set for this session',
-    'session-dirs' => 'folders added in this session', worktree => 'in a worktree', 'mode-changed' => 'the permission mode changed',
+    'session-dirs' => 'folders added in this session', worktree => 'in a worktree',
     'no-launcher' => 'not started through the launcher', 'fg-not-shipped' => 'terminal restarts not enabled in this version yet',
     'bg-not-shipped' => 'background restarts not enabled in this version yet',
     'on-hold' => 'that release is on hold', 'bypass-left' => 'a permission bypass would come back',
     'restriction-lost' => 'a restriction it was started with would be lost (a launch flag a restart does not apply again)',
+    'keepset-unverified' => 'a restriction it was started with may be lost (what a restart keeps is not checked for that version yet)',
     'mode-unknown' => 'the permission mode to restart in is not known',
 );
 # The launcher's refusal reasons (its file contract §5), for the `launcher did not restart` line.

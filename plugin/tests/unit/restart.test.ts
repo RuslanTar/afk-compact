@@ -548,17 +548,21 @@ test('AT-RS-13: bg: the respawn passes the job folder and the fresh mode (the he
   expect(w.submits.length).toBe(1)
 })
 
-test('AT-RS-13 (B9): bg: the job\'s flags read again at the respawn hold a restriction a restart drops: restriction-lost, a skip, the continue once', async ($, on) => {
-  const w = await session($, on, { route: 'bg' })
-  w.restartRespawn = { ok: false, why: 'restriction-lost' }
-  await nudgedTurn($, w)
-  await w.advance(RESTART_GRACE_MS)
-  expect(acts(w).slice(-3)).toEqual(['respawn', 'respawn-cancel', 'set'])
-  expect(whys(w, 'refresh_skipped')).toEqual(['restriction-lost'])
-  expect([w.rowsOf('refresh_failed').length, w.submits.length]).toEqual([0, 1])
-})
+// B9 (restriction-lost, keepset-unverified) on the job's flags read again, and the helper's second
+// check of the setting (turned off during the grace) and of the route's ship gate.
+for (const why of ['restriction-lost', 'keepset-unverified', 'off', 'bg-not-shipped']) {
+  test(`AT-RS-13 (B9, G1): bg: the respawn refuses ${why} before anything started: a skip, not a failure; the continue once`, async ($, on) => {
+    const w = await session($, on, { route: 'bg' })
+    w.restartRespawn = { ok: false, why }
+    await nudgedTurn($, w)
+    await w.advance(RESTART_GRACE_MS)
+    expect(acts(w).slice(-3)).toEqual(['respawn', 'respawn-cancel', 'set'])
+    expect(whys(w, 'refresh_skipped')).toEqual([why])
+    expect([w.rowsOf('refresh_failed').length, w.submits.length]).toEqual([0, 1])
+  })
+}
 
-for (const why of ['restriction-lost', 'bg-not-shipped']) {
+for (const why of ['restriction-lost', 'keepset-unverified', 'bg-not-shipped']) {
   test(`AT-RS-14 (mod part): the gate's ${why} on the background route: one refresh_skipped, nothing armed, the continue as usual`, async ($, on) => {
     const w = await session($, on, { route: 'bg' })
     w.restartGate = { ok: false, why }
@@ -628,6 +632,19 @@ test('AT-RS-05: the launch note not written at exiting (gone, another nonce\'s, 
   expect(states(w)).toEqual(['exiting', 'cancelled'])
   expect(w.submits.length).toBe(1)
 })
+
+for (const why of ['off', 'fg-not-shipped']) {
+  test(`AT-RS-05 (G1): the helper refuses exiting with ${why} (its second check, nothing written): no /exit, refresh_skipped ${why}, the continue`, async ($, on) => {
+    const w = await session($, on)
+    await nudgedTurn($, w)
+    setReplyFor(w, 'exiting', { ok: false, l: 'absent', c: 'absent', why })
+    await w.advance(RESTART_GRACE_MS)
+    expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
+    expect([whys(w, 'refresh_skipped'), w.rowsOf('refresh_failed').length]).toEqual([[why], 0])
+    expect(states(w)).toEqual(['exiting', 'cancelled'])
+    expect(w.submits.length).toBe(1)
+  })
+}
 
 test('AT-RS-14 (mod part): bg: a client attached in this load: attached', async ($, on) => {
   const w = await session($, on, { route: 'bg' })
@@ -801,6 +818,28 @@ test('AT-RS-19 (D10, mod part): no mode read in this load: no --seen-mode (the h
   await nudgedTurn($, w)
   const gate = w.restartCalls('gate')[0]
   expect([gate?.args.includes('--seen-mode'), gate?.args.includes('--turn-at')]).toEqual([false, true])
+})
+
+test('AT-RS-19 (D10, mod part): no main turn in this load (the plugin\'s idle compaction of a record an earlier process armed): --turn-at is the load\'s start, so that process\'s Stop counts as older than the last turn and the launch mode narrows it', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+  const MIN = 60000
+  const w = new World({ version: { version: '2.1.311' } }).install(on, {
+    [`idle_due:${SID_A}`]: {
+      kind: 'compact', due: T0 + 10 * MIN, sid: SID_A, end: T0 - 44 * MIN, anchor: T0 - 44 * MIN, load: 'old', tokens: 260000, ttl: '1h', pct: 30,
+      cc: '2.1.311', model: 'claude-test-model', answer: true, published: false, episode: { since: T0 - 44 * MIN, done: false },
+    },
+  })
+  w.policy = { idleCompaction: false }
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
+  w.tokens = 260000
+  w.restartSetting = 'on'
+  w.claudeVersion = '2.1.312 (Claude Code)'
+  w.env = { [LAUNCH_ENV]: LAUNCH }
+  await w.start($)
+  await w.advance(10 * MIN)
+  const gate = w.restartCalls('gate')[0]
+  expect(gate).toBeDefined()
+  expect([Number(w.flag(gate, '--turn-at')), gate?.args.includes('--seen-mode')]).toEqual([T0, false])
+  expect(Number(w.flag(gate, '--now-ms'))).toBeGreaterThan(T0)
 })
 
 test('shadow (terminal route trial data): one refresh_would per moment, with the running agents and the gate\'s items and launcher state; a running agent does not refuse there', async ($, on) => {

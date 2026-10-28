@@ -4,17 +4,19 @@
 #                [--model M] [--seen-mode X --seen-at MS] [--turn-at MS] [--now-ms MS]
 #       -> {ok, why, setting, route, mode, effort, job_short, token, types, items, launcher}
 #          (seen: the newest permission_mode the mod read in this load, turn-at: the start of
-#          its last main turn; D10)
+#          its last main turn, else of the load; without it no read counts as the last turn's; D10)
 #   restart arm --sid S --route fg|bg --nonce N --from V --to V --continue 0|1 --mode X
 #               [--effort E] [--model M] [--launch DIR | --job-dir DIR] [--load-id L] [--now-ms MS]
 #       -> {ok, why, token}  (the setting read again: not `on` refuses `off`; a route without
 #          its ship gate refuses `fg-not-shipped` or `bg-not-shipped`)
 #   restart set --sid S --nonce N --state X [--exiting-at MS] [--launch DIR] [--now-ms MS]
-#       -> {ok, l, c}
+#       -> {ok, l, c, why}  (exiting and go: the terminal route's ship gate, `fg-not-shipped`;
+#          exiting: the setting read again, `off` unless it is `on`)
 #   restart claim --sid S --load-id L [--launch DIR] [--bg] [--now-ms MS]
 #       -> {claimed, why, route, from, to, continue, nonce, at, refused}
 #   restart respawn --sid S --short J --nonce N --to V --job-dir DIR --mode X [--wait-ms MS (test mode)]
-#       -> {ok, pid, why}
+#       -> {ok, pid, why}  (the background route's ship gate, `bg-not-shipped`, and the setting
+#          read again, `off`, before anything else)
 #   restart respawn-cancel --sid S --nonce N [--state cancelled|failed]
 #       -> {ok, killed, note}
 # Paths come from the mod's literal env reads (the launch folder, the job folder) and are
@@ -59,9 +61,9 @@ sub run {
                              load_id => $opt->{'load-id'}, now => $now);
         $o = jsonc::obj(ok => jsonc::bool($r->{ok}), why => $r->{why}, token => $r->{token});
     } elsif ($sub eq 'set') {
-        my $r = restart::set_state(sid => $sid, sid_dir => $d, nonce => $opt->{nonce}, state => $opt->{state}, now => $now,
-                                   exiting_at => $opt->{'exiting-at'}, launch => _str($opt->{launch}));
-        $o = jsonc::obj(ok => jsonc::bool($r->{ok}), l => $r->{l}, c => $r->{c});
+        my $r = restart::set_state(sid => $sid, sid_dir => $d, setting => rc::val('restart_on_update'), nonce => $opt->{nonce},
+                                   state => $opt->{state}, now => $now, exiting_at => $opt->{'exiting-at'}, launch => _str($opt->{launch}));
+        $o = jsonc::obj(ok => jsonc::bool($r->{ok}), l => $r->{l}, c => $r->{c}, why => $r->{why});
     } elsif ($sub eq 'claim') {
         my $r = restart::claim(sid => $sid, sid_dir => $d, load_id => $opt->{'load-id'}, launch => _str($opt->{launch}),
                                bg => ($opt->{bg} ? 1 : 0), now => $now);
@@ -72,7 +74,8 @@ sub run {
         # The row the detached helper may write needs the envelope's claude pid now: the walk
         # from the grandchild (reparented, in its own session) would find nothing.
         rc::claude();
-        my $r = restart::respawn(sid => $sid, sid_dir => $d, short => $opt->{short}, nonce => $opt->{nonce},
+        my $r = restart::respawn(sid => $sid, sid_dir => $d, setting => rc::val('restart_on_update'), short => $opt->{short},
+                                 nonce => $opt->{nonce},
                                  to => (restart::is_ver($opt->{to}) ? $opt->{to} : undef), job_dir => _str($opt->{'job-dir'}),
                                  mode => $opt->{mode}, wait_ms => $opt->{'wait-ms'});
         $o = jsonc::obj(ok => jsonc::bool($r->{ok}), pid => $r->{pid}, why => $r->{why});

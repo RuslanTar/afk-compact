@@ -460,6 +460,8 @@ export type LoadState = {
   modeSeen: { mode: string; at: number } | undefined
   /** D10: when the last main turn of this load started. */
   lastMainTurnAt: number | undefined
+  /** D10: when this load's `session.start` ran (once per load; never for a `/clear`). */
+  sessionStartAt: number | undefined
 }
 
 /**
@@ -604,6 +606,7 @@ export function newState(loadId: string): LoadState {
     versionMoved: undefined,
     modeSeen: undefined,
     lastMainTurnAt: undefined,
+    sessionStartAt: undefined,
   }
 }
 
