@@ -28,15 +28,15 @@ export type LaneFacts = {
   todo: number
   done: number
   unmarked: number
-  /** Of the steps marked todo, those whose text names no gate, ask, pending answer, wait or job trigger: a step that can run. */
+  /** Of the steps marked todo, those whose text names no gate, ask, pending answer or wait, and no job trigger leads: a step that can run. */
   free: number
   /**
-   * Of the steps marked todo, those held on a job: their only trigger is a running job's result
-   * (`On the timer notification, reply …`, `when CI finishes, report …`, `wait for the B-1
-   * result`; owner 2026-10-28 digest rules (a)). Such a step runs once that result is in (-06).
+   * Of the steps marked todo, those held on a job: a running job's result leads them as their
+   * trigger (`On the timer notification, reply …`, `when CI finishes, report …`; owner 2026-10-28
+   * digest rules (a)), with no user-wins word. Such a step runs once that result is in (-06).
    */
   onJob: number
-  /** Of the steps marked todo, those held on the user (a gate, an ask, a pending answer, a needed approval) or on another named wait (a reviewer). */
+  /** Of the steps marked todo, those held on the user: a gate, an ask, a pending answer, a needed approval or any wait (release-0.1.1b's reading). */
   onUser: number
   /** Next steps says `see handoff`: the steps are in a handoff file, so code cannot count them all. */
   elsewhere: boolean
@@ -94,26 +94,19 @@ const ITEM_RE = /^\s*\d+\.\s/
  */
 const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
 /**
- * A step that cannot run now: it is gated, asks the user, holds a pending answer, waits on
- * something (`waits for`, `waiting on`, `wait until`, `wait till`, `awaiting`, `blocked on`/`by`)
- * or needs an approval or the user. A wait on CI or a reviewer counts too: under a blocked Status
- * the model's word leads (owner xxxxxxxx-05), and code moves a stop toward work only on a step that
- * names no wait at all. A wait on a running job, and any other step whose trigger is a job's
- * result, is held on that job (`JOB_RE`, owner 2026-10-28 digest rules (a)), whatever the wording
- * (`Wait for …` or `On …`).
+ * A step that cannot run now, as release-0.1.1b reads it (its own `HELD_RE`, unchanged): it is
+ * gated, asks the user, holds a pending answer, waits on something (`waits for`, `waiting on`,
+ * `awaiting`, `blocked on`/`by`) or needs an approval or the user. A wait on CI or a reviewer counts
+ * too: under a blocked Status the model's word leads (owner xxxxxxxx-05), and code moves a stop
+ * toward work only on a step that names no wait at all. Such a step is held on the user, whatever
+ * else it says (`holdOf`): a wait on a job (`Wait for the timer notification, then reply`) too.
  */
-const HELD_RE = /\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|wait(?:s|ing)? (?:on|for|until|till)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
+const HELD_RE = /\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
 /**
  * One word between a trigger and what it names: never a possessive (`the reviewer's result` is
  * not a job's) nor `of`, `from`, `by` or `for` (`approval of the run` is not the run).
  */
 const WORD = "(?:(?!(?:of|from|by|for)\\s)[\\w.#/\"`-]+\\s+)"
-/**
- * One word of a wait's object before its job noun (`wait for the release build`, `Wait for Jenkins
- * build`): a `WORD` that is not `to`, `on`, `and` or `or` either, so a job named after the object's
- * own noun (`Wait for Anna to run the build`, `wait for review on build 7`) is not what the wait is on.
- */
-const NOUN_WORD = "(?:(?!(?:of|from|by|for|to|on|and|or)\\s)[\\w.#/\"`-]+\\s+)"
 /**
  * A running job as a step names it: `B-n` is the summary form's id of a background job; a test
  * run (`the tests`, `the suite`) is one too.
@@ -131,52 +124,26 @@ const JOB_RESULT = `(?:notifications?|${JOB}(?:'s)?\\s+${RESULT}|(?:results?|out
 const FINISH =
   '(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|reports? back|reported back|' +
   'fires?|fired|exits?|exited|pass(?:es|ed)?|fail(?:s|ed)?|succeed(?:s|ed)?|is (?:done|in|back|green|red|over)|are (?:done|in|back|green|red|over))'
-/**
- * The start of the step (after its number; `then` may lead): a trigger there holds the whole
- * step, while one after other work (`commit the notes; when CI finishes, …`) leaves that work free.
- */
+/** The start of the step (after its number; `then` may lead): only a trigger there holds the step. */
 const LEAD = '^(?:\\d+\\.\\s+)?(?:then,?\\s+)?'
-/** A wait word: `wait for`, `waits on`, `waiting until`, `wait till`, `awaiting`. */
-const WAIT = '(?:wait(?:s|ing)?\\s+(?:on|for|until|till)|await(?:s|ing)?)'
 /**
- * What may follow a wait's job (`WAIT_END`, read after it): an id (`Build 42`, `Agent B`, `wf_1`)
- * or a `(s)` / `/tests` twin, then the step's end, a mark, a clause break (`,` `;` `:` `.` `!` `?`
- * `(` `)` a dash), `then`, `before <doing>`, or the job's end (`to finish`, `to be done`, `passes`).
- */
-const WAIT_ID = `(?:\\(s\\)|/${JOB})?(?:\\s+(?:[a-z]|[\\w#.-]*\\d[\\w#.-]*))?`
-const WAIT_END =
-  `(?=\\s*(?:$|[,;:.!?()·—–]|-\\s|then\\b|before\\s+\\w+ing\\b|${FINISH}\\b|` +
-  `to\\s+(?:be\\s+(?:done|green|red|over|finished|completed?)\\b|${FINISH}\\b)))`
-/**
- * A step whose trigger is a running job's result (owner 2026-10-28 digest rules (a)):
+ * A step whose trigger is a running job's result, leading the step (owner 2026-10-28 digest
+ * rules (a)):
  * - `On the timer notification, reply …`, `after the agent result, merge …`, `upon the agent's
- *   return`: on, upon or after leading the step, then a job's result (`JOB_RESULT`);
- * - `After the run, commit …`, `upon CI, …`: upon or after leading the step, then a job alone
- *   (an article or a `B-n` id may come first) and a `,`, `;` or `:`;
+ *   return`: on, upon or after, then a job's result (`JOB_RESULT`);
+ * - `After the run, commit …`, `upon CI, …`: upon or after, then a job alone (an article or a
+ *   `B-n` id may come first) and a `,`, `;` or `:`;
  * - `when CI finishes, report …`, `after the build ends`, `once the result arrives`: when, after,
- *   once or as soon as leading the step, then a job or a result, then its end (`FINISH`);
- * - `wait for the timer notification`, `waits on B-1`, `awaiting the build`, `wait till CI passes`:
- *   a wait on a job or a job's result (an article and two `NOUN_WORD`s may come first), anywhere
- *   (any wait reads held already: this only tells the job's from the user's). The wait's object
- *   ends at its job (`WAIT_END`): `Wait for the build and a vote`, `Wait for the build to be
- *   signed off`, `Wait for the build from the release manager` wait on more than the job.
- * The trigger leads the step, so a step that only mentions a job or a result (`fix the build
- * script`, `add a test for when the task completes`, `log a message when the build is done`, `On
- * completion, commit`, `after the results are reviewed, …`, `After fixing the build, commit`)
- * stays free work: code never turns a summary toward a stop its own words do not ask for. A
- * trigger that does not lead the step (`reply once the timer fires`) reads free too: that errs
- * toward work.
+ *   once or as soon as, then a job or a result, then its end (`FINISH`).
+ * A step that only mentions a job or a result (`fix the build script`, `log a message when the
+ * build is done`, `On completion, commit`, `After fixing the build, commit`), or names its trigger
+ * later (`reply once the timer fires`), reads as on release-0.1.1b: free work.
  */
-const JOB_SRC =
+const JOB_RE = new RegExp(
   `${LEAD}(?:on|upon|after)\\s+${WORD}{0,4}?${JOB_RESULT}\\b` +
   `|${LEAD}(?:upon|after)\\s+(?:(?:the|that|this|its)\\s+)?(?:B-\\d+\\s+)?${JOB}\\s*[,;:]` +
-  `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b` +
-  `|\\b${WAIT}\\s+(?:(?:the|that|this|its)\\s+)?${NOUN_WORD}{0,2}?(?:${JOB_RESULT}|${JOB})${WAIT_ID}${WAIT_END}`
-const JOB_RE = new RegExp(JOB_SRC, 'i')
-/** Every job trigger of a step, to read what is left of it (`holdOf`). */
-const JOB_ALL_RE = new RegExp(JOB_SRC, 'gi')
-/** A step's done criterion (`— done when the run finishes`, up to its mark or next clause): not a trigger. */
-const CRITERION_RE = /\bdone when\b[^·;]*/gi
+  `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b`,
+  'i')
 /** A person by a pronoun (`I`, `my`, `we`, `you`, `his`, `she`, `their`, `someone`, `whoever`). */
 const PRONOUN =
   '(?:I|me|my|mine|myself|we|us|our|ours|you|your|yours|he|him|his|she|her|hers|they|them|their|theirs|' +
@@ -207,15 +174,11 @@ const APPROVAL =
   'guidance|decid(?:e|es|ed|ing)|decisions?|choose|chooses|chose|choices?|questions?|ask(?:s|ed|ing)?|request\\w*|agree\\w*|' +
   'check(?:s|ed|ing)?\\s+(?:in\\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))'
 /**
- * A word that makes a step the user's whenever a job trigger comes with it (`holdOf`): a person, a
- * pronoun or a person's say (`APPROVAL`), anywhere in the step (not inside a longer word:
- * `user-facing`, `us-east-1` are none).
+ * A word that keeps a step with a job trigger off the job (`holdOf`): a person, a pronoun or a
+ * person's say (`APPROVAL`), anywhere in the step (not inside a longer word: `user-facing`,
+ * `us-east-1` are none).
  */
 const USER_WINS_RE = new RegExp(`\\b(?:${PRONOUN}|${PERSON}|${APPROVAL})(?![\\w-])`, 'i')
-/**
- * A name: a capitalised word (`Anna`, `Ünal`, `GitHub`), read outside the step's job triggers.
- */
-const NAME_RE = /(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}/u
 /**
  * `reply` or `answer` opening the step or a clause after `,`, `—` or `then`, with no object (the
  * step's end or mark, a clause break, `with`, `and`, `in`): the session's own reply (`On the timer
@@ -225,27 +188,21 @@ const NAME_RE = /(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}/u
 const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/gi
 /**
  * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (owner
- * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run).
- * - The user wins: a step with a job trigger (`JOB_RE`) is held on the job only when it is nothing
- *   but its job triggers and the session's own work: no person, pronoun or person's say anywhere in
- *   it (`USER_WINS_RE`), and, outside its triggers, no name (`NAME_RE`) and no other wait, ask or
- *   need (`HELD_RE`). Else it is held on the user (`Wait for approval to run the build`, `When the
- *   build finishes, wait for input`, `Wait for CI. Then: Anna merges`, and, erring toward a stop,
- *   `Wait for the timer notification, then reply to the user`). A step that needs the user and a
- *   job still needs the user after the job ends, so a job's result never unblocks it.
- * - With no job trigger, a step reads as on release-0.1.1b: held on the user when it is gated,
- *   asks the user, holds a pending answer, waits or needs an approval (`HELD_RE`), else free. A
- *   person or approval word alone (`tidy the notes after review`) holds nothing.
- * Every space (a no-break space too) reads as a plain one, as in copies.pm `_hold_of`.
+ * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run). No step
+ * reads more held on a job, or freer, than on release-0.1.1b:
+ * - a step release-0.1.1b reads held (`HELD_RE`, on the step as it is) is held on the user, as
+ *   there; so is a wait on a job (`Wait for the timer notification, then reply`: a known limit of
+ *   0.1.1, which reads no job in a wait's words);
+ * - a step it reads free is held on a job only when a job trigger leads it (`JOB_RE`) and no
+ *   user-wins word stands anywhere in it (`USER_WINS_RE`); else it is free, as there.
+ * Planned for 0.1.2: an explicit `waits: job` / `waits: you` mark in the summary's steps, read by
+ * code instead of the wording. The job reading takes every space (a no-break space too) as a plain
+ * one, as copies.pm `_hold_of` does.
  */
 function holdOf(raw: string): 'user' | 'job' | undefined {
+  if (HELD_RE.test(raw)) return 'user'
   const text = raw.replace(/\s/g, ' ')
-  const bare = text.replace(CRITERION_RE, '')
-  if (JOB_RE.test(bare)) {
-    const rest = bare.replace(JOB_ALL_RE, ' ')
-    return USER_WINS_RE.test(text.replace(OWN_REPLY_RE, '$1$2')) || NAME_RE.test(rest) || HELD_RE.test(rest) ? 'user' : 'job'
-  }
-  return HELD_RE.test(text) ? 'user' : undefined
+  return JOB_RE.test(text) && !USER_WINS_RE.test(text.replace(OWN_REPLY_RE, '$1$2')) ? 'job' : undefined
 }
 const ELSEWHERE_RE = /\bsee handoff\b/i
 /** Step 1's `— for "<the user's latest request>"` tail (and what follows it). */

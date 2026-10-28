@@ -223,43 +223,32 @@ sub _test_corrupt {
 #   Step 1 none or proposed; else in-progress;
 # - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
-#   `Gate: none` (Step 1 itself naming none of them). A step whose trigger is a running job's
-#   result (`On the timer notification, reply …`, `when CI finishes, …`, `After the run, commit`;
-#   owner 2026-10-28 digest rules (a), lane.ts `JOB_RE`) is held on that job, not a step that can
-#   run: the copy is taken with no result in, so it stays blocked (only the session's result turn
-#   reads it working). The user wins: a step with such a trigger that names, anywhere, a person,
-#   a pronoun or a person's say (`Wait for the user to run the build`, `Wait for approval to run
-#   the build`, `then ask the user`), or that is more than its job triggers and the session's own
-#   work (a name or another wait outside them, a wait that goes on past its job), is held on the
-#   user, never on the job.
+#   `Gate: none` (Step 1 itself naming none of them). No step reads more held on a job, or
+#   freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts `holdOf`): a step
+#   0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a job too (`Wait for
+#   the timer notification, then reply`: a known limit of 0.1.1); a step it reads free is held on
+#   a job only when a job trigger leads it (`On the timer notification, reply …`, `when CI
+#   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
+#   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
+#   result in, so it stays blocked (only the session's result turn reads it working).
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
 # The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
-my $HELD_RE = qr/\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|wait(?:s|ing)? (?:on|for|until|till)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
+my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
 # lane.ts `JOB_RE` and its parts, word for word.
 my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
-my $J_NOUN_WORD = q{(?:(?!(?:of|from|by|for|to|on|and|or)\s)[\w.#/"`-]+\s+)};
 my $J_JOB = q{(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|tests?|suites?|B-\d+)};
 my $J_RESULT = q{(?:results?|outputs?|completion|returns?|notifications?)};
 my $J_JOB_RESULT = "(?:notifications?|$J_JOB(?:'s)?\\s+$J_RESULT|(?:results?|outputs?|completion|returns?)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?$J_WORD?$J_JOB)";
 my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|reports? back|reported back|}
     . q{fires?|fired|exits?|exited|pass(?:es|ed)?|fail(?:s|ed)?|succeed(?:s|ed)?|is (?:done|in|back|green|red|over)|are (?:done|in|back|green|red|over))};
 my $J_LEAD = q{^(?:\d+\.\s+)?(?:then,?\s+)?};
-my $J_WAIT = q{(?:wait(?:s|ing)?\s+(?:on|for|until|till)|await(?:s|ing)?)};
-my $J_WAIT_ID = "(?:\\(s\\)|/$J_JOB)?(?:\\s+(?:[a-z]|[\\w#.-]*\\d[\\w#.-]*))?";
-my $J_WAIT_END = "(?=\\s*(?:\$|[,;:.!?()·—–]|-\\s|then\\b|before\\s+\\w+ing\\b|$J_FINISH\\b|"
-    . "to\\s+(?:be\\s+(?:done|green|red|over|finished|completed?)\\b|$J_FINISH\\b)))";
-my $J_SRC = "${J_LEAD}(?:on|upon|after)\\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\\b"
-    . "|${J_LEAD}(?:upon|after)\\s+(?:(?:the|that|this|its)\\s+)?(?:B-\\d+\\s+)?$J_JOB\\s*[,;:]"
-    . "|${J_LEAD}(?:when|after|once|as soon as)\\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\\s+)?(?:$J_JOB|$J_RESULT)\\s+(?:$J_WORD){0,2}?$J_FINISH\\b"
-    . "|\\b$J_WAIT\\s+(?:(?:the|that|this|its)\\s+)?(?:$J_NOUN_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)$J_WAIT_ID$J_WAIT_END";
-my $JOB_RE = qr/$J_SRC/iaa;
-# lane.ts `PRONOUN`, `PERSON`, `APPROVAL`, `USER_WINS_RE`, `NAME_RE` and `OWN_REPLY_RE`, word for
-# word: with a job trigger the user wins. A person, a pronoun or a person's say anywhere in the
-# step, or a name, another wait, an ask or a need outside its job triggers, holds it on the user (a
-# `reply` or `answer` with no object opening the step or a clause after `,`, `—` or `then` is the
-# session's own, not one). Helper case AD-11 checks this file's _hold_of against the wording lists
-# of plugin/tests/unit/lane.test.ts.
+my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:upon|after)\s+(?:(?:the|that|this|its)\s+)?(?:B-\d+\s+)?$J_JOB\s*[,;:]|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b/iaa;
+# lane.ts `PRONOUN`, `PERSON`, `APPROVAL`, `USER_WINS_RE` and `OWN_REPLY_RE`, word for word: a
+# person, a pronoun or a person's say anywhere in the step keeps it off the job (a `reply` or
+# `answer` with no object opening the step or a clause after `,`, `—` or `then` is the session's
+# own, not one). Helper case AD-11 checks this file's _hold_of against the wording lists of
+# plugin/tests/unit/lane.test.ts.
 my $J_PRONOUN = q{(?:I|me|my|mine|myself|we|us|our|ours|you|your|yours|he|him|his|she|her|hers|they|them|their|theirs|}
     . q{someone|somebody|anyone|anybody|everyone|everybody|nobody|who|whom|whoever)};
 my $J_PERSON = q{(?:users?|owners?|humans?|people|persons?|reviewers?|approvers?|maintainers?|teams?|teammates?|colleagues?|clients?|customers?|}
@@ -271,23 +260,19 @@ my $J_APPROVAL = q{(?:approv\w*|accept(?:s|ed|ing|ance)?|permi(?:ssions?|ts?|tte
     . q{guidance|decid(?:e|es|ed|ing)|decisions?|choose|chooses|chose|choices?|questions?|ask(?:s|ed|ing)?|request\w*|agree\w*|}
     . q{check(?:s|ed|ing)?\s+(?:in\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))};
 my $USER_WINS_RE = qr/\b(?:$J_PRONOUN|$J_PERSON|$J_APPROVAL)(?![\w-])/iaa;
-my $NAME_RE = qr/(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}/;
 my $OWN_REPLY_RE = qr/(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/iaa;
-# JS `\s`, which lane.ts `holdOf` reads as a plain space.
+# JS `\s`, which lane.ts `holdOf` reads as a plain space for the job reading.
 my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
 
-# What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run. With a job
-# trigger the user wins; with none, release-0.1.1b's reading ($HELD_RE held, else free).
+# What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run. Held on the
+# user where release-0.1.1b reads it held ($HELD_RE on the step as it is); else on a job when a
+# job trigger leads it and no user-wins word stands in it; else free, as on 0.1.1b.
 sub _hold_of {
     my ($text) = @_;
+    return 'user' if $text =~ $HELD_RE;
     $text =~ s/$JS_SPACE/ /g;
-    (my $bare = $text) =~ s/\bdone when\b[^·;]*//giaa;
-    if ($bare =~ $JOB_RE) {
-        (my $rest = $bare) =~ s/$JOB_RE/ /g;
-        (my $u = $text) =~ s/$OWN_REPLY_RE/$1$2/g;
-        return $u =~ $USER_WINS_RE || $rest =~ $NAME_RE || $rest =~ $HELD_RE ? 'user' : 'job';
-    }
-    return $text =~ $HELD_RE ? 'user' : undef;
+    (my $u = $text) =~ s/$OWN_REPLY_RE/$1$2/g;
+    return $text =~ $JOB_RE && $u !~ $USER_WINS_RE ? 'job' : undef;
 }
 
 sub _trim { my ($s) = @_; $s =~ s/\A\s+|\s+\z//g; return $s }
