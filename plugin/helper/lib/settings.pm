@@ -199,6 +199,8 @@ sub config_dir_foreign {
     return 0 unless config_dir_other();
     my $cd = config_dir();
     my $home = consent_dir();
+    # no account home (a uid with no user database entry): no consent folder, so safe values
+    return 1 unless defined $home;
     return same_settings_file("$cd/settings.json", "$home/settings.json") ? 0 : 1;
 }
 
