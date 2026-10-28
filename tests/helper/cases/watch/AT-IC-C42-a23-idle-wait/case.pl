@@ -5,7 +5,9 @@
 # Stop. n0, not idle, with no claim: A-23 count 0 at its first Stop. n1, idle: held while its
 # record is pending, then armed (a resume), then claimed by prompt.context: no A-23. n2, idle:
 # held while pending, then settled undelivered with no claim: A-23 count 0 at the Stop after that.
-my ($n0, $n1, $n2) = ('a23d0000', 'a23d0001', 'a23d0002');
+# n3, idle but with resume_pref sessionstart (a dispatch from before the P4 fix), its record
+# pending, no claim: not held, A-23 count 0 at its first Stop (the hold reads resume_pref).
+my ($n0, $n1, $n2, $n3) = ('a23d0000', 'a23d0001', 'a23d0002', 'a23d0003');
 my $ok = sub { T::main_body(nonce => $_[0]) };
 my $idle = sub { T::dispatch($_[0], $_[1], channel => 'mod-self', trigger => 'plugin', resume_pref => 'prompt.context') };
 my $rec = sub { { v => 1, state => $_[1] // 'pending', session_id => $T::SID, nonce => $_[0], built_at => 0, measured_at => 0,
@@ -34,11 +36,13 @@ my %seen;
 my $snap = sub { my $k = shift; return { call => 'code', code => sub { $seen{$k} = [ map { $_->{key}{nonce} } @{ $a23->($_[0]) } ] } } };
 my $idle_d = { %{ $idle->($n1, 999) }, idle => \1 };
 my $idle_d2 = { %{ $idle->($n2, 2999) }, idle => \1 };
+my $idle_d3 = { %{ $idle->($n3, 4999) }, idle => \1, resume_pref => 'sessionstart' };
 {
     files => [
         { path => "\$WATCH/\$SID/dispatch/$n0.json", json => T::dispatch($n0, 99, channel => 'mod-self', trigger => 'plugin') },
         { path => "\$WATCH/\$SID/dispatch/$n1.json", json => $idle_d },
         { path => "\$WATCH/\$SID/dispatch/$n2.json", json => $idle_d2 },
+        { path => "\$WATCH/\$SID/dispatch/$n3.json", json => $idle_d3 },
         # n0's record is pending too: only an idle dispatch is held.
         { path => '$WATCH/$SID/resume-pending.json', json => $rec->($n0) },
     ],
@@ -74,6 +78,11 @@ my $idle_d2 = { %{ $idle->($n2, 2999) }, idle => \1 };
         { call => 'append', rows => [ T::prompt(4050) ] },
         { call => 'stop', at => 4100 },
         $snap->('n2-settled'),
+        { call => 'write', path => '$WATCH/$SID/resume-pending.json', json => $rec->($n3) },
+        { call => 'append', rows => [ T::boundary(5000, trigger => 'auto'), T::summary(5000.1), T::prompt(5050) ] },
+        $post->($n3, 5001),
+        { call => 'stop', at => 5100 },
+        $snap->('n3'),
     ],
     expect => sub {
         my ($E) = @_;
@@ -84,8 +93,9 @@ my $idle_d2 = { %{ $idle->($n2, 2999) }, idle => \1 };
         $E->is($j->('n1-claimed'), $n0, 'an idle block claimed later: no A-23');
         $E->is($j->('n2-pending'), $n0, 'a second idle block pending: no A-23');
         $E->is($j->('n2-settled'), "$n0,$n2", 'an idle block settled with no claim: A-23 at the next Stop');
+        $E->is($j->('n3'), "$n0,$n2,$n3", 'an idle block pending on disk but with resume_pref sessionstart: A-23 at its first Stop');
         my @a = $E->alerts('A-23');
-        $E->is(join(',', map { join(':', $_->{key}{nonce}, keys %{ $_->{evidence} }) } @a), "$n0:count,$n2:count", 'A-23 count 0, twice');
+        $E->is(join(',', map { join(':', $_->{key}{nonce}, keys %{ $_->{evidence} }) } @a), "$n0:count,$n2:count,$n3:count", 'A-23 count 0, three times');
         $E->is($a[1]{evidence}{count}, 0, 'count 0');
         $E->is($a[1]{key}{session_id}, $T::SID, 'the held compaction keeps its key');
     },

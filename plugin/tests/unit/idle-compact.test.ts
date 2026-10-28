@@ -1404,7 +1404,8 @@ test('AT-IC-C42 (resume-persist), the next process over the same store and watch
   const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
   expect(block).toContain(SID_A)
   const idle = lineOf(w, 'idle')
-  if (idle !== undefined) expect(block).toContain(idle)
+  expect(idle).toBeDefined()
+  expect(block).toContain(idle ?? '')
   expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
 })
 
