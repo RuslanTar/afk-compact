@@ -1,0 +1,3 @@
+# Hand-written launch notes are byte-exact test data (bad-cr.note holds a CR on purpose): no
+# end-of-line conversion on add or checkout, whatever core.autocrlf says.
+* -text

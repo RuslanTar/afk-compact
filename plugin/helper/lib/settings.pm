@@ -17,7 +17,7 @@ use warnings;
 use utf8;
 require "userre.pm";    # U-06: the time bound for the user's own patterns
 
-# The 39 keys of MOD-SPEC §1.2: type; fallback (used only when the manifest lacks the key:
+# The keys of MOD-SPEC §1.2 (43 with idle_digest and restart_on_update): type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
@@ -79,6 +79,10 @@ our @KEYS = (
     # the shipped list (lib/gsd.pm %DRIVERS) and the skills whose own text runs gsd-tools, that a
     # session re-enters when it invoked them
     [driver_skills               => 'str',  '',                        'list'],
+    # SESSION-RESTART D1 (owner 19:08, 2026-10-27): `on` = move a session onto a newly installed
+    # Claude Code at a compaction boundary; `shadow` = log the verdict only; `off` = never. A
+    # consent key (settings file only); any other value reads as off with a note.
+    [restart_on_update           => 'str',  'off',                     'enum'],
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
@@ -86,13 +90,14 @@ our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 our %ENUM = (watcher => [qw(shadow off)], handoff_turn => [qw(halt off)], relaunch_auto => [qw(on shadow off)],
              unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
              idle_digest => [qw(submit return)],
-             resume_proceed => [qw(auto confirm)]);
+             resume_proceed => [qw(auto confirm)], restart_on_update => [qw(off shadow on)]);
 
 # DP-3: keys that let the plugin act without asking. Read from the settings file only, and
 # given their %SAFE value when the settings folder is not the account's ~/.claude (CR-F34).
 # queue_cmd is one (Q-ADAPTER QA-B1, QU-02: an injected flag would run a program), and so is
 # unattended_prod_reads (S-SETTINGS B).
-our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unattended_prod_reads queue_cmd);
+# restart_on_update is one (SESSION-RESTART D1): it lets the plugin end and restart a session.
+our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unattended_prod_reads queue_cmd restart_on_update);
 # Protective keys (S-SETTINGS B, MOD-SPEC §2.6): they can only make the plugin ask or withhold
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
 # settings file, and a foreign config dir does not reset it (that would weaken protection).
@@ -121,6 +126,7 @@ our %FLAG_ALIAS = (
     'repo-roots' => 'repo_roots', 'relaunch-auto' => 'relaunch_auto', 'relaunch-allow' => 'relaunch_allow',
     'unattended-prod-reads' => 'unattended_prod_reads', 'prod-patterns' => 'prod_patterns', 'queue-cmd' => 'queue_cmd',
     'secret-extra-rules' => 'secret_extra_rules', 'protected-branches' => 'protected_branches',
+    'restart-on-update' => 'restart_on_update',
 );
 
 sub _unset {
@@ -158,7 +164,12 @@ sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne ''
 # $TEST_CONSENT_MARK at its root; only there and with STORE_TEST_MODE=1 is the consent
 # folder $HOME/.claude (each case runs in a fresh HOME). The shipped plugin has no such
 # file, so env alone cannot move the consent folder.
-our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '', unattended_prod_reads => 'forbid', queue_cmd => '');
+# Owner 2026-10-27 20:38 (SESSION-RESTART §9 Q1 (a)): a settings folder whose settings.json
+# is the account's ~/.claude/settings.json (a symlink to it, or a hard link: the same file
+# by its real path or its device and inode) counts as that folder for every consent key: it is
+# the same bytes, so no new trust. Another file there still gives the safe values.
+our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '', unattended_prod_reads => 'forbid', queue_cmd => '',
+             restart_on_update => 'off');
 our $TEST_CONSENT_MARK = '.test-consent-home';
 sub account_home { my $h = (getpwuid($<))[7]; return defined $h && $h ne '' ? $h : undef }
 sub consent_dir {
@@ -167,7 +178,9 @@ sub consent_dir {
     my $h = account_home();
     return defined $h ? "$h/.claude" : undef;
 }
-sub config_dir_foreign {
+# config_dir_other() -> 1 when the settings folder is not the consent folder itself (by its path,
+# real path or device and inode); config_dir_foreign() adds the same-file rule on top of it.
+sub config_dir_other {
     my $cd = config_dir();
     my $home = consent_dir();
     return 1 unless defined $home;
@@ -178,6 +191,29 @@ sub config_dir_foreign {
     my @b = stat $home;
     return 0 if @a && @b && $a[0] == $b[0] && $a[1] == $b[1];
     return 1;
+}
+
+# config_dir_foreign() -> 1 when the consent keys take their safe values: another settings folder
+# whose settings.json is not the consent folder's own (owner 2026-10-27 20:38).
+sub config_dir_foreign {
+    return 0 unless config_dir_other();
+    my $cd = config_dir();
+    my $home = consent_dir();
+    return same_settings_file("$cd/settings.json", "$home/settings.json") ? 0 : 1;
+}
+
+# same_settings_file(a, b) -> 1 when both name one existing regular file: the same real path
+# (a symlink to the other, or to the same target) or the same device and inode (a hard link).
+# Two files with equal bytes are not the same file.
+sub same_settings_file {
+    my ($a, $b) = @_;
+    return 0 unless -f $a && -f $b;
+    require Cwd;
+    my ($ra, $rb) = (Cwd::abs_path($a), Cwd::abs_path($b));
+    return 1 if defined $ra && defined $rb && $ra eq $rb;
+    my @x = stat $a;
+    my @y = stat $b;
+    return (@x && @y && $x[0] == $y[0] && $x[1] == $y[1]) ? 1 : 0;
 }
 
 # The plugin's names before its rename (NM-2; rename-order ruling xxxxxxxx-32, 2026-10-23): a
@@ -320,6 +356,14 @@ sub resolve {
         elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
         else { push @notes, "idle_compact: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
         $val{idle_compact} = $x;
+    }
+    # restart_on_update (SESSION-RESTART D1): trimmed and case-folded; off, shadow or on, else
+    # off with a note (never the value). A blank value is unset: the default.
+    {
+        my $x = trim(lc($val{restart_on_update} // 'off'));
+        if ($x eq '') { $x = 'off'; $src{restart_on_update} = 'default' }
+        if ($x !~ /\A(?:off|shadow|on)\z/) { push @notes, 'restart_on_update: not off, shadow or on, off used'; $x = 'off' }
+        $val{restart_on_update} = $x;
     }
     # SK-1 / SK-2: an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
     my $tr = ticket_re({ values => \%val });

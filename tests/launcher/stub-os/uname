@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stub uname for tests/launcher/run.sh: reports $STUB_UNAME for -s.
+if [ "${1-}" = -s ]; then
+  printf '%s\n' "${STUB_UNAME:?}"
+  exit 0
+fi
+exit 1

@@ -193,6 +193,9 @@ sub preamble {
             emit('config_note', [key => $1, note => 'config-dir-not-home']) if once("config_note.$1.config-dir");
         } elsif ($n =~ /^([a-z_]+): HOME is not the account home, safe value used$/) {
             emit('config_note', [key => $1, note => 'home-not-account']) if once("config_note.$1.home");
+        } elsif ($n =~ /^(restart_on_update): not off, shadow or on, off used$/) {
+            # SESSION-RESTART D1: an invalid value is off; the row names the key, never the value
+            emit('config_invalid', [key => $1]) if once("config_invalid.$1");
         }
     }
     # S-SETTINGS B: an invalid unattended_prod_reads value (forbid used) or a dropped

@@ -144,6 +144,15 @@ def calls(tmp):
         # answer that it is absent and write nothing.
         ("trial-measure-absent", ["trial-measure", "--sid", SID, "--budget-ms", "7500", "--cc-version", "2.1.306"]),
         ("trial-save-absent", ["trial-save", "--sid", SID], trial_skip + "\n"),
+        # SESSION-RESTART (restart on update, the default `off`): the gate's refusal, a claim with
+        # no carry note, a state change with no note and a cancel with no respawn record.
+        ("restart-gate-off", ["restart", "gate", "--sid", SID, "--route", "fg", "--from", "2.1.311", "--to", "2.1.312",
+                              "--model", "", "--seen-mode", "default", "--seen-at", "1792580712000",
+                              "--turn-at", "1792580700000", "--now-ms", "1792580712000"]),
+        ("restart-claim-none", ["restart", "claim", "--sid", SID, "--load-id", "l0ad0001", "--now-ms", "1792580712000"]),
+        ("restart-set-absent", ["restart", "set", "--sid", SID, "--nonce", "0123456789abcdef", "--state", "cancelled",
+                                "--now-ms", "1792580712000"]),
+        ("restart-respawn-cancel-none", ["restart", "respawn-cancel", "--sid", SID, "--nonce", "0123456789abcdef"]),
     ]
 
 

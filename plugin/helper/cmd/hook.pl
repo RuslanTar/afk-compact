@@ -163,6 +163,8 @@ sub on_PreCompact {
 # ------------------------------------------------------------------ PostCompact (MOD-SPEC §5.3)
 sub on_PostCompact {
     my ($p) = @_;
+    # SESSION-RESTART D10: the fresh permission mode of this compaction, with its time
+    eval { restart::note_post(rc::sid_dir(), $p) };
     my $r = postcompact::run($p);
     return ('', { detect => $r });
 }
@@ -285,6 +287,8 @@ sub on_Stop {
     my $d = rc::sid_dir() // return ('', {});
     eval { sidecar::write($d, $p, 'Stop') };
     eval { util::write_atomic("$d/last-stop", util::iso_ms(util::now()) . "\n", 0600) };
+    # SESSION-RESTART D10, §3.6, G12: the turn's permission mode and effort level, and the transcript
+    eval { restart::note_stop($d, $p) };
     # AT-RP-04: a resume block armed for this process's first turn that the turn did not take
     eval { resumeblock::settle_armed($d, rc::sid()) };
     my $r0 = util::clock_ms();

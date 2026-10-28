@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stub id for tests/launcher/run.sh: reports $STUB_UID for -u, so a folder the test user made
+# looks owned by someone else.
+if [ "${1-}" = -u ]; then
+  printf '%s\n' "${STUB_UID:?}"
+  exit 0
+fi
+exit 1

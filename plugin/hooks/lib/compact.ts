@@ -23,6 +23,7 @@ import type { LaneFacts } from './lane'
 import { laneFacts } from './lane'
 import { armDigest } from './digest'
 import { shadowPrepM3, startShadow } from './shadow'
+import { restartMoment } from './restart'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -326,6 +327,9 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
   // nothing running gets its digest turn right away (`idle_digest: submit`, the default).
   if (main && idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
+  // SESSION-RESTART D2 (b): right after Claude Code's own idle compaction; nothing is submitted
+  // after it (the new load waits at the prompt with its block, as after any idle compaction).
+  if (main && idle) await guarded(d, sid, 'restart', () => restartMoment(d, sid, { cont: false }))
   return r
 }
 

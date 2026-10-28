@@ -137,6 +137,28 @@ export class World {
   abortThrow = false
   /** While set, a `prompt.submit` reaching the bottom is not recorded (the person's own prompts of `userTurn`). */
   private quiet = false
+  /** SESSION-RESTART: `$.ui.log` lines (§4.2). */
+  uiLogs: string[] = []
+  /** `$.prompt.read()`'s draft (G8). */
+  draft = ''
+  /** `$.session.surfaces()` (G9, G3b); undefined: the call throws. */
+  surfaceList: string[] | undefined = ['terminal']
+  /** How `claude --version` answers (G5): its stdout, or `reject` (it cannot start or timed out). */
+  claudeVersion: string | 'reject' = '2.1.306 (Claude Code)'
+  /** `restart_on_update` as `ident` reports it (D1); undefined: no such key. */
+  restartSetting: string | undefined
+  /** `ident`'s `restart_reports` (§2.3). */
+  restartReports: unknown[] = []
+  /** The `restart gate` reply (§4.1); fields over a passing default. */
+  restartGate: Record<string, unknown> = {}
+  /** The `restart claim` reply (§5.2); fields over a "none" default. */
+  restartClaimReply: Record<string, unknown> = {}
+  /** The `restart respawn` reply (§2.2 step 3). */
+  restartRespawn: Record<string, unknown> = { ok: true, pid: 4321 }
+  /** Awaited inside the bottom of `command.run` for `exit` (a `/exit` the test ends itself). */
+  exitGate: Promise<void> | undefined
+  /** `$.fs.write` refuses a path this returns true for (a full disk, a folder gone). */
+  writeDeny: ((path: string) => boolean) | undefined
 
   constructor(init: Partial<Pick<World, 'sid' | 'tokens' | 'window' | 'version'>> = {}) {
     Object.assign(this, init)
@@ -178,6 +200,7 @@ export class World {
       return { value: undefined }
     })
     on('fs.write', (_$, e) => {
+      if (this.writeDeny?.(e.path)) return { deny: 'not written' }
       this.writes.push(e.path)
       this.files.set(e.path, e.text)
       return { value: undefined }
@@ -217,6 +240,10 @@ export class World {
       const m = this.commandMode
       if (m === 'reject') throw new Error('rejected')
       if (typeof m === 'object') return { text: m.text }
+      if (e.command === 'exit' || e.command === 'quit') {
+        if (this.exitGate) await this.exitGate
+        return {}
+      }
       if (e.command !== 'compact') return { text: 'no such command here' }
       if (m === 'unclaimed') {
         this.compacts.push({ instructions: e.args || undefined, trigger: 'manual', agentId: undefined })
@@ -239,6 +266,21 @@ export class World {
         ...(this.compactUsage !== undefined ? { usage: this.compactUsage } : {}),
       }
     })
+    on('ui.log', (_$, e) => {
+      this.uiLogs.push(e.text)
+      return { value: undefined }
+    })
+    on('prompt.read', () => ({ value: { text: this.draft, cursor: this.draft.length } }))
+    on('session.surfaces', () => {
+      if (this.surfaceList === undefined) throw new Error('no surfaces')
+      return { value: this.surfaceList as never }
+    })
+    on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+    on('session.detach', (_$, e) => ({ clientId: e.clientId }))
+    // The classic hook events the mod observes (SESSION-RESTART D10): no settings hook beneath.
+    on('classic.Stop', () => ({}))
+    on('classic.UserPromptSubmit', () => ({}))
+    on('classic.PermissionRequest', () => ({}))
     on('session.start', (_$, e) => ({ cwd: e.cwd }))
     on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
     on('turn.abort', (_$, e) => {
@@ -365,6 +407,11 @@ export class World {
   /** The fake helper: one answer per subcommand, the stdout forms of BUILD-PLAN §3.1. */
   helper(argv: string[], env: Record<string, string>, stdin?: string): Reply {
     const bin = argv[0] ?? ''
+    if (bin === 'claude') {
+      this.calls.push({ sub: 'claude', args: argv.slice(1), env })
+      if (this.claudeVersion === 'reject') return 'reject'
+      return { exitCode: 0, stdout: this.claudeVersion + '\n' }
+    }
     const m = /^(.*)\/scripts\/(.+)-store$/.exec(bin)
     if (m && m[1] !== undefined && m[2]) {
       this.root = m[1]
@@ -384,7 +431,12 @@ export class World {
     const sid = flag('--sid')
     switch (sub) {
       case 'ident':
-        return ok(JSON.stringify({ pid: 43210, pid_lstart: 'Tue Oct 21 14:00:00 2026', execpath_version: null, watch: this.identWatch }) + '\n')
+        return ok(JSON.stringify({
+          pid: 43210, pid_lstart: 'Tue Oct 21 14:00:00 2026', execpath_version: null, watch: this.identWatch,
+          ...(this.restartSetting !== undefined ? { restart: this.restartSetting, restart_reports: this.restartReports } : {}),
+        }) + '\n')
+      case 'restart':
+        return ok(JSON.stringify(this.restartReply(args, sid)) + '\n')
       case 'log': {
         // `--stdin` (F2-6): one JSON object per line, each appended as a row.
         const rows = args.includes('--stdin')
@@ -481,6 +533,54 @@ export class World {
       default:
         return { exitCode: 64, stdout: '' }
     }
+  }
+
+  /** The fake `restart` subcommand (SESSION-RESTART; the real one: helper cases RS-*). */
+  restartReply(args: string[], sid: string): Record<string, unknown> {
+    const flag = (k: string) => {
+      const i = args.indexOf(k)
+      return i >= 0 ? (args[i + 1] ?? '') : undefined
+    }
+    const sub = args[0]
+    const route = flag('--route') === 'bg' ? 'bg' : 'fg'
+    if (sub === 'gate') {
+      return { ok: true, why: null, setting: this.restartSetting ?? 'off', route, mode: 'acceptEdits', effort: 'high', job_short: route === 'bg' ? 'job1' : null, token: route === 'fg' ? '0123456789abcdef' : null, types: [], items: [], launcher: route === 'fg' ? 'ok' : null, ...this.restartGate }
+    }
+    if (sub === 'arm') {
+      const at = Number(flag('--now-ms'))
+      const c = { v: 1, route, state: 'armed', sid, nonce: flag('--nonce'), from: flag('--from'), to: flag('--to'), at, exiting_at: null, continue: flag('--continue') === '1' }
+      this.files.set(`${WATCH}/${sid}/restart.json`, JSON.stringify(c) + '\n')
+      return { ok: true, why: null, token: route === 'fg' ? '0123456789abcdef' : null }
+    }
+    if (sub === 'set') {
+      const path = `${WATCH}/${sid}/restart.json`
+      const t = this.files.get(path)
+      if (t === undefined) return { ok: true, l: 'absent', c: 'absent', why: null }
+      const c = JSON.parse(t) as Record<string, unknown>
+      if (c.nonce !== flag('--nonce')) return { ok: true, l: 'mismatch', c: 'mismatch', why: null }
+      c.state = flag('--state')
+      const ex = flag('--exiting-at')
+      if (ex !== undefined) c.exiting_at = Number(ex)
+      this.files.set(path, JSON.stringify(c) + '\n')
+      return { ok: true, l: flag('--launch') !== undefined ? 'written' : 'absent', c: 'written', why: null }
+    }
+    if (sub === 'claim') return { claimed: false, why: 'none', route: null, from: null, to: null, continue: false, nonce: null, at: null, refused: [], ...this.restartClaimReply }
+    if (sub === 'respawn') return this.restartRespawn
+    if (sub === 'respawn-cancel') {
+      // The real one settles this nonce's background note still armed or sent first, then kills.
+      const path = `${WATCH}/${sid}/restart.json`
+      const t = this.files.get(path)
+      const c = t === undefined ? undefined : (JSON.parse(t) as Record<string, unknown>)
+      const note = c !== undefined && c.nonce === flag('--nonce') && c.route === 'bg' && (c.state === 'armed' || c.state === 'sent')
+      if (note && c) this.files.set(path, JSON.stringify({ ...c, state: flag('--state') === 'failed' ? 'failed' : 'cancelled' }) + '\n')
+      return { ok: true, killed: true, note }
+    }
+    return { ok: false }
+  }
+
+  /** The `restart <sub>` calls of the fake helper, in order. */
+  restartCalls(sub?: string): Call[] {
+    return this.callsOf('restart').filter(c => sub === undefined || c.args[0] === sub)
   }
 
   // ---- reads over what the plugin did

@@ -14,12 +14,20 @@ import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { startsWork } from './lib/lane'
 import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
+import { noteMode, onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
 
 export const register: Register = (on, options) => {
   const state = newState(randomHex(8))
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
+    // SESSION-RESTART D10: a permission mode read before the load's start (an earlier process's
+    // Stop) is older than any turn of this load.
+    try {
+      state.sessionStartAt = await $.clock.now()
+    } catch {
+      // no stamp: the restart moment uses its own time (every read counts as older)
+    }
     // D11, §3.4: a person launched or resumed this session: present for the next minute, so an
     // idle compaction the load adopts does not run in front of them (stamped before loadIdle).
     if (e.isInteractive === true) {
@@ -49,6 +57,12 @@ export const register: Register = (on, options) => {
       state.agentTurns.add(e.agentId)
       laneAgentStarted(state, e.agentId)
       return next(e)
+    }
+    // SESSION-RESTART D10: a permission mode read before this turn's start is older than the last turn.
+    try {
+      state.lastMainTurnAt = await $.clock.now()
+    } catch {
+      // no stamp: the last one stands (or the load's start)
     }
     await onTurnStart(realDeps($, options, state), e.turnId, e.text)
     return next(e)
@@ -129,6 +143,8 @@ export const register: Register = (on, options) => {
       promptEntering(state, kind)
       // §9.4: a prompt entering cancels the pre-idle timer.
       cancelIdleTimer(realDeps($, options, state))
+      // SESSION-RESTART §2.2 step 4, §3.4 step 3: a prompt entering stops a restart under way.
+      if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state))
     }
     // The shadow trial's M1 moment for this plugin's typed handoff command, before its turn
     // starts; off (one cheap test) without the local trial config.
@@ -177,6 +193,8 @@ export const register: Register = (on, options) => {
     const d = realDeps($, options, state)
     const sid = await prepare(d)
     const tool = String(e.tool)
+    // SESSION-RESTART G10: a worktree entered in this load is a restriction a resume cannot carry.
+    onWorktreeTool(d, tool)
     const input = e as unknown as Record<string, unknown>
     const isAsk = tool === ASK_TOOL
     if (isAsk) {
@@ -214,6 +232,42 @@ export const register: Register = (on, options) => {
     const own = claimOwnCompact(state, e)
     if (own) return onOwnCompact(d, await prepare(d), e, own, x => next(x))
     return trackNative(d, e, async () => onCompact(d, await prepare(d), e, x => next(x)))
+  }).catch(($, e, next) => next(e))
+
+  // SESSION-RESTART §3.4 step 5, G9, G10 (observe only): another origin's `/exit` while armed
+  // cancels the restart; the commands a restart cannot carry block it for the rest of the load.
+  // Our own `/exit` never reaches this hook (the engine skips the raising plugin's hooks).
+  on('command.run', async ($, e, next) => {
+    await onCommandRun(realDeps($, options, state), e)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // SESSION-RESTART D10: the permission mode of every main Stop, UserPromptSubmit and
+  // PermissionRequest input (observe only; nothing awaited before `next`).
+  on('classic.Stop', async ($, e, next) => {
+    void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PermissionRequest', async ($, e, next) => {
+    void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // SESSION-RESTART G3b: remote clients attached in this load (observe only).
+  on('session.attach', async ($, e, next) => {
+    const r = await next(e)
+    onAttach(realDeps($, options, state), 1)
+    return r
+  }).catch(($, e, next) => next(e))
+
+  on('session.detach', async ($, e, next) => {
+    const r = await next(e)
+    onAttach(realDeps($, options, state), -1)
+    return r
   }).catch(($, e, next) => next(e))
 
   // The resume block (the same idle block again for a person back after a background result's turn
