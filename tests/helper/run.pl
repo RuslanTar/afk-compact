@@ -71,6 +71,8 @@
 #     POSIX form (Etc/GMT-3 is "<+03>-3"), which its helper calls then get (host_zone).
 #   builtin begin_fit {reply, found, all, unread, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
+#   builtin hold_parity {file, lists {<const name>: job | user | none}, min}: copies::_hold_of (the
+#     staged copy) over each named string array of a TS test file in the staged plugin
 # Hosts for 0.1.0 (this runner and the watch driver, as a normal user, never as root):
 #   macOS, and the Linux rows MX-04 (debian:bookworm-slim + git), MX-09 (fedora:latest +
 #   git) and MX-12 (alpine:latest + perl git). None of the three has make, procps ps or
@@ -2695,6 +2697,40 @@ sub builtin {
             my $w = $a->{want}{$k};
             push @e, "runtime $k: " . ($rt->{$k} // 'missing') . ", want $w" unless ($rt->{$k} // '') eq $w;
         }
+        return @e;
+    }
+    if ($name eq 'hold_parity') {
+        # AD-11 (owner 2026-10-28 digest rules (a), review 3): the saved copy's hold of a step
+        # (copies::_hold_of, the staged copy) against the lists the TS lane test checks lane.ts's
+        # holdOf with. {file: the test file under the staged plugin, lists: {<const name>: job |
+        # user | none}, min: the fewest wordings a list may hold}. Each `const <name> = [` ... `]`
+        # array's string literals are read from the file itself, so one list feeds both checks.
+        local @INC = ("$STAGE/helper/lib", @INC);
+        require "copies.pm";
+        my $src = util::read_file("$STAGE/$a->{file}");
+        return ("cannot read $a->{file} in the staged plugin") unless defined $src;
+        utf8::decode($src) unless utf8::is_utf8($src);
+        my $total = 0;
+        for my $list (sort keys %{ $a->{lists} || {} }) {
+            my $want = $a->{lists}{$list};
+            my ($body) = $src =~ /^const \Q$list\E = \[\n(.*?)^\]$/ms;
+            if (!defined $body) { push @e, "$list: no `const $list = [` array in $a->{file}"; next }
+            my @words;
+            for my $l (split /\n/, $body) {
+                next if $l =~ m{\A\s*//};
+                while ($l =~ /'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g) {
+                    (my $w = defined $1 ? $1 : $2) =~ s/\\(.)/$1/g;
+                    push @words, $w;
+                }
+            }
+            push @e, "$list: " . scalar(@words) . " wordings, want at least $a->{min}" if @words < ($a->{min} // 1);
+            for my $w (@words) {
+                my $h = copies::_hold_of("1. $w \x{b7} todo") // 'none';
+                push @e, "$list: '$w' holds on $h, want $want" if $h ne $want;
+            }
+            $total += @words;
+        }
+        print "#   hold_parity: $total wordings\n" if $VERBOSE;
         return @e;
     }
     if ($name eq 'begin_fit') {

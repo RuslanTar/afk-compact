@@ -28,8 +28,16 @@ export type LaneFacts = {
   todo: number
   done: number
   unmarked: number
-  /** Of the steps marked todo, those whose text names no gate, ask, pending answer or wait: a step that can run. */
+  /** Of the steps marked todo, those whose text names no gate, ask, pending answer or wait, and no job trigger leads: a step that can run. */
   free: number
+  /**
+   * Of the steps marked todo, those held on a job: a running job's result leads them as their
+   * trigger (`On the timer notification, reply …`, `when CI finishes, report …`; owner 2026-10-28
+   * digest rules (a)), with no user-wins word. Such a step runs once that result is in (-06).
+   */
+  onJob: number
+  /** Of the steps marked todo, those held on the user: a gate, an ask, a pending answer, a needed approval or any wait (release-0.1.1b's reading). */
+  onUser: number
   /** Next steps says `see handoff`: the steps are in a handoff file, so code cannot count them all. */
   elsewhere: boolean
   /**
@@ -39,14 +47,21 @@ export type LaneFacts = {
   listed: boolean
   /** `Step 1:` is `none`, `proposed`, a step to run, or there is no Step 1 line. */
   step1: 'none' | 'proposed' | 'set' | 'missing'
-  /** The `Gate:` line says `none` (and Step 1 names no ask or wait), names a blocker, or is missing. */
-  gate: 'none' | 'set' | 'missing'
+  /**
+   * The `Gate:` line says `none` (and Step 1 names no ask, wait or job trigger), says `none` while
+   * Step 1 is held on a job (`job`: it runs once the job's result is in), names a blocker, or is missing.
+   */
+  gate: 'none' | 'job' | 'set' | 'missing'
   /** Acuity `unstable` or a `MID-STEP` checkpoint: a step is half done. */
   unstable: boolean
 }
 
-/** The state code settled on, how (the summary's Status, or the code re-check), and a plain reason. */
-export type LaneResult = { lane: Lane; source: 'status' | 'recheck'; why: string }
+/**
+ * The state code settled on, how (the summary's Status, or the code re-check), and a plain reason.
+ * `byResult`: working only because the job's result that came with this turn unblocks a step held
+ * on that job (owner 2026-10-28 digest rules (a)); that turn's end reads the lane again (rule (b)).
+ */
+export type LaneResult = { lane: Lane; source: 'status' | 'recheck'; why: string; byResult?: true }
 
 /** What code measured at the time of the check. */
 export type LaneMeasured = {
@@ -60,6 +75,11 @@ export type LaneMeasured = {
   driver: boolean
   /** The model started work (an agent, a workflow, a background shell) after a turn got the idle block. */
   superseded?: boolean
+  /**
+   * A job's result came with this turn's prompt (a notification that reported a task ended): a
+   * step held on a job can run in this turn (owner 2026-10-28 digest rules (a), xxxxxxxx-06).
+   */
+  result?: boolean
 }
 
 const STATUS_RE = /^\s*Status:\s*([a-z][a-z-]*)/m
@@ -74,12 +94,116 @@ const ITEM_RE = /^\s*\d+\.\s/
  */
 const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
 /**
- * A step that cannot run now: it is gated, asks the user, holds a pending answer, waits on
- * something (`waits for`, `waiting on`, `awaiting`, `blocked on`/`by`) or needs an approval or the
- * user. A wait on CI or a reviewer counts too: under a blocked Status the model's word leads
- * (owner xxxxxxxx-05), and code moves a stop toward work only on a step that names no wait at all.
+ * A step that cannot run now, as release-0.1.1b reads it (its own `HELD_RE`, unchanged): it is
+ * gated, asks the user, holds a pending answer, waits on something (`waits for`, `waiting on`,
+ * `awaiting`, `blocked on`/`by`) or needs an approval or the user. A wait on CI or a reviewer counts
+ * too: under a blocked Status the model's word leads (owner xxxxxxxx-05), and code moves a stop
+ * toward work only on a step that names no wait at all. Such a step is held on the user, whatever
+ * else it says (`holdOf`): a wait on a job (`Wait for the timer notification, then reply`) too.
  */
 const HELD_RE = /\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
+/**
+ * One word between a trigger and what it names: never a possessive (`the reviewer's result` is
+ * not a job's) nor `of`, `from`, `by` or `for` (`approval of the run` is not the run).
+ */
+const WORD = "(?:(?!(?:of|from|by|for)\\s)[\\w.#/\"`-]+\\s+)"
+/**
+ * A running job as a step names it: `B-n` is the summary form's id of a background job; a test
+ * run (`the tests`, `the suite`) is one too.
+ */
+const JOB = '(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|tests?|suites?|B-\\d+)'
+/** What a job gives back. */
+const RESULT = '(?:results?|outputs?|completion|returns?|notifications?)'
+/**
+ * A job's result as a step names it: a notification (only a job's opens a turn), or a result,
+ * output, completion or return that names its job (`the build result`, `the agent's output`,
+ * `the agent's return`, `the result of the run`); a bare `the results` or `completion` names none.
+ */
+const JOB_RESULT = `(?:notifications?|${JOB}(?:'s)?\\s+${RESULT}|(?:results?|outputs?|completion|returns?)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?${WORD}?${JOB})`
+/** A job that ends or a result that comes in. */
+const FINISH =
+  '(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|reports? back|reported back|' +
+  'fires?|fired|exits?|exited|pass(?:es|ed)?|fail(?:s|ed)?|succeed(?:s|ed)?|is (?:done|in|back|green|red|over)|are (?:done|in|back|green|red|over))'
+/** The start of the step (after its number; `then` may lead): only a trigger there holds the step. */
+const LEAD = '^(?:\\d+\\.\\s+)?(?:then,?\\s+)?'
+/**
+ * A step whose trigger is a running job's result, leading the step (owner 2026-10-28 digest
+ * rules (a)):
+ * - `On the timer notification, reply …`, `after the agent result, merge …`, `upon the agent's
+ *   return`: on, upon or after, then a job's result (`JOB_RESULT`);
+ * - `After the run, commit …`, `upon CI, …`: upon or after, then a job alone (an article or a
+ *   `B-n` id may come first) and a `,`, `;` or `:`;
+ * - `when CI finishes, report …`, `after the build ends`, `once the result arrives`: when, after,
+ *   once or as soon as, then a job or a result, then its end (`FINISH`).
+ * A step that only mentions a job or a result (`fix the build script`, `log a message when the
+ * build is done`, `On completion, commit`, `After fixing the build, commit`), or names its trigger
+ * later (`reply once the timer fires`), reads as on release-0.1.1b: free work.
+ */
+const JOB_RE = new RegExp(
+  `${LEAD}(?:on|upon|after)\\s+${WORD}{0,4}?${JOB_RESULT}\\b` +
+  `|${LEAD}(?:upon|after)\\s+(?:(?:the|that|this|its)\\s+)?(?:B-\\d+\\s+)?${JOB}\\s*[,;:]` +
+  `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b`,
+  'i')
+/** A person by a pronoun (`I`, `my`, `we`, `you`, `his`, `she`, `their`, `someone`, `whoever`). */
+const PRONOUN =
+  '(?:I|me|my|mine|myself|we|us|our|ours|you|your|yours|he|him|his|she|her|hers|they|them|their|theirs|' +
+  'someone|somebody|anyone|anybody|everyone|everybody|nobody|who|whom|whoever)'
+/**
+ * A person by a noun: the user, the owner, a human, or a role or group (a reviewer, approver,
+ * maintainer, the team, a colleague, the client, a customer, a vendor, a stakeholder, a manager, a
+ * designer, an engineer, a developer, the lead, QA, the PM or PO, the CTO or CEO, SRE, ops, on-call,
+ * the CAB, legal, an operator, an admin).
+ */
+const PERSON =
+  '(?:users?|owners?|humans?|people|persons?|reviewers?|approvers?|maintainers?|teams?|teammates?|colleagues?|clients?|customers?|' +
+  'vendors?|stakeholders?|managers?|designers?|engineers?|developers?|leads?|QA|PMs?|POs?|CTO|CEO|SREs?|ops|on-call|CAB|legal|operators?|admins?)'
+/**
+ * A person's say on the work, in any form: an approval, an acceptance, a permission, an
+ * authorization, an allowance, a go-ahead, a go/no-go, a green light, a say-so or the final say, a
+ * thumbs-up, a nod, a blessing, an ack, a vote, a verdict, consent, a clearance, a sign-off, an
+ * LGTM, an OK, a yes, a confirmation, a review, feedback, an answer, a reply, a response, input,
+ * instructions, direction, guidance, a decision, a choice, a question, an ask, a request, an
+ * agreement, a check with someone, what is pending or needed, a manual step, a gate. (`ack` but
+ * not `acknowledging`: the AD2 kit wording's own reply acknowledges the notification.)
+ */
+const APPROVAL =
+  '(?:approv\\w*|accept(?:s|ed|ing|ance)?|permi(?:ssions?|ts?|tted)|authori[sz](?:e|es|ed|ing|ation)|allow(?:s|ed)?|' +
+  'go[- ]ahead|go/no-go|no-go|green[- ]?(?:light(?:s|ed)?|lit)|say-so|final say|thumbs?[- ]?ups?|nods?|bless(?:ing|ed)?|' +
+  'acks?|acked|votes?|voted|verdicts?|consent\\w*|clearance|sign(?:s|ed|ing)?[- ]?offs?|LGTM|OK|okay|yes|' +
+  'confirm\\w*|review\\w*|feedback|answer\\w*|repl(?:y|ies|ied)|respon(?:se|ses|d|ds|ded)|input|instructions?|directions?|' +
+  'guidance|decid(?:e|es|ed|ing)|decisions?|choose|chooses|chose|choices?|questions?|ask(?:s|ed|ing)?|request\\w*|agree\\w*|' +
+  'check(?:s|ed|ing)?\\s+(?:in\\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))'
+/**
+ * A word that keeps a step with a job trigger off the job (`holdOf`): a person, a pronoun or a
+ * person's say (`APPROVAL`), anywhere in the step (not inside a longer word: `user-facing`,
+ * `us-east-1` are none).
+ */
+const USER_WINS_RE = new RegExp(`\\b(?:${PRONOUN}|${PERSON}|${APPROVAL})(?![\\w-])`, 'i')
+/**
+ * `reply` or `answer` opening the step or a clause after `,`, `—` or `then`, with no object (the
+ * step's end or mark, a clause break, `with`, `and`, `in`): the session's own reply (`On the timer
+ * notification, reply with one line`), not a person's, so `USER_WINS_RE` reads the step without it.
+ * After `;`, `:` or `and`, or with an object (`answer Fran's question`), it counts.
+ */
+const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/gi
+/**
+ * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (owner
+ * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run). No step
+ * reads more held on a job, or freer, than on release-0.1.1b:
+ * - a step release-0.1.1b reads held (`HELD_RE`, on the step as it is) is held on the user, as
+ *   there; so is a wait on a job (`Wait for the timer notification, then reply`: a known limit of
+ *   0.1.1, which reads no job in a wait's words);
+ * - a step it reads free is held on a job only when a job trigger leads it (`JOB_RE`) and no
+ *   user-wins word stands anywhere in it (`USER_WINS_RE`); else it is free, as there.
+ * Planned for 0.1.2: an explicit `waits: job` / `waits: you` mark in the summary's steps, read by
+ * code instead of the wording. The job reading takes every space (a no-break space too) as a plain
+ * one, as copies.pm `_hold_of` does.
+ */
+function holdOf(raw: string): 'user' | 'job' | undefined {
+  if (HELD_RE.test(raw)) return 'user'
+  const text = raw.replace(/\s/g, ' ')
+  return JOB_RE.test(text) && !USER_WINS_RE.test(text.replace(OWN_REPLY_RE, '$1$2')) ? 'job' : undefined
+}
 const ELSEWHERE_RE = /\bsee handoff\b/i
 /** Step 1's `— for "<the user's latest request>"` tail (and what follows it). */
 const FOR_TAIL = /\s+—\s+for\s+".*$/
@@ -146,23 +270,29 @@ export function laneFacts(text: string): LaneFacts {
   const g = GATE_RE.exec(where)?.[1]?.trim()
   // A Step 1 that itself asks the user or waits is behind a gate, whatever the Gate line says (its
   // `— for "<the user's request>"` tail is the user's words, not the step's).
-  const gate = g === undefined || g === '' ? 'missing' : /^`?none\b/i.test(g) && !HELD_RE.test(step.replace(FOR_TAIL, '')) ? 'none' : 'set'
+  const held = /^`?none\b/i.test(g ?? '') ? holdOf(step.replace(FOR_TAIL, '')) : 'user'
+  const gate = g === undefined || g === '' ? 'missing' : held === undefined ? 'none' : held === 'job' ? 'job' : 'set'
   const found = section(text, 'next steps')
   const next = found ?? []
   let todo = 0
   let done = 0
   let unmarked = 0
   let free = 0
+  let onJob = 0
+  let onUser = 0
   for (const item of items(next)) {
     const m = lastMark(item)
     if (m === 'done') done++
     else if (m === 'todo') {
       todo++
-      if (!HELD_RE.test(item)) free++
+      const h = holdOf(item)
+      if (h === 'job') onJob++
+      else if (h === 'user') onUser++
+      else free++
     } else unmarked++
   }
   return {
-    status: st?.[1] ?? null, todo, done, unmarked, free, elsewhere: ELSEWHERE_RE.test(next.join('\n')), listed: found !== undefined, step1, gate,
+    status: st?.[1] ?? null, todo, done, unmarked, free, onJob, onUser, elsewhere: ELSEWHERE_RE.test(next.join('\n')), listed: found !== undefined, step1, gate,
     unstable: ACUITY_UNSTABLE.test(where) || MID_STEP.test(where),
   }
 }
@@ -174,10 +304,17 @@ export function asLaneFacts(x: unknown): LaneFacts | undefined {
   const n = (k: string) => typeof o[k] === 'number' && Number.isInteger(o[k]) && (o[k] as number) >= 0
   if (!(o.status === null || typeof o.status === 'string') || !['todo', 'done', 'unmarked', 'free'].every(n)) return undefined
   if (typeof o.elsewhere !== 'boolean' || typeof o.unstable !== 'boolean') return undefined
-  if (!['none', 'proposed', 'set', 'missing'].includes(o.step1 as string) || !['none', 'set', 'missing'].includes(o.gate as string)) return undefined
+  if (!['none', 'proposed', 'set', 'missing'].includes(o.step1 as string) || !['none', 'job', 'set', 'missing'].includes(o.gate as string)) return undefined
+  // A record written before the holds were told apart has no `onJob` or `onUser`: every held step
+  // counts as held on the user (it was read so then).
+  if ((o.onJob !== undefined && !n('onJob')) || (o.onUser !== undefined && !n('onUser'))) return undefined
+  const todo = o.todo as number
+  const free = o.free as number
+  const onJob = o.onJob === undefined ? 0 : (o.onJob as number)
   // A record without `listed` (written before it was read) counts as one with no Next steps: never finished.
   return {
-    status: o.status as string | null, todo: o.todo as number, done: o.done as number, unmarked: o.unmarked as number, free: o.free as number,
+    status: o.status as string | null, todo, done: o.done as number, unmarked: o.unmarked as number, free,
+    onJob, onUser: o.onUser === undefined ? Math.max(0, todo - free - onJob) : (o.onUser as number),
     elsewhere: o.elsewhere, listed: o.listed === true, step1: o.step1 as LaneFacts['step1'], gate: o.gate as LaneFacts['gate'], unstable: o.unstable,
   }
 }
@@ -239,6 +376,10 @@ function recheck(lane: Lane, why: string): LaneResult {
  *   section (a summary cut near its size cap can lose it: AWAY-DIGEST §4.3);
  * - a blocked Status is working while a step can run (marked todo, naming no gate or wait; or
  *   Step 1 set with `Gate: none`: owner xxxxxxxx-08, non-blocking work keeps the lane going);
+ *   a step held on a job is not such a step: the model's blocked word stands while the job runs,
+ *   and only the turn its result comes with reads working (`byResult`; owner 2026-10-28 digest
+ *   rules (a), xxxxxxxx-06: the result unblocks that step); that turn's end reads the lane again
+ *   without the result (rule (b), digest.ts `laneTurnEnd`), so the step it did no longer counts;
  *   `hard-blocked` with a unit running is `soft-blocked`, and `soft-blocked` with none is
  *   `hard-blocked` (owner xxxxxxxx-06: soft means something still runs);
  * - `working`, an older word or none: `finished` once nothing runs, every listed step is marked
@@ -265,6 +406,9 @@ export function laneOf(f: LaneFacts | undefined, m: LaneMeasured): LaneResult {
   if (w === 'hard-blocked' || w === 'soft-blocked') {
     if (f.free > 0) return recheck('working', `the summary says ${w}, but a step with no gate is to do`)
     if (f.step1 === 'set' && f.gate === 'none') return recheck('working', `the summary says ${w}, but Step 1 has no gate`)
+    if (m.result === true && (f.onJob > 0 || (f.step1 === 'set' && f.gate === 'job'))) {
+      return { ...recheck('working', `the summary says ${w}, but a result unblocks a step`), byResult: true }
+    }
     if (w === 'hard-blocked' && m.running > 0) return recheck('soft-blocked', 'the summary says hard-blocked, but a job still runs')
     if (w === 'soft-blocked' && m.running === 0) return recheck('hard-blocked', 'the summary says soft-blocked, but nothing runs')
     return { lane: w, source: 'status', why: "the summary's Status line" }
@@ -387,3 +531,23 @@ export function laneNote(name: string, r: LaneResult, basis: string, again = fal
         'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
         'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.')
 }
+
+/**
+ * The text of the digest turn the plugin submits after a result's turn did the step that result
+ * unblocked and the lane now reads finished or hard-blocked (owner 2026-10-28 digest rules (b);
+ * digest.ts `laneTurnEnd`). `basis` is `laneBasis` now.
+ */
+export function resultDigestLine(name: string, r: LaneResult, basis: string): string {
+  return `Note from the user's ${name} plugin: the user is still away. The last turn handled a background result; code now reads the work lane as ${r.lane} (${r.why}). ` +
+    'A step that can still run without the user: continue it, unless it hits a gate. ' +
+    `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done, and what the last turn did); ` +
+    'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
+    'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.'
+}
+
+/**
+ * A turn's answer that already ends with the digest's last section (`Needs you` or `Nothing
+ * needed from you` opening a line): the `[idle]` block's step 5 asks for the digest when all
+ * that is left waits on the user, so a result's turn may have printed it; no second one follows.
+ */
+export const DIGEST_END_RE = /^[^\w\n]*(?:Needs you\b|Nothing needed from you\b)/m

@@ -223,9 +223,57 @@ sub _test_corrupt {
 #   Step 1 none or proposed; else in-progress;
 # - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
-#   `Gate: none` (Step 1 itself naming none of them).
+#   `Gate: none` (Step 1 itself naming none of them). No step reads more held on a job, or
+#   freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts `holdOf`): a step
+#   0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a job too (`Wait for
+#   the timer notification, then reply`: a known limit of 0.1.1); a step it reads free is held on
+#   a job only when a job trigger leads it (`On the timer notification, reply …`, `when CI
+#   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
+#   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
+#   result in, so it stays blocked (only the session's result turn reads it working).
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
-my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+# The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
+# non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
+my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
+# lane.ts `JOB_RE` and its parts, word for word.
+my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
+my $J_JOB = q{(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|tests?|suites?|B-\d+)};
+my $J_RESULT = q{(?:results?|outputs?|completion|returns?|notifications?)};
+my $J_JOB_RESULT = "(?:notifications?|$J_JOB(?:'s)?\\s+$J_RESULT|(?:results?|outputs?|completion|returns?)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?$J_WORD?$J_JOB)";
+my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|reports? back|reported back|}
+    . q{fires?|fired|exits?|exited|pass(?:es|ed)?|fail(?:s|ed)?|succeed(?:s|ed)?|is (?:done|in|back|green|red|over)|are (?:done|in|back|green|red|over))};
+my $J_LEAD = q{^(?:\d+\.\s+)?(?:then,?\s+)?};
+my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:upon|after)\s+(?:(?:the|that|this|its)\s+)?(?:B-\d+\s+)?$J_JOB\s*[,;:]|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b/iaa;
+# lane.ts `PRONOUN`, `PERSON`, `APPROVAL`, `USER_WINS_RE` and `OWN_REPLY_RE`, word for word: a
+# person, a pronoun or a person's say anywhere in the step keeps it off the job (a `reply` or
+# `answer` with no object opening the step or a clause after `,`, `—` or `then` is the session's
+# own, not one). Helper case AD-11 checks this file's _hold_of against the wording lists of
+# plugin/tests/unit/lane.test.ts.
+my $J_PRONOUN = q{(?:I|me|my|mine|myself|we|us|our|ours|you|your|yours|he|him|his|she|her|hers|they|them|their|theirs|}
+    . q{someone|somebody|anyone|anybody|everyone|everybody|nobody|who|whom|whoever)};
+my $J_PERSON = q{(?:users?|owners?|humans?|people|persons?|reviewers?|approvers?|maintainers?|teams?|teammates?|colleagues?|clients?|customers?|}
+    . q{vendors?|stakeholders?|managers?|designers?|engineers?|developers?|leads?|QA|PMs?|POs?|CTO|CEO|SREs?|ops|on-call|CAB|legal|operators?|admins?)};
+my $J_APPROVAL = q{(?:approv\w*|accept(?:s|ed|ing|ance)?|permi(?:ssions?|ts?|tted)|authori[sz](?:e|es|ed|ing|ation)|allow(?:s|ed)?|}
+    . q{go[- ]ahead|go/no-go|no-go|green[- ]?(?:light(?:s|ed)?|lit)|say-so|final say|thumbs?[- ]?ups?|nods?|bless(?:ing|ed)?|}
+    . q{acks?|acked|votes?|voted|verdicts?|consent\w*|clearance|sign(?:s|ed|ing)?[- ]?offs?|LGTM|OK|okay|yes|}
+    . q{confirm\w*|review\w*|feedback|answer\w*|repl(?:y|ies|ied)|respon(?:se|ses|d|ds|ded)|input|instructions?|directions?|}
+    . q{guidance|decid(?:e|es|ed|ing)|decisions?|choose|chooses|chose|choices?|questions?|ask(?:s|ed|ing)?|request\w*|agree\w*|}
+    . q{check(?:s|ed|ing)?\s+(?:in\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))};
+my $USER_WINS_RE = qr/\b(?:$J_PRONOUN|$J_PERSON|$J_APPROVAL)(?![\w-])/iaa;
+my $OWN_REPLY_RE = qr/(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/iaa;
+# JS `\s`, which lane.ts `holdOf` reads as a plain space for the job reading.
+my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
+
+# What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run. Held on the
+# user where release-0.1.1b reads it held ($HELD_RE on the step as it is); else on a job when a
+# job trigger leads it and no user-wins word stands in it; else free, as on 0.1.1b.
+sub _hold_of {
+    my ($text) = @_;
+    return 'user' if $text =~ $HELD_RE;
+    $text =~ s/$JS_SPACE/ /g;
+    (my $u = $text) =~ s/$OWN_REPLY_RE/$1$2/g;
+    return $text =~ $JOB_RE && $u !~ $USER_WINS_RE ? 'job' : undef;
+}
 
 sub _trim { my ($s) = @_; $s =~ s/\A\s+|\s+\z//g; return $s }
 
@@ -293,13 +341,13 @@ sub copy_status {
     my ($g) = $where =~ /^\s*Gate:[ \t]*([^·\n]*)/m;
     $g = defined $g ? _trim($g) : '';
     (my $cmd = $step) =~ s/\s+—\s+for\s+".*\z//;
-    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && $cmd !~ $HELD_RE) ? 'none' : 'set';
+    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined _hold_of($cmd)) ? 'none' : 'set';
     my ($listed, @next) = _section($t, 'next steps');
     my ($todo, $unmarked, $free) = (0, 0, 0);
     for my $item (_items(@next)) {
         my $m = _last_mark($item);
         if (!defined $m) { $unmarked++ }
-        elsif ($m eq 'todo') { $todo++; $free++ unless $item =~ $HELD_RE }
+        elsif ($m eq 'todo') { $todo++; $free++ unless defined _hold_of($item) }
     }
     if ($w eq 'finished' || $w eq 'done') {
         return 'in-progress' unless $listed && $todo == 0 && $unmarked == 0 && join("\n", @next) !~ /\bsee handoff\b/i;

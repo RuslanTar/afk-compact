@@ -6,6 +6,7 @@ import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onOwnCompact, onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
 import { claimOwnCompact, isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
+import { laneTurnEnd } from './lib/digest'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
@@ -75,6 +76,9 @@ export const register: Register = (on, options) => {
     const d = realDeps($, options, state)
     const sid = await prepare(d)
     await onTurnComplete(d, sid, { reason: e.reason, answer: e.answer })
+    // Owner 2026-10-28 digest rules (b): the end of a turn whose job result unblocked a step reads
+    // the work lane again; a lane now finished or hard-blocked still gets its digest, once.
+    await laneTurnEnd(d, sid, e.reason, e.answer)
     // The shadow trial: started, not awaited, after the plugin's own turn end (one `fs.exists`
     // without its local config).
     shadowTurnEnd(d, sid, e.answer)

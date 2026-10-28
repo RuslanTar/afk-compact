@@ -119,11 +119,12 @@ export async function buildBlockWith(
   // Away digest phase 1: an idle block outside halt mode reads the work lane now (lane.ts), with
   // the units running now: agents, the measure's running rows (none for a block restored after
   // `claude --resume`: they ran in the process that ended), less what this episode's
-  // notifications reported ended, and with the work the model started since its block went out.
+  // notifications reported ended, with the work the model started since its block went out, and
+  // with whether a job's result came with this turn's prompt (owner 2026-10-28 digest rules (a)).
   const ep = episodeOf(d.state, sid, a.nonce)
   const running = idle && a.halt !== true ? await runningUnits(d, ep?.restored === true ? undefined : remeasure, ep?.ended ?? new Set()) : undefined
   const lane = running !== undefined
-    ? laneOf(a.lane, { running, midturn: a.midturn, nonok: a.nonok, driver, superseded: ep?.superseded === true })
+    ? laneOf(a.lane, { running, midturn: a.midturn, nonok: a.nonok, driver, superseded: ep?.superseded === true, result: ep?.result === true })
     : undefined
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
@@ -251,7 +252,7 @@ export function openEpisode(
 ): void {
   s.idleLane = {
     sid, nonce, facts: a.lane, nonok: a.nonok, driver: remeasure !== undefined && DRIVER_LINE.test(remeasure), shown: undefined,
-    remeasure, measuredAt, ended: new Set(), superseded: false, closed: false, restored,
+    remeasure, measuredAt, ended: new Set(), superseded: false, closed: false, restored, result: false, unblocked: false, digested: false,
   }
 }
 
@@ -278,6 +279,10 @@ async function laneShown(
     return
   }
   l.shown = out.lane?.lane ?? 'working'
+  if (showsDigest(l.shown)) l.digested = true
+  // Owner 2026-10-28 digest rules (b): working only because this turn's result unblocks a step
+  // held on its job: this turn's end reads the lane again.
+  if (out.lane?.byResult === true) l.unblocked = true
   // The measure this turn's block went out with (re-measured past 600 s): its rows and its driver.
   l.remeasure = out.remeasure
   l.measuredAt = out.measuredAt
@@ -297,36 +302,50 @@ async function laneShown(
  * or a change toward work: nothing is added. The note carries the Basis code renders now
  * (`laneBasis`). A prompt that then does not enter (dropped, or its hook chain threw) hands the
  * note back with `laneNoteLost`, so the next turn of the episode gets it.
+ * A notification that reports a task ended is a job's result: in its turn a step held on that job
+ * can run, so the lane reads working (owner 2026-10-28 digest rules (a)), and that turn's end
+ * reads it again (rule (b), digest.ts `laneTurnEnd`). Once any turn of the episode was told a
+ * finished or blocked lane, a note asks for one line on the new state, never a second digest.
  */
 export async function laneRecheck(d: Deps, kind: string, text: string): Promise<LaneNoteSent | undefined> {
   const s = d.state
   const l = s.idleLane
   if (!l || l.closed || (await d.sessionId()) !== l.sid) return undefined
   if (isHuman(kind)) {
+    l.result = false
+    l.unblocked = false
     if (l.shown !== undefined) l.closed = true
     return undefined
   }
-  if (kind === 'task-notification') for (const id of notifiedTasks(text)) l.ended.add(id)
+  const ended = kind === 'task-notification' ? notifiedTasks(text) : []
+  for (const id of ended) l.ended.add(id)
+  if (ended.length > 0) l.result = true
   if (l.shown === undefined || s.halt.active) return undefined
   const running = await runningUnits(d, l.restored ? undefined : l.remeasure, l.ended)
-  const r = laneOf(l.facts, { running, midturn: false, nonok: l.nonok, driver: l.driver, superseded: l.superseded })
+  const r = laneOf(l.facts, { running, midturn: false, nonok: l.nonok, driver: l.driver, superseded: l.superseded, result: l.result })
+  if (r.byResult === true) l.unblocked = true
   if (r.lane === l.shown) return undefined
   const was = l.shown
   l.shown = r.lane
   await logLane(d, l.sid, l.nonce, l.facts, r, 'recheck', running)
   if (r.lane !== 'finished' && r.lane !== 'hard-blocked') return undefined
+  const digested = l.digested
+  l.digested = true
   // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
   const asOf = l.measuredAt !== undefined ? isoLocal(l.measuredAt, false).slice(11, 16) : undefined
-  return { text: laneNote(d.name, r, laneBasis(l.facts, running, l.remeasure, asOf), showsDigest(was)), nonce: l.nonce, was, now: r.lane }
+  return { text: laneNote(d.name, r, laneBasis(l.facts, running, l.remeasure, asOf), showsDigest(was) || digested), nonce: l.nonce, was, now: r.lane, digested }
 }
 
-/** A lane note `laneRecheck` put beside a prompt: the state it told, and the one before. */
-export type LaneNoteSent = { text: string; nonce: string; was: Lane | undefined; now: Lane }
+/** A lane note `laneRecheck` put beside a prompt: the state it told, the one before, and whether a digest had gone out before it. */
+export type LaneNoteSent = { text: string; nonce: string; was: Lane | undefined; now: Lane; digested?: boolean }
 
 /** The prompt that carried this note did not enter: the episode reads as before it, so a later turn gets the note. */
 export function laneNoteLost(s: LoadState, n: LaneNoteSent): void {
   const l = s.idleLane
-  if (l && l.nonce === n.nonce && !l.closed && l.shown === n.now) l.shown = n.was
+  if (l && l.nonce === n.nonce && !l.closed && l.shown === n.now) {
+    l.shown = n.was
+    if (n.digested !== undefined) l.digested = n.digested
+  }
 }
 
 /**
