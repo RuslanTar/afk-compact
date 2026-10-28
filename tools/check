@@ -13,6 +13,16 @@ Usage: tools/check PHASE [--names FILE] [--no-drill]
   --names  the competitor-name list (E-7); default $GATE_NAMES_FILE. Missing = X-gates fails.
   --no-drill  skip X-tools and BT-02 (used for the drill's own run inside its renamed copy)
 
+Time: integration runs every helper case twice (X-H here, and again in the BT-02 copy, whose own
+`tools/check integration --no-drill` repeats every check), plus the X-tools probes. Give a full
+run a wall-clock cap of at least 3,600 s, raised from the 1,700 s used before: on 2026-10-28, at
+a load average of 150 to 270 on 14 cores, the helper cases alone took 1,191 s and a full run
+1,483 s, and an earlier run on that branch was cut at 1,700 s in its BT-02 pass. AT-CK-09 (case
+AT-CK-02-03-05-06-08-09-12) is load-sensitive: under such load the evidence sweep's time budget
+(sweep.pm) can run out before its last file, which is then listed referenced-budget instead of
+withheld. It failed in 1 of 2 runs alone on that tree and on the one before it; re-run it alone
+on a quiet machine before taking a failure for a regression.
+
 X-gen: tools/build --check, tools/fixtures-gen --check, tools/helper-replies-gen --check,
 tools/canary-baseline --check (pinned to the Claude Code binary the baseline records, so an
 update does not make it flaky; when that binary is gone, every part but the C8 counts is
