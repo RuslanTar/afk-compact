@@ -104,15 +104,16 @@ const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
  */
 const HELD_RE = /\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|wait(?:s|ing)? (?:on|for|until|till)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
 /**
- * The part of `HELD_RE` that holds a step on the user: a gate, an ask (`ask user`, `ask the user`,
- * `ask you`), a pending answer, a needed approval or the user.
- */
-const USER_RE = /\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
-/**
  * One word between a trigger and what it names: never a possessive (`the reviewer's result` is
  * not a job's) nor `of`, `from`, `by` or `for` (`approval of the run` is not the run).
  */
 const WORD = "(?:(?!(?:of|from|by|for)\\s)[\\w.#/\"`-]+\\s+)"
+/**
+ * One word of a wait's object before its job noun (`wait for the release build`, `Wait for Jenkins
+ * build`): a `WORD` that is not `to`, `on`, `and` or `or` either, so a job named after the object's
+ * own noun (`Wait for Anna to run the build`, `wait for review on build 7`) is not what the wait is on.
+ */
+const NOUN_WORD = "(?:(?!(?:of|from|by|for|to|on|and|or)\\s)[\\w.#/\"`-]+\\s+)"
 /**
  * A running job as a step names it: `B-n` is the summary form's id of a background job; a test
  * run (`the tests`, `the suite`) is one too.
@@ -146,8 +147,8 @@ const WAIT = '(?:wait(?:s|ing)?\\s+(?:on|for|until|till)|await(?:s|ing)?)'
  * - `when CI finishes, report …`, `after the build ends`, `once the result arrives`: when, after,
  *   once or as soon as leading the step, then a job or a result, then its end (`FINISH`);
  * - `wait for the timer notification`, `waits on B-1`, `awaiting the build`, `wait till CI passes`:
- *   a wait on a job or a job's result, anywhere (any wait reads held already: this only tells the
- *   job's from the user's).
+ *   a wait on a job or a job's result (an article and two `NOUN_WORD`s may come first), anywhere
+ *   (any wait reads held already: this only tells the job's from the user's).
  * The trigger leads the step, so a step that only mentions a job or a result (`fix the build
  * script`, `add a test for when the task completes`, `log a message when the build is done`, `On
  * completion, commit`, `after the results are reviewed, …`, `After fixing the build, commit`)
@@ -159,73 +160,52 @@ const JOB_RE = new RegExp(
   `${LEAD}(?:on|upon|after)\\s+${WORD}{0,4}?${JOB_RESULT}\\b` +
     `|${LEAD}(?:upon|after)\\s+(?:(?:the|that|this|its)\\s+)?(?:B-\\d+\\s+)?${JOB}\\s*[,;:]` +
     `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b` +
-    `|\\b${WAIT}\\s+(?:(?:the|that|this|its)\\s+)?${WORD}{0,2}?(?:${JOB_RESULT}|${JOB})\\b`,
+    `|\\b${WAIT}\\s+(?:(?:the|that|this|its)\\s+)?${NOUN_WORD}{0,2}?(?:${JOB_RESULT}|${JOB})\\b`,
   'i',
 )
 /** A step's done criterion (`— done when the run finishes`, up to its mark or next clause): not a trigger. */
 const CRITERION_RE = /\bdone when\b[^·;]*/gi
-/** A person as the object of a wait, by a pronoun (`you`, `me`, `him`, `them`, `us`, `someone`). */
-const PRONOUN = '(?:you|me|him|them|us|someone|somebody|anyone|anybody)'
+/** A person by a pronoun (`you`, `your`, `me`, `him`, `them`, `us`, `someone`). */
+const PRONOUN = '(?:you|your|me|him|them|us|someone|somebody|anyone|anybody)'
 /**
- * A person as the object of a wait, by a word that may also lead a noun (`the client build`, `her
- * build`): the user, the owner, `her`, a human, or a role or group (a reviewer, approver,
- * maintainer, the team, the client, a customer, QA, the PM, the lead, an operator, an admin).
+ * A person by a noun: the user, the owner, `her`, a human, or a role or group (a reviewer,
+ * approver, maintainer, the team, the client, a customer, QA, the PM, the lead, an operator, an admin).
  */
 const PERSON = '(?:users?|owners?|her|humans?|people|reviewers?|approvers?|maintainers?|teams?|teammates?|clients?|customers?|QA|PMs?|lead|operators?|admins?)'
 /**
- * A job or a result as a noun after a person or a name (`the client build`, `Jenkins build`,
- * `Anna's result`): `JOB` and `RESULT` less the forms that are also a verb after its subject
- * (`runs`, `builds`, `tests`, `returns`: `wait until the maintainer runs the build` waits on the
- * maintainer).
+ * A person's say on the work: an approval, a permission, a go-ahead, a confirmation, an OK, a
+ * clearance, a sign-off, feedback, a review, an answer or a reply, a decision, a yes, consent, an LGTM.
  */
-const JOB_NOUN = '(?:jobs?|build|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|run|tasks?|test|suites?|B-\\d+|results?|outputs?|completion|return|notifications?)'
+const APPROVAL =
+  '(?:approv(?:al|als|e|es|ed)|permission|go[- ]ahead|confirm(?:s|ed|ation)?|OK|okay|clearance|sign[- ]?offs?|feedback|' +
+  'reviews?|answers?|repl(?:y|ies)|decisions?|yes|consent|LGTM)'
 /**
- * The object of a wait, up to the end of its clause: a `,`, `;`, `:`, `·`, `—`, a sentence's `.`,
- * `then` or `to` (`Wait for the build and the user, then merge` holds both; `wait for CI to email
- * me` names only CI).
+ * A word that makes a step the user's whenever a job trigger comes with it (`holdOf`): a person, a
+ * pronoun, a person's say (`APPROVAL`) or a gate, anywhere in the step (not inside a longer word:
+ * `user-facing`, `us-east-1` are none).
  */
-const WAIT_OBJECT = '(?:(?!\\b(?:then|to)\\b|[,;:·—]|\\.(?:\\s|$))[^\\n])*?'
+const USER_WINS_RE = new RegExp(`\\b(?:${PRONOUN}|${PERSON}|${APPROVAL}|gated)(?![\\w-])`, 'i')
 /**
- * A wait whose object is or holds a person (`Wait for the user to run the build`, `wait for you to
- * run the tests`, `waiting on the reviewer`, `wait for the build and the user, then merge`, `wait
- * for the team to run the pipeline`): held on the user, whatever job word comes with it (reviews of
- * digest rules (a)), so `JOB_RE`'s wait branch never reads it as a job's. A `PERSON` word a job or
- * a result follows as a noun is not one (`wait for the client build` is the build's).
+ * `reply` or `answer` opening the step or one of its clauses (after `,`, `;`, `:`, `—`, `then`,
+ * `and`): the session's own reply (`On the timer notification, reply with one line`), not a
+ * person's, so `USER_WINS_RE` reads the step without it.
  */
-const PERSON_WAIT_RE = new RegExp(
-  `\\b${WAIT}\\s+${WAIT_OBJECT}\\b(?:${PRONOUN}(?![\\w-])|${PERSON}(?![\\w-])(?!(?:'s)?\\s+${JOB_NOUN}\\b))`,
-  'i',
-)
+const OWN_REPLY_RE = /(^|[,;:—]|\b(?:then|and)\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)\b/gi
 /**
- * A wait on a named person: a capitalised word right after the wait (`wait for Anna to run CI`), not
- * one a job or a result follows as a noun (`wait for Jenkins build` is the job's). `holdOf` checks
- * the capital (the regex reads case-blind) and leaves out the articles and a capitalised job word or
- * result (`Wait for Build 42 to finish`, `Wait for Agent B`, `Wait for Timer` are the job's).
- */
-const NAMED_WAIT_RE = new RegExp(`\\b${WAIT}\\s+([A-Za-z]+)\\b(?!(?:'s)?\\s+${JOB_NOUN}\\b)`, 'gi')
-const ARTICLE_RE = /^(?:the|an?|that|this|its|your|our|my)$/i
-const JOB_WORD_RE = new RegExp(`^(?:${JOB}|${RESULT})$`, 'i')
-/** Whether a step waits on a person (`PERSON_WAIT_RE`, `NAMED_WAIT_RE`). */
-function waitsOnPerson(text: string): boolean {
-  if (PERSON_WAIT_RE.test(text)) return true
-  for (const m of text.matchAll(NAMED_WAIT_RE)) {
-    const name = m[1] ?? ''
-    if (/^[A-Z][a-z]+$/.test(name) && !ARTICLE_RE.test(name) && !JOB_WORD_RE.test(name)) return true
-  }
-  return false
-}
-/**
- * What holds a step (Step 1's text, or a Next steps item): the user (a gate, an ask, a pending
- * answer, a needed approval, a wait on a person, or another named wait such as a reviewer's
- * result), a running job's result (owner 2026-10-28 digest rules (a): it runs once the result is
- * in), or nothing (it can run). The user wins over a job: a step that needs both still needs the
- * user after the job ends (`wait for the build and the user`, `Wait for the agent, then ask the
- * user`), so an ask and a wait on a person are read before `JOB_RE`. A later clause that only
- * tells the user something (`Wait for the timer notification, then reply to the user`) is no hold.
+ * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (owner
+ * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run).
+ * - The user wins: a step with a job trigger (`JOB_RE`) is held on the job only when no person,
+ *   pronoun, approval-like word or gate stands anywhere in it (`USER_WINS_RE`); else it is held on
+ *   the user (`Wait for approval to run the build`, `wait for the team to run the pipeline`, `Wait
+ *   for the agent, then ask the user`, and, erring toward a stop, `Wait for the timer notification,
+ *   then reply to the user`). A step that needs the user and a job still needs the user after the
+ *   job ends, so a job's result never unblocks a step that names the user's part.
+ * - With no job trigger, a step reads as on release-0.1.1b: held on the user when it is gated,
+ *   asks the user, holds a pending answer, waits or needs an approval (`HELD_RE`), else free. A
+ *   person or approval word alone (`tidy the notes after review`) holds nothing.
  */
 function holdOf(text: string): 'user' | 'job' | undefined {
-  if (USER_RE.test(text) || waitsOnPerson(text)) return 'user'
-  if (JOB_RE.test(text.replace(CRITERION_RE, ''))) return 'job'
+  if (JOB_RE.test(text.replace(CRITERION_RE, ''))) return USER_WINS_RE.test(text.replace(OWN_REPLY_RE, '$1$2')) ? 'user' : 'job'
   return HELD_RE.test(text) ? 'user' : undefined
 }
 const ELSEWHERE_RE = /\bsee handoff\b/i

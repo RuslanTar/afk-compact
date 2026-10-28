@@ -914,7 +914,7 @@ const TRIGGERS = [
   'On the result of the run, write it up',
   "After the agent's output comes back, merge it",
   'Then, when the build is green, push the tag',
-  'once the results arrive, summarise them',
+  'once the results arrive, summarise each',
   'Wait for Jenkins build, then read its log',
   // A capitalised job word right after the wait is the job, not a named person (review 3).
   'Wait for Build 42 to finish',
@@ -931,10 +931,9 @@ const TRIGGERS = [
   'When the build succeeds, tag',
   'After the run, commit',
   "Upon the agent's return, merge",
-  // A person after the wait's own clause, or one the build follows, is no person the wait is on.
-  'Wait for the timer notification, then reply to the user with one line',
-  'wait for CI to email me',
-  'wait for the client build to finish',
+  // A reply or an answer that opens a clause is the session's own, not a person's.
+  'When the timer fires, answer with one line',
+  'after the build ends, reply and tag the release',
 ]
 /**
  * Ordinary work that only mentions a job, its end or a result, with no trigger leading its clause
@@ -953,11 +952,11 @@ const NOT_TRIGGERS = [
   'After fixing the build, commit',
 ]
 /**
- * A wait on something that is not a job (a person, an approval): held on the user, never on a job,
- * even when a job word follows the person (review 2 of digest rules (a)), when the person is a
- * pronoun or a group, or when the person or an ask of the user comes after the job (review 3).
- * The plugin's helper case AD-11 reads TRIGGERS, NOT_TRIGGERS and USER_WAITS from this file and
- * checks that the saved copy's status (copies.pm `_hold_of`) gives each the same hold.
+ * A wait on something that is not a job (a person, an approval), or a job trigger in a step that
+ * names a person anywhere: held on the user, never on a job (the user wins, reviews 2 to 4 of
+ * digest rules (a)). The plugin's helper case AD-11 reads TRIGGERS, NOT_TRIGGERS, USER_WAITS and
+ * APPROVAL_WAITS from this file and checks that the saved copy's status (copies.pm `_hold_of`)
+ * gives each the same hold.
  */
 const USER_WAITS = [
   "Wait for the reviewer's result",
@@ -982,7 +981,84 @@ const USER_WAITS = [
   'wait for us to run CI',
   'wait for the build and the user, then merge',
   'Wait for the agent, then ask the user',
+  // A person anywhere wins over the job, even one the step only tells (erring toward a stop).
+  'Wait for the timer notification, then reply to the user with one line',
+  'wait for CI to email me',
+  'wait for the client build to finish',
+  'Wait for the build and tell the user',
+  'Wait for the build and ping me',
+  'Wait for CI and notify the owner',
+  'Await the build and ping them',
+  'Wait for the build, then tell me',
+  'On the timer notification, reply to the user',
+  'when CI finishes, report to the team',
+  // A pronoun is read as a person even when it names things (erring toward a stop).
+  'once the results arrive, summarise them',
+  // A name, capitalised or not: the wait is on the name, not on the job after its `to`.
+  'wait for anna to run CI',
+  'Wait for Anna, then run the build',
 ]
+/**
+ * A wait for a person's say (an approval, a permission, a go-ahead, a confirmation, an OK, a
+ * clearance, a sign-off, feedback, a review, an answer, a reply, a decision, a yes, consent) with
+ * a job word in it, before or after: held on the user, never on the job (review 4 of digest rules
+ * (a)), whatever the order of the words.
+ */
+const APPROVAL_WAITS = [
+  'Wait for approval to run the build',
+  'Wait for approval to run the tests',
+  'Await approval to run the deploy job',
+  'Wait for permission to run the pipeline',
+  'Wait for the go-ahead to run the build',
+  'Wait for go ahead to run the build',
+  'Wait for confirmation to run CI',
+  'Wait for OK to run the tests',
+  'Wait for an okay to rerun the job',
+  'Wait for clearance to run the agents',
+  'Await sign-off to run the pipeline',
+  'Wait for sign-off to run the release job',
+  'Wait for sign off on the build',
+  'Wait for sign-off on build 42',
+  'Wait for go-ahead on build 7',
+  'Wait for feedback on build 42',
+  'Wait for the answer to build',
+  'Wait for review to run the suite',
+  'Wait for a review to run the suite',
+  'Wait for a reply on the build',
+  'Wait for a decision on the pipeline',
+  'Wait for a yes to run the deploy job',
+  'Wait for consent to run the workflow',
+  'Wait for LGTM on the build',
+  'Wait for merge request approval, then run the pipeline',
+  'Wait for the build approval',
+  'Wait for CI approval',
+  'Wait for test sign-off',
+  'Wait for the pipeline review',
+  'Wait for the release build sign-off',
+  'Wait for the run approval, then merge',
+  'Wait for the build to be approved',
+  'When the build passes and it is approved, merge',
+  'after CI finishes, confirm the deploy',
+  'On the build result, wait for the go-ahead',
+]
+/**
+ * release-0.1.1b's `HELD_RE`, kept here as a fixture: what that release read held (on the user);
+ * any other step it read free. The tie-break below is checked against it.
+ */
+const OLD_HELD_RE = /\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
+/**
+ * The user-wins words as the owner's tie-break states them (a person or a pronoun, an
+ * approval-like word, a gate; a reply or an answer that opens a clause is the session's own), kept
+ * apart from lane.ts so the test does not only read the code back.
+ */
+const SPEC_USER_WINS = (step: string): boolean =>
+  /\b(?:you|your|me|him|them|us|someone|somebody|anyone|anybody|users?|owners?|her|humans?|people|reviewers?|approvers?|maintainers?|teams?|teammates?|clients?|customers?|QA|PMs?|lead|operators?|admins?|approv(?:al|als|e|es|ed)|permission|go[- ]ahead|confirm(?:s|ed|ation)?|OK|okay|clearance|sign[- ]?offs?|feedback|reviews?|answers?|repl(?:y|ies)|decisions?|yes|consent|LGTM|gated)(?![\w-])/i
+    .test(step.replace(/(^|[,;:—]|\b(?:then|and)\b)(\s*)(?:repl(?:y|ies)|answers?)\b/gi, '$1$2'))
+/** The hold lane.ts reads for one step, through laneFacts: `job`, `user` or `free`. */
+const holdVia = (step: string): 'job' | 'user' | 'free' => {
+  const f = laneFacts('## Resume here\n' + onJob(step))
+  return f.onJob === 1 ? 'job' : f.onUser === 2 ? 'user' : 'free'
+}
 
 test('rule (a): a step whose only trigger is a running job\'s result is held on the job under a blocked Status, whatever the wording', () => {
   for (const step of TRIGGERS) {
@@ -1014,7 +1090,7 @@ test('rule (a): not held under a working (or finished) Status; a step that only 
     expect([step, laneOf(f, M).lane]).toEqual([step, 'working'])
   }
   // A wait on a person or an approval holds the step on the user: a job's result does not unblock it.
-  for (const step of USER_WAITS) {
+  for (const step of [...USER_WAITS, ...APPROVAL_WAITS]) {
     const f = laneFacts('## Resume here\n' + onJob(step))
     expect([step, f.free, f.onJob, f.onUser]).toEqual([step, 0, 0, 2])
     expect([step, laneOf(f, { ...M, result: true }).lane]).toEqual([step, 'hard-blocked'])
@@ -1037,6 +1113,30 @@ test('rule (a): Step 1 held on a job with `Gate: none` is not a free Step 1: blo
   expect(asLaneFacts(old)).toEqual({ ...F, status: 'hard-blocked', todo: 2, free: 1, onJob: 0, onUser: 1 })
   expect(asLaneFacts({ ...F, onJob: -1 })).toBe(undefined)
   expect(asLaneFacts({ ...F, gate: 'job' })?.gate).toBe('job')
+})
+
+test('rule (a), the user wins: never held on a job when a person or an approval-like word stands in the step; never freer than release-0.1.1b', () => {
+  const all = [...TRIGGERS, ...NOT_TRIGGERS, ...USER_WAITS, ...APPROVAL_WAITS]
+  expect(APPROVAL_WAITS.length).toBeGreaterThanOrEqual(30)
+  for (const step of all) {
+    const now = holdVia(step)
+    const old = OLD_HELD_RE.test(step) ? 'user' : 'free'
+    // Never a job hold with a user-wins word anywhere; so never a job hold where 0.1.1b read a
+    // user hold unless the wording has no user-wins word.
+    if (SPEC_USER_WINS(step)) expect([step, now]).not.toEqual([step, 'job'])
+    // A step 0.1.1b read held is never read free now.
+    if (old === 'user') expect([step, now]).not.toEqual([step, 'free'])
+  }
+  for (const step of [...USER_WAITS, ...APPROVAL_WAITS]) expect([step, holdVia(step)]).toEqual([step, 'user'])
+  for (const step of TRIGGERS) expect([step, SPEC_USER_WINS(step), holdVia(step)]).toEqual([step, false, 'job'])
+  for (const step of NOT_TRIGGERS) expect([step, holdVia(step)]).toEqual([step, 'free'])
+  // The AD2 kit wording names no person: held on the timer's job; its `reply to the user` twin is the user's.
+  expect(holdVia('On the timer notification, reply with one line acknowledging it')).toBe('job')
+  expect(holdVia('On the timer notification, reply to the user')).toBe('user')
+  // A person or an approval word with no job trigger reads as on 0.1.1b.
+  for (const step of ['tidy the notes after review', 'write the reply to the reviewer', 'Ask Anna for approval', 'Wait for the user']) {
+    expect([step, holdVia(step)]).toEqual([step, OLD_HELD_RE.test(step) ? 'user' : 'free'])
+  }
 })
 
 /** The AD2 shape: an idle compaction while the timer shell b7 runs; the summary's only free-looking step waits on its result. */

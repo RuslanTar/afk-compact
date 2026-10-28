@@ -1,6 +1,6 @@
 {
  "id": "AD-11-hold-parity-lane-test",
- "note": "Owner 2026-10-28 digest rules (a), review 3: the saved copy's hold of a step (copies.pm _hold_of) and the lane check's (lane.ts holdOf) are two copies of one rule, so they must agree word for word. copy_status cannot tell a user hold from a job hold, so this reads the wordings the TS lane test checks holdOf with (TRIGGERS: held on a job, USER_WAITS: held on the user, NOT_TRIGGERS: free work) from plugin/tests/unit/lane.test.ts itself and checks that _hold_of gives each the same hold",
+ "note": "Owner 2026-10-28 digest rules (a), reviews 3 and 4: the saved copy's hold of a step (copies.pm _hold_of) and the lane check's (lane.ts holdOf) are two copies of one rule (with a job trigger the user wins: a person, a pronoun, an approval-like word or a gate anywhere holds the step on the user; with none, release-0.1.1b's reading), so they must agree word for word. copy_status cannot tell a user hold from a job hold, so this reads the wordings the TS lane test checks holdOf with (TRIGGERS: held on a job, USER_WAITS and APPROVAL_WAITS: held on the user, NOT_TRIGGERS: free work) from plugin/tests/unit/lane.test.ts itself and checks that _hold_of gives each the same hold",
  "steps": [
   {
    "name": "copies::_hold_of gives every lane.test.ts wording the hold the TS test expects",
@@ -10,6 +10,7 @@
     "lists": {
      "TRIGGERS": "job",
      "USER_WAITS": "user",
+     "APPROVAL_WAITS": "user",
      "NOT_TRIGGERS": "none"
     },
     "min": 10

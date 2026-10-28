@@ -227,13 +227,14 @@ sub _test_corrupt {
 #   result (`On the timer notification, reply …`, `when CI finishes, …`, `After the run, commit`;
 #   owner 2026-10-28 digest rules (a), lane.ts `JOB_RE`) is held on that job, not a step that can
 #   run: the copy is taken with no result in, so it stays blocked (only the session's result turn
-#   reads it working). A wait whose object is or holds a person (`Wait for the user to run the
-#   build`, `wait for the team to run the pipeline`, `wait for the build and the user`) or a step
-#   that asks the user (`then ask the user`) is held on the user, whatever job word comes with it.
+#   reads it working). The user wins: a step with such a trigger that names, anywhere, a person,
+#   a pronoun, an approval-like word or a gate (`Wait for the user to run the build`, `Wait for
+#   approval to run the build`, `then ask the user`) is held on the user, never on the job.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
 my $HELD_RE = qr/\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|wait(?:s|ing)? (?:on|for|until|till)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
 # lane.ts `JOB_RE` and its parts, word for word.
 my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
+my $J_NOUN_WORD = q{(?:(?!(?:of|from|by|for|to|on|and|or)\s)[\w.#/"`-]+\s+)};
 my $J_JOB = q{(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|tests?|suites?|B-\d+)};
 my $J_RESULT = q{(?:results?|outputs?|completion|returns?|notifications?)};
 my $J_JOB_RESULT = "(?:notifications?|$J_JOB(?:'s)?\\s+$J_RESULT|(?:results?|outputs?|completion|returns?)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?$J_WORD?$J_JOB)";
@@ -241,38 +242,27 @@ my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|a
     . q{fires?|fired|exits?|exited|pass(?:es|ed)?|fail(?:s|ed)?|succeed(?:s|ed)?|is (?:done|in|back|green|red|over)|are (?:done|in|back|green|red|over))};
 my $J_LEAD = q{^(?:\d+\.\s+)?(?:then,?\s+)?};
 my $J_WAIT = q{(?:wait(?:s|ing)?\s+(?:on|for|until|till)|await(?:s|ing)?)};
-my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:upon|after)\s+(?:(?:the|that|this|its)\s+)?(?:B-\d+\s+)?$J_JOB\s*[,;:]|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b|\b$J_WAIT\s+(?:(?:the|that|this|its)\s+)?(?:$J_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)\b/i;
-my $USER_RE = qr/\b(?:gated|ask (?:the )?(?:user|owner)|ask you|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
-# lane.ts `PRONOUN`, `PERSON`, `JOB_NOUN`, `WAIT_OBJECT`, `PERSON_WAIT_RE`, `NAMED_WAIT_RE` and
-# `waitsOnPerson`, word for word: a wait whose object (up to its clause's end) is or holds a person
-# (a pronoun; the user, the owner, a role or group that no job or result follows as a noun; or a
-# capitalised name that is no job word or result and that no job or result follows as a noun)
-# holds the step on the user, read before $JOB_RE. Helper case AD-11 checks this file's _hold_of
-# against the wording lists of plugin/tests/unit/lane.test.ts.
-my $J_PRONOUN = q{(?:you|me|him|them|us|someone|somebody|anyone|anybody)};
+my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:upon|after)\s+(?:(?:the|that|this|its)\s+)?(?:B-\d+\s+)?$J_JOB\s*[,;:]|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b|\b$J_WAIT\s+(?:(?:the|that|this|its)\s+)?(?:$J_NOUN_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)\b/i;
+# lane.ts `PRONOUN`, `PERSON`, `APPROVAL`, `USER_WINS_RE` and `OWN_REPLY_RE`, word for word: with a
+# job trigger, a person, a pronoun, an approval-like word or a gate anywhere in the step holds it
+# on the user (a `reply` or `answer` opening a clause is the session's own, not one). Helper case
+# AD-11 checks this file's _hold_of against the wording lists of plugin/tests/unit/lane.test.ts.
+my $J_PRONOUN = q{(?:you|your|me|him|them|us|someone|somebody|anyone|anybody)};
 my $J_PERSON = q{(?:users?|owners?|her|humans?|people|reviewers?|approvers?|maintainers?|teams?|teammates?|clients?|customers?|QA|PMs?|lead|operators?|admins?)};
-my $J_JOB_NOUN = q{(?:jobs?|build|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|run|tasks?|test|suites?|B-\d+|results?|outputs?|completion|return|notifications?)};
-my $J_WAIT_OBJECT = q{(?:(?!\b(?:then|to)\b|[,;:·—]|\.(?:\s|$))[^\n])*?};
-my $PERSON_WAIT_RE = qr/\b$J_WAIT\s+$J_WAIT_OBJECT\b(?:$J_PRONOUN(?![\w-])|$J_PERSON(?![\w-])(?!(?:'s)?\s+$J_JOB_NOUN\b))/i;
-my $NAMED_WAIT_RE = qr/\b$J_WAIT\s+([A-Za-z]+)\b(?!(?:'s)?\s+$J_JOB_NOUN\b)/i;
-my $JOB_WORD_RE = qr/\A(?:$J_JOB|$J_RESULT)\z/i;
+my $J_APPROVAL = q{(?:approv(?:al|als|e|es|ed)|permission|go[- ]ahead|confirm(?:s|ed|ation)?|OK|okay|clearance|sign[- ]?offs?|feedback|}
+    . q{reviews?|answers?|repl(?:y|ies)|decisions?|yes|consent|LGTM)};
+my $USER_WINS_RE = qr/\b(?:$J_PRONOUN|$J_PERSON|$J_APPROVAL|gated)(?![\w-])/i;
+my $OWN_REPLY_RE = qr/(^|[,;:—]|\b(?:then|and)\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)\b/i;
 
-sub _waits_on_person {
-    my ($text) = @_;
-    return 1 if $text =~ $PERSON_WAIT_RE;
-    while ($text =~ /$NAMED_WAIT_RE/g) {
-        my $w = $1;
-        return 1 if $w =~ /\A[A-Z][a-z]+\z/ && $w !~ /\A(?:the|an?|that|this|its|your|our|my)\z/i && $w !~ $JOB_WORD_RE;
-    }
-    return 0;
-}
-
-# What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run.
+# What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run. With a job
+# trigger the user wins; with none, release-0.1.1b's reading ($HELD_RE held, else free).
 sub _hold_of {
     my ($text) = @_;
-    return 'user' if $text =~ $USER_RE || _waits_on_person($text);
     (my $t = $text) =~ s/\bdone when\b[^·;]*//gi;
-    return 'job' if $t =~ $JOB_RE;
+    if ($t =~ $JOB_RE) {
+        (my $u = $text) =~ s/$OWN_REPLY_RE/$1$2/g;
+        return $u =~ $USER_WINS_RE ? 'user' : 'job';
+    }
     return $text =~ $HELD_RE ? 'user' : undef;
 }
 
