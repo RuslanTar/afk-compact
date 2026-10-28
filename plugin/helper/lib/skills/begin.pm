@@ -386,13 +386,15 @@ sub _bucket_holder {
     return undef;
 }
 
+# _pin_lock(ctx, sid) -> held | stale | free. The lock record (lock::with) keeps the
+# holder's start time as `pid_lstart` (PF-9: reading `lstart` made every holder stale).
 sub _pin_lock {
     my ($ctx, $sid) = @_;
     my $l = skills::ctx::pin_path($ctx, $sid) . '.lock';
     return 'free' unless -e $l;
     my $d = eval { skills::util::json_decode(skills::util::read_file($l, 4096)) };
     return 'free' unless ref $d eq 'HASH' && $d->{pid};
-    return skills::ctx::pid_matches($d->{pid}, $d->{lstart}) ? 'held' : 'stale';
+    return skills::ctx::pid_matches($d->{pid}, $d->{pid_lstart}) ? 'held' : 'stale';
 }
 
 sub _inflight_line {
