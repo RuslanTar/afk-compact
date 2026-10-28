@@ -16,7 +16,7 @@ Usage: tools/check PHASE [--names FILE] [--no-drill]
 Time: integration runs every helper case twice (X-H here, and again in the BT-02 copy, whose own
 `tools/check integration --no-drill` repeats every check), plus the X-tools probes. Give a full
 run a wall-clock cap of at least 3,600 s, raised from the 1,700 s used before: on 2026-10-28, at
-a load average of 150 to 270 on 14 cores, the helper cases alone took 1,191 s and a full run
+a load average of about 150 to 275 on 14 cores, the helper cases alone took 1,191 s and a full run
 1,483 s, and an earlier run on that branch was cut at 1,700 s in its BT-02 pass. AT-CK-09 (case
 AT-CK-02-03-05-06-08-09-12) is load-sensitive: under such load the evidence sweep's time budget
 (sweep.pm) can run out before its last file, which is then listed referenced-budget instead of
