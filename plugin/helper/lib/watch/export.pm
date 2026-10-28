@@ -278,15 +278,27 @@ sub _rows_of_session {
     return \@rows;
 }
 
+# _since(arg, now) -> epoch | undef (no --since) | 'bad'. A YYYY-MM-DD date must be a real
+# calendar date (PF-6): mktime would move 2026-02-31 to 3 March and 2026-13-01 into 2027.
 sub _since {
     my ($arg, $now) = @_;
     return undef unless defined $arg;
     return $now - $1 * 86400 if $arg =~ /\A([1-9][0-9]{0,4})d\z/;
     if ($arg =~ /\A([0-9]{4})-([0-9]{2})-([0-9]{2})\z/) {
-        my $t = POSIX::mktime(0, 0, 0, $3, $2 - 1, $1 - 1900);
+        my ($y, $m, $d) = (0 + $1, 0 + $2, 0 + $3);
+        return 'bad' unless $m >= 1 && $m <= 12 && $d >= 1 && $d <= _month_days($y, $m);
+        my $t = POSIX::mktime(0, 0, 0, $d, $m - 1, $y - 1900);
         return $t if defined $t;
     }
     return 'bad';
+}
+
+# _month_days(year, month 1-12) -> the month's days; February has 29 in a Gregorian leap year
+sub _month_days {
+    my ($y, $m) = @_;
+    return 30 if $m == 4 || $m == 6 || $m == 9 || $m == 11;
+    return 31 unless $m == 2;
+    return ($y % 4 == 0 && ($y % 100 != 0 || $y % 400 == 0)) ? 29 : 28;
 }
 
 # --- identity list (B.3) ----------------------------------------------------
