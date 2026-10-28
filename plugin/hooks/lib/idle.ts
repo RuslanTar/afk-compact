@@ -683,7 +683,9 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   await writeTombstone(d, sid, rec.due, now)
   if ((await d.sessionId()) !== sid) return skip('session-changed')
   if (rec.kind === 'compact') return fireCompact(d, rec, now, out)
-  // The check reads its policy as armed (no `idle_mode` row at its fire); the turn reads it again.
+  // The check writes no `idle_mode` row at its fire: it keeps its policy as armed and reads again
+  // only automatic compaction (G0b, checkBlocked) before it compacts; the turn reads the full
+  // policy again.
   const scale = scaleOf(await d.idleEnv())
   if (rec.kind === 'turn') {
     // A 49-min turn that finds native idle on or unreadable now logs `native-on` / `native-unknown`

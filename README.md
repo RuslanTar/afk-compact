@@ -550,7 +550,7 @@ Some managed setups hold plugin hooks on compaction and prompt context for user-
 |---|---|---|
 | Shaping native, manual and subagent compactions | mod hook | classic `PreCompact` fallback (one text that selects the subagent form by itself) |
 | Plugin compactions, nudge, auto-continue | yes | yes |
-| Resume block | prompt context | `SessionStart`, else the continue text |
+| Resume block | prompt context | `SessionStart`, else the continue text; after an idle compaction none: its block waits for prompt context, never goes by `SessionStart`, and `/afk-compact:status` reports it as undelivered |
 | Summary copy | `PostCompact`, mod as backup | `PostCompact`, mod as backup for its own compactions |
 | Evidence before a compaction | before each main manual, auto or plugin compaction | only before the plugin's own; other compactions get the sweep right after |
 | Measured facts to the summarizer | when `measured_block` is on | only on the plugin's own compactions |
