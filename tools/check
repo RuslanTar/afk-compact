@@ -622,8 +622,8 @@ def probes(name):
         append(d, "plugin/skills/resume/SKILL.md", "\nWhen unsure, `<store> risk --cmd '<command>'` classifies it.\n")
         # NR-13: the old user-facing promise back in the README and a setting description.
         append(d, "plugin/README.md", "\nA command taken from a handoff is never run either way.\n")
-        edit(d, "plugin/.claude-plugin/plugin.json", "Production writes always ask, and so do production commands copied from a handoff unless an approval you gave names that read command.",
-             "Production writes and commands from a handoff always ask.")
+        edit(d, "plugin/.claude-plugin/plugin.json", "Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command",
+             "Production writes and commands from a handoff always ask")
         # AT-CK-08: the resume_proceed confirm line no longer stops after the R8 report.
         edit(d, "plugin/skills/resume/SKILL.md", "stop after the R8 report and wait for the user's go", "ask before Step 1")
 
