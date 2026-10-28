@@ -205,8 +205,17 @@ export function cancelBoundary(d: Deps): void {
   d.state.afterForeign = undefined
 }
 
-async function resumePref(d: Deps, sid: string): Promise<ResumePref> {
-  if (d.state.ctxSeen) return 'prompt.context'
+/**
+ * MOD-SPEC §3.4: `prompt.context` once it ran in this load, else the classic SessionStart(compact)
+ * when its hooks run, else the continue text. An idle compaction's block always waits for
+ * `prompt.context` (IDLE-COMPACT-SPEC §1.4, IC-1 D3): only that channel adds `[idle]` and
+ * re-measures it on the person's return, and only an unclaimed block on disk reaches the next
+ * process (resume-persist). A load that adopted the idle record (a supervisor move, `claude
+ * respawn`, `--resume`) has had no prompt yet, so the classic channel would otherwise take the
+ * block at compaction time, without `[idle]` (P4 p4-20261028-005619).
+ */
+async function resumePref(d: Deps, sid: string, idle: boolean): Promise<ResumePref> {
+  if (d.state.ctxSeen || idle) return 'prompt.context'
   const p = await d.paths()
   if (p && (await d.exists(`${p.watch}/${sid}/classic-alive.json`))) return 'sessionstart'
   return 'prompt.submit'
@@ -334,7 +343,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       prodConsent = cp?.consent['unattended_prod_reads']
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
-      pref = await resumePref(d, sid)
+      pref = await resumePref(d, sid, idle !== undefined)
       // The checkpoint above can take seconds: a person may have come back since (idle only).
       const changed = opts.idleRecheck ? await opts.idleRecheck() : undefined
       if (changed !== undefined) {
