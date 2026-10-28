@@ -15,7 +15,8 @@ package reconcile;
 #     by an install -> `precompute_not_reused` (counted, never a failure)
 #   - order canary C6: a boundary row with no PostCompact, or a PostCompact with no
 #     PreCompact and no `precomputed` -> `order_anomaly`
-#   - an undelivered main resume block -> `resume_undelivered`
+#   - an undelivered main resume block -> `resume_undelivered` (an idle block still waiting on
+#     disk for the next turn is not undelivered yet: step 4)
 #   - a save that returned EXISTS sha-differs settles its stash once (RRP-04, MOD-SPEC §5.8):
 #     `stash_dropped` (redundant) or `stash_kept` (a redacted *.mismatch.md keep)
 #   - final mode (SessionEnd, the cross-session finish): no SETTLE_S wait (RRP-05)
@@ -589,7 +590,10 @@ sub _run {
             }
             next if $logged->{"compaction_unresolved:$nn"} || exists $copied->{"n:$nn"} || $post{$nn};
             # DP-29 (E-M-15): the mod closed this dispatch because a native compaction ran first
-            # (compacted {skip: native-ran}): an outcome, not an unresolved compaction
+            # (compacted {skip: native-ran}): an outcome, not an unresolved compaction; so is a
+            # call Claude Code rejected as headless (compact_rejected {error_class: headless}),
+            # and a headless `/compact` the host cannot run (compact_command {error_class:
+            # no-command or input-ended})
             $native_ran //= _native_ran();
             next if $native_ran->{$nn};
             next if grep { ($_->{nonce} // '') eq $nn } @{ $st->{rolls_l} };
@@ -625,10 +629,15 @@ sub _run {
         }
     }
 
-    # 4. undelivered main resume blocks
+    # 4. undelivered main resume blocks. An idle compaction's block (MOD-SPEC §3.4 idle exception:
+    # its dispatch is idle with resume_pref prompt.context) waits on disk for the next turn, which
+    # may be the first turn of the next process of this session id (resume-persist): while it still
+    # waits it is not undelivered, in final mode too (SessionEnd, the cross-session finish), and a
+    # later run looks at it again (claimed: nothing; settled with no claim: resume_undelivered).
     for my $r (grep { !$_->{rd} } @{ $st->{rolls_l} }) {
         next unless ($r->{actor} // '') eq 'main' && defined $r->{nonce};
         next unless $now - $r->{e} > 30;
+        next if _idle_waits($sid_dir, $disp{ $r->{nonce} }, $r->{nonce});
         $r->{rd} = 1;
         next if -e "$sid_dir/resume-claimed/$r->{nonce}" || $logged->{"resume_undelivered:$r->{nonce}"};
         rc::emit('resume_undelivered', [nonce => $r->{nonce}]);
@@ -680,13 +689,28 @@ sub _idle_settled {
     return ($main_end && ($final || $now - $bd->{e} >= $SETTLE_S)) ? 1 : 0;
 }
 
-# Nonces the mod closed with compacted {skip: native-ran} (DP-29), read from the mod stream
-# (the same rows postcompact::_mod_closed reads; only this skip class closes an unresolved check).
+# Step 4: an idle mod dispatch whose block goes by prompt.context (every one since the P4 fix,
+# boundary.ts `resumePref`) and whose block still waits for a turn (resumeblock::waits).
+sub _idle_waits {
+    my ($sid_dir, $d, $nonce) = @_;
+    return 0 unless $d && dispatch::is_mod($d) && $d->{idle} && ($d->{resume_pref} // '') eq 'prompt.context';
+    return resumeblock::waits($sid_dir, $nonce);
+}
+
+# Nonces the mod closed with compacted {skip: native-ran} (DP-29), whose call Claude Code
+# rejected as headless (compact_rejected {error_class: headless}, 2026-10-27 headless probe), or
+# whose headless `/compact` the host cannot run (compact_command {error_class: no-command or
+# input-ended}), read from the mod stream (the same rows postcompact::_mod_closed reads; only
+# these close an unresolved check: another rejection or failure stays unresolved).
+our %HOST_CANNOT = map { $_ => 1 } qw(no-command input-ended);
 sub _native_ran {
     my %c;
-    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => ['compacted']) }) {
-        next unless ($row->{ev} // '') eq 'compacted' && defined $row->{nonce} && !ref $row->{nonce};
-        $c{ $row->{nonce} } = 1 if ($row->{skip} // '') eq 'native-ran';
+    for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compacted compact_rejected compact_command)]) }) {
+        my $ev = $row->{ev} // '';
+        next unless defined $row->{nonce} && !ref $row->{nonce};
+        $c{ $row->{nonce} } = 1 if ($ev eq 'compacted' && ($row->{skip} // '') eq 'native-ran')
+                                || ($ev eq 'compact_rejected' && ($row->{error_class} // '') eq 'headless')
+                                || ($ev eq 'compact_command' && $HOST_CANNOT{ $row->{error_class} // '' });
     }
     return \%c;
 }

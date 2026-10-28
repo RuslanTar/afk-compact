@@ -1,0 +1,265 @@
+{
+ "id": "AT-DH-22-trial-texts-facts",
+ "note": "TRIAL-DUAL-HANDOFF 4.2/4.2b: the old skill and template read at run time with their sums and the two H10 fills (the trial old root; queue_cmd or the note); the native head and tail for the running version, arm (default control) and transcript flag (t0 with no transcript); a changed byte -> no-old-skill sum, an unlisted version file -> no-native-prompt; facts: the repo by the git common dir, the ticket from the branch, the newest genuine old file of the bucket in full, never the plugin's (kind:) and never a manual file built on one (counted as flagged), this session's own old shadow for Step 0",
+ "now": "2026-10-27T10:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "write": "$TMP/old-skills/create-handoff/SKILL.md",
+     "content": "# Old skill (synthetic)\nSave to {RUN_HANDOFFS}/<repo>/<ticket>/.\nQueue: \"{RUN_QUEUE_CMD}\" list\n"
+    },
+    {
+     "write": "$TMP/old-skills/create-handoff/references/handoff-template.md",
+     "content": "# Template (synthetic)\n---\nrepository:\n---\n"
+    },
+    {
+     "write": "$HOME/.cache/$BRAND-trial/native-prompt/2.1.311/control.t0.head.txt",
+     "content": "HEAD-TEXT (synthetic)\n"
+    },
+    {
+     "write": "$HOME/.cache/$BRAND-trial/native-prompt/2.1.311/control.t0.tail.txt",
+     "content": "\nTAIL-TEXT (synthetic)\n"
+    },
+    {
+     "repo": {
+      "branch": "LAB-42-retry",
+      "commits": [
+       {
+        "files": {
+         "app.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ],
+      "dirty": {
+       "app.rb": "x = 2\n"
+      }
+     },
+     "at": "$TMP/work"
+    },
+    {
+     "write": "$ROOT/work/LAB-42/2026-10-20_09-00-00_older.md",
+     "content": "---\nrepository: work\n---\nOLDER-GENUINE\n"
+    },
+    {
+     "write": "$ROOT/work/LAB-42/2026-10-25_09-00-00_genuine.md",
+     "content": "---\nrepository: work\n---\nNEWEST-GENUINE\n"
+    },
+    {
+     "write": "$ROOT/work/LAB-42/2026-10-26_09-00-00_${SID8}_plugin.md",
+     "content": "---\nkind: handoff\n---\nPLUGIN-FILE\n"
+    },
+    {
+     "write": "$ROOT/work/LAB-42/2026-10-26_10-00-00_built-on-plugin.md",
+     "content": "---\nprevious_handoff: 2026-10-26_09-00-00_${SID8}_plugin.md\n---\nBUILT-ON-PLUGIN\n"
+    },
+    {
+     "write": "$HOME/.cache/$BRAND-trial/old/work/LAB-42/2026-10-24_09-00-00_${SID8}_mine.old-handoff.txt",
+     "content": "OWN-SHADOW\n"
+    },
+    {
+     "write": "$HOME/.cache/$BRAND-trial/trial.json",
+     "json": {
+      "v": 1,
+      "on": true,
+      "trial_until": "2026-11-24",
+      "handoff_root": "$ROOT",
+      "log_dir": "$WATCH",
+      "cc_versions": [
+       "2.1.311"
+      ],
+      "old_skill": {
+       "dir": "$TMP/old-skills",
+       "sha256": {
+        "create-handoff/SKILL.md": "fc896770577a3d03fcb5f646a8342a0a2781ec9f13fe18266070077d8dbfe7ef",
+        "create-handoff/references/handoff-template.md": "b2ea15ae74ae50a9aa50148d6569d446cc2f4476c01af1ac16151773fc36e398"
+       }
+      },
+      "native_prompt": {
+       "dir": "$HOME/.cache/$BRAND-trial/native-prompt",
+       "sha256": {
+        "2.1.311/control.t0.head.txt": "8bceea1831a8ad43e0ae2e3304ff3e27644e9055a47fee268a82556d236758d7",
+        "2.1.311/control.t0.tail.txt": "a5773cfcdb61eb2cf856cd806daa93d2183ddc0605c2e01e5e60bdcd65a56f60"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "texts ok",
+   "argv": [
+    "trial-measure",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work",
+    "--cc-version",
+    "2.1.311"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "on",
+     "skip": null,
+     "m3": false,
+     "native_tail": false,
+     "old.status": "ok",
+     "old.skill": "# Old skill (synthetic)\nSave to $HOME/.cache/$BRAND-trial/old/<repo>/<ticket>/.\nQueue: \"(no queue command is set: treat the list as empty)\" list\n",
+     "old.template": "# Template (synthetic)\n---\nrepository:\n---\n",
+     "native.status": "ok",
+     "native.head": "HEAD-TEXT (synthetic)\n",
+     "native.tail": "\nTAIL-TEXT (synthetic)\n",
+     "native.prompt_arm": "control",
+     "native.arm_source": "default",
+     "native.transcript_flag": 0,
+     "native.cc_version": "2.1.311",
+     "facts.repo": "work",
+     "facts.ticket": "LAB-42",
+     "facts.branch": "LAB-42-retry",
+     "facts.dirty": 1,
+     "facts.old_chain_flagged": 1
+    }
+   },
+   "stdout_has": [
+    "NEWEST-GENUINE",
+    "Step 0\\): ~/\\.cache/[^ ]+-trial/old/work/LAB-42/2026-10-24_09-00-00_[0-9a-f]{8}_mine\\.old-handoff\\.txt"
+   ],
+   "stdout_lacks": [
+    "PLUGIN-FILE",
+    "BUILT-ON-PLUGIN",
+    "OLDER-GENUINE"
+   ]
+  },
+  {
+   "name": "arm from the env",
+   "argv": [
+    "trial-measure",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work",
+    "--cc-version",
+    "2.1.311"
+   ],
+   "env": {
+    "CLAUDE_CODE_CURRIED_TRINKET": "lean"
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "native.status": "no-native-prompt",
+     "native.prompt_arm": "lean",
+     "native.arm_source": "env"
+    }
+   }
+  },
+  {
+   "name": "a PreCompact hook of another tool in settings.json",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "hooks": {
+       "PreCompact": [
+        {
+         "hooks": [
+          {
+           "type": "command",
+           "command": "\"$PLUGIN/scripts/$BRAND-store\" hook PreCompact"
+          },
+          {
+           "type": "command",
+           "command": "other-tool precompact"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "argv": [
+    "trial-measure",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work",
+    "--cc-version",
+    "2.1.311"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "native.precompact_hooks": true
+    }
+   }
+  },
+  {
+   "name": "only the plugin's own PreCompact hook",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "hooks": {
+       "PreCompact": [
+        {
+         "hooks": [
+          {
+           "type": "command",
+           "command": "\"$PLUGIN/scripts/$BRAND-store\" hook PreCompact"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "argv": [
+    "trial-measure",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work",
+    "--cc-version",
+    "2.1.311"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "native.precompact_hooks": false
+    }
+   }
+  },
+  {
+   "name": "a changed byte",
+   "setup": [
+    {
+     "write": "$TMP/old-skills/create-handoff/SKILL.md",
+     "content": "# Old skill (synthetic)\nSave to {RUN_HANDOFFS}/<repo>/<ticket>/.\nQueue: \"{RUN_QUEUE_CMD}\" list\n "
+    }
+   ],
+   "argv": [
+    "trial-measure",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work",
+    "--cc-version",
+    "2.1.311"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "old.status": "no-old-skill",
+     "old.why": "sum:create-handoff/SKILL.md",
+     "native.status": "ok"
+    }
+   }
+  }
+ ]
+}

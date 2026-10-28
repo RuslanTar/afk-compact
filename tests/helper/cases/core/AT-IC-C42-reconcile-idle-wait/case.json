@@ -1,0 +1,125 @@
+{
+ "id": "AT-IC-C42 (reconcile: an idle block that waits is not undelivered)",
+ "note": "MOD-SPEC §3.4 idle exception (P4 fix, 2026-10-28), reconcile step 4: an idle compaction's block (dispatch idle, resume_pref prompt.context) waits on disk for the next turn, which may be the first turn of the next process of this session id (resume-persist). While it still waits (no claim, resume-pending.json or resume-armed.json pending with its nonce) reconcile logs no resume_undelivered for it, at a Stop and in final mode (SessionEnd), and looks at it again later: settled with no claim gives resume_undelivered, a claim gives none. Only an idle prompt.context dispatch is held: a non-idle block whose record is armed, and an idle dispatch from before the fix (resume_pref sessionstart) whose record is pending, are undelivered at once. The cross-session finish is AT-IC-C42 (orphans)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "an idle block pending, a non-idle block armed: only the non-idle one is undelivered",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$WATCH/$SID/dispatch/1d1e0001.json",
+     "json": {"v": 1, "nonce": "1d1e0001", "session_id": "$SID", "actor": "main", "agent_id": null, "trigger": "plugin", "channel": "mod-self",
+              "resume_pref": "prompt.context", "midturn": false, "idle": true, "idle_gap_s": 3240, "tags": [], "instructions_sha8": "00000000",
+              "instructions_bytes": 4000, "cc_version": "2.1.312", "load_id": "0a1b2c3d", "pid": 424242, "pid_lstart": "Tue Oct 21 09:00:00 2026",
+              "ts": "2026-10-21T13:59:00+03:00"}},
+    {"write": "$WATCH/$SID/dispatch/1d1e0002.json",
+     "json": {"v": 1, "nonce": "1d1e0002", "session_id": "$SID", "actor": "main", "agent_id": null, "trigger": "plugin", "channel": "mod-self",
+              "resume_pref": "prompt.context", "midturn": false, "idle": false, "idle_gap_s": null, "tags": [], "instructions_sha8": "00000000",
+              "instructions_bytes": 4000, "cc_version": "2.1.312", "load_id": "0a1b2c3d", "pid": 424242, "pid_lstart": "Tue Oct 21 09:00:00 2026",
+              "ts": "2026-10-21T13:58:00+03:00"}},
+    {"write": "$WATCH/$SID/compactions.jsonl",
+     "jsonl": [
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T13:58:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 1, "nonce": "1d1e0002", "id6": "c42a02", "trigger": "plugin", "channel": "mod-self", "idle": "false"},
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T13:59:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 2, "nonce": "1d1e0001", "id6": "c42a01", "trigger": "plugin", "channel": "mod-self", "idle": "true"}
+     ]},
+    {"write": "$WATCH/$SID/resume-pending.json",
+     "json": {"v": 1, "state": "pending", "session_id": "$SID", "nonce": "1d1e0001", "built_at": 1792580370000, "measured_at": 1792580370000, "load_id": "0a1b2c3d",
+              "args": {"nonce": "1d1e0001", "midturn": false, "nonok": false, "savedCopy": null, "idle": true}, "remeasure": null,
+              "outcome": {"nudged": false, "continued": false, "halt": false}}},
+    {"write": "$WATCH/$SID/resume-armed.json",
+     "json": {"v": 1, "state": "pending", "session_id": "$SID", "nonce": "1d1e0002", "built_at": 1792580310000, "measured_at": 1792580310000, "load_id": "0a1b2c3d",
+              "args": {"nonce": "1d1e0002", "midturn": false, "nonok": false, "savedCopy": null}, "remeasure": null,
+              "outcome": {"nudged": false, "continued": true, "halt": false}}}
+   ],
+   "argv": ["reconcile", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": [" undelivered=1$"],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 1},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 1, "fields": {"nonce": "1d1e0002"}}
+    ]}},
+  {"name": "the session ends (final mode): the idle block still waits for the next process",
+   "now": "2026-10-21T14:06:00+03:00",
+   "argv": ["hook", "SessionEnd"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionEnd", "reason": "other"},
+   "expect": {"exit": 0, "stdout": "",
+    "files": [{"path": "$WATCH/$SID/resume-pending.json", "json": {"state": "pending", "nonce": "1d1e0001"}}],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 1},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 0, "fields": {"nonce": "1d1e0001"}}
+    ]}},
+  {"name": "the block settled with no claim: undelivered now, once",
+   "now": "2026-10-21T15:10:00+03:00",
+   "setup": [
+    {"write": "$WATCH/$SID/resume-pending.json",
+     "json": {"v": 1, "state": "settled", "session_id": "$SID", "nonce": "1d1e0001", "resume": "undelivered", "ts": "2026-10-21T15:09:00+03:00"}}
+   ],
+   "argv": ["reconcile", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": [" undelivered=1$"],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 1, "fields": {"nonce": "1d1e0001"}}]}},
+  {"argv": ["reconcile", "--sid", "$SID", "--final"],
+   "now": "2026-10-21T15:11:00+03:00",
+   "expect": {"exit": 0, "stdout_has": [" undelivered=0$"],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 2}]}},
+  {"name": "a second idle block, pending: held",
+   "now": "2026-10-21T16:05:00+03:00",
+   "setup": [
+    {"write": "$WATCH/$SID/dispatch/1d1e0003.json",
+     "json": {"v": 1, "nonce": "1d1e0003", "session_id": "$SID", "actor": "main", "agent_id": null, "trigger": "plugin", "channel": "mod-self",
+              "resume_pref": "prompt.context", "midturn": false, "idle": true, "idle_gap_s": 3240, "tags": [], "instructions_sha8": "00000000",
+              "instructions_bytes": 4000, "cc_version": "2.1.312", "load_id": "1b2c3d4e", "pid": 424243, "pid_lstart": "Tue Oct 21 15:00:00 2026",
+              "ts": "2026-10-21T16:00:00+03:00"}},
+    {"write": "$WATCH/$SID/compactions.jsonl",
+     "jsonl": [
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T13:58:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 1, "nonce": "1d1e0002", "id6": "c42a02", "trigger": "plugin", "channel": "mod-self", "idle": "false"},
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T13:59:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 2, "nonce": "1d1e0001", "id6": "c42a01", "trigger": "plugin", "channel": "mod-self", "idle": "true"},
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T16:00:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 3, "nonce": "1d1e0003", "id6": "c42a03", "trigger": "plugin", "channel": "mod-self", "idle": "true"}
+     ]},
+    {"write": "$WATCH/$SID/resume-pending.json",
+     "json": {"v": 1, "state": "pending", "session_id": "$SID", "nonce": "1d1e0003", "built_at": 1792594800000, "measured_at": 1792594800000, "load_id": "1b2c3d4e",
+              "args": {"nonce": "1d1e0003", "midturn": false, "nonok": false, "savedCopy": null, "idle": true}, "remeasure": null,
+              "outcome": {"nudged": false, "continued": false, "halt": false}}}
+   ],
+   "argv": ["reconcile", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": [" undelivered=0$"],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 2}]}},
+  {"name": "its block is claimed by prompt.context (the person's return): never undelivered",
+   "now": "2026-10-21T16:50:00+03:00",
+   "setup": [
+    {"write": "$WATCH/$SID/resume-claimed/1d1e0003", "text": "prompt.context\n"},
+    {"write": "$WATCH/$SID/resume-pending.json",
+     "json": {"v": 1, "state": "settled", "session_id": "$SID", "nonce": "1d1e0003", "resume": "delivered:prompt.context", "ts": "2026-10-21T16:49:00+03:00"}}
+   ],
+   "argv": ["reconcile", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": [" undelivered=0$"],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 2},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 0, "fields": {"nonce": "1d1e0003"}}
+    ]}},
+  {"name": "an idle dispatch from before the fix (resume_pref sessionstart), its record pending, no claim: undelivered at once",
+   "now": "2026-10-21T17:05:00+03:00",
+   "setup": [
+    {"write": "$WATCH/$SID/dispatch/1d1e0004.json",
+     "json": {"v": 1, "nonce": "1d1e0004", "session_id": "$SID", "actor": "main", "agent_id": null, "trigger": "plugin", "channel": "mod-self",
+              "resume_pref": "sessionstart", "midturn": false, "idle": true, "idle_gap_s": 3240, "tags": [], "instructions_sha8": "00000000",
+              "instructions_bytes": 4000, "cc_version": "2.1.312", "load_id": "1b2c3d4e", "pid": 424243, "pid_lstart": "Tue Oct 21 15:00:00 2026",
+              "ts": "2026-10-21T17:00:00+03:00"}},
+    {"write": "$WATCH/$SID/compactions.jsonl",
+     "jsonl": [
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T13:58:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 1, "nonce": "1d1e0002", "id6": "c42a02", "trigger": "plugin", "channel": "mod-self", "idle": "false"},
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T13:59:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 2, "nonce": "1d1e0001", "id6": "c42a01", "trigger": "plugin", "channel": "mod-self", "idle": "true"},
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T16:00:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 3, "nonce": "1d1e0003", "id6": "c42a03", "trigger": "plugin", "channel": "mod-self", "idle": "true"},
+      {"v": 1, "ev": "compaction", "ts": "2026-10-21T17:00:30+03:00", "session_id": "$SID", "actor": "main", "compaction_seq": 4, "nonce": "1d1e0004", "id6": "c42a04", "trigger": "plugin", "channel": "mod-self", "idle": "true"}
+     ]},
+    {"write": "$WATCH/$SID/resume-pending.json",
+     "json": {"v": 1, "state": "pending", "session_id": "$SID", "nonce": "1d1e0004", "built_at": 1792598400000, "measured_at": 1792598400000, "load_id": "1b2c3d4e",
+              "args": {"nonce": "1d1e0004", "midturn": false, "nonok": false, "savedCopy": null, "idle": true}, "remeasure": null,
+              "outcome": {"nudged": false, "continued": false, "halt": false}}}
+   ],
+   "argv": ["reconcile", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": [" undelivered=1$"],
+    "rows": [
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 3},
+     {"file": "$WATCH/$SID.classic.jsonl", "ev": "resume_undelivered", "count": 1, "fields": {"nonce": "1d1e0004"}}
+    ]}}
+ ]
+}

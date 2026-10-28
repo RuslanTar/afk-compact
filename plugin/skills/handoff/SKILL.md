@@ -25,7 +25,7 @@ Shell: one command per call with literal arguments; no `-c` scripts, no `&&` or 
 | C | Blocking `LINT` after 2 fix rounds | Relay the receipt (it names the kept draft) and stop. Never say "saved". |
 | D | An evidence row is `withheld` | Never copy it another way or retry. If a resume needs it, add an Open question naming where it lives. |
 | E | The user must decide something | Record it in Open questions with a recommendation. No interactive question tool here: it holds the turn open and blocks compaction. |
-| F | Newer handoffs from other sessions, foreign commits, another live session on this checkout, a lane or pin held elsewhere | Still write your own new file. Record it under Ownership, stay read-only on their resource; if Step 1 touches it, status `blocked`. |
+| F | Newer handoffs from other sessions, foreign commits, another live session on this checkout, a lane or pin held elsewhere | Still write your own new file. Record it under Ownership, stay read-only on their resource; if Step 1 touches it and nothing else can start, Status `hard-blocked` (`soft-blocked` while a job of yours still runs). |
 | G | Session-bound work is running (shells, monitors, scheduled tasks, workflows, agents) | Do not wait. Gate line `stay in this session: <ids> die on /clear or exit` (background shells: `die on exit`), and the report's insurance line. |
 | H | Call budget spent | Stop probing; tag what is not re-checked `[unverified]`; continue at Step 3. |
 
@@ -71,7 +71,7 @@ Build In flight as the union by runtime id of the listings, `inflight_measured` 
 - A listing fails or none exists → the `not checked` none-form.
 - A claim not re-checked → `last seen <stamp> [unverified]`, time from tool output you already have.
 - A second probe batch (a corrected call) carries its own `stamp`; never reuse an earlier batch's time.
-- A re-check breaks Step 1 → record the drift in Live state, change Step 1 or set `blocked`, report it. Do not ask.
+- A re-check breaks Step 1 → record the drift in Live state, change Step 1 or, when nothing else can start, set Status `hard-blocked` (`soft-blocked` while a job still runs), report it. Do not ask.
 
 Why: stale external state and lost background work are the commonest resume failures; a claim with its time and re-check command is cheap to verify.
 
@@ -102,19 +102,21 @@ Write the body to `<stage>/body.md`, from the `#` title to Next steps in templat
 
 `<store> publish --stage <stage> --slug <kebab-slug> --status <in-progress|blocked|completed>`
 
+`--status` is the file's own word, from the Status word: `finished` → `completed`, `hard-blocked` or `soft-blocked` → `blocked`, `working` → `in-progress`.
+
 It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`. In repo mode one export line follows the written receipt: `Exported to repository: <path> (…)`, `Export refused: <reason>` (the handoff is still saved) or `Not exported: <how to accept>`.
 - `LINT` → one round = one Write of `body.md` (or of the recipe) that fixes every LINT line, then publish again. Never one Edit per LINT line. After 2 failed rounds → C. `LINT private-path` (repo mode) is fixed the same way: the path would reach git, so write a durable path or a pointer instead.
 - `ADVISORY` → at most one round: if one Edit fixes it, Edit and publish again; else list it in the report. A LINT round in progress absorbs it.
 - `ADVISORY secret-warn rules=<ids>` → take the value out and say where it lives, or report those rule ids; never the value.
 - Saved only when the receipt says so.
 
-## Step 8 — Report (≤8 lines, this order)
+## Step 8 — Report (8 items, this order; the verdict's list and its `Coming up:` line may add lines)
 
 1. The receipt, verbatim, and the export line under it when printed.
 2. `Resume with: /afk-compact:resume <path>`
 3. Status word and Step 1.
 4. `Running now and lost on /clear or session end: B-1 <what>, …. Stay in this session until <condition>, or accept the loss.` (Background shells survive `/clear`: `lost on session end`.) Otherwise `nothing running (checked <stamp>)` or `nothing running known (not checked)`.
-5. The bucket, if it came from your slug, was re-pinned to the user's topic (`ownership.repin` `ok`; say from where), or still differs from it (`refused`: name the holder).
-6. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
-7. Questions for the user in plain words, each with a recommendation and what it blocks, or `none`.
-8. `carry_notice` verbatim when set, advisories (a `secret-warn` by its rule ids), ownership conflicts, what could not be verified; omit when none.
+5. Evidence counts (copied, ref-only, redacted, withheld), the disposable retention note if used, any quota warning.
+6. `carry_notice` verbatim when set, advisories (a `secret-warn` by its rule ids), the bucket if it came from your slug (re-pinned to the user's topic: `ownership.repin` `ok`, say from where; or still differs: `refused`, name the holder), ownership conflicts, what could not be verified; omit when none.
+7. `Decided without you (say if any is wrong): D-4 <choice>, D-5 <choice>`, for this session's `D-` lines with source `agent`; omit when none.
+8. Last, the verdict: `Needs you:` and numbered items in plain words, each with what to do, your recommendation and what it blocks; or the one line `Nothing needed from you`. Work that stays stopped until the user writes (auto-continue paused) is an item. Needs that come later, not now, go on one `Coming up:` line, never in the list.

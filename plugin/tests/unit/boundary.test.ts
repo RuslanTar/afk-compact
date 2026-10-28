@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
-import { storeWord } from '../../hooks/lib/deps'
+import { rejectClass, storeWord } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { AGENT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -369,7 +369,11 @@ test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no t
   w.compactMode = 'reject'
   await w.turnEnd($)
   await w.advance(2000)
-  expect(w.rowsOf('compact_rejected').length).toBe(1)
+  // The row carries the rejection's text as the engine gave it (one line, ≤160 chars) and its class.
+  const rej = w.rowsOf('compact_rejected')[0]
+  const error = typeof rej?.error === 'string' ? rej.error : ''
+  expect([error.length > 0, error.length <= 160, error.includes('\n'), rej?.error_class]).toEqual([true, true, false, rejectClass(error)])
+  expect(w.rowsOf('headless').length).toBe(0)
   await w.advance(30000)
   expect(w.compacts.length).toBe(1)
   w.compactMode = 'ok'

@@ -351,7 +351,9 @@ sub owner_state {
     if (defined $epoch) {
         my ($end) = grep { $_->{state} eq 'ended' && "$_->{pid}" eq "$pid" && $_->{epoch} eq $epoch && $_->{sid8} eq $s8 } @$all;
         if ($end) {
-            my $t = skills::util::iso_to_epoch($end->{data}{ts});
+            # A `gone` record (sessions::close_gone) is stamped when the session started again,
+            # not when its process ended: the end time is unknown.
+            my $t = ($end->{data}{reason} // '') eq 'gone' ? undef : skills::util::iso_to_epoch($end->{data}{ts});
             # /clear ends the session, not the process: its shells survive (DP-24 (c)).
             my $live = ($end->{data}{reason} // '') eq 'clear' ? _cleared($pid, $lstart, $cur, $t) : undef;
             return $live // { state => 'ended', end => $t };

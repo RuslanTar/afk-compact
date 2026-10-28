@@ -2,7 +2,7 @@
 // after-step (§5.2), shared with the boundary self-call path (§4).
 import type { SessionCompactInput, SessionCompactResult, SessionMessage } from 'claude-code'
 import type { Deps, PendingResume, RequestUsage } from './deps'
-import { readShare } from './deps'
+import { prefixRead, uncoveredInput } from './deps'
 import type { Tag } from './assemble'
 import type { Trigger } from './canary'
 import type { Verdict } from './detect'
@@ -18,7 +18,11 @@ import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWat
 import { drawNonce } from './nonce'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlockWith, claimedElsewhere, logOutcome, prodAllowed } from './resume'
+import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, settleRecords } from './resume'
+import type { LaneFacts } from './lane'
+import { laneFacts } from './lane'
+import { armDigest } from './digest'
+import { shadowPrepM3, startShadow } from './shadow'
 
 export type ResumePref = 'prompt.context' | 'sessionstart' | 'prompt.submit' | 'none'
 
@@ -105,26 +109,31 @@ export async function isSelfDispatch(d: Deps, sid: string, nonce: string): Promi
 }
 
 /**
- * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5, provisional until the lab's
- * AT-MG-05 cells measure warm reads): a main compaction from this many tokens up whose
- * summarizer request read under this share of its input from the cache is `compaction_cold`.
+ * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5): a main compaction from this many
+ * tokens up whose summarizer request read under this share of its cached prefix (`prefixRead`,
+ * root ruling 2026-10-27 23:16: L3 0.925 and L1 0.999 warm, a cold L3 about 0.27) is
+ * `compaction_cold`.
  */
 export const COLD_SHARE = 0.5
 export const COLD_MIN_TOKENS = 100000
 
 /**
- * MG-3: `compaction_cache {nonce, read_share}` for a compaction whose result carries the
- * summarizer's usage, and `compaction_cold` for a cold main one (see COLD_SHARE). A different
- * model than the session's cannot read the session's cache, so this is the runtime sign of one.
+ * MG-3: `compaction_cache {nonce, prefix_read, uncovered}` for a compaction whose result carries
+ * the summarizer's usage, and `compaction_cold {nonce, prefix_read}` for a cold main one (see
+ * COLD_SHARE). `uncovered` is the input outside the cache: the compaction request's one cache
+ * marker leaves the context after the last summarized assistant message uncached, warm or cold,
+ * so it is logged apart and never makes a compaction cold (root ruling 2026-10-27 23:16, which
+ * replaced the read share of all input here). A different model than the session's cannot read
+ * the session's cache, so a cold prefix is the runtime sign of one.
  */
 export async function cacheRows(
   d: Deps, sid: string, nonce: string, r: { usage?: RequestUsage; tokensBefore?: number }, main: boolean, actor: string,
 ): Promise<void> {
   if (r.usage === undefined) return
-  const share = readShare(r.usage)
-  await log(d, sid, 'compaction_cache', { nonce, read_share: share }, actor)
-  if (main && share !== null && share < COLD_SHARE && (r.tokensBefore ?? 0) >= COLD_MIN_TOKENS) {
-    await log(d, sid, 'compaction_cold', { nonce, read_share: share }, actor)
+  const prefix = prefixRead(r.usage)
+  await log(d, sid, 'compaction_cache', { nonce, prefix_read: prefix, uncovered: uncoveredInput(r.usage) }, actor)
+  if (main && prefix !== null && prefix < COLD_SHARE && (r.tokensBefore ?? 0) >= COLD_MIN_TOKENS) {
+    await log(d, sid, 'compaction_cold', { nonce, prefix_read: prefix }, actor)
   }
 }
 
@@ -269,7 +278,16 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     ...(handoffHt !== undefined ? { handoffHt } : {}),
     ...(idle && gapS !== undefined ? { idle: { gapS } } : {}),
   })
+  // The shadow trial's M3 moment (off without its local config): a main compaction of Claude
+  // Code's with no handoff turn before it; its forks start right before `next`, not awaited.
+  const shadow = main && handoffHt === undefined && (trigger === 'auto' || trigger === 'manual')
+    ? await shadowPrepM3(d, sid, {
+      kind: idle ? 'm3-idle' : trigger === 'manual' ? 'm3-manual' : 'm3-auto', nonce, trigger,
+      ...(trigger === 'manual' && e.instructions !== undefined ? { compactText: e.instructions } : {}),
+    })
+    : undefined
   const t0 = await d.now()
+  startShadow(d, shadow)
   const r = await next({ ...e, instructions: [e.instructions, text].filter(Boolean).join('\n\n') })
   if (r.skip !== undefined) {
     await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0 }, actor)
@@ -305,6 +323,9 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     ...(prodConsent !== undefined ? { prodConsent } : {}),
     ...(idle ? { idle: true } : {}),
   }))
+  // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
+  // nothing running gets its digest turn right away (`idle_digest: submit`, the default).
+  if (main && idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
   return r
 }
 
@@ -351,6 +372,9 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   let savedCopy: string | null = null
   let notSaved: string | undefined
   let chars = 0
+  // Away digest phase 1: the lane facts of an idle compaction's summary (the model's own Status
+  // and step marks, parsed; no text kept).
+  let facts: LaneFacts | undefined
   // PRIV-04: the raw summary is stashed only under the watch folder the helper vetted (ident);
   // refused (null) or unknown (no helper answer) means no stash, never the options' folder.
   const stash = await vettedWatch(d, a.sid)
@@ -363,6 +387,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     const det = detectSummary(summary.text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
     verdict = det.verdict
     chars = det.normalized.length
+    if (main && a.idle === true) facts = laneFacts(summary.text)
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
     // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
     // behind is found by another session's cross-session finish. Empty; an existing one is fine.
@@ -413,9 +438,13 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
     // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
-    ...(a.idle === true ? { idle: true, halt: s.halt.active } : {}),
+    ...(a.idle === true ? { idle: true, halt: s.halt.active, ...(facts !== undefined ? { lane: facts } : {}) } : {}),
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
+  // The idle episode of this compaction (a compaction that is not idle closes the one before).
+  if (a.idle === true && !a.midturn) openEpisode(s, a.sid, a.nonce, blockArgs, built.remeasure, built.measuredAt)
+  else s.idleLane = undefined
+  if (built.lane !== undefined) await logLane(d, a.sid, a.nonce, facts, built.lane, 'build', built.running ?? 0)
   // A block still pending is replaced by this one: its outcome is settled now (no channel
   // will try it again). So is a block held for a person's return (owner xxxxxxxx-37).
   const old = s.pending
@@ -423,13 +452,21 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     s.pending = undefined
     await logOutcome(d, old.sid, old.nonce, old.outcome, await claimedElsewhere(d, old))
   }
+  // AT-RP-05: so is a record of this session id that another load left (an armed block of an
+  // earlier process, not yet taken); this load never restores one after its own compaction.
+  s.restoreChecked = a.sid
+  await settleRecords(d, a.sid, n => claimedWhere(d, a.sid, n), a.nonce)
   s.idleAgain = undefined
   const pend: PendingResume = {
     sid: a.sid, nonce: a.nonce, block: built.block, builtAt: await d.now(), args: blockArgs, resumePref: a.resumePref, turnSeq: s.turnSeq,
     outcome: { nudged: s.nudgedThisTurn, continued: false, halt: s.halt.active, ...(a.stats !== undefined ? { handoff: a.stats } : {}) },
     ...(built.remeasure !== undefined ? { remeasure: built.remeasure } : {}),
     measuredAt: built.measuredAt,
+    ...(built.lane !== undefined ? { lane: built.lane } : {}),
   }
+  // AT-RP-01: on disk too, for a `claude --resume` of this session before its next turn; written
+  // before the block is pending, so a channel that settles it finds the record to settle.
+  pend.persisted = await persistPending(d, pend)
   s.pending = pend
   if (!isOk(verdict)) toastOnce(d, 'nonok:' + a.nonce, `${d.name}: compaction summary not in handoff format (${verdict}); the resume block adds a fallback note.`)
   if (!s.fourthToasted && (s.mainCompactions >= 4 || chars > 12000)) {

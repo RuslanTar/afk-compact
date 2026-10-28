@@ -102,6 +102,8 @@ def calls(tmp):
     hto = lambda ht: ["handoff-turn", "open", "--sid", SID, "--ht", ht, "--reason", "cap", "--max-calls", "34",
                       "--max-tokens", "64000"]
     hts = lambda ht: ["handoff-state", "--sid", SID, "--ht", ht]
+    trial_skip = json.dumps({"kind": "skip", "moment_id": SID[:8] + "-" + NONCE, "moment": {"kind": "m3-auto", "status": "skipped:cold"}},
+                            separators=(",", ":"))
     job = json.dumps({"kind": "job", "task_id": "b1x2y3", "command": "rg -n retry src", "cwd": "$TMP/work",
                       "is_read_only": True, "backgrounded": "flag"}, separators=(",", ":"))
     save = ["save-copy", "--sid", SID, "--nonce", NONCE, "--from", tmp + "/summary.txt", "--writer", "mod",
@@ -138,6 +140,10 @@ def calls(tmp):
         ("handoff-state-superseded", hts(HT_OPEN)),
         ("log-jobs-caller", ["log", "--sid", SID, "--stream", "jobs", "--stdin"], job + "\n"),
         ("dispatch-handoff-ht", [a if a != NONCE else "2b3c4d5e" for a in disp] + ["--handoff-ht", HT_OPEN]),
+        # The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-GEN): without its config both commands
+        # answer that it is absent and write nothing.
+        ("trial-measure-absent", ["trial-measure", "--sid", SID, "--budget-ms", "7500", "--cc-version", "2.1.306"]),
+        ("trial-save-absent", ["trial-save", "--sid", SID], trial_skip + "\n"),
     ]
 
 

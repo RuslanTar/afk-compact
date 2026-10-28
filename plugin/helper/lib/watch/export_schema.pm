@@ -46,7 +46,9 @@ my @HT_END = qw(published none race aborted);
 my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-failed submit-failed again
                   triggers-off small-window session-changed busy aborted small ttl-5m near-limit episode published
                   cooldown disabled halted precompute in-flight native-on native-unknown
-                  native-fired agents-running);
+                  native-fired agents-running
+                  lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
+                  compaction-off error);
 my @IDLE_SRC = qw(mod notice return both none);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
@@ -133,7 +135,16 @@ our %SCHEMA = (
     nudge => { tokens => 'num', turn_seq => 'int', askq_open => 'bool', halt => 'bool', active => 'bool', last_cycle => 'bool' },
     continue => { result => [pre => [qw(submitted)], [qw(skipped halt)]], continues_last_hour => 'int', halt => 'word',
                   skipped => 'word' },
-    compact_rejected => { nonce => 'nonce', attempt => 'int' },
+    # 2026-10-27 (headless probe): the rejection's class; Claude Code's own error text stays local
+    compact_rejected => { nonce => 'nonce', attempt => 'int', error_class => [enum => qw(headless turn-running other)], error => 'drop' },
+    # a headless load (`claude -p`, the Agent SDK, an app or editor built on it): no nudge in it;
+    # one row per session id (`same-load`: a new id in it, as after a /clear), and one more when
+    # its `/compact` path goes off (`command-failed`); `compact`: how the plugin compacts there
+    headless => { via => [enum => qw(session-start compact-rejected same-load command-failed)], compact => [enum => qw(command none)] },
+    # a headless load's plugin compaction run as `/compact`: how it went and, for a failure, its
+    # class; Claude Code's own text stays local
+    compact_command => { nonce => 'nonce', result => [enum => qw(compacted skipped unclaimed failed rejected)],
+                         error_class => [enum => qw(no-command input-ended in-hook not-enough other)], error => 'drop' },
     session => { phase => [enum => qw(start end)], source => [enum => qw(startup resume clear compact)], reason => 'word',
                  mod_loaded => 'bool', previous_session_id => 'hash', lineage_reason => 'word', pid_lstart => 'drop',
                  scratchpad => [enum => qw(present absent)], under_temp_root => 'bool' },
@@ -166,14 +177,36 @@ our %SCHEMA = (
                          approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int' }], approval_classes => [list => 'word'] },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
-    handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash' },
+    # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was
+    handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash',
+                         kind => [enum => qw(turn check compact)], late_s => 'num' },
     # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
     # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
     # cached (2b, a hint only, never used to decide)
-    idle_mode => { native => [enum => qw(on off unknown)], plugin_turn => [enum => qw(on check off)], served_hint => 'word' },
+    # IDLE-COMPACT-SPEC §1.2, §2.3 (lane B): native vetoed / compaction-off (`off` in older rows), the
+    # plugin's own idle compaction (`check`: at the 55.5-min check, lane B and owner Q2; `agents`: lane
+    # A's while agents run), Claude Code's idle minimum and the test seam's cache length
+    idle_mode => { native => [enum => qw(on off unknown vetoed compaction-off)], plugin_turn => [enum => qw(on check off)], served_hint => 'word',
+                   plugin_compact => [enum => qw(on agents check failed queued off)], compact_min => 'num', cache_s => 'num' },
     # owner xxxxxxxx-17: a break of 55.5 min or more at 200K and more with no compaction since the
     # turn end, while the setting allowed native idle compaction (native stayed silent)
     idle_silent => { gap_s => 'num', tokens => 'num', agents => 'int', served_hint => 'word' },
+    # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
+    # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
+    idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int', at => [enum => qw(check timer)], late_s => 'num', adopted => 'bool' },
+    # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
+    # for the load (`queued`: lane B1's D8).
+    idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
+    # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
+    # after an idle compaction (the summary's Status word, the state, how, the units running: agents
+    # and the measure's running background tasks, at which step), and the digest turn submitted
+    # right after one with nothing running, or why not
+    lane_outcome => { nonce => 'nonce', status => [enum => qw(working finished hard-blocked soft-blocked active blocked waiting-owner waiting-job done none other)],
+                      lane => [enum => qw(working finished hard-blocked soft-blocked)], source => [enum => qw(status recheck)],
+                      agents => 'int', at => [enum => qw(build delivery recheck submit)] },
+    digest_submit => { nonce => 'nonce', lane => [enum => qw(finished hard-blocked soft-blocked unknown)],
+                       result => [enum => qw(submitted skipped:return skipped:running skipped:taken skipped:session-changed skipped:busy
+                                            skipped:halt skipped:headless skipped:disabled skipped:cap skipped:claimed skipped:submit-failed)] },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num', model => 'model' },
     handoff_turn_end => {
@@ -192,9 +225,11 @@ our %SCHEMA = (
     handoff_orphan_abort_failed => { turn_id => 'hash', ht => 'hash', why => [enum => qw(rejected other-text)] },
     handoff_mode => { mode => [enum => qw(private repo)], reason => 'word', declared => 'bool', accepted => 'bool' },
     idle_mismatch => { nonce => 'nonce' },
-    # MG-3 / MG-5 (2026-10-23): the summarizer request's cache-read share, and a cold one (A-28)
-    compaction_cache => { nonce => 'nonce', read_share => 'num' },
-    compaction_cold => { nonce => 'nonce', read_share => 'num' },
+    # MG-3 / MG-5 (2026-10-23): the summarizer request's cache read, and a cold one (A-28). Root
+    # ruling 2026-10-27 23:16: the prefix read (cache reads over reads and writes) and the input
+    # outside the cache (uncovered) replace the read share of all input; older rows keep read_share.
+    compaction_cache => { nonce => 'nonce', prefix_read => 'num', uncovered => 'num', read_share => 'num' },
+    compaction_cold => { nonce => 'nonce', prefix_read => 'num', read_share => 'num' },
     # ID-2 (2026-10-23): a native idle compaction no plugin dispatch shaped (A-29)
     idle_unshaped => { boundary_uuid => 'hash' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
@@ -234,7 +269,7 @@ our %SCHEMA = (
                    cap => 'int', continues_last_hour => 'int', continue_without_nudge => 'bool', result => 'word',
                    relation => 'word', native_thrash => 'bool', mod_thrash => 'bool', batches => 'int',
                    lost_U => 'int', lost_D => 'int', lost_X => 'int', rules => [list => 'word'], hard => 'bool',
-                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num' }],
+                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num', prefix_read => 'num' }],
     },
     watch_error => { stage => 'word', error_class => 'word' },
     # --- other rows of MOD-SPEC (kebab-case there, snake_case on disk) and of the built code ---

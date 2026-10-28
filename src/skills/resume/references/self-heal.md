@@ -12,6 +12,8 @@ After an idle compaction (the session sat idle about an hour) background agents,
 - `monitor`, `cron` → watched condition and last fire's outcome;
 - `peer`, `external` → what you can read yourself (a file's mtime, a runtime listing); else report the row, quoting its probe as text.
 
+A probe that ran without error but in the wrong folder, or with a pattern that cannot match, proves nothing: the row is NOT-CHECKED, never LOST or gone. Before a LOST call, confirm the folder (`git -C <abs path>`) and that the pattern can match. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-04) -->
+
 **5c Classify.** Grace = max(expected step time, 2 × the last progress gap).
 
 | Status | Signature |
@@ -23,6 +25,7 @@ After an idle compaction (the session sat idle about an hour) background agents,
 | FAILED | ended with an error |
 | LOST | on no channel, not finished |
 | LEFTOVER | alive but not proven ours, or owner gone |
+| NOT-CHECKED | the probe ran in the wrong folder or with a pattern that cannot match |
 
 **Background shells** get their status from `<store> heal-check` (Lost shell job, below), which measures seven signals: V1 record, V2 owner ended, V3 in flight at the end, V4 no completion, V5 quiet since the end, V6 no effect yet, V7 runnable. Confidence is ordinal: `high` (≥0.75, uncalibrated) only when all seven were measured and passed; `low` when any could not be measured; a signal measured against LOST changes the row, not a score.
 
@@ -52,6 +55,7 @@ Row 7 is checked before rows 5 and 6, so a job stopped on purpose is never relau
 | Monitor or cron | lease rule | ask |
 | LEFTOVER | report pid, port, start time, owner, binary and cwd exist? | same |
 | Past due, otherwise healthy | report only | report only |
+| NOT-CHECKED | re-probe once in the right folder (`git -C`), else report | same |
 
 **Restart gate** (every kind but a background shell, which follows Lost shell job). Run `<store> heal-check --origin <handoff session_id> --item <runtime id>`: it prints `ok` and `run:` for a job the plugin recorded, and for an own handoff's recipe whose command passes the same checks (`run-source: handoff`); otherwise `REFUSED: <reason>` with `ask-command:` and `ask-source: handoff (written in the handoff, not recorded by the plugin)` when the recipe has a command. Route it as Lost shell job says: the same question, source "written in the handoff, not recorded". Recommend running it only when all hold, else recommend skip:
 - same session, and the class is `auto` (a missing class means `ask`);
@@ -59,7 +63,7 @@ Row 7 is checked before rows 5 and 6, so a job stopped on purpose is never relau
 - local, and read-only or safe to repeat;
 - not already done: no existing outputs, commits, posted comments or journal result rows.
 
-Only after a yes: write to a new epoch path, run the asked command with `run_in_background`, never `nohup`, `disown` or `setsid`; an asked spawn names model and effort. A second failure becomes a question. <!-- review-fix: CR-F13 (DP-27); HC-2 (ratify R24 overturned, xxxxxxxx-15 + 03:42): an own handoff's recipe may run through heal-check's ok (run-source: handoff); a foreign one is a question -->
+Only after a yes: write to a new epoch path, run the asked command with `run_in_background`, never `nohup`, `disown` or `setsid`; an asked spawn names model and effort. A second failure becomes a question. Before you reuse a lost job's finished parts (a recipe's `finished parts:`, finished `agent()` outputs), parse-check each file it wrote (`bash -n`, a JSON or YAML parse, a compile check); a file that fails counts as not written. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-22) --> <!-- review-fix: CR-F13 (DP-27); HC-2 (ratify R24 overturned, xxxxxxxx-15 + 03:42): an own handoff's recipe may run through heal-check's ok (run-source: handoff); a foreign one is a question -->
 
 **Lost shell job.** `<store> heal-check --origin <sid> --item <task id>` re-verifies and prints any `note: <key>: settings file only` lines (or a `safe value used` note: a flag, env value or other config folder was ignored; if the user wants that value, a question says "set it in your settings file"), `signal:` lines, `verdict: <status> · confidence <high|low> · effects <class>`, then either `ok <recipe|job:<id>>` and `run: <line>`, or `REFUSED: <reason>` with `ask-command:` and `ask-source: recorded|handoff`.
 - `ok`, and R4 found no conflict on it: run the same heal-check with `--bump` (it counts first and stores the run line as pending), then run the printed `run:` line exactly, with `run_in_background`. Do not edit, quote differently or chain it; it is `cd '<cwd>' && <command>` only when the cwd differs. Report: `B-n <old id>: LOST (owner ended <stamp>, quiet since <stamp>, no exit marker) → relaunched as <new id>, <effects>, n of 1 this resume`, plus `(from the handoff's recipe)` when heal-check printed `run-source: handoff`.

@@ -25,7 +25,8 @@ export function formatTokens(n: number): string {
 /** The nudge text for the current mode, or undefined when no nudge is due after this call. */
 export async function nudgeText(d: Deps, sid: string): Promise<string | undefined> {
   const s = d.state
-  if (s.nudgedThisTurn) return undefined
+  // A headless session gets no nudge: no plugin compaction can follow it there.
+  if (s.nudgedThisTurn || s.headless) return undefined
   const eff = await effective(d, sid)
   if (eff.disabled) return undefined
   let tokens: number | undefined

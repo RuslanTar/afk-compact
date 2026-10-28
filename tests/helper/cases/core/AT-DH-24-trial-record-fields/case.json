@@ -1,0 +1,176 @@
+{
+ "id": "AT-DH-24-trial-record-fields",
+ "note": "TRIAL-DUAL-HANDOFF 4.6/4.7 (P-DH-SAVE, review fixes): the mod's local times east of UTC (+03:00, with or without milliseconds) and Z, and a served model with Claude Code's [1m] suffix are kept in the record; a cloud ARN as model is dropped (MG-4, the export's model class); a repo name that is not one safe path part (a space) is filed under its bucket name (slug + 8 hex of its sha256) instead of a usage exit; the skip-list matches the name as found; a token-shaped kebab slug falls back to handoff; the mod's minimal `failed` call after a failed save writes one save-failed row with the arm statuses and no reply",
+ "now": "2026-10-27T10:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "sid": "5e55a0d4-0c0f-4f1e-9a00-0000000000d4",
+ "steps": [
+  {
+   "name": "times east of UTC and a [1m] model are kept",
+   "setup": [
+    {
+     "write": "$HOME/.cache/$BRAND-trial/trial.json",
+     "json": {
+      "v": 1,
+      "on": true,
+      "trial_until": "2026-11-24",
+      "handoff_root": "$ROOT",
+      "log_dir": "$WATCH",
+      "cc_versions": ["2.1.311"]
+     }
+    }
+   ],
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-1a2b3c4d",
+    "repo": "work",
+    "ticket": "general",
+    "moment": {"kind": "m1-self", "turn_id": "t2", "opened_at": "2026-10-27T10:00:00+03:00", "model": "claude-opus-5-5[1m]", "position": 1, "plugin_side": "n/a"},
+    "old": {"status": "empty", "started_at": "2026-10-27T10:00:00+03:00", "ended_at": "2026-10-27T10:03:00.250+03:00"},
+    "native": {"status": "empty", "started_at": "2026-10-27T07:00:00Z", "ended_at": "2026-10-27T10:02:00+03:00"}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": true},
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-1a2b3c4d.json",
+      "json": {
+       "opened_at": "2026-10-27T10:00:00+03:00",
+       "model": "claude-opus-5-5[1m]",
+       "turn_id": "t2",
+       "old": {"status": "empty", "started_at": "2026-10-27T10:00:00+03:00", "ended_at": "2026-10-27T10:03:00.250+03:00"},
+       "native": {"status": "empty", "started_at": "2026-10-27T07:00:00Z", "ended_at": "2026-10-27T10:02:00+03:00"}
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a cloud ARN as model and a time with no offset are dropped",
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-2b3c4d5e",
+    "repo": "work",
+    "ticket": "general",
+    "moment": {"kind": "m1-self", "opened_at": "2026-10-27T10:00:00", "model": "arn:aws:bedrock:us-east-1:000000000000:inference-profile/x", "position": 2},
+    "old": {"status": "empty"},
+    "native": {"status": "empty"}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": true},
+    "files": [
+     {"path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-2b3c4d5e.json", "keys_absent": ["model", "opened_at"], "json": {"position": 2}}
+    ]
+   }
+  },
+  {
+   "name": "a repo name with a space is filed under its bucket name",
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-3c4d5e6f",
+    "repo": "My Project",
+    "ticket": "general",
+    "moment": {"kind": "m3-auto", "position": 3},
+    "old": {"status": "ok", "reply": "=== OLD-HANDOFF START notes ===\nBODY-OLD\n=== OLD-HANDOFF END ===\n"},
+    "native": {"status": "ok", "reply": "<summary>BODY-NATIVE</summary>"}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": true, "old.status": "ok", "native.status": "ok"},
+    "files": [
+     {"path": "$HOME/.cache/$BRAND-trial/old/My-Project-51e38ecc/general/*_${SID8}_notes.old-handoff.txt", "count": 1},
+     {"path": "$HOME/.cache/$BRAND-trial/native/My-Project-51e38ecc/general/*_${SID8}_m3-auto.native-summary.txt", "count": 1},
+     {"path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-3c4d5e6f.json", "json": {"repo": "My-Project-51e38ecc", "ticket": "general"}, "absent_text": ["My Project"]}
+    ],
+    "absent": ["$HOME/.cache/$BRAND-trial/old/My Project"]
+   }
+  },
+  {
+   "name": "a token-shaped slug falls back to handoff",
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_parts": [
+    "{\"kind\":\"moment\",\"moment_id\":\"5e55a0d4-4d5e6f70\",\"repo\":\"work\",\"ticket\":\"general\",\"moment\":{\"kind\":\"m3-auto\",\"position\":4},",
+    "\"old\":{\"status\":\"ok\",\"reply\":\"=== OLD-HANDOFF START xo",
+    "xb-1234567890-abcdefgh",
+    "ijklmn ===\\nBODY\\n=== OLD-HANDOFF END ===\\n\"},\"native\":{\"status\":\"empty\"}}"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {"written": true, "old.status": "ok"},
+    "files": [
+     {"path": "$HOME/.cache/$BRAND-trial/old/work/general/*_${SID8}_handoff.old-handoff.txt", "count": 1},
+     {"path": "$HOME/.cache/$BRAND-trial/old/work/general/*_${SID8}_xo*", "count": 0},
+     {"path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-4d5e6f70.json", "lacks": ["xo[x]b"]}
+    ]
+   }
+  },
+  {
+   "name": "the skip-list names the repo as found",
+   "setup": [
+    {
+     "write": "$HOME/.cache/$BRAND-trial/trial.json",
+     "json": {
+      "v": 1,
+      "on": true,
+      "trial_until": "2026-11-24",
+      "handoff_root": "$ROOT",
+      "log_dir": "$WATCH",
+      "cc_versions": ["2.1.311"],
+      "skip_repos": ["My Project"]
+     }
+    }
+   ],
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-5e6f7081",
+    "repo": "My Project",
+    "ticket": "general",
+    "moment": {"kind": "m3-auto"},
+    "old": {"status": "empty"},
+    "native": {"status": "empty"}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": false, "why": "repo-skipped"},
+    "absent": ["$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-5e6f7081.json"]
+   }
+  },
+  {
+   "name": "a failed save: one save-failed row, the arm statuses, no reply",
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "failed",
+    "moment_id": "$SID8-6f708192",
+    "moment": {"kind": "m2-halt", "ht": "6f708192", "opened_at": "2026-10-27T10:00:00+03:00", "status": "save-failed"},
+    "old": {"status": "ok", "started_at": "2026-10-27T10:00:00+03:00", "reply": "REPLY-TEXT", "input_tokens": 5},
+    "native": {"status": "api-error", "http_status": 529}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": true},
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-6f708192.json",
+      "mode": "0600",
+      "json": {"status": "save-failed", "kind": "m2-halt", "ht": "6f708192", "old": {"status": "ok", "input_tokens": 5}, "native": {"status": "api-error", "http_status": 529}},
+      "absent_text": ["REPLY-TEXT"]
+     },
+     {"path": "$HOME/.cache/$BRAND-trial/old/*/*/*", "count": 2}
+    ],
+    "absent": ["$HOME/.cache/$BRAND-trial/native/*/*/*_m2-halt.native-summary.txt"]
+   }
+  },
+  {
+   "name": "a failed call with another status writes nothing",
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {"kind": "failed", "moment_id": "$SID8-708192a3", "moment": {"status": "skipped:cold"}},
+   "expect": {"exit": 0, "json": {"written": false, "why": "bad-failed"}}
+  }
+ ]
+}

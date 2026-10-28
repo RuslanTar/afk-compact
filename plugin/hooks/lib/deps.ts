@@ -2,9 +2,11 @@
 // implementation. Handlers take Deps, never `$`, so a test can run them through the kit (where
 // test hooks answer `$`) or with a fake Deps.
 import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claude-code'
+import type { ResumePref } from './compact'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
 import type { BlockArgs } from './resume'
+import type { Lane, LaneFacts, LaneResult } from './lane'
 import { optionEnv, parseOptions, paths } from './config'
 
 export type RunResult = {
@@ -17,23 +19,133 @@ export type RunResult = {
   error: string
 }
 
-export type Usage = { tokens: number | undefined; window: number; rateLimits: { percentUsed: number }[] }
+/**
+ * `rateLimits` keeps each window's `kind` (`five_hour`, `seven_day`, a gateway's `spend_limit`;
+ * `''` when the engine gave none): only a plan window is evidence of the one-hour cache (D15).
+ */
+export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number }[] }
+
+/** Claude Code's own native idle compaction as the merged settings and its environment say (§1.1). */
+export type NativeIdle = 'on' | 'vetoed' | 'compaction-off' | 'unknown'
+
+/**
+ * The environment the idle timers read once per load (§5): Claude Code's own
+ * `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (`compactMin`, as native parses it), the test seam
+ * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined), the `DISABLE_PROMPT_CACHING*`
+ * names native's cache check reads (`cacheOff`) and Claude Code's prompt-cache TTL switches for
+ * the main conversation (`ttl`, TtlEnv).
+ */
+export type IdleEnv = { compactMin: number; cacheS: number | undefined; cacheOff: boolean; ttl: TtlEnv }
+
+/** A prompt-cache TTL as Claude Code names one (`promptCacheTtl`, `CLAUDE_CODE_PROMPT_CACHE_TTL`). */
+export type CacheTtl = '5m' | '1h'
+
+/**
+ * The main conversation's prompt-cache TTL switches in Claude Code's environment, in its own order
+ * (2.1.311, the TTL pick for the main thread): `first` is `5m` when `FORCE_PROMPT_CACHING_5M` is
+ * set, else `CLAUDE_CODE_PROMPT_CACHE_TTL` (`5m` or `1h`); both outrank the `promptCacheTtl`
+ * setting. `enable1h` (`ENABLE_PROMPT_CACHING_1H`) ranks below the setting. `messages5m`
+ * (`CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL` `5m`) makes the conversation's own cache five minutes
+ * whatever the others say.
+ */
+export type TtlEnv = { first: CacheTtl | undefined; enable1h: boolean; messages5m: boolean }
+
+/** No TTL switch set: the TTL is Claude Code's automatic one. */
+export const TTL_ENV_NONE: TtlEnv = { first: undefined, enable1h: false, messages5m: false }
+
+/** An env TTL value as Claude Code's enum read takes one: trimmed, one of `words` exactly, else undefined. */
+function ttlWord(v: string | undefined, words: readonly CacheTtl[]): CacheTtl | undefined {
+  const t = (v ?? '').trim()
+  return words.find(w => w === t)
+}
+
+/** TtlEnv from the four variables' raw values (undefined: unset). */
+export function ttlEnvOf(v: { force5m?: string; ttl?: string; enable1h?: string; messages?: string }): TtlEnv {
+  return {
+    first: envTruthy(v.force5m) ? '5m' : ttlWord(v.ttl, ['5m', '1h']),
+    enable1h: envTruthy(v.enable1h),
+    messages5m: ttlWord(v.messages, ['5m']) === '5m',
+  }
+}
+
+/**
+ * The main conversation's cache TTL as Claude Code picks it from its switches and the merged
+ * `promptCacheTtl` setting (`setting`, any value: only `5m` and `1h` count), or undefined when
+ * none is set (automatic: one hour on a subscription within its limits, five minutes otherwise).
+ */
+export function cacheTtlOf(t: TtlEnv, setting: unknown): CacheTtl | undefined {
+  const s = setting === '5m' || setting === '1h' ? setting : undefined
+  const v = t.first ?? s ?? (t.enable1h ? '1h' : undefined)
+  return t.messages5m ? '5m' : v
+}
+
+/** Native `IXt`: no idle compaction below this context size by default, and never below the floor. */
+export const IDLE_COMPACT_MIN_DEFAULT = 200000
+export const IDLE_COMPACT_MIN_FLOOR = 100000
+/** D10: the test seam's bounds, in seconds of a simulated prompt-cache hour. */
+export const IDLE_CACHE_S_MIN = 120
+export const IDLE_CACHE_S_MAX = 3600
+
+/** An environment flag as Claude Code reads one: trimmed, case-folded `1`, `true`, `yes` or `on`. */
+export function envTruthy(v: string | undefined): boolean {
+  return v !== undefined && ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase())
+}
+
+/** `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (native `IXt`): a positive integer gives max(100,000, v), else 200,000. */
+export function compactMinOf(v: string | undefined): number {
+  const t = (v ?? '').trim()
+  if (!/^[0-9]+$/.test(t)) return IDLE_COMPACT_MIN_DEFAULT
+  const n = Number(t)
+  return Number.isSafeInteger(n) && n > 0 ? Math.max(IDLE_COMPACT_MIN_FLOOR, n) : IDLE_COMPACT_MIN_DEFAULT
+}
+
+/** `STORE_TEST_IDLE_CACHE_S` (D10): an integer from 120 to 3600, else undefined (ignored). */
+export function cacheSOf(v: string | undefined): number | undefined {
+  const t = (v ?? '').trim()
+  if (!/^[0-9]+$/.test(t)) return undefined
+  const n = Number(t)
+  return n >= IDLE_CACHE_S_MIN && n <= IDLE_CACHE_S_MAX ? n : undefined
+}
 
 /** The four token counts of one model request (`ModelUsage`), as far as this module reads them. */
 export type RequestUsage = { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
+
+/** A token count of a usage as a non-negative number (anything else counts 0). */
+const tokensOf = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
 
 /**
  * MG-3: the share of a request's input the prompt cache served, `cache_read_input_tokens` over
  * all input tokens (uncached + read + written), to 3 places; null with no usage or no input. A
  * request on another model than the session's cannot read the session's cache, so a low share
- * at a large context is the observable sign of one.
+ * at a large context is the observable sign of one. A main request's cache marker sits on its
+ * last message, so its uncached input is small; a compaction's is not (see `prefixRead`).
  */
 export function readShare(u: RequestUsage | null | undefined): number | null {
   if (!u) return null
-  const n = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
-  const read = n(u.cache_read_input_tokens)
-  const total = n(u.input_tokens) + read + n(u.cache_creation_input_tokens)
+  const read = tokensOf(u.cache_read_input_tokens)
+  const total = tokensOf(u.input_tokens) + read + tokensOf(u.cache_creation_input_tokens)
   return total > 0 ? Math.round((read / total) * 1000) / 1000 : null
+}
+
+/**
+ * The cold test of a compaction (root ruling 2026-10-27 23:16, after the L3 probe; replaces the
+ * read share there): the share of the cached prefix the summarizer request read rather than wrote,
+ * `cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)`, to 3 places;
+ * null with no usage or no cache tokens. Claude Code's compaction request puts its one message
+ * cache marker on the last summarized assistant message, so everything after it is uncached input
+ * whatever the cache state (`uncoveredInput`): L3 read 0.045 of its input warm, but 0.925 of its
+ * prefix. A warm cache reads about 0.9 or more of the prefix, a cold one about 0.3 or less.
+ */
+export function prefixRead(u: RequestUsage | null | undefined): number | null {
+  if (!u) return null
+  const read = tokensOf(u.cache_read_input_tokens)
+  const prefix = read + tokensOf(u.cache_creation_input_tokens)
+  return prefix > 0 ? Math.round((read / prefix) * 1000) / 1000 : null
+}
+
+/** The input tokens outside the cache (`input_tokens`): logged beside the prefix read, never part of the cold test. */
+export function uncoveredInput(u: RequestUsage | null | undefined): number | null {
+  return u ? tokensOf(u.input_tokens) : null
 }
 export type Version = { version: string; base?: string; builtAt?: string }
 
@@ -80,8 +192,17 @@ export interface Deps {
    * undefined when it cannot be read. Read only to record it: no call of the mod names a model.
    */
   model(): Promise<string | undefined>
-  /** `$.session.compact`; rejects while a turn runs. */
+  /** `$.session.compact`; rejects while a turn runs, and always in a headless session. */
   compact(instructions: string): Promise<SessionCompactResult>
+  /**
+   * `$.command.run({ command: 'compact' })`, a bare `/compact` queued as if typed, run once the
+   * session is idle: a headless session's way to compact (its compaction runs only as a
+   * `/compact` input there). It runs through our own `session.compact` hook (trigger `manual`),
+   * which shapes it (`ownCompact`). Resolves to the command's output: `undefined` when it
+   * compacted, else Claude Code's reason (a failed `/compact` resolves, it does not reject).
+   * Rejects for an unknown command, inside a hook the turn waits on, or past the host's input.
+   */
+  compactCommand(): Promise<{ text: string | undefined }>
   submit(text: string): Promise<void>
   /**
    * OT-2 (owner xxxxxxxx-06, 2026-10-22): `$.turn.abort({ turnId })`, ending the running main
@@ -96,6 +217,8 @@ export interface Deps {
   read(path: string): Promise<string | undefined>
   storeGet(key: string): Promise<unknown>
   storeSet(key: string, value: unknown): Promise<void>
+  /** `$.store.delete`: removes the key (a tombstone past its life, idle.ts). */
+  storeDelete(key: string): Promise<void>
   now(): Promise<number>
   after(ms: number, fn: () => void): { cancel: () => void }
   toast(text: string): void
@@ -103,13 +226,23 @@ export interface Deps {
   notice(text: string, timeoutMs: number): void
   policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
   /**
-   * IA-2 (idle D3): Claude Code's own idle compaction as the merged settings say. `off` when
-   * `idleCompaction` or its precondition `autoCompactEnabled` is `false` (IC-1 F4); `unknown` when a
-   * read throws; else `on`. The server can still keep native idle off while the setting allows it
-   * (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome check (owner xxxxxxxx-17, O-9:
-   * "unreadable means check what happened").
+   * IA-2 (idle D3), split by the plugin's idle compaction (§1.1): Claude Code's own idle
+   * compaction as the merged settings and its environment say, first match wins.
+   * `compaction-off`: `DISABLE_COMPACT` or `DISABLE_AUTO_COMPACT` set, or `autoCompactEnabled`
+   * `false` (native's gate order puts `compaction_off` first; the plugin never compacts against
+   * it). `vetoed`: `idleCompaction` `false` (only native idle is off; the plugin compacts idle
+   * sessions itself). `unknown` when a read throws; else `on`. The server can still keep native
+   * idle off while the setting allows it (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome
+   * check (owner xxxxxxxx-17, O-9: "unreadable means check what happened").
    */
-  nativeIdle(): Promise<'on' | 'off' | 'unknown'>
+  nativeIdle(): Promise<NativeIdle>
+  /** The idle timers' environment (IdleEnv), read once per load (`idleEnvMemo`). */
+  idleEnv(): Promise<IdleEnv>
+  /**
+   * The merged `promptCacheTtl` setting (`5m` or `1h`), read when asked (a settings change takes
+   * effect at once); undefined when unset, any other value, or the read throws.
+   */
+  promptCacheTtl(): Promise<CacheTtl | undefined>
   /**
    * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
    * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
@@ -125,6 +258,12 @@ export interface Deps {
   agentsAlive(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
+  /**
+   * `$.model.fork({ prompt })`, the shadow trial's one model call (TRIAL-DUAL-HANDOFF §4.1): the
+   * engine's answer as given; rejects on a hook's `{ deny }`. Called only while the user's local
+   * trial config is on (shadow.ts).
+   */
+  fork(prompt: string): Promise<unknown>
 }
 
 /** What one module load keeps in memory (a reload starts a fresh one). */
@@ -175,6 +314,10 @@ export type LoadState = {
   selfNonces: Set<string>
   /** The pending main resume block for prompt.context or the continue text. */
   pending: PendingResume | undefined
+  /** The session id whose armed resume record this load has looked for (AT-RP-02); reset at session.end. */
+  restoreChecked: string | undefined
+  /** The session id whose resume records this load's first main turn end has closed (AT-RP-05); reset at session.end. */
+  restoreClosed: string | undefined
   mainCompactions: number
   fourthToasted: boolean
   selfCallLoggedFor: Set<string>
@@ -216,22 +359,48 @@ export type LoadState = {
   /** When the last main turn ended, and whether it ended `answer` (§9.4, the idle predicate). */
   lastTurnEndAt: number | undefined
   lastTurnAnswer: boolean
+  /** When the last main-thread model request (`turn.step`) started: the idle compaction's anchor (D3). */
+  lastMainReqAt: number | undefined
+  /**
+   * D11: the last sign of a person at the prompt (a `prompt.edit`, a `prompt.change` of theirs, an
+   * interactive `session.start`); the idle compaction skips `present` for a minute after it.
+   */
+  lastInputAt: number | undefined
+  /** D7: the plugin's idle compactions that failed in a row in this load (a success resets it). */
+  idleCompactFails: number
+  /** D7 (`failed`, two in a row) and D8 (`queued`, lane B1): the idle compaction is off for the load. */
+  idleCompactOff: 'failed' | 'queued' | undefined
+  /** The persisted idle due this load runs was adopted from another load or process (§3.4, D6). */
+  idleAdopted: boolean
+  /** `idleEnv()` once per load. */
+  idleEnvMemo: Promise<IdleEnv> | undefined
   /** The pre-idle timer (§9.4). */
   idleTimer: { cancel: () => void } | undefined
+  /**
+   * D12 (lane B): bumped by every cancel of the idle timer, synchronously, so a tick that was
+   * reading the clock when a turn started, a prompt entered or the session ended re-arms nothing.
+   */
+  idleGen: number
   /**
    * The sid whose `idle_due` this load wrote or re-armed and has not cleared yet. Kept apart
    * from `idleTimer`: the hooks cancel the timer synchronously before `cancelIdle` runs.
    */
   idleDueSid: string | undefined
+  /**
+   * Per session id, the one pending delete of the tombstone this load wrote last (§3.1): a newer
+   * tombstone or record of that sid cancels it, so turn starts do not pile up hour-long waits.
+   */
+  idleTombDeletes: Map<string, { cancel: () => void }>
   /** The idle episode: from a human-origin turn's end to the next human-origin turn.start (§9.4). */
   idleEpisode: { since: number; done: boolean } | undefined
   /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
   publishedSinceHuman: boolean
   /**
-   * The `native/plugin_turn/served_hint` triple of the last `idle_mode` row this load wrote (IA-3,
-   * owner xxxxxxxx-17), undefined before the first.
+   * The session id and policy tuple (native, plugin_turn, plugin_compact, compact_min,
+   * served_hint, cache_s) of the last `idle_mode` row this load wrote (IA-3, owner xxxxxxxx-17;
+   * §1.2: one per session id, so a `/clear` gets its own), undefined before the first.
    */
-  idleMode: string | undefined
+  idleMode: { sid: string; tuple: string } | undefined
   /**
    * Owner xxxxxxxx-37 ("Full block again on return"): a turn not of a person's (a background
    * result) took an idle compaction's resume block at `usedAt`; the first human-origin turn gets
@@ -239,6 +408,19 @@ export type LoadState = {
    * block was built with, taken at `measuredAt` (used, with that stamp, when the new measure fails).
    */
   idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
+  /**
+   * Away digest phase 1 (owner 2026-10-27 12:5x): the open idle episode of the last main idle
+   * compaction (or of its block restored after `claude --resume`), from its after-step to the
+   * first human-origin prompt once a turn got the block: the lane facts its summary gave, the
+   * lane state the last turn was told (`shown`, undefined until a turn got the block), the measure
+   * the block went out with (its running in-flight rows count until a notification ends them),
+   * the task ids this episode's notifications reported ended, and whether the model started work
+   * after the block went out (`superseded`: the summary's Status no longer describes the lane).
+   * Every later prompt not of a person's re-checks the lane (resume.ts `laneRecheck`) and carries a
+   * note beside it when the lane turned finished or hard-blocked. A person's prompt closes it; the
+   * `[idle-again]` block that prompt's turn may get still reads it, then drops it.
+   */
+  idleLane: IdleLane | undefined
   /**
    * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
    * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
@@ -250,6 +432,55 @@ export type LoadState = {
    * and has not completed in this load, by agent id.
    */
   agentTurns: Set<string>
+  /**
+   * A headless load (`claude -p`, the Agent SDK, or an app or editor built on it):
+   * `session.start` said no person is at the prompt, or `$.session.compact` rejected as not
+   * available there. Claude Code rejects a plugin's compaction call in such a session, so the
+   * plugin neither nudges nor starts one; the plugin leaves Claude Code's own compactions alone
+   * and shapes the ones that run, as usual.
+   */
+  headless: boolean
+  /** The session id the last `headless` row was logged for (one row per session id, so after a `/clear`). */
+  headlessSid: string | undefined
+  /**
+   * How a headless load compacts: `command` runs `/compact` (`compactCommand`) at a turn end at
+   * or above the target, shaped by our own hook; `none` once that failed twice in a row or
+   * cannot work in this host (no `/compact` command, the host's input ended): from then on no
+   * plugin compaction in this load, as before the fallback.
+   */
+  headlessCompact: 'command' | 'none'
+  /** Our `/compact` in flight: our `session.compact` hook claims the next main `manual` one. */
+  ownCompact: OwnCompact | undefined
+  /**
+   * The running main turn is the one our `/compact` runs in (it started with `/compact` while
+   * ours was in flight): its turn end starts no plugin compaction.
+   */
+  ownCompactTurn: boolean
+  /**
+   * Our `/compact` runs that failed in a row (two make `headlessCompact` `none`); anything but
+   * a compaction our hook shaped counts, a skipped or unclaimed one too.
+   */
+  commandFails: number
+}
+
+/**
+ * One plugin compaction run as a `/compact` command in a headless session: what the boundary
+ * prepared (dispatch record written, `mod-self`), handed to our `session.compact` hook, which
+ * appends `text` and runs the after-step there (it needs the summary messages).
+ */
+export type OwnCompact = {
+  nonce: string
+  text: string
+  pref: ResumePref
+  prodConsent?: string
+  /** The `ht` of a handoff turn this compaction follows (none in a headless session today). */
+  ht?: string
+  /** When the dispatch record was written (the `compacted` row's `ms`). */
+  t0: number
+  /** Our hook took this compaction as ours. */
+  claimed: boolean
+  /** The compaction's result, once our hook has it. */
+  result?: SessionCompactResult
 }
 
 export type PendingResume = {
@@ -268,6 +499,33 @@ export type PendingResume = {
   turnSeq: number
   /** What the mod decided for this compaction, logged as `mod_outcome` once the block settles. */
   outcome: Outcome
+  /** Its record is on disk (`resume-pending.json`, AT-RP-01): a session end other than `/clear` keeps it for a resume. */
+  persisted?: boolean
+  /** An idle block's work lane as code read it when the block was built (away digest phase 1). */
+  lane?: LaneResult
+}
+
+/** The open idle episode of away digest phase 1 (`LoadState.idleLane`). */
+export type IdleLane = {
+  sid: string
+  nonce: string
+  facts: LaneFacts | undefined
+  nonok: boolean
+  driver: boolean
+  shown: Lane | undefined
+  remeasure: string | undefined
+  /** When `remeasure` was measured (epoch ms): a lane note's Basis says how old its git facts are. */
+  measuredAt: number | undefined
+  ended: Set<string>
+  superseded: boolean
+  /** A person's prompt came after a turn got the block: no more re-checks (the held `[idle-again]` block still reads it). */
+  closed: boolean
+  /**
+   * The episode of a block restored after `claude --resume`: the background tasks its measures list
+   * ran in the process that ended, and no notification of this load will end them, so only agents
+   * count as running (review of fix round 1).
+   */
+  restored: boolean
 }
 
 /**
@@ -316,6 +574,8 @@ export function newState(loadId: string): LoadState {
     ctxSeen: false,
     selfNonces: new Set(),
     pending: undefined,
+    restoreChecked: undefined,
+    restoreClosed: undefined,
     mainCompactions: 0,
     fourthToasted: false,
     selfCallLoggedFor: new Set(),
@@ -339,14 +599,29 @@ export function newState(loadId: string): LoadState {
     turnOrigin: undefined,
     lastTurnEndAt: undefined,
     lastTurnAnswer: false,
+    lastMainReqAt: undefined,
+    lastInputAt: undefined,
+    idleCompactFails: 0,
+    idleCompactOff: undefined,
+    idleAdopted: false,
+    idleEnvMemo: undefined,
     idleTimer: undefined,
+    idleGen: 0,
     idleDueSid: undefined,
+    idleTombDeletes: new Map(),
     idleEpisode: undefined,
     publishedSinceHuman: false,
     idleMode: undefined,
     idleAgain: undefined,
+    idleLane: undefined,
     compactedAt: undefined,
     agentTurns: new Set(),
+    headless: false,
+    headlessSid: undefined,
+    headlessCompact: 'command',
+    ownCompact: undefined,
+    ownCompactTurn: false,
+    commandFails: 0,
   }
 }
 
@@ -377,7 +652,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     async usage() {
       const u = await $.session.usage()
-      return { tokens: u.context.tokens, window: u.context.window, rateLimits: (u.rateLimits ?? []).map(l => ({ percentUsed: l.percentUsed })) }
+      return {
+        tokens: u.context.tokens, window: u.context.window,
+        rateLimits: (u.rateLimits ?? []).map(l => ({ kind: typeof l.kind === 'string' ? l.kind : '', percentUsed: l.percentUsed })),
+      }
     },
     async version() {
       const v = await $.session.version()
@@ -392,6 +670,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       }
     },
     compact: instructions => $.session.compact({ instructions }),
+    async compactCommand() {
+      const r = await $.command.run({ command: 'compact' })
+      return { text: typeof r.text === 'string' && r.text.trim() !== '' ? r.text : undefined }
+    },
     async submit(text) {
       // A hook or the engine refuses a submit with a resolved `{ drop }`: that is a failed
       // submit too, so the caller's `submit-failed` path runs and `ourSubmitPending` is reset.
@@ -432,6 +714,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     storeGet: key => $.store.get(key),
     storeSet: (key, value) => $.store.set(key, value),
+    storeDelete: key => $.store.delete(key),
     now: () => $.clock.now(),
     after: (ms, fn) => $.clock.after(ms, fn),
     toast(text) {
@@ -450,11 +733,56 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     },
     async nativeIdle() {
       try {
-        const idle = await $.settings.read({ key: 'idleCompaction' })
-        const auto = await $.settings.read({ key: 'autoCompactEnabled' })
-        return idle === false || auto === false ? 'off' : 'on'
+        // `$.env.get` takes literal names only (the engine lists what a module reads).
+        if (envTruthy(await $.env.get('DISABLE_COMPACT')) || envTruthy(await $.env.get('DISABLE_AUTO_COMPACT'))) return 'compaction-off'
+        if ((await $.settings.read({ key: 'autoCompactEnabled' })) === false) return 'compaction-off'
+        return (await $.settings.read({ key: 'idleCompaction' })) === false ? 'vetoed' : 'on'
       } catch {
         return 'unknown'
+      }
+    },
+    idleEnv() {
+      if (!state.idleEnvMemo) {
+        state.idleEnvMemo = (async (): Promise<IdleEnv> => {
+          const get = async (read: () => Promise<string | undefined>): Promise<string | undefined> => {
+            try {
+              return await read()
+            } catch {
+              return undefined
+            }
+          }
+          // Literal names (the engine lists what a module reads): native's cache check (`lce`,
+          // Claude Code 2.1.311) reads these six; any one set counts as no one-hour cache.
+          const caching = await Promise.all([
+            get(() => $.env.get('DISABLE_PROMPT_CACHING')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_HAIKU')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_SONNET')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_OPUS')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_FABLE')),
+            get(() => $.env.get('DISABLE_PROMPT_CACHING_MYTHOS')),
+          ])
+          return {
+            compactMin: compactMinOf(await get(() => $.env.get('CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS'))),
+            cacheS: cacheSOf(await get(() => $.env.get('STORE_TEST_IDLE_CACHE_S'))),
+            cacheOff: caching.some(envTruthy),
+            // Claude Code 2.1.311's TTL switches for the main conversation (TtlEnv).
+            ttl: ttlEnvOf({
+              force5m: await get(() => $.env.get('FORCE_PROMPT_CACHING_5M')),
+              ttl: await get(() => $.env.get('CLAUDE_CODE_PROMPT_CACHE_TTL')),
+              enable1h: await get(() => $.env.get('ENABLE_PROMPT_CACHING_1H')),
+              messages: await get(() => $.env.get('CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL')),
+            }),
+          }
+        })()
+      }
+      return state.idleEnvMemo
+    },
+    async promptCacheTtl() {
+      try {
+        const v = await $.settings.read({ key: 'promptCacheTtl' })
+        return v === '5m' || v === '1h' ? v : undefined
+      } catch {
+        return undefined
       }
     },
     async servedHint() {
@@ -496,6 +824,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       }
       return state.pathsMemo.then(p => withHelperWatch(p, state.ident))
     },
+    fork: prompt => $.model.fork({ prompt }),
   }
 }
 
@@ -537,6 +866,57 @@ export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)
   return String(err).slice(0, 120)
+}
+
+/**
+ * A `$.session.compact` rejection as a row value: Claude Code's own error text on one line,
+ * control characters dropped, at most 160 characters (the local stream only; the export drops it).
+ */
+export function rejectText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  return raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)
+}
+
+/**
+ * The class of a `$.session.compact` rejection: `headless` when Claude Code says the call is not
+ * available in a headless (`-p` / SDK) session, `turn-running` while a turn runs, else `other`.
+ */
+export function rejectClass(text: string): 'headless' | 'turn-running' | 'other' {
+  if (/headless|-p \/ SDK|\bSDK session\b/i.test(text)) return 'headless'
+  if (/\bturn\b.*\brun(s|ning)?\b/i.test(text)) return 'turn-running'
+  return 'other'
+}
+
+/**
+ * The class of a failed `/compact` run (its rejection or its output text): `no-command` (no
+ * `/compact` here, as with compaction turned off), `input-ended` (the host ended its input or a
+ * limit, as at the end of a single-prompt `claude -p`), `in-hook` (called where a turn waits),
+ * `not-enough` (too few messages), else `other`. The first two cannot work later in the load.
+ */
+export function commandClass(text: string): 'no-command' | 'input-ended' | 'in-hook' | 'not-enough' | 'other' {
+  if (/no command named|unknown command/i.test(text)) return 'no-command'
+  if (/ended its input|input (has )?ended|host'?s limits?|past a stop/i.test(text)) return 'input-ended'
+  if (/inside a hook|hook the turn waits/i.test(text)) return 'in-hook'
+  if (/not enough messages/i.test(text)) return 'not-enough'
+  return 'other'
+}
+
+/** A headless load whose plugin compaction is off (no `/compact` path left): no nudge, no boundary. */
+export function pluginCompactOff(s: LoadState): boolean {
+  return s.headless && s.headlessCompact === 'none'
+}
+
+/**
+ * At our `session.compact` hook, before any await: our `/compact` in flight takes the first main
+ * `manual` compaction that reaches the hook as ours (once). A person's or the host's own
+ * `/compact` queued just before ours would be taken too; it then gets our instructions after
+ * its own, and ours runs as a plain manual one after it.
+ */
+export function claimOwnCompact(s: LoadState, e: { trigger: string; agentId?: string }): OwnCompact | undefined {
+  const own = s.ownCompact
+  if (!own || own.claimed || e.agentId !== undefined || e.trigger !== 'manual') return undefined
+  own.claimed = true
+  return own
 }
 
 /** Before our `$.prompt.submit`: the next main turn.start is ours (MOD-SPEC §9, §9.1 step 3). */

@@ -1,0 +1,80 @@
+{
+ "id": "BG-PID-03-gone-end-unknown",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "An ended- record of reason gone (sessions::close_gone) is written when the session starts again, possibly hours after its process ended: the owner's end time is unknown, not that stamp. A job whose output was written a minute ago under that owner is not quiet (V5 against the quiet window, not the late stamp), so it is not LOST and not relaunched; before, the stamp (here 2099) passed V5 and the job relaunched beside a shell that may still write",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/repo/app"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194001-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194001, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194001-1072915200.ended-11111111.json",
+     "content": "{\"session_id\": \"$SID\", \"reason\": \"gone\", \"ts\": \"2099-01-01T00:00:00+00:00\"}"
+    },
+    {
+     "write": "$WATCH/$SID/jobs.jsonl",
+     "content": "{\"v\": 1, \"ts\": \"2026-10-21T13:00:01.000+03:00\", \"ev\": \"job\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"helper\", \"kind\": \"job\", \"task_id\": \"r6\", \"launched_at\": \"2026-10-21T13:00:00+03:00\", \"owner\": {\"pid\": 4194001, \"lstart\": \"Thu Jan  1 00:00:00 2004\"}, \"cwd\": \"$TMP/repo\", \"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"command_sha256\": \"54703843d2e117a445593b679d2fbe56354b35955c85ca8c8e2915b972995223\", \"command_withheld\": null, \"is_read_only\": true, \"sandbox_disabled\": false, \"backgrounded\": \"flag\", \"output_path\": \"$TMP/out/r6.output\", \"output_path_source\": \"layout\", \"relaunch_of\": null, \"epoch\": 1}\n"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_03\", \"name\": \"Bash\", \"input\": {\"command\": \"ls -la doc; echo \\\"__exit $?\\\"\", \"run_in_background\": true}}]}}\n{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_03\", \"content\": \"Command running in background with ID: r6.\"}]}, \"toolUseResult\": {\"backgroundTaskId\": \"r6\"}}\n"
+    },
+    {
+     "write": "$TMP/out/r6.output",
+     "content": "x\n"
+    },
+    {
+     "age": "$TMP/out/r6.output",
+     "minutes": 1
+    }
+   ]
+  },
+  {
+   "name": "owner ended at an unknown time; output written 1 minute ago: not quiet, not LOST",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "r6"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^signal: V2 owner-ended pass \\(owner ended \\(time unknown\\)\\)$",
+     "^signal: V5 quiet fail ",
+     "^verdict: LEFTOVER "
+    ],
+    "stdout_lacks": [
+     "^verdict: LOST"
+    ]
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "1:$LSTART1"
+   }
+  }
+ ]
+}

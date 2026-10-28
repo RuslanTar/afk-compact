@@ -1,0 +1,495 @@
+{
+ "id": "AT-DH-23-trial-save",
+ "note": "TRIAL-DUAL-HANDOFF 4.5/4.6 (P-DH-SAVE): a skip record is content-free; both replies are secret-scanned and redacted before disk (rule ids only in the record), saved 0600 under the trial folder with the slug from the frame line, the native body sha by the engine's rule; nothing under the handoff root; unknown moment fields dropped; a bad slug -> handoff; REUSE of this bucket's old shadow -> reuse, REUSE of any other path -> bad-reuse; a config that is off writes nothing; not the owner's config -> no shadow",
+ "now": "2026-10-27T10:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "skip record",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$HOME/.cache/$BRAND-trial/trial.json",
+     "json": {
+      "v": 1,
+      "on": true,
+      "trial_until": "2026-11-24",
+      "handoff_root": "$ROOT",
+      "log_dir": "$WATCH",
+      "cc_versions": [
+       "2.1.311"
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "skip",
+    "moment_id": "$SID8-0000aaaa",
+    "moment": {
+     "kind": "m3-idle",
+     "status": "skipped:cold",
+     "reply": "NOT-A-FIELD"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": true
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-0000aaaa.json",
+      "mode": "0600",
+      "json": {
+       "v": 1,
+       "moment_id": "$SID8-0000aaaa",
+       "kind": "m3-idle",
+       "status": "skipped:cold",
+       "session_id": "$SID"
+      },
+      "keys_absent": [
+       "reply"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "moment with two replies",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-1a2b3c4d",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "Here it is.\n=== OLD-HANDOFF START retry-work ===\n---\nrepository: work\n---\ntoken $SECRET{github-token} here\n=== OLD-HANDOFF END ===\n",
+     "input_tokens": 900,
+     "cache_read_input_tokens": 300000
+    },
+    "native": {
+     "status": "ok",
+     "reply": "<analysis>ANALYSIS-TEXT</analysis>\n<summary>SUMMARY-BODY</summary>\n",
+     "prompt_arm": "control",
+     "cache_prefix_flag": false
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": true,
+     "old.status": "ok",
+     "native.status": "ok"
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/old/work/LAB-42/*_${SID8}_retry-work.old-handoff.txt",
+      "count": 1
+     },
+     {
+      "path": "$HOME/.cache/$BRAND-trial/old/work/LAB-42/*_${SID8}_retry-work.old-handoff.txt",
+      "mode": "0600",
+      "contains": [
+       "[redacted:",
+       "repository: work"
+      ],
+      "absent_text": [
+       "OLD-HANDOFF",
+       "Here it is.",
+       "$SECRET{github-token}"
+      ]
+     },
+     {
+      "path": "$HOME/.cache/$BRAND-trial/native/work/LAB-42/*_${SID8}_m3-auto.native-summary.txt",
+      "mode": "0600",
+      "contains": [
+       "SUMMARY-BODY",
+       "ANALYSIS-TEXT"
+      ]
+     },
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-1a2b3c4d.json",
+      "mode": "0600",
+      "json": {
+       "moment_id": "$SID8-1a2b3c4d",
+       "kind": "m3-auto",
+       "nonce": "1a2b3c4d",
+       "repo": "work",
+       "ticket": "LAB-42",
+       "old": {
+        "status": "ok",
+        "framed": true,
+        "input_tokens": 900
+       },
+       "native": {
+        "status": "ok",
+        "body_sha256": "9516301accc6cad27b874aca0fcdf86aeff63ad94f2f28b05d8bd0a83e85a7ae",
+        "prompt_arm": "control",
+        "cache_prefix_flag": false
+       }
+      },
+      "absent_text": [
+       "SUMMARY-BODY",
+       "ANALYSIS-TEXT",
+       "NOT-A-FIELD",
+       "repository: work",
+       "$SECRET{github-token}"
+      ],
+      "has": [
+       "\"redacted\": \\[\\s*\"github-token\""
+      ]
+     },
+     {
+      "path": "$ROOT/*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "same moment again: no second record",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-1a2b3c4d",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "Here it is.\n=== OLD-HANDOFF START retry-work ===\n---\nrepository: work\n---\ntoken $SECRET{github-token} here\n=== OLD-HANDOFF END ===\n",
+     "input_tokens": 900,
+     "cache_read_input_tokens": 300000
+    },
+    "native": {
+     "status": "ok",
+     "reply": "<analysis>ANALYSIS-TEXT</analysis>\n<summary>SUMMARY-BODY</summary>\n",
+     "prompt_arm": "control",
+     "cache_prefix_flag": false
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": false,
+     "why": "exists"
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/old/work/LAB-42/*retry-work*",
+      "count": 1
+     },
+     {
+      "path": "$HOME/.cache/$BRAND-trial/native/work/LAB-42/*",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "bad slug, REUSE outside the bucket",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-2b3c4d5e",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "=== OLD-HANDOFF START Bad Slug! ===\nbody\n=== OLD-HANDOFF END ===\n"
+    },
+    "native": {
+     "status": "ok",
+     "reply": "REUSE /etc/passwd"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "old.status": "ok"
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/old/work/LAB-42/*_${SID8}_handoff.old-handoff.txt",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "REUSE of another path",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-3c4d5e6f",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "REUSE $TMP/work/x.old-handoff.txt"
+    },
+    "native": {
+     "status": "empty"
+    }
+   },
+   "setup": [
+    {
+     "write": "$TMP/work/x.old-handoff.txt",
+     "content": "x\n"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "old.status": "bad-reuse",
+     "native.status": "empty"
+    }
+   }
+  },
+  {
+   "name": "REUSE of this bucket's old shadow",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-4d5e6f70",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "REUSE $HOME/.cache/$BRAND-trial/old/work/LAB-42/2026-10-24_09-00-00_${SID8}_mine.old-handoff.txt"
+    },
+    "native": {
+     "status": "lost"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.cache/$BRAND-trial/old/work/LAB-42/2026-10-24_09-00-00_${SID8}_mine.old-handoff.txt",
+     "content": "OWN\n"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "old.status": "reuse",
+     "native.status": "lost"
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-4d5e6f70.json",
+      "json": {
+       "old": {
+        "reused_of": "2026-10-24_09-00-00_${SID8}_mine.old-handoff.txt"
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "an unknown arm status reads rejected; a moment id of another session is refused",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "ffffffff-5e6f7081",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "Here it is.\n=== OLD-HANDOFF START retry-work ===\n---\nrepository: work\n---\ntoken $SECRET{github-token} here\n=== OLD-HANDOFF END ===\n",
+     "input_tokens": 900,
+     "cache_read_input_tokens": 300000
+    },
+    "native": {
+     "status": "ok",
+     "reply": "<analysis>ANALYSIS-TEXT</analysis>\n<summary>SUMMARY-BODY</summary>\n",
+     "prompt_arm": "control",
+     "cache_prefix_flag": false
+    }
+   },
+   "expect": {
+    "exit": 64
+   }
+  },
+  {
+   "name": "not the owner config: no shadow",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/logs"
+   },
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-6f708192",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "1a2b3c4d",
+     "position": 1,
+     "plugin_side": "n/a",
+     "reply": "NOT-A-FIELD",
+     "facts": "NOT-A-FIELD"
+    },
+    "old": {
+     "status": "ok",
+     "reply": "Here it is.\n=== OLD-HANDOFF START retry-work ===\n---\nrepository: work\n---\ntoken $SECRET{github-token} here\n=== OLD-HANDOFF END ===\n",
+     "input_tokens": 900,
+     "cache_read_input_tokens": 300000
+    },
+    "native": {
+     "status": "ok",
+     "reply": "<analysis>ANALYSIS-TEXT</analysis>\n<summary>SUMMARY-BODY</summary>\n",
+     "prompt_arm": "control",
+     "cache_prefix_flag": false
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": false,
+     "why": "not-owner-config"
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-6f708192.json",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "off: nothing",
+   "setup": [
+    {
+     "write": "$HOME/.cache/$BRAND-trial/trial.json",
+     "json": {
+      "v": 1,
+      "on": false,
+      "trial_until": "2026-11-24",
+      "handoff_root": "$ROOT",
+      "log_dir": "$WATCH",
+      "cc_versions": [
+       "2.1.311"
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "skip",
+    "moment_id": "$SID8-708192a3",
+    "moment": {
+     "kind": "m1-self",
+     "status": "skipped:no-limits"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": false,
+     "why": "off:off"
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-708192a3.json",
+      "exists": false
+     }
+    ]
+   }
+  }
+ ]
+}

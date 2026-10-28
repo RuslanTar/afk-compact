@@ -1,20 +1,25 @@
 // The turn-end scheduler and the self-call path (MOD-SPEC §4, §9), and the scheduling of the
 // handoff turn and the compaction after it (§9.1). The engine skips our own `session.compact`
-// hook for our `$.session.compact`, so everything happens at the call site.
-import type { Deps } from './deps'
+// hook for our `$.session.compact`, so everything happens at the call site. In a headless
+// session, where that call always rejects, the compaction runs as a `/compact` command instead,
+// and its after-step runs in our own hook (`onOwnCompact`), which that command does reach.
+import type { SessionCompactInput, SessionCompactResult } from 'claude-code'
+import type { Deps, OwnCompact } from './deps'
 import type { ResumePref } from './compact'
 import { afterStep, cacheRows, dispatchExists, guarded, mainText, writeDispatch } from './compact'
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
+import { armDigest } from './digest'
 import type { HandoffTurn } from './handoff-turn'
 import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHandoff, planPrecompact } from './handoff-turn'
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { armIdle } from './idle'
-import { isHuman } from './deps'
-import { log, skipClass } from './log'
+import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText } from './deps'
+import { compactOff, log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
+import { shadowPrepM3, startShadow } from './shadow'
 
 /** MOD-SPEC §9: the nudged turn ended on a user-owned question (`?` on the last non-blank line). */
 export function endsWithQuestion(answer: string): boolean {
@@ -50,6 +55,20 @@ export type BoundaryOpts = {
    * sweep would answer `skipped: swept` with no rows (DP-30 (1)).
    */
   checked?: { nonce: string; named: string | undefined; prev: string | undefined; cp: Checkpoint | undefined }
+  /**
+   * Owner 2026-10-27 03:4x ("Compact (Recommended)"): the idle compaction of the 55.5-min check
+   * while agents run (idle.ts), with the seconds since the last main turn end. Exempt from the
+   * cooldown and the target check (the check applied Claude Code's idle floor); an idle dispatch
+   * record and resume block (`[idle]`), not counted for the thrash rule, and no continue after it.
+   */
+  idle?: { gapS: number }
+  /**
+   * The plugin's own idle compaction (idle.ts): its guards asked once more after the checkpoint,
+   * which can take seconds, and before the dispatch record is written. A reason (a turn started
+   * or ended, a compaction other than ours started or ran, a person at the prompt) stops it
+   * there, with no record behind (D13).
+   */
+  idleRecheck?: () => Promise<string | undefined>
 }
 
 /** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
@@ -60,6 +79,9 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   s.foreignPrompts = 0
   // Before any await: a native compaction from here on makes the post-handoff one a second one.
   const seq = s.nativeCompactSeq
+  // The turn our own `/compact` ran in (alive.ts): its end starts no plugin compaction.
+  const ownCompactTurn = s.ownCompactTurn
+  s.ownCompactTurn = false
   s.lastTurnAsksUser = s.askedThisTurn || endsWithQuestion(t.answer)
   if (t.reason !== 'answer') s.resumeAfter = false
   // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
@@ -78,6 +100,10 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   }
   const nudged = s.lastCycle
   s.lastCycle = null
+  // A headless session with no `/compact` path left: no plugin compaction (Claude Code rejects
+  // the call there). With the path, no nudge came, so `last` is null: no handoff turn below.
+  // Nor at the end of the turn our own `/compact` ran in: never a repeat without a prompt.
+  if (pluginCompactOff(s) || ownCompactTurn) return
   const eff = await effective(d, sid)
   if (eff.disabled) return
   if (t.reason !== 'answer') return
@@ -119,7 +145,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   if (s.busy) return
   // §9.3: with `precompact_turn: model`, an eligible turn end that was not nudged gets its
   // pre-compaction handoff turn first; a skip leaves the normal compaction, as with `code`.
-  if (!s.nudgedThisTurn && last === null && !s.halt.active) {
+  // A headless session gets no pre-compaction turn: the plugin submits no model turn there.
+  if (!s.nudgedThisTurn && last === null && !s.halt.active && !s.headless) {
     const p = await planPrecompact(d, sid, eff, tokens)
     if (p) {
       startHandoffTimer(d, sid, p)
@@ -179,8 +206,17 @@ export function cancelBoundary(d: Deps): void {
   d.state.afterForeign = undefined
 }
 
-async function resumePref(d: Deps, sid: string): Promise<ResumePref> {
-  if (d.state.ctxSeen) return 'prompt.context'
+/**
+ * MOD-SPEC §3.4: `prompt.context` once it ran in this load, else the classic SessionStart(compact)
+ * when its hooks run, else the continue text. An idle compaction's block always waits for
+ * `prompt.context` (IDLE-COMPACT-SPEC §1.4, IC-1 D3): only that channel adds `[idle]` and
+ * re-measures it on the person's return, and only an unclaimed block on disk reaches the next
+ * process (resume-persist). A load that adopted the idle record (a supervisor move, `claude
+ * respawn`, `--resume`) has had no prompt yet, so the classic channel would otherwise take the
+ * block at compaction time, without `[idle]` (P4 p4-20261028-005619).
+ */
+async function resumePref(d: Deps, sid: string, idle: boolean): Promise<ResumePref> {
+  if (d.state.ctxSeen || idle) return 'prompt.context'
   const p = await d.paths()
   if (p && (await d.exists(`${p.watch}/${sid}/classic-alive.json`))) return 'sessionstart'
   return 'prompt.submit'
@@ -219,32 +255,67 @@ async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void
   })
 }
 
-/** `nativeCheck` with its rows; true when the compaction is not run now. */
-async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<boolean> {
+/**
+ * `$.session.compact` rejected: `compact_rejected` with Claude Code's own error text (no session
+ * content; the export drops it) and its class. A headless rejection (`claude -p`, the Agent SDK)
+ * also marks the load headless: no nudge or plugin compaction follows in it. Reconcile and the
+ * watcher's A-17 take such a row as the dispatch's outcome: not unresolved, not `no-after`.
+ */
+export async function compactRejected(d: Deps, sid: string, nonce: string, err: unknown): Promise<ReturnType<typeof rejectClass>> {
+  const error = rejectText(err)
+  const errorClass = rejectClass(error)
+  await log(d, sid, 'compact_rejected', { nonce, attempt: 1, error_class: errorClass, error })
+  if (errorClass === 'headless') await markHeadless(d, sid, 'compact-rejected')
+  return errorClass
+}
+
+/** `nativeCheck` with its rows: `ran` (a native compaction ran since), `wait`, or undefined (go on). */
+async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<'wait' | 'ran' | undefined> {
   const c = nativeCheck(d, opts)
   if (c === 'ran') await nativeRan(d, sid, opts)
-  return c !== undefined
+  return c
 }
+
+/**
+ * D13: how one `boundary()` call went. `ran: false` with the reason when it stopped before a
+ * compaction was asked for (`compact-off`, `busy`, `asks-user`, `halted`, `compacted` when a
+ * native one ran instead, `small-window`, `cooldown`, `small`, or what `idleRecheck` answered:
+ * `busy`, `newer-turn`, `compacted`, `present`); `ran: true` once
+ * `$.session.compact` or the `/compact` command was called, `ok` when it compacted through the
+ * plugin, else a `failClass`: `skipped`, a rejection class (`turn-running`, `headless`, `other`)
+ * or the `compact_command` result (`failed`, `unclaimed`, `rejected`). The idle timer logs a
+ * refusal and counts failures from it (idle.ts); the other callers ignore it.
+ */
+export type BoundaryResult = { ran: false; why: string } | { ran: true; ok: boolean; failClass?: string }
+
+const stopped = (c: 'wait' | 'ran'): BoundaryResult => ({ ran: false, why: c === 'ran' ? 'compacted' : 'busy' })
 
 /**
  * MOD-SPEC §4: one plugin compaction at a clean turn end, then the after-step and continue.
  * After a handoff turn (§9.1) it runs despite halt and cooldown, with `[handoff]` when the
- * handoff was published, and no continue follows.
+ * handoff was published, and no continue follows. An idle compaction (owner 2026-10-27, and the
+ * plugin's own idle compaction, idle.ts) skips the cooldown and the target, and no continue
+ * follows either. Says how it went (BoundaryResult, D13).
  */
-export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> {
+export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<BoundaryResult> {
   const s = d.state
   const ah = opts.afterHandoff
-  if (s.busy || s.mainTurnRunning || s.askOpen > 0 || (s.halt.active && !opts.exemptHalt)) return
+  const idle = opts.idle
+  if (pluginCompactOff(s)) return { ran: false, why: 'compact-off' }
+  if (s.busy || s.mainTurnRunning) return { ran: false, why: 'busy' }
+  if (s.askOpen > 0) return { ran: false, why: 'asks-user' }
+  if (s.halt.active && !opts.exemptHalt) return { ran: false, why: 'halted' }
   // No await before this check, so a native compaction's end cannot slip past unseen.
-  if (nativeCheck(d, opts) === 'wait') return
+  if (nativeCheck(d, opts) === 'wait') return stopped('wait')
   const sid = await d.sessionId()
-  if (await stopForNative(d, sid, opts)) return
+  const first = await stopForNative(d, sid, opts)
+  if (first !== undefined) return stopped(first)
   const eff = await effective(d, sid)
-  if (eff.disabled) return
+  if (eff.disabled) return { ran: false, why: 'small-window' }
   const now = await d.now()
-  if (!ah && s.lastPluginCompactAt !== undefined && now - s.lastPluginCompactAt < d.cfg.cooldown_ms) return
+  if (!ah && !idle && s.lastPluginCompactAt !== undefined && now - s.lastPluginCompactAt < d.cfg.cooldown_ms) return { ran: false, why: 'cooldown' }
   const tokens = (await d.usage()).tokens
-  if (!ah && (tokens === undefined || tokens < eff.target)) return
+  if (!ah && !idle && (tokens === undefined || tokens < eff.target)) return { ran: false, why: 'small' }
   s.busy = true
   try {
     let nonce: string
@@ -273,21 +344,36 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
       prodConsent = cp?.consent['unattended_prod_reads']
       const main = await mainText(d, nonce, false, prev, measured, ah?.path)
       text = main.text
-      pref = await resumePref(d, sid)
+      pref = await resumePref(d, sid, idle !== undefined)
+      // The checkpoint above can take seconds: a person may have come back since (idle only).
+      const changed = opts.idleRecheck ? await opts.idleRecheck() : undefined
+      if (changed !== undefined) {
+        s.nudgeNonce = named
+        return { ran: false, why: changed }
+      }
       // The checkpoint above can take seconds: a native compaction may have started or run since.
       // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
       // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
       // reuses this checkpoint.
-      if (await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })) {
+      const again = await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })
+      if (again !== undefined) {
         s.nudgeNonce = named
-        return
+        return stopped(again)
       }
       s.selfNonces.add(nonce)
       await writeDispatch(d, {
         sid, nonce, agentId: null, trigger: 'plugin', channel: 'mod-self', resumePref: pref, midturn: false, tags: main.tags, text,
         ...(ah ? { handoffHt: ah.ht } : {}),
+        ...(idle ? { idle } : {}),
       })
     }
+    // The shadow trial's M3 moment for a plugin compaction with no handoff turn before it (off
+    // without its local config); its forks start right before the call below, not awaited. The
+    // plugin's own idle compaction (the 54-min timer, the 55.5-min check) is the idle moment
+    // `m3-idle`, as Claude Code's idle compaction is: under "idleCompaction": false it takes
+    // native's place at the same moment, so the idle arm stays one stratum (trigger `plugin` tells
+    // who started it); `m3-plugin` stays the turn-end compactions of an active session.
+    const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: idle ? 'm3-idle' : 'm3-plugin', nonce, trigger: 'plugin' })
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
     // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
     // await sits between that check and the call.
@@ -299,40 +385,182 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<void> 
     const late = nativeCheck(d, withRecord)
     if (late !== undefined) {
       if (late === 'ran') await nativeRan(d, sid, withRecord)
-      return
+      return stopped(late)
+    }
+    const run: SelfRun = { nonce, pref, t0, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
+    // Headless: `$.session.compact` always rejects there; the compaction runs as `/compact`.
+    if (s.headless) {
+      const result = await commandCompact(d, sid, run, text)
+      return result === 'compacted' ? { ran: true, ok: true } : { ran: true, ok: false, failClass: result }
     }
     let r
+    startShadow(d, shadow)
     try {
       r = await d.compact(text)
+    } catch (err) {
+      return { ran: true, ok: false, failClass: await compactRejected(d, sid, nonce, err) }
+    }
+    let settled: boolean
+    try {
+      settled = await settleSelf(d, sid, run, r)
     } catch {
-      await log(d, sid, 'compact_rejected', { nonce, attempt: 1 })
-      return
+      // Only the bookkeeping after the call failed: it compacted unless Claude Code skipped it,
+      // which is what the idle failure count goes by (§1.7). Nothing follows either way.
+      return r.skip === undefined ? { ran: true, ok: true } : { ran: true, ok: false, failClass: 'skipped' }
     }
-    const ht: Record<string, string> = ah ? { handoff_ht: ah.ht } : {}
-    if (r.skip !== undefined) {
-      await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - t0, ...ht })
-      return
-    }
-    await log(d, sid, 'compacted', {
-      nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
-      usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...ht,
-    })
-    await cacheRows(d, sid, nonce, r, true, 'main')
-    s.lastPluginCompactAt = await d.now()
-    s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
-    const msgs = r.messages
-    const before = r.tokensBefore
-    const after = r.tokensAfter
-    await guarded(d, sid, 'after-step', () => afterStep(d, {
-      sid, nonce, agentId: null, midturn: false, resumePref: pref, messages: msgs, tokensBefore: before, tokensAfter: after,
-      ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
-      ...(ah ? { stats: ah.stats } : {}),
-      ...(prodConsent !== undefined ? { prodConsent } : {}),
-    }))
-    await guarded(d, sid, 'continue', () => autoContinue(d, sid))
+    if (!settled) return { ran: true, ok: false, failClass: 'skipped' }
+    // Like Claude Code's own idle compaction, the plugin's sends nothing after it: the resume
+    // block waits for the next turn (a background result or the person's return).
+    if (!idle) await guarded(d, sid, 'continue', () => autoContinue(d, sid))
     // The block not carried by a continue waits for prompt.context; the cap may have entered halt.
     if (s.pending && s.pending.nonce === nonce) s.pending.outcome.halt = s.halt.active
+    return { ran: true, ok: true }
   } finally {
     s.busy = false
   }
+}
+
+/** One plugin compaction's dispatch, as the boundary prepared it, for the steps after its result. */
+type SelfRun = {
+  nonce: string
+  pref: ResumePref
+  t0: number
+  prodConsent?: string
+  ah?: NonNullable<BoundaryOpts['afterHandoff']>
+  /** An idle compaction (`BoundaryOpts.idle`): no thrash entry, an idle after-step. */
+  idle?: NonNullable<BoundaryOpts['idle']>
+}
+
+/**
+ * A plugin compaction's result: its `compacted` row, the cache rows, the cooldown and thrash
+ * bookkeeping and the after-step (MOD-SPEC §4, §5.2). False when the compaction was skipped.
+ * Shared by the self-call and, inside our own hook, by a headless session's `/compact`.
+ */
+async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactResult): Promise<boolean> {
+  const s = d.state
+  const { nonce, ah } = run
+  const ht: Record<string, string> = ah ? { handoff_ht: ah.ht } : {}
+  if (r.skip !== undefined) {
+    await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - run.t0, ...ht })
+    return false
+  }
+  await log(d, sid, 'compacted', {
+    nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
+    usage_present: r.usage !== undefined, ms: (await d.now()) - run.t0, ...ht,
+  })
+  await cacheRows(d, sid, nonce, r, true, 'main')
+  s.lastPluginCompactAt = await d.now()
+  // An idle compaction ends no nudged cycle: the thrash rule does not count it.
+  if (!run.idle) s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
+  const msgs = r.messages
+  const before = r.tokensBefore
+  const after = r.tokensAfter
+  await guarded(d, sid, 'after-step', () => afterStep(d, {
+    sid, nonce, agentId: null, midturn: false, resumePref: run.pref, messages: msgs, tokensBefore: before, tokensAfter: after,
+    ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
+    ...(ah ? { stats: ah.stats } : {}),
+    ...(run.prodConsent !== undefined ? { prodConsent: run.prodConsent } : {}),
+    ...(run.idle ? { idle: true } : {}),
+  }))
+  // IDLE-COMPACT D16: the plugin's own idle compaction arms the away digest as Claude Code's does
+  // (compact.ts onCompact): under `"idleCompaction": false` it is the only idle compaction there is.
+  // armDigest skips while anything runs; submitDigest skips a headless session.
+  if (run.idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
+  return true
+}
+
+/** The `/compact` runs that may fail in a row before the path is off for the load. */
+export const COMMAND_FAILS_MAX = 2
+
+/**
+ * A headless session's plugin compaction: a bare `/compact` (`$.command.run`; no arguments, so
+ * the transcript's command row carries none of our text), which our own `session.compact` hook
+ * claims and shapes with `text` (`onOwnCompact`). No continue follows: the session waits for its
+ * next prompt, which gets the resume block (prompt.context). One `compact_command` row says how
+ * it went. Anything but a compaction our hook shaped is a failure (skipped, no result, unclaimed,
+ * Claude Code's reason, a rejected call): it starts the cooldown, so the next turn end does not
+ * retry at once; one that cannot work later in the load (`no-command`, `input-ended`), or the
+ * second in a row, turns the path off (`compactOff`).
+ */
+async function commandCompact(d: Deps, sid: string, run: SelfRun, text: string): Promise<string> {
+  const s = d.state
+  const own: OwnCompact = {
+    nonce: run.nonce, text, pref: run.pref, t0: run.t0, claimed: false,
+    ...(run.prodConsent !== undefined ? { prodConsent: run.prodConsent } : {}),
+    ...(run.ah ? { ht: run.ah.ht } : {}),
+  }
+  ownRuns.set(own, run)
+  s.ownCompact = own
+  let out: CommandOut
+  try {
+    out = await d.compactCommand()
+  } catch (err) {
+    out = { rejected: err }
+  } finally {
+    if (s.ownCompact === own) s.ownCompact = undefined
+    ownRuns.delete(own)
+  }
+  return commandOutcome(d, sid, own, out)
+}
+
+/**
+ * How our `/compact` went, as one `compact_command` row. Only `compacted` (our hook claimed it
+ * and it compacted) resets the failure count. Every other outcome is a failure: it starts the
+ * cooldown and counts toward `COMMAND_FAILS_MAX`, so a /compact that did not do its job is never
+ * repeated at once (the end of the turn Claude Code ran it in comes right after it). They are
+ * `skipped` (claimed, the compaction skipped), `failed` with a class (claimed with no result,
+ * as when the compaction beneath our hook threw; or Claude Code's reason as the output),
+ * `unclaimed` (it compacted without reaching our hook as ours: unshaped, no after-step), and
+ * `rejected` (the call rejected) with the class and the text.
+ */
+export async function commandOutcome(d: Deps, sid: string, own: OwnCompact, out: CommandOut): Promise<string> {
+  const s = d.state
+  if (own.claimed && own.result !== undefined && own.result.skip === undefined) {
+    s.commandFails = 0
+    await log(d, sid, 'compact_command', { nonce: own.nonce, result: 'compacted', error_class: null, error: null })
+    return 'compacted'
+  }
+  const rejected = 'rejected' in out
+  const failText = rejected ? rejectText(out.rejected) : out.text !== undefined ? rejectText(out.text) : undefined
+  let row: { result: string; error_class: ReturnType<typeof commandClass> | null; error: string | null }
+  if (own.claimed && own.result !== undefined) {
+    row = { result: 'skipped', error_class: null, error: null }
+  } else if (own.claimed) {
+    row = { result: 'failed', error_class: commandClass(failText ?? ''), error: failText ?? null }
+  } else if (failText === undefined) {
+    // It compacted, but not through our hook as ours: the dispatch gets no after-step (reconcile
+    // and the watcher report it). It also counts for the thrash rule.
+    s.pluginCompactions.push({ turnSeq: s.turnSeq, refilled: null })
+    row = { result: 'unclaimed', error_class: null, error: null }
+  } else {
+    row = { result: rejected ? 'rejected' : 'failed', error_class: commandClass(failText), error: failText }
+  }
+  await log(d, sid, 'compact_command', { nonce: own.nonce, ...row })
+  s.lastPluginCompactAt = await d.now()
+  s.commandFails++
+  const cls = row.error_class
+  if (cls === 'no-command' || cls === 'input-ended' || s.commandFails >= COMMAND_FAILS_MAX) await compactOff(d, sid)
+  return row.result
+}
+
+/** What `$.command.run` answered: the command's output text, or the call's rejection. */
+export type CommandOut = { text: string | undefined } | { rejected: unknown }
+
+/** The boundary's run for each `/compact` in flight (read by our hook). */
+const ownRuns = new WeakMap<OwnCompact, SelfRun>()
+
+type CompactNext = (e: SessionCompactInput) => Promise<SessionCompactResult>
+
+/**
+ * Our `session.compact` hook for our own `/compact` (claimed by `claimOwnCompact`): our text
+ * after any instructions already there, then the after-step here, where the summary messages
+ * are (`$.command.run` returns only text). Nothing after `next` may throw: the hook's `.catch`
+ * would replay the result, but the steps after it are ours to finish or log.
+ */
+export async function onOwnCompact(d: Deps, sid: string, e: SessionCompactInput, own: OwnCompact, next: CompactNext): Promise<SessionCompactResult> {
+  const r = await next({ ...e, instructions: [e.instructions, own.text].filter(Boolean).join('\n\n') })
+  own.result = r
+  const run = ownRuns.get(own) ?? { nonce: own.nonce, pref: own.pref, t0: own.t0, ...(own.prodConsent !== undefined ? { prodConsent: own.prodConsent } : {}) }
+  await guarded(d, sid, 'own-compact', () => settleSelf(d, sid, run, r))
+  return r
 }

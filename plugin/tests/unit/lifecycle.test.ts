@@ -6,6 +6,7 @@ import type { Engine } from 'claude-code/testing'
 import { expect, test } from 'claude-code/testing'
 import { AGENT, HOME, ROOT, SID_A, SID_B, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
+import { BY_SID_KEY, BY_SID_MAX, SEEN_KEY, SEEN_MAX } from '../../hooks/lib/canary'
 
 test('AT-M1-16: mod-alive.json under sid A at session.start and under sid B at a main turn.start after /clear', async ($, on) => {
   const w = new World().install(on)
@@ -43,6 +44,52 @@ test('AT-M3-08: lastVersion 2.1.304, version 2.1.305: one version_change, smokeD
   expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(1)
 })
 
+test('BG-VER-01: this session ran 2.1.310 before (moved, resumed or respawned) and the machine already has 2.1.311: one version_change 2.1.310 -> 2.1.311 under its sid, one toast, smokeDue untouched; again: nothing', async ($, on) => {
+  const w = new World({ version: { version: '2.1.311' } })
+  w.install(on, { lastVersion: '2.1.311', smokeDue: null, [BY_SID_KEY]: { [SID_A]: '2.1.310' } })
+  await w.start($)
+  await w.start($)
+  expect(w.rowsOf('version_change').map(r => [r.sid, r.from, r.to])).toEqual([[SID_A, '2.1.310', '2.1.311']])
+  expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(1)
+  expect(w.files.get(`${WATCH}/version.json`)).toBeUndefined()
+})
+
+test('BG-VER-02: another session already ran 2.1.311 and this machine ran 2.1.310 too: a new session on 2.1.310 logs no version_change, no toast, smokeDue stays 2.1.311 (probe P5)', async ($, on) => {
+  const w = new World({ version: { version: '2.1.310' } })
+  w.install(on, { lastVersion: '2.1.311', smokeDue: '2.1.311', [SEEN_KEY]: ['2.1.310', '2.1.311'], [BY_SID_KEY]: { [SID_B]: '2.1.311' } })
+  await w.start($)
+  expect(w.rowsOf('version_change').length).toBe(0)
+  expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(0)
+  expect(w.files.get(`${WATCH}/version.json`)).toBeUndefined()
+})
+
+test('BG-VER-03: the version a session runs is kept per session id, in one map of at most BY_SID_MAX sessions (oldest out); the versions seen, at most SEEN_MAX', async ($, on) => {
+  const seen: unknown[] = []
+  on('store.set', { key: BY_SID_KEY }, (_$, e, next) => {
+    seen.push(e.value)
+    return next(e)
+  })
+  const sets: unknown[] = []
+  on('store.set', { key: SEEN_KEY }, (_$, e, next) => {
+    sets.push(e.value)
+    return next(e)
+  })
+  const full: Record<string, string> = {}
+  for (let i = 0; i < BY_SID_MAX; i++) full['old-' + i] = '2.1.300'
+  const versions = Array.from({ length: SEEN_MAX }, (_, i) => '2.0.' + i)
+  const w = new World({ version: { version: '2.1.311' } })
+  w.install(on, { lastVersion: '2.0.' + (SEEN_MAX - 1), [SEEN_KEY]: versions, [BY_SID_KEY]: full })
+  await w.start($)
+  await w.start($)
+  expect(seen.length).toBe(1)
+  const map = seen[0] as Record<string, string>
+  expect([Object.keys(map).length, map[SID_A], 'old-0' in map, 'old-1' in map]).toEqual([BY_SID_MAX, '2.1.311', false, true])
+  expect(sets.length).toBe(1)
+  const set = sets[0] as string[]
+  expect([set.length, set[0], set[set.length - 1]]).toEqual([SEEN_MAX, '2.0.1', '2.1.311'])
+  expect(w.rowsOf('version_change').map(r => [r.from, r.to])).toEqual([['2.0.' + (SEEN_MAX - 1), '2.1.311']])
+})
+
 test('AT-M3-08 (reload): a load that finds lastVersion equal adds nothing', async ($, on) => {
   const w = new World({ version: { version: '2.1.305' } })
   w.install(on, { lastVersion: '2.1.305', smokeDue: '2.1.305' })
@@ -52,12 +99,13 @@ test('AT-M3-08 (reload): a load that finds lastVersion equal adds nothing', asyn
   expect(w.toasts.filter(t => t !== shippedNotice(w.name).text).length).toBe(0)
 })
 
-test('AT-M3-09: version 2.1.306-dev sets smokeDue, once', async ($, on) => {
+test('AT-M3-09: version 2.1.306-dev sets smokeDue, once (one version_change, one toast)', async ($, on) => {
   const w = new World({ version: { version: '2.1.306-dev', base: '2.1.306-dev' } })
   w.install(on, { lastVersion: '2.1.306-dev' })
   await w.start($)
   await w.start($)
   expect(w.rowsOf('version_change').length).toBe(1)
+  expect(w.toasts.filter(t => t.includes('version-change')).length).toBe(1)
   expect(JSON.parse(w.files.get(`${WATCH}/version.json`) ?? '{}').smokeDue).toBe('2.1.306-dev')
 })
 

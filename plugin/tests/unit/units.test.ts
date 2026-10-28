@@ -12,6 +12,7 @@ import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
+import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
 import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
@@ -113,32 +114,40 @@ const WORST = {
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
   draft_state: 'present', handoff_finish: '`' + NAME + "-store publish --stage '" + PREV + "' --slug lab-123-retry --status in-progress`",
   idle_used_at: '2026-10-21T04:40:00+03:00',
+  // Away digest phase 1 [idle-done]: the lane word, the longest reason and the longest Basis line
+  // lane.ts gives (LANE_WHY_MAX, LANE_BASIS_MAX; tools/assemble budgets with the same values).
+  lane: 'hard-blocked', lane_why: 'no Status code could read, but every listed step is marked done',
+  lane_basis: '999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed',
+  // The shadow trial's fork texts (TRIAL-DUAL-HANDOFF §4.2): read at run time from local files.
+  old_skill: '# Old skill\nStep 1.', old_template: '# Template', trial_facts: 'Repository: r', trial_tail: 'Last reply:\ndone',
 }
 const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
+  'trial-old-handoff': ['trial-tail'],
 }
 
 /**
  * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
  * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
- * (owner xxxxxxxx-25) and `midturn`, `idle-again` (owner xxxxxxxx-37) only with `idle` or
- * `idle-halt`, `handoff` never with `handoff-partial`, `driver` never with `idle-halt`, and one
- * handoff-turn kind at a time.
+ * (owner xxxxxxxx-25), `idle-done` (away digest phase 1) and `midturn`, `idle-again` (owner
+ * xxxxxxxx-37) only with `idle`, `idle-halt` or `idle-done`, `handoff` never with
+ * `handoff-partial`, `driver` never with `idle-halt` or `idle-done`, and one handoff-turn kind at a time.
  */
 function combos(tags: Tag[]): Tag[][] {
   let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
   const has = (c: Tag[], t: Tag) => c.includes(t)
   if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
-  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
-  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt'))
-  // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused).
-  out = out.filter(c => !(has(c, 'driver') && has(c, 'idle-halt')))
+  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'idle-done'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt') || has(c, 'idle-done'))
+  // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused); a measured driver
+  // keeps the work lane working, so never with [idle-done] either (lane.ts).
+  out = out.filter(c => !(has(c, 'driver') && (has(c, 'idle-halt') || has(c, 'idle-done'))))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
@@ -156,27 +165,34 @@ describe('AT-P-07 assembler (14-character name)', () => {
     }
   })
   // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
-  // the hard guard is the channel total below, with the D-18 `[handoff]` line included.
-  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,192 B (the hard channel total)', () => {
+  // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,720 B since
+  // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS), 8,800 B since the
+  // away digest's lane Status and step marks (owner 2026-10-27 12:5x). Classic keeps 8,192.
+  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,800 B (the hard channel total)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'handoff', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8192).toBe(true)
+    expect(byteLength(s) <= 8800).toBe(true)
   })
   test('classic fallback (main [auto]+[chain] + subagent [fallback]) ≤8,192 B', () => {
     const s = assembleText(text('handoff-instructions'), ['auto', 'chain'], WORST, ['measured']) + assembleText(text('subagent-instructions'), ['fallback'], WORST)
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,192 B', () => {
+  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,800 B', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8192).toBe(true)
+    expect(byteLength(s) <= 8800).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
-  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,950
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,130
   // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note,
-  // and the owner's 2026-10-26 GSD re-entry ruling the [driver] line).
-  test('resume protocol ≤3,950 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // the owner's 2026-10-26 GSD re-entry ruling the [driver] line, and the 2026-10-26 plugin-text
+  // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last; 4,590
+  // since the away digest's [idle-done] line with its code-rendered Basis, and the step-5 digest
+  // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5; 4,620 since that
+  // step-5 digest carries the code-rendered Basis line too, owner 2026-10-27 22:32; 4,657 since
+  // release-0.1.0's [driver] line names the workflow file a GSD loop command loads).
+  test('resume protocol ≤4,657 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 3950).toBe(true)
+      expect(s.length <= 4657).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
@@ -406,6 +422,38 @@ test('AT-IA-01 idle_handoff_turn: common words, and any other value reads as off
     const r = parseOptions({ idle_handoff_turn: w } as never)
     expect([w, r.idle_handoff_turn, r.notes.invalid]).toEqual([w, 'off', ['idle_handoff_turn']])
   }
+})
+
+// IDLE-COMPACT §5 (D9): `idle_compact` reads like `idle_handoff_turn` (the same word lists and
+// invalid value as settings.pm); default `auto` pending the owner (Q3). `on` is a plain auto word
+// here (no legacy note: the key is new).
+test('AT-IC-C00 idle_compact: default auto; common words; any other value reads as off with config_invalid', () => {
+  expect(DEFAULTS.idle_compact).toBe('auto')
+  expect(parseOptions({}).idle_compact).toBe('auto')
+  for (const w of ['off', 'false', ' No ', 'NONE', 'disabled', '0', false, 0]) {
+    const r = parseOptions({ idle_compact: w } as never)
+    expect([w, r.idle_compact, r.notes.invalid]).toEqual([w, 'off', []])
+  }
+  for (const w of ['auto', 'true', 'Yes', ' 1 ', 'on', true, 1]) {
+    const r = parseOptions({ idle_compact: w } as never)
+    expect([w, r.idle_compact, r.notes.invalid, r.notes.noted]).toEqual([w, 'auto', [], undefined])
+  }
+  for (const w of ['  ', '\t', '${user_config.idle_compact}']) expect(parseOptions({ idle_compact: w } as never).idle_compact).toBe('auto')
+  for (const w of ['maybe', 'enabled', '2']) {
+    const r = parseOptions({ idle_compact: w } as never)
+    expect([w, r.idle_compact, r.notes.invalid]).toEqual([w, IDLE_INVALID_READS_AS, ['idle_compact']])
+  }
+})
+
+// IDLE-COMPACT §1.2, §5: the environment the idle timers read. CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS
+// as native `IXt` reads it; the D10 test seam bounded to 120-3600 s; a flag as Claude Code reads one.
+test('AT-IC-C00 idle env: compactMinOf, cacheSOf, envTruthy', () => {
+  expect([compactMinOf(undefined), compactMinOf(''), compactMinOf('abc'), compactMinOf('-5'), compactMinOf('0'), compactMinOf('1.5')]).toEqual([200000, 200000, 200000, 200000, 200000, 200000])
+  expect([compactMinOf('50000'), compactMinOf(' 300000 '), compactMinOf('100000')]).toEqual([100000, 300000, 100000])
+  expect([cacheSOf(undefined), cacheSOf('60'), cacheSOf('abc'), cacheSOf('119'), cacheSOf('3601'), cacheSOf('600.5')]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
+  expect([cacheSOf('120'), cacheSOf(' 600 '), cacheSOf('3600')]).toEqual([120, 600, 3600])
+  expect(['1', 'true', ' YES ', 'on'].map(envTruthy)).toEqual([true, true, true, true])
+  expect([undefined, '', '0', 'false', 'off', 'no', 'x'].map(v => envTruthy(v))).toEqual([false, false, false, false, false, false, false])
 })
 
 // P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.

@@ -182,6 +182,10 @@ sub on_SessionStart {
     if (rc::root_ok('handoff_root')) {
         $where = git::where($p->{cwd});
         eval { sessions::write_live($sid, $p->{cwd}, $where->{toplevel}, $src, $where->{head}) };
+        # This session's records of earlier processes that ended with no SessionEnd (a
+        # background session moved to a new version, a resume after a crash) get their
+        # ended- twin here.
+        eval { sessions::close_gone($sid) };
         $lin = eval { sessions::write_lineage($sid, $src) } if $src eq 'clear' || $src eq 'fork';
     }
     $lin = sessions::lineage($sid) if !$lin || $lin->{exists};
@@ -190,6 +194,10 @@ sub on_SessionStart {
         util::write_atomic("$d/classic-alive.json",
             jsonc::encode_bytes(jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, source => $src, ts => util::iso(util::now()))) . "\n", 0600);
     }
+    # AT-RP-04: a block still pending when this session id last ended goes to its first turn
+    # (the mod delivers it). Only a resume of the same session id: /clear and a fork start
+    # under another id, and a compaction's own block is the session_compact path above.
+    eval { resumeblock::arm($d, $sid) } if $src eq 'resume';
     if ($src =~ /^(startup|resume)$/) {
         my $ev = rc::exec_version();
         my $pd = $ENV{CLAUDE_PLUGIN_DATA};
@@ -277,6 +285,8 @@ sub on_Stop {
     my $d = rc::sid_dir() // return ('', {});
     eval { sidecar::write($d, $p, 'Stop') };
     eval { util::write_atomic("$d/last-stop", util::iso_ms(util::now()) . "\n", 0600) };
+    # AT-RP-04: a resume block armed for this process's first turn that the turn did not take
+    eval { resumeblock::settle_armed($d, rc::sid()) };
     my $r0 = util::clock_ms();
     my $n = reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000, cutoff => reconcile::cutoff());
     # the cross-session finish pass, only when reconcile left ≥ 500 ms of its 2 s (MOD-SPEC §5.8)

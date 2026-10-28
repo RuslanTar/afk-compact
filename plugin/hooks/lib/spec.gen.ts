@@ -92,6 +92,10 @@ export const SPEC = {
     "manual"
   ],
   "status_words": [
+    "working",
+    "finished",
+    "hard-blocked",
+    "soft-blocked",
     "active",
     "blocked",
     "waiting-owner",
@@ -145,7 +149,7 @@ export const SPEC = {
     "agent",
     "external"
   ],
-  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|answered: .+)$",
+  "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|no answer \\(.+\\)|answered: .+)$",
   "restart_classes": [
     "auto",
     "ask",
@@ -437,7 +441,7 @@ export const SPEC = {
     },
     "section-cap": {
       "why": "one section crowds out the others",
-      "fix": "cut that section toward its template §2 cap"
+      "fix": "cut that section toward its template §2 cap if §2 lets you cut it; else keep it and list the advisory in the report"
     },
     "code-block": {
       "why": "code is recoverable from the repository",
