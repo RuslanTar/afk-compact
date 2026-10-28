@@ -6,12 +6,16 @@
 // `idle_digest: return` submits nothing: the block waits for the next turn, and a person's own
 // message gets the at most 5-line pointer of the same line before its answer.
 // One `digest_submit {nonce, lane, result}` row per idle compaction of a finished or blocked lane.
-import type { Deps } from './deps'
+// Owner 2026-10-28 digest rules (b): after a background result's turn did the step that result
+// unblocked, the lane is read again at that turn's end (`laneTurnEnd`); finished or hard-blocked
+// now gets one digest turn too (`submitResultDigest`), or the person's return gets it.
+import type { Deps, IdleLane } from './deps'
 import { submitPending, submitSettled } from './deps'
 import { contStamps } from './cont'
 import { claimBy } from './helper'
-import { digestLine, runningUnits, showsDigest } from './lane'
-import { helperMissing, log } from './log'
+import type { LaneResult } from './lane'
+import { DIGEST_END_RE, digestLine, laneBasis, laneOf, resultDigestLine, runningUnits, showsDigest } from './lane'
+import { helperMissing, isoLocal, log } from './log'
 import { claimedElsewhere, logLane, logOutcome } from './resume'
 
 /** The digest turn waits this long after the compaction (the hook returns first; a person may type). */
@@ -52,17 +56,8 @@ export async function submitDigest(d: Deps, sid: string, nonce: string): Promise
   const pend = s.pending
   if (!pend || pend.nonce !== nonce || pend.sid !== sid) return row(d, sid, nonce, 'unknown', 'skipped:taken')
   const lane = pend.lane?.lane ?? 'working'
-  if ((await d.sessionId()) !== sid) return row(d, sid, nonce, lane, 'skipped:session-changed')
-  if (s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.handoffTurn !== undefined || s.ourSubmitPending) {
-    return row(d, sid, nonce, lane, 'skipped:busy')
-  }
-  if (s.halt.active) return row(d, sid, nonce, lane, 'skipped:halt')
-  if (s.headless) return row(d, sid, nonce, lane, 'skipped:headless')
-  const max = d.cfg.max_auto_continues_per_hour
-  const now = await d.now()
-  const stamps = await contStamps(d, sid, now)
-  if (max === 0) return row(d, sid, nonce, lane, 'skipped:disabled')
-  if (stamps.length >= max) return row(d, sid, nonce, lane, 'skipped:cap')
+  const g = await canSubmit(d, sid)
+  if (typeof g === 'string') return row(d, sid, nonce, lane, g)
   const c = await claimBy(d, sid, nonce, 'prompt.submit')
   if (c.result === 'failed') await helperMissing(d, sid, 'claim')
   s.pending = undefined
@@ -71,22 +66,117 @@ export async function submitDigest(d: Deps, sid: string, nonce: string): Promise
     await logOutcome(d, sid, nonce, pend.outcome, await claimedElsewhere(d, pend))
     return
   }
-  const text = digestLine(d.name) + '\n\n' + pend.block
-  stamps.push(now)
-  await d.storeSet(`cont:${sid}`, stamps)
-  submitPending(s, text)
-  let submitted = true
-  try {
-    await d.submit(text)
-  } catch {
-    submitted = false
-    submitSettled(s)
-  }
+  const submitted = await send(d, sid, digestLine(d.name) + '\n\n' + pend.block, g)
   await row(d, sid, nonce, lane, submitted ? 'submitted' : 'skipped:submit-failed')
   if (submitted) {
     if (pend.lane !== undefined) await logLane(d, sid, nonce, pend.args.lane, pend.lane, 'submit', await runningUnits(d, pend.remeasure, new Set()))
-    if (s.idleLane && s.idleLane.nonce === nonce) s.idleLane.shown = lane
+    if (s.idleLane && s.idleLane.nonce === nonce) {
+      s.idleLane.shown = lane
+      if (showsDigest(lane)) s.idleLane.digested = true
+    }
   }
   pend.outcome.halt = s.halt.active
   await logOutcome(d, sid, nonce, pend.outcome, submitted ? 'delivered:prompt.submit' : 'undelivered')
+}
+
+/**
+ * Whether a digest turn may be submitted now: the `digest_submit` result that says why not (the
+ * session changed, a turn runs or a prompt is entering, halt mode, a headless session,
+ * auto-continue off or at its hourly cap), else the continue stamps it counts against.
+ */
+async function canSubmit(d: Deps, sid: string): Promise<string | { stamps: number[]; now: number }> {
+  const s = d.state
+  if ((await d.sessionId()) !== sid) return 'skipped:session-changed'
+  if (s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.handoffTurn !== undefined || s.ourSubmitPending) return 'skipped:busy'
+  if (s.halt.active) return 'skipped:halt'
+  if (s.headless) return 'skipped:headless'
+  const max = d.cfg.max_auto_continues_per_hour
+  const now = await d.now()
+  const stamps = await contStamps(d, sid, now)
+  if (max === 0) return 'skipped:disabled'
+  if (stamps.length >= max) return 'skipped:cap'
+  return { stamps, now }
+}
+
+/** Submits a digest turn's text (counted against the hourly continue cap); false when the submit failed. */
+async function send(d: Deps, sid: string, text: string, g: { stamps: number[]; now: number }): Promise<boolean> {
+  const s = d.state
+  g.stamps.push(g.now)
+  await d.storeSet(`cont:${sid}`, g.stamps)
+  submitPending(s, text)
+  try {
+    await d.submit(text)
+    return true
+  } catch {
+    submitSettled(s)
+    return false
+  }
+}
+
+/**
+ * Owner 2026-10-28 digest rules (b): at the end of a main turn whose job result unblocked a step
+ * held on that job (the lane read working for that turn only: rule (a), lane.ts `laneOf`
+ * `byResult`), the lane is read again without that result, so the step the turn did no longer
+ * counts. When it now reads finished or hard-blocked, the user still gets the blocked digest,
+ * once: with `idle_digest: submit` (the default) one digest turn is submitted right away (the
+ * same checks and hourly cap as the digest turn after the compaction); with `return` the
+ * person's return gets it (the `[idle-again]` block, read again then, carries `[idle-done]`).
+ * No turn is submitted when a turn of this episode was already told a finished or blocked lane
+ * (one digest per episode; the person's return still shows the state), or when this turn's answer
+ * already ends with the digest (the `[idle]` block's step 5 asks for it when all left waits on the
+ * user). Something still running: no change (its result opens a turn, re-checked as before).
+ */
+export async function laneTurnEnd(d: Deps, sid: string, reason: string, answer: string): Promise<void> {
+  const s = d.state
+  const l = s.idleLane
+  if (!l || l.sid !== sid) return
+  const unblocked = l.unblocked
+  l.result = false
+  l.unblocked = false
+  if (!unblocked || l.closed || l.shown === undefined || s.halt.active || reason !== 'answer') return
+  const r = await laneNow(d, l)
+  if (r === undefined) return
+  await logLane(d, sid, l.nonce, l.facts, r.lane, 'recheck', r.running)
+  if (l.digested || DIGEST_END_RE.test(answer)) {
+    l.shown = r.lane.lane
+    l.digested = true
+    return
+  }
+  if (d.cfg.idle_digest !== 'submit') return row(d, sid, l.nonce, r.lane.lane, 'skipped:return')
+  const nonce = l.nonce
+  d.after(digestDelayMs(d), () => {
+    s.inflight = submitResultDigest(d, sid, nonce).catch(() => undefined)
+  })
+}
+
+/** The episode's lane read now with no result in (finished or hard-blocked only), and the units running. */
+async function laneNow(d: Deps, l: IdleLane): Promise<{ lane: LaneResult; running: number } | undefined> {
+  const running = await runningUnits(d, l.restored ? undefined : l.remeasure, l.ended)
+  const lane = laneOf(l.facts, { running, midturn: false, nonok: l.nonok, driver: l.driver, superseded: l.superseded })
+  return lane.lane === 'finished' || lane.lane === 'hard-blocked' ? { lane, running } : undefined
+}
+
+/**
+ * The timer `laneTurnEnd` armed fired: the digest turn of rule (b), unless the episode ended or
+ * changed (a person's prompt, a newer compaction, a digest already told), the lane no longer reads
+ * finished or hard-blocked (work started, a unit runs), or `canSubmit` says no. A turn of the
+ * episode not told the lane yet still gets it from `laneRecheck`.
+ */
+export async function submitResultDigest(d: Deps, sid: string, nonce: string): Promise<void> {
+  const s = d.state
+  const l = s.idleLane
+  if (!l || l.nonce !== nonce || l.sid !== sid || l.closed || l.digested || s.halt.active) return row(d, sid, nonce, 'unknown', 'skipped:taken')
+  const r = await laneNow(d, l)
+  if (r === undefined) return
+  const lane = r.lane.lane
+  const g = await canSubmit(d, sid)
+  if (typeof g === 'string') return row(d, sid, nonce, lane, g)
+  // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
+  const asOf = l.measuredAt !== undefined ? isoLocal(l.measuredAt, false).slice(11, 16) : undefined
+  const submitted = await send(d, sid, resultDigestLine(d.name, r.lane, laneBasis(l.facts, r.running, l.remeasure, asOf)), g)
+  await row(d, sid, nonce, lane, submitted ? 'submitted' : 'skipped:submit-failed')
+  if (!submitted) return
+  l.shown = lane
+  l.digested = true
+  await logLane(d, sid, nonce, l.facts, r.lane, 'submit', r.running)
 }

@@ -15,7 +15,7 @@ import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
 
 const HAS = hasTag('resume-context', 'idle-done')
 const M = { running: 0, midturn: false, nonok: false, driver: false }
-const F: LaneFacts = { status: 'finished', todo: 0, done: 2, unmarked: 0, free: 0, elsewhere: false, listed: true, step1: 'none', gate: 'none', unstable: false }
+const F: LaneFacts = { status: 'finished', todo: 0, done: 2, unmarked: 0, free: 0, onJob: 0, onUser: 0, elsewhere: false, listed: true, step1: 'none', gate: 'none', unstable: false }
 
 // ---- the parser
 
@@ -31,17 +31,17 @@ test('laneFacts: Status word, step marks, Step 1 and a half-done step from the s
     '2. run the tests — done when green · done',
     '3. tidy the notes',
   ].join('\n')
-  expect(laneFacts(text)).toEqual({ status: 'hard-blocked', todo: 1, done: 1, unmarked: 1, free: 0, elsewhere: false, listed: true, step1: 'set', gate: 'set', unstable: false })
+  expect(laneFacts(text)).toEqual({ status: 'hard-blocked', todo: 1, done: 1, unmarked: 1, free: 0, onJob: 0, onUser: 1, elsewhere: false, listed: true, step1: 'set', gate: 'set', unstable: false })
   const inline = '## Resume here\nStatus: finished · Acuity: unstable · State: y\nStep 1: none\n## Next steps: 1. a — done when b · done 2. c — done when d · done\n'
-  expect(laneFacts(inline)).toEqual({ status: 'finished', todo: 0, done: 2, unmarked: 0, free: 0, elsewhere: false, listed: true, step1: 'none', gate: 'missing', unstable: true })
+  expect(laneFacts(inline)).toEqual({ status: 'finished', todo: 0, done: 2, unmarked: 0, free: 0, onJob: 0, onUser: 0, elsewhere: false, listed: true, step1: 'none', gate: 'missing', unstable: true })
   // An item's last mark counts, and only a mark that ends its words (`· done when` is not one); a
   // step marked todo with no gate, ask, pending answer or wait can run.
   const marks = '## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none · Don\'t: x\n## Next steps\n1. run the suite · done when green · todo\n' +
     '2. ask user: deploy (! make deploy) · todo\n3. wait for B-1 — done when it ends · todo; waits on B-1\n   if red → fix\n- pending answer: the table\n'
-  expect(laneFacts(marks)).toEqual({ status: 'soft-blocked', todo: 3, done: 0, unmarked: 0, free: 1, elsewhere: false, listed: true, step1: 'none', gate: 'none', unstable: false })
+  expect(laneFacts(marks)).toEqual({ status: 'soft-blocked', todo: 3, done: 0, unmarked: 0, free: 1, onJob: 1, onUser: 1, elsewhere: false, listed: true, step1: 'none', gate: 'none', unstable: false })
   expect(laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: ask user: push (! git push)\nGate: none\n').gate).toBe('set')
   expect(laneFacts('## Resume here\nStatus: finished\n## Next steps: see handoff\n')).toEqual(
-    { status: 'finished', todo: 0, done: 0, unmarked: 0, free: 0, elsewhere: true, listed: true, step1: 'missing', gate: 'missing', unstable: false })
+    { status: 'finished', todo: 0, done: 0, unmarked: 0, free: 0, onJob: 0, onUser: 0, elsewhere: true, listed: true, step1: 'missing', gate: 'missing', unstable: false })
   expect(laneFacts('no form here').status).toBe(null)
   expect(laneFacts('## Resume here\nStatus: working · State: z (checkpoint: MID-STEP 2, remaining 3)\nStep 1: `x` | proposed\n').step1).toBe('proposed')
   expect(laneFacts('## Resume here\nStatus: working · State: z (checkpoint: MID-STEP 2, remaining 3)\n').unstable).toBe(true)
@@ -90,11 +90,11 @@ test('laneOf: each Status word as read, and the code corrections toward work or 
 test('laneOf: every reason fits the @lane_why@ size tools/assemble budgets with', () => {
   let longest = ''
   const statuses = [null, 'working', 'finished', 'hard-blocked', 'soft-blocked', 'done', 'other']
-  for (const status of statuses) for (const todo of [0, 1]) for (const free of [0, 1]) for (const unmarked of [0, 1])
-    for (const elsewhere of [false, true]) for (const step1 of ['none', 'proposed', 'set', 'missing'] as const) for (const gate of ['none', 'set'] as const)
-      for (const listed of [true, false]) for (const running of [0, 1]) for (const flag of ['', 'midturn', 'nonok', 'driver', 'superseded', 'unstable']) {
-        const f: LaneFacts = { status, todo, done: 1, unmarked, free, elsewhere, listed, step1, gate, unstable: flag === 'unstable' }
-        const r = laneOf(f, { running, midturn: flag === 'midturn', nonok: flag === 'nonok', driver: flag === 'driver', superseded: flag === 'superseded' })
+  for (const status of statuses) for (const todo of [0, 1]) for (const free of [0, 1]) for (const unmarked of [0, 1]) for (const onJob of [0, 1])
+    for (const elsewhere of [false, true]) for (const step1 of ['none', 'proposed', 'set', 'missing'] as const) for (const gate of ['none', 'job', 'set'] as const)
+      for (const listed of [true, false]) for (const running of [0, 1]) for (const flag of ['', 'midturn', 'nonok', 'driver', 'superseded', 'unstable', 'result']) {
+        const f: LaneFacts = { status, todo, done: 1, unmarked, free, onJob, onUser: 0, elsewhere, listed, step1, gate, unstable: flag === 'unstable' }
+        const r = laneOf(f, { running, midturn: flag === 'midturn', nonok: flag === 'nonok', driver: flag === 'driver', superseded: flag === 'superseded', result: flag === 'result' })
         if (r.why.length > longest.length) longest = r.why
       }
   expect(laneOf(undefined, M).why.length <= LANE_WHY_MAX).toBe(true)
@@ -890,4 +890,201 @@ test('R3-4: a notification with no status (a Monitor\'s event while it runs on) 
   const t = await resultTurn($, w, event)
   expect(t.block ?? '').not.toContain('code reads the work lane as finished')
   expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at]).slice(-1)).toEqual([['working', 'delivery']])
+})
+
+// ---- owner 2026-10-28 digest rules (a)/(b): a step held on a job's result; the re-check at that result turn's end
+
+/** A blocked Resume here whose push waits on the user, with this step first in Next steps. */
+const onJob = (step: string, status = 'soft-blocked'): string =>
+  `Status: ${status} · Acuity: stable · State: the timer runs; the push waits on you (checkpoint: clean)\nStep 1: \`git push\` — for "ship"\n` +
+  `Gate: protected-branch push · Don't: x\n## Next steps\n1. ${step} · todo\n2. \`git push\` — done when pushed · todo; gated: ask user: push (! git push)\n`
+/** Trigger wordings of a step whose only trigger is a running job's result (rule (a)). */
+const TRIGGERS = [
+  'On the timer notification, reply with one line acknowledging it',
+  'Wait for the timer notification, then reply with one line',
+  'when CI finishes, report the result',
+  'after the build ends, tag the release',
+  'once the B-1 result arrives, summarise it',
+  'when the timer fires, check its log',
+  'upon the workflow notification, read its output',
+  'after the agent result, merge the findings',
+  'On the B-2 shell result, read the log — done when read',
+  'waiting on B-2, then read its log',
+]
+
+test('rule (a): a step whose only trigger is a running job\'s result is held on the job under a blocked Status, whatever the wording', () => {
+  for (const step of TRIGGERS) {
+    const f = laneFacts('## Resume here\n' + onJob(step))
+    expect([step, f.todo, f.free, f.onJob, f.onUser]).toEqual([step, 2, 0, 1, 1])
+    // While the job runs the model's soft-blocked stands; with nothing running it reads hard-blocked.
+    expect([step, laneOf(f, { ...M, running: 1 }).lane]).toEqual([step, 'soft-blocked'])
+    expect([step, laneOf(f, M).lane]).toEqual([step, 'hard-blocked'])
+    // The turn the job's result comes with: the step it unblocks can run (xxxxxxxx-06).
+    expect([step, laneOf(f, { ...M, result: true })]).toEqual([step, { lane: 'working', source: 'recheck', why: 'the summary says soft-blocked, but a result unblocks a step', byResult: true }])
+    expect([step, laneOf(laneFacts('## Resume here\n' + onJob(step, 'hard-blocked')), { ...M, running: 1 }).lane]).toEqual([step, 'soft-blocked'])
+  }
+  // The AD2 wording and its "Wait for" twin read the same at every moment (no flip on wording).
+  const on = laneFacts('## Resume here\n' + onJob('On the timer notification, reply with one line'))
+  const wait = laneFacts('## Resume here\n' + onJob('Wait for the timer notification, then reply with one line'))
+  for (const m of [{ ...M, running: 1 }, M, { ...M, result: true }]) expect(laneOf(on, m)).toEqual(laneOf(wait, m))
+})
+
+test('rule (a): not held under a working (or finished) Status; a step that only names a build or a result, or a done criterion, stays free work', () => {
+  for (const step of TRIGGERS) {
+    expect([step, laneOf(laneFacts('## Resume here\n' + onJob(step, 'working')), M).lane]).toEqual([step, 'working'])
+    expect([step, laneOf(laneFacts('## Resume here\n' + onJob(step, 'working')), { ...M, result: true }).lane]).toEqual([step, 'working'])
+    expect([step, laneOf(laneFacts('## Resume here\n' + onJob(step, 'finished')), M).lane]).toEqual([step, 'working'])
+  }
+  for (const step of ['fix the build script', 'work on the results table', 'run the suite — done when the run finishes', 'rerun the failed CI job', 'tidy the notes after review']) {
+    const f = laneFacts('## Resume here\n' + onJob(step))
+    expect([step, f.free, f.onJob]).toEqual([step, 1, 0])
+    expect([step, laneOf(f, { ...M, running: 1 }).lane]).toEqual([step, 'working'])
+  }
+  // A step that needs the user after the job too is held on the user.
+  const both = laneFacts('## Resume here\n' + onJob('after CI finishes, deploy — gated: ask user: deploy'))
+  expect([both.onJob, both.onUser]).toEqual([0, 2])
+  expect(laneOf(both, { ...M, result: true }).lane).toBe('hard-blocked')
+  // A result on a blocked lane with no step held on a job changes nothing.
+  expect(laneOf({ ...F, status: 'soft-blocked', todo: 1, onUser: 1 }, { ...M, result: true }).lane).toBe('hard-blocked')
+})
+
+test('rule (a): Step 1 held on a job with `Gate: none` is not a free Step 1: blocked while the job runs, working in its result turn', () => {
+  const f = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: On the timer notification, reply — for "go"\nGate: none · Don\'t: x\n## Next steps\n1. `git push` · todo; gated: ask user: push\n')
+  expect([f.step1, f.gate, f.free, f.onJob, f.onUser]).toEqual(['set', 'job', 0, 0, 1])
+  expect(laneOf(f, { ...M, running: 1 }).lane).toBe('soft-blocked')
+  expect(laneOf(f, { ...M, result: true }).lane).toBe('working')
+  // A record of lane facts written before the holds were told apart reads every held step as the user's.
+  const { onJob: _j, onUser: _u, ...old } = { ...F, status: 'hard-blocked', todo: 2, free: 1 }
+  expect(asLaneFacts(old)).toEqual({ ...F, status: 'hard-blocked', todo: 2, free: 1, onJob: 0, onUser: 1 })
+  expect(asLaneFacts({ ...F, onJob: -1 })).toBe(undefined)
+  expect(asLaneFacts({ ...F, gate: 'job' })?.gate).toBe('job')
+})
+
+/** The AD2 shape: an idle compaction while the timer shell b7 runs; the summary's only free-looking step waits on its result. */
+async function ad2($: Engine, w: World, step: string): Promise<void> {
+  w.resumeHere = onJob(step)
+  w.measureBlock = shell('b7')
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+}
+
+for (const step of ['On the timer notification, reply with one line acknowledging it', 'Wait for the timer notification, then reply with one line']) {
+  test(`rule (b) "${step.slice(0, 8)}": the result turn reads working ([idle]); its end reads hard-blocked and submits one digest turn; nothing repeats it`, async ($, on) => {
+    const w = new World().install(on)
+    await ad2($, w, step)
+    if (!HAS) return
+    expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:running']])
+    // The timer's result: the step it unblocks can run, so the block is today's [idle].
+    const t = await resultTurn($, w, notif('b7'))
+    expect(t.block ?? '').toContain(head(w, 'idle') ?? '')
+    expect(t.block ?? '').not.toContain(head(w, 'idle-done') ?? '')
+    await w.turnEnd($, 'The timer ended; nothing new started.')
+    await w.advance(5000)
+    expect(w.submits.length).toBe(1)
+    const sent = w.submits[0] ?? ''
+    expect(sent).toContain('code now reads the work lane as hard-blocked (the summary says soft-blocked, but nothing runs)')
+    expect(sent).toContain('print the away digest')
+    expect(sent).toContain('Basis: 0 of 2 listed steps marked done; 0 units running; git: not measured (by code, as is)')
+    expect(sent.endsWith('or Nothing needed from you.')).toBe(true)
+    expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:running'], ['hard-blocked', 'submitted']])
+    expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.source, r.at])).toEqual([
+      ['soft-blocked', 'status', 'build'], ['working', 'recheck', 'delivery'], ['hard-blocked', 'recheck', 'recheck'], ['hard-blocked', 'recheck', 'submit'],
+    ])
+    // The digest turn runs and ends: no second one, and a later turn not of a person's gets no note.
+    await w.turnStart($, sent)
+    await w.turnEnd($, 'Stopped: waiting on you.\n\nNeeds you:\n1. Approve the push.')
+    await w.advance(5000)
+    const cron = await resultTurn($, w, 'A scheduled check ran.')
+    expect(cron.ctx).toBe('')
+    await w.turnEnd($)
+    await w.advance(5000)
+    expect(w.submits.length).toBe(1)
+    // The person is back: the [idle-again] block reads the lane again, hard-blocked ([idle-done]'s pointer branch).
+    await w.userTurn($, 'back')
+    const back = ctxOf(w)
+    expect(back).toContain("A background result's turn got this block at")
+    expect(back).toContain('code reads the work lane as hard-blocked')
+  })
+}
+
+test('rule (b) with idle_digest return: no digest turn at the result turn\'s end; the person\'s return gets the hard-blocked [idle-done] block', { options: { idle_digest: 'return' } }, async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  if (!HAS) return
+  await resultTurn($, w, notif('b7'))
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:return'], ['hard-blocked', 'skipped:return']])
+  await w.userTurn($, 'back')
+  const back = ctxOf(w)
+  expect(back).toContain('code reads the work lane as hard-blocked')
+  expect(back).toContain("The user's own message opened this turn: only ≤5 lines of it")
+})
+
+test('rule (b): the result turn already printed the digest ([idle] step 5): no second one', async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  if (!HAS) return
+  await resultTurn($, w, notif('b7'))
+  await w.turnEnd($, 'Stopped: waiting on you. Basis: 0 of 2 listed steps marked done.\n\n**Needs you:**\n1. Approve the push. Blocks: step 2.')
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at]).slice(-1)).toEqual([['hard-blocked', 'recheck']])
+  // A later turn not of a person's gets no note either: the lane was told.
+  expect((await resultTurn($, w, 'A scheduled check ran.')).ctx).toBe('')
+})
+
+test('rule (b): two jobs, a step on each: the first result turn ends soft-blocked (no digest); the last one\'s end gives hard-blocked and one digest turn', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = 'Status: soft-blocked · Acuity: stable · State: two shells run (checkpoint: clean)\nStep 1: none\n' +
+    '## Next steps\n1. when B-1 ends, read its log · todo\n2. when B-2 ends, read its log · todo\n3. `git push` · todo; gated: ask user: push\n'
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight (sidecar 2026-10-21 14:00 +0300):\n  b1 · shell · running\n  b2 · shell · running\nEvidence: none'
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  if (!HAS) return
+  await resultTurn($, w, notif('b1'))
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  // The second result: still working by its result (no note), then its end reads hard-blocked.
+  expect((await resultTurn($, w, notif('b2'))).ctx).toBe('')
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits.length).toBe(1)
+  expect(w.submits[0] ?? '').toContain('code now reads the work lane as hard-blocked')
+  expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at])).toEqual([
+    ['soft-blocked', 'build'], ['working', 'delivery'], ['hard-blocked', 'recheck'], ['hard-blocked', 'submit'],
+  ])
+})
+
+test('rule (b): one digest per episode: a turn already told the soft-blocked digest, so the result turn\'s end submits none', async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  if (!HAS) return
+  // A scheduled turn takes the block while the timer runs: the soft-blocked digest.
+  expect((await resultTurn($, w, 'A scheduled check ran.')).block ?? '').toContain('code reads the work lane as soft-blocked')
+  await w.turnEnd($)
+  // The timer's result reads working (no note); its end reads hard-blocked; the digest went out already.
+  expect((await resultTurn($, w, notif('b7'))).ctx).toBe('')
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at])).toEqual([
+    ['soft-blocked', 'build'], ['soft-blocked', 'delivery'], ['working', 'recheck'], ['hard-blocked', 'recheck'],
+  ])
+})
+
+test('rule (b): work the result turn starts supersedes the lane: no digest at its end', async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  if (!HAS) return
+  await resultTurn($, w, notif('b7'))
+  await $.tool.call({ tool: 'Agent', description: 'next step', prompt: 'do it', mode: 'standard' } as never)
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
 })

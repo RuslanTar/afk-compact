@@ -570,6 +570,20 @@ export type IdleLane = {
    * count as running (review of fix round 1).
    */
   restored: boolean
+  /** A job's result came with the prompt of the turn now running (a notification that reported a task ended); cleared at its end. */
+  result: boolean
+  /**
+   * The turn now running read the lane working only because that result unblocks a step held on
+   * its job (owner 2026-10-28 digest rules (a)): its end reads the lane again (rule (b), digest.ts
+   * `laneTurnEnd`); cleared there.
+   */
+  unblocked: boolean
+  /**
+   * A turn of this episode was told a finished or blocked lane (its block, the digest turn, or a
+   * note that asks for the digest or a one-line change): later notes ask for one line, never a
+   * second digest, and the end of a result's turn submits none.
+   */
+  digested: boolean
 }
 
 /**
