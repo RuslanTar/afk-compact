@@ -104,27 +104,46 @@ const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
 const HELD_RE = /\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
 /** The part of `HELD_RE` that holds a step on the user: a gate, an ask, a pending answer, a needed approval or the user. */
 const USER_RE = /\b(?:gated|ask user|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i
-/** Up to four words between a trigger and what it names. */
-const WORDS = "(?:[\\w.#/'\"`-]+\\s+){0,4}?"
-/** A job's result as a step names it. */
-const RESULT_NOUN = '(?:notifications?|results?|outputs?|completion)'
-/** A running job (or its result) as a step names it: `B-n` is the summary form's id of a background job. */
-const JOB_NOUN = `(?:${RESULT_NOUN}|jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|B-\\d+)`
+/**
+ * One word between a trigger and what it names: never a possessive (`the reviewer's result` is
+ * not a job's) nor `of`, `from`, `by` or `for` (`approval of the run` is not the run).
+ */
+const WORD = "(?:(?!(?:of|from|by|for)\\s)[\\w.#/\"`-]+\\s+)"
+/** A running job as a step names it: `B-n` is the summary form's id of a background job. */
+const JOB = '(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|B-\\d+)'
+/** What a job gives back. */
+const RESULT = '(?:results?|outputs?|completion|notifications?)'
+/**
+ * A job's result as a step names it: a notification (only a job's opens a turn), or a result,
+ * output or completion that names its job (`the build result`, `the agent's output`, `the result
+ * of the run`); a bare `the results` or `completion` names none.
+ */
+const JOB_RESULT = `(?:notifications?|${JOB}(?:'s)?\\s+${RESULT}|(?:results?|outputs?|completion)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?${WORD}?${JOB})`
 /** A job that ends or a result that comes in. */
 const FINISH = '(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|fires?|fired|exits?|exited|passes|passed|fails|failed|is (?:done|in|back|green|red))'
 /**
- * A step whose trigger is a running job's result (owner 2026-10-28 digest rules (a)): `On the
- * timer notification, reply …` (on, upon or after at the start of a clause, then the result);
- * `when CI finishes`, `after the build ends`, `once the result arrives` (a trigger, a job, its
- * end); `wait for the timer notification`, `waits on B-1`, `awaiting the build` (a wait on a job).
- * Each needs a trigger word and a job or result named after it, so a step that only mentions a
- * build or a result (`fix the build script`, `work on the results table`) stays free work: code
- * never turns a summary toward a stop its own words do not ask for.
+ * The start of the step (after its number; `then` may lead): a trigger there holds the whole
+ * step, while one after other work (`commit the notes; when CI finishes, …`) leaves that work free.
+ */
+const LEAD = '^(?:\\d+\\.\\s+)?(?:then,?\\s+)?'
+/**
+ * A step whose trigger is a running job's result (owner 2026-10-28 digest rules (a)):
+ * - `On the timer notification, reply …`, `after the agent result, merge …`: on, upon or after
+ *   leading the step, then a job's result (`JOB_RESULT`);
+ * - `when CI finishes, report …`, `after the build ends`, `once the result arrives`: when, after,
+ *   once or as soon as leading the step, then a job or a result, then its end (`FINISH`);
+ * - `wait for the timer notification`, `waits on B-1`, `awaiting the build`: a wait on a job or a
+ *   job's result, anywhere (any wait reads held already: this only tells the job's from the user's).
+ * The trigger leads the step, so a step that only mentions a job or a result (`fix the build
+ * script`, `add a test for when the task completes`, `log a message when the build is done`, `On
+ * completion, commit`, `after the results are reviewed, …`) stays free work: code never turns a
+ * summary toward a stop its own words do not ask for. A trigger that does not lead the step
+ * (`reply once the timer fires`) reads free too: that errs toward work.
  */
 const JOB_RE = new RegExp(
-  `(?:^(?:\\d+\\.\\s+)?|[;:,(—]\\s*)(?:on|upon|after)\\s+${WORDS}${RESULT_NOUN}\\b` +
-    `|\\b(?:when|after|once|until|as soon as)\\s+${WORDS}${JOB_NOUN}\\s+(?:[\\w.#/'-]+\\s+){0,2}?${FINISH}\\b` +
-    `|\\b(?:wait(?:s|ing)?\\s+(?:on|for|until)|await(?:s|ing)?)\\s+(?:[\\w.#/'-]+\\s+){0,2}?${JOB_NOUN}\\b`,
+  `${LEAD}(?:on|upon|after)\\s+${WORD}{0,4}?${JOB_RESULT}\\b` +
+    `|${LEAD}(?:when|after|once|as soon as)\\s+${WORD}{0,4}?(?:${JOB}(?:'s)?\\s+)?(?:${JOB}|${RESULT})\\s+${WORD}{0,2}?${FINISH}\\b` +
+    `|\\b(?:wait(?:s|ing)?\\s+(?:on|for|until)|await(?:s|ing)?)\\s+(?:(?:the|that|this|its)\\s+)?${WORD}{0,2}?(?:${JOB_RESULT}|${JOB})\\b`,
   'i',
 )
 /** A step's done criterion (`— done when the run finishes`, up to its mark or next clause): not a trigger. */

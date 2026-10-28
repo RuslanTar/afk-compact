@@ -121,10 +121,12 @@ async function send(d: Deps, sid: string, text: string, g: { stamps: number[]; n
  * once: with `idle_digest: submit` (the default) one digest turn is submitted right away (the
  * same checks and hourly cap as the digest turn after the compaction); with `return` the
  * person's return gets it (the `[idle-again]` block, read again then, carries `[idle-done]`).
- * No turn is submitted when a turn of this episode was already told a finished or blocked lane
- * (one digest per episode; the person's return still shows the state), or when this turn's answer
- * already ends with the digest (the `[idle]` block's step 5 asks for it when all left waits on the
- * user). Something still running: no change (its result opens a turn, re-checked as before).
+ * No turn is submitted when this turn's answer already ends with the digest (the `[idle]` block's
+ * step 5 asks for it when all left waits on the user), or when a turn of this episode was already
+ * told a finished or blocked lane (one digest per episode): then the next turn not of a person's
+ * gets the one-line note on the new state, as after any change (`laneRecheck`), and the person's
+ * return the block read again. Something still running: no change (its result opens a turn,
+ * re-checked as before).
  */
 export async function laneTurnEnd(d: Deps, sid: string, reason: string, answer: string): Promise<void> {
   const s = d.state
@@ -137,11 +139,15 @@ export async function laneTurnEnd(d: Deps, sid: string, reason: string, answer: 
   const r = await laneNow(d, l)
   if (r === undefined) return
   await logLane(d, sid, l.nonce, l.facts, r.lane, 'recheck', r.running)
-  if (l.digested || DIGEST_END_RE.test(answer)) {
+  if (DIGEST_END_RE.test(answer)) {
     l.shown = r.lane.lane
     l.digested = true
     return
   }
+  // A digest went out earlier in the episode: no second one. The lane told stays as it was (this
+  // turn's working), so the next turn not of a person's gets the one-line note on the new state
+  // (`laneRecheck`), and the person's return the block read again.
+  if (l.digested) return
   if (d.cfg.idle_digest !== 'submit') return row(d, sid, l.nonce, r.lane.lane, 'skipped:return')
   const nonce = l.nonce
   d.after(digestDelayMs(d), () => {

@@ -223,9 +223,30 @@ sub _test_corrupt {
 #   Step 1 none or proposed; else in-progress;
 # - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
-#   `Gate: none` (Step 1 itself naming none of them).
+#   `Gate: none` (Step 1 itself naming none of them). A step whose trigger is a running job's
+#   result (`On the timer notification, reply …`, `when CI finishes, …`; owner 2026-10-28 digest
+#   rules (a), lane.ts `JOB_RE`) is held on that job, not a step that can run: the copy is taken
+#   with no result in, so it stays blocked (only the session's result turn reads it working).
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+# lane.ts `JOB_RE` and its parts, word for word.
+my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
+my $J_JOB = q{(?:jobs?|builds?|CI|pipelines?|timers?|agents?|subagents?|workflows?|shells?|runs?|tasks?|B-\d+)};
+my $J_RESULT = q{(?:results?|outputs?|completion|notifications?)};
+my $J_JOB_RESULT = "(?:notifications?|$J_JOB(?:'s)?\\s+$J_RESULT|(?:results?|outputs?|completion)\\s+(?:of|from)\\s+(?:(?:the|that|this|its)\\s+)?$J_WORD?$J_JOB)";
+my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|arrived|returns?|returned|comes? (?:in|back)|fires?|fired|exits?|exited|passes|passed|fails|failed|is (?:done|in|back|green|red))};
+my $J_LEAD = q{^(?:\d+\.\s+)?(?:then,?\s+)?};
+my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b|\b(?:wait(?:s|ing)?\s+(?:on|for|until)|await(?:s|ing)?)\s+(?:(?:the|that|this|its)\s+)?(?:$J_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)\b/i;
+my $USER_RE = qr/\b(?:gated|ask user|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+
+# What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run.
+sub _hold_of {
+    my ($text) = @_;
+    return 'user' if $text =~ $USER_RE;
+    (my $t = $text) =~ s/\bdone when\b[^·;]*//gi;
+    return 'job' if $t =~ $JOB_RE;
+    return $text =~ $HELD_RE ? 'user' : undef;
+}
 
 sub _trim { my ($s) = @_; $s =~ s/\A\s+|\s+\z//g; return $s }
 
@@ -293,13 +314,13 @@ sub copy_status {
     my ($g) = $where =~ /^\s*Gate:[ \t]*([^·\n]*)/m;
     $g = defined $g ? _trim($g) : '';
     (my $cmd = $step) =~ s/\s+—\s+for\s+".*\z//;
-    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && $cmd !~ $HELD_RE) ? 'none' : 'set';
+    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined _hold_of($cmd)) ? 'none' : 'set';
     my ($listed, @next) = _section($t, 'next steps');
     my ($todo, $unmarked, $free) = (0, 0, 0);
     for my $item (_items(@next)) {
         my $m = _last_mark($item);
         if (!defined $m) { $unmarked++ }
-        elsif ($m eq 'todo') { $todo++; $free++ unless $item =~ $HELD_RE }
+        elsif ($m eq 'todo') { $todo++; $free++ unless defined _hold_of($item) }
     }
     if ($w eq 'finished' || $w eq 'done') {
         return 'in-progress' unless $listed && $todo == 0 && $unmarked == 0 && join("\n", @next) !~ /\bsee handoff\b/i;

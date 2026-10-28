@@ -910,7 +910,29 @@ const TRIGGERS = [
   'after the agent result, merge the findings',
   'On the B-2 shell result, read the log — done when read',
   'waiting on B-2, then read its log',
+  'as soon as the pipeline passes, merge',
+  'On the result of the run, write it up',
+  "After the agent's output comes back, merge it",
+  'Then, when the build is green, push the tag',
+  'once the results arrive, summarise them',
 ]
+/**
+ * Ordinary work that only mentions a job, its end or a result, with no trigger leading its clause
+ * (review of digest rules (a)): free work, so a blocked Status still reads working (-08, M1).
+ */
+const NOT_TRIGGERS = [
+  'add a test for when the task completes',
+  'handle the case when the job fails (retry)',
+  'log a message when the build is done',
+  'On completion, commit the change',
+  'after the results are reviewed, write the summary',
+  'until CI passes, fix the failures',
+  'on the results page, add a filter',
+  'reply once the timer fires',
+  'commit the notes; when the build is green, push the tag',
+]
+/** A wait on something that is not a job (a person, an approval): held on the user, never on a job. */
+const USER_WAITS = ["Wait for the reviewer's result", 'awaiting approval of the run', 'wait for review of CI']
 
 test('rule (a): a step whose only trigger is a running job\'s result is held on the job under a blocked Status, whatever the wording', () => {
   for (const step of TRIGGERS) {
@@ -935,10 +957,17 @@ test('rule (a): not held under a working (or finished) Status; a step that only 
     expect([step, laneOf(laneFacts('## Resume here\n' + onJob(step, 'working')), { ...M, result: true }).lane]).toEqual([step, 'working'])
     expect([step, laneOf(laneFacts('## Resume here\n' + onJob(step, 'finished')), M).lane]).toEqual([step, 'working'])
   }
-  for (const step of ['fix the build script', 'work on the results table', 'run the suite — done when the run finishes', 'rerun the failed CI job', 'tidy the notes after review']) {
+  for (const step of ['fix the build script', 'work on the results table', 'run the suite — done when the run finishes', 'rerun the failed CI job', 'tidy the notes after review', ...NOT_TRIGGERS]) {
     const f = laneFacts('## Resume here\n' + onJob(step))
     expect([step, f.free, f.onJob]).toEqual([step, 1, 0])
     expect([step, laneOf(f, { ...M, running: 1 }).lane]).toEqual([step, 'working'])
+    expect([step, laneOf(f, M).lane]).toEqual([step, 'working'])
+  }
+  // A wait on a person or an approval holds the step on the user: a job's result does not unblock it.
+  for (const step of USER_WAITS) {
+    const f = laneFacts('## Resume here\n' + onJob(step))
+    expect([step, f.free, f.onJob, f.onUser]).toEqual([step, 0, 0, 2])
+    expect([step, laneOf(f, { ...M, result: true }).lane]).toEqual([step, 'hard-blocked'])
   }
   // A step that needs the user after the job too is held on the user.
   const both = laneFacts('## Resume here\n' + onJob('after CI finishes, deploy — gated: ask user: deploy'))
@@ -1061,7 +1090,7 @@ test('rule (b): two jobs, a step on each: the first result turn ends soft-blocke
   ])
 })
 
-test('rule (b): one digest per episode: a turn already told the soft-blocked digest, so the result turn\'s end submits none', async ($, on) => {
+test('rule (b): one digest per episode: a turn already told the soft-blocked digest, so the result turn\'s end submits none; the next turn still gets the one-line change note', async ($, on) => {
   const w = new World().install(on)
   await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
   if (!HAS) return
@@ -1076,6 +1105,15 @@ test('rule (b): one digest per episode: a turn already told the soft-blocked dig
   expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at])).toEqual([
     ['soft-blocked', 'build'], ['soft-blocked', 'delivery'], ['working', 'recheck'], ['hard-blocked', 'recheck'],
   ])
+  // The change is not swallowed: the next turn not of a person's says what changed in one line, once.
+  const note = (await resultTurn($, w, 'A scheduled check ran.')).ctx
+  expect(note).toContain('code reads the work lane as hard-blocked (the summary says soft-blocked, but nothing runs)')
+  expect(note).toContain('the away digest went out already: say in one line that the lane is now hard-blocked')
+  await w.turnEnd($)
+  expect((await resultTurn($, w, 'A scheduled check ran.')).ctx).toBe('')
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
 })
 
 test('rule (b): work the result turn starts supersedes the lane: no digest at its end', async ($, on) => {
