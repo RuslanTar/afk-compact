@@ -2156,6 +2156,42 @@ sub u06_check {
     return ("unknown check '$check'");
 }
 
+# claude_pid_walk_chains(args) -> errors: the claude_pid_walk lib step's chains, run in this
+# process; its parent (getppid(), above pid 1) stands for each chain's `start`.
+sub claude_pid_walk_chains {
+    my ($args) = @_;
+    my @e;
+    no warnings qw(redefine once);
+    my $real = getppid();
+    for my $c (@{ $args->{chains} }) {
+        my %used = map { ("$_" => 1, (defined $c->{procs}{$_}{ppid} ? ("$c->{procs}{$_}{ppid}" => 1) : ())) } keys %{ $c->{procs} || {} };
+        my %map = ("$c->{start}" => $real);
+        if ($used{$real} && "$real" ne "$c->{start}") {
+            my $free = 900000;
+            $free++ while $used{$free};
+            $map{$real} = $free;
+        }
+        my $ren = sub { my ($x) = @_; return (defined $x && exists $map{"$x"}) ? $map{"$x"} : $x };
+        my %t = map { $ren->($_) => { %{ $c->{procs}{$_} }, ppid => $ren->($c->{procs}{$_}{ppid}) } } keys %{ $c->{procs} || {} };
+        my $calls = 0;
+        local *identity::_parent_and_comm = sub { my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
+        local *identity::_exe = sub { $calls++; my $p = $t{ $_[0] } or return undef; return $p->{exe} };
+        local *identity::start_time = sub { return 'stub' };
+        local $identity::CACHED;
+        local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
+        local $ENV{STORE_TEST_CLAUDE_PID};
+        delete $ENV{STORE_TEST_CLAUDE_PID};
+        my $r = identity::claude_pid();
+        my ($pid, $found) = ($r->{pid}, $r->{found});
+        $pid = undef if !$found && $pid == $real;
+        my $want = $ren->($c->{want});
+        push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($want // 'null') if ($pid // 'null') ne ($want // 'null');
+        push @e, "$c->{id}: found $found, want $c->{found}" if $found != ($c->{found} ? 1 : 0);
+        push @e, "$c->{id}: $calls executable reads, want $c->{exe_calls}" if defined $c->{exe_calls} && $calls != $c->{exe_calls};
+    }
+    return @e;
+}
+
 sub builtin {
     my ($name, $a, $cdir) = @_;
     _libs();
@@ -2845,30 +2881,35 @@ sub builtin {
         # table given in the case ({pid: {ppid, comm, exe}}; exe is what /proc/<pid>/exe or lsof
         # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read.
         # The public entry, identity::claude_pid, starts at getppid(): the chain's `start` pid is
-        # renamed to it throughout, and start times are stubbed.
+        # renamed to it throughout, and start times are stubbed. A recorded pid that happens to be
+        # the real parent's (other than `start`) is moved to a free number, so the two never merge.
         return ('no chains') unless ref $a->{chains} eq 'ARRAY' && @{ $a->{chains} };
-        no warnings qw(redefine once);
-        my $real = getppid();
-        for my $c (@{ $a->{chains} }) {
-            my $ren = sub { my ($x) = @_; return (defined $x && $x eq "$c->{start}") ? $real : $x };
-            my %t = map { $ren->($_) => { %{ $c->{procs}{$_} }, ppid => $ren->($c->{procs}{$_}{ppid}) } } keys %{ $c->{procs} || {} };
-            my $calls = 0;
-            local *identity::_parent_and_comm = sub { my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
-            local *identity::_exe = sub { $calls++; my $p = $t{ $_[0] } or return undef; return $p->{exe} };
-            local *identity::start_time = sub { return 'stub' };
-            local $identity::CACHED;
-            local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
-            local $ENV{STORE_TEST_CLAUDE_PID};
-            delete $ENV{STORE_TEST_CLAUDE_PID};
-            my $r = identity::claude_pid();
-            my ($pid, $found) = ($r->{pid}, $r->{found});
-            $pid = undef if !$found && $pid == $real;
-            my $want = $ren->($c->{want});
-            push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($want // 'null') if ($pid // 'null') ne ($want // 'null');
-            push @e, "$c->{id}: found $found, want $c->{found}" if $found != ($c->{found} ? 1 : 0);
-            push @e, "$c->{id}: $calls executable reads, want $c->{exe_calls}" if defined $c->{exe_calls} && $calls != $c->{exe_calls};
+        # When the runner's parent is pid 1 (a container whose first process is the shell that
+        # started the runner, as `docker run` without --init does), getppid() is 1, where every
+        # walk stops by design (init is never Claude Code). The walk then runs in a child process,
+        # whose parent is the runner, and the child sends its errors back on a pipe.
+        if (getppid() <= 1) {
+            pipe(my $rd, my $wr) or return ("claude_pid_walk: pipe: $!");
+            my $kid = fork;
+            return ("claude_pid_walk: fork: $!") unless defined $kid;
+            if (!$kid) {
+                close $rd;
+                my @ce = eval { claude_pid_walk_chains($a) };
+                @ce = ("claude_pid_walk child died: $@") if $@;
+                s/\n/ /g for @ce;
+                print {$wr} map { "$_\n" } @ce;
+                close $wr;
+                POSIX::_exit(0);
+            }
+            close $wr;
+            my @got = <$rd>;
+            close $rd;
+            waitpid($kid, 0);
+            chomp @got;
+            push @got, "claude_pid_walk child exited with status $?" if $?;
+            return @got;
         }
-        return @e;
+        return claude_pid_walk_chains($a);
     }
     if ($name eq 'linux_start_time') {
         # R-4: the probe (a Perl file in the case folder) runs in a Linux container with the
