@@ -7,248 +7,248 @@
   "userConfig": {
     "handoff_root": {
       "type": "directory",
-      "title": "Handoff root",
-      "description": "Folder for handoffs and saved summary copies; buckets are <root>/<repo>/<ticket-or-topic>/.",
+      "title": "Handoff folder",
+      "description": "Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default ~/.claude/handoffs; change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository.",
       "default": "~/.claude/handoffs"
     },
     "log_dir": {
       "type": "directory",
       "title": "Log folder",
-      "description": "Watcher logs and per-compaction records. Empty = <handoff root>/.watch.",
+      "description": "Where the plugin keeps its local logs (which hold no conversation text) and its per-compaction records. Empty (the default) means the .watch folder inside the handoff folder; set a path only if you want the logs kept apart from the handoffs.",
       "default": ""
     },
     "disposable_root": {
       "type": "directory",
-      "title": "Disposable evidence root",
-      "description": "Automatic evidence copies, in dated folders.",
+      "title": "Temporary evidence folder",
+      "description": "Where the plugin copies temporary files the session referred to (for example test output or logs in a temp folder), in one dated folder per day, so they are still there after the system clears its temp folder. Default ~/.claude/trash-staging; nothing in it is deleted automatically, so remove old dated folders yourself when you no longer need them.",
       "default": "~/.claude/trash-staging"
     },
     "disposable_keep_days": {
       "type": "number",
-      "title": "Disposable keep days",
-      "description": "Retention note only; the plugin deletes nothing. 0 = kept until removed.",
+      "title": "Evidence keep days (reminder only)",
+      "description": "How many days you plan to keep the temporary evidence copies; the plugin only prints this as a reminder in its handoff reports and never deletes anything. Default 0 means \"kept until you remove them\"; set a number of days if you clean the folder on a schedule and want the reports to say so.",
       "default": 0
     },
     "evidence_quota_mb": {
       "type": "number",
-      "title": "Evidence quota (MB)",
-      "description": "Per-bucket evidence size that triggers a warning; warn only.",
+      "title": "Evidence size warning (MB)",
+      "description": "Size, in MB, at which the plugin warns that the saved evidence and summary copies of one ticket or topic folder have grown large. Default 500 MB; it only warns and never deletes, so raise it if the warning is noise, lower it to hear sooner, or set 0 for no warning.",
       "default": 500
     },
     "queue_cmd": {
       "type": "file",
-      "title": "Queue command",
-      "description": "Executable for an optional question queue: answers `list --json --session <sid>` with a `queue-stub/v1` object (the version tag is required), `adopt --lane <id> [--if-free] [--must-exist]` and `add --json ...` (draft on stdin; exit codes in README). Empty = off: the plugin makes no queue call. Read from your settings file only (flags and env are ignored).",
+      "title": "Question queue program",
+      "description": "Optional: the path of a program of your own that collects the questions an unattended session needs to ask you, so they wait in one queue as well as in the handoff (the program must follow the contract in the README, \"Questions for your queue\"). Empty (the default) turns this off and the plugin calls nothing; only your settings file counts for this option, flags and environment variables are ignored.",
       "default": ""
     },
     "triggers": {
       "type": "boolean",
       "title": "Plugin compactions",
-      "description": "false = no plugin compactions, no nudge, no auto-continue; shaping, saving and verification still run.",
+      "description": "Lets the plugin start compactions itself at a clean point, nudge the model toward one, and tell the session to carry on afterwards. Default true; set false if you only want every compaction written as a handoff, saved and checked, while Claude Code alone decides when to compact.",
       "default": true
     },
     "compact_target_tokens": {
       "type": "number",
       "title": "Compaction target (tokens)",
-      "description": "Plugin compaction at a clean turn end at or above this.",
+      "description": "Conversation size, in tokens, at which the plugin compacts (has Claude Code summarize the conversation and continue from the summary) as soon as the model finishes a turn, instead of waiting for Claude Code to compact in the middle of a task. Default 400,000 (minimum 100,000); lower it to compact earlier and more often, raise it to keep more history in view; on smaller context windows the plugin lowers it by itself.",
       "default": 400000,
       "min": 100000
     },
     "compact_soft_max_tokens": {
       "type": "number",
-      "title": "Soft maximum (tokens)",
-      "description": "Mid-turn nudge at or above this.",
+      "title": "Mid-turn nudge point (tokens)",
+      "description": "Conversation size, in tokens, at which the plugin asks the model, once, in the middle of a long turn to reach a stopping point so the compaction can run cleanly. Default 600,000 (minimum 150,000); keep it above the compaction target, and lower it if long turns keep running into Claude Code's own mid-task compaction.",
       "default": 600000,
       "min": 150000
     },
     "native_window_tokens": {
       "type": "number",
-      "title": "Native window (tokens)",
-      "description": "Your native auto-compact window, for the clamp. 0 = the session's context window.",
+      "title": "Claude Code compaction window (tokens)",
+      "description": "The context size within which Claude Code runs its own automatic compaction; the plugin keeps its own thresholds below Claude Code's compaction point (about 33,000 tokens under this window). Default 0 means the model's context window as Claude Code reports it; enter a number only if you told Claude Code to compact within a smaller window (values under 100,000 count as 100,000).",
       "default": 0
     },
     "boundary_delay_ms": {
       "type": "number",
-      "title": "Boundary delay (ms)",
-      "description": "Delay before a turn-end compaction (500 ms after a nudge).",
+      "title": "Wait before acting (ms)",
+      "description": "How long, in milliseconds, the plugin waits after a turn ends before it compacts or sends a turn of its own; a message you send during the wait cancels it. Default 2,000 (2 seconds; 500 ms after a nudged turn); raise it if you want more time to step in before the plugin acts.",
       "default": 2000
     },
     "cooldown_ms": {
       "type": "number",
-      "title": "Cooldown (ms)",
-      "description": "Minimum gap between plugin compactions.",
+      "title": "Minimum gap between compactions (ms)",
+      "description": "Shortest time, in milliseconds, between two compactions the plugin starts, so a session that fills up fast cannot compact over and over. Default 30,000 (30 seconds); raise it if you see plugin compactions bunched together.",
       "default": 30000
     },
     "max_auto_continues_per_hour": {
       "type": "number",
-      "title": "Auto-continues per hour",
-      "description": "Cap on automatic continues in a rolling hour; 0 = never auto-continue, so every nudged cycle is a last cycle.",
+      "title": "Automatic continues per hour",
+      "description": "How many times in any one hour the plugin may tell a session to keep working by itself after a compaction. Default 6 (allowed 0 to 10); lower it to limit unattended usage, or set 0 so that every run stops after its compaction and waits for you (by default the model is first given a turn to write a handoff, see Handoff before stopping).",
       "default": 6,
       "min": 0,
       "max": 10
     },
     "handoff_turn": {
       "type": "string",
-      "title": "Handoff turn",
-      "description": "halt = before the last compaction of a run that will not auto-continue, one more turn writes a handoff; off = no handoff turn.",
+      "title": "Handoff before stopping",
+      "description": "Values: halt or off. halt (the default): when the plugin will not continue the work by itself after the coming compaction, it first gives the model one extra turn to write a handoff you can resume from later; off skips that turn, which saves its usage but leaves only the compaction summary.",
       "default": "halt"
     },
     "handoff_turn_max_tokens": {
       "type": "number",
-      "title": "Handoff turn allowance (tokens)",
-      "description": "Tokens the handoff turn may use; reserved below the native trigger.",
+      "title": "Handoff turn budget (tokens)",
+      "description": "How many tokens the extra handoff-writing turn may use; the plugin keeps that much room free below Claude Code's own compaction point. Default 64,000 (allowed 20,000 to 150,000); raise it if handoffs get cut short, lower it on small context windows, where a large budget makes the plugin compact earlier.",
       "default": 64000,
       "min": 20000,
       "max": 150000
     },
     "precompact_turn": {
       "type": "string",
-      "title": "Pre-compaction handoff turn",
-      "description": "model = before each planned compaction the model gets one extra turn to write a handoff; code = code records the checkpoint alone, which saves usage. Any other value counts as code.",
+      "title": "Handoff before each planned compaction",
+      "description": "Values: model or code. model (the default): before each compaction the plugin starts at the compaction target, the model gets one extra turn to write a handoff while it still sees the whole conversation; code: the plugin records its own checkpoint without that turn, which uses less of your usage allowance (any other value counts as code).",
       "default": "model"
     },
     "measured_block": {
       "type": "boolean",
-      "title": "Measured facts to the summarizer",
-      "description": "Send the measured facts block to the summarizer (plugin path only).",
+      "title": "Measured facts for the summarizer",
+      "description": "When on, the plugin adds freshly measured facts (git branch, commit, changed files, background jobs) to the instructions Claude Code's summarizer gets; this applies only when the plugin's main module shapes the compaction. Default false, because the first turn after every compaction gets these facts, measured again, anyway; turn it on if summaries keep getting them wrong.",
       "default": false
     },
     "auto_evidence": {
       "type": "boolean",
-      "title": "Automatic evidence copies",
-      "description": "Copy the temp files a session cited into the disposable root after a compaction.",
+      "title": "Copy cited temp files",
+      "description": "After each compaction, copy temporary files the session mentioned (such as logs or test output in a temp folder) into the temporary evidence folder, with size limits and a secret check, so they are still there when the work resumes. Default true; set false if you do not want these copies on disk.",
       "default": true
     },
     "warn_ui": {
       "type": "boolean",
-      "title": "Warnings in the interface",
-      "description": "Toasts and status line for escalations.",
+      "title": "Pop-up warnings",
+      "description": "Show the plugin's short pop-up notices in Claude Code when something needs your attention, for example when it pauses automatic work or saves a handoff. Default true; set false for fewer interruptions and check /{{plugin}}:status instead.",
       "default": true
     },
     "watcher": {
       "type": "string",
-      "title": "Watcher",
-      "description": "Local content-free compaction logs (shadow) or off. Nothing is sent; share with /{{plugin}}:report.",
+      "title": "Local compaction logs",
+      "description": "Values: shadow or off. shadow (the default) keeps local logs of how each compaction went, without any conversation text, and nothing is ever sent (you can share them yourself with /{{plugin}}:report); off stops new log entries and keeps the ones already written (any other value counts as shadow).",
       "default": "shadow"
     },
     "stall_min": {
       "type": "number",
-      "title": "Stall threshold (minutes)",
-      "description": "Minutes without progress before the watcher calls work stalled.",
+      "title": "Stalled job alert (minutes)",
+      "description": "How long, in minutes, a background job must have been running before the local logs may flag it as stalled in /{{plugin}}:status; it is flagged once it has run this long and its output has not changed for the last 15 minutes (or cannot be checked). Default 60; lower it to hear about stuck jobs sooner, raise it if your jobs normally run for a long time with quiet stretches.",
       "default": 60
     },
     "cache_ttl_s": {
       "type": "number",
-      "title": "Cache TTL (seconds)",
-      "description": "Warm/cold prompt-cache proxy used by the watcher.",
+      "title": "Prompt cache lifetime (seconds)",
+      "description": "How long, in seconds, the local logs assume Claude Code's prompt cache (the stored conversation that makes the next request cheaper) stays fresh; a large compaction after a longer pause is flagged as likely costly. Default 300 (5 minutes); set 3600 if your sessions use the one-hour cache, so pauses that cost nothing are not flagged.",
       "default": 300
     },
     "otel_log_path": {
       "type": "file",
-      "title": "OpenTelemetry log path",
-      "description": "Read only if you already write it. Empty = unused.",
+      "title": "OpenTelemetry log file",
+      "description": "Path to an OpenTelemetry log file (Claude Code's optional usage telemetry) that you already have written, for the local logs to draw on. Empty (the default) means none; the plugin never turns OpenTelemetry on, and this version does not read the file yet, so leave it empty.",
       "default": ""
     },
     "deny_class_patterns": {
       "type": "string",
-      "title": "Permission-denial classes",
-      "description": "Patterns that class permission denials. Empty = the shipped classes.",
+      "title": "Blocked-tool categories",
+      "description": "Your own rules for sorting blocked tool calls (permission denials) into categories in the local logs, written as category=pattern pairs (pattern: a regular expression) separated by ';', where the category is sleep-poll, routing, secret, write-guard, scope or other. Empty (the default) uses the built-in rules; change it only if your own hooks block tools with messages the built-in rules put in the wrong category.",
       "default": ""
     },
     "repo_roots": {
       "type": "string",
-      "title": "Repositories for repo mode",
-      "description": "Main checkouts, separated by ';', that may also receive published handoffs when the repository declares it in .claude/handoffs.json. Read from your settings file only (flags and env are ignored). Empty = none.",
+      "title": "Repositories that may receive handoffs",
+      "description": "Main checkout folders, separated by ';', into which each published handoff may also be exported so a team can review and commit it; a repository also has to opt in with a .claude/handoffs.json file. Empty (the default) keeps handoffs only in your private handoff folder; only your settings file counts for this option, flags and environment variables are ignored.",
       "default": ""
     },
     "relaunch_auto": {
       "type": "string",
-      "title": "Automatic relaunch",
-      "description": "on = relaunch a lost background job by itself when every check passes; shadow = log the verdict, always ask; off = always ask. Read from your settings file only (flags and env are ignored).",
+      "title": "Restart lost background jobs",
+      "description": "Values: on, shadow or off. on (the default): when a resumed session finds that a background job (such as a long test run) was lost when Claude Code exited, it starts the job again by itself if the job is read-only or on your allowlist and every safety check passes, otherwise it asks; shadow only logs what it would have done and asks; off always asks (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": "on"
     },
     "relaunch_allow": {
       "type": "string",
-      "title": "Relaunch allowlist",
-      "description": "Patterns (each starts ^), separated by ';', for repeat-safe local commands that may start again by themselves after a lost-job check. A chained command, an outward step or a production command always asks. Read from your settings file only (flags and env are ignored).",
+      "title": "Commands allowed to restart by themselves",
+      "description": "Patterns (regular expressions, each starting with ^), separated by ';', for commands that are safe to run twice, such as a local test or build, which a resumed session may then restart by itself after a lost-job check. Empty (the default) means only read-only jobs restart by themselves; a command chained with others, one that reaches outside your machine, or a production command always asks (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": ""
     },
     "relaunch_quiet_s": {
       "type": "number",
-      "title": "Relaunch quiet window (seconds)",
-      "description": "Seconds without output before a lost job counts as quiet when its end time is unknown.",
+      "title": "Lost job quiet time (seconds)",
+      "description": "When the plugin cannot tell when a lost background job ended, the job's output must have been silent for this many seconds before the job counts as stopped and may be restarted. Default 120 (allowed 30 to 3,600); raise it for jobs that normally go quiet for longer.",
       "default": 120,
       "min": 30,
       "max": 3600
     },
     "unattended_prod_reads": {
       "type": "string",
-      "title": "Unattended production reads",
-      "description": "forbid = a resumed session asks before any production step, unless an approval you gave names that read command; allow = a read-only production check the session builds itself may run without asking. Production writes always ask, and so do production commands copied from a handoff unless an approval you gave names that read command. Read from your settings file only (flags and env are ignored).",
+      "title": "Unattended production checks",
+      "description": "Values: forbid or allow. forbid (the default): a resumed session asks before any command that touches production and offers it for you to run, unless an approval you gave names that read-only command; allow: a read-only production check the session writes itself may run without asking. Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": "forbid"
     },
     "prod_patterns": {
       "type": "string",
-      "title": "Production patterns",
-      "description": "Extra patterns, separated by ';', that mark a command as production, beside the shipped prod-token class. They can only make the plugin ask more. Empty = the shipped class only.",
+      "title": "Extra production patterns",
+      "description": "Extra patterns (regular expressions), separated by ';', that mark a command as touching production, on top of the built-in rule, which looks for prod, production or prd as a separate word or part (as in --context=prod-eu). Empty (the default) means the built-in rule only; add your own environment or host names so the plugin asks before those commands too (these patterns can only make it ask more).",
       "default": ""
     },
     "idle_handoff_turn": {
       "type": "string",
-      "title": "Pre-idle handoff turn",
-      "description": "auto = when Claude Code's own idle compaction is off and the plugin does not compact the session either (below its minimum, idle_compact off, \"autoCompactEnabled\": false, or the plugin's compaction failed twice), the model gets one turn to write a handoff about 49 minutes into an idle period, before the prompt cache expires; when it is on (or its setting cannot be read), the plugin checks about 55.5 minutes in and, if Claude Code did not compact the session, runs that turn only when it does not compact the session itself (see idle_compact). off = never. true, yes, 1 and the old on count as auto; false, no, none, disabled and 0 as off; any other value counts as off, with a note in /status.",
+      "title": "Handoff when idle",
+      "description": "Values: auto or off. auto (the default): if a long session sits idle and nobody will compact it before Claude Code's one-hour prompt cache (the stored conversation that keeps the next request cheap) expires, the plugin gives the model one turn, about 49 to 56 minutes in, to write a handoff; off never runs that turn, which saves its usage (it costs several times as much as an idle compaction).",
       "default": "auto"
     },
     "idle_compact": {
       "type": "string",
-      "title": "Idle compaction by the plugin",
-      "description": "auto = while Claude Code's own idle compaction is off in your settings (\"idleCompaction\": false) and automatic compaction is on, the plugin compacts a main conversation of 200,000 tokens or more (CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS changes this) itself about 54 minutes after its last request, before the prompt cache expires (terminal sessions; not yet headless or Desktop ones). While Claude Code's own idle compaction is on (or its setting cannot be read), the plugin compacts such a conversation itself at its 55.5-minute check when Claude Code did not, agents running or not. Before this version, \"idleCompaction\": false meant no idle compaction at all. off = never; the pre-idle handoff turn runs instead. true, yes, 1 and on count as auto; false, no, none, disabled and 0 as off; any other value counts as off, with a note in /status.",
+      "title": "Compact idle sessions",
+      "description": "Values: auto or off. auto (the default): when a conversation of 200,000 tokens or more has been idle for about 54 to 56 minutes and Claude Code has not compacted it, the plugin compacts it itself before the one-hour prompt cache expires, so coming back costs less (terminal sessions only, for now); off: the plugin never compacts idle sessions, and the handoff-when-idle turn runs instead where it applies.",
       "default": "auto"
     },
     "idle_handoff_min_tokens": {
       "type": "number",
-      "title": "Pre-idle handoff minimum (tokens)",
-      "description": "No pre-idle handoff turn below this context size.",
+      "title": "Handoff when idle: minimum size (tokens)",
+      "description": "The handoff-when-idle turn runs only for conversations of at least this many tokens, since smaller ones are cheap to reload. Default 200,000 (allowed 100,000 to 1,000,000); raise it to run that turn less often, lower it to cover medium-size sessions too.",
       "default": 200000,
       "min": 100000,
       "max": 1000000
     },
     "idle_digest": {
       "type": "string",
-      "title": "Away digest after an idle compaction",
-      "description": "submit = after an idle compaction (Claude Code's or the plugin's own) of a session whose work is finished or blocked on you, with nothing still running, the plugin sends one turn right away that prints the away digest (what is done, what is left, what waits on you); return = no turn: the digest waits for your next message, which opens with a short pointer. With work left or jobs running, the session continues as before.",
+      "title": "Away summary after an idle compaction",
+      "description": "Values: submit or return. submit (the default): when a session compacted while you were away has finished its work or is only waiting on you, with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; return sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (any other value counts as return).",
       "default": "submit"
     },
     "ticket_pattern": {
       "type": "string",
-      "title": "Ticket pattern",
-      "description": "Regular expression that finds the ticket id in a branch name, for the handoff folder (group 1 if it has one, else the whole match). The id must be letters, digits, '.', '_' or '-'. An invalid pattern counts as the default. Folders made under the default are still found after a change.",
+      "title": "Ticket id pattern",
+      "description": "A regular expression that finds a ticket id (such as ABC-123) in the git branch name, so that handoffs for one ticket share one folder; if the pattern has a group in parentheses, that group is the id. Default [A-Z][A-Z0-9]+-[0-9]+ (ids like ABC-123); change it to match your tracker's ids (an invalid pattern falls back to the default, and folders made earlier are still found).",
       "default": "[A-Z][A-Z0-9]+-[0-9]+"
     },
     "secret_extra_rules": {
       "type": "string",
       "title": "Extra secret rules",
-      "description": "Your own secret rules beside the shipped ones, separated by ';': HARD:<regex> blocks a handoff and withholds a file, WARN:<regex> warns and redacts, NAME:<glob> withholds a file by name. They can only withhold more. Read from your settings file only (flags and env are ignored).",
+      "description": "Your own rules for spotting secrets in handoffs and copied files, added to the built-in ones and separated by ';': HARD:pattern blocks the handoff and withholds the file, WARN:pattern warns and masks the match (for HARD and WARN the pattern is a regular expression), and NAME:wildcard withholds files whose names match a simple wildcard such as *.pem (not a regular expression). Empty (the default) means the built-in rules only; add rules for your own token formats, they can only withhold more (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": ""
     },
     "resume_proceed": {
       "type": "string",
-      "title": "Resume: go on or confirm",
-      "description": "auto = a resume you start goes on with Step 1 after its report; confirm = it stops after the report and waits for your go. The resume after a compaction is not affected. The stricter value of your settings, a flag or env wins.",
+      "title": "Manual resume: continue or wait",
+      "description": "Values: auto or confirm. auto (the default): when you run /{{plugin}}:resume yourself, it reports what it found and then carries on with the next step; confirm: it stops after the report and waits for your go-ahead. Resumes after the plugin's own compactions are not affected, and when your settings file, a flag and an environment variable disagree, confirm wins.",
       "default": "auto"
     },
     "handoff_reuse_window_min": {
       "type": "number",
-      "title": "Handoff reuse window (minutes)",
-      "description": "A handoff written less than this many minutes ago, with nothing changed since, is reused instead of written again. 0 = never reuse.",
+      "title": "Reuse a recent handoff (minutes)",
+      "description": "When the model starts a handoff on its own less than this many minutes after the last one, and nothing has changed since (same commit, same files, no new decisions), the plugin reuses that handoff instead of writing a new one. Default 15 (allowed 0 to 60); 0 turns this time-based reuse off (a handoff is still reused when nothing at all happened since the last one), a higher value saves usage when handoffs come often.",
       "default": 15,
       "min": 0,
       "max": 60
     },
     "evidence_total_max_mb": {
       "type": "number",
-      "title": "Evidence total (MB)",
-      "description": "Most evidence one sweep or handoff copies in full; a file beyond it is not copied (listed as withheld: over-total) and stays where it is. Nothing is deleted.",
+      "title": "Evidence copy limit (MB)",
+      "description": "The most data, in MB, that one evidence copy run (after a compaction, or for one handoff) copies in full; files beyond it are listed as withheld and left where they are, and nothing is deleted. Default 50 (allowed 10 to 500); raise it if large logs you need later are being withheld, lower it to save disk space.",
       "default": 50,
       "min": 10,
       "max": 500
@@ -256,27 +256,27 @@
     "watch_quota_mb": {
       "type": "number",
       "title": "Log size warning (MB)",
-      "description": "Size of the local compaction logs that raises a storage warning; warn only, nothing is deleted. 0 = no warning.",
+      "description": "When the plugin's local logs grow past this size, in MB, it shows a storage warning; nothing is deleted. Default 50 (allowed 0 to 10,000); 0 turns the warning off, raise it if you keep large logs on purpose.",
       "default": 50,
       "min": 0,
       "max": 10000
     },
     "protected_branches": {
       "type": "string",
-      "title": "Protected branches",
-      "description": "Extra branch names or globs, separated by ';', that count as protected beside the shipped list (the remote's default branch, main, master, trunk, develop, stable, staging, gh-pages, prod…, release…, hotfix/…): a push to one always asks again, whatever was approved before. * matches within one part of the name, ** across /, ? one character. They can only add: no entry removes a shipped branch. Read from your settings file only (flags and env are ignored). Empty = the shipped list only.",
+      "title": "Extra protected branches",
+      "description": "Branch names or wildcard patterns, separated by ';', that count as protected on top of the built-in list (the remote's default branch, main, master, develop, staging, release and hotfix branches and similar): a push to one, or a merge into one, always asks you again, whatever you approved before. Empty (the default) means the built-in list only; add your own deployment branches, for example qa-env;uat/*, and note that entries can only add, never unprotect a built-in branch (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": ""
     },
     "restart_on_update": {
       "type": "string",
-      "title": "Restart on update",
-      "description": "on = right after a compaction, with nothing running in the background, no question open and nobody typing, the plugin moves the session onto a newly installed Claude Code by itself and keeps the same session (background sessions by claude respawn, terminal sessions through the plugin's launcher; neither is enabled in this version yet, see /{{plugin}}:status). shadow = log what it would do, restart nothing. off = never. Any other value counts as off. Read from your settings file only (flags and env are ignored).",
+      "title": "Restart on Claude Code update (beta)",
+      "description": "Values: on, shadow or off. on: right after a compaction, with nothing running and nobody typing, the plugin restarts the session on a newly installed Claude Code and keeps the same conversation (not active in this version yet, see /{{plugin}}:status); shadow only logs what it would do; off (the default) never restarts (any other value counts as off; only your settings file counts for this option, flags and environment variables are ignored).",
       "default": "off"
     },
     "driver_skills": {
       "type": "string",
-      "title": "Loop skills to re-enter",
-      "description": "Skill names, separated by ';', that drive a session as a loop beside the shipped list (gsd-autonomous, gsd-execute-phase, gsd-manager, superpowers:executing-plans, superpowers:subagent-driven-development). When a session invoked one and the loop is clearly live at the compaction (one of its steps mid-turn, or an agent, workflow or teammate it launched still running), the resume after a compaction or a handoff runs it again (Active driver line). A skill whose own text runs gsd-tools counts without being listed. A loop run as another loop's step never replaces it; a paused, ended, stopped or unclear loop, or one whose arguments cannot be repeated whole, is shown, never run. A skill the session never invoked is never run. Empty = the shipped list only.",
+      "title": "Loop skills to resume",
+      "description": "Names of extra skills, separated by ';', that drive a session as a repeating work loop, like the built-in gsd-autonomous, gsd-execute-phase, gsd-manager, superpowers:executing-plans and superpowers:subagent-driven-development; when such a loop is clearly still running at a compaction, the plugin starts it again afterwards so the loop goes on. Empty (the default) means the built-in list only; add your own loop skills (a paused, finished or unclear loop is shown to the model but never restarted, and a skill the session never used is never run).",
       "default": ""
     }
   }
