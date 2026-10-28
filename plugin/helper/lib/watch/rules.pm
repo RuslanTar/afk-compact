@@ -29,6 +29,8 @@ my $JOIN_S = 120;
 # compaction's prefix read and writes compaction_cold).
 our $COLD_SHARE = 0.5;
 our $COLD_MIN_TOKENS = 100_000;
+# A-23: the idle compactions held for a later Stop at most (see _a23_held).
+our $A23_HELD_MAX = 50;
 
 # The row kinds the rules read from the classic and mod streams and from the
 # mod's events/ files. Only these are decoded and kept (lib/watch/cache.pm);
@@ -501,6 +503,8 @@ sub evaluate {
     my $prev_chars = $sess->{prev_chars} ||= {};
     my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
     my $once = sub { my $rule = shift; return ($ex->{by_rule}{$rule} // 0) ? 'info' : 'warn' };
+    # A-23 of the idle compactions held at earlier Stops (below), before this Stop's own.
+    my $held = _a23_held($ctx, $S, $sess, $R);
 
     for my $c (@$C) {
         tick($ctx);
@@ -609,15 +613,12 @@ sub evaluate {
             }
         }
         if ($c->{main} && !$c->{precompute} && $c->{nonce} ne 'none') {
-            my @inj = grep { ($_->{nonce} // '') eq $c->{nonce} } rows_of($S, 'resume_inject');
-            my $nonok = defined $c->{verdict} && !$OKV{ $c->{verdict} };
-            my %why;
-            $why{count} = scalar @inj if @inj == 0 || @inj >= 2;
-            $why{nonok_note_missing} = \1 if $nonok && grep { defined $_->{nonok_note} && !$_->{nonok_note} } @inj;
-            $why{resume_over_10k} = \1 if grep { ($_->{bytes} // 0) > 10000 } @inj;
-            for my $w (sort keys %why) {
-                $R->(rule => 'A-23', severity => 'warn', id_parts => [@idp, $w], %k,
-                     evidence => { $w => $why{$w} });
+            my $a23 = { nonce => $c->{nonce}, id => $c->{id}, key => $c->{key}, actor => $c->{actor}, verdict => $c->{verdict} };
+            my @inj = _injects($S, $c->{nonce});
+            if (!@inj && _idle_dispatch($D) && _block_waits($ctx, $c->{nonce})) {
+                push @$held, $a23 unless grep { $_->{nonce} eq $c->{nonce} } @$held;
+            } else {
+                _a23($R, $a23, \@inj);
             }
         }
         if ($c->{main} && ($c->{mod_off} || ($P && ($c->{channel} // '') eq 'none'))) {
@@ -625,11 +626,85 @@ sub evaluate {
                  evidence => { mod_off => watch::ctx::B($c->{mod_off}), channel => $c->{channel} });
         }
     }
+    @$held = @$held[-$A23_HELD_MAX .. -1] if @$held > $A23_HELD_MAX;
+    if (@$held) { $sess->{a23_held} = $held } else { delete $sess->{a23_held} }
     tick($ctx);
     _event_rules($ctx, $S, $ex, $sess, \@events, $C);
     tick($ctx);
     _session_rules($ctx, $S, $ex, $sess);
     return $C;
+}
+
+# --- A-23 and the idle block (IDLE-COMPACT-SPEC §1.4, MOD-SPEC §3.4) ----------
+#
+# An idle compaction sends no continue: its resume block waits on disk for the next turn (the
+# person's return, a background result, or the first turn of the next process of this session
+# id, resume-persist), and only `prompt.context` delivers it. So a main Stop can sweep an idle
+# compaction whose block nobody has claimed yet, and is still due to: that is not a missing
+# block. Such a compaction is held (session state `a23_held`, at most $A23_HELD_MAX, the oldest
+# dropped first) and decided at a later Stop: once a `resume_inject` row names its nonce, by the
+# usual A-23 checks on those rows; once the block no longer waits with no claim (the mod settled
+# it undelivered, a newer compaction replaced it, a /clear dropped it), as count 0. One that waits
+# forever (the process stopped and the session never resumed) raises nothing.
+
+sub _injects {
+    my ($S, $nonce) = @_;
+    return grep { ($_->{nonce} // '') eq $nonce } rows_of($S, 'resume_inject');
+}
+
+# One A-23 per reason for a compaction (`id`, `key`, `actor`, `verdict`) and its resume_inject rows.
+sub _a23 {
+    my ($R, $a, $inj) = @_;
+    my @inj = @$inj;
+    my $nonok = defined $a->{verdict} && !$OKV{ $a->{verdict} };
+    my %why;
+    $why{count} = scalar @inj if @inj == 0 || @inj >= 2;
+    $why{nonok_note_missing} = \1 if $nonok && grep { defined $_->{nonok_note} && !$_->{nonok_note} } @inj;
+    $why{resume_over_10k} = \1 if grep { ($_->{bytes} // 0) > 10000 } @inj;
+    for my $w (sort keys %why) {
+        $R->(rule => 'A-23', severity => 'warn', id_parts => [$a->{id}, $w], key => $a->{key}, actor => $a->{actor},
+             evidence => { $w => $why{$w} });
+    }
+}
+
+# An idle dispatch whose block goes by `prompt.context` (every idle mod dispatch since the P4 fix).
+sub _idle_dispatch {
+    my ($D) = @_;
+    return 0 unless $D;
+    my $i = $D->{idle};
+    $i = $$i if ref $i eq 'SCALAR';
+    return 0 unless defined $i && !ref $i && ($i eq '1' || $i eq 'true');
+    return ($D->{resume_pref} // '') eq 'prompt.context' ? 1 : 0;
+}
+
+# The block of this nonce still waits: no claim, and the mod's record of it (resume-pending.json,
+# or resume-armed.json once a resume armed it) is still pending.
+sub _block_waits {
+    my ($ctx, $nonce) = @_;
+    my $d = watch::ctx::sid_dir($ctx);
+    return 0 if -e "$d/resume-claimed/$nonce";
+    for my $f (qw(resume-pending.json resume-armed.json)) {
+        next if -l "$d/$f";
+        my $j = watch::io::read_json_file("$d/$f");
+        next unless ref $j eq 'HASH';
+        return 1 if ($j->{state} // '') eq 'pending' && ($j->{nonce} // '') eq $nonce;
+    }
+    return 0;
+}
+
+# The compactions held at earlier Stops: each one decided now goes (A-23 as above), the rest
+# come back in their order.
+sub _a23_held {
+    my ($ctx, $S, $sess, $R) = @_;
+    my @keep;
+    for my $h (@{ ref $sess->{a23_held} eq 'ARRAY' ? $sess->{a23_held} : [] }) {
+        next unless ref $h eq 'HASH' && defined $h->{nonce} && !ref $h->{nonce};
+        tick($ctx);
+        my @inj = _injects($S, $h->{nonce});
+        if (!@inj && _block_waits($ctx, $h->{nonce})) { push @keep, $h; next }
+        _a23($R, $h, \@inj);
+    }
+    return \@keep;
 }
 
 sub _pre_near {

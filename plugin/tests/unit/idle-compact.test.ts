@@ -1408,6 +1408,99 @@ test('AT-IC-C42 (resume-persist), the next process over the same store and watch
   expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
 })
 
+/**
+ * The classic SessionStart(compact) as the helper runs it (hook.pl `session_compact`): it claims
+ * the block at compaction time, with no `[idle]` line (resumeblock.pm), only for a dispatch whose
+ * `resume_pref` is `sessionstart`.
+ */
+function classicSessionStart(w: World): void {
+  w.atCompact = () => {
+    const d = w.callsOf('dispatch').at(-1)
+    const n = d ? w.flag(d, '--nonce') : undefined
+    if (!d || n === undefined || w.flag(d, '--resume-pref') !== 'sessionstart' || w.claims.has(n)) return
+    w.claims.set(n, 'sessionstart')
+    w.files.set(`${WATCH}/${SID_A}/resume-claimed/${n}`, 'sessionstart\n')
+  }
+}
+
+test('AT-IC-C42 (resume-persist, P4 adopted load): a load that adopted the record and has had no prompt yet (classic-alive present) dispatches its idle compaction with resume_pref prompt.context; SessionStart(compact) leaves the block unclaimed on disk, and the person\'s return gets [idle], re-measured', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, { tokens: 260000 }, adoptedRecord(probe))
+  // A supervisor move or `claude respawn`: the classic SessionStart(resume) wrote classic-alive.json.
+  w.files.set(`${WATCH}/${SID_A}/classic-alive.json`, '{}')
+  classicSessionStart(w)
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(selfCompacts(w)).toBe(1)
+  const d = w.callsOf('dispatch')[0]
+  const nonce = w.flag(d, '--nonce') ?? ''
+  expect([w.flag(d, '--resume-pref'), w.claims.has(nonce)]).toEqual(['prompt.context', false])
+  const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/${PENDING_FILE}`) ?? 'null') as Record<string, unknown>
+  expect([rec.state, rec.nonce, (rec.args as Record<string, unknown> | undefined)?.idle]).toEqual(['pending', nonce, true])
+  // The person comes back 50 min later in the same load.
+  await w.advance(50 * MIN)
+  await w.userTurn($, 'where were we?')
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(block).toContain(SID_A)
+  const idle = lineOf(w, 'idle')
+  expect(idle).toBeDefined()
+  expect(block).toContain(idle ?? '')
+  expect(w.rowsOf('resume_remeasured').map(r => r.nonce)).toEqual([nonce])
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([[nonce, 'delivered:prompt.context']])
+})
+
+/**
+ * The classic SessionStart(resume) of the next process as the helper runs it (resumeblock.pm
+ * `arm`, helper case AT-RP-04): a pending record of this session id becomes resume-armed.json,
+ * unless its nonce is claimed already (a block the classic SessionStart(compact) took is never
+ * armed again).
+ */
+function classicResumeArm(w: World): void {
+  const from = `${WATCH}/${SID_A}/${PENDING_FILE}`
+  const t = w.files.get(from)
+  if (t === undefined) return
+  const j = JSON.parse(t) as Record<string, unknown>
+  if (j.state !== 'pending' || j.session_id !== SID_A || w.files.has(`${WATCH}/${SID_A}/resume-claimed/${String(j.nonce)}`)) return
+  w.files.delete(from)
+  w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, t)
+}
+
+test('AT-IC-C42 (resume-persist, P4 adopted load, across processes): the adopted load compacts and leaves the block unclaimed on disk; the process ends; the next load\'s first prompt gets it with [idle], re-measured', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, { tokens: 260000 }, adoptedRecord(probe))
+  w.files.set(`${WATCH}/${SID_A}/classic-alive.json`, '{}')
+  classicSessionStart(w)
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(selfCompacts(w)).toBe(1)
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  expect(w.claims.has(nonce)).toBe(false)
+  // No prompt for 50 min, then the supervisor stops the process. A kit test gets one load, so the
+  // process end and the next load are the in-process path a new process takes (AT-RP-02): the
+  // load's end takes the block out of memory and keeps it on disk (no mod_outcome yet); the next
+  // process's classic SessionStart(resume) arms it; its session.start runs; its first prompt.
+  await w.advance(50 * MIN)
+  await $.session.end({ reason: 'resume', sessionId: SID_A, resume: { id: SID_A } } as never)
+  expect(w.rowsOf('mod_outcome')).toEqual([])
+  classicResumeArm(w)
+  expect(JSON.parse(w.files.get(`${WATCH}/${SID_A}/${ARMED_FILE}`) ?? 'null')).toMatchObject({ state: 'pending', nonce, args: { idle: true } })
+  await w.advance(2 * MIN)
+  w.measureBlock = 'Git: main @ 7c7c7c7, 1 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
+  await w.start($)
+  await w.userTurn($, 'where were we?')
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(block).toContain(SID_A)
+  const idle = lineOf(w, 'idle')
+  expect(idle).toBeDefined()
+  expect(block).toContain(idle ?? '')
+  // Built 52 min earlier: measured again at delivery.
+  expect(block).toContain('7c7c7c7')
+  expect(w.rowsOf('resume_remeasured').map(r => r.nonce)).toEqual([nonce])
+  expect(w.claims.get(nonce)).toBe('prompt.context')
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([[nonce, 'delivered:prompt.context']])
+  expect(JSON.parse(w.files.get(`${WATCH}/${SID_A}/${ARMED_FILE}`) ?? 'null')).toMatchObject({ state: 'settled', nonce, resume: 'delivered:prompt.context' })
+})
+
 test('AT-IC-C43 (§1.2): after a /clear in the same load, the new session id\'s first turn end writes its own idle_mode row', { options: ON }, async ($, on) => {
   const w = world(on)
   await w.start($)
