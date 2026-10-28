@@ -148,14 +148,39 @@ const JOB_RE = new RegExp(
 )
 /** A step's done criterion (`— done when the run finishes`, up to its mark or next clause): not a trigger. */
 const CRITERION_RE = /\bdone when\b[^·;]*/gi
+/** A wait word, as `JOB_RE`'s wait branch has it. */
+const WAIT = '(?:wait(?:s|ing)?\\s+(?:on|for|until)|await(?:s|ing)?)'
+/**
+ * A wait whose object is a person (`Wait for the user to run the build`, `wait for you to run the
+ * tests`, `waiting on the reviewer`): held on that person, whatever job word follows (review of
+ * digest rules (a)), so `JOB_RE`'s wait branch never reads it as a job's.
+ */
+const PERSON_WAIT_RE = new RegExp(`\\b${WAIT}\\s+(?:(?:the|an?|that|this|your|our|my)\\s+)?(?:user|owner|you|me|reviewers?|approvers?|maintainers?)\\b`, 'i')
+/**
+ * A wait on a named person: a capitalised word right after the wait (`wait for Anna to run CI`), not
+ * one a job word or a result follows (`wait for Jenkins build` is the job's). `holdOf` checks the
+ * capital (the regex reads case-blind) and leaves out the articles.
+ */
+const NAMED_WAIT_RE = new RegExp(`\\b${WAIT}\\s+([A-Za-z]+)\\b(?!(?:'s)?\\s+(?:${JOB}|${RESULT})\\b)`, 'gi')
+const ARTICLE_RE = /^(?:the|an?|that|this|its|your|our|my)$/i
+/** Whether a step waits on a person (`PERSON_WAIT_RE`, `NAMED_WAIT_RE`). */
+function waitsOnPerson(text: string): boolean {
+  if (PERSON_WAIT_RE.test(text)) return true
+  for (const m of text.matchAll(NAMED_WAIT_RE)) {
+    const name = m[1] ?? ''
+    if (/^[A-Z][a-z]+$/.test(name) && !ARTICLE_RE.test(name)) return true
+  }
+  return false
+}
 /**
  * What holds a step (Step 1's text, or a Next steps item): the user (a gate, an ask, a pending
- * answer, a needed approval, or another named wait such as a reviewer), a running job's result
- * (owner 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run).
- * The user wins over a job: a step that needs both still needs the user after the job ends.
+ * answer, a needed approval, a wait on a person, or another named wait such as a reviewer's
+ * result), a running job's result (owner 2026-10-28 digest rules (a): it runs once the result is
+ * in), or nothing (it can run). The user wins over a job: a step that needs both still needs the
+ * user after the job ends, and a wait on a person is read before `JOB_RE`.
  */
 function holdOf(text: string): 'user' | 'job' | undefined {
-  if (USER_RE.test(text)) return 'user'
+  if (USER_RE.test(text) || waitsOnPerson(text)) return 'user'
   if (JOB_RE.test(text.replace(CRITERION_RE, ''))) return 'job'
   return HELD_RE.test(text) ? 'user' : undefined
 }

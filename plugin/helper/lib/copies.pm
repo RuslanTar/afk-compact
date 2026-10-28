@@ -226,7 +226,9 @@ sub _test_corrupt {
 #   `Gate: none` (Step 1 itself naming none of them). A step whose trigger is a running job's
 #   result (`On the timer notification, reply …`, `when CI finishes, …`; owner 2026-10-28 digest
 #   rules (a), lane.ts `JOB_RE`) is held on that job, not a step that can run: the copy is taken
-#   with no result in, so it stays blocked (only the session's result turn reads it working).
+#   with no result in, so it stays blocked (only the session's result turn reads it working). A
+#   wait for a person (`Wait for the user to run the build`) is held on the user, whatever job
+#   word follows.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
 # lane.ts `JOB_RE` and its parts, word for word.
@@ -238,11 +240,27 @@ my $J_FINISH = q{(?:finish(?:es|ed)?|ends?|ended|completes?|completed|arrives?|a
 my $J_LEAD = q{^(?:\d+\.\s+)?(?:then,?\s+)?};
 my $JOB_RE = qr/${J_LEAD}(?:on|upon|after)\s+(?:$J_WORD){0,4}?$J_JOB_RESULT\b|${J_LEAD}(?:when|after|once|as soon as)\s+(?:$J_WORD){0,4}?(?:$J_JOB(?:'s)?\s+)?(?:$J_JOB|$J_RESULT)\s+(?:$J_WORD){0,2}?$J_FINISH\b|\b(?:wait(?:s|ing)?\s+(?:on|for|until)|await(?:s|ing)?)\s+(?:(?:the|that|this|its)\s+)?(?:$J_WORD){0,2}?(?:$J_JOB_RESULT|$J_JOB)\b/i;
 my $USER_RE = qr/\b(?:gated|ask user|pending answer|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/i;
+# lane.ts `PERSON_WAIT_RE`, `NAMED_WAIT_RE` and `waitsOnPerson`, word for word: a wait whose
+# object is a person (the user, the owner, you, me, a reviewer, approver or maintainer, or a
+# capitalised name no job word or result follows) holds the step on the user, read before $JOB_RE.
+my $J_WAIT = q{(?:wait(?:s|ing)?\s+(?:on|for|until)|await(?:s|ing)?)};
+my $PERSON_WAIT_RE = qr/\b$J_WAIT\s+(?:(?:the|an?|that|this|your|our|my)\s+)?(?:user|owner|you|me|reviewers?|approvers?|maintainers?)\b/i;
+my $NAMED_WAIT_RE = qr/\b$J_WAIT\s+([A-Za-z]+)\b(?!(?:'s)?\s+(?:$J_JOB|$J_RESULT)\b)/i;
+
+sub _waits_on_person {
+    my ($text) = @_;
+    return 1 if $text =~ $PERSON_WAIT_RE;
+    while ($text =~ /$NAMED_WAIT_RE/g) {
+        my $w = $1;
+        return 1 if $w =~ /\A[A-Z][a-z]+\z/ && $w !~ /\A(?:the|an?|that|this|its|your|our|my)\z/i;
+    }
+    return 0;
+}
 
 # What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run.
 sub _hold_of {
     my ($text) = @_;
-    return 'user' if $text =~ $USER_RE;
+    return 'user' if $text =~ $USER_RE || _waits_on_person($text);
     (my $t = $text) =~ s/\bdone when\b[^·;]*//gi;
     return 'job' if $t =~ $JOB_RE;
     return $text =~ $HELD_RE ? 'user' : undef;

@@ -915,6 +915,7 @@ const TRIGGERS = [
   "After the agent's output comes back, merge it",
   'Then, when the build is green, push the tag',
   'once the results arrive, summarise them',
+  'Wait for Jenkins build, then read its log',
 ]
 /**
  * Ordinary work that only mentions a job, its end or a result, with no trigger leading its clause
@@ -931,8 +932,24 @@ const NOT_TRIGGERS = [
   'reply once the timer fires',
   'commit the notes; when the build is green, push the tag',
 ]
-/** A wait on something that is not a job (a person, an approval): held on the user, never on a job. */
-const USER_WAITS = ["Wait for the reviewer's result", 'awaiting approval of the run', 'wait for review of CI']
+/**
+ * A wait on something that is not a job (a person, an approval): held on the user, never on a job,
+ * even when a job word follows the person (review 2 of digest rules (a)).
+ */
+const USER_WAITS = [
+  "Wait for the reviewer's result",
+  'awaiting approval of the run',
+  'wait for review of CI',
+  'Wait for the user to run the build',
+  'wait for you to run the tests',
+  'wait for the user to build',
+  'wait for the owner to rerun the CI job',
+  'wait for me to start the run',
+  'waiting on the reviewer to finish the run',
+  'awaiting the approver to pass the pipeline',
+  'wait until the maintainer runs the build',
+  'Wait for Anna to run the build',
+]
 
 test('rule (a): a step whose only trigger is a running job\'s result is held on the job under a blocked Status, whatever the wording', () => {
   for (const step of TRIGGERS) {
