@@ -1,0 +1,4442 @@
+{
+ "id": "AT-GR-04",
+ "sid": "0000001a-0000-4000-8000-00000000001a",
+ "note": "GSD re-entry scan (review of the second build): a scan that stops on its time check at row 256 does not count that row as read, so the cached rescan reads it (before, the cached offset skipped it for good and the session's driver on that row was lost). The row limit stands in for the clock (STORE_TEST_GSD_SCAN_ROWS, test mode only).",
+ "now": "2026-10-26T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "repo": {
+      "branch": "main",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n",
+         ".planning/STATE.md": "---\ngsd_state_version: 1.0\nstatus: executing\ncurrent_phase: 3\nlast_activity: 2026-10-20\n---\n\n# Project State\n",
+         ".planning/ROADMAP.md": "# Roadmap\n",
+         ".planning/workstreams/workstream-a/STATE.md": "---\nstatus: executing\ncurrent_phase: \"2\"\nstopped_at: \"Plan 2.3 task 1\"\nlast_activity: 2026-10-26\nworkstream: workstream-a\n---\n\n# Project State\n",
+         ".planning/workstreams/workstream-b/STATE.md": "---\nstatus: planning\ncurrent_phase: 5\nlast_activity: 2026-10-25\nworkstream: workstream-b\n---\n\n# Project State\n",
+         ".planning/.phase-loop-run": "run 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$WATCH/$SID"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/0000001a-0000-4000-8000-00000000001a.jsonl",
+     "jsonl": [
+      {
+       "permissionMode": "default",
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "type": "permission-mode"
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0154",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 000"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0155",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 001"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0156",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 002"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0157",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 003"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0158",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 004"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0159",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 005"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0160",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 006"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0161",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 007"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0162",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 008"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0163",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 009"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0164",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 010"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0165",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 011"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0166",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 012"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0167",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 013"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0168",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 014"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0169",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 015"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0170",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 016"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0171",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 017"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0172",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 018"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0173",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 019"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0174",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 020"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0175",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 021"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0176",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 022"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0177",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 023"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0178",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 024"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0179",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 025"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0180",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 026"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0181",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 027"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0182",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 028"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0183",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 029"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0184",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 030"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0185",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 031"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0186",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 032"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0187",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 033"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0188",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 034"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0189",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 035"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0190",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 036"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0191",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 037"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0192",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 038"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0193",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 039"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0194",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 040"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0195",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 041"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0196",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 042"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0197",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 043"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0198",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 044"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0199",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 045"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0200",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 046"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0201",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 047"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0202",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 048"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0203",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 049"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0204",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 050"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0205",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 051"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0206",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 052"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0207",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 053"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0208",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 054"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0209",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 055"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0210",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 056"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0211",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 057"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0212",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 058"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0213",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 059"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0214",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 060"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0215",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 061"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0216",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 062"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0217",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 063"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0218",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 064"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0219",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 065"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0220",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 066"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0221",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 067"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0222",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 068"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0223",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 069"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0224",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 070"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0225",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 071"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0226",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 072"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0227",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 073"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0228",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 074"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0229",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 075"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0230",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 076"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0231",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 077"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0232",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 078"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0233",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 079"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0234",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 080"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0235",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 081"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0236",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 082"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0237",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 083"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0238",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 084"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0239",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 085"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0240",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 086"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0241",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 087"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0242",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 088"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0243",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 089"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0244",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 090"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0245",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 091"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0246",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 092"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0247",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 093"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0248",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 094"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0249",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 095"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0250",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 096"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0251",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 097"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0252",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 098"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0253",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 099"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0254",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 100"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0255",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 101"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0256",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 102"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0257",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 103"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0258",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 104"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0259",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 105"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0260",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 106"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0261",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 107"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0262",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 108"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0263",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 109"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0264",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 110"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0265",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 111"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0266",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 112"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0267",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 113"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0268",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 114"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0269",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 115"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0270",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 116"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0271",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 117"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0272",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 118"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0273",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 119"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0274",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 120"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0275",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 121"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0276",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 122"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0277",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 123"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0278",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 124"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0279",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 125"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0280",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 126"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0281",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 127"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0282",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 128"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0283",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 129"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0284",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 130"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0285",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 131"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0286",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 132"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0287",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 133"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0288",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 134"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0289",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 135"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0290",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 136"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0291",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 137"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0292",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 138"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0293",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 139"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0294",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 140"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0295",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 141"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0296",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 142"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0297",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 143"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0298",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 144"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0299",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 145"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0300",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 146"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0301",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 147"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0302",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 148"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0303",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 149"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0304",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 150"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0305",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 151"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0306",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 152"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0307",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 153"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0308",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 154"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0309",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 155"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0310",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 156"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0311",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 157"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0312",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 158"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0313",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 159"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0314",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 160"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0315",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 161"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0316",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 162"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0317",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 163"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0318",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 164"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0319",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 165"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0320",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 166"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0321",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 167"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0322",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 168"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0323",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 169"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0324",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 170"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0325",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 171"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0326",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 172"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0327",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 173"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0328",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 174"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0329",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 175"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0330",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 176"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0331",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 177"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0332",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 178"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0333",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 179"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0334",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 180"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0335",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 181"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0336",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 182"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0337",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 183"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0338",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 184"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0339",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 185"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0340",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 186"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0341",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 187"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0342",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 188"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0343",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 189"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0344",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 190"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0345",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 191"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0346",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 192"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0347",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 193"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0348",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 194"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0349",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 195"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0350",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 196"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0351",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 197"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0352",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 198"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0353",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 199"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0354",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 200"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0355",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 201"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0356",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 202"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0357",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 203"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0358",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 204"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0359",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 205"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0360",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 206"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0361",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 207"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0362",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 208"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0363",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 209"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0364",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 210"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0365",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 211"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0366",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 212"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0367",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 213"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0368",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 214"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0369",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 215"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0370",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 216"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0371",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 217"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0372",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 218"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0373",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 219"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0374",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 220"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0375",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 221"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0376",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 222"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0377",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 223"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0378",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 224"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0379",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 225"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0380",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 226"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0381",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 227"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0382",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 228"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0383",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 229"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0384",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 230"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0385",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 231"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0386",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 232"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0387",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 233"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0388",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 234"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0389",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 235"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0390",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 236"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0391",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 237"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0392",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 238"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0393",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 239"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0394",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 240"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0395",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 241"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0396",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 242"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0397",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 243"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0398",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 244"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0399",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 245"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0400",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 246"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0401",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 247"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0402",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 248"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0403",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 249"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0404",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 250"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0405",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 251"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0406",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 252"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:00:00.000Z",
+       "type": "user",
+       "uuid": "row-0407",
+       "version": "2.1.310",
+       "message": {
+        "role": "user",
+        "content": "note 253"
+       },
+       "origin": {
+        "kind": "human"
+       }
+      },
+      {
+       "cwd": "$TMP/repo",
+       "isSidechain": false,
+       "parentUuid": null,
+       "sessionId": "0000001a-0000-4000-8000-00000000001a",
+       "timestamp": "2026-10-26T10:01:00.000Z",
+       "type": "assistant",
+       "uuid": "row-0409",
+       "version": "2.1.310",
+       "message": {
+        "role": "assistant",
+        "content": [
+         {
+          "type": "tool_use",
+          "id": "toolu_0408",
+          "name": "Skill",
+          "input": {
+           "skill": "superpowers:executing-plans",
+           "args": "docs/plans/retry.md"
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the scan stops at row 256 (its time check)",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_GSD_SCAN_ROWS": "255"
+   },
+   "argv": [
+    "measure",
+    "--sid",
+    "0000001a-0000-4000-8000-00000000001a",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^GSD: not measured \\(timeout\\)$"
+    ],
+    "stdout_lacks": [
+     "Active driver"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/gsd-scan.json",
+      "json": {
+       "v": 17
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the cached rescan reads row 256: the driver is found",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "0000001a-0000-4000-8000-00000000001a",
+    "--compact",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Active driver: /superpowers:executing-plans docs/plans/retry\\.md \\(Skill, 2026-10-26 13:01 \\+0300\\) · re-enter: /superpowers:executing-plans docs/plans/retry\\.md$"
+    ],
+    "stdout_lacks": [
+     "timeout"
+    ]
+   }
+  }
+ ],
+ "tmp_base": "short"
+}

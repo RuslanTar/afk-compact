@@ -24,6 +24,8 @@
 #   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
 #                            not the system temp folder (the publish lint treats paths
 #                            under /tmp, /private/tmp and /var/folders as ephemeral)
+#   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
+#                            case whose helper output depends on its path lengths)
 #   step "cwd"               the helper's working directory (default: the case's $TMP)
 #   step "capture"           {VAR: "json:<dotted path>" | "re:<regex, one group>"} from stdout
 #   case / step "options"  {key: value}: plugin options in $HOME/.claude/settings.json
@@ -33,7 +35,9 @@
 #   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
-#   expect: stdout_has / stdout_lacks (regexes, /m); stderr_has (regexes, /m); json_keys; json {dotted path: value |
+#   expect: stdout_max_bytes (for a case in the system temp folder, each $TMP in stdout counts as
+#     $TMP_REF_BYTES bytes, so the cap does not depend on how long TMPDIR is);
+#     stdout_has / stdout_lacks (regexes, /m); stderr_has (regexes, /m); json_keys; json {dotted path: value |
 #     {re} | {null} | {len} | {len_min} | {len_plus, total} | {present} | {max_bytes}}; files
 #     has / lacks (regexes, /m); {len_plus: "<dotted path>" or a list of them, total: N}: the
 #     list's length plus the numbers at those paths (0 when absent) is N
@@ -41,7 +45,8 @@
 #   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
 #   setup: tempfiles <recipe> (+ tmp, record, sid); secret_files <dir> (+ record, sid);
 #     write + jsonl_repeat {row, count} (then any jsonl rows); write + jsonl + jsonl_pad
-#     {key (dotted), text, bytes} (the first row's key holds text repeated to bytes);
+#     {key (dotted), text, bytes, row} (row `row`'s key, the first row's by default, holds text
+#     repeated to bytes);
 #     repo_fixture <recipe> + at; paths [..] (+ sid) appends paths.jsonl rows; copy + mode
 #     (+ subst: true fills the placeholders in the copied text)
 #   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
@@ -94,7 +99,15 @@ binmode(STDERR, ':encoding(UTF-8)');
 # failed cases' c<N> and stage/ (`# kept:`); a run that dies or is killed (INT, TERM,
 # HUP) cleans up the same way in END. Only this process cleans: forked children never do.
 my $OWNER_PID = $$;
-my ($RUN_TMP, $REPO_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
+my ($RUN_TMP, $REPO_TMP, $SHORT_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
+# Root ruling R6 (2026-10-27): a stdout byte cap (stdout_max_bytes) of a case outside the repo's
+# tmp/ counts each of its $TMP paths as this many bytes: the length of a case folder under macOS's
+# default temp folder (/private/var/folders/<2>/<30>/T/store-h-<pid>-<6 hex>/c<N>, 77 to 82
+# bytes), where the caps were sized. A long TMPDIR then no longer fails a cap, and a short one
+# (/tmp) no longer hides an overrun. Cases under the repo's tmp/ (tmp_base "repo") are measured as
+# they are. A case whose helper output itself depends on its path lengths (begin trims to fit
+# 3,072 B) runs with tmp_base "short": under /tmp, whatever TMPDIR is.
+our $TMP_REF_BYTES = 82;
 my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, $FIXTURES_DIR, @ARGS);
 $SIG{$_} = sub { exit 130 } for qw(INT TERM HUP);
 END {
@@ -157,6 +170,14 @@ sub repo_tmp {
     $REPO_TMP = "$REPO_TMP_BASE/store-h-" . $$ . '-' . util::rand_hex(6);
     util::mkdir_p($REPO_TMP);
     return $REPO_TMP;
+}
+# R6: tmp_base "short": a run dir under /tmp (the system temp folder when /tmp is not writable).
+sub short_tmp {
+    return $SHORT_TMP if $SHORT_TMP;
+    return $RUN_TMP unless -d '/tmp' && -w '/tmp';
+    $SHORT_TMP = '/tmp/store-h-' . $$ . '-' . util::rand_hex(6);
+    util::mkdir_p($SHORT_TMP);
+    return $SHORT_TMP;
 }
 # lstart_in(pid, tz): `ps -o lstart=` for pid as the helper reads it in a case: under the
 # zone the helper call gets (TZ, child_env; undef: no TZ) and the C locale. An lstart is
@@ -425,7 +446,7 @@ for my $cf (@CASES) {
     push @errs, "runner error: $@" if $@;
     # The case's work dirs: c<N> under the system temp folder and, for tmp_base "repo"
     # cases, under the repo's tmp/.
-    my @cdirs = grep { -d } map { "$_/c$N" } grep { defined } ($RUN_TMP, $REPO_TMP);
+    my @cdirs = grep { -d } map { "$_/c$N" } grep { defined } ($RUN_TMP, $REPO_TMP, $SHORT_TMP);
     if (@errs) {
         $FAILED++;
         push @FAIL_IDS, $id;
@@ -462,7 +483,7 @@ sub cleanup {
         }
     }
     %KIDS = ();
-    my @work = grep { defined && -d } ($RUN_TMP, $REPO_TMP);
+    my @work = grep { defined && -d } ($RUN_TMP, $REPO_TMP, $SHORT_TMP);
     if ($KEEP) {
         print "# work dirs kept: @work\n" if @work;
     } elsif (@FAILED_DIRS) {
@@ -584,11 +605,13 @@ sub sequence_case {
 sub run_case {
     my ($case, $cdir) = @_;
     $case = sequence_case($case) if defined $case->{sequence};
-    my $tmp = (($case->{tmp_base} // '') eq 'repo' ? repo_tmp() : $RUN_TMP) . "/c$N";
+    my $tb = $case->{tmp_base} // '';
+    my $tmp = ($tb eq 'repo' ? repo_tmp() : $tb eq 'short' ? short_tmp() : $RUN_TMP) . "/c$N";
     util::mkdir_p("$tmp/home");
     util::mkdir_p("$tmp/tmpdir");
     my %V;
     $V{TMP} = Cwd::abs_path($tmp);
+    $V{TMP_NORM} = $tb eq 'repo' ? 0 : 1;    # R6: byte caps count $TMP at $TMP_REF_BYTES
     $V{HOME} = "$V{TMP}/home";
     $V{SID} = $case->{sid} // $DEFAULT_SID;
     $V{SID8} = substr($V{SID}, 0, 8);
@@ -1044,10 +1067,11 @@ sub setup {
         elsif (exists $s->{bytes}) { $text = ('x' x 63 . "\n") x int($s->{bytes} / 64); $text .= 'x' x ($s->{bytes} - length $text) }
         elsif (exists $s->{lines}) { $text = join('', map { "line $_ of the output\n" } 1 .. $s->{lines}) }
         else { $text = $s->{text} // '' }
-        # jsonl_pad {key, text, bytes}: the first jsonl row's dotted key holds text repeated to
-        # bytes (a row longer than a reader's first block, e.g. a long agent prompt)
-        if ($s->{jsonl} && $s->{jsonl_pad} && @{ $s->{jsonl} }) {
-            my ($pad, $h) = ($s->{jsonl_pad}, $s->{jsonl}[0]);
+        # jsonl_pad {key, text, bytes, row}: the dotted key of jsonl row `row` (default the first)
+        # holds text repeated to bytes (a row longer than a reader's first block, e.g. a long agent
+        # prompt, or than a reader's row cap, e.g. a pasted prompt after a loop's invocation)
+        if ($s->{jsonl} && $s->{jsonl_pad} && @{ $s->{jsonl} } > ($s->{jsonl_pad}{row} // 0)) {
+            my ($pad, $h) = ($s->{jsonl_pad}, $s->{jsonl}[ $s->{jsonl_pad}{row} // 0 ]);
             my @k = split /\./, $pad->{key};
             my $last = pop @k;
             $h = ($h->{$_} = ref $h->{$_} eq 'HASH' ? $h->{$_} : {}) for @k;
@@ -3021,6 +3045,17 @@ sub subset {
     return undef;
 }
 
+# tmp_norm_len(out, tmp) -> (length, count): out's byte length with each occurrence of tmp (with or
+# without a leading /private) counted as $TMP_REF_BYTES bytes.
+sub tmp_norm_len {
+    my ($out, $tmp) = @_;
+    return (length($out), 0) unless defined $tmp && $tmp ne '';
+    (my $bare = $tmp) =~ s{\A/private(?=/)}{};
+    my ($n, $len) = (0, length $out);
+    while ($out =~ m{(?:/private)?\Q$bare\E}g) { $n++; $len += $TMP_REF_BYTES - length($&) }
+    return ($len, $n);
+}
+
 sub check {
     my ($x, $res, $V, $st) = @_;
     $x = subst_deep($x, $V);
@@ -3049,7 +3084,11 @@ sub check {
                 push @e, json_expect($d, $x->{json});
             }
         }
-        push @e, "stdout is " . length($out) . " bytes > $x->{stdout_max_bytes}" if defined $x->{stdout_max_bytes} && length($out) > $x->{stdout_max_bytes};
+        if (defined $x->{stdout_max_bytes}) {
+            my ($n, $k) = $V->{TMP_NORM} ? tmp_norm_len($out, $V->{TMP}) : (length($out), 0);
+            push @e, "stdout is " . length($out) . " bytes" . ($k ? " ($n with its $k temp paths at $TMP_REF_BYTES bytes each)" : '')
+                    . " > $x->{stdout_max_bytes}" if $n > $x->{stdout_max_bytes};
+        }
         push @e, golden_diff($x->{stdout_golden}, $outc) if $x->{stdout_golden};
         push @e, "stderr not empty: " . chars(substr($r->{err}, 0, 200)) if $x->{stderr_empty} && length $r->{err};
         if ($x->{stderr_has}) { my $ec = $r->{err} // ''; utf8::decode($ec); for my $re (@{ $x->{stderr_has} }) { push @e, "stderr lacks /$re/: " . chars(substr($r->{err} // '', 0, 200)) unless $ec =~ /$re/m } }

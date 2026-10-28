@@ -277,9 +277,12 @@ export function channelToken(v: string | undefined): string | null {
  * `copy` (AP-5): the saved copy of this compaction's summary, whose `## Approvals` lines the
  * helper checks against this session's transcript (`Approvals (checked)` lines); without it the
  * block has no approvals line, so no approval in the summary counts as checked.
+ * `budgetMs`: the helper's own budget for the whole call (`--budget-ms`), for a caller that kills
+ * it sooner than the helper's default budget; without it the helper keeps its own.
  */
-export async function measure(d: Deps, sid: string, nonce?: string, timeoutMs = CHECKPOINT_MS, copy?: string): Promise<string | undefined> {
-  const args = ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : []), ...(copy !== undefined && copy !== '' ? ['--copy=' + copy] : [])]
+export async function measure(d: Deps, sid: string, nonce?: string, timeoutMs = CHECKPOINT_MS, copy?: string, budgetMs?: number): Promise<string | undefined> {
+  const args = ['measure', '--sid', sid, '--compact', ...(nonce ? ['--nonce', nonce] : []), ...(copy !== undefined && copy !== '' ? ['--copy=' + copy] : []),
+    ...(budgetMs !== undefined && budgetMs > 0 ? ['--budget-ms', String(Math.floor(budgetMs))] : [])]
   const r = await call(d, args, timeoutMs)
   return r.ok ? r.stdout.replace(/\s+$/, '') : undefined
 }

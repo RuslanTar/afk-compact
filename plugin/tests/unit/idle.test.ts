@@ -244,6 +244,29 @@ test('AT-IC-04: a block delivered 601 s after it was built is rebuilt with one f
   expect(w.rowsOf('resume_remeasured').map(r => [r.age_s, typeof r.ms])).toEqual([[601, 'number']])
 })
 
+// Review of the third build: the delivery-time re-measure has a short budget; when its GSD step
+// runs out of time, the stored measure's GSD and driver lines stay in the block (and so does
+// [driver]), in place of `GSD: not measured (timeout)`.
+test('AT-GR-07: a fresh re-measure whose GSD step timed out keeps the stored GSD and Active driver lines, and the [driver] line', async ($, on) => {
+  const w = new World().install(on)
+  const gsd = 'GSD (this session): workstream workstream-a · /r/.planning/workstreams/workstream-a/STATE.md: status executing · phase 2'
+  const active = 'Active driver: /phase-loop (Skill, 2026-10-26 14:25 +0300) · re-enter: /phase-loop --ws workstream-a'
+  w.measureBlock = `Git: main @ 3f9c2e1, 0 modified, 0 untracked\n${gsd}\n${active}\nIn flight: none listed\nEvidence: none`
+  await w.start($)
+  await raiseCompact($, { trigger: 'manual' })
+  await w.advance(601 * 1000)
+  w.measureBlock = 'Git: main @ 9e9e9e9, 2 modified, 0 untracked\nGSD: not measured (timeout)\nIn flight: none listed\nEvidence: none'
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(w.rowsOf('resume_remeasured').length).toBe(1)
+  expect(block).toContain('9e9e9e9')
+  expect(block).toContain(gsd)
+  expect(block).toContain(active)
+  expect(block).not.toContain('GSD: not measured (timeout)')
+  const driver = lineOf(w, ['driver'])
+  expect(driver === undefined).toBe(!hasTag('resume-context', 'driver'))
+  if (driver !== undefined) expect(block).toContain(driver)
+})
+
 // Owner xxxxxxxx-37 ("Full block again on return", replaces ID-3's [idle-return] line; SPEC-DELTAS
 // AT-ID-03): the first human prompt after a background result's turn took an idle compaction's
 // block gets the full block again, re-measured, with [idle-again] naming when it went out first.
@@ -410,6 +433,10 @@ test('AT-IC-04: the re-measure fails (3 s budget) → the stored block goes out,
   expect(w.rowsOf('resume_remeasure_failed').map(r => r.age_s)).toEqual([700])
   const last = w.callsOf('measure')[w.callsOf('measure').length - 1]
   expect(last?.args.includes('--compact')).toBe(true)
+  // Review of the second build: only this delivery-time re-measure, killed at 3 s, gives the
+  // helper the short budget; the re-measure at compaction keeps the helper's own (7 s).
+  expect(last?.args.join(' ')).toContain('--budget-ms 2700')
+  expect(w.callsOf('measure')[0]?.args.includes('--budget-ms')).toBe(false)
 })
 
 // ---- IC-1 D5: the pre-idle handoff turn (§9.4)

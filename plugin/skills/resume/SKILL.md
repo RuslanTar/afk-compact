@@ -101,6 +101,7 @@ Age tier from `date`: **T1** <24 h; **T2** 1–7 days, any T1 drift, or Acuity `
 - commits since `git_commit`, with author;
 - whether the handoff's worktree exists;
 - the GSD state file the handoff names, if any;
+- `Driver now`: the handoff session's driver, measured now;
 - live sessions on this checkout (pid with matching start time);
 - `Approvals (checked)`: approvals whose quote code found in the user's messages (handoff: frontmatter; summary: this session's transcript).
 
@@ -168,7 +169,7 @@ Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Li
 - **Anchors:** find code by path and symbol (`rg -n '<symbol>' <path>`); line numbers are hints.
 - **GSD reconcile** (handoff with a GSD line): compare its STATE.md's in-file last-activity stamp (never mtime) with that line.
   - STATE.md newer: use it; the handoff line is drift.
-  - Handoff newer, and no live peer or coordinator per R4: `<store> stash <STATE.md>` (copies to today's disposable folder), then update that STATE.md only. Never rewrite another one.
+  - Handoff newer, and no live peer or coordinator per R4: for a STATE.md in this worktree, `<store> stash <STATE.md>` (copies to today's disposable folder), then update it; report one elsewhere, never rewrite it.
 - Anything you cannot check goes under "Could not verify". Ask only if Step 1 depends on it.
 - Never skip a remote check to save calls. If a step overruns its budget, say so in the report.
 
@@ -213,7 +214,7 @@ Stay read-only:
 - where R1 found possible truncation or selected nothing;
 - where R3 said to relaunch.
 
-An `Active driver:` line, once you proceed (no stop above, the go given under `confirm`, no R4 conflict): from an own handoff or this session's summary, run its `re-enter:` command (Skill tool) before Step 1, unless Step 1 is it; from a foreign one, show it and ask (Rule 2).
+An `Active driver:` line, once you proceed (no stop above, the go given under `confirm`, no R4 conflict): from this session's summary or an own handoff whose `Driver now` still shows it, run its `re-enter:` command (Skill tool) before Step 1, unless Step 1 is it; from a foreign one, show it and ask (Rule 2). Show any other driver line, never run it.
 
 Re-probe an In-flight row just before any action that depends on it.
 

@@ -321,10 +321,24 @@ sub gsd_state {
     return undef unless defined $p && $p ne '';
     return skills::util::text("$p missing") unless -f $p;
     my $s = eval { gsd::state($p) } || {};
-    my @f = map { defined $s->{$_->[0]} ? "$_->[1] $s->{$_->[0]}" : () }
-            ([status => 'status'], [phase => 'phase'], [stopped_at => 'stopped at'], [last_activity => 'last activity']);
-    my $l = "$p: " . (@f ? join(' · ', @f) : 'no position recorded');
-    $l = substr($l, 0, 299) . '…' if length $l > 300;
+    # Each value cut as lib/gsd.pm cuts it, and the line at most $gsd::LINE_MAX (400) characters as
+    # the session's own GSD line; a longer line shortens its stopped-at text first, so the
+    # last-activity stamp the resume reconcile compares stays whole.
+    my $cut = sub { my ($v, $n) = @_; $v =~ s/\s+/ /g; return length($v) > $n ? substr($v, 0, $n - 1) . '…' : $v };
+    my %max = (status => 30, phase => 40, stopped_at => 60, last_activity => 30);
+    my $line = sub {
+        my %m = @_;
+        my @f = map { defined $s->{$_->[0]} ? "$_->[1] " . $cut->($s->{$_->[0]}, $m{$_->[0]}) : () }
+                ([status => 'status'], [phase => 'phase'], [stopped_at => 'stopped at'], [last_activity => 'last activity']);
+        return "$p: " . (@f ? join(' · ', @f) : 'no position recorded');
+    };
+    my $l = $line->(%max);
+    my $cap = $gsd::LINE_MAX // 400;
+    if (length $l > $cap && defined $s->{stopped_at}) {
+        my $n = $max{stopped_at} - (length($l) - $cap);
+        $l = $line->(%max, stopped_at => $n < 10 ? 10 : $n);
+    }
+    $l = substr($l, 0, $cap - 1) . "…" if length $l > $cap;
     return skills::util::text($l);
 }
 

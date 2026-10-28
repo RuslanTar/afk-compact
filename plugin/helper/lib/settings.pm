@@ -70,7 +70,8 @@ our @KEYS = (
     # shipped protected list (protected() below); a protective key
     [protected_branches          => 'str',  '',                        'list'],
     # owner 2026-10-26 (GSD re-entry per session; review of the first build): loop skills, beside
-    # the shipped list (lib/gsd.pm %DRIVERS), that a session re-enters when it invoked them
+    # the shipped list (lib/gsd.pm %DRIVERS) and the skills whose own text runs gsd-tools, that a
+    # session re-enters when it invoked them
     [driver_skills               => 'str',  '',                        'list'],
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;

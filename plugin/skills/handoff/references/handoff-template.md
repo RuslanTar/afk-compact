@@ -174,7 +174,7 @@ The helper replaces `@self@` with the published path. Subsections only when they
   GSD re-entry (new session only): /gsd-resume-work --ws <ws>
   Active driver: <command> (<how>, <stamp>) · re-enter: <command>
   ```
-  The resume runs an Active driver's `re-enter:` command. This skill never writes STATE.md or `.planning/HANDOFF.json`.
+  The driver line may read `Paused driver:` (the loop paused itself) or `Was driving:` (unclear whether the loop still runs); copy it as printed. The resume runs only an `Active driver:` line's `re-enter:` command, and only while its session still shows it active; any other it shows, never runs. This skill never writes STATE.md or `.planning/HANDOFF.json`.
 - **Environment**: services and how to start them, the env contract (names, never values), where credentials live and how they are provisioned, the account; point to project docs that hold it.
 - **Guards in force** (≤5 lines, only when met this session): `<guard> → blocks <what> → sanctioned route <allow rule | user-run ! <cmd> | project script>`. Never a way around a guard.
 - **Ownership**: writer sid8; other live sessions or peers on this checkout, bucket or lane; foreign commits; newer handoffs from other sessions and what they decided; `read-only: <resource>, owned by <sid8 | peer>`.

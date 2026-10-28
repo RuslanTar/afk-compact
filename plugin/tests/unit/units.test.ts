@@ -13,7 +13,7 @@ import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
 import type { Deps } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
-import { BLOCK_MAX, BLOCK_SOFT, fitBlock, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 
 const NAME = 'x'.repeat(14)
 
@@ -170,13 +170,13 @@ describe('AT-P-07 assembler (14-character name)', () => {
     expect(byteLength(s) <= 8192).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
-  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,920
+  // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 3,950
   // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note,
   // and the owner's 2026-10-26 GSD re-entry ruling the [driver] line).
-  test('resume protocol ≤3,920 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  test('resume protocol ≤3,950 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 3920).toBe(true)
+      expect(s.length <= 3950).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
@@ -524,4 +524,14 @@ describe('MOD-04 resume-block tags and the store token', () => {
     expect(hasTag('resume-context', 'submit-idle')).toBe(false)
     expect(hasTag('no-such-asset', 'midturn')).toBe(false)
   })
+})
+
+// Fourth review of the GSD re-entry: the stored GSD line carries STATE.md text, so `$&`, `$'`, `` $` ``
+// and `$$` in it stay literal when it replaces a timed-out GSD step.
+test('AT-GR-08: keepGsdLines keeps replacement patterns in a stored GSD line literal', () => {
+  const gsd = "GSD (this session): no workstream named · /r/.planning/STATE.md: status executing · stopped at fix $& and $' in costs $$ $`"
+  const fresh = 'Git: main @ 9e9e9e9\nGSD: not measured (timeout)\nIn flight: none listed'
+  const out = keepGsdLines(fresh, `Git: main @ 3f9c2e1\n${gsd}\nIn flight: none listed`)
+  expect(out).toBe(`Git: main @ 9e9e9e9\n${gsd}\nIn flight: none listed`)
+  expect(keepGsdLines(fresh, undefined)).toBe(fresh)
 })
