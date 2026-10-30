@@ -1804,6 +1804,25 @@ for (const c of [{ reason: 'cap', agents: false }, { reason: 'thrash', agents: t
   })
 }
 
+// NL-2 is scoped to halt mode: with no halt and no agents, a window at 95% at the check stays its
+// refusal under `run` too (no turn after it, D2), as the README states.
+test('AT-IC-C45 (NL-2): no halt, no agents, a window at 95% at the check, idle_handoff_near_limit run: [near-limit, check], no compaction and no turn', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await w.userTurn($)
+  await w.advance(1000)
+  w.tokens = 260000
+  await w.turnEnd($, 'Done with that step.')
+  const compacts = w.compacts.length
+  await w.advance(55 * MIN)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.advance(MIN)
+  expect(w.rowsOf('halt').length).toBe(0)
+  expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
+  expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
+})
+
 for (const c of [{ turn: true, why: 'episode' }, { turn: false, why: 'halted' }]) {
   test(`AT-IC-C45 (owner Q2, root call): no agents, halt for a thrash, the last turn a background result's${c.turn ? '' : ', the turn off'}: no compaction; [${c.why}, check]${c.turn ? ' (the turn\'s own rule: a background result opens no episode)' : ''}`, { options: c.turn ? ON : { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
     const w = world(on)
