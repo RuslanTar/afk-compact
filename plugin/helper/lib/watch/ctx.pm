@@ -24,7 +24,8 @@ package watch::ctx;
 #   secret_hits    PostCompact: [rule ids] from secrets.scan on the summary
 #   keyset_hash    C5 sha8 of this payload's key set, as core computes it
 #   mod_alive_this_turn  PostCompact: core's liveness answer (MOD-SPEC §3.3)
-#   refused        a roots.check refusal: the watcher then writes nothing
+#   refused        a root refusal reason: the watcher then writes nothing (unset: refused()
+#                  checks the watch dir and handoff_root itself)
 #   append         sub(path, row): core's appender (default: watch::io)
 #   row            sub(ev, fields, ctx): core's envelope builder
 #   sha256         sub(bytes) -> hex: core's sha256 with its fallbacks
@@ -214,17 +215,58 @@ sub watcher_on {
     return (($ctx->{settings}{watcher} || 'shadow') ne 'off') ? 1 : 0;
 }
 
-# The watcher writes nothing when its root is unsafe (WATCH §6.1).
+# refused(ctx) -> 0, or "<key>: <reason>" when the watcher must write nothing (WATCH §6.1:
+# "if the configured root or watch dir resolves inside a git work tree, the watcher writes
+# nothing and status says why"). Each path gets core's unsafe-root test (roots::check_path,
+# MOD-SPEC §1.2 D-12): inside .planning/ or a not-ignored git work tree is refused, a
+# git-ignored one is ok. Order: the watch dir (the configured log_dir, else <root>/.watch,
+# then the folder this call writes to when core passed another), then handoff_root.
+# disposable_root is not checked: the watcher writes nothing under it. `root-unchecked` (git
+# check-ignore ran out of the hook's time) refuses too, for this call only: ctx and the
+# roots cache live for one helper call and nothing of the refusal is kept, so the next hook
+# checks again. A check that cannot run (roots.pm not loadable, an error) refuses: unknown
+# is not safe. A caller may pass `refused` in ctx; it is taken as given.
 sub refused {
     my ($ctx) = @_;
     return $ctx->{refused} if exists $ctx->{refused};
-    my $r;
-    if (defined &roots::check) {
-        $r = eval { local $SIG{__DIE__}; roots::check($ctx->{settings}) };
-    }
-    $ctx->{refused} = (defined $r && !ref $r && $r ne 'ok' && $r ne '1') ? $r
-                    : (ref $r eq 'HASH' && $r->{refused}) ? $r->{refused} : 0;
+    $ctx->{refused} = _root_refusal($ctx);
     return $ctx->{refused};
+}
+
+sub _root_refusal {
+    my ($ctx) = @_;
+    # The watcher also runs outside main.pl (tests, a library caller): load the check and
+    # the two core libraries it calls, as main.pl does.
+    my $loaded = eval {
+        local $SIG{__DIE__};
+        require "util.pm" unless defined &util::real_path;
+        require "git.pm" unless defined &git::check_ignore;
+        require "roots.pm" unless defined &roots::check_path;
+        1;
+    };
+    return 'roots: check-unavailable' unless $loaded && defined &roots::check_path;
+    my $s = ref $ctx->{settings} eq 'HASH' ? $ctx->{settings} : {};
+    my $root = $ctx->{root};
+    my $log = (defined $s->{log_dir} && !ref $s->{log_dir} && $s->{log_dir} ne '') ? $s->{log_dir}
+            : (defined $s->{handoff_root} && $s->{handoff_root} ne '') ? "$s->{handoff_root}/.watch"
+            : defined $root ? "$root/.watch" : undef;
+    my (@check, %seen);
+    for my $c (['log_dir', $log], ['log_dir', $ctx->{watch}], ['handoff_root', $root],
+               ['handoff_root', $s->{handoff_root}]) {
+        my ($key, $p) = @$c;
+        next unless defined $p && !ref $p && $p ne '';
+        $p =~ s{/+\z}{} unless $p eq '/';
+        next if $seen{$p}++;
+        push @check, [$key, $p];
+    }
+    return 'handoff_root: root-unset' unless @check;
+    for my $c (@check) {
+        my ($key, $p) = @$c;
+        my $r = eval { local $SIG{__DIE__}; roots::check_path($p) };
+        return "$key: check-failed" unless ref $r eq 'HASH';
+        return "$key: " . ($r->{reason} // 'root-unsafe') unless $r->{ok};
+    }
+    return 0;
 }
 
 sub sid8 { return substr($_[0]{sid} || 'unknown', 0, 8) }
