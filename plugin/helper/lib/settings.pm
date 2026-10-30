@@ -17,7 +17,7 @@ use warnings;
 use utf8;
 require "userre.pm";    # U-06: the time bound for the user's own patterns
 
-# The keys of MOD-SPEC §1.2 (43 with idle_digest and restart_on_update): type; fallback (used only when the manifest lacks the key:
+# The keys of MOD-SPEC §1.2 (44 with idle_digest, restart_on_update and idle_handoff_near_limit): type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).

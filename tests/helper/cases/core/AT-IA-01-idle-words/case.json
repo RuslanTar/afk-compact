@@ -772,6 +772,38 @@
      "^note: idle_handoff_near_limit: not run or skip, run used$"
     ]
    }
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): \" SKIP \" resolves to skip (export_view over resolve, as the watch export reads it)",
+   "options": {
+    "idle_handoff_near_limit": " SKIP "
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "skip"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): \"Run\" resolves to run",
+   "options": {
+    "idle_handoff_near_limit": "Run"
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): spaces only resolve to the default run",
+   "options": {
+    "idle_handoff_near_limit": "  "
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): \"maybe\" resolves to run, never other",
+   "options": {
+    "idle_handoff_near_limit": "maybe"
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
   }
  ]
 }
