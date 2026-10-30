@@ -490,6 +490,74 @@
    "options": {
     "keep_warm_hours": 1.5
    }
+  },
+  {
+   "name": "keep_warm_hours \".5\": half an hour, as the plugin's Number() reads it (not the default)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 0\\.5 h of an idle gap"
+    ]
+   },
+   "options": {
+    "keep_warm_hours": ".5"
+   }
+  },
+  {
+   "name": "keep_warm_hours \" 2. \": blanks and a trailing point read as 2",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 2 h of an idle gap"
+    ]
+   },
+   "options": {
+    "keep_warm_hours": " 2. "
+   }
   }
  ]
 }

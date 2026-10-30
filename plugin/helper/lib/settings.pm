@@ -147,10 +147,8 @@ sub _coerce {
         return $v ? 1 : 0 if ref $v;
         return ($v =~ /^(1|true|yes|on)$/i) ? 1 : 0;
     }
-    if ($t eq 'num') {
-        return undef unless defined $v && "$v" =~ /^-?[0-9]+(\.[0-9]+)?$/;
-        return 0 + $v;
-    }
+    # A number as the plugin's Number() reads a decimal (`.5`, `5.`, a sign, an exponent, blanks around).
+    return _decimal($v) if $t eq 'num';
     if ($t eq 'dir' || $t eq 'file') { return util::expand_tilde(util::to_bytes("$v")) }
     return util::text("$v");    # a text value is characters (§2.6); paths above stay bytes (SR 1.1)
 }
@@ -383,7 +381,9 @@ sub resolve {
 # ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
 # num_clamped(key[, resolved]) -> (value, clamped 0|1): a number key within the manifest's
 # min/max (S-SETTINGS E4-E6: handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
-# watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback.
+# watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback. A number reads as the
+# plugin's `Number()` reads a decimal (config.ts `num`): a sign, `.5`, `5.`, an exponent and
+# surrounding blanks are accepted (keep_warm_hours `.5` is 0.5 on both sides).
 sub num_clamped {
     my ($key, $r) = @_;
     $r //= _current();
@@ -392,11 +392,25 @@ sub num_clamped {
     my $fb = $row ? $row->[2] : undef;
     my $uc = eval { ctx::user_config()->{$key} };
     $fb = $uc->{default} if ref $uc eq 'HASH' && defined $uc->{default} && !ref $uc->{default};
-    $v = $fb unless defined $v && !ref $v && "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/;
+    $v = _decimal($v) // _decimal($fb);
     return (undef, 0) unless defined $v;
     my ($lo, $hi) = eval { limits($key) };
     my $used = (defined $lo && $v < $lo) ? $lo : (defined $hi && $v > $hi) ? $hi : 0 + $v;
     return ($used, $used == $v ? 0 : 1);
+}
+
+# A plain decimal (num_clamped): the number, else undef.
+sub _decimal {
+    my ($v) = @_;
+    return undef unless defined $v && !ref $v;
+    my $t = "$v";
+    $t =~ s/\A\s+//;
+    $t =~ s/\s+\z//;
+    return undef unless $t =~ /\A[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?\z/;
+    my $n = 0 + $t;
+    # Not finite (an exponent past the double range): the plugin keeps its default too.
+    return undef if $n - $n != 0;
+    return $n;
 }
 
 # The resolved settings of this run (rc), else a fresh resolve.
