@@ -349,7 +349,7 @@ test('AT-M5-06: full mod lifecycle under an fs trace: no pin write; every write 
     expect(p.startsWith(ROOT + '/')).toBe(true)
     expect(p.includes('/.sessions/')).toBe(false)
   }
-  expect(w.writes.some(p => p.startsWith(HOME + '/.claude/handoffs/.watch/'))).toBe(true)
+  expect(w.writes.some(p => p.startsWith(WATCH + '/'))).toBe(true)
 })
 
 test('unsafe roots: ident watch null (every log folder refused): the mod writes no file at all', async ($, on) => {

@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13",
- "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH that fails the 5.28 check), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row; any other subcommand prints REFUSED: helper-runtime and exits 3",
+ "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH that fails the 5.28 check), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [
@@ -30,9 +30,12 @@
     "exit": 0,
     "stdout": "",
     "stderr_empty": true,
+    "absent": [
+     "$LEGACY"
+    ],
     "rows": [
      {
-      "file": "$WATCH/$SID.classic.jsonl",
+      "file": "$HOME/.local/state/$BRAND/handoffs/.watch/$SID.classic.jsonl",
       "ev": "helper_runtime_missing",
       "count": 1,
       "fields": {

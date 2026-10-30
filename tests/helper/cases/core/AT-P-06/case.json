@@ -35,7 +35,7 @@
       "count": 1
      },
      {
-      "path": "$HOME/.claude/handoffs",
+      "path": "$ROOT",
       "count": 0
      }
     ]
@@ -58,8 +58,12 @@
     "exit": 0,
     "files": [
      {
-      "path": "$HOME/.claude/handoffs/.watch/$SID.classic.jsonl",
+      "path": "$ROOT/.watch/$SID.classic.jsonl",
       "count": 1
+     },
+     {
+      "path": "$LEGACY",
+      "count": 0
      }
     ]
    }
@@ -85,7 +89,7 @@
     "exit": 0,
     "rows": [
      {
-      "file": "$HOME/.claude/handoffs/.watch/$SID.classic.jsonl",
+      "file": "$ROOT/.watch/$SID.classic.jsonl",
       "ev": "session",
       "fields": {
        "phase": "end"

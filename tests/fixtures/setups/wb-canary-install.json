@@ -383,12 +383,12 @@
       "content": "{\"path\": \"$TMP/wb-canary-evidence01/2026-10-21/app.log\"}\n"
     },
     {
-      "write": "$HOME/.claude/handoffs/wb-canary-repo01/wb-canary-topic01/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
+      "write": "$ROOT/wb-canary-repo01/wb-canary-topic01/compact/2026-10-21_14-02-00_5e55a001_c1-1a2b3c.md",
       "content": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 1a2b3c4d\ndate: 2026-10-21T14:02:00+03:00\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nactor: main\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/wb-canary-topic01\nbucket_source: topic\nbranch: feature/WBCANARY-4242-wb-canary-branch01\nworktree: $TMP/wb-canary-repo01\n---\n⟪{{plugin}} v1 n=1a2b3c4d s=main⟫\n# WBCANARY-4242 — CANARY-TEXT-wb-summary\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-summary (checkpoint: clean)\n⟪/{{plugin}} n=1a2b3c4d⟫\n",
       "mode": "0400"
     },
     {
-      "write": "$HOME/.claude/handoffs/wb-canary-repo01/wb-canary-topic01/2026-10-21_14-03-00_5e55a001_handoff.md",
+      "write": "$ROOT/wb-canary-repo01/wb-canary-topic01/2026-10-21_14-03-00_5e55a001_handoff.md",
       "content": "---\nkind: handoff\nsession_id: 5e55a001-0c0f-4f1e-9a00-00000000a001\nrepository: wb-canary-repo01\nbucket: wb-canary-repo01/wb-canary-topic01\nticket: WBCANARY-4242\nbranch: feature/WBCANARY-4242-wb-canary-branch01\n---\n# WBCANARY-4242 — CANARY-TEXT-wb-handoff\n## Resume here\nStatus: active · State: CANARY-TEXT-wb-handoff (checkpoint: clean)\n"
     },
     {

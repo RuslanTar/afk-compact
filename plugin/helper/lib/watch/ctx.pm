@@ -42,7 +42,8 @@ use watch::io;
 use watch::json;
 
 my %DEFAULTS = (
-    handoff_root                => '~/.claude/handoffs',
+    # STATE-ROOT (0.1.2); <plugin> is the plugin's name from its manifest (_named)
+    handoff_root                => '~/.local/state/<plugin>/handoffs',
     log_dir                     => '',
     watcher                     => 'shadow',
     stall_min                   => 60,
@@ -68,6 +69,17 @@ my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
 sub plugin_root_default {
     my $p = Cwd::abs_path("$THIS_DIR/../../..");
     return defined $p ? $p : "$THIS_DIR/../../..";
+}
+
+# _named(value) -> value with <plugin> replaced by the plugin's name from its manifest (the
+# handoff_root fallback default, STATE-ROOT).
+sub _named {
+    my ($v) = @_;
+    return $v unless defined $v && !ref $v && index($v, '<plugin>') >= 0;
+    my $m = watch::io::read_json_file(plugin_root_default() . '/.claude-plugin/plugin.json') || {};
+    my $n = ref $m eq 'HASH' && defined $m->{name} && !ref $m->{name} && $m->{name} ne '' ? $m->{name} : 'store';
+    $v =~ s/<plugin>/$n/g;
+    return $v;
 }
 
 sub _expand {
@@ -110,7 +122,7 @@ sub _settings {
         $v = $DEFAULTS{$k} unless defined $v;
         $s{$k} = $v;
     }
-    $s{handoff_root} = _expand($s{handoff_root}) || _expand($DEFAULTS{handoff_root});
+    $s{handoff_root} = _expand(_named($s{handoff_root})) || _expand(_named($DEFAULTS{handoff_root}));
     for my $k (qw(stall_min cache_ttl_s compact_target_tokens compact_soft_max_tokens
                   native_window_tokens max_auto_continues_per_hour evidence_quota_mb
                   handoff_turn_max_tokens watch_quota_mb)) {

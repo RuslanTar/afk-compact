@@ -98,8 +98,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   ic-desc      AT-IC-11: resume description without `/clear`/`break`; handoff one unchanged
   nudge-folder AT-TX-13: nudge step 3 current-folder fallback and `Dirty in <folder git ran in>:`
   BLD-05 end-of-round gates over a built plugin folder (build round 9, after the last merge):
-  config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS and
-               watch/ctx.pm %DEFAULTS equal the manifest defaults; manifest and @KEYS list the
+  config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS,
+               watch/ctx.pm %DEFAULTS, paths.pm $DEFAULT_ROOT and the launcher's hroot equal
+               the manifest defaults (handoff_root ~/.local/state/<name>/handoffs, STATE-ROOT); manifest and @KEYS list the
                same keys; AT-IA-01: settings.pm and config.ts hold the same idle off/auto words
                and the same value for any other word
   export-classes AT-WB-08: every settings key exports as num/bool/enum/path/list/drop; dir and
@@ -550,6 +551,9 @@ def self_heal_hits(target, brand):
 RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto", "idle_digest": "off",
                   "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "auto",
                   "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
+# STATE-ROOT (0.1.2): the handoff_root default, outside ~/.claude (whose writes get Claude
+# Code's protected-path prompt); {} is the plugin name.
+STATE_ROOT = "~/.local/state/{}/handoffs"
 
 
 def config_defaults_hits(target, brand):
@@ -566,7 +570,7 @@ def config_defaults_hits(target, brand):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if got != val or isinstance(got, bool):
             out.append((path, None, "AT-WD-02 default", "AT-WD-02 default: {} is {!r}, want {!r}".format(key, got, val), ""))
-    for key, val in sorted(RULED_DEFAULTS.items()):
+    for key, val in sorted(dict(RULED_DEFAULTS, handoff_root=STATE_ROOT.format(brand)).items()):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if key not in uc or got != val or isinstance(got, bool):
             # The text is also the "line", so a PENDING row can name one key (its fragment).
@@ -1234,6 +1238,15 @@ def _settings_rows(target):
     return path, rows
 
 
+# STATE-ROOT: a hand-written default may name the plugin as this token (filled in at run time from the
+# manifest's name), so a rename needs no edit; the gate fills it with the brand before comparing.
+NAME_TOKEN = "<plugin>"
+
+
+def _named(v, brand):
+    return v.replace(NAME_TOKEN, brand) if isinstance(v, str) else v
+
+
 def _lit(v):
     """A Perl or TypeScript literal as Python: 'x' -> x, numbers -> int/float, true/false."""
     v = v.strip().rstrip(",").strip()
@@ -1276,7 +1289,7 @@ def config_sources_hits(target, brand):
         seen.add(key)
         if key not in defaults:
             out.append((spath, None, "AT-CAP-02 extra", "AT-CAP-02 extra: settings.pm key {} is not in the manifest".format(key), ""))
-        elif not _same(defaults[key], _lit(fb), perl_bool=(typ == "bool")):
+        elif not _same(defaults[key], _named(_lit(fb), brand), perl_bool=(typ == "bool")):
             out.append((spath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: settings.pm {} fallback {} != manifest {!r}".format(
                 key, fb, defaults[key]), ""))
     for key in sorted(set(defaults) - seen):
@@ -1290,7 +1303,7 @@ def config_sources_hits(target, brand):
             out.append((cpath, None, "AT-CAP-02 config.ts", "AT-CAP-02 config.ts: no DEFAULTS block", ""))
         for ln in (m.group(1).split("\n") if m else []):
             r = re.match(r"^\s*(\w+):\s*(.+?),?\s*$", ln)
-            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _lit(r.group(2))):
+            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _named(_lit(r.group(2)), brand)):
                 out.append((cpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: config.ts DEFAULTS {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
     out.extend(_idle_words_hits(spath, cpath))
@@ -1303,9 +1316,38 @@ def config_sources_hits(target, brand):
             out.append((wpath, None, "AT-CAP-02 ctx.pm", "AT-CAP-02 ctx.pm: no %DEFAULTS block", ""))
         for ln in (m.group(1).split("\n") if m else []):
             r = re.match(r"^\s*(\w+)\s*=>\s*(.+?),?\s*$", ln)
-            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _lit(r.group(2)), perl_bool=True):
+            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _named(_lit(r.group(2)), brand), perl_bool=True):
                 out.append((wpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: watch/ctx.pm {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
+    out.extend(_root_fallback_hits(target, brand, defaults.get("handoff_root")))
+    return out
+
+
+PATHS_REL = "helper/lib/paths.pm"
+
+
+def _root_fallback_hits(target, brand, want):
+    """AT-CAP-02 (STATE-ROOT): the two handoff_root fallbacks outside the key tables equal the manifest
+    default too: lib/paths.pm $DEFAULT_ROOT and the launcher's shell fallback for `.watch`
+    (`hroot='…'`, built from src/launcher.tmpl). A missed one splits the hooks' root from the
+    helper's."""
+    out = []
+    ppath = os.path.join(target, *PATHS_REL.split("/"))
+    if not os.path.isfile(ppath):
+        out.append(_missing(ppath, "AT-CAP-02 paths.pm"))
+    else:
+        m = re.search(r"^our \$DEFAULT_ROOT = '([^']*)';", _read(ppath), re.M)
+        if not m or _named(m.group(1), brand) != want:
+            out.append((ppath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: paths.pm $DEFAULT_ROOT {} != manifest {!r}".format(
+                m.group(1) if m else "missing", want), ""))
+    lpath = os.path.join(target, LAUNCHER_DIR, brand + "-store")
+    if not os.path.isfile(lpath):
+        out.append(_missing(lpath, "AT-CAP-02 launcher"))
+    else:
+        m = re.search(r"\|\| hroot='([^']*)'", _read(lpath))
+        if not m or m.group(1) != want:
+            out.append((lpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: launcher hroot {} != manifest {!r}".format(
+                m.group(1) if m else "missing", want), ""))
     return out
 
 

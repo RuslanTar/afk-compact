@@ -86,7 +86,7 @@
    },
    "capture": {
     "PUB": "re:^Wrote handoff to: (.+)$",
-    "PUB_REL": "re:^Wrote handoff to: .*?/\\.claude/handoffs/(.+)$"
+    "PUB_REL": "re:^Wrote handoff to: .*?/handoffs/(.+)$"
    }
   },
   {

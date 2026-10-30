@@ -32,7 +32,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "{\"pid\":424242,\"pid_lstart\":\"Tue Oct 21 09:00:00 2026\",\"execpath_version\":null,\"watch\":\"~/.claude/handoffs/.watch\",\"restart\":\"off\",\"restart_reports\":[]}\n"
+   "{\"pid\":424242,\"pid_lstart\":\"Tue Oct 21 09:00:00 2026\",\"execpath_version\":null,\"watch\":\"~/.local/state/",
+   "/handoffs/.watch\",\"restart\":\"off\",\"restart_reports\":[]}\n"
   ]
  },
  {
@@ -302,7 +303,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "VERDICT ok marker_line=1 sentinel_from_end=1\nSaved copy: ~/.claude/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md\n"
+   "VERDICT ok marker_line=1 sentinel_from_end=1\nSaved copy: ~/.local/state/",
+   "/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md\n"
   ]
  },
  {
@@ -350,7 +352,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "VERDICT ok marker_line=1 sentinel_from_end=1\nEXISTS: ~/.claude/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md sha-match\n"
+   "VERDICT ok marker_line=1 sentinel_from_end=1\nEXISTS: ~/.local/state/",
+   "/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md sha-match\n"
   ]
  },
  {
@@ -374,7 +377,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "~/.claude/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md\n"
+   "~/.local/state/",
+   "/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md\n"
   ]
  },
  {
@@ -770,7 +774,9 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "staged ~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=<store> publish --stage '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
+   "staged ~/.local/state/",
+   "/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03 draft=1 finish=<store> publish --stage '~/.local/state/",
+   "/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03' --slug lab-42 --status in-progress\n"
   ]
  },
  {
@@ -794,7 +800,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "staged ~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04 draft=0 finish=none\n"
+   "staged ~/.local/state/",
+   "/handoffs/repo/LAB-42/.staging/it's-0a0b0c04 draft=0 finish=none\n"
   ]
  },
  {
@@ -818,7 +825,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "published ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
+   "published ~/.local/state/",
+   "/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md\n"
   ]
  },
  {
@@ -842,7 +850,8 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   ],
   "exitCode": 0,
   "stdout": [
-   "publish-failed ~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry-2.md\n"
+   "publish-failed ~/.local/state/",
+   "/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry-2.md\n"
   ]
  },
  {

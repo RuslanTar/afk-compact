@@ -63,7 +63,9 @@ export type Config = {
 }
 
 export const DEFAULTS: Config = {
-  handoff_root: '~/.claude/handoffs',
+  // STATE-ROOT (0.1.2): out of ~/.claude, whose writes get Claude Code's protected-path prompt (helper
+  // lib/paths.pm); NAME_TOKEN is the plugin's name (parseOptions), so a rename needs no edit here
+  handoff_root: '~/.local/state/<plugin>/handoffs',
   log_dir: '',
   disposable_root: '~/.claude/trash-staging',
   triggers: true,
@@ -221,10 +223,18 @@ function handoffTokens(o: PluginOptions, notes: Config['notes']): number {
   return c
 }
 
-export function parseOptions(o: PluginOptions): Config {
+/** The token in DEFAULTS.handoff_root that stands for the plugin's name (STATE-ROOT). */
+export const NAME_TOKEN = '<plugin>'
+
+/**
+ * The options as the mod reads them. `name` (the plugin's, `$.plugin.name`) fills NAME_TOKEN in the
+ * handoff_root default; a load fills the manifest's default in itself, so this is the fallback.
+ */
+export function parseOptions(o: PluginOptions, name?: string): Config {
   const notes: Config['notes'] = { invalid: [], clamped: [] }
+  const root = name ? DEFAULTS.handoff_root.split(NAME_TOKEN).join(name) : DEFAULTS.handoff_root
   return {
-    handoff_root: str(o, 'handoff_root', DEFAULTS.handoff_root),
+    handoff_root: str(o, 'handoff_root', root),
     log_dir: str(o, 'log_dir', DEFAULTS.log_dir),
     disposable_root: str(o, 'disposable_root', DEFAULTS.disposable_root),
     triggers: bool(o, 'triggers', DEFAULTS.triggers),

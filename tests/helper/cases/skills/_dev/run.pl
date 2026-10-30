@@ -127,7 +127,7 @@ sub run_case {
     my $sid = $c->{sid} // $DEF_SID;
     my %vars = (TMP => $tmp, HOME => $home, SID => $sid, SID8 => lc(substr($sid =~ s/[^0-9a-zA-Z]//gr, 0, 8)),
                 PLUGIN => $PLUGIN, STORE => $STORE, LSTART1 => $LSTART1, CASE => $dir, BRAND => $BRAND);
-    $vars{ROOT} = "$home/.claude/handoffs";
+    $vars{ROOT} = "$home/.local/state/$BRAND/handoffs";    # STATE-ROOT default
     $vars{DISP} = "$home/.claude/trash-staging";
     my $cenv = subst($c->{env} || {}, \%vars);
     $vars{ROOT} = $cenv->{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} if $cenv->{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT};

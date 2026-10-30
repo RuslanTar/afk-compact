@@ -180,7 +180,7 @@ describe('BT-05 recorded helper replies', () => {
     const hs = async (n: string) => handoffState(depsFor(reply(n)), REPLY_SID, htOf(n))
     expect(await hs('handoff-state-none')).toEqual({ state: 'none' })
     expect(await hs('handoff-state-staged')).toEqual({
-      state: 'staged', stage: '~/.claude/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03', draft: true,
+      state: 'staged', stage: '~/.local/state/' + NAME + '/handoffs/repo/LAB-42/.staging/5e55a001-0a0b0c03', draft: true,
       finish: join(reply('handoff-state-staged').stdout).replace(/^.* finish=/, '').trimEnd(),
     })
     const staged = await hs('handoff-state-staged')
@@ -190,9 +190,9 @@ describe('BT-05 recorded helper replies', () => {
     const finish = staged.state === 'staged' ? staged.finish ?? '' : ''
     expect([finish.startsWith("<store> publish --stage '"), finish.includes('$PLUGIN'), finish.includes('/' + LAUNCHER_DIR + '/')]).toEqual([true, false, false])
     expect(await hs('handoff-state-staged-no-finish')).toEqual({
-      state: 'staged', stage: "~/.claude/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
+      state: 'staged', stage: '~/.local/state/' + NAME + "/handoffs/repo/LAB-42/.staging/it's-0a0b0c04", draft: false, finish: null,
     })
-    expect(await hs('handoff-state-published')).toEqual({ state: 'published', path: '~/.claude/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md' })
+    expect(await hs('handoff-state-published')).toEqual({ state: 'published', path: '~/.local/state/' + NAME + '/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md' })
     expect(await hs('handoff-state-superseded')).toEqual({ state: 'superseded', nonce: REPLY_NONCE })
     // DP-28: a claimed handoff file the publish could not write answers `publish-failed <path>`;
     // the mod reads it as failed, so the cycle falls back to the full summary text.

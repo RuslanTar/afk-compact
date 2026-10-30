@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, hasTag, leftovers } from '../../hooks/lib/assemble'
-import { CLAMP_DEFAULTS, DEFAULTS, IDLE_INVALID_READS_AS, clamp, clampConstants, minWindow, parseOptions, softCap, targetOf } from '../../hooks/lib/config'
+import { CLAMP_DEFAULTS, DEFAULTS, IDLE_INVALID_READS_AS, NAME_TOKEN, clamp, clampConstants, minWindow, parseOptions, paths, softCap, targetOf } from '../../hooks/lib/config'
 import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
@@ -243,6 +243,18 @@ test('BT-01 (U part): the marker in assets.gen.ts takes the run-time plugin name
   expect(t).toContain(OPEN + 'zz-rename-probe v1 n=@nonce@ s=main' + CLOSE)
   expect(t).toContain(OPEN + '/zz-rename-probe n=@nonce@' + CLOSE)
   expect(assetText('subagent-instructions', 'q')).toContain(OPEN + 'q v1 n=@nonce@ s=sub' + CLOSE)
+})
+
+test('STATE-ROOT (0.1.2): the default handoff root is outside ~/.claude, and .watch moves with it', () => {
+  // the plugin's name stands as a token in the fallback default; parseOptions fills it in
+  expect(DEFAULTS.handoff_root).toBe('~/.local/state/' + NAME_TOKEN + '/handoffs')
+  const unset = parseOptions({ handoff_root: '${user_config.handoff_root}', log_dir: '' }, 'nm')
+  expect(paths(unset, '/hh/u')).toEqual({ root: '/hh/u/.local/state/nm/handoffs', watch: '/hh/u/.local/state/nm/handoffs/.watch' })
+  expect(paths(parseOptions({}, 'nm'), '/hh/u/')?.watch).toBe('/hh/u/.local/state/nm/handoffs/.watch')
+  // a value the user set stays the only root (the old default included); log_dir still wins for .watch
+  expect(paths(parseOptions({ handoff_root: '~/.claude/handoffs' }, 'nm'), '/hh/u')?.root).toBe('/hh/u/.claude/handoffs')
+  expect(paths(parseOptions({ log_dir: '/var/x/logs/' }, 'nm'), '/hh/u')?.watch).toBe('/var/x/logs')
+  expect(paths(DEFAULTS, undefined)).toBeUndefined()
 })
 
 test('clamp arithmetic: AT-P-03 and AT-P-04', () => {

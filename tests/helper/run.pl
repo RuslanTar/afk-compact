@@ -16,7 +16,7 @@
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
 #   out: a PATH without git), run (a helper call without assertions).
-# Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
+# Placeholders in every string: $TMP $HOME $ROOT $LEGACY (the pre-0.1.2 default root) $WATCH $SID $SID8 $PLUGIN $FIX $CASE
 #   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
 #   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), $LAUNCH_ENV (the restart
@@ -681,7 +681,14 @@ sub run_case {
     $V{PLUGIN_VERSION} = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) }; ref $m eq 'HASH' ? $m->{version} // '0.0.0' : '0.0.0' };
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
-    $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
+    # STATE-ROOT (0.1.2): the default root is the staged manifest's default (~/.local/state/<brand>/handoffs);
+    # $LEGACY is the old default ~/.claude/handoffs, read while handoff_root is unset
+    my $droot = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) };
+                     ref $m eq 'HASH' && ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{handoff_root} eq 'HASH'
+                         ? $m->{userConfig}{handoff_root}{default} : undef } // '~/.local/state/' . $BRAND . '/handoffs';
+    $droot =~ s{\A~/}{$V{HOME}/};
+    $V{LEGACY} = "$V{HOME}/.claude/handoffs";
+    $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : $droot;
     $V{WATCH} = defined $cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR}) : "$V{ROOT}/.watch";
     $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : "$V{HOME}/.claude/trash-staging";
     my $vars = subst_deep($case->{vars} || {}, \%V);
@@ -783,8 +790,8 @@ sub subst {
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
     $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
-    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
-    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
+    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\}}{$V->{$1} // ''}ge;
+    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\b/$V->{$1} \/\/ ''/ge;
     # $LSTART1 / $RUNNER_LSTART (lstart_var), then any other $NAME the case defined (vars) or a
     # step captured; unknown names stay as written.
     $s =~ s/\$([A-Z][A-Z0-9_]*)/my $n = $1; $n eq 'LSTART1' || $n eq 'RUNNER_LSTART' ? lstart_var($n, $V) : exists $V->{$n} && defined $V->{$n} ? $V->{$n} : "\$$n"/ge;
@@ -3154,6 +3161,27 @@ sub golden_diff {
             . ' want ' . jsonc::encode(substr($want, $i, 60)));
 }
 
+# tree_sig(dir) -> one line per entry under dir (itself included): relative path, type, mode,
+# size, mtime and, for a file, its sha256; sorted (same_tree_as).
+sub tree_sig {
+    my ($dir) = @_;
+    my @out;
+    my @todo = ('');
+    while (@todo) {
+        my $rel = shift @todo;
+        my $p = $rel eq '' ? $dir : "$dir/$rel";
+        my @st = lstat $p or next;
+        my $type = -l _ ? 'l' : -d _ ? 'd' : 'f';
+        my $sum = $type eq 'f' ? sha::hex256(util::read_file($p) // '') : $type eq 'l' ? (readlink($p) // '') : '';
+        push @out, join("\t", $rel eq '' ? '.' : $rel, $type, sprintf('%04o', $st[2] & 07777), ($type eq 'd' ? 0 : $st[7]), $st[9], $sum);
+        next unless $type eq 'd';
+        opendir(my $dh, $p) or next;
+        push @todo, map { $rel eq '' ? $_ : "$rel/$_" } grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+        closedir $dh;
+    }
+    return join("\n", sort @out);
+}
+
 sub expand_glob {
     my ($pat) = @_;
     return ($pat) unless $pat =~ /[*?\[]/;
@@ -3285,6 +3313,22 @@ sub check {
                 push @e, "$p: bytes differ from snapshot $f->{same_bytes_as}" if defined $was && (util::read_file($p) // '') ne $was;
             }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
+            # tree_snapshot <label> keeps a folder's listing (every entry's path, type, mode, size,
+            # mtime and bytes) for a later step's same_tree_as <label> (STATE-ROOT: nothing is written
+            # under the legacy root)
+            if (defined $f->{tree_snapshot}) { $V->{"__tree_$f->{tree_snapshot}"} = tree_sig($p) }
+            if (defined $f->{same_tree_as}) {
+                my $was = $V->{"__tree_$f->{same_tree_as}"};
+                push @e, "$p: no tree snapshot $f->{same_tree_as}" unless defined $was;
+                if (defined $was) {
+                    my $now = tree_sig($p);
+                    if ($now ne $was) {
+                        my %w = map { $_ => 1 } split /\n/, $was;
+                        my %n = map { $_ => 1 } split /\n/, $now;
+                        push @e, "$p: tree changed: " . join('; ', (map { "+$_" } grep { !$w{$_} } sort keys %n), (map { "-$_" } grep { !$n{$_} } sort keys %w));
+                    }
+                }
+            }
             next if -d $p;
             my $raw = util::read_file($p) // '';
             my $txt = $raw; utf8::decode($txt);

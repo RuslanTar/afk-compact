@@ -22,7 +22,7 @@ require "userre.pm";    # U-06: the time bound for the user's own patterns
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
 our @KEYS = (
-    [handoff_root                => 'dir',  '~/.claude/handoffs',      'path'],
+    [handoff_root                => 'dir',  '~/.local/state/<plugin>/handoffs', 'path'],    # STATE-ROOT (0.1.2); lib/paths.pm
     [log_dir                     => 'dir',  '',                        'path'],
     [disposable_root             => 'dir',  '~/.claude/trash-staging', 'path'],
     [disposable_keep_days        => 'num',  0,                         'num'],
@@ -283,7 +283,7 @@ sub resolve {
     my $foreign = config_dir_foreign();
     for my $k (@KEYS) {
         my ($key, $type, $fallback) = @$k[0 .. 2];
-        my $default = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : $fallback;
+        my $default = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : (defined &paths::named ? paths::named($fallback) : $fallback);
         my ($v, $s);
         my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
         my $file_only = $FILE_ONLY{$key};

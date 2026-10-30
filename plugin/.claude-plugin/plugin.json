@@ -8,8 +8,8 @@
     "handoff_root": {
       "type": "directory",
       "title": "Handoff folder",
-      "description": "Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default ~/.claude/handoffs; change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository.",
-      "default": "~/.claude/handoffs"
+      "description": "Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default ~/.local/state/afk-compact/handoffs, outside ~/.claude, where Claude Code asks before every write; while this is unset, handoffs an earlier version saved in ~/.claude/handoffs are still read, never written. Change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository.",
+      "default": "~/.local/state/afk-compact/handoffs"
     },
     "log_dir": {
       "type": "directory",

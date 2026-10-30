@@ -6,9 +6,11 @@ import type { On, SessionCompactResult, SessionMessage } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 import { CLOSE, OPEN, detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
+import { BRAND } from './_gen/brand.gen'
 
 export const HOME = '/hh/u'
-export const ROOT = HOME + '/.claude/handoffs'
+// STATE-ROOT (0.1.2): the default handoff root (the manifest's, filled in by the load), outside ~/.claude
+export const ROOT = HOME + '/.local/state/' + BRAND.name + '/handoffs'
 export const WATCH = ROOT + '/.watch'
 export const SID_A = '5e55a001-0c0f-4f1e-9a00-00000000a001'
 export const SID_B = '5e55a002-0c0f-4f1e-9a00-00000000a002'

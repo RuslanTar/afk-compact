@@ -54,7 +54,8 @@ def summary(name):
 def ht_setup(tmp, home):
     """Files `begin` and `publish` (WP-skills) write for a bound ht, written here directly so the
     recorded `handoff-state` replies cover every form (core lib/handoff_turn.pm)."""
-    root = os.path.join(home, ".claude", "handoffs")
+    # the default handoff_root (STATE-ROOT, 0.1.2: ~/.local/state/<name>/handoffs)
+    root = os.path.join(home, ".local", "state", brand(), "handoffs")
     d = os.path.join(root, ".watch", SID, "handoff-turn")
     bucket = os.path.join(root, "repo", "LAB-42")
     stages = {HT_DRAFT: os.path.join(bucket, ".staging", "5e55a001-0a0b0c03"),

@@ -54,7 +54,7 @@ if [ "${1-}" = hook ]; then
   if [ -z "$watch" ]; then
     hroot=${CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT-}
     case $hroot in '${user_config.'*) hroot= ;; esac
-    [ -n "$hroot" ] || hroot='~/.claude/handoffs'
+    [ -n "$hroot" ] || hroot='~/.local/state/{{plugin}}/handoffs'
     watch=$hroot/.watch
   fi
   case $watch in '~'|'~/'*) watch=${HOME-}${watch#\~} ;; esac

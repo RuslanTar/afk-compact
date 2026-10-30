@@ -696,7 +696,7 @@ export function newState(loadId: string): LoadState {
 
 /** The real Deps over the engine's `$`. */
 export function realDeps($: EngineInterface, options: PluginOptions, state: LoadState): Deps {
-  const cfg = parseOptions(options)
+  const cfg = parseOptions(options, $.plugin.name)
   const env = optionEnv(options)
   return {
     name: $.plugin.name,
