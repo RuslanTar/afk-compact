@@ -235,7 +235,7 @@ test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check ru
 // gate as the 49-min one; only idle_handoff_near_limit `skip` skips it at a window of 90% or more
 // (`skip-spend`, 0.1.2: a plan window is not a spend limit, so the turn runs as under `run`).
 for (const mode of ['run', 'skip-spend', 'skip'] as const) {
-  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
+  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode !== 'skip' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
     const w = world(on)
     w.policy = {}
     await w.start($)
