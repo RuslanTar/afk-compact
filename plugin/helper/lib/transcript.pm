@@ -712,11 +712,11 @@ our @DENIED = (
     [ rule       => qr/\A\s*A [A-Za-z ]{1,40} in this command can't be checked before it runs/ ],
     [ rule       => qr/\A\s*\S+ (?:from|to) '[^\n]*?' was blocked by a deny rule/ ],
     [ user       => qr/\A\s*The user doesn't want to proceed with this tool use/ ],
-    [ user       => qr/\A\s*Permission for this tool use was denied\. The tool use was rejected/ ],
+    [ user       => qr/\A\s*Permission for this tool use[ ]was denied\. The tool use[ ]was rejected/ ],
 );
 # Words one of the texts above holds: a result row with none of them is not decoded.
 our @DENIED_HINTS = ('denied', 'want to proceed', "haven't granted", '"reject"', 'sensitive file',
-    'requires approval', 'require approval', "can't be checked", 'deny rule');
+    'requires approval', "require\x20approval", "can't be checked", 'deny rule');
 # Tools whose input holds file text: only their path is kept.
 my %DENIED_PATH_ONLY = map { $_ => 1 } qw(Write Edit MultiEdit NotebookEdit);
 our $DENIED_VALUE_MAX = 200;      # longer input values (a body, a description) are skipped
