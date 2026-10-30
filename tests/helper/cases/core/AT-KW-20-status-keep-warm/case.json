@@ -33,7 +33,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) \u00b7 this gap: not warming$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming$"
     ]
    }
   },
@@ -120,7 +120,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) \u00b7 this gap: warming, 2 pings so far$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: warming, 2 pings so far$"
     ]
    }
   },
@@ -189,7 +189,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) \u00b7 this gap: not warming \\(the last warmed gap: 1 ping, stopped: no-jobs\\)$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last warmed gap: 1 ping, stopped: no-jobs\\)$"
     ]
    }
   },
@@ -269,7 +269,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) \u00b7 this gap: warming, 0 pings so far$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: warming, 0 pings so far$"
     ]
    }
   },
