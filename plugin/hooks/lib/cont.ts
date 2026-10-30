@@ -216,6 +216,8 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
   // block that turn should get. Our prompt.submit hook checks again, with no await before the drop.
   if (userFirst(s)) {
     await log(d, sid, 'continue', { result: 'skipped:user-first', continues_last_hour: null })
+    // prompt.context may have been read already (after the compaction, before that turn).
+    if (pend) d.invalidateContext()
     return
   }
   /** Where this continue leaves the pending block (F2-3 `resume`). */
@@ -249,6 +251,7 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
       if (pend && resume === 'delivered:prompt.submit' && s.pending === undefined) {
         pend.heldClaim = true
         s.pending = pend
+        d.invalidateContext()
       }
       return
     }

@@ -221,7 +221,9 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
   const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
   s.pending = undefined
-  // A continue that claimed the block and was dropped for a user prompt (cont.ts) holds it for this turn.
+  // A continue that claimed the block and was dropped for a user prompt (cont.ts) holds it for this
+  // turn. One whose submit is still in flight logs its own outcome, or is dropped and puts it back.
+  if (c.result === 'TAKEN' && c.by === 'prompt.submit' && s.contSubmitting && pend.heldClaim !== true) return undefined
   if (c.result === 'TAKEN' && !(pend.heldClaim === true && c.by === 'prompt.submit')) {
     await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:' + (c.by ?? 'unknown'))
     return undefined
@@ -475,7 +477,9 @@ export async function undeliveredCheck(d: Deps, sid: string): Promise<void> {
   const pend = s.pending
   if (!pend || pend.turnSeq >= s.turnSeq) return
   s.pending = undefined
-  const where = await claimedElsewhere(d, pend)
+  // A block a dropped continue claimed and held for prompt.context, which did not take it.
+  const claimed = await claimedElsewhere(d, pend)
+  const where = pend.heldClaim === true && claimed === 'delivered:prompt.submit' ? 'undelivered' : claimed
   if (where === 'undelivered') {
     await log(d, pend.sid, 'resume_undelivered', { nonce: pend.nonce, resume_pref: pend.resumePref })
     escalate(d, 'resume-undelivered')

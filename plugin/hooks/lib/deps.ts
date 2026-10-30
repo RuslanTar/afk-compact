@@ -207,6 +207,11 @@ export interface Deps {
   compactCommand(): Promise<{ text: string | undefined }>
   submit(text: string): Promise<void>
   /**
+   * `$.ui.invalidate('prompt.context')`: the engine asks `prompt.context` again for the next turn
+   * (its answer otherwise stands once read), so a block left pending for it is still sent.
+   */
+  invalidateContext(): void
+  /**
    * OT-2 (owner xxxxxxxx-06, 2026-10-22): `$.turn.abort({ turnId })`, ending the running main
    * turn (its tools stopped, no interruption marker); rejects when `turnId` is not the running one.
    */
@@ -382,8 +387,9 @@ export type LoadState = {
    * Prompts of others queued while a main turn ran (`turnId` set), oldest first: the origin kind,
    * the text that entered and the turn it was queued over. One delivered into that turn starts
    * none; one that starts its own turn after it is told by its text there (`claimTurn`).
+   * `passed`: the main turns started since it was queued that were not its own.
    */
-  queuedKinds: { kind: string; text: string; over: string }[]
+  queuedKinds: { kind: string; text: string; over: string; passed: number }[]
   /** The origin kind of the prompt that opened the current main turn: `plugin` for ours, undefined when none was seen. */
   turnOrigin: string | undefined
   /** When the last main turn ended, and whether it ended `answer` (§9.4, the idle predicate). */
@@ -761,6 +767,13 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       const r = await $.prompt.submit({ text })
       if (r.drop !== undefined) throw new Error('dropped: ' + String(r.drop))
     },
+    invalidateContext() {
+      try {
+        $.ui.invalidate('prompt.context')
+      } catch {
+        // Not asked again: the block stays pending, and the turn end reports it undelivered.
+      }
+    },
     abortTurn: turnId => $.turn.abort({ turnId }),
     async run(argv, timeoutMs, stdin) {
       try {
@@ -1071,8 +1084,11 @@ export function isOurText(turnText: string, sent: string | undefined): boolean {
  * the other turn leaves our submit pending for the turn still to come (CR-F17).
  */
 export function claimTurn(s: LoadState, turnText: string): boolean {
-  // A prompt queued over the turn that just ended (or kept from before it) whose text this turn carries.
-  const q = s.queuedKinds.findIndex(k => isOurText(turnText, k.text))
+  // A prompt queued over an earlier turn whose own turn this is: its turn carries exactly its
+  // text (xxxxxxxx, xxxxxxxx: 5 of 5), so a turn that only contains it (a task notification
+  // quoting a short "y") is not taken for it.
+  const t = turnText.trim()
+  const q = t === '' ? -1 : s.queuedKinds.findIndex(k => k.text.trim() === t)
   const foreign = s.foreignPrompts > 0 || q >= 0
   const ours = s.ourSubmitPending && (!foreign || isOurText(turnText, s.ourSubmitText))
   if (ours) {
@@ -1088,8 +1104,10 @@ export function claimTurn(s: LoadState, turnText: string): boolean {
     // entering count was reset (a bound): its origin kind is still the oldest one kept.
     s.turnOrigin = s.enteringKinds.shift()
   }
-  // Still `turnId` of the turn before this one: a prompt queued over an earlier turn went into it.
-  s.queuedKinds = s.queuedKinds.filter(k => k.over === s.turnId)
+  // Other turns (task notifications, ...) may start first: a queued prompt is kept until its
+  // turn starts, or until MAX_ENTERING later turns have started (then it went into its turn).
+  for (const k of s.queuedKinds) k.passed++
+  s.queuedKinds = s.queuedKinds.filter(k => k.passed <= MAX_ENTERING)
   return ours
 }
 
@@ -1101,8 +1119,12 @@ export function isHuman(kind: string | undefined): boolean {
 }
 
 /** `prompt.submit` of a prompt entering an idle session (no `turnId`): its turn starts next. */
-export function promptEntering(s: LoadState, kind = 'unknown'): void {
+export function promptEntering(s: LoadState, kind = 'unknown', text?: string): void {
   s.foreignPrompts++
+  // A prompt kept as queued with this same text is not the one whose turn starts next: this
+  // entering one is, and it takes the entering origin kind (no stale kind left behind).
+  const t = text?.trim() ?? ''
+  if (t !== '') s.queuedKinds = s.queuedKinds.filter(k => k.text.trim() !== t)
   s.enteringKinds.push(kind)
   // A bound, as for the count: a kind whose prompt never started a turn is not kept for long.
   if (s.enteringKinds.length > MAX_ENTERING) s.enteringKinds.shift()
@@ -1118,7 +1140,7 @@ export const MAX_ENTERING = 4
  */
 export function promptQueued(s: LoadState, kind: string, text: string, over: string): void {
   if (text.trim() === '') return
-  s.queuedKinds.push({ kind, text, over })
+  s.queuedKinds.push({ kind, text, over, passed: 0 })
   if (s.queuedKinds.length > MAX_ENTERING) s.queuedKinds.shift()
 }
 
@@ -1147,16 +1169,22 @@ export function isOwnOrigin(origin: { kind: string; name?: string }, name: strin
 }
 
 /**
- * Our own handoff-turn submit or auto-continue reaching our `prompt.submit` hook after a user
- * prompt came first (a main turn started, or a prompt entered whose turn has not started): it is
- * dropped there, so it never runs after that turn as a plain one (CR-F17, CR-F25), nor takes the
- * resume block that turn should get.
+ * Our own handoff-turn submit reaching our `prompt.submit` hook after another prompt came first
+ * (a main turn started, or a prompt entered whose turn has not started), or our auto-continue
+ * after a person's (`userFirst`): it is dropped there, so it never runs after that turn as a
+ * plain one (CR-F17, CR-F25), nor takes the resume block that turn should get. A continue behind
+ * a task notification's entering prompt still runs after that turn, as before.
  */
 export function refuseOwnSubmit(s: LoadState): boolean {
-  return (s.handoffSubmitting || s.contSubmitting) && userFirst(s)
+  return (s.handoffSubmitting && (s.mainTurnRunning || s.foreignPrompts > 0)) || (s.contSubmitting && userFirst(s))
 }
 
-/** A main turn runs, or a prompt of another entered and its turn has not started. */
+/**
+ * A main turn runs, or a person's prompt (IC-1 D6 origin) entered and its turn has not started.
+ * A task notification's or another plugin's entering prompt stops neither a continue nor a
+ * compaction, as before: a last cycle's compaction dropped for it would not come again while halt
+ * stays on, and the continue still runs after its turn.
+ */
 export function userFirst(s: LoadState): boolean {
-  return s.mainTurnRunning || s.foreignPrompts > 0
+  return s.mainTurnRunning || (s.foreignPrompts > 0 && s.enteringKinds.some(isHuman))
 }

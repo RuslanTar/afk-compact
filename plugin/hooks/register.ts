@@ -145,7 +145,7 @@ export const register: Register = (on, options) => {
     // IC-1 D6: the entering prompt's origin kind decides at its turn.start whether halt clears.
     const kind = e.origin.kind
     if (entering) {
-      promptEntering(state, kind)
+      promptEntering(state, kind, e.text)
       // §9.4: a prompt entering cancels the pre-idle timer.
       cancelIdleTimer(realDeps($, options, state))
       // SESSION-RESTART §2.2 step 4, §3.4 step 3: a prompt entering stops a restart under way.

@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
-import { newState, promptEntering, promptNotEntered, refuseOwnSubmit, rejectClass, storeWord } from '../../hooks/lib/deps'
+import { claimTurn, newState, promptEntering, promptNotEntered, promptQueued, refuseOwnSubmit, rejectClass, storeWord, userFirst as isUserFirst } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { AGENT, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -256,6 +256,76 @@ test('AF-C2: refuseOwnSubmit covers the continue: refused while a main turn runs
   expect(refuseOwnSubmit(s)).toBe(true)
   s.contSubmitting = false
   expect(refuseOwnSubmit(s)).toBe(false)
+})
+
+test('AF-C3: a task notification\'s or another plugin\'s entering prompt is not a person first: the continue runs after its turn; a handoff-turn submit is still refused', () => {
+  const s = newState('l')
+  for (const kind of ['task-notification', 'plugin']) {
+    promptEntering(s, kind)
+    expect(isUserFirst(s)).toBe(false)
+    s.contSubmitting = true
+    expect(refuseOwnSubmit(s)).toBe(false)
+    s.contSubmitting = false
+    s.handoffSubmitting = true
+    expect(refuseOwnSubmit(s)).toBe(true)
+    s.handoffSubmitting = false
+    promptNotEntered(s, kind)
+  }
+  promptEntering(s, 'task-notification')
+  promptEntering(s, 'composer')
+  expect(isUserFirst(s)).toBe(true)
+})
+
+test('AF-C3: a task notification entering during the compaction: the continue is submitted', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  let open!: () => void
+  await userFirst($, w, async () => {
+    w.compactGate = new Promise<void>(r => { open = r })
+  })
+  await $.prompt.submit({ text: NOTE('n1'), origin: { kind: 'task-notification' } } as never)
+  open()
+  await w.settle()
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual(['submitted'])
+  expect(w.submits.filter(isCont).length).toBe(1)
+})
+
+test('AF-C4: a continue dropped for a person\'s prompt whose turn never takes the held block: the turn end reports it undelivered, not delivered:prompt.submit', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  w.dropIf = text => (isCont(text) ? 'a user prompt came first' : undefined)
+  let release: (() => void) | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub === 'claim' && args.includes('prompt.submit')) await new Promise<void>(r => { release = r })
+  }
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(500)
+  await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+  release?.()
+  await w.settle()
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  expect(w.claims.get(nonce)).toBe('prompt.submit')
+  await w.turnStart($, PERSON)
+  await w.turnEnd($)
+  expect(w.rowsOf('resume_undelivered').map(r => r.nonce)).toEqual([nonce])
+  expect(w.rowsOf('mod_outcome').find(r => r.nonce === nonce)?.resume).toBe('undelivered')
+})
+
+test('AF-D2: a person\'s prompt entering before the 500-ms boundary fires, its turn not started: no compaction, no dispatch record', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+  await w.advance(500)
+  expect(w.compacts.length).toBe(0)
+  expect(w.callsOf('dispatch').length).toBe(0)
+  expect(w.callsOf('checkpoint').length).toBe(0)
 })
 
 /**
@@ -530,6 +600,59 @@ for (const origin of [{ kind: 'task-notification' }, { kind: 'plugin', name: 'ot
     expect(w.storeGet(`cont:${SID_A}`)).toEqual([T0 - 1000, T0 - 500])
   })
 }
+
+const NOTE = (id: string) => `<task-notification>\n<task-id>${id}</task-id>\n<summary>Monitor done, 3 entries: y</summary>\n</task-notification>`
+
+/** Turn `id` starts for an entering prompt of `kind` with `text`, then ends (the count reset). */
+function enteredTurn(s: ReturnType<typeof newState>, id: string, kind: string, text: string): void {
+  s.foreignPrompts = 0
+  promptEntering(s, kind)
+  claimTurn(s, text)
+  s.turnId = id
+  s.foreignPrompts = 0
+}
+
+test('AF-B3: a short prompt queued over turn A went into it; a task notification\'s turn whose text holds that string is not taken for it: halt is not cleared, and the next person\'s turn gets its own origin', () => {
+  const s = newState('l')
+  s.turnId = 'A'
+  promptQueued(s, 'composer', 'y', 'A')
+  enteredTurn(s, 'B', 'task-notification', NOTE('b1'))
+  expect(s.turnOrigin).toBe('task-notification')
+  enteredTurn(s, 'C', 'composer', 'next step please')
+  expect(s.turnOrigin).toBe('composer')
+})
+
+for (const between of [1, 2]) {
+  test(`AF-B4: a person's prompt queued over turn A starts its own turn after ${between} task notification turn(s): origin composer`, () => {
+    const s = newState('l')
+    s.turnId = 'A'
+    promptQueued(s, 'composer', 'look at the failing spec', 'A')
+    for (let i = 0; i < between; i++) {
+      enteredTurn(s, `B${i}`, 'task-notification', NOTE(`b${i}`))
+      expect(s.turnOrigin).toBe('task-notification')
+    }
+    claimTurn(s, 'look at the failing spec')
+    expect(s.turnOrigin).toBe('composer')
+    expect(s.queuedKinds).toEqual([])
+  })
+}
+
+test('AF-B5: a queued prompt is kept for MAX_ENTERING later turns, then dropped; one entering idle with the same text takes the entering kind', () => {
+  const s = newState('l')
+  s.turnId = 'A'
+  promptQueued(s, 'composer', 'ok', 'A')
+  for (let i = 0; i < 4; i++) enteredTurn(s, `B${i}`, 'task-notification', NOTE(`b${i}`))
+  expect(s.queuedKinds.length).toBe(1)
+  enteredTurn(s, 'B4', 'task-notification', NOTE('b4'))
+  expect(s.queuedKinds).toEqual([])
+  promptQueued(s, 'plugin', 'ok', 'B4')
+  s.foreignPrompts = 0
+  promptEntering(s, 'composer', 'ok')
+  expect(s.queuedKinds).toEqual([])
+  claimTurn(s, 'ok')
+  expect(s.turnOrigin).toBe('composer')
+  expect(s.enteringKinds).toEqual([])
+})
 
 test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no timer; the next turn end schedules again', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)
