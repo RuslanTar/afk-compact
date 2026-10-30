@@ -883,12 +883,18 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       if (!state.pathsMemo) {
         state.pathsMemo = (async () => {
           let home: string | undefined
+          let stateHome: string | undefined
           try {
             home = await $.env.get('HOME')
           } catch {
             home = undefined
           }
-          return paths(cfg, home)
+          try {
+            stateHome = (await $.env.get('XDG_STATE_HOME')) || undefined
+          } catch {
+            stateHome = undefined
+          }
+          return paths(cfg, home, { home: stateHome, name: $.plugin.name })
         })()
       }
       return state.pathsMemo.then(p => withHelperWatch(p, state.ident))

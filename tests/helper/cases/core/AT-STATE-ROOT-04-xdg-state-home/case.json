@@ -1,0 +1,294 @@
+{
+ "id": "AT-STATE-ROOT-04 (state-root: $XDG_STATE_HOME holds the default handoff root)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "core",
+ "note": "STATE-ROOT (0.1.2): while handoff_root is the default (unset, or a value equal to the default), the root is $XDG_STATE_HOME/<plugin>/handoffs when XDG_STATE_HOME is an absolute path (a relative or empty one is ignored, the XDG Base Directory rule), else ~/.local/state/<plugin>/handoffs; any other value is the only root. The old root ~/.claude/handoffs is still read beside it. lib/paths.pm and watch/ctx.pm agree; paths::named and watch::ctx::_named fall back to `plugin` when no plugin name can be read. Through the helper: begin stages under the XDG root and writes nothing under ~/.local/state; locate still pools the old root's buckets.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "mkdir": "$TMP/h1/.claude/handoffs"
+    },
+    {
+     "mkdir": "$TMP/h2"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d1d2d3d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 66666666-6666-4666-8666-666666666666\nactor: main\n---\n⟪$BRAND v1 n=0d1d2d3d s=manual⟫\n# LAB-5 — old root\n⟪/$BRAND n=0d1d2d3d⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "paths::for and watch::ctx: the root under each value and XDG_STATE_HOME",
+   "lib": "state_root",
+   "args": {
+    "roots": [
+     {
+      "id": "unset, XDG_STATE_HOME absolute",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/xdg/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "unset, XDG_STATE_HOME with a trailing slash",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg/",
+      "root": "$TMP/xdg/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "the default as a value (Claude Code fills it in)",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "env",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/xdg/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "the default expanded",
+      "value": "$TMP/h1/.local/state/$BRAND/handoffs",
+      "source": "env",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/xdg/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "the XDG root itself as a value",
+      "value": "$TMP/xdg/$BRAND/handoffs",
+      "source": "settings",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/xdg/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "a relative XDG_STATE_HOME is ignored",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "home": "$TMP/h1",
+      "xdg": "rel/state",
+      "root": "$TMP/h1/.local/state/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "an empty XDG_STATE_HOME is ignored",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "home": "$TMP/h1",
+      "xdg": "",
+      "root": "$TMP/h1/.local/state/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "no XDG_STATE_HOME",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "home": "$TMP/h1",
+      "root": "$TMP/h1/.local/state/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/handoffs"
+     },
+     {
+      "id": "an explicit other root stays the only root",
+      "value": "$TMP/elsewhere",
+      "source": "settings",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/elsewhere",
+      "from_default": false,
+      "legacy": null
+     },
+     {
+      "id": "~/.claude/handoffs set explicitly stays the only root",
+      "value": "~/.claude/handoffs",
+      "source": "flag",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/h1/.claude/handoffs",
+      "from_default": false,
+      "legacy": null
+     },
+     {
+      "id": "no old root folder",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "home": "$TMP/h2",
+      "xdg": "$TMP/xdg",
+      "root": "$TMP/xdg/$BRAND/handoffs",
+      "from_default": true,
+      "legacy": null
+     }
+    ]
+   }
+  },
+  {
+   "name": "paths::named and watch::ctx::_named: `plugin` when no plugin name can be read",
+   "lib": "state_root",
+   "args": {
+    "named": [
+     {
+      "value": "~/.local/state/<plugin>/handoffs",
+      "brand": null,
+      "want": "~/.local/state/plugin/handoffs"
+     },
+     {
+      "value": "~/.local/state/<plugin>/handoffs",
+      "brand": "",
+      "want": "~/.local/state/plugin/handoffs"
+     },
+     {
+      "value": "~/.local/state/<plugin>/handoffs",
+      "brand_dies": true,
+      "want": "~/.local/state/plugin/handoffs"
+     },
+     {
+      "value": "~/.local/state/<plugin>/handoffs",
+      "brand": "zz",
+      "want": "~/.local/state/zz/handoffs"
+     },
+     {
+      "value": "/x/y",
+      "brand": null,
+      "want": "/x/y"
+     }
+    ],
+    "watch_named": [
+     {
+      "value": "~/.local/state/<plugin>/handoffs",
+      "plugin_root": "$TMP/none",
+      "want": "~/.local/state/plugin/handoffs"
+     },
+     {
+      "value": "~/.local/state/<plugin>/handoffs",
+      "plugin_root": "$TMP/none",
+      "launcher": "/opt/x/zz-store",
+      "want": "~/.local/state/zz/handoffs"
+     }
+    ]
+   }
+  },
+  {
+   "name": "begin under XDG_STATE_HOME: the stage is under $XDG_STATE_HOME/<plugin>/handoffs, nothing under ~/.local/state",
+   "cwd": "$TMP/repo",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "70717071-7071-4707-8707-707170717071",
+    "--topic",
+    "x"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": {
+      "re": "^$TMP/xdg/$BRAND/handoffs/repo/x/\\.staging/"
+     }
+    },
+    "absent": [
+     "$HOME/.local/state"
+    ]
+   }
+  },
+  {
+   "name": "a value equal to the default reads under XDG_STATE_HOME too",
+   "cwd": "$TMP/repo",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "~/.local/state/$BRAND/handoffs"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "70727072-7072-4707-8707-707270727072",
+    "--topic",
+    "y"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": {
+      "re": "^$TMP/xdg/$BRAND/handoffs/repo/y/\\.staging/"
+     }
+    },
+    "absent": [
+     "$HOME/.local/state"
+    ]
+   }
+  },
+  {
+   "name": "locate under XDG_STATE_HOME still pools the old root's buckets",
+   "cwd": "$TMP/repo",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md\\nrelation: same-session\\n"
+    ]
+   }
+  },
+  {
+   "name": "status under XDG_STATE_HOME: the old root's line",
+   "cwd": "$TMP/repo",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "70717071-7071-4707-8707-707170717071"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^legacy handoff root ~/\\.claude/handoffs: read-only, 1 bucket$"
+    ],
+    "absent": [
+     "$HOME/.local/state"
+    ]
+   }
+  }
+ ]
+}

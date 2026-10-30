@@ -386,9 +386,31 @@ export function expand(path: string, home: string | undefined): string | undefin
 
 export type Paths = { root: string; watch: string }
 
-/** `<root>` and `<watch>` (MOD-SPEC conventions); undefined when `~` cannot be expanded. */
-export function paths(cfg: Config, home: string | undefined): Paths | undefined {
-  const root = expand(cfg.handoff_root, home)
+/** Where the handoff_root default sits below the home folder (STATE-ROOT): `$XDG_STATE_HOME` stands for it. */
+const STATE_HOME_DEFAULT = '~/.local/state'
+
+/**
+ * The handoff root a value names, `~` expanded (STATE-ROOT). The default (DEFAULTS.handoff_root with
+ * `name`, else `plugin`) reads under `stateHome` (`$XDG_STATE_HOME`) when that is an absolute path, as
+ * the helper's paths::state_default does: the XDG Base Directory rule ignores a relative value. Any
+ * other value is returned as it is; undefined when `~` cannot be expanded.
+ */
+export function stateRoot(value: string, home: string | undefined, stateHome?: string, name?: string): string | undefined {
+  const root = expand(value, home)
+  if (root === undefined || stateHome === undefined || !stateHome.startsWith('/')) return root
+  const def = DEFAULTS.handoff_root.split(NAME_TOKEN).join(name || 'plugin')
+  if (!def.startsWith(STATE_HOME_DEFAULT + '/')) return root
+  const norm = (p: string | undefined) => p?.replace(/\/+/g, '/').replace(/(.)\/$/, '$1')
+  if (norm(root) !== norm(expand(def, home))) return root
+  return stateHome.replace(/\/+$/, '') + def.slice(STATE_HOME_DEFAULT.length)
+}
+
+/**
+ * `<root>` and `<watch>` (MOD-SPEC conventions); undefined when `~` cannot be expanded. `state` gives
+ * `$XDG_STATE_HOME` and the plugin's name for the default root (stateRoot).
+ */
+export function paths(cfg: Config, home: string | undefined, state?: { home?: string; name?: string }): Paths | undefined {
+  const root = stateRoot(cfg.handoff_root, home, state?.home, state?.name)
   if (root === undefined) return undefined
   const watch = cfg.log_dir === '' ? root.replace(/\/+$/, '') + '/.watch' : expand(cfg.log_dir, home)
   if (watch === undefined) return undefined

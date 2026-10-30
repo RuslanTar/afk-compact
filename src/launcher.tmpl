@@ -55,6 +55,11 @@ if [ "${1-}" = hook ]; then
     hroot=${CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT-}
     case $hroot in '${user_config.'*) hroot= ;; esac
     [ -n "$hroot" ] || hroot='~/.local/state/{{plugin}}/handoffs'
+    # the default root reads under $XDG_STATE_HOME when that is an absolute path (as the helper)
+    case $hroot in
+      '~/.local/state/{{plugin}}/handoffs'|'~/.local/state/{{plugin}}/handoffs/'|"${HOME-}/.local/state/{{plugin}}/handoffs"|"${HOME-}/.local/state/{{plugin}}/handoffs/")
+        case ${XDG_STATE_HOME-} in /*) hroot=${XDG_STATE_HOME%/}/{{plugin}}/handoffs ;; esac ;;
+    esac
     watch=$hroot/.watch
   fi
   case $watch in '~'|'~/'*) watch=${HOME-}${watch#\~} ;; esac

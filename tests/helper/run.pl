@@ -3111,6 +3111,45 @@ sub builtin {
         print "#   redact: ${\ length $text} bytes, $n hits, " . sprintf('%.2f s', $dt) . "\n" if $VERBOSE;
         return @e;
     }
+    if ($name eq 'state_root') {
+        # STATE-ROOT (0.1.2): paths::for's handoff root (the default reads under $XDG_STATE_HOME when
+        # that is an absolute path; any other value is the root as given) and its legacy root;
+        # watch::ctx::_state_root agrees for the same value; paths::named and watch::ctx::_named fall
+        # back to `plugin` (ctx::brand's last name) when no plugin name can be read.
+        require "watch/ctx.pm";
+        no warnings qw(once redefine);
+        for my $c (@{ $a->{roots} || [] }) {
+            delete local $ENV{XDG_STATE_HOME};
+            $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
+            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'flag' } };
+            my $p = paths::for($s, 'x');
+            my $id = $c->{id} // ($c->{value} // 'unset');
+            push @e, "$id: root " . ($p->{root} // 'null') . ", want $c->{root}" if ($p->{root} // '') ne $c->{root};
+            push @e, "$id: watch $p->{watch}, want $c->{root}/.watch" if ($p->{watch} // '') ne "$c->{root}/.watch";
+            push @e, "$id: from_default $p->{from_default}, want " . ($c->{from_default} ? 1 : 0) if exists $c->{from_default} && $p->{from_default} != ($c->{from_default} ? 1 : 0);
+            push @e, "$id: legacy " . ($p->{legacy} // 'null') . ', want ' . ($c->{legacy} // 'null') if exists $c->{legacy} && ($p->{legacy} // '') ne ($c->{legacy} // '');
+            next unless defined $c->{value};
+            # the watcher's context from the same settings (pid and spec given: nothing else is read)
+            my $w = watch::ctx::init({ sid => 'x', pid => 1, spec => {}, now => 0, settings => { handoff_root => $c->{value}, log_dir => '' } });
+            push @e, "$id: watch::ctx root " . ($w->{root} // 'null') . ", want $c->{root}" if ($w->{root} // '') ne $c->{root};
+            push @e, "$id: watch::ctx watch " . ($w->{watch} // 'null') . ", want $c->{root}/.watch" if ($w->{watch} // '') ne "$c->{root}/.watch";
+        }
+        for my $c (@{ $a->{named} || [] }) {
+            local *ctx::brand = $c->{brand_dies} ? sub { die "no brand\n" } : sub { $c->{brand} };
+            my $got = paths::named($c->{value});
+            push @e, "paths::named($c->{value}) " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
+        }
+        for my $c (@{ $a->{watch_named} || [] }) {
+            local *watch::ctx::plugin_root_default = sub { $c->{plugin_root} };
+            delete local $ENV{STORE_LAUNCHER};
+            $ENV{STORE_LAUNCHER} = $c->{launcher} if defined $c->{launcher};
+            my $got = watch::ctx::_named($c->{value});
+            push @e, "watch::ctx::_named($c->{value}) " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
+        }
+        return @e;
+    }
+
     return ("unknown builtin $name");
 }
 

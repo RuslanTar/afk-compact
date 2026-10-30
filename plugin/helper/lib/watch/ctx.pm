@@ -79,11 +79,41 @@ sub _named {
     my $m = watch::io::read_json_file(plugin_root_default() . '/.claude-plugin/plugin.json') || {};
     my $n = ref $m eq 'HASH' && defined $m->{name} && !ref $m->{name} && $m->{name} ne '' ? $m->{name} : undef;
     if (!defined $n) {
-        ($n = File::Basename::basename($ENV{STORE_LAUNCHER} // '')) =~ s/-store\z//;
+        my $l = defined $ENV{STORE_LAUNCHER} && $ENV{STORE_LAUNCHER} ne '' ? File::Basename::basename($ENV{STORE_LAUNCHER}) : '';
+        ($n = $l) =~ s/-store\z//;
         $n = 'plugin' if $n eq '';
     }
     $v =~ s/<plugin>/$n/g;
     return $v;
+}
+
+# STATE-ROOT (0.1.2): the pre-0.1.2 default handoff root, the one watch-side copy of core's
+# paths::$LEGACY_ROOT (watch/ modules load no core module). export.pm reads its bucket names.
+our $LEGACY_ROOT = '~/.claude/handoffs';
+
+# legacy_root() -> $LEGACY_ROOT with ~ expanded (undef without HOME).
+sub legacy_root {
+    return undef unless defined $ENV{HOME} && $ENV{HOME} ne '';
+    return _expand($LEGACY_ROOT);
+}
+
+# _state_root(value) -> the handoff root a value names: the default (as the fallback names it, with ~
+# expanded) reads under $XDG_STATE_HOME when that is an absolute path, as core's paths::state_default
+# (STATE-ROOT); any other value is returned as it is.
+sub _state_root {
+    my ($v) = @_;
+    return $v unless defined $v && !ref $v;
+    my $d = _expand(_named($DEFAULTS{handoff_root}));
+    my $x = $ENV{XDG_STATE_HOME};
+    return $v unless defined $d && defined $x && $x =~ m{\A/};
+    $d =~ s{/+}{/}g;
+    (my $vv = $v) =~ s{/+}{/}g;
+    $vv =~ s{(?<=.)/\z}{};
+    my $home = defined $ENV{HOME} ? $ENV{HOME} : '';
+    $home =~ s{/+\z}{};
+    return $v unless $vv eq $d && index($d, "$home/.local/state/") == 0;
+    (my $xx = $x) =~ s{/+\z}{};
+    return $xx . substr($d, length("$home/.local/state"));
 }
 
 sub _expand {
@@ -188,7 +218,7 @@ sub init {
     return $ctx if $ctx->{_init};
     $ctx->{_init} = 1;
     $ctx->{settings} = _settings($ctx);
-    $ctx->{root} = _expand($ctx->{root}) || $ctx->{settings}{handoff_root};
+    $ctx->{root} = _expand($ctx->{root}) || _state_root($ctx->{settings}{handoff_root});
     my $watch = _expand($ctx->{watch}) || _expand($ctx->{settings}{log_dir});
     $ctx->{watch} = defined $watch ? $watch : $ctx->{root} . '/.watch';
     $ctx->{watch} =~ s{/+\z}{};

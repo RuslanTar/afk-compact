@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13",
- "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH that fails the 5.28 check), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3",
+ "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH that fails the 5.28 check), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [
@@ -36,6 +36,156 @@
     "rows": [
      {
       "file": "$HOME/.local/state/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the default root under an absolute XDG_STATE_HOME",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg/"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "absent": [
+     "$LEGACY"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/xdg/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a handoff_root equal to the default reads under XDG_STATE_HOME too",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "~/.local/state/$BRAND/handoffs"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "absent": [
+     "$LEGACY"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/xdg/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 2,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a relative XDG_STATE_HOME is ignored",
+   "env": {
+    "XDG_STATE_HOME": "rel/state"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "absent": [
+     "$LEGACY"
+    ],
+    "rows": [
+     {
+      "file": "$HOME/.local/state/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 2,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "an explicit other handoff_root stays the root",
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/own"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "absent": [
+     "$LEGACY"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/own/.watch/$SID.classic.jsonl",
       "ev": "helper_runtime_missing",
       "count": 1,
       "fields": {

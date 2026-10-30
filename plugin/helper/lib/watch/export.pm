@@ -371,8 +371,9 @@ sub identity_list {
     for my $r (@$rr) { push @c, $r; (my $b = $r) =~ s{/+\z}{}; $b =~ s{.*/}{}s; push @c, $b; push @roots, $r }
     # STATE-ROOT (0.1.2): the repository and bucket names of the pre-0.1.2 default root
     # ~/.claude/handoffs count too (rows written before the update name them); more names only
-    # withhold more, so it is read whatever handoff_root says.
-    my $legacy = defined $ENV{HOME} && $ENV{HOME} ne '' ? "$ENV{HOME}/.claude/handoffs" : undef;
+    # withhold more, so it is read whatever handoff_root says (the path is
+    # watch::ctx's one constant, $LEGACY_ROOT).
+    my $legacy = watch::ctx::legacy_root();
     for my $root (grep { defined && -d } ($ctx->{root}, (defined $legacy && $legacy ne ($ctx->{root} // '') ? $legacy : ()))) {
         for my $repo (watch::io::list_dir($root)) {
             next if $repo =~ /\A\./ || !-d "$root/$repo";
