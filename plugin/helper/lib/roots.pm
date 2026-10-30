@@ -49,17 +49,18 @@ sub _time_left {
 #   paths read from --stdin; an absolute stdin path under a work tree whose own path is NFD
 #   dies with "Invalid path". The relative part has no work-tree folders in it, so a non-ASCII
 #   work tree (`~/Café/proj`, `~/Проекты/app`) is asked like an ASCII one.
-# - Not made yet, with a non-ASCII byte in the relative part: asked on the command line,
-#   which git precomposes (a decomposed `Café`, as Finder stores it, would miss a `!Café/`
-#   written NFC on stdin). Telling an NFC-stable name (`Café` written NFC, Cyrillic) from one
-#   NFC would change needs Unicode::Normalize, which is not on the perl-base floor, so every
-#   such name takes this form. -z needs --stdin, so it stays one plain -q call; the cost is
-#   that such a root, ignored only by a folder-only pattern on itself, is refused until it is
-#   made, and one under `*` with `!Café/` counts as ignored until it is made.
-# - Not made yet, relative part all ASCII: git cannot know it will be a folder, so a
-#   folder-only pattern (`wlogs/`) misses the path as written and a folder-only negation
-#   (`!wlogs/`) is skipped. Asked with a
-#   trailing slash, git checks each folder on the path (the root included) and then an
+# - Not made yet, relative part not NFC-stable: asked on the command line, which git
+#   precomposes (a decomposed `Café`, as Finder stores it, would miss a `!Café/` written NFC
+#   on stdin). NFC-stable is told by the UTF-8 bytes alone, with no Unicode::Normalize (not on
+#   the perl-base floor): ASCII, U+00A0-U+017F and Cyrillic other than its combining marks
+#   U+0483-U+0489 are left as they are by NFC. Anything else (an NFD name, Greek, CJK) takes
+#   this form. -z needs --stdin, so it stays one plain -q call; the cost is that such a root,
+#   ignored only by a folder-only pattern on itself, is refused until it is made, and one
+#   under `*` with a folder re-include counts as ignored until it is made.
+# - Not made yet, relative part NFC-stable (`wlogs`, `Café` written NFC, Cyrillic): git
+#   cannot know it will be a folder, so a folder-only pattern (`wlogs/`) misses the path as
+#   written and a folder-only negation (`!wlogs/`) is skipped. Asked with a trailing slash,
+#   git checks each folder on the path (the root included) and then an
 #   empty-named entry inside the root, which `wlogs/*` or `*` also match although the folder
 #   itself is not ignored (`wlogs/*` with `!wlogs/*.jsonl` brings the plugin's files back).
 #   So both forms are asked, in one git call (git::check_ignore_forms, NUL-separated fields):
@@ -79,7 +80,8 @@ sub _ignored {
     my $top = $wt eq '/' ? '/' : "$wt/";
     return undef unless index($real, $top) == 0 && length($real) > length($top);
     my $rel = substr($real, length($top));
-    return git::check_ignore($wt, $real, $t) if $rel =~ /[^\x00-\x7f]/;
+    return git::check_ignore($wt, $real, $t)
+        unless $rel =~ /\A(?:[\x00-\x7f]|\xc2[\xa0-\xbf]|[\xc3-\xc5][\x80-\xbf]|[\xd0\xd1\xd3][\x80-\xbf]|\xd2[\x80-\x82\x8a-\xbf])*\z/;
     my $a = git::check_ignore_forms($wt, ["./$rel", "./$rel/"], $t);
     return $a unless ref $a eq 'ARRAY';
     my ($aw, $awm) = @{ $a->[0] };
