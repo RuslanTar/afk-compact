@@ -302,6 +302,16 @@ sub former_name_keys {
     return @out;
 }
 
+# inline_key() -> `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and not under the config dir's
+# plugins/ (a --plugin-dir run, E-14), else undef.
+sub inline_key {
+    my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
+    return undef unless defined $pr && $pr ne '';
+    my $plugins = util::clean_path(config_dir() . '/plugins');
+    my $p = util::clean_path($pr);
+    return index("$p/", "$plugins/") != 0 ? ctx::brand() . '@inline' : undef;
+}
+
 # Returns (options hashref or undef, note) from the user's settings file.
 sub _settings_file_options {
     my $brand = ctx::brand();
@@ -311,14 +321,8 @@ sub _settings_file_options {
     my $s = eval { jsonc::decode($raw) };
     return (undef, undef) unless ref $s eq 'HASH' && ref $s->{pluginConfigs} eq 'HASH';
     my $pc = $s->{pluginConfigs};
-    my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
-    if (defined $pr && $pr ne '') {
-        my $plugins = util::clean_path(config_dir() . '/plugins');
-        my $p = util::clean_path($pr);
-        if (index("$p/", "$plugins/") != 0) {
-            my $k = "$brand\@inline";
-            return (ref $pc->{$k} eq 'HASH' ? $pc->{$k}{options} : undef, $k);
-        }
+    if (defined(my $k = inline_key())) {
+        return (ref $pc->{$k} eq 'HASH' ? $pc->{$k}{options} : undef, $k);
     }
     my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %$pc;
     return (undef, undef) unless @cand;
@@ -850,6 +854,56 @@ sub export_view {
         push @kv, $key => $out;
     }
     return jsonc::obj(@kv);
+}
+
+# ---------------------------------------------------------------- view (0.1.2 onboarding)
+# view(\%flags[, tier]) -> ordered object: one row per key (key, title, section, tier, kind,
+# default, min, max, values, value, source, class) in @SECTIONS order (@KEYS order inside a
+# section), with the pluginConfigs key in use and why a write there would be refused. Defaults,
+# min and max are the manifest's; value and source are resolve()'s. tier: common, advanced or
+# all (default). A key with no %SECTION row goes to section `other`, tier advanced, and is listed
+# in `unsectioned` (the settings-sections gate fails on it). Read-only.
+our %KIND = (num => 'number', bool => 'boolean', enum => 'enum', path => 'path', list => 'list', drop => 'text');
+sub view {
+    my ($flags, $tier) = @_;
+    $tier //= 'all';
+    my $r = resolve($flags || {});
+    my $uc = ctx::user_config();
+    my (%rows, %by, @unsectioned);
+    for my $k (@KEYS) {
+        my ($key, $type, $fallback, $class) = @$k;
+        my ($sec, $t) = @{ $SECTION{$key} || [] };
+        if (!defined $sec) { push @unsectioned, $key; ($sec, $t) = ('other', 'advanced') }
+        next unless $tier eq 'all' || $tier eq $t;
+        my $u = ref $uc->{$key} eq 'HASH' ? $uc->{$key} : {};
+        my $default = exists $u->{default} ? $u->{default} : $fallback;
+        my $v = $r->{values}{$key};
+        my ($lo, $hi) = limits($key);
+        if ($type eq 'bool') { ($default, $v) = (jsonc::bool(_coerce($key, $default)), jsonc::bool($v)) }
+        elsif ($type eq 'num') { $default = 0 + $default if defined $default && "$default" =~ /\A-?[0-9]+(\.[0-9]+)?\z/; $v = 0 + $v if defined $v }
+        $rows{$key} = jsonc::obj(
+            key => $key, title => $u->{title}, section => $sec, tier => $t, kind => $KIND{$class // ''} // 'text',
+            default => $default, min => $lo, max => $hi,
+            values => ($ENUM{$key} ? [ @{ $ENUM{$key} } ] : undef),
+            value => $v, source => $r->{source}{$key},
+            class => ($FILE_ONLY{$key} ? 'consent' : $NO_FLAG{$key} ? 'protective' : undef));
+        push @{ $by{$sec} }, $key;
+    }
+    my @sections;
+    for my $s (@SECTIONS, ['other' => 'Other']) {
+        push @sections, jsonc::obj(id => $s->[0], title => $s->[1], keys => $by{ $s->[0] }) if $by{ $s->[0] };
+    }
+    my ($opts, $ckey) = _settings_file_options();
+    my $inline = inline_key();
+    my $state = !defined $ckey ? 'absent' : $ckey eq 'ambiguous' ? 'ambiguous' : ref $opts eq 'HASH' ? 'found' : 'absent';
+    my $key_used = $state eq 'ambiguous' ? undef : $inline // ($state eq 'found' ? $ckey : undef);
+    my $foreign = config_dir_foreign();
+    my $refused = $foreign ? 'config-dir-foreign' : defined $inline ? 'inline' : $state eq 'ambiguous' ? 'ambiguous' : undef;
+    return jsonc::obj(
+        config_file => config_dir() . '/settings.json', config_key => $key_used, config_key_state => $state,
+        inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,
+        sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
+        unsectioned => \@unsectioned, notes => $r->{notes});
 }
 
 # Pull settings flags out of a parsed-flag hash (keys as given on the command line).
