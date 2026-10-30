@@ -97,7 +97,7 @@ claude plugin update afk-compact
 /reload-plugins
 ```
 
-After a Claude Code update, `/afk-compact:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/afk-compact-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on.
+After a Claude Code update, `/afk-compact:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/afk-compact-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on. Smoke finds the declarations of the running Claude Code where it writes them when its built-in plugin-authoring skill loads. That folder lasts only for one session, so when they are missing smoke says so: type `/plugin-authoring` in the same session, then run the `!` command again (or pass `--types FILE`).
 
 ## Uninstall
 
