@@ -189,6 +189,8 @@ sub capture {
 
 sub run_case {
     my ($dir) = @_;
+    # a case may set the root-check deadline; it ends with the case, also when a step dies
+    local $roots::DEADLINE;
     T::reset_ids();
     require watch::sweep;
     $watch::alerts::DELIVERY = q(status-only);

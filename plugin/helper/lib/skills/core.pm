@@ -7,8 +7,9 @@ package skills::core;
 #   settings::resolve(\%flags)        -> hashref of userConfig keys (MOD §1.2) with the
 #                                        effective values; optional {_source}{key}
 #   paths::for($settings, $sid)        -> {root, watch, disposable}
-#   roots::check($settings)            -> 'ok' | {ok=>1} | undef (ok); a string reason
-#                                        or {refused=>reason} (refused)
+#   roots::check($settings)            -> {handoff_root, log_dir, disposable_root}, each
+#                                        {ok=>1, ...} or {ok=>0, reason} (older shapes:
+#                                        'ok' | {ok=>1} | undef, or a reason string)
 #   log::row($ev, \%fields, \%ctx)     -> row (hashref or JSON line)
 #   log::append($file, $row)           -> appends to the absolute stream file
 #   lock::with($path, \%owner, $fn)    -> $fn's return; dies when the lock is live

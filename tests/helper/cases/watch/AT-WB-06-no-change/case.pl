@@ -2,9 +2,10 @@
 # <watch> before is byte-identical (mode too); the only new files are the zips, the salt
 # (32 bytes, 0600) and the install id (0600). Default out folder: ~/Downloads when it is a
 # writable folder outside a git work tree; inside a work tree (here a home repository that
-# ignores .claude/), or missing, the fallback is <watch>/reports/. An --out folder that does not exist: exit 73, nothing written. Usage
-# errors (an unknown flag, a value given to the bare `--with-summaries` flag (RS-2: the user's yes
-# in that run is the only way on), a bad --since) exit 64.
+# ignores .claude/), or missing, the fallback is <watch>/reports/. An --out folder that does
+# not exist: exit 73, nothing written. Usage errors (an unknown flag, a value given to the
+# bare `--with-summaries` flag (RS-2: the user's yes in that run is the only way on), a bad
+# --since) exit 64.
 my %got;
 {
     needs => ['cmd:git'],

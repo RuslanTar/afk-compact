@@ -335,7 +335,9 @@ sub log_row {
 # handoff root (WATCH §6.1), also when init or watcher_on died before the hook's own check.
 sub error_row {
     my ($ctx, $stage, $err) = @_;
-    return 0 if eval { refused($ctx) };
+    # a check that died is unknown, and unknown is not safe
+    my $why = eval { refused($ctx) };
+    return 0 if !defined $why || $why;
     my $class = defined $err ? "$err" : 'unknown';
     $class =~ s/\s+\z//;
     $class = 'internal' unless $class =~ /\A[a-z][a-z0-9-]{0,39}\z/;
