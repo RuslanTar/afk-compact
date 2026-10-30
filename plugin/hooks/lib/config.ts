@@ -46,9 +46,12 @@ export type Config = {
   /**
    * Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): after an idle compaction whose work
    * lane is finished or blocked with nothing running, `submit` sends the digest turn right away;
-   * `return` waits for the next turn (a person's return gets a short pointer first).
+   * `return` waits for the next turn (a person's return gets a short pointer first). `off` (owner
+   * rule (c), 2026-10-28: the digest ships on only after a live PASS): no digest turn, and no text
+   * asks for the full digest; a finished or blocked lane still starts nothing and gets one line on
+   * the lane state with its Basis, then Needs you or Nothing needed from you.
    */
-  idle_digest: 'submit' | 'return'
+  idle_digest: 'submit' | 'return' | 'off'
   /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
   watcher_off: boolean
   /**
@@ -83,8 +86,10 @@ export const DEFAULTS: Config = {
   idle_handoff_min_tokens: 200000,
   // Owner Q3 (2026-10-27 18:54, "auto ig. will set myself"); the release note says it.
   idle_compact: 'auto',
-  // Owner xxxxxxxx-09 (2026-10-27 12:5x): "default setting: submit right away".
-  idle_digest: 'submit',
+  // Owner xxxxxxxx-09 (2026-10-27 12:5x): "default setting: submit right away"; owner rule (c)
+  // (2026-10-28): the away digest ships on only after a live PASS, else off. The live AD2 probe
+  // failed the digest's text format, so 0.1.1 ships `off`; a later build flips this one value.
+  idle_digest: 'off',
   watcher_off: false,
   notes: { invalid: [], clamped: [] },
 }
@@ -241,8 +246,8 @@ export function parseOptions(o: PluginOptions): Config {
     idle_handoff_turn: idleTurn(o, notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
     idle_compact: idleCompact(o, notes),
-    // Any other value is `return`, the value with no extra plugin turn (as for the other keys).
-    idle_digest: choice(o, 'idle_digest', ['submit', 'return'] as const, DEFAULTS.idle_digest, 'return', notes),
+    // Any other value is `off`, the value with no extra plugin turn and no digest (rule (c)).
+    idle_digest: choice(o, 'idle_digest', ['submit', 'return', 'off'] as const, DEFAULTS.idle_digest, 'off', notes),
     watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
   }

@@ -18,7 +18,9 @@ import { PENDING_FILE, ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
-const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code' }
+// `idle_digest: submit` pins the away digest as built (owner xxxxxxxx-09); owner rule (c)
+// (2026-10-28) makes `off` the default of 0.1.1, which its own D16 case names.
+const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code', idle_digest: 'submit' }
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
 const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
@@ -1554,6 +1556,18 @@ test('AT-IC-C44 (D16): idle_digest return: no turn (digest_submit skipped:return
   await w.advance(54 * MIN + 5000)
   expect(w.submits).toEqual([])
   if (DONE) expect(w.rowsOf('digest_submit').map(r => r.result)).toEqual(['skipped:return'])
+})
+
+test('AT-IC-C44 (D16): idle_digest off (the default of 0.1.1, owner rule (c)): a finished lane, nothing running: no turn (digest_submit skipped:off)', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+  const w = world(on)
+  w.resumeHere = FINISHED
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(54 * MIN)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([1, 1])
+  await w.advance(60 * 1000)
+  expect(w.submits).toEqual([])
+  if (DONE) expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['finished', 'skipped:off']])
 })
 
 // ---- Lane B: the 55.5-min check's compaction runs behind the guards of the `compact` timer (D4),

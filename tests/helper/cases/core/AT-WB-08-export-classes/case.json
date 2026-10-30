@@ -1,21 +1,21 @@
 {
  "id": "AT-WB-08 (helper part)",
- "note": "W-BETA D / MOD-SPEC §1.2 Export column (CORE-02): every settings.pm @KEYS row has an export class, and export_view() exports num/bool as is, an enum value only when it is one of the key's values (else other), a path as unset/default/custom-in-home/custom (never the path), a list as its entry count (never the entries)",
+ "note": "W-BETA D / MOD-SPEC §1.2 Export column (CORE-02): every settings.pm @KEYS row has an export class, and export_view() exports num/bool as is, an enum value only when it is one of the key's values (else other), a path as unset/default/custom-in-home/custom (never the path), a list as its entry count (never the entries); idle_digest takes off (owner rule (c), 2026-10-28: the default of 0.1.1) beside submit and return",
  "steps": [
   {"name": "classes and values", "lib": "settings_export", "args": {"home": "/Users/someone",
    "values": {"handoff_root": "/Users/someone/.claude/handoffs", "log_dir": "", "disposable_root": "/Volumes/x/trash", "queue_cmd": "/Users/someone/bin/q",
               "otel_log_path": "", "max_auto_continues_per_hour": 6, "triggers": 1, "watcher": "Shadow ", "handoff_turn": "sometimes",
-              "relaunch_auto": "on", "unattended_prod_reads": "allow", "precompact_turn": "code", "idle_handoff_turn": "off",
+              "relaunch_auto": "on", "unattended_prod_reads": "allow", "precompact_turn": "code", "idle_handoff_turn": "off", "idle_digest": "off",
               "repo_roots": "/a;/b; ;/c", "relaunch_allow": "", "prod_patterns": "x;y", "deny_class_patterns": "z"},
    "want": {"handoff_root": "default", "log_dir": "unset", "disposable_root": "custom", "queue_cmd": "custom-in-home", "otel_log_path": "unset",
             "max_auto_continues_per_hour": 6, "triggers": "true", "watcher": "shadow", "handoff_turn": "other", "relaunch_auto": "on",
-            "unattended_prod_reads": "allow", "precompact_turn": "code", "idle_handoff_turn": "off",
+            "unattended_prod_reads": "allow", "precompact_turn": "code", "idle_handoff_turn": "off", "idle_digest": "off",
             "repo_roots": 3, "relaunch_allow": 0, "prod_patterns": 2, "deny_class_patterns": 1}}},
   {"name": "no argument, run context", "lib": "settings_export", "args": {"home": "/Users/someone", "noarg": true,
-   "values": {"handoff_root": "/Volumes/x/h", "max_auto_continues_per_hour": 2, "watcher": "off", "triggers": 0},
-   "want": {"handoff_root": "custom", "max_auto_continues_per_hour": 2, "watcher": "off", "triggers": "false"}}},
+   "values": {"handoff_root": "/Volumes/x/h", "max_auto_continues_per_hour": 2, "watcher": "off", "triggers": 0, "idle_digest": "Submit"},
+   "want": {"handoff_root": "custom", "max_auto_continues_per_hour": 2, "watcher": "off", "triggers": "false", "idle_digest": "submit"}}},
   {"name": "no argument, no run context: resolved defaults", "lib": "settings_export", "args": {"home": "/Users/someone", "noarg": true,
    "want": {"handoff_root": "default", "disposable_root": "default", "log_dir": "unset", "max_auto_continues_per_hour": 6,
-            "watcher": "shadow", "triggers": "true", "handoff_turn": "halt", "repo_roots": 0}}}
+            "watcher": "shadow", "triggers": "true", "handoff_turn": "halt", "repo_roots": 0, "idle_digest": "off"}}}
  ]
 }

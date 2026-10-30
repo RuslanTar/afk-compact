@@ -216,8 +216,8 @@
     "idle_digest": {
       "type": "string",
       "title": "Away summary after an idle compaction",
-      "description": "Values: submit or return. submit (the default): when a session compacted while you were away has finished its work or is only waiting on you, with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; return sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (any other value counts as return).",
-      "default": "submit"
+      "description": "Values: submit, return or off. off (the default in this version): when a session compacted while you were away has finished its work or is only waiting on you, the plugin sends no turn of its own and asks for no summary; the next reply starts nothing new and says in one line where the work stands, then what needs you. submit: with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; return sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (any other value counts as off).",
+      "default": "off"
     },
     "ticket_pattern": {
       "type": "string",

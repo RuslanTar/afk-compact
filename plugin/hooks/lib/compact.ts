@@ -325,7 +325,8 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     ...(idle ? { idle: true } : {}),
   }))
   // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
-  // nothing running gets its digest turn right away (`idle_digest: submit`, the default).
+  // nothing running gets its digest turn right away with `idle_digest: submit` (`off`, the default
+  // of this version by owner rule (c), and `return` log the skip and submit nothing).
   if (main && idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
   // SESSION-RESTART D2 (b): right after Claude Code's own idle compaction; nothing is submitted
   // after it (the new load waits at the prompt with its block, as after any idle compaction).

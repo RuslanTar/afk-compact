@@ -543,10 +543,11 @@ def self_heal_hits(target, brand):
 
 
 # Owner-ruled manifest defaults (one constant each, so a ruling lands in one commit): precompact_turn
-# `model` (xxxxxxxx-18), idle_handoff_turn `auto` (idle D3, IA-1), idle_digest `submit` (away digest,
-# owner 2026-10-27 12:5x xxxxxxxx-09), and the six keys of
+# `model` (xxxxxxxx-18), idle_handoff_turn `auto` (idle D3, IA-1), idle_digest `off` (away digest,
+# owner 2026-10-27 12:5x xxxxxxxx-09 ruled `submit`; owner rule (c), 2026-10-28: on only after a
+# live PASS, else `off`, and the live AD2 probe failed the digest's text format), and the six keys of
 # xxxxxxxx-12/-13/-14 (S-SETTINGS E1-E6, SK-7) at today's behaviour.
-RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto", "idle_digest": "submit",
+RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto", "idle_digest": "off",
                   "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "auto",
                   "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
 
@@ -1629,11 +1630,13 @@ GATE_LIST_BANNED = ("No approval or handoff line changes this", "No approval cov
 # REVIEW-NIGHT TG-02 / TG-03 (REVIEW-NIGHT-2): the F-layer acceptance tests of SPEC-DELTAS §5 that no
 # gate held yet. Rows: (AT id, path, line selector, phrase every selected line must hold).
 AT_TEXT_NEEDS = [
-    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "handle it, then continue Step 1"),
-    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "explicit gate"),
+    # Owner rule (c), 2026-10-28: [idle-off] is [idle] under idle_digest off (0.1.1's default)
+    # and holds the same owner-ruled phrases.
+    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle(?:-off)?\] ", "handle it, then continue Step 1"),
+    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle(?:-off)?\] ", "explicit gate"),
     # Owner xxxxxxxx-18 ("Add the check line"): the kept messages first, in both idle lines;
     # owner xxxxxxxx-25 ("Stop in halt"): the halt variant stops after the background result.
-    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle\] ", "check the messages kept after the summary first; skip what is already done"),
+    ("AT-IB-01", RESUME_CTX_REL, r"^\[idle(?:-off)?\] ", "check the messages kept after the summary first; skip what is already done"),
     ("AT-IB-03", RESUME_CTX_REL, r"^\[idle-halt\] ", "check the messages kept after the summary first; skip what is already done"),
     ("AT-IB-03", RESUME_CTX_REL, r"^\[idle-halt\] ", "handle it, then stop and wait for the user"),
     ("AT-SR-02", RESUME_REL, r"^- Candidates labelled `repo:`", "only without real risk"),
@@ -1649,6 +1652,14 @@ AT_TEXT_NEEDS = [
     ("AT-HC-04", HEAL_REL, r"^\*\*Restart gate\*\*", "`run-source: handoff`"),
 ]
 AT_TEXT_BANNED = (("AT-HC-04", HEAL_REL, "never run on its own"),)
+# Owner rule (c), 2026-10-28: under idle_digest off no line asks for the away digest. Rows: (id,
+# path, line selector, phrase no selected line may hold; at least one line must match).
+AT_TEXT_BANNED_SEL = [
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-off\] ", "away digest"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-done-off\] ", "away digest"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-off\] ", "Decided without you"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-done-off\] ", "Decided without you"),
+]
 
 
 def gate_list_hits(target, brand):
@@ -1681,6 +1692,17 @@ def gate_list_hits(target, brand):
         for no, ln in enumerate(lines or [], 1):
             if phrase in ln:
                 out.append((path, no, at, "{} banned: {!r}".format(at, phrase), ln))
+    for at, rel, sel, phrase in AT_TEXT_BANNED_SEL:
+        path, lines = _shipped(target, rel, brand)
+        if lines is None:
+            out.append(_missing(path, at))
+            continue
+        hits = [(no, ln) for no, ln in enumerate(lines, 1) if re.match(sel, ln)]
+        if not hits:
+            out.append((path, None, at, "{}: no line matches {!r}".format(at, sel), ""))
+        for no, ln in hits:
+            if phrase.lower() in ln.lower():
+                out.append((path, no, at, "{} banned: a line matching {!r} holds {!r}".format(at, sel, phrase), ln))
     return out
 
 

@@ -18,12 +18,15 @@ import type { AssetName } from './assets.gen'
  * of a finished or blocked work lane; never with `idle`, `idle-halt`, `midturn` or `driver`).
  * 2026-10-27: `trial-tail` of the shadow trial's old-arm adapter (TRIAL-DUAL-HANDOFF §4.1: the last
  * reply and a newly typed prompt, kept only when there is one).
+ * 2026-10-30: the resume block's `idle-off` and `idle-done-off` (owner rule (c), 2026-10-28:
+ * `[idle]` and `[idle-done]` under `idle_digest: off`, which ask for one line on the lane state in
+ * place of the away digest; in the same exclusive idle group).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  | 'driver' | 'trial-tail' | 'idle-done'
+  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<

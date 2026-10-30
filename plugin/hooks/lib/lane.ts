@@ -6,7 +6,9 @@
 // - `finished`: every listed step done, nothing runs: the turn shows the digest, starts nothing;
 // - `hard-blocked`: all that is left waits on the user and nothing runs (nothing can start);
 // - `soft-blocked`: all that is left waits on the user and something still runs.
-// Both blocked states act like `finished` (the digest), but the lane is not done. A result that
+// Both blocked states act like `finished` (the digest), but the lane is not done. Under
+// `idle_digest: off` (owner rule (c), 2026-10-28) they start nothing too, but every text asks for
+// one line on the lane state with its Basis in place of the digest. A result that
 // unblocks a step makes the lane `working` again (the `[idle-done]` text says so), and work the
 // model starts after the block went out supersedes the summary's Status for the rest of the idle
 // episode (owner xxxxxxxx-06). Anything code cannot read falls back to `working`, today's
@@ -509,24 +511,36 @@ export function startsWork(tool: string, result: unknown): boolean {
 
 /**
  * The text of the digest turn the plugin submits right after an idle compaction with nothing
- * running (`idle_digest: submit`, the default; owner xxxxxxxx-09). The resume block follows it.
+ * running (`idle_digest: submit`; owner xxxxxxxx-09; `off` is the default of this version, owner
+ * rule (c)). The resume block follows it.
  */
 export function digestLine(name: string): string {
   return `Note from the user's ${name} plugin: the session was compacted while the user was away, and the work lane reads finished or blocked. Follow the resume block below: it asks for the away digest.`
 }
 
 /**
+ * The one-line form of a finished or blocked lane, in place of the away digest: a note after the
+ * digest went out, and every text under `idle_digest: off` (owner rule (c), 2026-10-28).
+ */
+function laneLine(r: LaneResult, basis: string): string {
+  return `say in one line that the lane is now ${r.lane} (Basis: ${basis}), then last, Needs you (numbered, each with what it blocks) or Nothing needed from you.`
+}
+
+/**
  * The note of a later turn not of a person's in the same idle episode, when code now reads the
  * lane as finished or hard-blocked though the turn before was told otherwise (a job ended). When
  * an earlier turn of the episode already got a finished or blocked lane (its digest went out),
- * the note asks for one line on the new state, not a second digest. `basis` is `laneBasis` now.
+ * the note asks for one line on the new state, not a second digest. `off` (`idle_digest: off`):
+ * that one line always, and no digest is named. `basis` is `laneBasis` now.
  */
-export function laneNote(name: string, r: LaneResult, basis: string, again = false): string {
+export function laneNote(name: string, r: LaneResult, basis: string, again = false, off = false): string {
   return `Note from the user's ${name} plugin: after this result code reads the work lane as ${r.lane} (${r.why}). ` +
     'A result that unblocks a step makes it working again: handle it, then continue Step 1 unless it needs the user or hits a gate. ' +
     'A cron or Monitor turn: do its iteration first. ' +
-    (again
-      ? `Else start nothing; the away digest went out already: say in one line that the lane is now ${r.lane} (Basis: ${basis}), then last, Needs you (numbered, each with what it blocks) or Nothing needed from you.`
+    (off
+      ? 'Else start nothing: ' + laneLine(r, basis)
+      : again
+      ? 'Else start nothing; the away digest went out already: ' + laneLine(r, basis)
       : `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done); ` +
         'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
         'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.')
@@ -535,19 +549,33 @@ export function laneNote(name: string, r: LaneResult, basis: string, again = fal
 /**
  * The text of the digest turn the plugin submits after a result's turn did the step that result
  * unblocked and the lane now reads finished or hard-blocked (owner 2026-10-28 digest rules (b);
- * digest.ts `laneTurnEnd`). `basis` is `laneBasis` now.
+ * digest.ts `laneTurnEnd`). `basis` is `laneBasis` now. `off`: the one-line form, no digest. No
+ * production caller passes it: `submitResultDigest` returns before this text under any setting
+ * but `idle_digest: submit`; it stays so the texts of both forms are tested side by side.
  */
-export function resultDigestLine(name: string, r: LaneResult, basis: string): string {
+export function resultDigestLine(name: string, r: LaneResult, basis: string, off = false): string {
   return `Note from the user's ${name} plugin: the user is still away. The last turn handled a background result; code now reads the work lane as ${r.lane} (${r.why}). ` +
     'A step that can still run without the user: continue it, unless it hits a gate. ' +
-    `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done, and what the last turn did); ` +
-    'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
-    'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.'
+    (off
+      ? 'Else start nothing: ' + laneLine(r, basis)
+      : `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done, and what the last turn did); ` +
+        'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
+        'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.')
 }
 
 /**
  * A turn's answer that already ends with the digest's last section (`Needs you` or `Nothing
  * needed from you` opening a line): the `[idle]` block's step 5 asks for the digest when all
  * that is left waits on the user, so a result's turn may have printed it; no second one follows.
+ * The same under every `idle_digest` setting (submit and return as before `off` existed).
  */
 export const DIGEST_END_RE = /^[^\w\n]*(?:Needs you\b|Nothing needed from you\b)/m
+
+/**
+ * With `idle_digest: off` only (digest.ts `laneTurnEnd`, after `DIGEST_END_RE`): the one-line form
+ * may end its only line with `Nothing needed from you`, or carry its numbered `Needs you` list on
+ * that same line (`... Needs you: 1. approve the push`). Either counts as the lane told. Under off a
+ * false match only drops a repeated one-line note, never a turn, so the wider match is safe there;
+ * submit and return never use it.
+ */
+export const OFF_LINE_END_RE = /\bNothing needed from you\b[^\w\n]*$|\bNeeds you\b[^\n]*?\b1[.)]/m
