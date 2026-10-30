@@ -1449,3 +1449,49 @@ test('AT-KW-49: a prompt enters while a fork-miss ping is out and stays pending;
   expect(at).toEqual([50])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
 })
+
+test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-miss at 100): the gap stops fork-miss with the hand-over, and the compaction runs', { options: ON }, async ($, on) => {
+  const w = world(on)
+  let t0 = 0
+  const at: number[] = []
+  let open: () => void = () => undefined
+  let pending: Promise<unknown> | undefined
+  on('model.fork', async () => {
+    at.push(Math.round((w.clock.now() - t0) / MIN))
+    if (at.length === 2) {
+      w.dropIf = () => 'a peer dropped it'
+      w.atSubmit = () => new Promise<void>(r => { open = r })
+      pending = $.prompt.submit({ text: 'one', origin: { kind: 'composer' } } as never)
+    }
+    await w.clock.sleep(15000)
+    return { value: { isAnswered: true, text: 'OK', usage: at.length === 2 ? COLD : WARM } } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 101)
+  expect(pending).toBeDefined()
+  expect([pings(w), stops(w)]).toEqual([[['warm', 1], ['fork-miss', 1]], []])
+  open()
+  await pending
+  await w.settle()
+  await until(w, t0, 110)
+  expect(at).toEqual([50, 100])
+  expect(stops(w)).toEqual([['fork-miss', true, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-47: a fork-miss holds back only its own session: after /clear the new session\'s gap pings at 50 with no request of its own yet', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? COLD : WARM }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 51)
+  expect(pings(w)).toEqual([['fork-miss', 0]])
+  await $.session.end({ reason: 'clear', sessionId: SID_A, resume: { id: SID_A } } as never)
+  w.sid = SID_B
+  const t1 = await humanTurn($, w)
+  await until(w, t1, 51)
+  expect(f.at.length).toBe(2)
+  expect(pings(w)).toEqual([['fork-miss', 0], ['warm', 1]])
+})
