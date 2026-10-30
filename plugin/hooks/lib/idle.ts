@@ -89,13 +89,16 @@ export const NATIVE_IDLE_FLOOR = 200000
 /**
  * Every rate-limit window must stay below this share (else `near-limit`): always for the plugin's
  * idle compaction; for the idle handoff turn only with `idle_handoff_near_limit: skip` (owner
- * xxxxxxxx, 2026-10-30: "I want the handoff anyway", so the default `run` does not check it).
+ * xxxxxxxx, 2026-10-30: "I want the handoff anyway", so the default `run` does not check it), and
+ * with `skip-spend` only the spend-limit windows (owner xxxxxxxx, 0.1.2: configurable, `run` the default).
  */
 export const NEAR_LIMIT_PCT = 90
 /** A tombstone outlives every timer that could still hold its record (§3.1): its due plus this. */
 const TOMBSTONE_LIFE_MS = IDLE_LATE_MS + 60000
 /** D15: the windows that show a subscription, so the one-hour main-thread cache. */
 const PLAN_WINDOWS: readonly string[] = ['five_hour', 'seven_day']
+/** The window a Claude gateway reports for its money spend cap (not a plan's usage allowance). */
+const SPEND_WINDOW = 'spend_limit'
 /** D7: the failure classes of `BoundaryResult` that count (a person's turn or a headless host do not). */
 const COUNTED_FAILS: readonly string[] = ['skipped', 'other', 'failed', 'unclaimed', 'error']
 
@@ -116,8 +119,9 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * `anchor` is the start of the last main request at arm (null: use `end`); `tokens`, `ttl` and
  * `pct` are the context size, the cache (Claude Code's TTL switch when one is set, `5m` with
  * caching off, else `1h` when a plan window was reported, D15) and the highest window share at
- * arm, which a new process reads before its first request reports any (G10-G12); `cc` and `model`
- * are the Claude Code version and main model at arm (G3a).
+ * arm, which a new process reads before its first request reports any (G10-G12); `spct` the
+ * highest spend-limit share at arm (null: none reported), for `idle_handoff_near_limit: skip-spend`;
+ * `cc` and `model` are the Claude Code version and main model at arm (G3a).
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
@@ -130,7 +134,7 @@ export type Due = {
   kind: IdleKind; end: number | null
   answer: boolean; published: boolean
   load: string | null; anchor: number | null; tokens: number | null
-  ttl: '1h' | '5m' | null; pct: number | null; cc: string | null; model: string | null
+  ttl: '1h' | '5m' | null; pct: number | null; spct: number | null; cc: string | null; model: string | null
 }
 
 /** Every clear of a record (§3.1): which load cleared which due, and when. */
@@ -158,7 +162,8 @@ function readDue(v: unknown): Due | undefined {
   return {
     due: o.due, sid: o.sid, episode, kind, end: numOrNull(o.end), answer: o.answer === true, published: o.published === true,
     load: strOrNull(o.load), anchor: numOrNull(o.anchor), tokens: numOrNull(o.tokens),
-    ttl: o.ttl === '1h' || o.ttl === '5m' ? o.ttl : null, pct: numOrNull(o.pct), cc: strOrNull(o.cc), model: strOrNull(o.model),
+    ttl: o.ttl === '1h' || o.ttl === '5m' ? o.ttl : null, pct: numOrNull(o.pct), spct: numOrNull(o.spct),
+    cc: strOrNull(o.cc), model: strOrNull(o.model),
   }
 }
 
@@ -372,13 +377,15 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
     model = (await d.model()) ?? null
   }
   const limits = u?.rateLimits ?? []
+  const spend = limits.filter(l => l.kind === SPEND_WINDOW)
   // The cache this load writes (D15, G11): caching off or a TTL switch first, else the plan windows.
   const set = p.env.cacheOff ? '5m' : await explicitTtl(d, p.env)
   s.idleAdopted = false
   await persist(d, {
     due, sid, episode: s.idleEpisode ?? null, kind, end: endAt, answer: s.lastTurnAnswer, published: s.publishedSinceHuman,
     load: s.loadId, anchor, tokens: u?.tokens ?? null, ttl: set ?? (u === undefined ? null : planOf(u).length > 0 ? '1h' : '5m'),
-    pct: limits.length > 0 ? Math.max(...limits.map(l => l.percentUsed)) : null, cc, model,
+    pct: limits.length > 0 ? Math.max(...limits.map(l => l.percentUsed)) : null,
+    spct: spend.length > 0 ? Math.max(...spend.map(l => l.percentUsed)) : null, cc, model,
   })
 }
 
@@ -473,11 +480,21 @@ async function ttl5m(d: Deps, env: IdleEnv, u: Use, rec: Due): Promise<boolean> 
   return !(d.state.idleAdopted && rec.ttl === '1h')
 }
 
-/** G12: a window at the limit share or more (any kind, a gateway's too); none reported: the record's reading. */
-function nearLimit(u: Use, rec: Due): boolean {
+/**
+ * G12: a window at the limit share or more (any kind, a gateway's too; `spendOnly`: a gateway's
+ * spend limit only, plan windows ignored); none reported: the record's reading at arm.
+ */
+function nearLimit(u: Use, rec: Due, spendOnly = false): boolean {
   const limits = u?.rateLimits ?? []
-  if (limits.length > 0) return limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))
-  return rec.pct !== null && rec.pct >= NEAR_LIMIT_PCT
+  if (limits.length > 0) return limits.some(l => (!spendOnly || l.kind === SPEND_WINDOW) && !(l.percentUsed < NEAR_LIMIT_PCT))
+  const pct = spendOnly ? rec.spct : rec.pct
+  return pct !== null && pct >= NEAR_LIMIT_PCT
+}
+
+/** The idle handoff turn's own near-limit skip (`idle_handoff_near_limit`): never under `run`. */
+function turnNearLimit(d: Deps, u: Use, rec: Due): boolean {
+  const mode = d.cfg.idle_handoff_near_limit
+  return mode !== 'run' && nearLimit(u, rec, mode === 'skip-spend')
 }
 
 /** The checks of §9.4 "Fire" from `aborted` on, in order; the first that fails is the skip reason. */
@@ -487,7 +504,7 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   const tokens = u?.tokens ?? rec.tokens ?? undefined
   if (tokens === undefined || tokens < d.cfg.idle_handoff_min_tokens) return 'small'
   if (await ttl5m(d, await d.idleEnv(), u, rec)) return 'ttl-5m'
-  if (d.cfg.idle_handoff_near_limit === 'skip' && nearLimit(u, rec)) return 'near-limit'
+  if (turnNearLimit(d, u, rec)) return 'near-limit'
   const ep = s.idleEpisode
   if (!ep || ep.done) return 'episode'
   if (s.publishedSinceHuman) return 'published'
@@ -566,7 +583,8 @@ type Compact = { compact: true; gapS: number; tokens: number; agents: number }
  * switched off since the arm, it never compacts (D1). Two refusals still give the turn, as before
  * lane B, when no agents run and the turn is on (root call on Q2, 2026-10-27): `halted` (a thrash
  * or bad-summary halt stops plugin compactions, not the turn; with `idle_handoff_near_limit: run`
- * also when `near-limit` came before it, root call NL-2) and `compaction-off` (D1 keeps the
+ * also when `near-limit` came before it, root call NL-2, and with `skip-spend` when no spend limit
+ * is at the share) and `compaction-off` (D1 keeps the
  * turn there). Else the turn's checks, or `agents-running` while agents run (the skip of before
  * 2026-10-27, with `idle_compact: off`).
  */
@@ -598,8 +616,9 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
     if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents }
     // Root call NL-2 (0.1.2): `near-limit` comes before `halted` in the guards, so under
     // `idle_handoff_near_limit: run` a halt that stops the compaction anyway (not the cap) falls
-    // back to the turn the same way; `skip` keeps the near-limit skip.
-    const haltedToo = g.why === 'near-limit' && d.cfg.idle_handoff_near_limit === 'run' && d.state.halt.active && d.state.halt.reason !== 'cap'
+    // back to the turn the same way; `skip` keeps the near-limit skip, and `skip-spend` keeps it
+    // only when a spend limit is at the share (plan windows alone fall back as under `run`).
+    const haltedToo = g.why === 'near-limit' && !turnNearLimit(d, u, rec) && d.state.halt.active && d.state.halt.reason !== 'cap'
     if (agents > 0 || !on.turnOn || (g.why !== 'halted' && g.why !== 'compaction-off' && !haltedToo)) return g.why
   }
   if (agents > 0) return 'agents-running'

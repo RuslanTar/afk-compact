@@ -38,9 +38,11 @@ export type Config = {
   /**
    * Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): `run` runs the idle handoff turn at
    * any usage share; `skip` skips it while a rate-limit window is at NEAR_LIMIT_PCT or more (idle.ts
-   * `near-limit`). The plugin's idle compaction keeps its own near-limit skip either way.
+   * `near-limit`); `skip-spend` (0.1.2) skips it only while a gateway's spend limit (a money cap)
+   * is there, and runs it near a plan's five-hour or seven-day window. The plugin's idle compaction
+   * keeps its own near-limit skip, any window, under every value.
    */
-  idle_handoff_near_limit: 'run' | 'skip'
+  idle_handoff_near_limit: 'run' | 'skip-spend' | 'skip'
   /**
    * `auto`: while Claude Code's own idle compaction is off in the settings (`"idleCompaction":
    * false`) and automatic compaction is on, the plugin compacts an idle main session itself about
@@ -254,7 +256,7 @@ export function parseOptions(o: PluginOptions): Config {
     idle_handoff_turn: idleTurn(o, notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
     // Any other value is the default `run` (no legacy words); settings.pm reads it the same way.
-    idle_handoff_near_limit: choice(o, 'idle_handoff_near_limit', ['run', 'skip'] as const, DEFAULTS.idle_handoff_near_limit, DEFAULTS.idle_handoff_near_limit, notes),
+    idle_handoff_near_limit: choice(o, 'idle_handoff_near_limit', ['run', 'skip-spend', 'skip'] as const, DEFAULTS.idle_handoff_near_limit, DEFAULTS.idle_handoff_near_limit, notes),
     idle_compact: idleCompact(o, notes),
     // Any other value is `off`, the value with no extra plugin turn and no digest (rule (c)).
     idle_digest: choice(o, 'idle_digest', ['submit', 'return', 'off'] as const, DEFAULTS.idle_digest, 'off', notes),
