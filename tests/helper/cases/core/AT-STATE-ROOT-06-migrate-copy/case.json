@@ -1,0 +1,115 @@
+{
+ "id": "AT-STATE-ROOT-06 (state-root: migrate's copy never leaves a cut-off file; a new root inside the old one is not copied into itself)",
+ "layer": "H",
+ "owner": "core",
+ "note": "STATE-ROOT (0.1.2): util::copy_new, migrate's copy, writes under a temp name beside the file and links it into place: a write that fails part way leaves nothing under the file's name and no temp name, a rerun copies it, the mtime given is kept, and an existing file is never replaced. migrate skips the new root when it lies inside the old one ($XDG_STATE_HOME under ~/.claude/trash-staging), so nothing is copied into itself.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/src/big.bin",
+     "bytes": 200000
+    },
+    {
+     "write": "$TMP/src/small.txt",
+     "content": "small\n"
+    },
+    {
+     "write": "$LEGACY_DISP/2026-10-01/a-evidence/a.log",
+     "content": "old a\n"
+    },
+    {
+     "touch": "$LEGACY_DISP/2026-10-01/a-evidence/a.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    }
+   ]
+  },
+  {
+   "name": "util::copy_new: a failed write leaves no file and no temp name; a rerun copies with the mtime; nothing is replaced",
+   "lib": "state_root",
+   "args": {
+    "copy_new": [
+     {
+      "id": "a write fails after the first block",
+      "src": "$TMP/src/big.bin",
+      "dst": "$TMP/dst/big.bin",
+      "fail_after": 1,
+      "want": "dies"
+     },
+     {
+      "id": "the rerun copies it, mtime kept",
+      "src": "$TMP/src/big.bin",
+      "dst": "$TMP/dst/big.bin",
+      "mtime": "2026-10-01T10:00:00+03:00",
+      "want": "copied"
+     },
+     {
+      "id": "an existing file is left as it is",
+      "src": "$TMP/src/small.txt",
+      "dst": "$TMP/dst/big.bin",
+      "want": "exists"
+     },
+     {
+      "id": "a small file",
+      "src": "$TMP/src/small.txt",
+      "dst": "$TMP/dst/small.txt",
+      "want": "copied"
+     }
+    ]
+   }
+  },
+  {
+   "name": "migrate --apply with the new disposable root inside the old one copies once, never into itself",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root: ~/\\.claude/trash-staging -> ~/\\.claude/trash-staging/st/$BRAND/disposable$",
+     "^  copied: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · .* · failed: 0$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-01/a-evidence/a.log",
+      "contains": [
+       "old a"
+      ],
+      "mtime_at": "2026-10-01T10:00:00+03:00"
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/st",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 0 files, 0\\.0 MB · already there: 1 · differ, left as they are: 0 "
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/st",
+      "exists": false
+     }
+    ]
+   }
+  }
+ ]
+}

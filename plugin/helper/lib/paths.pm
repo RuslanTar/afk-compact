@@ -1,7 +1,7 @@
 package paths;
 # lib/paths.pm: where things live (MOD-SPEC conventions). Owner: WP-core.
 # paths::for(settings, sid) -> {root, watch, disposable, watch_default, from_default, legacy,
-#   disposable_from_default, disposable_legacy}
+#   disposable_from_default, disposable_legacy, moved}
 # STATE-ROOT (0.1.2): the default handoff root is ~/.local/state/<plugin>/handoffs and the default
 # disposable root ~/.local/state/<plugin>/disposable. Claude Code asks before every write under
 # ~/.claude in the default permission mode (its protected-path, "sensitive file" prompt, which no
@@ -39,7 +39,9 @@ sub for {
     return { root => $root, watch => $watch, disposable => $disp, watch_default => $wdef,
              from_default => $is_def, legacy => $is_def ? legacy($settings, $root) : undef,
              disposable_from_default => $d_def,
-             disposable_legacy => $d_def ? legacy($settings, $disp, 'disposable_root') : undef };
+             disposable_legacy => $d_def ? legacy($settings, $disp, 'disposable_root') : undef,
+             moved => [ grep { defined } ($is_def ? _moved($settings, $root, 'handoff_root') : undef),
+                                         ($d_def ? _moved($settings, $disp, 'disposable_root') : undef) ] };
 }
 
 # default_root([key]) -> the manifest's default for key (handoff_root unless given), else its
@@ -107,6 +109,39 @@ sub legacy {
     return $l;
 }
 
-sub sid_dir { my ($p, $sid) = @_; return "$p->{watch}/$sid" }
+# _moved(resolved settings, root, key) -> [old default, root] while key is the default (`for` asks only
+# then), whether or not the old folder still exists; undef when it is the root itself or the settings
+# carry no source. follow() reads it.
+sub _moved {
+    my ($settings, $root, $key) = @_;
+    return undef unless ref $settings eq 'HASH' && ref $settings->{source} eq 'HASH' && defined $root && $MOVED{$key};
+    my $l = util::clean_path($MOVED{$key}[1]);
+    return undef if !defined $l || $l eq $root;
+    return [$l, $root];
+}
+
+# follow(moved, path) -> path, or the same relative path under the new root when path is missing and
+# lies under an old default root (STATE-ROOT): MANIFEST.tsv rows and pins record full paths, and
+# `migrate --apply` copies the old folders without changing those records, so once the old folder is
+# removed a copy is read where migrate put it. A path that exists, or whose copy does not, is
+# returned as it is. moved is paths::for's `moved` list ([old, new] pairs).
+sub follow {
+    my ($moved, $path) = @_;
+    return $path unless defined $path && $path ne '' && ref $moved eq 'ARRAY' && !-e $path && !-l $path;
+    for my $m (@$moved) {
+        my ($old, $new) = @$m;
+        next unless defined $old && defined $new;
+        # the old folder as written, and through the real path of its parent (a record may hold either)
+        my $rp = util::real_path(util::dirname($old));
+        for my $o (grep { defined } ($old, defined $rp ? "$rp/" . util::basename($old) : undef)) {
+            next unless index($path, "$o/") == 0;
+            my $cand = $new . substr($path, length $o);
+            return $cand if -e $cand;
+        }
+    }
+    return $path;
+}
+
+sub sid_dir{ my ($p, $sid) = @_; return "$p->{watch}/$sid" }
 
 1;

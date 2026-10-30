@@ -3158,6 +3158,30 @@ sub builtin {
             push @e, "$id: disposable_legacy " . ($p->{disposable_legacy} // 'null') . ', want ' . ($c->{legacy} // 'null')
                 if exists $c->{legacy} && ($p->{disposable_legacy} // '') ne ($c->{legacy} // '');
         }
+        # util::copy_new (migrate's copy): copied, or `exists` when dst is there (never replaced), or
+        # `dies` when a write fails after fail_after writes; dst is then absent, and no temp name is left
+        # beside dst either way, so a rerun copies it again
+        for my $c (@{ $a->{copy_new} || [] }) {
+            my $id = $c->{id} // $c->{dst};
+            my $calls = 0;
+            my $orig = \&util::_write_all;
+            no warnings qw(redefine);
+            local *util::_write_all = defined $c->{fail_after}
+                ? sub { die "write: failed on purpose\n" if ++$calls > $c->{fail_after}; $orig->(@_) } : $orig;
+            my $t = defined $c->{mtime} ? util::parse_iso($c->{mtime}) : undef;
+            my $before = util::read_file($c->{dst});
+            my $n = eval { util::copy_new($c->{src}, $c->{dst}, mode => 0600, (defined $t ? (times => [$t, $t]) : ())) };
+            my $got = !defined $n ? 'dies' : $n < 0 ? 'exists' : 'copied';
+            push @e, "$id: $got, want $c->{want}" . ($got eq 'dies' ? " ($@)" : '') if $got ne $c->{want};
+            my @left = grep { /\.part-/ } util::list_dir(util::dirname($c->{dst}));
+            push @e, "$id: temp names left beside it: @left" if @left;
+            push @e, "$id: $c->{dst} exists after a failed copy" if $got eq 'dies' && (-e $c->{dst} || -l $c->{dst});
+            if ($got eq 'copied') {
+                push @e, "$id: bytes differ from $c->{src}" if (util::read_file($c->{dst}) // '') ne (util::read_file($c->{src}) // 'x');
+                push @e, "$id: mtime " . (stat $c->{dst})[9] . ", want $t" if defined $t && (stat $c->{dst})[9] != $t;
+            }
+            push @e, "$id: $c->{dst} was changed" if $got eq 'exists' && (util::read_file($c->{dst}) // '') ne ($before // '');
+        }
         for my $c (@{ $a->{named} || [] }) {
             local *ctx::brand = $c->{brand_dies} ? sub { die "no brand\n" } : sub { $c->{brand} };
             my $got = paths::named($c->{value});
@@ -3375,6 +3399,12 @@ sub check {
                 push @e, "$p: bytes differ from snapshot $f->{same_bytes_as}" if defined $was && (util::read_file($p) // '') ne $was;
             }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
+            # mtime_at <ISO>: the file's modification time (a copy that keeps its source's; touch sets it)
+            if (defined $f->{mtime_at}) {
+                my $want = util::parse_iso($f->{mtime_at});
+                my $got = (stat $p)[9];
+                push @e, "$p: mtime " . ($got // 'none') . ", want $f->{mtime_at}" unless defined $want && defined $got && $got == $want;
+            }
             # tree_snapshot <label> keeps a folder's listing (every entry's path, type, mode, size,
             # mtime and bytes) for a later step's same_tree_as <label> (STATE-ROOT: nothing is written
             # under the legacy root)

@@ -62,6 +62,9 @@ sub new {
     $ctx->{legacy}         = defined &rc::legacy ? rc::legacy() : undef;
     $ctx->{legacy_refused} = defined &rc::legacy_refused ? rc::legacy_refused() : undef;
     $ctx->{legacy_path}    = defined &rc::legacy_path ? rc::legacy_path() : undef;
+    # ([old default, new root] while handoff_root / disposable_root is the default, from the run context,
+    # whose settings carry their sources; follow() below)
+    $ctx->{moved}          = defined &rc::paths && ref(rc::paths()) eq q(HASH) ? skills::util::text_deep(rc::paths()->{moved} || []) : [];
     $ctx->{sid}        = 'unknown';
     return bless $ctx, __PACKAGE__;
 }
@@ -100,6 +103,11 @@ sub records_dir { my ($ctx) = @_; return "$ctx->{root}/.sessions/by-pid" }
 # the store's own files looks in both, in this order (the store root's file wins for one name);
 # writers use $ctx->{root} only.
 sub read_roots { my ($ctx) = @_; return grep { defined && $_ ne '' } ($ctx->{root}, $ctx->{legacy}) }
+
+# follow(ctx, path) -> a recorded full path (a MANIFEST.tsv copy, a pin's bucket_path), or, when it is
+# missing under an old default root (~/.claude/handoffs, ~/.claude/trash-staging), the same relative
+# path under the new root where `migrate --apply` copied it (STATE-ROOT; lib/paths.pm follow).
+sub follow { my ($ctx, $path) = @_; return paths::follow($ctx->{moved}, $path) }
 
 # All records: [{pid, epoch, state(live|ended), sid8, path, data}], from both read roots (a
 # record file in both counts once, the store root's).

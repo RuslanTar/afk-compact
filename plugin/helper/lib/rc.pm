@@ -57,7 +57,8 @@ sub read_roots { return grep { defined } ($R{paths}{root}, $R{legacy}) }
 # disposable_legacy() / _refused() / _path(): the same for the old default disposable root
 # (~/.claude/trash-staging while disposable_root is the default), checked on first use only (status
 # and migrate ask; nothing writes there, and copies record their own paths, so verify and
-# restore-evidence read the copies in it as they are).
+# restore-evidence read the copies in it as they are, or under the new root once it is gone:
+# paths::follow).
 sub _disposable_legacy_check {
     return if $R{disposable_legacy_checked}++;
     my $dl = $R{paths}{disposable_legacy};

@@ -131,6 +131,8 @@ sub read_repos {
 sub twin_buckets {
     my ($ctx, $bucket) = @_;
     my @roots = skills::ctx::read_roots($ctx);
+    # a pin's bucket under an old default root that is gone: its copy under the new root (skills::ctx::follow)
+    $bucket = skills::ctx::follow($ctx, $bucket);
     my $b = skills::util::abs_path($bucket) // $bucket;
     for my $r (@roots) {
         my $ar = skills::util::abs_path($r) // $r;

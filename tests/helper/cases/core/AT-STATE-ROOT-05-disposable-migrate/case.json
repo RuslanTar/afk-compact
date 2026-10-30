@@ -1,8 +1,8 @@
 {
- "id": "AT-STATE-ROOT-05 (state-root: the disposable root moved too; migrate copies, never deletes)",
+ "id": "AT-STATE-ROOT-05 (state-root: the disposable root moved too; migrate copies, never deletes; recorded paths follow the copy)",
  "layer": "H",
  "owner": "core",
- "note": "STATE-ROOT (0.1.2, owner 2026-10-30 \"move both\"): while disposable_root is the default (unset, or a value equal to it) the evidence root is $XDG_STATE_HOME/<plugin>/disposable when that is absolute, else ~/.local/state/<plugin>/disposable; the old default ~/.claude/trash-staging is read (status line; verify and restore-evidence follow MANIFEST's full paths) and never written; a value set, the old default included, is kept as it is. `migrate` (user-run) is a dry run by default, copies with --apply, never deletes, moves or overwrites, skips links, and leaves a root set explicitly alone.",
+ "note": "STATE-ROOT (0.1.2; the owner chose to move both roots out of ~/.claude): while disposable_root is the default (unset, or a value equal to it) the evidence root is $XDG_STATE_HOME/<plugin>/disposable when that is absolute, else ~/.local/state/<plugin>/disposable; the old default ~/.claude/trash-staging is read (status line; verify and restore-evidence follow MANIFEST's full paths) and never written; a value set, the old default included, is kept as it is. `migrate` (user-run) is a dry run by default, copies with --apply, never deletes, moves or overwrites, skips links, leaves a root set explicitly alone, leaves out drafts (.staging), .watch, .sessions/by-pid and pin locks, keeps mtimes, and exits 3 on a failed copy, which a rerun copies. Once the old folders are gone, a MANIFEST.tsv copy or a pin's bucket_path recorded under them is read by the same relative path under the new root while the setting is the default.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -25,6 +25,34 @@
      "content": "{\"bucket\":\"repo/LAB-5\"}\n"
     },
     {
+     "touch": "$LEGACY/repo/LAB-5/2026-10-20_12-00-00_22222222_a.md",
+     "at": "2026-10-20T12:00:00+03:00"
+    },
+    {
+     "write": "$LEGACY/.sessions/23232323-2323-4232-8232-232323232323.json",
+     "content": "{\"session_id\": \"23232323-2323-4232-8232-232323232323\", \"bucket\": \"other/LAB-7\", \"bucket_path\": \"$LEGACY/other/LAB-7\", \"bucket_source\": \"pin\"}"
+    },
+    {
+     "write": "$LEGACY/other/LAB-7/2026-10-20_14-00-00_23232323_w.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f1f2f3f\ndate: 2026-10-20T14:00:00+03:00\nsession_id: 23232323-2323-4232-8232-232323232323\nactor: main\n---\n⟪$BRAND v1 n=0f1f2f3f s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0f1f2f3f⟫\n"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-5/.staging/22222222-0a0b0c0d/draft.md",
+     "content": "unfinished draft\n"
+    },
+    {
+     "write": "$LEGACY/.watch/22222222-2222-4222-8222-222222222222/events.jsonl",
+     "content": "{}\n"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194212-1072915200.live-22222222.json",
+     "content": "{\"pid\": 4194212}\n"
+    },
+    {
+     "write": "$LEGACY/.sessions/22222222-2222-4222-8222-222222222222.json.lock",
+     "content": ""
+    },
+    {
      "symlink": "$LEGACY/repo/LAB-5/link.md",
      "to": "$TMP/outside.txt"
     },
@@ -36,6 +64,14 @@
      "write": "$LEGACY_DISP/2026-10-01/h-evidence/run.log",
      "content": "old evidence\n",
      "mode": "0400"
+    },
+    {
+     "touch": "$LEGACY_DISP/2026-10-01/h-evidence/run.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$LEGACY_DISP/2026-10-02/x-evidence/fail.log",
+     "content": "second\n"
     },
     {
      "write": "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md",
@@ -141,8 +177,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^legacy handoff root ~/\\.claude/handoffs: read-only, 1 bucket$",
-     "^legacy disposable root ~/\\.claude/trash-staging: read-only, 1 folder$",
+     "^legacy handoff root ~/\\.claude/handoffs: read-only, 2 buckets$",
+     "^legacy disposable root ~/\\.claude/trash-staging: read-only, 2 folders$",
      "^  ! .*-store\"? migrate$"
     ],
     "files": [
@@ -226,10 +262,10 @@
     "stdout_has": [
      "\\Amigrate: dry run, nothing written",
      "^handoff_root: ~/\\.claude/handoffs -> ~/\\.local/state/$BRAND/handoffs$",
-     "^  to copy: 2 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1$",
+     "^  to copy: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · drafts, watcher files, live records and locks left out: 4$",
      "^    differs: repo/LAB-5/2026-10-20_13-00-00_22222222_b\\.md$",
      "^disposable_root: ~/\\.claude/trash-staging -> ~/\\.local/state/$BRAND/disposable$",
-     "^  to copy: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0$"
+     "^  to copy: 2 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · drafts, watcher files, live records and locks left out: 0$"
     ],
     "files": [
      {
@@ -256,17 +292,26 @@
    }
   },
   {
-   "name": "migrate --apply copies, keeps a differing file and the old folders, skips the link",
+   "setup": [
+    {
+     "write": "$DISP/2026-10-02",
+     "content": "a file where a folder should go\n"
+    }
+   ]
+  },
+  {
+   "name": "migrate --apply copies, keeps a differing file and the old folders, skips the link, leaves out live entries; a failed copy exits 3",
    "argv": [
     "migrate",
     "--apply"
    ],
    "expect": {
-    "exit": 0,
+    "exit": 3,
     "stdout_has": [
      "\\Amigrate: copying \\(nothing is deleted, moved or overwritten\\)",
-     "^  copied: 2 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · failed: 0$",
-     "^  copied: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · failed: 0$",
+     "^  copied: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · drafts, watcher files, live records and locks left out: 4 · failed: 0$",
+     "^  copied: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · drafts, watcher files, live records and locks left out: 0 · failed: 1$",
+     "^    failed: 2026-10-02/x-evidence/fail\\.log \\(",
      "^the old folders stay where they are"
     ],
     "files": [
@@ -297,7 +342,40 @@
       "contains": [
        "old evidence"
       ],
-      "mode": "0400"
+      "mode": "0400",
+      "mtime_at": "2026-10-01T10:00:00+03:00"
+     },
+     {
+      "path": "$ROOT/repo/LAB-5/2026-10-20_12-00-00_22222222_a.md",
+      "mtime_at": "2026-10-20T12:00:00+03:00"
+     },
+     {
+      "path": "$ROOT/other/LAB-7/2026-10-20_14-00-00_23232323_w.md",
+      "contains": [
+       "LAB-7"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-5/.staging",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/4194212-1072915200.live-22222222.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/22222222-2222-4222-8222-222222222222.json.lock",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.watch/22222222-2222-4222-8222-222222222222",
+      "exists": false
+     },
+     {
+      "path": "$DISP/2026-10-02",
+      "contains": [
+       "a file where"
+      ]
      },
      {
       "path": "$LEGACY",
@@ -311,7 +389,15 @@
    }
   },
   {
-   "name": "migrate --apply again copies nothing more",
+   "setup": [
+    {
+     "rename": "$DISP/2026-10-02",
+     "to": "$TMP/blocker"
+    }
+   ]
+  },
+  {
+   "name": "migrate --apply again copies only the file that failed",
    "argv": [
     "migrate",
     "--apply"
@@ -319,10 +405,16 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^  copied: 0 files, 0\\.0 MB · already there: 2 · differ, left as they are: 1 ",
-     "^  copied: 0 files, 0\\.0 MB · already there: 1 · differ, left as they are: 0 "
+     "^  copied: 0 files, 0\\.0 MB · already there: 4 · differ, left as they are: 1 ",
+     "^  copied: 1 files, [0-9.]+ MB · already there: 1 · differ, left as they are: 0 .* · failed: 0$"
     ],
     "files": [
+     {
+      "path": "$DISP/2026-10-02/x-evidence/fail.log",
+      "contains": [
+       "second"
+      ]
+     },
      {
       "path": "$LEGACY",
       "same_tree_as": "L0"
@@ -437,6 +529,88 @@
     ],
     "stdout_lacks": [
      " migrate$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "rename": "$LEGACY_DISP",
+     "to": "$TMP/gone/trash-staging"
+    },
+    {
+     "rename": "$LEGACY",
+     "to": "$TMP/gone/handoffs"
+    }
+   ]
+  },
+  {
+   "name": "the old folders removed after migrate: verify and restore-evidence read the recorded copy under the new root",
+   "argv": [
+    "verify",
+    "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok $DISP/2026-10-01/h-evidence/run.log$"
+    ],
+    "stdout_lacks": [
+     "^missing"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "restore-evidence",
+    "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md",
+    "--to",
+    "$TMP/out2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^$TMP/out2/run\\.log$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/out2/run.log",
+      "contains": [
+       "old evidence"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a pin's bucket_path under the removed old root reads as its copy under the new root",
+   "argv": [
+    "locate",
+    "--sid",
+    "23232323-2323-4232-8232-232323232323",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $ROOT/other/LAB-7/2026-10-20_14-00-00_23232323_w\\.md\\nrelation: same-session\\n"
+    ]
+   }
+  },
+  {
+   "name": "with disposable_root set (the old default), the recorded path is read as it is",
+   "argv": [
+    "verify",
+    "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "~/.claude/trash-staging"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^missing $LEGACY_DISP/2026-10-01/h-evidence/run.log$"
     ]
    }
   }
