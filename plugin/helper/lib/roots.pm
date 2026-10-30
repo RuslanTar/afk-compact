@@ -39,8 +39,18 @@ sub _time_left {
 
 # _ignored(worktree, real path) -> 1 | 0 | -1 (out of time) | undef (unknown): is the root
 # folder ignored, so that nothing written under it shows in git?
-# - The folder exists: git is asked about it as it is and knows it is a folder.
-# - Not made yet: git cannot know it will be a folder, so a folder-only pattern (`wlogs/`)
+# - The folder exists: git is asked about it as it is and knows it is a folder. The slash form
+#   below would be wrong here: inside an existing folder `*/` (or `**/`, `wlogs//`, `/`) also
+#   matches the empty entry, so `*/` with `!wlogs/` would read as ignored though git shows the
+#   folder's files.
+# - A path with a non-ASCII byte: asked the same way, on the command line. On macOS git
+#   (core.precomposeUnicode, set by git init) turns command-line paths and the folder names it
+#   reads into NFC, but not paths read from --stdin: a decomposed (NFD) `Café`, as Finder
+#   stores it, would then miss a `!Café/` written NFC, or die with "Invalid path" under a work
+#   tree whose own path is NFD. -z needs --stdin, so this form stays one plain -q call; the
+#   cost is that such a root not made yet, ignored only by a folder-only pattern on itself, is
+#   refused until it is made.
+# - Not made yet (all ASCII): git cannot know it will be a folder, so a folder-only pattern (`wlogs/`)
 #   misses the path as written and a folder-only negation (`!wlogs/`) is skipped. Asked with a
 #   trailing slash, git checks each folder on the path (the root included) and then an
 #   empty-named entry inside the root, which `wlogs/*` or `*` also match although the folder
@@ -57,7 +67,7 @@ sub _ignored {
     my ($wt, $real) = @_;
     my $t = _time_left();
     return -1 if $t < 50;
-    return git::check_ignore($wt, $real, $t) if -d $real;
+    return git::check_ignore($wt, $real, $t) if -d $real || $real =~ /[^\x00-\x7f]/;
     my $a = git::check_ignore_forms($wt, [$real, ($real =~ m{/\z} ? $real : "$real/")], $t);
     return $a unless ref $a eq 'ARRAY';
     my ($aw, $awm) = @{ $a->[0] };
