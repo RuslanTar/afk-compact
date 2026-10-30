@@ -10,6 +10,7 @@ import { clearHalt, loadHalt } from './cont'
 import { onHandoffTurnStart } from './handoff-turn'
 import { handoffTurnClose } from './helper'
 import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
+import { cancelKeepWarmTimer, stopKeepWarm } from './keepwarm'
 import { ensureIdent, isoLocal, log, markHeadless } from './log'
 import { claimedElsewhere, logOutcome, settleRecords } from './resume'
 import { showNotice } from './notice'
@@ -85,6 +86,7 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   // entered beside it starts a turn of the user's, which leaves our submit pending).
   cancelBoundary(d)
   cancelIdleTimer(d)
+  cancelKeepWarmTimer(d)
   s.mainTurnRunning = true
   // Claude Code may run our headless `/compact` inside a turn: that turn's end is not a turn end
   // to compact at (boundary.ts), or a /compact that did not compact would repeat on its own.
@@ -111,6 +113,8 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   // A published handoff names only a compaction before the next main turn (§3.1).
   s.published = undefined
   await cancelIdle(d, sid)
+  // Keep-warm (D-14): a main turn ends the gap's warming; one not of the plugin's own lets the next gap warm.
+  await stopKeepWarm(d, 'turn', ours)
   if (!ours) s.nudgeNonce = undefined
   // IC-1 D6: only a person's prompt clears halt; a task notification, a scheduled trigger, a
   // peer or another plugin does not (our own submits never did). It also ends the idle episode.
@@ -140,6 +144,7 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   const s = d.state
   cancelBoundary(d)
   cancelIdleTimer(d)
+  cancelKeepWarmTimer(d)
   // SESSION-RESTART §3.4 step 6: the launch note's `go` (or cancel) is the first awaited action.
   await restartOnEnd(d, reason)
   s.resumeAfter = false
@@ -155,6 +160,8 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   s.restoreClosed = undefined
   if (reason === 'other') d.state.idleDueSid = undefined
   else await cancelIdle(d, endedSid)
+  await stopKeepWarm(d, 'session-end')
+  s.bgTasks = undefined
   if (h && h.ht !== null && h.phase !== 'running') await handoffTurnClose(d, endedSid, h.ht, 'cancelled')
   if (pend && (reason === 'clear' || pend.persisted !== true)) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
   else if (pend) {

@@ -15,6 +15,7 @@ import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHan
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { armIdle } from './idle'
+import { armKeepWarm } from './keepwarm'
 import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText, userFirst } from './deps'
 import { compactOff, log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
@@ -94,6 +95,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   s.lastTurnAnswer = t.reason === 'answer'
   if (isHuman(s.turnOrigin)) s.idleEpisode = { since: endAt, done: false }
   await armIdle(d, sid, endAt)
+  // Keep-warm (D-14): the gap's ping timer, beside the idle timer (keepwarm.ts decides at its due).
+  await armKeepWarm(d, sid, endAt)
   await undeliveredCheck(d, sid)
   const end = await endHandoffTurn(d, sid, t.reason, t.answer)
   if (end.kind === 'done') return

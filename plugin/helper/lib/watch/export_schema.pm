@@ -48,7 +48,7 @@ my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-faile
                   cooldown disabled halted precompute in-flight native-on native-unknown
                   native-fired agents-running
                   lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
-                  compaction-off error);
+                  compaction-off error keep-warm);
 my @IDLE_SRC = qw(mod notice return both none);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
@@ -208,6 +208,15 @@ our %SCHEMA = (
     # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
     # for the load (`queued`: lane B1's D8).
     idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
+    # keep-warm (D-14, 2026-10-30): an idle gap with this session's own background jobs open warms
+    # its one-hour cache with fork pings (counts and classes only: the cache tokens each ping read
+    # and wrote, its result, an HTTP status), then stops for one reason, handing the idle timer's
+    # record back to the idle path or not
+    keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num' },
+    keep_warm_ping => { n => 'int', result => [enum => qw(warm lapsed nothing-to-fork api-error aborted error)], cache_read => 'num',
+                        cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int' },
+    keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed lapsed no-jobs ttl-5m near-limit cutoff off error)],
+                        pings => 'int', gap_s => 'num', handover => 'bool' },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted

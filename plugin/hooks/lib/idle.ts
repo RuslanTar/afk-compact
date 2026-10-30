@@ -40,6 +40,9 @@
 // fires it late only within a bound (§3.4). When the turn's checks pass, one plugin-submitted
 // handoff turn runs on the D-18 machinery (handoff-turn.ts); no plugin compaction and no continue
 // follow it (DP-4; PR-2 P-56 is not reviewed); at most one per idle episode.
+// Keep-warm (D-14, keepwarm.ts): while the gap warms (a background job of this session open, the
+// one-hour cache), every kind's fire waits (`keep-warm`) and its record goes back here when warming
+// stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`).
 import type { CacheTtl, Deps, IdleEnv, NativeIdle, Usage } from './deps'
 import type { Effective } from './config'
 import type { BoundaryResult } from './boundary'
@@ -47,6 +50,7 @@ import { boundary } from './boundary'
 import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { cacheTtlOf } from './deps'
+import { keepWarmHolds } from './keepwarm'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
 import { log } from './log'
 
@@ -113,7 +117,9 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * `pct` are the context size, the cache (Claude Code's TTL switch when one is set, `5m` with
  * caching off, else `1h` when a plan window was reported, D15) and the highest window share at
  * arm, which a new process reads before its first request reports any (G10-G12); `cc` and `model`
- * are the Claude Code version and main model at arm (G3a).
+ * are the Claude Code version and main model at arm (G3a). `warm` is the start of the last keep-warm
+ * ping of a record handed back by keep-warm (`handOverIdle`): the cache counts from there, not
+ * from the turn end, for the turn's 55.5-min bound and the check re-armed after it.
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
@@ -127,6 +133,7 @@ export type Due = {
   answer: boolean; published: boolean
   load: string | null; anchor: number | null; tokens: number | null
   ttl: '1h' | '5m' | null; pct: number | null; cc: string | null; model: string | null
+  warm?: number | null
 }
 
 /** Every clear of a record (§3.1): which load cleared which due, and when. */
@@ -155,7 +162,13 @@ function readDue(v: unknown): Due | undefined {
     due: o.due, sid: o.sid, episode, kind, end: numOrNull(o.end), answer: o.answer === true, published: o.published === true,
     load: strOrNull(o.load), anchor: numOrNull(o.anchor), tokens: numOrNull(o.tokens),
     ttl: o.ttl === '1h' || o.ttl === '5m' ? o.ttl : null, pct: numOrNull(o.pct), cc: strOrNull(o.cc), model: strOrNull(o.model),
+    ...(numOrNull(o.warm) !== null ? { warm: numOrNull(o.warm) } : {}),
   }
+}
+
+/** The moment a record's turn-time bounds count from: its last keep-warm ping, else its turn end. */
+function baseOf(rec: Due): number | null {
+  return rec.warm ?? rec.end
 }
 
 /** G1's reading of the store: nothing there (a lost write), a tombstone, or a record. */
@@ -167,7 +180,7 @@ function readStored(v: unknown): 'missing' | 'tombstone' | Due {
 const secs = (ms: number): number => Math.round(ms / 1000)
 
 /** D10: the test seam's scale for every cache-derived time (1 without it). */
-function scaleOf(env: IdleEnv): number {
+export function scaleOf(env: IdleEnv): number {
   return env.cacheS === undefined ? 1 : env.cacheS / 3600
 }
 
@@ -263,6 +276,16 @@ async function persist(d: Deps, rec: Due): Promise<void> {
   dropTombDelete(d, own.sid)
   d.state.idleDueSid = own.sid
   schedule(d, own, await d.now())
+}
+
+/**
+ * Keep-warm (D-14) hands the record it held back to the idle path with the cache still warm: due
+ * now, anchored at the start of the last warm ping (`anchor` for the compaction's lapse guard,
+ * `warm` for the turn's), with the episode, the turn's end and the published flag as they are now.
+ */
+export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number): Promise<void> {
+  const s = d.state
+  await persist(d, { ...rec, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman })
 }
 
 /** The policy at this moment (§1.2): Claude Code's own idle compaction and the plugin's paths. */
@@ -404,7 +427,8 @@ function lateFireOk(rec: Due, now: number, scale: number): boolean {
   }
   if (rec.kind === 'check') return now - rec.due <= IDLE_LATE_MS
   // A handoff turn up to minute 55.5 is accepted practice: the check runs one there.
-  return rec.end !== null && now <= rec.end + IDLE_CHECK_MS * scale
+  const base = baseOf(rec)
+  return base !== null && now <= base + IDLE_CHECK_MS * scale
 }
 
 /**
@@ -469,6 +493,17 @@ async function ttl5m(d: Deps, env: IdleEnv, u: Use, rec: Due): Promise<boolean> 
   return !(d.state.idleAdopted && rec.ttl === '1h')
 }
 
+/**
+ * Keep-warm (D-14): the main conversation's cache is the one-hour one: caching on, and Claude
+ * Code's own TTL switch says `1h`, or none is set and the usage reports a plan window (D15).
+ */
+export async function oneHourCache(d: Deps, env: IdleEnv, u: Use): Promise<boolean> {
+  if (env.cacheOff) return false
+  const set = await explicitTtl(d, env)
+  if (set !== undefined) return set === '1h'
+  return planOf(u).length > 0
+}
+
 /** G12: a window at the limit share or more (any kind, a gateway's too); none reported: the record's reading. */
 function nearLimit(u: Use, rec: Due): boolean {
   const limits = u?.rateLimits ?? []
@@ -495,7 +530,7 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   return { tokens, allowance, native: eff.native_trigger, calls: c }
 }
 
-function isBusy(s: Deps['state']): boolean {
+export function isBusy(s: Deps['state']): boolean {
   return s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.handoffTurn !== undefined || s.ourSubmitPending
 }
 
@@ -682,6 +717,8 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   }
   await writeTombstone(d, sid, rec.due, now)
   if ((await d.sessionId()) !== sid) return skip('session-changed')
+  // Keep-warm (D-14): while the gap warms, the record waits there (no turn, no compaction yet).
+  if (await keepWarmHolds(d, rec, now)) return skip('keep-warm')
   if (rec.kind === 'compact') return fireCompact(d, rec, now, out)
   // The check writes no `idle_mode` row at its fire: it keeps its policy as armed and reads again
   // only automatic compaction (G0b, checkBlocked) before it compacts; the turn reads the full
@@ -698,7 +735,8 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
       return
     }
     // §3.4: a turn starting after minute 55.5 (a late timer, a sleep) is lapsed.
-    if (rec.end !== null && now > rec.end + IDLE_CHECK_MS * scale) return skip('lapsed', secs(now - rec.due))
+    const base = baseOf(rec)
+    if (base !== null && now > base + IDLE_CHECK_MS * scale) return skip('lapsed', secs(now - rec.due))
   }
   const b = rec.kind === 'check' ? await checkBlocked(d, sid, rec, now, scale, atLoad) : await turnBlocked(d, sid, rec, now, atLoad)
   if (typeof b === 'string') return skip(b, b === 'lapsed' ? secs(now - rec.due) : undefined)
@@ -754,7 +792,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
  * turn or, lane B, the plugin's compaction at it).
  */
 async function rearmCheck(d: Deps, rec: Due, now: number, scale: number): Promise<void> {
-  const end = rec.end
+  const end = baseOf(rec)
   if (end === null || end + IDLE_CHECK_MS * scale <= now) return
   await persist(d, { ...rec, due: end + IDLE_CHECK_MS * scale, kind: 'check', episode: d.state.idleEpisode ?? null, answer: d.state.lastTurnAnswer, published: d.state.publishedSinceHuman })
 }

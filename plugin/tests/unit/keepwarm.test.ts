@@ -1,0 +1,371 @@
+// U tests through the kit: keep-warm (decision D-14, 2026-10-30; keepwarm.ts, setting
+// `keep_warm_hours`). While the main session is idle and one of its own background jobs is open,
+// on the one-hour cache, a hidden fork ping about every 50 minutes keeps the prompt cache warm; the
+// idle timer's turn, compaction or check waits, and at the cutoff (or another stop with the cache
+// warm) the idle path runs then. Test ids AT-KW-nn. Synthetic values only.
+import { expect, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
+import type { On } from 'claude-code'
+import { hasTag } from '../../hooks/lib/assemble'
+import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
+import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION } from '../../hooks/lib/idle'
+import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_PING_MS, forkOutcome } from '../../hooks/lib/keepwarm'
+import { SID_A, World } from './harness.test'
+
+const IDLE = hasTag('handoff-turn', 'submit-idle')
+const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code', keep_warm_hours: 2 }
+const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
+const MIN = 60000
+const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
+const RUNNING = [{ id: 'sub-1', status: 'running' }]
+const WARM = { input_tokens: 11, output_tokens: 4, cache_read_input_tokens: 228161, cache_creation_input_tokens: 9 }
+const COLD = { input_tokens: 11, output_tokens: 4, cache_read_input_tokens: 0, cache_creation_input_tokens: 228170 }
+
+type Answer = { isAnswered: boolean; reason?: string; text?: string; usage?: unknown; status?: number; error?: string }
+
+/** Every `$.model.fork`, with the clock minute it came at (since `t0`), answered by `answer` (by call order). */
+function forks(on: On, w: World, answer: (i: number) => Answer = () => ({ isAnswered: true, text: 'OK', usage: WARM })): { at: number[]; prompts: string[]; t0: number } {
+  const out = { at: [] as number[], prompts: [] as string[], t0: 0 }
+  on('model.fork', (_$, e) => {
+    out.at.push(Math.round((w.clock.now() - out.t0) / MIN))
+    out.prompts.push(e.prompt)
+    return { value: answer(out.at.length - 1) } as never
+  })
+  return out
+}
+
+function world(on: On, policy: Record<string, unknown> = NATIVE_OFF): World {
+  const w = new World().install(on)
+  w.policy = policy
+  w.rateLimits = LIMITS
+  w.agents = RUNNING
+  return w
+}
+
+/** A person's turn that ends at 260K; returns the clock at its end. */
+async function humanTurn($: Engine, w: World, tokens = 260000): Promise<number> {
+  await w.userTurn($)
+  w.tokens = tokens
+  await w.turnEnd($)
+  return w.clock.now()
+}
+
+/** Moves the clock minute by minute to `minutes` after `t0` (each tick of the plugin's timers runs). */
+async function until(w: World, t0: number, minutes: number): Promise<void> {
+  while (w.clock.now() + MIN <= t0 + minutes * MIN) await w.advance(MIN)
+  const rest = t0 + minutes * MIN - w.clock.now()
+  if (rest > 0) await w.advance(rest)
+}
+
+const pings = (w: World) => w.rowsOf('keep_warm_ping').map(r => [r.result, r.n])
+const stops = (w: World) => w.rowsOf('keep_warm_stop').map(r => [r.why, r.handover, r.pings])
+const skips = (w: World) => w.rowsOf('handoff_skipped').filter(r => r.reason === 'idle').map(r => [r.why, r.kind])
+const ic = (w: World) => w.rowsOf('idle_compact')
+const selfCompacts = (w: World) => w.compacts.filter(c => c.trigger === undefined).length
+
+/** Raise a classic hook event the way the engine does (the Stop's in-flight background tasks). */
+async function stopHook($: Engine, e: Record<string, unknown>): Promise<void> {
+  await ($ as unknown as { classic: Record<string, (e: unknown) => Promise<unknown>> }).classic['Stop']?.({ stop_hook_active: false, session_id: SID_A, ...e })
+}
+
+// ---- The setting
+
+test('AT-KW-01 options: keep_warm_hours default 6; 0 is off; clamped to 0..24 with config_clamped', () => {
+  expect(DEFAULTS.keep_warm_hours).toBe(6)
+  expect(parseOptions({}).keep_warm_hours).toBe(6)
+  expect(parseOptions({ keep_warm_hours: 0 } as never).keep_warm_hours).toBe(0)
+  expect(parseOptions({ keep_warm_hours: '3' } as never).keep_warm_hours).toBe(3)
+  const hi = parseOptions({ keep_warm_hours: 30 } as never)
+  expect([hi.keep_warm_hours, hi.notes.clamped]).toEqual([24, [{ key: 'keep_warm_hours', configured: 30, effective: 24 }]])
+  const lo = parseOptions({ keep_warm_hours: -1 } as never)
+  expect([lo.keep_warm_hours, lo.notes.clamped]).toEqual([0, [{ key: 'keep_warm_hours', configured: -1, effective: 0 }]])
+  expect(parseOptions({ keep_warm_hours: '${user_config.keep_warm_hours}' } as never).keep_warm_hours).toBe(6)
+})
+
+test('AT-KW-02 timing: the ping at 50 min (at most 55), never later than the idle path\'s 58-min lapse bound', () => {
+  expect(KEEP_WARM_PING_MS).toBe(50 * MIN)
+  expect(KEEP_WARM_PING_MS <= 55 * MIN).toBe(true)
+  expect(KEEP_WARM_LATEST_MS).toBe(IDLE_LAPSE_FRACTION * IDLE_CACHE_MS)
+  expect(KEEP_WARM_LATEST_MS).toBe(58 * MIN)
+})
+
+test('AT-KW-02 forkOutcome: warm at a cache read share of the prefix at or above the cold share; lapsed below; no-text classes', () => {
+  expect(KEEP_WARM_COLD_SHARE).toBe(0.5)
+  expect(forkOutcome({ isAnswered: true, text: 'OK', usage: WARM })).toEqual({ result: 'warm', read: 228161, created: 9 })
+  expect(forkOutcome({ isAnswered: true, text: 'OK', usage: COLD })).toEqual({ result: 'lapsed', read: 0, created: 228170 })
+  expect(forkOutcome({ isAnswered: false, reason: 'empty-reply', usage: WARM }).result).toBe('warm')
+  expect(forkOutcome({ isAnswered: false, reason: 'nothing-to-fork' }).result).toBe('nothing-to-fork')
+  expect(forkOutcome({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: WARM })).toEqual({ result: 'api-error', read: 228161, created: 9, status: 529 })
+  expect(forkOutcome({ isAnswered: false, reason: 'aborted', usage: WARM }).result).toBe('aborted')
+  expect(forkOutcome(undefined).result).toBe('error')
+  expect(forkOutcome({ isAnswered: true, text: 'OK' }).result).toBe('lapsed')
+})
+
+// ---- Warming and the hand-over at the cutoff
+
+test('AT-KW-03: vetoed, an agent running: pings at 50 and 100 min, the 54-min compaction waits (keep-warm), at the cutoff (2 h) it runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 49)
+  expect(f.at).toEqual([])
+  await until(w, t0, 54)
+  expect(f.at).toEqual([50])
+  expect(f.prompts[0]).toBe('Reply with the single word OK.')
+  expect(skips(w)).toEqual([['keep-warm', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  expect(w.rowsOf('keep_warm_start').map(r => [r.jobs, r.gap_s, r.hours])).toEqual([[1, 3000, 2]])
+  await until(w, t0, 149)
+  expect(f.at).toEqual([50, 100])
+  expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
+  expect(w.rowsOf('keep_warm_ping').map(r => [r.cache_read, r.cache_creation, r.since_s, r.gap_s])).toEqual([[228161, 9, 3000, 3000], [228161, 9, 3000, 6000]])
+  expect(selfCompacts(w)).toBe(0)
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(f.at).toEqual([50, 100])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents, r.late_s])).toEqual([['timer', 9000, 1, 0]])
+  expect(selfCompacts(w)).toBe(1)
+  expect([w.submits.length, w.rowsOf('continue').length]).toEqual([0, 0])
+  // Nothing more in this gap.
+  await until(w, t0, 300)
+  expect([f.at.length, selfCompacts(w), stops(w).length]).toEqual([2, 1, 1])
+})
+
+test('AT-KW-04: native on, an agent running: the 55.5-min check waits; at the cutoff it compacts at the check while warm (agents 1)', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 57)
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
+  expect(selfCompacts(w)).toBe(0)
+  await until(w, t0, 150)
+  expect(f.at).toEqual([50, 100])
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 9000, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-05: automatic compaction off, an agent running: the 49-min handoff turn waits; at the cutoff the turn runs (or no-asset), and its end starts no new warming', { options: ON }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 50)
+  expect(skips(w)).toEqual([['keep-warm', 'turn']])
+  expect(w.submits.length).toBe(0)
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  if (IDLE) {
+    expect(w.submits.length).toBe(1)
+    // The handoff turn the hand-over submitted runs and ends: no new gap warms after it.
+    await w.turnStart($, w.submits[0])
+    await w.turnEnd($)
+    await until(w, t0, 300)
+    expect(f.at).toEqual([50, 100])
+  } else expect(skips(w)).toEqual([['keep-warm', 'turn'], ['no-asset', 'turn']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-06: a background shell from the main Stop counts as a job; a Monitor or an ended task does not', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }, { id: 'm1', type: 'monitor', status: 'running', description: 'x' }] })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 51)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([1])
+})
+
+// ---- Never warming
+
+for (const c of [
+  { name: 'no background job open (plain user absence)', set: (w: World) => { w.agents = [] } },
+  { name: 'only a Monitor in the Stop list', set: (w: World) => { w.agents = [] }, stop: [{ id: 'm1', type: 'monitor', status: 'running' }] },
+  { name: 'the five-minute cache: no plan window', set: (w: World) => { w.rateLimits = [] } },
+  { name: 'the five-minute cache: promptCacheTtl 5m', set: (w: World) => { w.policy = { ...NATIVE_OFF, promptCacheTtl: '5m' } } },
+  { name: 'the five-minute cache: CLAUDE_CODE_PROMPT_CACHE_TTL=5m', set: (w: World) => { w.env = { CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' } } },
+  { name: 'a usage window at 92%', set: (w: World) => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 92 }, { kind: 'seven_day', percentUsed: 30 }] } },
+]) {
+  test(`AT-KW-07: ${c.name}: no fork, no keep-warm row; the idle path runs as before`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    c.set(w)
+    const f = forks(on, w)
+    await w.start($)
+    await w.userTurn($)
+    w.tokens = 260000
+    if (c.stop) await stopHook($, { background_tasks: c.stop })
+    await w.turnEnd($)
+    f.t0 = w.clock.now()
+    await until(w, f.t0, 120)
+    expect(f.at).toEqual([])
+    expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_ping').length, w.rowsOf('keep_warm_stop').length]).toEqual([0, 0, 0])
+    expect(skips(w).filter(s => s[0] === 'keep-warm')).toEqual([])
+  })
+}
+
+test('AT-KW-07: keep_warm_hours 0: no fork with an agent running; the idle compaction runs at 54 min as before', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 55)
+  expect(f.at).toEqual([])
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-08: the explicit one-hour TTL with no usage windows readable: it warms (the limit guard is skipped)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.rateLimits = []
+  w.env = { CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' }
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50, 100])
+})
+
+// ---- Stop rules
+
+test('AT-KW-09: a main turn starts: warming stops (turn), the deferred compaction is dropped, no ping after; the next gap warms again', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 70)
+  await w.userTurn($, 'Agent sub-1 finished.', 'task-notification')
+  expect(stops(w)).toEqual([['turn', false, 1]])
+  await w.turnEnd($)
+  const t1 = w.clock.now()
+  await until(w, t1, 49)
+  expect(f.at).toEqual([50])
+  expect(selfCompacts(w)).toBe(0)
+  await until(w, t1, 51)
+  expect(f.at).toEqual([50, 120])
+})
+
+test('AT-KW-10: no background job open at a ping (the agent ended, no result turn yet): stop no-jobs, the compaction runs at once while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.agents = [{ id: 'sub-1', status: 'completed' }]
+  await until(w, t0, 100)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['timer', 6000, 0]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-11: a usage window reaches 90% between pings: stop near-limit, the deferred compaction gets its own near-limit skip', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 90 }, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 100)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['near-limit', true, 1]])
+  expect(skips(w)).toEqual([['keep-warm', 'compact'], ['near-limit', 'compact']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-12: the cache switched to five minutes between pings: stop ttl-5m with the hand-over', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.policy = { ...NATIVE_OFF, promptCacheTtl: '5m' }
+  await until(w, t0, 100)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['ttl-5m', true, 1]])
+  expect(skips(w)).toEqual([['keep-warm', 'compact'], ['ttl-5m', 'compact']])
+})
+
+test('AT-KW-13: a ping finds the cache lapsed (cache read near zero): stop lapsed, no hand-over, no compaction on the cold cache', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? WARM : COLD }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 150)
+  expect(f.at).toEqual([50, 100])
+  expect(pings(w)).toEqual([['warm', 1], ['lapsed', 1]])
+  expect(w.rowsOf('keep_warm_ping')[1]?.cache_read).toBe(0)
+  expect(stops(w)).toEqual([['lapsed', false, 1]])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+test('AT-KW-14: nothing-to-fork (a main request in flight) is tried again a minute later at no cost; the next ping counts from the one that warmed', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, i => (i < 2 ? { isAnswered: false, reason: 'nothing-to-fork' } : { isAnswered: true, text: 'OK', usage: WARM }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 102)
+  expect(f.at).toEqual([50, 51, 52, 102])
+  expect(pings(w)).toEqual([['nothing-to-fork', 0], ['nothing-to-fork', 0], ['warm', 1], ['warm', 2]])
+})
+
+test('AT-KW-15 (the 58-min guard): no ping starts more than 58 min after the last warm request: retries end at 58, then stop missed, no hand-over', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, () => ({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 70)
+  expect(f.at).toEqual([50, 51, 52, 53, 54, 55, 56, 57, 58])
+  expect(w.rowsOf('keep_warm_ping').map(r => r.status)).toEqual(Array(9).fill(529))
+  expect(stops(w)).toEqual([['missed', false, 0]])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  await until(w, t0, 200)
+  expect(f.at.length).toBe(9)
+})
+
+test('AT-KW-16: the session ends while warming: stop session-end, no ping after', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  await $.session.end({ sessionId: SID_A, reason: 'prompt_input_exit' } as never)
+  await w.settle()
+  expect(stops(w)).toEqual([['session-end', false, 1]])
+  await until(w, t0, 200)
+  expect(f.at).toEqual([50])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-17: Claude Code compacted the session during the gap: warming stops (compacted), no hand-over', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  await $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never)
+  await w.settle()
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['compacted', false, 1]])
+})

@@ -5,6 +5,7 @@ import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claud
 import type { ResumePref } from './compact'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
+import type { BgTasks, KeepWarm } from './keepwarm'
 import type { BlockArgs } from './resume'
 import type { Lane, LaneFacts, LaneResult } from './lane'
 import type { RestartEnv, RestartReport, RestartRun, RestartSetting } from './restart'
@@ -268,7 +269,7 @@ export interface Deps {
   /**
    * `$.model.fork({ prompt })`, the shadow trial's one model call (TRIAL-DUAL-HANDOFF §4.1): the
    * engine's answer as given; rejects on a hook's `{ deny }`. Called only while the user's local
-   * trial config is on (shadow.ts).
+   * trial config is on (shadow.ts), and for keep-warm's ping (keepwarm.ts, D-14).
    */
   fork(prompt: string): Promise<unknown>
   /**
@@ -519,6 +520,15 @@ export type LoadState = {
   lastMainTurnAt: number | undefined
   /** D10: when this load's `session.start` ran (once per load; never for a `/clear`). */
   sessionStartAt: number | undefined
+  /** Keep-warm (D-14, keepwarm.ts): the current idle gap's warming, undefined between a turn start and the next turn end. */
+  keepWarm: KeepWarm | undefined
+  /** The ping timer, and its generation (bumped by every cancel, as `idleGen`). */
+  keepWarmTimer: { cancel: () => void } | undefined
+  keepWarmGen: number
+  /** The last gap handed over to the idle path: no warming until a turn not of the plugin's own starts. */
+  keepWarmSpent: boolean
+  /** The background tasks the main session's last Stop listed as in flight (Monitors and crons left out). */
+  bgTasks: BgTasks | undefined
 }
 
 /**
@@ -709,6 +719,11 @@ export function newState(loadId: string): LoadState {
     modeSeen: undefined,
     lastMainTurnAt: undefined,
     sessionStartAt: undefined,
+    keepWarm: undefined,
+    keepWarmTimer: undefined,
+    keepWarmGen: 0,
+    keepWarmSpent: false,
+    bgTasks: undefined,
   }
 }
 

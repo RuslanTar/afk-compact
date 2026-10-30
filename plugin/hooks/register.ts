@@ -12,6 +12,7 @@ import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
+import { cancelKeepWarmTimer, noteBackground } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
 import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
@@ -47,6 +48,7 @@ export const register: Register = (on, options) => {
   // disk for a resume of the same session id) and closes an open handoff turn.
   on('session.end', async ($, e, next) => {
     cancelIdleTimer(realDeps($, options, state))
+    cancelKeepWarmTimer(realDeps($, options, state))
     await onSessionEnd(realDeps($, options, state), e.sessionId, e.reason)
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -146,8 +148,9 @@ export const register: Register = (on, options) => {
     const kind = e.origin.kind
     if (entering) {
       promptEntering(state, kind, e.text)
-      // §9.4: a prompt entering cancels the pre-idle timer.
+      // §9.4: a prompt entering cancels the pre-idle timer, and keep-warm's ping timer (D-14).
       cancelIdleTimer(realDeps($, options, state))
+      cancelKeepWarmTimer(realDeps($, options, state))
       // SESSION-RESTART §2.2 step 4, §3.4 step 3: a prompt entering stops a restart under way.
       if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state))
     }
@@ -252,8 +255,14 @@ export const register: Register = (on, options) => {
 
   // SESSION-RESTART D10: the permission mode of every main Stop, UserPromptSubmit and
   // PermissionRequest input (observe only; nothing awaited before `next`).
+  // Keep-warm (D-14): the main Stop's in-flight background tasks (`background_tasks`), read at its ping.
   on('classic.Stop', async ($, e, next) => {
     void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    try {
+      noteBackground(state, e)
+    } catch {
+      // no list: keep-warm counts the agents only
+    }
     return next(e)
   }).catch(($, e, next) => next(e))
   on('classic.UserPromptSubmit', async ($, e, next) => {
