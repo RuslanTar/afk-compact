@@ -77,7 +77,8 @@ export const register: Register = (on, options) => {
     const sid = await prepare(d)
     await onTurnComplete(d, sid, { reason: e.reason, answer: e.answer })
     // Owner 2026-10-28 digest rules (b): the end of a turn whose job result unblocked a step reads
-    // the work lane again; a lane now finished or hard-blocked still gets its digest, once.
+    // the work lane again; a lane now finished or hard-blocked still gets its digest, once, with
+    // idle_digest: submit or return; with off, the one-line note.
     await laneTurnEnd(d, sid, e.reason, e.answer)
     // The shadow trial: started, not awaited, after the plugin's own turn end (one `fs.exists`
     // without its local config).
