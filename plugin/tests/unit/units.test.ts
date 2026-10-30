@@ -125,7 +125,8 @@ const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
 const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
-  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done'],
+  'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done',
+    'idle-off', 'idle-done-off'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
   'trial-old-handoff': ['trial-tail'],
@@ -134,20 +135,22 @@ const TAGS: Record<string, Tag[]> = {
 /**
  * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
  * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
- * (owner xxxxxxxx-25), `idle-done` (away digest phase 1) and `midturn`, `idle-again` (owner
- * xxxxxxxx-37) only with `idle`, `idle-halt` or `idle-done`, `handoff` never with
- * `handoff-partial`, `driver` never with `idle-halt` or `idle-done`, and one handoff-turn kind at a time.
+ * (owner xxxxxxxx-25), `idle-done` (away digest phase 1), their `idle_digest: off` variants
+ * `idle-off` and `idle-done-off` (owner rule (c)) and `midturn`, `idle-again` (owner xxxxxxxx-37)
+ * only with one of those idle lines, `handoff` never with `handoff-partial`, `driver` never with
+ * `idle-halt`, `idle-done` or `idle-done-off`, and one handoff-turn kind at a time.
  */
 function combos(tags: Tag[]): Tag[][] {
   let out: Tag[][] = [[]]
   for (const t of tags) for (const c of [...out]) out.push([...c, t])
   const has = (c: Tag[], t: Tag) => c.includes(t)
   if (tags.includes('prod-forbid')) out = out.filter(c => has(c, 'prod-forbid') !== has(c, 'prod-allow'))
-  out = out.filter(c => [has(c, 'idle'), has(c, 'idle-halt'), has(c, 'idle-done'), has(c, 'midturn')].filter(Boolean).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
-  out = out.filter(c => !has(c, 'idle-again') || has(c, 'idle') || has(c, 'idle-halt') || has(c, 'idle-done'))
+  const IDLE: Tag[] = ['idle', 'idle-halt', 'idle-done', 'idle-off', 'idle-done-off']
+  out = out.filter(c => [...IDLE, 'midturn' as Tag].filter(t => has(c, t)).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
+  out = out.filter(c => !has(c, 'idle-again') || IDLE.some(t => has(c, t)))
   // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused); a measured driver
   // keeps the work lane working, so never with [idle-done] either (lane.ts).
-  out = out.filter(c => !(has(c, 'driver') && (has(c, 'idle-halt') || has(c, 'idle-done'))))
+  out = out.filter(c => !(has(c, 'driver') && (has(c, 'idle-halt') || has(c, 'idle-done') || has(c, 'idle-done-off'))))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }

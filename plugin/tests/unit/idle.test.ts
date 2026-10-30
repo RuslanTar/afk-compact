@@ -2,8 +2,8 @@
 // idle rule, §3.4 delivery rule, §9 halt and /clear guards, §9.4). Cases that run the pre-idle
 // turn need the `[submit-idle]` lines of handoff-turn.txt; a build without them answers
 // `no-asset`, and those cases check that instead.
-import { expect, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import { expect, test as kitTest } from 'claude-code/testing'
+import type { Engine, TestBody, TestOptions } from 'claude-code/testing'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { storeWord } from '../../hooks/lib/deps'
@@ -15,6 +15,16 @@ const IDLE = hasTag('handoff-turn', 'submit-idle')
 // IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` arms the pre-idle turn only while Claude
 // Code's own idle compaction is off, read from the settings (`idleCompaction`, `autoCompactEnabled`).
 const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code' }
+
+/**
+ * A kit test with `idle_digest: submit` unless its options name a value: the `[idle]` cases here
+ * pin the line as built for `submit` and `return`; owner rule (c) (2026-10-28) makes `off` the
+ * default of 0.1.1, whose `[idle-off]` line lane.test.ts covers.
+ */
+function test(name: string, ...rest: readonly [TestBody] | readonly [TestOptions, TestBody]): void {
+  const [o, body]: [TestOptions, TestBody] = rest.length === 1 ? [{}, rest[0]] : [rest[0], rest[1]]
+  kitTest(name, { ...o, options: { idle_digest: 'submit', ...o.options } }, body)
+}
 // IDLE-COMPACT D2: with `"idleCompaction": false` at 200K and more the plugin's own idle
 // compaction replaces the 49-min turn; the turn's own cases switch it off (`idle_compact: off`).
 const TURN = { ...ON, idle_compact: 'off' }

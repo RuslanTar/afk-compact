@@ -130,15 +130,23 @@ export async function buildBlockWith(
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
   // Owner xxxxxxxx-25: in halt mode the idle line stops after the background result; a finished
-  // or blocked lane shows the digest instead of continuing (owner 2026-10-27 12:5x).
-  if (idle) tags.push(a.halt === true ? 'idle-halt' : lane !== undefined && showsDigest(lane.lane) ? 'idle-done' : 'idle')
+  // or blocked lane shows the digest instead of continuing (owner 2026-10-27 12:5x). Under
+  // `idle_digest: off` (owner rule (c), 2026-10-28) the same lines ask for one line on the lane
+  // state in place of the digest: `[idle-off]` and `[idle-done-off]`.
+  const off = d.cfg.idle_digest === 'off'
+  if (idle) {
+    tags.push(a.halt === true ? 'idle-halt'
+      : lane !== undefined && showsDigest(lane.lane) ? (off ? 'idle-done-off' : 'idle-done')
+      : off ? 'idle-off' : 'idle')
+  }
   if (idle && a.again !== undefined) tags.push('idle-again')
   // Exactly one of the two step-4 lines (BLD-04 exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
   // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver,
   // never in a halted idle block ([idle-halt] stops and waits for the user; EXCLUSIVE in tools/assemble).
-  // A measured driver keeps the lane working (lane.ts), so it never meets [idle-done] either.
-  if (driver && !tags.includes('idle-halt') && !tags.includes('idle-done')) tags.push('driver')
+  // A measured driver keeps the lane working (lane.ts), so it never meets [idle-done] (or its off
+  // variant) either.
+  if (driver && !tags.includes('idle-halt') && !tags.includes('idle-done') && !tags.includes('idle-done-off')) tags.push('driver')
   const measuredAt = at ?? (await d.now())
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)
@@ -333,7 +341,8 @@ export async function laneRecheck(d: Deps, kind: string, text: string): Promise<
   l.digested = true
   // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
   const asOf = l.measuredAt !== undefined ? isoLocal(l.measuredAt, false).slice(11, 16) : undefined
-  return { text: laneNote(d.name, r, laneBasis(l.facts, running, l.remeasure, asOf), showsDigest(was) || digested), nonce: l.nonce, was, now: r.lane, digested }
+  const basis = laneBasis(l.facts, running, l.remeasure, asOf)
+  return { text: laneNote(d.name, r, basis, showsDigest(was) || digested, d.cfg.idle_digest === 'off'), nonce: l.nonce, was, now: r.lane, digested }
 }
 
 /** A lane note `laneRecheck` put beside a prompt: the state it told, the one before, and whether a digest had gone out before it. */

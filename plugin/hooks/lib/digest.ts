@@ -1,10 +1,14 @@
 // Away digest phase 1, the digest turn (owner 2026-10-27 12:5x, xxxxxxxx-09: "Pointer on return.
 // default setting: submit right away"; AWAY-DIGEST §11). After an idle compaction whose work lane
 // reads finished, hard-blocked or soft-blocked, with nothing running (no agent, and no background
-// task the measure lists: nothing would open a turn before the person comes back), `idle_digest: submit` (the default) submits one turn right away:
+// task the measure lists: nothing would open a turn before the person comes back), `idle_digest: submit` submits one turn right away:
 // the digest line with the resume block, whose `[idle-done]` line asks for the full digest.
 // `idle_digest: return` submits nothing: the block waits for the next turn, and a person's own
 // message gets the at most 5-line pointer of the same line before its answer.
+// `idle_digest: off` (the default of this version; owner rule (c), 2026-10-28: the digest ships on
+// only after a live PASS) submits nothing either, and no text asks for the full digest: the block's
+// `[idle-done-off]` line, and every note, ask for one line on the lane state with its Basis, then
+// Needs you or Nothing needed from you.
 // One `digest_submit {nonce, lane, result}` row per idle compaction of a finished or blocked lane.
 // Owner 2026-10-28 digest rules (b): after a background result's turn did the step that result
 // unblocked, the lane is read again at that turn's end (`laneTurnEnd`); finished or hard-blocked
@@ -37,7 +41,7 @@ export async function armDigest(d: Deps, sid: string, nonce: string): Promise<vo
   const pend = s.pending
   if (!pend || pend.nonce !== nonce || pend.sid !== sid || pend.lane === undefined || !showsDigest(pend.lane.lane)) return
   const lane = pend.lane.lane
-  if (d.cfg.idle_digest !== 'submit') return row(d, sid, nonce, lane, 'skipped:return')
+  if (d.cfg.idle_digest !== 'submit') return row(d, sid, nonce, lane, `skipped:${d.cfg.idle_digest}`)
   if ((await runningUnits(d, pend.remeasure, new Set())) > 0) return row(d, sid, nonce, lane, 'skipped:running')
   d.after(digestDelayMs(d), () => {
     s.inflight = submitDigest(d, sid, nonce).catch(() => undefined)
@@ -56,6 +60,7 @@ export async function submitDigest(d: Deps, sid: string, nonce: string): Promise
   const pend = s.pending
   if (!pend || pend.nonce !== nonce || pend.sid !== sid) return row(d, sid, nonce, 'unknown', 'skipped:taken')
   const lane = pend.lane?.lane ?? 'working'
+  if (d.cfg.idle_digest !== 'submit') return row(d, sid, nonce, lane, `skipped:${d.cfg.idle_digest}`)
   const g = await canSubmit(d, sid)
   if (typeof g === 'string') return row(d, sid, nonce, lane, g)
   const c = await claimBy(d, sid, nonce, 'prompt.submit')
@@ -118,9 +123,10 @@ async function send(d: Deps, sid: string, text: string, g: { stamps: number[]; n
  * held on that job (the lane read working for that turn only: rule (a), lane.ts `laneOf`
  * `byResult`), the lane is read again without that result, so the step the turn did no longer
  * counts. When it now reads finished or hard-blocked, the user still gets the blocked digest,
- * once: with `idle_digest: submit` (the default) one digest turn is submitted right away (the
+ * once: with `idle_digest: submit` one digest turn is submitted right away (the
  * same checks and hourly cap as the digest turn after the compaction); with `return` the
- * person's return gets it (the `[idle-again]` block, read again then, carries `[idle-done]`).
+ * person's return gets it (the `[idle-again]` block, read again then, carries `[idle-done]`);
+ * with `off` no turn either, and that block carries `[idle-done-off]` (one line, no digest).
  * No turn is submitted when this turn's answer already ends with the digest (the `[idle]` block's
  * step 5 asks for it when all left waits on the user), or when a turn of this episode was already
  * told a finished or blocked lane (one digest per episode): then the next turn not of a person's
@@ -148,7 +154,7 @@ export async function laneTurnEnd(d: Deps, sid: string, reason: string, answer: 
   // turn's working), so the next turn not of a person's gets the one-line note on the new state
   // (`laneRecheck`), and the person's return the block read again.
   if (l.digested) return
-  if (d.cfg.idle_digest !== 'submit') return row(d, sid, l.nonce, r.lane.lane, 'skipped:return')
+  if (d.cfg.idle_digest !== 'submit') return row(d, sid, l.nonce, r.lane.lane, `skipped:${d.cfg.idle_digest}`)
   const nonce = l.nonce
   d.after(digestDelayMs(d), () => {
     s.inflight = submitResultDigest(d, sid, nonce).catch(() => undefined)
@@ -175,6 +181,7 @@ export async function submitResultDigest(d: Deps, sid: string, nonce: string): P
   const r = await laneNow(d, l)
   if (r === undefined) return
   const lane = r.lane.lane
+  if (d.cfg.idle_digest !== 'submit') return row(d, sid, nonce, lane, `skipped:${d.cfg.idle_digest}`)
   const g = await canSubmit(d, sid)
   if (typeof g === 'string') return row(d, sid, nonce, lane, g)
   // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.

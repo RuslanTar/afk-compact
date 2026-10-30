@@ -63,8 +63,9 @@ our @KEYS = (
     # Code's own idle compaction is off (`"idleCompaction": false`); `off` = never
     [idle_compact                => 'str',  'auto',                    'enum'],
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): the digest turn right after an
-    # idle compaction of a finished or blocked lane (`submit`), or none until the next turn (`return`)
-    [idle_digest                 => 'str',  'submit',                  'enum'],
+    # idle compaction of a finished or blocked lane (`submit`), or none until the next turn
+    # (`return`); `off` (owner rule (c), 2026-10-28: on only after a live PASS) asks for no digest
+    [idle_digest                 => 'str',  'off',                     'enum'],
     # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
     [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
     [secret_extra_rules          => 'str',  '',                        'list'],
@@ -89,7 +90,7 @@ our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 # The values an enum key exports as is (W-BETA D); any other value exports as `other`.
 our %ENUM = (watcher => [qw(shadow off)], handoff_turn => [qw(halt off)], relaunch_auto => [qw(on shadow off)],
              unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
-             idle_digest => [qw(submit return)],
+             idle_digest => [qw(submit return off)],
              resume_proceed => [qw(auto confirm)], restart_on_update => [qw(off shadow on)]);
 
 # DP-3: keys that let the plugin act without asking. Read from the settings file only, and

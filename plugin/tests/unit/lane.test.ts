@@ -1,17 +1,29 @@
 // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-08/-09; AWAY-DIGEST §11): the
 // work lane's Status from the summary, re-checked by code; finished or blocked lanes show the
 // digest instead of continuing; the digest turn right after an idle compaction with nothing
-// running (`idle_digest: submit`, the default) or none (`return`); the re-check of later turns.
-import { expect, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+// running (`idle_digest: submit`) or none (`return`, `off`); the re-check of later turns. Owner
+// rule (c) (2026-10-28) makes `off` the default of 0.1.1: no digest turn and no text asks for the
+// full digest. The tests here pin `submit` unless they name a value (`test` below); the `off`
+// tests at the end name it, or take the shipped default (`kitTest`).
+import { expect, test as kitTest } from 'claude-code/testing'
+import type { Engine, TestBody, TestOptions } from 'claude-code/testing'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import type { LaneFacts } from '../../hooks/lib/lane'
-import { LANE_BASIS_MAX, LANE_WHY_MAX, asLaneFacts, digestLine, laneBasis, laneFacts, laneOf, measuredRunning, notifiedTasks, startsWork } from '../../hooks/lib/lane'
+import { LANE_BASIS_MAX, LANE_WHY_MAX, asLaneFacts, digestLine, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
+
+/**
+ * A kit test with `idle_digest: submit` unless its options name a value: these tests pin the
+ * digest as built for `submit` and `return` (owner xxxxxxxx-09), unchanged by the `off` default.
+ */
+function test(name: string, ...rest: readonly [TestBody] | readonly [TestOptions, TestBody]): void {
+  const [o, body]: [TestOptions, TestBody] = rest.length === 1 ? [{}, rest[0]] : [rest[0], rest[1]]
+  kitTest(name, { ...o, options: { idle_digest: 'submit', ...o.options } }, body)
+}
 
 const HAS = hasTag('resume-context', 'idle-done')
 const M = { running: 0, midturn: false, nonok: false, driver: false }
@@ -126,12 +138,15 @@ test('laneOf: no Status code can read (none, an older word, not in the handoff f
   expect(laneOf(F, { ...M, nonok: true }).source).toBe('recheck')
 })
 
-test('idle_digest: submit by default (owner xxxxxxxx-09); return; any other value reads as return with a note', () => {
-  expect(DEFAULTS.idle_digest).toBe('submit')
-  expect(parseOptions({}).idle_digest).toBe('submit')
+test('idle_digest: off by default (owner rule (c), 2026-10-28); submit; return; any other value reads as off with a note', () => {
+  expect(DEFAULTS.idle_digest).toBe('off')
+  expect(parseOptions({}).idle_digest).toBe('off')
+  expect(parseOptions({ idle_digest: ' Submit ' }).idle_digest).toBe('submit')
   expect(parseOptions({ idle_digest: ' Return ' }).idle_digest).toBe('return')
+  expect(parseOptions({ idle_digest: 'OFF' }).idle_digest).toBe('off')
+  expect(parseOptions({ idle_digest: 'submit' }).notes.invalid).toEqual([])
   const bad = parseOptions({ idle_digest: 'later' })
-  expect([bad.idle_digest, bad.notes.invalid]).toEqual(['return', ['idle_digest']])
+  expect([bad.idle_digest, bad.notes.invalid]).toEqual(['off', ['idle_digest']])
 })
 
 // ---- through the kit
@@ -158,7 +173,7 @@ async function idleCompaction($: Engine, w: World): Promise<void> {
 const FINISHED_HEAD = 'Status: finished · Acuity: stable · State: done (checkpoint: clean)\nStep 1: none\n'
 const FINISHED = FINISHED_HEAD + '## Next steps\n1. run the suite — done when green · done\n'
 
-test('finished lane, nothing running, idle_digest submit (default): one digest turn right away with the [idle-done] block; no [idle]', async ($, on) => {
+test('finished lane, nothing running, idle_digest submit: one digest turn right away with the [idle-done] block; no [idle]', async ($, on) => {
   const w = new World().install(on)
   w.resumeHere = FINISHED
   await w.start($)
@@ -1795,6 +1810,124 @@ test('rule (b): work the result turn starts supersedes the lane: no digest at it
   if (!HAS) return
   await resultTurn($, w, notif('b7'))
   await $.tool.call({ tool: 'Agent', description: 'next step', prompt: 'do it', mode: 'standard' } as never)
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+})
+
+// ---- idle_digest off (owner rule (c), 2026-10-28: the away digest ships on only after a live
+// PASS, else off; the default of 0.1.1). No digest turn is submitted, and no text asks for the
+// full digest: a finished or blocked lane still starts nothing and gets one line on its state with
+// the code-rendered Basis, then Needs you or Nothing needed from you.
+
+/** The full digest's section names and its request, none of which an `off` text may carry. */
+const FULL_DIGEST = ['away digest', 'Done (', 'Done;', 'Left (', 'Running;', 'Decided without you']
+const ENDING = 'Needs you (numbered, each with what it blocks) or Nothing needed from you'
+function noDigest(text: string): void {
+  for (const words of FULL_DIGEST) expect([words, text.includes(words)]).toEqual([words, false])
+}
+const OFF = { options: { idle_digest: 'off' } }
+
+test('off: the [idle-done-off] and [idle-off] lines ask for the one-line form, never the digest; [idle-done] and [idle] are unchanged', () => {
+  const RTB = { ...RT, lane: 'hard-blocked', lane_basis: 'B0' }
+  const plain = assemble('p', 'resume-context', ['prod-forbid'], RTB).split('\n')
+  const added = (tag: Tag) => assemble('p', 'resume-context', ['prod-forbid', tag], RTB).split('\n').filter(l => !plain.includes(l)).join('\n')
+  if (!hasTag('resume-context', 'idle-done-off') || !hasTag('resume-context', 'idle-off')) return
+  const doneOff = added('idle-done-off')
+  noDigest(doneOff)
+  expect(doneOff).toContain('Else start nothing; say in one line that the lane is hard-blocked (Basis: B0, by code, as is), then last, ' + ENDING + '.')
+  expect(doneOff).toContain("The user's own message opened this turn: that line first, then answer them, Needs you last.")
+  // The rest of the line is [idle-done]'s: a new request or an unblocking result works again.
+  expect(doneOff).toContain('the lane is working again; handle it, then continue Step 1 unless it needs the user or hits a gate (step 4)')
+  const idleOff = added('idle-off')
+  noDigest(idleOff)
+  expect(idleOff).toContain('Step 5 finds none left, or all left waits on the user: instead, start nothing; say in one line the lane state (Basis: B0, by code, as is), then last, Needs you')
+  expect(idleOff).toContain('Nothing needed from you. Then stop; later turns say what changed in one line.')
+  expect(idleOff).toContain('handle it, then continue Step 1 unless it needs the user or hits an explicit gate (step 4)')
+  // submit and return keep their texts.
+  expect(added('idle-done')).toContain('Else start nothing and print the away digest (step 6 allows it)')
+  expect(added('idle')).toContain('instead, print the away digest (step 6 allows it)')
+  // Never two idle lines in one block.
+  expect(added('idle-done-off')).not.toContain(added('idle-done'))
+})
+
+test('off: laneNote and resultDigestLine give the one-line form; submit\'s texts are unchanged', () => {
+  const r = laneOf({ ...F, status: 'hard-blocked' }, M)
+  for (const again of [false, true]) {
+    const note = laneNote('p', r, 'B1', again, true)
+    noDigest(note)
+    expect(note).toContain('Else start nothing: say in one line that the lane is now hard-blocked (Basis: B1), then last, ' + ENDING + '.')
+    expect(note).toContain('A result that unblocks a step makes it working again')
+  }
+  const line = resultDigestLine('p', r, 'B2', true)
+  noDigest(line)
+  expect(line.endsWith('Else start nothing: say in one line that the lane is now hard-blocked (Basis: B2), then last, ' + ENDING + '.')).toBe(true)
+  expect(laneNote('p', r, 'B1')).toContain('Else start nothing and print the away digest: the lane state and why; Basis: B1 (by code, as is); Done')
+  expect(laneNote('p', r, 'B1', true)).toContain('Else start nothing; the away digest went out already: say in one line that the lane is now hard-blocked (Basis: B1)')
+  expect(resultDigestLine('p', r, 'B2')).toContain('Else start nothing and print the away digest')
+})
+
+kitTest('off (the shipped default): a finished lane, nothing running: no digest turn (digest_submit skipped:off); the person\'s return gets [idle-done-off], one line, no digest', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = FINISHED
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(60 * 1000)
+  expect(w.submits).toEqual([])
+  if (!hasTag('resume-context', 'idle-done-off')) return
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['finished', 'skipped:off']])
+  await w.userTurn($, 'back')
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(block).toContain('code reads the work lane as finished')
+  expect(block).toContain('Else start nothing; say in one line that the lane is finished (Basis: ')
+  expect(block).toContain(ENDING)
+  expect(block).toContain("The user's own message opened this turn: that line first")
+  noDigest(block)
+})
+
+test('off: hard-blocked with an agent running: no digest turn; the result turns get [idle-done-off] and then the one-line note, never the digest', OFF, async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = HARD
+  w.agents = [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'running' }]
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  if (!hasTag('resume-context', 'idle-done-off')) return
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off']])
+  w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
+  const first = await resultTurn($, w, 'Agent a1 finished.')
+  expect(first.block ?? '').toContain('code reads the work lane as soft-blocked')
+  expect(first.block ?? '').toContain('Else start nothing; say in one line that the lane is soft-blocked (Basis: ')
+  noDigest(first.block ?? '')
+  await w.turnEnd($)
+  w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
+  const note = await resultTurn($, w, 'Agent a2 finished.')
+  expect(note.ctx).toContain('code reads the work lane as hard-blocked')
+  expect(note.ctx).toContain('Else start nothing: say in one line that the lane is now hard-blocked (Basis: ')
+  expect(note.ctx).toContain(ENDING)
+  noDigest(note.ctx)
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+})
+
+test('off: a working lane\'s result turn gets [idle-off] (its step 5 asks for the one line); rule (b) at its end submits no digest turn (skipped:off); the next turn gets the one-line note', OFF, async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  if (!hasTag('resume-context', 'idle-off')) return
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off']])
+  const t = await resultTurn($, w, notif('b7'))
+  const block = t.block ?? ''
+  expect(block).toContain('Step 5 finds none left, or all left waits on the user: instead, start nothing; say in one line the lane state (Basis: ')
+  noDigest(block)
+  await w.turnEnd($, 'The timer ended; nothing new started.')
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off'], ['hard-blocked', 'skipped:off']])
+  const cron = await resultTurn($, w, 'A scheduled check ran.')
+  expect(cron.ctx).toContain('Else start nothing: say in one line that the lane is now hard-blocked (Basis: ')
+  noDigest(cron.ctx)
   await w.turnEnd($)
   await w.advance(5000)
   expect(w.submits).toEqual([])
