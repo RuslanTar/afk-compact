@@ -410,7 +410,7 @@
     },
     "approval-plugin-turn": {
       "why": "the plugin asked for this handoff, not the user, so an approval in it must not read as usable",
-      "fix": "the plugin asked for this handoff, so record each approval as context only: U-n: approval \"<the user's words>\" — action <what> · targets <identity @ state> ; context only, not valid here; re-ask (no once, standing or state words); its Next step reads ask user:"
+      "fix": "write each approval as U-n: approval \"<words>\" — action … · targets … ; context only, not valid here; re-ask (no once or state); its Next step reads ask user:"
     },
     "private-path": {
       "why": "in repo mode the path would reach git",

@@ -113,7 +113,7 @@
      "^LINT approval-plugin-turn line 11$",
      "^LINT approval-plugin-turn line 12$",
      "^LINT approval-plugin-turn line 13$",
-     "^  why: the plugin asked for this handoff, not the user, so an approval in it must not read as usable · fix: the plugin asked for this handoff, so record each approval as context only: ",
+     "^  why: the plugin asked for this handoff, not the user, so an approval in it must not read as usable · fix: write each approval as U-n: approval \"<words>\" — action … · targets … ; context only, not valid here; re-ask \\(no once or state\\); its Next step reads ask user:$",
      "^REFUSED: lint \\(4 blocking\\)"
     ],
     "stdout_lacks": [

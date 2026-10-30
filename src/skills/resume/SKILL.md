@@ -103,7 +103,8 @@ Age tier from `date`: **T1** <24 h; **T2** 1–7 days, any T1 drift, or Acuity `
 - the GSD state file the handoff names, if any; <!-- owner 2026-10-26 21:37: the handoff's own, never every worktree's -->
 - `Driver now`: the handoff session's driver, measured now; <!-- root ruling R4 2026-10-27 -->
 - live sessions on this checkout (pid with matching start time);
-- `Approvals (checked)`: approvals whose quote code found in the user's messages (handoff: frontmatter; summary: this session's transcript).
+- `Approvals (checked)`: approvals whose quote code found in the user's messages (handoff: frontmatter; summary: this session's transcript);
+- `Approvals (context only, re-ask)`: approvals that do not carry: a line changed since publish, or one written as context (a handoff the plugin asked for records every approval that way). Re-ask each before acting on it.
 
 These facts win over the handoff's state claims.
 
