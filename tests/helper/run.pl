@@ -17,7 +17,7 @@
 #   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
 #   out: a PATH without git), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $LEGACY (the pre-0.1.2 default root) $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
+#   $BRAND $HOST $CLAUDE_BIN $DISP $LEGACY_DISP (the pre-0.1.2 default disposable root) $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
 #   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), $LAUNCH_ENV (the restart
 #   launcher's env name; an env name may hold it too), plus every variable a step captured.
@@ -690,7 +690,14 @@ sub run_case {
     $V{LEGACY} = "$V{HOME}/.claude/handoffs";
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : $droot;
     $V{WATCH} = defined $cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR}) : "$V{ROOT}/.watch";
-    $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : "$V{HOME}/.claude/trash-staging";
+    # the default disposable root is the staged manifest's too (~/.local/state/<brand>/disposable); $LEGACY_DISP
+    # is the old default ~/.claude/trash-staging, read while disposable_root is unset
+    my $ddisp = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) };
+                     ref $m eq 'HASH' && ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{disposable_root} eq 'HASH'
+                         ? $m->{userConfig}{disposable_root}{default} : undef } // '~/.local/state/' . $BRAND . '/disposable';
+    $ddisp =~ s{\A~/}{$V{HOME}/};
+    $V{LEGACY_DISP} = "$V{HOME}/.claude/trash-staging";
+    $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : $ddisp;
     my $vars = subst_deep($case->{vars} || {}, \%V);
     %V = (%V, %$vars);
     my @steps = $case->{steps} ? @{ $case->{steps} } : ({ %$case, then => undef });
@@ -790,8 +797,8 @@ sub subst {
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
     $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
-    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\}}{$V->{$1} // ''}ge;
-    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\b/$V->{$1} \/\/ ''/ge;
+    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY_DISP|LEGACY)\}}{$V->{$1} // ''}ge;
+    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY_DISP|LEGACY)\b/$V->{$1} \/\/ ''/ge;
     # $LSTART1 / $RUNNER_LSTART (lstart_var), then any other $NAME the case defined (vars) or a
     # step captured; unknown names stay as written.
     $s =~ s/\$([A-Z][A-Z0-9_]*)/my $n = $1; $n eq 'LSTART1' || $n eq 'RUNNER_LSTART' ? lstart_var($n, $V) : exists $V->{$n} && defined $V->{$n} ? $V->{$n} : "\$$n"/ge;
@@ -3134,6 +3141,22 @@ sub builtin {
             my $w = watch::ctx::init({ sid => 'x', pid => 1, spec => {}, now => 0, settings => { handoff_root => $c->{value}, log_dir => '' } });
             push @e, "$id: watch::ctx root " . ($w->{root} // 'null') . ", want $c->{root}" if ($w->{root} // '') ne $c->{root};
             push @e, "$id: watch::ctx watch " . ($w->{watch} // 'null') . ", want $c->{root}/.watch" if ($w->{watch} // '') ne "$c->{root}/.watch";
+        }
+        # the disposable root the same way: the default (unset, or equal to it) under $XDG_STATE_HOME when
+        # absolute, its legacy root ~/.claude/trash-staging when that folder exists; any other value as given
+        for my $c (@{ $a->{disposable} || [] }) {
+            delete local $ENV{XDG_STATE_HOME};
+            $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
+            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            my $s = { values => { handoff_root => $c->{handoff_root} // "/x/hr", log_dir => '', disposable_root => $c->{value} },
+                      source => { handoff_root => 'flag', disposable_root => $c->{source} // 'flag' } };
+            my $p = paths::for($s, 'x');
+            my $id = $c->{id} // ($c->{value} // 'unset');
+            push @e, "$id: disposable " . ($p->{disposable} // 'null') . ", want $c->{disposable}" if ($p->{disposable} // '') ne $c->{disposable};
+            push @e, "$id: disposable_from_default $p->{disposable_from_default}, want " . ($c->{from_default} ? 1 : 0)
+                if exists $c->{from_default} && $p->{disposable_from_default} != ($c->{from_default} ? 1 : 0);
+            push @e, "$id: disposable_legacy " . ($p->{disposable_legacy} // 'null') . ', want ' . ($c->{legacy} // 'null')
+                if exists $c->{legacy} && ($p->{disposable_legacy} // '') ne ($c->{legacy} // '');
         }
         for my $c (@{ $a->{named} || [] }) {
             local *ctx::brand = $c->{brand_dies} ? sub { die "no brand\n" } : sub { $c->{brand} };

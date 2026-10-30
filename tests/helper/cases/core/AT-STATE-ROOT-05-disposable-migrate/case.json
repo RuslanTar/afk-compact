@@ -1,0 +1,444 @@
+{
+ "id": "AT-STATE-ROOT-05 (state-root: the disposable root moved too; migrate copies, never deletes)",
+ "layer": "H",
+ "owner": "core",
+ "note": "STATE-ROOT (0.1.2, owner 2026-10-30 \"move both\"): while disposable_root is the default (unset, or a value equal to it) the evidence root is $XDG_STATE_HOME/<plugin>/disposable when that is absolute, else ~/.local/state/<plugin>/disposable; the old default ~/.claude/trash-staging is read (status line; verify and restore-evidence follow MANIFEST's full paths) and never written; a value set, the old default included, is kept as it is. `migrate` (user-run) is a dry run by default, copies with --apply, never deletes, moves or overwrites, skips links, and leaves a root set explicitly alone.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/outside.txt",
+     "content": "outside\n"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-5/2026-10-20_12-00-00_22222222_a.md",
+     "content": "old a\n"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-5/2026-10-20_13-00-00_22222222_b.md",
+     "content": "old b\n"
+    },
+    {
+     "write": "$LEGACY/.sessions/22222222-2222-4222-8222-222222222222.json",
+     "content": "{\"bucket\":\"repo/LAB-5\"}\n"
+    },
+    {
+     "symlink": "$LEGACY/repo/LAB-5/link.md",
+     "to": "$TMP/outside.txt"
+    },
+    {
+     "write": "$ROOT/repo/LAB-5/2026-10-20_13-00-00_22222222_b.md",
+     "content": "new b\n"
+    },
+    {
+     "write": "$LEGACY_DISP/2026-10-01/h-evidence/run.log",
+     "content": "old evidence\n",
+     "mode": "0400"
+    },
+    {
+     "write": "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md",
+     "content": "---\nkind: handoff\n---\n# h\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-9/evidence/2026-10-21_12-00-00_11111111_h/MANIFEST.tsv",
+     "content": "copy_path\torigin\tbytes\tsha256\tmtime\tcopied_at\tmode\tscan\tregen_cmd\tmeaning\n$LEGACY_DISP/2026-10-01/h-evidence/run.log\t/tmp/run.log\t13\tb913861cdacb5d92f50226670c91e746edcd6020be73a93c4d9e71e1c5098698\t-\t2026-10-01T10:00:00+03:00\t0400\tcopied\t-\tdisposable\n"
+    },
+    {
+     "write": "$TMP/note.txt",
+     "content": "a note\n"
+    },
+    {
+     "mkdir": "$TMP/h1/.claude/trash-staging"
+    },
+    {
+     "mkdir": "$TMP/h2"
+    }
+   ]
+  },
+  {
+   "name": "paths::for: the disposable root under each value and XDG_STATE_HOME, and its old root",
+   "lib": "state_root",
+   "args": {
+    "disposable": [
+     {
+      "id": "unset, no XDG_STATE_HOME",
+      "value": "~/.local/state/$BRAND/disposable",
+      "source": "default",
+      "home": "$TMP/h1",
+      "disposable": "$TMP/h1/.local/state/$BRAND/disposable",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/trash-staging"
+     },
+     {
+      "id": "unset, XDG_STATE_HOME absolute",
+      "value": "~/.local/state/$BRAND/disposable",
+      "source": "default",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "disposable": "$TMP/xdg/$BRAND/disposable",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/trash-staging"
+     },
+     {
+      "id": "a relative XDG_STATE_HOME is ignored",
+      "value": "~/.local/state/$BRAND/disposable",
+      "source": "default",
+      "home": "$TMP/h1",
+      "xdg": "rel",
+      "disposable": "$TMP/h1/.local/state/$BRAND/disposable",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/trash-staging"
+     },
+     {
+      "id": "the default as a value (Claude Code fills it in)",
+      "value": "~/.local/state/$BRAND/disposable",
+      "source": "env",
+      "home": "$TMP/h1",
+      "disposable": "$TMP/h1/.local/state/$BRAND/disposable",
+      "from_default": true,
+      "legacy": "$TMP/h1/.claude/trash-staging"
+     },
+     {
+      "id": "the old default set explicitly is kept, nothing else read",
+      "value": "~/.claude/trash-staging",
+      "source": "settings",
+      "home": "$TMP/h1",
+      "xdg": "$TMP/xdg",
+      "disposable": "$TMP/h1/.claude/trash-staging",
+      "from_default": false,
+      "legacy": null
+     },
+     {
+      "id": "another value set is kept",
+      "value": "$TMP/elsewhere",
+      "source": "flag",
+      "home": "$TMP/h1",
+      "disposable": "$TMP/elsewhere",
+      "from_default": false,
+      "legacy": null
+     },
+     {
+      "id": "no old folder",
+      "value": "~/.local/state/$BRAND/disposable",
+      "source": "default",
+      "home": "$TMP/h2",
+      "disposable": "$TMP/h2/.local/state/$BRAND/disposable",
+      "from_default": true,
+      "legacy": null
+     }
+    ]
+   }
+  },
+  {
+   "name": "status: both old folders read only, and the user-run migrate line",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^legacy handoff root ~/\\.claude/handoffs: read-only, 1 bucket$",
+     "^legacy disposable root ~/\\.claude/trash-staging: read-only, 1 folder$",
+     "^  ! .*-store\"? migrate$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY",
+      "tree_snapshot": "L0"
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "tree_snapshot": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "verify and restore-evidence read a copy kept in the old disposable root",
+   "argv": [
+    "verify",
+    "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok $LEGACY_DISP/2026-10-01/h-evidence/run.log$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "restore-evidence",
+    "$ROOT/repo/LAB-9/2026-10-21_12-00-00_11111111_h.md",
+    "--to",
+    "$TMP/out"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/out/run.log",
+      "contains": [
+       "old evidence"
+      ]
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a new copy goes to the new disposable root, nothing to the old one",
+   "argv": [
+    "stash",
+    "$TMP/note.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^$DISP/[0-9-]+/stash/"
+    ],
+    "files": [
+     {
+      "path": "$DISP/*/stash/*note.txt",
+      "count": 1
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "migrate: a dry run lists what it would copy and writes nothing",
+   "argv": [
+    "migrate"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Amigrate: dry run, nothing written",
+     "^handoff_root: ~/\\.claude/handoffs -> ~/\\.local/state/$BRAND/handoffs$",
+     "^  to copy: 2 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1$",
+     "^    differs: repo/LAB-5/2026-10-20_13-00-00_22222222_b\\.md$",
+     "^disposable_root: ~/\\.claude/trash-staging -> ~/\\.local/state/$BRAND/disposable$",
+     "^  to copy: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-5/2026-10-20_12-00-00_22222222_a.md",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/22222222-2222-4222-8222-222222222222.json",
+      "exists": false
+     },
+     {
+      "path": "$DISP/2026-10-01",
+      "exists": false
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "migrate --apply copies, keeps a differing file and the old folders, skips the link",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Amigrate: copying \\(nothing is deleted, moved or overwritten\\)",
+     "^  copied: 2 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · failed: 0$",
+     "^  copied: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · failed: 0$",
+     "^the old folders stay where they are"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-5/2026-10-20_12-00-00_22222222_a.md",
+      "contains": [
+       "old a"
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/22222222-2222-4222-8222-222222222222.json",
+      "contains": [
+       "repo/LAB-5"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-5/2026-10-20_13-00-00_22222222_b.md",
+      "contains": [
+       "new b"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-5/link.md",
+      "exists": false
+     },
+     {
+      "path": "$DISP/2026-10-01/h-evidence/run.log",
+      "contains": [
+       "old evidence"
+      ],
+      "mode": "0400"
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "migrate --apply again copies nothing more",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 0 files, 0\\.0 MB · already there: 2 · differ, left as they are: 1 ",
+     "^  copied: 0 files, 0\\.0 MB · already there: 1 · differ, left as they are: 0 "
+    ],
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "roots set explicitly (the old default included) are left alone",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "~/.claude/trash-staging",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/elsewhere"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^handoff_root: set to $TMP/elsewhere; only that folder is used, nothing to copy$",
+     "^disposable_root: set to ~/\\.claude/trash-staging; only that folder is used, nothing to copy$"
+    ],
+    "stdout_lacks": [
+     "copied:"
+    ],
+    "files": [
+     {
+      "path": "$TMP/elsewhere",
+      "exists": false
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "D0"
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "~/.claude/trash-staging",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/elsewhere"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^legacy (handoff|disposable) root",
+     " migrate$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "migrate",
+    "now"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^usage: migrate \\[--apply\\]$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "git": [
+      "init",
+      "-q",
+      "$HOME/.claude"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "old folders inside a git work tree are skipped",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^handoff_root: old folder ~/\\.claude/handoffs skipped \\(root-in-git\\)$",
+     "^disposable_root: old folder ~/\\.claude/trash-staging skipped \\(root-in-git\\)$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^legacy disposable root ~/\\.claude/trash-staging: skipped \\(root-in-git\\)$"
+    ],
+    "stdout_lacks": [
+     " migrate$"
+    ]
+   }
+  }
+ ]
+}

@@ -259,6 +259,14 @@ test('STATE-ROOT (0.1.2): the default handoff root is outside ~/.claude, and .wa
   expect(paths(DEFAULTS, undefined)).toBeUndefined()
 })
 
+test('STATE-ROOT (0.1.2): the default disposable root is outside ~/.claude too; a value set stays', () => {
+  expect(DEFAULTS.disposable_root).toBe('~/.local/state/' + NAME_TOKEN + '/disposable')
+  expect(parseOptions({ disposable_root: '${user_config.disposable_root}' }, 'nm').disposable_root).toBe('~/.local/state/nm/disposable')
+  expect(parseOptions({}).disposable_root).toBe('~/.local/state/plugin/disposable')
+  // the old default set explicitly is kept as it is
+  expect(parseOptions({ disposable_root: '~/.claude/trash-staging' }, 'nm').disposable_root).toBe('~/.claude/trash-staging')
+})
+
 test('STATE-ROOT (0.1.2): the default handoff root reads under an absolute $XDG_STATE_HOME, as the helper', () => {
   const xdg = { home: '/xs', name: 'nm' }
   // unset or equal to the default (as written or expanded): under XDG_STATE_HOME, .watch with it

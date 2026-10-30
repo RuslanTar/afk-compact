@@ -101,7 +101,7 @@ Only these sections take a none-form; other empty sections are omitted.
 
 - Bucket `<handoff_root>/<repo>/<ticket-or-topic>/` (default root `~/.local/state/{{plugin}}/handoffs`, or `$XDG_STATE_HOME/{{plugin}}/handoffs` when that is an absolute path; while `handoff_root` is the default, readers also pool the buckets of the pre-0.1.2 root `~/.claude/handoffs`, read only). Handoffs at its top level, named `YYYY-MM-DD_HH-MM-SS_<sid8>_<slug>.md`; readers order by frontmatter `date`.
 - Copies: `compact/`, `compact/subagents/`, `compact/unattributed/`, names ending `-<id6>.md`.
-- Evidence: `evidence/<stem>/` with `MANIFEST.tsv`. Disposable: `<disposable_root>/<YYYY-MM-DD>/<stem>-evidence/`.
+- Evidence: `evidence/<stem>/` with `MANIFEST.tsv`. Disposable: `<disposable_root>/<YYYY-MM-DD>/<stem>-evidence/` (default root `~/.local/state/{{plugin}}/disposable`, or `$XDG_STATE_HOME/{{plugin}}/disposable` when that is an absolute path; copies made before 0.1.2 stay in `~/.claude/trash-staging`, read only, found by the full paths `MANIFEST.tsv` records).
 - Sessions: pins `.sessions/<sid>.json`; lineage `.sessions/<sid>.lineage.json`; per-process records `.sessions/by-pid/<pid>-<lstart>.live-<sid8>.json` and `.ended-<sid8>.json`; approval-line hashes `.sessions/approvals/<sid>.<nonce>.json` (written once by `publish`); successor claims `.sessions/successors/<sid>.json` (written once by `pin`).
 - Watch tree `<log_dir>` (default `<root>/.watch`): `<sid>.jsonl`, `<sid>/events/`, `<sid>.classic.jsonl`, `<sid>.alerts.jsonl`, `<sid>/compactions.jsonl`, `<sid>/mod-alive.json`, `<sid>/bg/slot-<k>.json`, `heal/<origin sid>/<item>.count`.
 

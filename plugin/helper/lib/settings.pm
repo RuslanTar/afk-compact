@@ -24,7 +24,7 @@ require "userre.pm";    # U-06: the time bound for the user's own patterns
 our @KEYS = (
     [handoff_root                => 'dir',  '~/.local/state/<plugin>/handoffs', 'path'],    # STATE-ROOT (0.1.2); lib/paths.pm
     [log_dir                     => 'dir',  '',                        'path'],
-    [disposable_root             => 'dir',  '~/.claude/trash-staging', 'path'],
+    [disposable_root             => 'dir',  '~/.local/state/<plugin>/disposable', 'path'],    # STATE-ROOT (0.1.2); lib/paths.pm
     [disposable_keep_days        => 'num',  0,                         'num'],
     [evidence_quota_mb           => 'num',  500,                       'num'],
     [queue_cmd                   => 'file', '',                        'path'],
