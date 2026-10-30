@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Re-judged blocking rules, each pinned both ways (a former false refusal now passes, a true catch still blocks). HL-03 step1-mismatch: backticks, a `— proposed` mark (with or without a `(…)` note) and item 1 = Step 1 + ` — ` detail pass, and so does the same backticked command with only ` — ` detail after it on either side; an extra argument, a glued word, a dropped second command, a different edit after the same command, an empty Step 1 or a different wording still blocks. HL-04 id-range: a range of ids no chain file defines passes; a range hiding ids the stage ledger.md or the base's ledger pointer defines blocks until the draft names them alone; a range whose ends differ in kind, one that runs backwards or one over 1000 ids always blocks; a range on a pointer line naming inflight.md blocks; a range hiding ids the stage inflight.md table rows define blocks until the draft names them alone (the own previous file of a foreign base: HL-04-own-previous-ids) (a ledger pointer line naming ledger.md always blocks: the earlier D-2..D-3 lines). HL-05 recipe-placeholder: a `script: none` note, a printed value right after `=` or `-` in expected outputs and words inside an agent prompt pass; a whole-prompt placeholder (bare or quoted), a pointer inside a prompt or in expected outputs, a `--prompt=` flag's value, a placeholder path, a bare stand-in in expected outputs and a pointer to a stated path block, class ask included. HL-06 recipe-script: an earlier handoff's copy blocks until `evidence --keep` names it in this run (dup, no second copy); the fix text says so, and after it this handoff's MANIFEST lists the earlier copy.",
+ "note": "Re-judged blocking rules, each pinned both ways (a former false refusal now passes, a true catch still blocks). HL-03 step1-mismatch: backticks, a `— proposed` mark (with or without a `(…)` note) and item 1 = Step 1 + ` — ` detail pass, and so does the same backticked command with only ` — ` detail after it on either side; an extra argument, a glued word, a dropped second command, a different edit after the same command, an empty Step 1 or a different wording still blocks. HL-04 id-range: a range of ids no chain file defines passes; a range hiding ids the stage ledger.md or the base's ledger pointer defines blocks until the draft names them alone; a range whose ends differ in kind, one that runs backwards or one over 1000 ids always blocks; a range on a pointer line naming inflight.md blocks; a range hiding ids the stage inflight.md table rows define blocks until the draft names them alone (the own previous file of a foreign base: HL-04-own-previous-ids) (a ledger pointer line naming ledger.md always blocks: the earlier D-2..D-3 lines). HL-05 recipe-placeholder: a `script: none` note, a printed value right after `=` or `-` in expected outputs and words inside an agent prompt pass; a whole-prompt placeholder (bare or quoted), a pointer inside a prompt or in expected outputs, a `--prompt=` flag's value, a placeholder before an agent prompt, a placeholder path, a bare stand-in in expected outputs and a pointer to a stated path block, class ask included. HL-06 recipe-script: an earlier handoff's copy blocks until `evidence --keep` names it in this run (dup, no second copy); the fix text says so, and after it this handoff's MANIFEST lists the earlier copy.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -825,7 +825,11 @@
    "content": "item: B-4 · runtime id a1b2c3 · class ask\nscript: none\ncommand: bin/review --prompt=quick <out dir>\ncwd: $TMP/repo\nspawns: none\nexpected outputs: the report at <report path>\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
   },
   {
-   "name": "HL-05 recipe-placeholder: a placeholder that is the whole prompt (bare or quoted), a pointer inside a prompt, a `--prompt=` flag's value, a placeholder path, a pointer or a bare stand-in in expected outputs: still blocks; class ask does not exempt them",
+   "write": "$STAGE/restart/B-5.md",
+   "content": "item: B-5 · runtime id a1b2c3 · class ask\nscript: none\ncommand: cd <repo root> && Agent(model=\"opus\", effort=\"high\", prompt=\"review the retry fix\")\ncwd: $TMP/repo\nspawns: agent: model opus, effort high\nexpected outputs: $TMP/repo/review.md\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "name": "HL-05 recipe-placeholder: a placeholder that is the whole prompt (bare or quoted), a pointer inside a prompt, a `--prompt=` flag's value, a placeholder before an agent prompt, a placeholder path, a pointer or a bare stand-in in expected outputs: still blocks; class ask does not exempt them",
    "cwd": "$TMP/repo",
    "argv": [
     "publish",
@@ -847,8 +851,12 @@
      "^LINT recipe-placeholder restart/B-3\\.md:6$",
      "^LINT recipe-placeholder restart/B-4\\.md:3$",
      "^LINT recipe-placeholder restart/B-4\\.md:6$",
+     "^LINT recipe-placeholder restart/B-5\\.md:3$",
      "^  why: a recipe with <…> cannot run as written · fix: write the literal path, id or command, not a pointer such as <the path above>; class ask does not exempt it$",
      "^REFUSED: lint \\(\\d+ blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT recipe-placeholder restart/B-5\\.md:6$"
     ]
    }
   },
