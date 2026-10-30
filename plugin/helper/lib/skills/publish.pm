@@ -17,6 +17,8 @@ package skills::publish;
 # chain's file and this session's transcript; the ids that passed go to frontmatter
 # `approvals_checked`, and the row gains `approvals {lines, checked, unchecked}` and
 # `approval_classes` (counts and class ids only).
+# 0.1.2 (D-8): in a stage bound to a plugin handoff turn every own approval is context only
+# (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries.
 use strict;
 use warnings;
 use utf8;
@@ -121,6 +123,7 @@ sub run {
         brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
         queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
         quote_floor => [ skills::approvals::quote_floor($ctx, $s->{session_id}) ],
+        approval_context_only => (defined $ht ? 1 : 0),
     }) };
     if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
     $row->{bytes} = skills::util::blen($body);
@@ -133,8 +136,11 @@ sub run {
     $row->{acuity} = $res->{acuity} // '-';
     # AP-4: counts and outward class ids only, never a quote, action or target.
     my $ap = $res->{approvals} || {};
+    # A plugin handoff turn (0.1.2 D-8): nothing in this file is listed as checked or hashed.
+    $ap = { %$ap, checked => [], origins => {}, classes => [] } if defined $ht;
     if ($ap->{lines}) {
         $row->{approvals} = { lines => $ap->{lines}, checked => scalar(@{ $ap->{checked} || [] }), unchecked => $ap->{unchecked} // 0 };
+        $row->{approvals}{context} = $ap->{context} if $ap->{context};
         $row->{approval_classes} = $ap->{classes} || [];
     }
     # T-TEXT E7: under the first line of each id in this run, its `  why: … · fix: …` line from

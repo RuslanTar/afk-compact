@@ -3,8 +3,9 @@ package skills::approvals;
 # §15 approval-shape / approval-quote / approval-unchecked; SPEC-DELTAS AP-4, AP-5). Owner:
 # WP-skills.
 #
-#   lint(\@lines, %a)          the three publish checks; returns the ids whose quote passed
-#   handoff_lines(doc, ctx, sid) the `Approvals (checked)` lines of `measure <handoff>`
+#   lint(\@lines, %a)          the publish checks; returns the ids whose quote passed
+#   handoff_lines(doc, ctx, sid) the `Approvals (checked)` lines of `measure <handoff>`, and the
+#                              `Approvals (context only, re-ask)` line
 #   summary_lines(text, path)  the same for a compaction summary's copy (`measure --compact --copy`)
 #   classes(entry)             the outward class ids an approval's action names, and its gate
 #
@@ -72,6 +73,18 @@ package skills::approvals;
 # with that id and the line's hash equals the record: an added line, an edited quote, action,
 # target or id, a file with no record (published before the hashes) or a record without the id
 # makes the line context only (re-ask).
+#
+# Plugin handoff turns (0.1.2 D-8): a handoff the plugin asked for (a stage bound to a handoff
+# turn, `handoff_ht`: reasons halt, precompact and idle) records every own approval as context
+# only, `U-n: approval "<words>" — action <what> · targets <…> ; context only, not valid here;
+# re-ask` (approval_context_re), and its Next step re-asks. The auto-mode classifier blocked the
+# Write of a usable approval in a handoff the user did not ask for (its carve-out for recording
+# at the user's request cannot apply), and passed this shape (probe B, V3 0/9 blocked; X-5: no
+# denial note on a usable line). lint(context_only => 1) blocks any other own line
+# (`approval-plugin-turn`) and still checks the quote; publish then lists no id in
+# approvals_checked and records no line hashes, so nothing in the file can carry. The same
+# context-only line is accepted in any stage (never checked, never carried), and `measure`
+# lists such lines as context only.
 use strict;
 use warnings;
 use utf8;
@@ -196,6 +209,8 @@ our @ACTION_WORDS = (
 # The infra-write plain words other than the two tools _tool_read may exempt.
 my $INFRA_OTHER_RE = qr/\bterraform|\btofu\b|\bpulumi|\binfra(?:structure)?\b/i;
 my $LINE_RE = qr/\bU-[0-9]+:\s*approval\b/;
+# A scope or state field of approval_re, which a context-only line never holds.
+my $STATE_WORDS = qr/·[ \t]*(?:once|standing)\b|\bnot yet used\b|\bused[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}\b/;
 # Loose form for compaction summaries (the summary writes several on one line or a list).
 my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"[ \t]+—[ \t]+action[ \t]+(.+?)[ \t]+·[ \t]+targets[ \t]+(.+?)[ \t]+·[ \t]+(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+(not yet used|used[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}[ \t]+[0-9]{2}:[0-9]{2}(?:[ \t]+[+-][0-9]{4})?)/;
 
@@ -218,6 +233,25 @@ sub parse_line {
     my %e = (n => $1, quote => $2, action => $3, targets_text => $4, scope => $5, state => $7);
     $e{id} = "U-$e{n}";
     return _finish(\%e);
+}
+
+# parse_context_line(line) -> {n, id, quote, action, targets => [..], targets_text, context => 1}
+# for an own line in the spec's approval_context_re form (no once/standing, no state), else
+# undef. A line whose targets still hold a scope or state word is no context line.
+sub parse_context_line {
+    my ($l) = @_;
+    my $re = skills::spec::regex_at('approval_context_re') or return undef;
+    return undef unless defined $l && $l =~ $re;
+    my %e = (n => $1, quote => $2, action => $3, targets_text => $4, scope => '', state => '', context => 1);
+    return undef if "$e{action} · $e{targets_text}" =~ $STATE_WORDS;
+    $e{id} = "U-$e{n}";
+    return _finish(\%e);
+}
+
+# 1 when the spec has the context-only form and its lint id (0.1.2; an older spec has neither).
+sub context_enabled {
+    return 0 unless enabled() && defined skills::spec::regex_at('approval_context_re');
+    return skills::spec::lint_ids()->{blocking}{'approval-plugin-turn'} ? 1 : 0;
 }
 
 sub _finish {
@@ -522,16 +556,21 @@ sub _default_branches {
 
 # lint(\@lines, prev_lines => {line => 1}, tag_re => qr, note => text,
 #      chain => [{text, checked => {U-n => 1}}], transcript => path | undef,
-#      quote_floor => [quote_floor(ctx, sid)])
+#      quote_floor => [quote_floor(ctx, sid)], context_only => 1 | undef)
 #   -> {blocking => [[rule, where]…], advisory => [...], checked => [U-n…], lines => n,
-#       unchecked => n, classes => [outward ids of checked approvals],
+#       unchecked => n, context => n, classes => [outward ids of checked approvals],
 #       origins => {U-n => origin class word} for the checked ids (owner xxxxxxxx-12)}
+# context_only (a plugin handoff turn, 0.1.2 D-8): every own line must be the context-only form
+# (approval-plugin-turn otherwise); its quote is still checked (approval-quote), and no id is
+# returned as checked. Without it a context-only own line is accepted too, never checked.
 sub lint {
     my ($lines, %a) = @_;
-    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, classes => [], origins => {});
+    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, context => 0, classes => [], origins => {});
     return \%r unless enabled();
     my $in = section_lines($lines);
     my ($tag_re, $note) = ($a{tag_re}, $a{note} // '');
+    my $cx_ok = context_enabled();
+    my $cx_only = $a{context_only} && $cx_ok ? 1 : 0;
     my @own;
     for my $i (0 .. $#$lines) {
         my $l = $lines->[$i];
@@ -549,8 +588,16 @@ sub lint {
             push @{ $r{blocking} }, [ 'approval-shape', $where ] unless $l =~ $LINE_RE && $l =~ /"[^"]+"/ && index($l, $note) >= 0;
             next;
         }
-        my $e = parse_line($l);
-        if (!$e) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+        my $e;
+        if ($cx_only) {
+            # A plugin handoff turn: only the context-only form (a usable line, one with a
+            # scope or state word, or one without the note is blocked).
+            $e = parse_context_line($l);
+            if (!$e) { push @{ $r{blocking} }, [ 'approval-plugin-turn', $where ]; next }
+        } else {
+            $e = parse_line($l) // ($cx_ok ? parse_context_line($l) : undef);
+            if (!$e) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+        }
         # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
         # with a checked line's id would ride on its check.
         if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
@@ -559,7 +606,8 @@ sub lint {
     }
     my @ask;
     for my $e (@own) {
-        if (my $d = _carried($e, $a{chain})) { $e->{ok} = 1; $e->{origin} = _origin_word($d->{origins}{ $e->{id} }); next }
+        if ($e->{context}) { if (_carried_context($e, $a{chain})) { $e->{ok} = 1; next } }
+        elsif (my $d = _carried($e, $a{chain})) { $e->{ok} = 1; $e->{origin} = _origin_word($d->{origins}{ $e->{id} }); next }
         push @ask, $e;
     }
     if (@ask) {
@@ -576,7 +624,9 @@ sub lint {
         }
     }
     my %cls;
-    for my $e (grep { $_->{ok} } @own) {
+    # A context-only line is never checked: it grants nothing, here or after a resume.
+    $r{context} = scalar grep { $_->{context} } @own;
+    for my $e (grep { $_->{ok} && !$_->{context} } @own) {
         push @{ $r{checked} }, $e->{id};
         $r{origins}{ $e->{id} } = $e->{origin} // 'unknown';
         $cls{$_} = 1 for @{ classes($e)->{outward} };
@@ -615,6 +665,21 @@ sub _carried {
         }
     }
     return undef;
+}
+
+# A context-only line carried from an own-chain file: a line of that file, in either form, with
+# the same id, words, action and targets. Its quote was checked when that file was published,
+# and a context-only line grants nothing, so the file need not list the id as checked.
+sub _carried_context {
+    my ($e, $chain) = @_;
+    for my $d (@{ $chain || [] }) {
+        for my $l (split /\n/, $d->{text} // '') {
+            my $p = parse_line($l) // parse_context_line($l) or next;
+            return 1 if $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote} && $p->{action} eq $e->{action}
+                && $p->{targets_text} eq $e->{targets_text};
+        }
+    }
+    return 0;
 }
 
 # The ids of a frontmatter approvals_checked value.
@@ -885,10 +950,16 @@ sub handoff_lines {
     my @lines = split /\n/, $d->{body} // '';
     my $in = section_lines(\@lines);
     my $tag_re = skills::spec::regex_at('carry.tag_re');
-    my @e = grep { defined } map { parse_line($lines[$_]) } grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
+    my @own_idx = grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
+    my @e = grep { defined } map { parse_line($lines[$_]) } @own_idx;
+    # Context-only own lines (a plugin handoff turn, 0.1.2 D-8): never checked, listed as such.
+    my %cx;
+    if (context_enabled()) {
+        for my $c (grep { defined } map { parse_context_line($lines[$_]) } @own_idx) { $cx{ $c->{id} } //= 'written as context' }
+    }
     my ($own, $why) = own_relation($d, $ctx, $sid);
     if (!$own) {
-        return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e;
+        return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e || %cx;
         return ([ 'Approvals (checked): none' ], { source => 'handoff', checked => 0, gate => 0, classes => [] });
     }
     # U3-01: a checked id carries only when its line matches the hash publish recorded.
@@ -899,10 +970,12 @@ sub handoff_lines {
     my $org = origins_of($ctx, $d);
     $_->{origin} = $org->{ $_->{id} } for @e;
     my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
-    my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %$unver;
+    my %ctx_only = (%cx, map { $_ => $HASH_WHY{ $unver->{$_} } } keys %$unver);
+    my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %ctx_only;
     if (@bad) {
-        push @$out, 'Approvals (context only, re-ask): ' . join(', ', map { "$_ ($HASH_WHY{ $unver->{$_} })" } @bad);
-        $row->{unverified} = scalar @bad;
+        push @$out, 'Approvals (context only, re-ask): ' . join(', ', map { "$_ ($ctx_only{$_})" } @bad);
+        $row->{unverified} = scalar keys %$unver if %$unver;
+        $row->{context} = scalar keys %cx if %cx;
     }
     return ($out, $row);
 }

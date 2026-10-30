@@ -411,6 +411,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "carry-approval": {"why": "an approval carries only along your own chain, where its use is tracked; another session's approval is context", "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"},
     "approval-shape": {"why": "the next session can act on an approval only when it can check its scope", "fix": "write the user's words, the action, each target with its state, once or standing, and not yet used or used <stamp>"},
     "approval-quote": {"why": "only the user's own words can approve an action", "fix": "quote the user exactly, or move the item to Open questions as ask user"},
+    "approval-plugin-turn": {"why": "the plugin asked for this handoff, not the user, so an approval in it must not read as usable", "fix": "the plugin asked for this handoff, so record each approval as context only: U-n: approval \"<the user's words>\" — action <what> · targets <identity @ state> ; context only, not valid here; re-ask (no once, standing or state words); its Next step reads ask user:"},
     "private-path": {"why": "in repo mode the path would reach git", "fix": "use a durable bucket path or a pointer; Volatile: does not help here"},
     "recipe-placeholder": {"why": "a recipe with <…> cannot run as written", "fix": "write the literal value, or class the row ask"},
     "recipe-script": {"why": "a restart runs only a script whose sha256 is in the manifest", "fix": "evidence --keep <script> and cite the durable path"},
@@ -432,7 +433,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "approval-unchecked": {"why": "an unchecked approval cannot carry", "fix": "nothing to do; the next session re-asks"}
   },
   "lint_ids": {
-    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard", "queue-off", "approval-shape", "approval-quote"],
+    "blocking": ["headings", "meta-in-draft", "update-heading", "resume-lines", "step1-mismatch", "none-form", "ephemeral-path", "live-asof", "unprinted-time", "time-format", "id-range", "carry-provenance", "carry-approval", "private-path", "recipe-placeholder", "recipe-script", "recipe-spawn", "secret-hard", "queue-off", "approval-shape", "approval-quote", "approval-plugin-turn"],
     "advisory": ["size", "section-cap", "code-block", "log-lines", "hash-lines", "must-read", "changes", "overlap", "recipe-mismatch", "secret-warn", "acuity", "store-path", "approval-unchecked"],
     "repo_mode_only": ["private-path"]
   },
@@ -534,6 +535,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "explicit_gate_classes": ["deploy", "env-write", "infra-write", "prod-write", "protected-push"],
   "protected_branch_re": "^(main|master|trunk|develop|development|stable|staging|gh-pages|prod|production|(prod|production)[/_-].+|releases?([/_-].+)?|hotfix/.+)$",
   "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
+  "approval_context_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) ; context only, not valid here; re-ask( · given .+)?$",
   "risk_classes": [
     {"id": "gate", "from": "explicit_gate_classes"},
     {"id": "outward", "from": "outward_classes"},

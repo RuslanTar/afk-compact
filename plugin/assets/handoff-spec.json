@@ -408,6 +408,10 @@
       "why": "only the user's own words can approve an action",
       "fix": "quote the user exactly, or move the item to Open questions as ask user"
     },
+    "approval-plugin-turn": {
+      "why": "the plugin asked for this handoff, not the user, so an approval in it must not read as usable",
+      "fix": "the plugin asked for this handoff, so record each approval as context only: U-n: approval \"<the user's words>\" — action <what> · targets <identity @ state> ; context only, not valid here; re-ask (no once, standing or state words); its Next step reads ask user:"
+    },
     "private-path": {
       "why": "in repo mode the path would reach git",
       "fix": "use a durable bucket path or a pointer; Volatile: does not help here"
@@ -507,7 +511,8 @@
       "secret-hard",
       "queue-off",
       "approval-shape",
-      "approval-quote"
+      "approval-quote",
+      "approval-plugin-turn"
     ],
     "advisory": [
       "size",
@@ -875,6 +880,7 @@
   ],
   "protected_branch_re": "^(main|master|trunk|develop|development|stable|staging|gh-pages|prod|production|(prod|production)[/_-].+|releases?([/_-].+)?|hotfix/.+)$",
   "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
+  "approval_context_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) ; context only, not valid here; re-ask( · given .+)?$",
   "risk_classes": [
     {
       "id": "gate",

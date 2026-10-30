@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "D-18 B7/B8: begin binds the newest open handoff turn of the session (<ht>.stage, the ht in the stage meta, handoff_turn {ht, max_calls}); a second begin returns that stage with resumed true and makes no stage; handoff-state reads none -> staged draft=0|1 with a literal finish command (slug from the stage meta, no session id) -> published; publish writes <ht>.published before the handoff file; another stage naming the same ht is refused with handoff-exists <path> and writes nothing",
+ "note": "D-18 B7/B8: begin binds the newest open handoff turn of the session (<ht>.stage, the ht in the stage meta, handoff_turn {ht, max_calls}); a second begin returns that stage with resumed true and makes no stage; handoff-state reads none -> staged draft=0|1 with a literal finish command (slug from the stage meta, no session id) -> published; publish writes <ht>.published before the handoff file; another stage naming the same ht is refused with handoff-exists <path> and writes nothing; 0.1.2 D-8: the turn's draft records its approval as context only (no approvals_checked)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -22,6 +22,14 @@
       ]
      },
      "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feature/LAB-7-retry to origin once the suite passes\"}}\n"
     }
    ]
   },
@@ -149,7 +157,7 @@
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feature/LAB-7-retry to origin\" — action git push origin feature/LAB-7-retry · targets branch feature/LAB-7-retry @ seed ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feature/LAB-7-retry to origin (user-run: ! git push origin feature/LAB-7-retry)\n"
   },
   {
    "name": "HT-LT-03 staged with a draft",
@@ -190,6 +198,15 @@
       "has": [
        "\\A$ROOT/repo/LAB-7/$STEM\\.md\\n\\z"
       ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "lacks": [
+       "approvals_checked"
+      ],
+      "has": [
+       "^- U-2: approval .* ; context only, not valid here; re-ask$"
+      ]
      }
     ],
     "rows": [
@@ -198,7 +215,13 @@
       "ev": "handoff_publish",
       "fields": {
        "result": "wrote",
-       "ht": "a1b2c3d4"
+       "ht": "a1b2c3d4",
+       "approvals": {
+        "lines": 1,
+        "checked": 0,
+        "unchecked": 0,
+        "context": 1
+       }
       }
      }
     ]
