@@ -333,23 +333,37 @@ sub _settings_file_options {
 
 # config_key_info() -> {state, key}: the user's settings file as a settings writer would see it
 # (0.1.2 onboarding). state: absent (no file, no pluginConfigs or no key for the plugin),
-# unparseable (the file is not a JSON object, or its pluginConfigs is not one: a writer refuses
-# it), ambiguous (two or more keys for the plugin), found (one key, with or without options).
-# key: that key; under --plugin-dir the @inline key, also while the file lacks it; else undef.
+# unreadable (the path exists, as a dangling link too, but cannot be read as a file: no
+# permission, a folder; a writer refuses it, never takes it for absent), unparseable (the file
+# is not a JSON object, its pluginConfigs is not one, or the plugin's entry or that entry's
+# options is there but not an object: a writer cannot merge into it and refuses it), ambiguous
+# (two or more keys for the plugin), found (one key, its options an object or missing).
+# key: that key, also when its entry is unparseable; under --plugin-dir the @inline key, also
+# while the file lacks it; else undef.
 sub config_key_info {
     my $inline = inline_key();
-    my $raw = util::read_file(config_dir() . '/settings.json');
-    return { state => 'absent', key => $inline } unless defined $raw;
+    my $file = config_dir() . '/settings.json';
+    my $raw = util::read_file($file);
+    if (!defined $raw) {
+        return { state => 'unreadable', key => undef } if -e $file || -l $file;
+        return { state => 'absent', key => $inline };
+    }
     my $s = eval { jsonc::decode($raw) };
     return { state => 'unparseable', key => undef }
         unless ref $s eq 'HASH' && (!defined $s->{pluginConfigs} || ref $s->{pluginConfigs} eq 'HASH');
     my $pc = $s->{pluginConfigs} || {};
-    return { state => (exists $pc->{$inline} ? 'found' : 'absent'), key => $inline } if defined $inline;
+    my $entry = sub {
+        my ($k) = @_;
+        my $e = $pc->{$k};
+        return 'unparseable' unless ref $e eq 'HASH' && (!exists $e->{options} || ref $e->{options} eq 'HASH');
+        return 'found';
+    };
+    return { state => (exists $pc->{$inline} ? $entry->($inline) : 'absent'), key => $inline } if defined $inline;
     my $brand = ctx::brand();
     my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %$pc;
     return { state => 'absent', key => undef } unless @cand;
     return { state => 'ambiguous', key => undef } if @cand > 1;
-    return { state => 'found', key => $cand[0] };
+    return { state => $entry->($cand[0]), key => $cand[0] };
 }
 
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
@@ -369,7 +383,6 @@ sub resolve {
     for my $k (@KEYS) {
         my ($key, $type, $fallback) = @$k[0 .. 2];
         my $default = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : $fallback;
-        $def{$key} = $default;
         my ($v, $s);
         my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
         my $file_only = $FILE_ONLY{$key};
@@ -384,6 +397,17 @@ sub resolve {
         elsif (!$file_only && !$no_flag && !_unset($env)) { ($v, $s) = ($env, 'env') }
         elsif (!$ambiguous && ref $opts eq 'HASH' && !_unset($opts->{$key})) { ($v, $s) = ($opts->{$key}, 'settings') }
         else { ($v, $s) = ($default, 'default') }
+        # ON-5 (0.1.2): only the settings file holds JSON values. An array of strings or numbers
+        # for a `;` list key reads as its entries joined with `;` (a protective list written as an
+        # array still adds its entries); any other array or object is invalid: the default.
+        if (ref $v eq 'ARRAY' && ($EXPORT{$key} // '') eq 'list' && !grep { !defined || ref } @$v) {
+            push @notes, "$key: a JSON list, read as its entries joined with ;";
+            $v = join ';', @$v;
+        }
+        elsif (ref $v eq 'ARRAY' || ref $v eq 'HASH') {
+            push @notes, "$key: not a single value, default used";
+            ($v, $s) = ($default, 'default');
+        }
         my $c = _coerce($key, $v);
         if (!defined $c) {
             push @notes, "$key: not a number, default used";
@@ -391,6 +415,7 @@ sub resolve {
         }
         $val{$key} = $c;
         $src{$key} = $s;
+        $def{$key} = $default;
     }
     # Tighten-only keys (S-SETTINGS E3): the strictest valid value of flag, env, settings file
     # and default wins; an invalid value counts as unset (with a note).
@@ -882,12 +907,15 @@ sub export_view {
 
 # ---------------------------------------------------------------- view (0.1.2 onboarding)
 # view(\%flags[, tier]) -> ordered object: one row per key (key, title, section, tier, kind,
-# default, min, max, values, value, source, class) in @SECTIONS order (@KEYS order inside a
+# default, min, max, values, value, source, clamped, class) in @SECTIONS order (@KEYS order inside a
 # section), with the pluginConfigs key in use (config_key_info) and why a write there would be
 # refused. Min and max are the manifest's; default, value and source are resolve()'s (one place
 # works the default out). tier: common, advanced or all (default). A key with no %SECTION row
 # goes to section `other`, tier advanced, and is listed in `unsectioned` (the settings-sections
-# gate fails on it). Read-only.
+# gate fails on it). `clamped`: true for a key the clamp moves (a number outside its min/max, a
+# window below the floor, a soft max or target over the window's clamp), the watcher's export
+# flags (watch::export::clamped_keys); `value` stays the configured one; null when they cannot be
+# worked out. Read-only.
 our %KIND = (num => 'number', bool => 'boolean', enum => 'enum', path => 'path', list => 'list', drop => 'text');
 sub view {
     my ($flags, $tier) = @_;
@@ -895,6 +923,7 @@ sub view {
     my $r = resolve($flags || {});
     my $uc = ctx::user_config();
     my (%rows, %by, @unsectioned);
+    my $cl = eval { require watch::export; watch::export::clamped_keys($r, scalar eval { spec::load() }) };
     for my $k (@KEYS) {
         my ($key, $type, undef, $class) = @$k;
         my ($sec, $t) = @{ $SECTION{$key} || [] };
@@ -911,6 +940,7 @@ sub view {
             default => $default, min => $lo, max => $hi,
             values => ($ENUM{$key} ? [ @{ $ENUM{$key} } ] : undef),
             value => $v, source => $r->{source}{$key},
+            clamped => (ref $cl eq 'HASH' ? jsonc::bool($cl->{$key}) : undef),
             class => ($FILE_ONLY{$key} ? 'consent' : $NO_FLAG{$key} ? 'protective' : undef));
         push @{ $by{$sec} }, $key;
     }
@@ -924,9 +954,11 @@ sub view {
     my $foreign = config_dir_foreign();
     # Why a write would be refused, the first that holds: another settings folder
     # (config-dir-foreign under CLAUDE_CONFIG_DIR, home-foreign when HOME is not the account
-    # home), a file a writer cannot merge into, a --plugin-dir run, two keys for the plugin.
+    # home), a file that cannot be read or that a writer cannot merge into, a --plugin-dir run,
+    # two keys for the plugin.
     my $refused = $foreign ? (($ENV{CLAUDE_CONFIG_DIR} // '') ne '' ? 'config-dir-foreign' : 'home-foreign')
-        : $state eq 'unparseable' ? 'unparseable' : defined $inline ? 'inline' : $state eq 'ambiguous' ? 'ambiguous' : undef;
+        : ($state eq 'unreadable' || $state eq 'unparseable') ? $state : defined $inline ? 'inline'
+        : $state eq 'ambiguous' ? 'ambiguous' : undef;
     return jsonc::obj(
         config_file => config_dir() . '/settings.json', config_key => $ci->{key}, config_key_state => $state,
         inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,

@@ -73,8 +73,9 @@
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
 #   builtin hold_parity {file, lists {<const name>: job | user | none}, min}: copies::_hold_of (the
 #     staged copy) over each named string array of a TS test file in the staged plugin
-#   builtin settings_view {home}: settings::view (the staged copy) against the staged manifest:
-#     a row per userConfig key in one section, its title, default, min and max the manifest's
+#   builtin settings_view {home, common}: settings::view (the staged copy) against the staged
+#     manifest: a row per userConfig key in one section, its title, default, min and max the
+#     manifest's; with `common` [keys], each row's tier common when listed, else advanced
 # Hosts for 0.1.0 (this runner and the watch driver, as a normal user, never as root):
 #   macOS, and the Linux rows MX-04 (debian:bookworm-slim + git), MX-09 (fedora:latest +
 #   git) and MX-12 (alpine:latest + perl git). None of the three has make, procps ps or
@@ -2867,6 +2868,14 @@ sub builtin {
             for my $f (qw(title default min max)) {
                 my ($g, $w) = ($norm->($r{$f}), $norm->(ref $uc->{$k} eq 'HASH' ? $uc->{$k}{$f} : undef));
                 push @e, "$k.$f = $g, want $w (the manifest's)" unless $g eq $w;
+            }
+        }
+        if (ref $a->{common} eq 'ARRAY') {
+            my %common = map { $_ => 1 } @{ $a->{common} };
+            for my $k (sort keys %rows) {
+                my %r = @{ $rows{$k} };
+                my $want = $common{$k} ? 'common' : 'advanced';
+                push @e, "$k.tier = " . ($r{tier} // 'null') . ", want $want" unless ($r{tier} // '') eq $want;
             }
         }
         push @e, "$_: a row with no manifest key" for grep { !exists $uc->{$_} } sort keys %rows;

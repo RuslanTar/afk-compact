@@ -1,9 +1,10 @@
 # cmd/settings.pl: the plugin's settings, for the onboarding settings flow (0.1.2). Owner: WP-core.
 #   settings show [--json] [--tier common|advanced|all] [settings flags]
 #     -> settings::view(): every key's section, tier, kind, default, min/max, allowed values,
-#        current value and its source (flag|env|settings|default|safe), consent or protective
-#        class; the pluginConfigs key in use and `write_refused` (config-dir-foreign,
-#        home-foreign, unparseable, inline or ambiguous: why a write there would be refused).
+#        current value and its source (flag|env|settings|default|safe), whether the clamp moves
+#        it, consent or protective class; the pluginConfigs key in use and `write_refused`
+#        (config-dir-foreign, home-foreign, unreadable, unparseable, inline or ambiguous: why a
+#        write there would be refused).
 #        --json prints that object on one line; without it, a heading per section and one
 #        `  <key> = <value> (<source>)` line per key. Read-only: no row, no file written.
 # There is no write verb: whether the plugin writes settings.json from a model-run call is open

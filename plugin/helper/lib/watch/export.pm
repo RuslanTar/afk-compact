@@ -831,6 +831,17 @@ sub _default_values {
     return \%d;
 }
 
+# clamped_keys(resolved, spec) -> {key => 1} for the keys the clamp moves: _clamped over
+# settings::export_view of those resolved settings, the flags the watcher exports as `clamped`.
+# `settings show` (0.1.2 onboarding) reads them, so both name the same keys. Dies on a bad view.
+sub clamped_keys {
+    my ($rs, $spec) = @_;
+    my $cur = _pairs(settings::export_view($rs));
+    my %v;
+    for (my $i = 0; $i < @$cur; $i += 2) { $v{ $cur->[$i] } = _plain($cur->[ $i + 1 ]) }
+    return _clamped({ spec => $spec }, \%v);
+}
+
 # The number keys the clamp moves (the mod's config.ts, MOD-SPEC §1.2): a value outside the
 # manifest's min/max; a window below the window floor; handoff_turn_max_tokens outside its
 # bounds; the soft max and target over what the §1.2 clamp gives for the configured window
