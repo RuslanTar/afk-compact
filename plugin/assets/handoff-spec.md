@@ -215,7 +215,7 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 | `recipe-placeholder` · `recipe-script` · `recipe-spawn` | blocking | a recipe with a placeholder; a script not in the manifest; an agent spawn without model and effort |
 | `secret-hard` | blocking | a HARD secret hit in the draft or recipes |
 | `queue-off` | blocking | queue mode off, and a model-typed `Queued:` line or a `· queued` question row |
-| `size` · `section-cap` | advisory | over 20 KB; a section over its `section_caps` value |
+| `size` · `section-cap` | advisory | over 20 KB; a section over its `section_caps` value (in `## Evidence`, the helper-pasted lines that `overlap` also leaves out do not count) |
 | `code-block` · `log-lines` · `hash-lines` | advisory | a code block over 5 lines; log-, warning- or stack-shaped lines; 4 or more consecutive hash lines |
 | `changes` · `must-read` | advisory | over 15 changes; over 3 must-read paths |
 | `recipe-mismatch` | advisory | a recorded job's recipe whose `command:` differs from its record |
@@ -394,7 +394,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   },
   "call_cap": 25,
   "recipe_cap": 8,
-  "section_caps": {"## Resume here": 1500, "## User constraints": 1500, "## Approvals": 1000, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1200, "## Open questions": 2000, "## Location": 1000, "## Work done and findings": 1800, "## Evidence": 600, "## Next steps": 1000},
+  "section_caps": {"## Resume here": 1500, "## User constraints": 2200, "## Approvals": 1000, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1400, "## Open questions": 2000, "## Location": 1700, "## Work done and findings": 1800, "## Evidence": 1100, "## Next steps": 1200},
   "lint_texts": {
     "headings": {"why": "readers find sections by their literal heading, in this order", "fix": "use the template §4 headings unchanged and in order; omit only an empty section without a none-form"},
     "meta-in-draft": {"why": "frontmatter, marker and sentinel come from code; typed ones break detection", "fix": "delete them from body.md; start at the # title"},
