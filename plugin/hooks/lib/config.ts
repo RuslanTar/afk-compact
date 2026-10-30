@@ -227,12 +227,13 @@ function handoffTokens(o: PluginOptions, notes: Config['notes']): number {
 export const NAME_TOKEN = '<plugin>'
 
 /**
- * The options as the mod reads them. `name` (the plugin's, `$.plugin.name`) fills NAME_TOKEN in the
- * handoff_root default; a load fills the manifest's default in itself, so this is the fallback.
+ * The options as the mod reads them. `name` (the plugin's, `$.plugin.name`, else `plugin` as in the
+ * helper's ctx::brand) fills NAME_TOKEN in the handoff_root default; a load fills the manifest's
+ * default in itself, so this is the fallback.
  */
 export function parseOptions(o: PluginOptions, name?: string): Config {
   const notes: Config['notes'] = { invalid: [], clamped: [] }
-  const root = name ? DEFAULTS.handoff_root.split(NAME_TOKEN).join(name) : DEFAULTS.handoff_root
+  const root = DEFAULTS.handoff_root.split(NAME_TOKEN).join(name || 'plugin')
   return {
     handoff_root: str(o, 'handoff_root', root),
     log_dir: str(o, 'log_dir', DEFAULTS.log_dir),

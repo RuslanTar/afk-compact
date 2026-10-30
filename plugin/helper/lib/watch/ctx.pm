@@ -71,13 +71,17 @@ sub plugin_root_default {
     return defined $p ? $p : "$THIS_DIR/../../..";
 }
 
-# _named(value) -> value with <plugin> replaced by the plugin's name from its manifest (the
-# handoff_root fallback default, STATE-ROOT).
+# _named(value) -> value with <plugin> replaced by the plugin's name (the handoff_root fallback default,
+# STATE-ROOT), in ctx::brand's order: the manifest's name, else the launcher's minus `-store`, else `plugin`.
 sub _named {
     my ($v) = @_;
     return $v unless defined $v && !ref $v && index($v, '<plugin>') >= 0;
     my $m = watch::io::read_json_file(plugin_root_default() . '/.claude-plugin/plugin.json') || {};
-    my $n = ref $m eq 'HASH' && defined $m->{name} && !ref $m->{name} && $m->{name} ne '' ? $m->{name} : 'store';
+    my $n = ref $m eq 'HASH' && defined $m->{name} && !ref $m->{name} && $m->{name} ne '' ? $m->{name} : undef;
+    if (!defined $n) {
+        ($n = File::Basename::basename($ENV{STORE_LAUNCHER} // '')) =~ s/-store\z//;
+        $n = 'plugin' if $n eq '';
+    }
     $v =~ s/<plugin>/$n/g;
     return $v;
 }

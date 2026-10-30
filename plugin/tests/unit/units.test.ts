@@ -251,6 +251,8 @@ test('STATE-ROOT (0.1.2): the default handoff root is outside ~/.claude, and .wa
   const unset = parseOptions({ handoff_root: '${user_config.handoff_root}', log_dir: '' }, 'nm')
   expect(paths(unset, '/hh/u')).toEqual({ root: '/hh/u/.local/state/nm/handoffs', watch: '/hh/u/.local/state/nm/handoffs/.watch' })
   expect(paths(parseOptions({}, 'nm'), '/hh/u/')?.watch).toBe('/hh/u/.local/state/nm/handoffs/.watch')
+  // no name: `plugin`, the helper's last fallback (ctx::brand), never the bare token
+  expect(parseOptions({}).handoff_root).toBe('~/.local/state/plugin/handoffs')
   // a value the user set stays the only root (the old default included); log_dir still wins for .watch
   expect(paths(parseOptions({ handoff_root: '~/.claude/handoffs' }, 'nm'), '/hh/u')?.root).toBe('/hh/u/.claude/handoffs')
   expect(paths(parseOptions({ log_dir: '/var/x/logs/' }, 'nm'), '/hh/u')?.watch).toBe('/var/x/logs')

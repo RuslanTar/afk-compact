@@ -35,13 +35,13 @@ sub default_root {
     return defined $d && !ref $d && $d ne '' ? $d : named($DEFAULT_ROOT);
 }
 
-# named(value) -> value with <plugin> replaced by the plugin's name (the manifest's), for a
-# fallback default; any other value is returned as it is.
+# named(value) -> value with <plugin> replaced by the plugin's name (ctx::brand: the manifest's, else the
+# launcher's, else `plugin`), for a fallback default; any other value is returned as it is.
 sub named {
     my ($v) = @_;
     return $v unless defined $v && !ref $v && index($v, $NAME_TOKEN) >= 0;
     my $n = eval { ctx::brand() };
-    $n = 'store' unless defined $n && $n ne '';
+    $n = 'plugin' unless defined $n && $n ne '';
     $v =~ s/\Q$NAME_TOKEN\E/$n/g;
     return $v;
 }
