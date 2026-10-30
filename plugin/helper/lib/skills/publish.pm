@@ -18,7 +18,8 @@ package skills::publish;
 # `approvals_checked`, and the row gains `approvals {lines, checked, unchecked}` and
 # `approval_classes` (counts and class ids only).
 # 0.1.2 (D-8): in a stage bound to a plugin handoff turn every own approval is context only
-# (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries.
+# (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries; the
+# frontmatter says `requested_by: plugin` (AC-4).
 use strict;
 use warnings;
 use utf8;
@@ -232,6 +233,9 @@ sub run {
         previous_kind => $s->{previous_kind},
         own_previous_handoff => (($s->{previous_kind} // '') eq 'foreign' ? $s->{own_previous_handoff} : undef),
         approvals_checked => (@{ $ap->{checked} || [] } ? join(', ', @{ $ap->{checked} }) : undef),
+        # 0.1.2 AC-4: the plugin asked for this handoff (a stage bound to a handoff turn), so
+        # `measure` names that reason and none of its approvals carries.
+        requested_by => ($ht ? 'plugin' : undef),
     );
     my $fm = "---\n" . join('', map { "$_: $fm{$_}\n" } grep { defined $fm{$_} && $fm{$_} ne '' }
                                @{ skills::spec::frontmatter_keys('handoff') }) . "---\n";

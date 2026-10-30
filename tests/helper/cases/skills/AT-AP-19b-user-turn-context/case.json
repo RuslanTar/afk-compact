@@ -6,7 +6,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.2 D-8: without a plugin handoff turn (a handoff the user asked for) today's scoped carry holds: a line without state or note is approval-shape, a usable line is checked and carries; a context-only own line is accepted (never checked, never hashed) and measure lists it under Approvals (context only, re-ask)",
+ "note": "0.1.2 D-8: without a plugin handoff turn (a handoff the user asked for) today's scoped carry holds: a line without state or note is approval-shape, a usable line is checked and carries; a context-only own line is accepted (never checked, never hashed) and measure lists it under Approvals (context only, re-ask); X-2 / HL-2: a usable line may keep the question its short answer replies to, `(answer to \"<question>\")`, and is checked on the words alone; review finding 2: in a later plugin handoff turn a context-only line carries from the own handoff's untagged `## Approvals` lines without a quote check, while the words of a tagged (foreign) line there do not carry (approval-quote)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -99,10 +99,10 @@
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-12: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:02 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-12: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:02 +0300\n- U-14: approval \"yes\" (answer to \"May I write spec v2 into the LAB-62 description?\") — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version · once · not yet used · given 11111111 2026-10-21 13:02 +0300\n- U-4: approval \"deploy the hotfix now\" — action deploy the hotfix · targets staging @ build 41 ; context only, not valid here; re-ask · given cd34ef56 2026-10-20 18:10 +0300 [from cd34ef56 · U-1 · 2026-10-20 18:10 +0300]\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
-   "name": "a usable line is checked and a context-only line is accepted, never checked",
+   "name": "a usable line (one keeping its question too) is checked, a context-only line is accepted, never checked",
    "cwd": "$TMP/repo",
    "argv": [
     "publish",
@@ -126,7 +126,10 @@
      {
       "path": "$ROOT/repo/approvals/$STEM.md",
       "has": [
-       "^approvals_checked: U-2$"
+       "^approvals_checked: U-2, U-14$"
+      ],
+      "lacks": [
+       "^requested_by:"
       ]
      },
      {
@@ -141,8 +144,8 @@
       "fields": {
        "result": "wrote",
        "approvals": {
-        "lines": 2,
-        "checked": 1,
+        "lines": 4,
+        "checked": 2,
         "unchecked": 0,
         "context": 1
        },
@@ -169,8 +172,97 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ 1a2b3c4; U-14 replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md → LAB-62 description @ the 2026-10-23 v1 version$",
      "^Approvals \\(context only, re-ask\\): U-12 \\(written as context\\)$"
+    ]
+   }
+  },
+  {
+   "name": "the plugin opens an idle handoff turn later in the session",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "b2c3d4e5",
+    "--reason",
+    "idle",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"u9\", \"timestamp\": \"2026-10-21T13:30:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"carry on with the retry work\"}}\n"
+  },
+  {
+   "name": "begin binds the turn; the base is the own handoff",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn.ht": "b2c3d4e5",
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE2": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (plugin turn)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE2"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE2/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-12: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:02 +0300\n- U-14: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask\n- U-4: approval \"deploy the hotfix now\" — action deploy the hotfix · targets staging @ build 41 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "context lines carry from the own handoff without a quote check; a tagged line's words do not",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE2",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 13$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-plugin-turn",
+     "approval-shape",
+     "LINT approval-quote line 10$",
+     "LINT approval-quote line 11$",
+     "LINT approval-quote line 12$"
     ]
    }
   }

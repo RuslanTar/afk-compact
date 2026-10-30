@@ -690,6 +690,102 @@ sub user_quote_found {
     return $r->[0];
 }
 
+# Denied calls (0.1.2 AC-2, mitigation 1 of the classifier incident): a tool call of the main
+# thread whose result Claude Code wrote as a permission denial. `classifier`: the auto-mode
+# classifier refused it; `rule`: a deny rule or the permission mode did; `user`: the user
+# rejected it at the prompt.
+our @DENIED = (
+    [ classifier => qr/\A\s*Permission for this action (?:was|has been) denied by (?:the )?(?:Claude Code )?auto[- ]mode classifier/ ],
+    [ rule       => qr/\A\s*Permission to use \S+ (?:[^\n]*? )?has been denied/ ],
+    [ user       => qr/\A\s*The user doesn't want to proceed with this tool use/ ],
+);
+# Tools whose input holds file text: only their path is kept.
+my %DENIED_PATH_ONLY = map { $_ => 1 } qw(Write Edit MultiEdit NotebookEdit);
+our $DENIED_VALUE_MAX = 200;      # longer input values (a body, a description) are skipped
+our $DENIED_TEXT_MAX = 2000;
+
+# denied_calls(path) -> [{tool, class, epoch, text}] | undef (unreadable): the main thread's
+# denied calls, oldest first, any session's rows of the file included (a copied denial counts:
+# fail closed). `text` is the call's input words in memory only, for the approvals lint to tell
+# which approval a denial covers; it is never logged or printed: the Bash command, the path of a
+# Write, Edit, MultiEdit or NotebookEdit, else the input's scalar values up to
+# $DENIED_VALUE_MAX characters each. Two passes: the results are found by plain index first, so
+# a transcript with no denial is read once without decoding.
+sub denied_calls {
+    my ($path) = @_;
+    return undef unless defined $path && -f $path && -r _;
+    open(my $fh, '<:raw', $path) or return undef;
+    my %res;
+    while (my $line = <$fh>) {
+        next unless index($line, '"tool_use_id"') >= 0
+            && (index($line, 'denied') >= 0 || index($line, "want to proceed") >= 0);
+        my $j = eval { jsonc::decode($line) };
+        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user' && !$j->{isSidechain};
+        my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+        next unless ref $c eq 'ARRAY';
+        for my $it (@$c) {
+            next unless ref $it eq 'HASH' && ($it->{type} // '') eq 'tool_result';
+            my $id = $it->{tool_use_id};
+            next unless defined $id && !ref $id && $id ne '';
+            my $t = $it->{content};
+            $t = join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$t) if ref $t eq 'ARRAY';
+            next unless defined $t && !ref $t;
+            for my $d (@DENIED) {
+                next unless $t =~ $d->[1];
+                $res{$id} = { class => $d->[0], epoch => _row_epoch($j) };
+                last;
+            }
+        }
+    }
+    unless (%res) { close $fh; return [] }
+    seek($fh, 0, 0);
+    my @out;
+    while (my $line = <$fh>) {
+        next unless index($line, '"tool_use"') >= 0 && grep { index($line, $_) >= 0 } keys %res;
+        my $j = eval { jsonc::decode($line) };
+        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'assistant' && !$j->{isSidechain};
+        my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+        next unless ref $c eq 'ARRAY';
+        for my $it (@$c) {
+            next unless ref $it eq 'HASH' && ($it->{type} // '') eq 'tool_use';
+            my $id = $it->{id};
+            next unless defined $id && !ref $id && $res{$id};
+            my $tool = $it->{name};
+            next unless defined $tool && !ref $tool && $tool ne '';
+            my $r = delete $res{$id};
+            push @out, { tool => $tool, class => $r->{class}, epoch => $r->{epoch} // _row_epoch($j),
+                         text => _denied_text($tool, $it->{input}) };
+        }
+    }
+    close $fh;
+    return \@out;
+}
+
+sub _denied_text {
+    my ($tool, $in) = @_;
+    my $t;
+    if (ref $in ne 'HASH') { $t = defined $in && !ref $in ? $in : '' }
+    elsif ($tool eq 'Bash') { $t = defined $in->{command} && !ref $in->{command} ? $in->{command} : '' }
+    elsif ($DENIED_PATH_ONLY{$tool}) {
+        $t = join(' ', grep { defined && !ref } $in->{file_path}, $in->{notebook_path});
+    } else {
+        my @v;
+        my $walk;
+        $walk = sub {
+            my ($x, $depth) = @_;
+            return if $depth > 3;
+            if (ref $x eq 'HASH') { $walk->($x->{$_}, $depth + 1) for sort keys %$x }
+            elsif (ref $x eq 'ARRAY') { $walk->($_, $depth + 1) for @$x }
+            elsif (defined $x && !ref $x && length($x) <= $DENIED_VALUE_MAX) { push @v, $x }
+        };
+        $walk->($in, 0);
+        undef $walk;
+        $t = join(' ', @v);
+    }
+    $t = substr($t, 0, $DENIED_TEXT_MAX) if length($t) > $DENIED_TEXT_MAX;
+    return $t;
+}
+
 # subagent_files(main transcript path, sid) -> [{path, agent_id}]
 sub subagent_files {
     my ($path, $sid) = @_;

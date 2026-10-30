@@ -81,10 +81,17 @@ package skills::approvals;
 # Write of a usable approval in a handoff the user did not ask for (its carve-out for recording
 # at the user's request cannot apply), and passed this shape (probe B, V3 0/9 blocked; X-5: no
 # denial note on a usable line). lint(context_only => 1) blocks any other own line
-# (`approval-plugin-turn`) and still checks the quote; publish then lists no id in
-# approvals_checked and records no line hashes, so nothing in the file can carry. The same
-# context-only line is accepted in any stage (never checked, never carried), and `measure`
-# lists such lines as context only.
+# (`approval-plugin-turn`, also for a second line with one id or a new approval line outside the
+# section: review finding 4) and still checks the quote; publish then lists no id in
+# approvals_checked, records no line hashes and writes `requested_by: plugin` (AC-4), so nothing
+# in the file can carry. The same context-only line is accepted in any stage (never checked,
+# never carried), and `measure` lists such lines as context only: `(plugin handoff)` in a file
+# marked requested_by: plugin, where no line carries at all, else `(written as context)`.
+#
+# The question (0.1.2 HL-2, X-2): after the words, `(answer to "<question>")` may keep the
+# question a short answer replies to; the quote check reads the words only. Only a handoff the
+# user asked for may hold it (a plugin handoff turn writes the bare V3 shape). Denied actions
+# (AC-2, mitigation 1): see _denied below; a denial note sits only on a context-only line (X-5).
 use strict;
 use warnings;
 use utf8;
@@ -235,14 +242,17 @@ sub parse_line {
     return _finish(\%e);
 }
 
-# parse_context_line(line) -> {n, id, quote, action, targets => [..], targets_text, context => 1}
-# for an own line in the spec's approval_context_re form (no once/standing, no state), else
-# undef. A line whose targets still hold a scope or state word is no context line.
+# parse_context_line(line) -> {n, id, quote, action, targets => [..], targets_text, context => 1,
+# question => 0|1, denied => 0|1} for an own line in the spec's approval_context_re form (no
+# once/standing, no state; optionally the question the words answer and, in a handoff the user
+# asked for, a ` · denied <how> <stamp>` note), else undef. A line whose targets still hold a
+# scope or state word is no context line.
 sub parse_context_line {
     my ($l) = @_;
     my $re = skills::spec::regex_at('approval_context_re') or return undef;
     return undef unless defined $l && $l =~ $re;
-    my %e = (n => $1, quote => $2, action => $3, targets_text => $4, scope => '', state => '', context => 1);
+    my %e = (n => $1, quote => $2, question => (defined $3 ? 1 : 0), action => $4, targets_text => $5,
+             denied => (defined $6 ? 1 : 0), scope => '', state => '', context => 1);
     return undef if "$e{action} · $e{targets_text}" =~ $STATE_WORDS;
     $e{id} = "U-$e{n}";
     return _finish(\%e);
@@ -252,6 +262,71 @@ sub parse_context_line {
 sub context_enabled {
     return 0 unless enabled() && defined skills::spec::regex_at('approval_context_re');
     return skills::spec::lint_ids()->{blocking}{'approval-plugin-turn'} ? 1 : 0;
+}
+
+# 1 when the spec has the denied-action rule (0.1.2 AC-2, mitigation 1).
+sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{blocking}{'approval-denied'} ? 1 : 0 }
+
+# Denied actions (0.1.2 AC-2, mitigation 1, in the owner's 0.1.2 scope of 2026-10-30): in a
+# handoff the user asked for, a usable approval whose action a call of this session was refused
+# for (the classifier, a deny rule or the user at the prompt; transcript::denied_calls) is
+# blocked (`approval-denied`): it is written context only with its denial note, and its Next
+# step asks.
+# A denied call covers an approval when, in the approval's action and targets,
+#   - a distinctive token of the call's input (a word with a digit or a `/ . : # ! @ _ -` inside:
+#     a ticket key, a branch with a slash, a path or its file name, a URL) stands whole, or
+#   - a service word of an MCP tool's server or name (not one of %DENY_STOP) stands as a word
+#     (`mcp__…Atlassian…__editJiraIssue` names `atlassian`, `jira`), or
+#   - the call names no such token and shares an outward class with the approval (a denied bare
+#     `git push` covers every push approval).
+# Fail closed: a wrong match costs one re-ask in the next session.
+our %DENY_STOP = map { $_ => 1 } qw(mcp claude server api app get set edit create update delete add remove write
+    read list search find send post put patch fetch query run new the issue issues page pages comment comments
+    message messages file files item items record records data info for and with tool tools);
+my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
+
+sub _deny_keys {
+    my ($c) = @_;
+    my (%tok, %word, %cls);
+    my $text = $c->{text} // '';
+    for my $t (split $DENY_TOKEN_SPLIT, $text) {
+        $t =~ s/[.:?]+\z//;
+        next if length($t) < 3 || $t =~ /\A-/;
+        next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!@_-]/;
+        $tok{$t} = 1;
+        $tok{$1} = 1 if $t =~ m{/([^/]{3,})\z} && $1 =~ /[0-9.:#!@_-]/ && $1 =~ /[A-Za-z0-9]{2}/;
+    }
+    my $tool = $c->{tool} // '';
+    if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
+        for my $w (map { lc } map { split /(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+/ } $1, $2) {
+            $word{$w} = 1 if length($w) >= 3 && $w =~ /[a-z]/ && !$DENY_STOP{$w};
+        }
+    }
+    for my $k (@{ (eval { skills::spec::outward_classes() }) || [] }) {
+        $cls{ $k->{class} } = 1 if $tool =~ $k->{re} || ($tool eq 'Bash' && $text =~ $k->{re});
+    }
+    if ($tool eq 'Bash') { for my $w (@ACTION_WORDS) { $cls{ $w->[0] } = 1 if $text =~ $w->[1] } }
+    return { tok => [ sort keys %tok ], word => [ sort keys %word ], cls => \%cls };
+}
+
+# _denied(entry, [deny keys…]) -> 1 when a denied call covers the approval (see above).
+sub _denied {
+    my ($e, $keys) = @_;
+    my $text = "$e->{action} · $e->{targets_text}";
+    my $lc = lc $text;
+    my $ecls;
+    for my $k (@{ $keys || [] }) {
+        for my $t (@{ $k->{tok} }) { return 1 if $text =~ /(?<![\w.\/-])\Q$t\E(?![\w\/-]|\.\w)/ }
+        for my $w (@{ $k->{word} }) { return 1 if $lc =~ /(?<![a-z0-9])\Q$w\E(?![a-z0-9])/ }
+        next if @{ $k->{tok} } || !%{ $k->{cls} };
+        $ecls //= do {
+            my %h = map { $_ => 1 } @{ classes($e)->{outward} };
+            for my $w (@ACTION_WORDS) { $h{ $w->[0] } = 1 if $e->{action} =~ $w->[1] }
+            \%h;
+        };
+        return 1 if grep { $ecls->{$_} } keys %{ $k->{cls} };
+    }
+    return 0;
 }
 
 sub _finish {
@@ -562,7 +637,9 @@ sub _default_branches {
 #       origins => {U-n => origin class word} for the checked ids (owner xxxxxxxx-12)}
 # context_only (a plugin handoff turn, 0.1.2 D-8): every own line must be the context-only form
 # (approval-plugin-turn otherwise); its quote is still checked (approval-quote), and no id is
-# returned as checked. Without it a context-only own line is accepted too, never checked.
+# returned as checked. Without it a context-only own line is accepted too, never checked, and a
+# usable line whose action this session was refused for is `approval-denied` (AC-2; the
+# transcript's denied calls, transcript::denied_calls, read in memory only).
 sub lint {
     my ($lines, %a) = @_;
     my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, context => 0, classes => [], origins => {});
@@ -571,6 +648,11 @@ sub lint {
     my ($tag_re, $note) = ($a{tag_re}, $a{note} // '');
     my $cx_ok = context_enabled();
     my $cx_only = $a{context_only} && $cx_ok ? 1 : 0;
+    # In a plugin handoff turn every shape fault is reported as approval-plugin-turn, whose fix
+    # names the context-only form (review finding 4: approval-shape's fix asks for once or
+    # standing and a state, the opposite).
+    my $shape = $cx_only ? 'approval-plugin-turn' : 'approval-shape';
+    my $dn_ok = !$cx_only && denied_enabled();
     my @own;
     for my $i (0 .. $#$lines) {
         my $l = $lines->[$i];
@@ -579,7 +661,7 @@ sub lint {
         if (!$in->{$i}) {
             # An approval line outside the section: new ones are flagged; a line carried
             # byte-identical from the base or own file, or a tagged carried line, is context.
-            push @{ $r{blocking} }, [ 'approval-shape', $where ] if is_approval_line($l) && !$tagged && !$a{prev_lines}{$l};
+            push @{ $r{blocking} }, [ $shape, $where ] if is_approval_line($l) && !$tagged && !$a{prev_lines}{$l};
             next;
         }
         next unless $l =~ /\S/;
@@ -590,19 +672,35 @@ sub lint {
         }
         my $e;
         if ($cx_only) {
-            # A plugin handoff turn: only the context-only form (a usable line, one with a
-            # scope or state word, or one without the note is blocked).
+            # A plugin handoff turn: only the context-only form of the probe (V3): a usable line,
+            # one with a scope or state word, one without the note, and one with the question or
+            # a denial note are blocked (X-2: neither was probed on a plugin handoff).
             $e = parse_context_line($l);
-            if (!$e) { push @{ $r{blocking} }, [ 'approval-plugin-turn', $where ]; next }
+            if (!$e || $e->{question} || $e->{denied}) { push @{ $r{blocking} }, [ 'approval-plugin-turn', $where ]; next }
         } else {
             $e = parse_line($l) // ($cx_ok ? parse_context_line($l) : undef);
-            if (!$e) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+            # A denial note on a line that is no context line: the action was denied, so the
+            # line must be context only (X-5: never a denial note on a usable approval).
+            if (!$e) { push @{ $r{blocking} }, [ ($dn_ok && $l =~ /\bdenied\b/i ? 'approval-denied' : 'approval-shape'), $where ]; next }
         }
         # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
         # with a checked line's id would ride on its check.
-        if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+        if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ $shape, $where ]; next }
         $e->{where} = $where;
         push @own, $e;
+    }
+    # AC-2: a usable line whose action this session was refused for (see _denied).
+    if ($dn_ok && grep { !$_->{context} } @own) {
+        my $calls = defined $a{transcript} && defined &transcript::denied_calls ? transcript::denied_calls($a{transcript}) : undef;
+        my @keys = map { _deny_keys($_) } @{ $calls || [] };
+        if (@keys) {
+            my @keep;
+            for my $e (@own) {
+                if (!$e->{context} && _denied($e, \@keys)) { push @{ $r{blocking} }, [ 'approval-denied', $e->{where} ]; next }
+                push @keep, $e;
+            }
+            @own = @keep;
+        }
     }
     my @ask;
     for my $e (@own) {
@@ -667,14 +765,14 @@ sub _carried {
     return undef;
 }
 
-# A context-only line carried from an own-chain file: a line of that file, in either form, with
+# A context-only line carried from an own-chain file: an own line of that file's `## Approvals`
+# (untagged: another session's words carried there are never this chain's), in either form, with
 # the same id, words, action and targets. Its quote was checked when that file was published,
 # and a context-only line grants nothing, so the file need not list the id as checked.
 sub _carried_context {
     my ($e, $chain) = @_;
     for my $d (@{ $chain || [] }) {
-        for my $l (split /\n/, $d->{text} // '') {
-            my $p = parse_line($l) // parse_context_line($l) or next;
+        for my $p (@{ _section_entries($d->{text}, 1) }) {
             return 1 if $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote} && $p->{action} eq $e->{action}
                 && $p->{targets_text} eq $e->{targets_text};
         }
@@ -716,16 +814,17 @@ sub hash_path {
     return "$ctx->{root}/.sessions/$HASH_DIR/$sid.$n.json";
 }
 
-# The parsed, untagged lines of a body's `## Approvals`, each with its exact text.
+# The parsed, untagged lines of a body's `## Approvals`, each with its exact text (with
+# $context, the context-only own lines too).
 sub _section_entries {
-    my ($body) = @_;
+    my ($body, $context) = @_;
     my @lines = split /\n/, $body // '';
     my $in = section_lines(\@lines);
     my $tag_re = skills::spec::regex_at('carry.tag_re');
     my @out;
     for my $i (sort { $a <=> $b } keys %$in) {
         next if $tag_re && $lines[$i] =~ $tag_re;
-        my $e = parse_line($lines[$i]) or next;
+        my $e = parse_line($lines[$i]) // ($context && context_enabled() ? parse_context_line($lines[$i]) : undef) or next;
         $e->{line} = $lines[$i];
         push @out, $e;
     }
@@ -953,9 +1052,14 @@ sub handoff_lines {
     my @own_idx = grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
     my @e = grep { defined } map { parse_line($lines[$_]) } @own_idx;
     # Context-only own lines (a plugin handoff turn, 0.1.2 D-8): never checked, listed as such.
+    # A file publish wrote in a plugin handoff turn (frontmatter `requested_by: plugin`, AC-4)
+    # names that reason, and none of its lines carries, whatever its approvals_checked says.
     my %cx;
     if (context_enabled()) {
-        for my $c (grep { defined } map { parse_context_line($lines[$_]) } @own_idx) { $cx{ $c->{id} } //= 'written as context' }
+        my $plugin = ($d->{fm}{requested_by} // '') eq 'plugin';
+        my $label = $plugin ? 'plugin handoff' : 'written as context';
+        for my $c (grep { defined } map { parse_context_line($lines[$_]) } @own_idx) { $cx{ $c->{id} } //= $label }
+        if ($plugin) { $cx{ $_->{id} } //= $label for @e }
     }
     my ($own, $why) = own_relation($d, $ctx, $sid);
     if (!$own) {

@@ -148,6 +148,19 @@ def gen_place_files():
     return sorted(out)
 
 
+def check_context_note(spec):
+    """0.1.2 D-8 (review finding 6): approval_context_re spells carry.foreign_approval_note
+    literally, so a changed note must change the regex too (the context-only own line reuses the
+    foreign form). Dies when the regex lacks the note, escaped as a regex literal."""
+    rx = spec.get("approval_context_re")
+    if rx is None:
+        return
+    note = (spec.get("carry") or {}).get("foreign_approval_note")
+    lit = re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", note) if isinstance(note, str) else None
+    if not isinstance(rx, str) or lit is None or lit not in rx:
+        die("spec-literals: approval_context_re does not hold carry.foreign_approval_note ({!r})".format(note))
+
+
 def plan(brand):
     """Return {repo-relative path: (text, mode)} for every GEN file of tools/build."""
     name = brand["name"]
@@ -173,6 +186,7 @@ def plan(brand):
                 spec = json.loads(m.group(1))
             except ValueError as e:
                 die("spec-literals block is not valid JSON: {}".format(e))
+            check_context_note(spec)
     if spec is not None:
         out["plugin/assets/handoff-spec.json"] = (json.dumps(spec, indent=2, ensure_ascii=False) + "\n", PLAIN)
 
