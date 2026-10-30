@@ -16,7 +16,7 @@
 #   repo (git recipe), dispatch (record fields + age_s), transcript (rows; boundary/prompt
 #   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
 #   out: a PATH without git), run (a helper call without assertions).
-# Placeholders in every string: $TMP $HOME $ROOT $WATCH $SID $SID8 $PLUGIN $FIX $CASE
+# Placeholders in every string: $TMP $HOME $ROOT $LEGACY (the pre-0.1.2 default root) $WATCH $SID $SID8 $PLUGIN $FIX $CASE
 #   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
 #   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), $LAUNCH_ENV (the restart
@@ -685,7 +685,14 @@ sub run_case {
     $V{PLUGIN_VERSION} = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) }; ref $m eq 'HASH' ? $m->{version} // '0.0.0' : '0.0.0' };
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
-    $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : "$V{HOME}/.claude/handoffs";
+    # STATE-ROOT (0.1.2): the default root is the staged manifest's default (~/.local/state/<brand>/handoffs);
+    # $LEGACY is the old default ~/.claude/handoffs, read while handoff_root is unset
+    my $droot = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) };
+                     ref $m eq 'HASH' && ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{handoff_root} eq 'HASH'
+                         ? $m->{userConfig}{handoff_root}{default} : undef } // '~/.local/state/' . $BRAND . '/handoffs';
+    $droot =~ s{\A~/}{$V{HOME}/};
+    $V{LEGACY} = "$V{HOME}/.claude/handoffs";
+    $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : $droot;
     $V{WATCH} = defined $cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR}) : "$V{ROOT}/.watch";
     $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : "$V{HOME}/.claude/trash-staging";
     my $vars = subst_deep($case->{vars} || {}, \%V);
@@ -787,8 +794,8 @@ sub subst {
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
     $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
-    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\}}{$V->{$1} // ''}ge;
-    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY)\b/$V->{$1} \/\/ ''/ge;
+    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\}}{$V->{$1} // ''}ge;
+    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\b/$V->{$1} \/\/ ''/ge;
     # $LSTART1 / $RUNNER_LSTART (lstart_var), then any other $NAME the case defined (vars) or a
     # step captured; unknown names stay as written.
     $s =~ s/\$([A-Z][A-Z0-9_]*)/my $n = $1; $n eq 'LSTART1' || $n eq 'RUNNER_LSTART' ? lstart_var($n, $V) : exists $V->{$n} && defined $V->{$n} ? $V->{$n} : "\$$n"/ge;
@@ -3153,6 +3160,45 @@ sub builtin {
         print "#   redact: ${\ length $text} bytes, $n hits, " . sprintf('%.2f s', $dt) . "\n" if $VERBOSE;
         return @e;
     }
+    if ($name eq 'state_root') {
+        # STATE-ROOT (0.1.2): paths::for's handoff root (the default reads under $XDG_STATE_HOME when
+        # that is an absolute path; any other value is the root as given) and its legacy root;
+        # watch::ctx::_state_root agrees for the same value; paths::named and watch::ctx::_named fall
+        # back to `plugin` (ctx::brand's last name) when no plugin name can be read.
+        require "watch/ctx.pm";
+        no warnings qw(once redefine);
+        for my $c (@{ $a->{roots} || [] }) {
+            delete local $ENV{XDG_STATE_HOME};
+            $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
+            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'flag' } };
+            my $p = paths::for($s, 'x');
+            my $id = $c->{id} // ($c->{value} // 'unset');
+            push @e, "$id: root " . ($p->{root} // 'null') . ", want $c->{root}" if ($p->{root} // '') ne $c->{root};
+            push @e, "$id: watch $p->{watch}, want $c->{root}/.watch" if ($p->{watch} // '') ne "$c->{root}/.watch";
+            push @e, "$id: from_default $p->{from_default}, want " . ($c->{from_default} ? 1 : 0) if exists $c->{from_default} && $p->{from_default} != ($c->{from_default} ? 1 : 0);
+            push @e, "$id: legacy " . ($p->{legacy} // 'null') . ', want ' . ($c->{legacy} // 'null') if exists $c->{legacy} && ($p->{legacy} // '') ne ($c->{legacy} // '');
+            next unless defined $c->{value};
+            # the watcher's context from the same settings (pid and spec given: nothing else is read)
+            my $w = watch::ctx::init({ sid => 'x', pid => 1, spec => {}, now => 0, settings => { handoff_root => $c->{value}, log_dir => '' } });
+            push @e, "$id: watch::ctx root " . ($w->{root} // 'null') . ", want $c->{root}" if ($w->{root} // '') ne $c->{root};
+            push @e, "$id: watch::ctx watch " . ($w->{watch} // 'null') . ", want $c->{root}/.watch" if ($w->{watch} // '') ne "$c->{root}/.watch";
+        }
+        for my $c (@{ $a->{named} || [] }) {
+            local *ctx::brand = $c->{brand_dies} ? sub { die "no brand\n" } : sub { $c->{brand} };
+            my $got = paths::named($c->{value});
+            push @e, "paths::named($c->{value}) " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
+        }
+        for my $c (@{ $a->{watch_named} || [] }) {
+            local *watch::ctx::plugin_root_default = sub { $c->{plugin_root} };
+            delete local $ENV{STORE_LAUNCHER};
+            $ENV{STORE_LAUNCHER} = $c->{launcher} if defined $c->{launcher};
+            my $got = watch::ctx::_named($c->{value});
+            push @e, "watch::ctx::_named($c->{value}) " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
+        }
+        return @e;
+    }
+
     return ("unknown builtin $name");
 }
 
@@ -3201,6 +3247,27 @@ sub golden_diff {
     $i++ while $i < length($got) && $i < length($want) && substr($got, $i, 1) eq substr($want, $i, 1);
     return ("stdout differs from the goldens at char $i: got " . jsonc::encode(substr($got, $i, 60))
             . ' want ' . jsonc::encode(substr($want, $i, 60)));
+}
+
+# tree_sig(dir) -> one line per entry under dir (itself included): relative path, type, mode,
+# size, mtime and, for a file, its sha256; sorted (same_tree_as).
+sub tree_sig {
+    my ($dir) = @_;
+    my @out;
+    my @todo = ('');
+    while (@todo) {
+        my $rel = shift @todo;
+        my $p = $rel eq '' ? $dir : "$dir/$rel";
+        my @st = lstat $p or next;
+        my $type = -l _ ? 'l' : -d _ ? 'd' : 'f';
+        my $sum = $type eq 'f' ? sha::hex256(util::read_file($p) // '') : $type eq 'l' ? (readlink($p) // '') : '';
+        push @out, join("\t", $rel eq '' ? '.' : $rel, $type, sprintf('%04o', $st[2] & 07777), ($type eq 'd' ? 0 : $st[7]), $st[9], $sum);
+        next unless $type eq 'd';
+        opendir(my $dh, $p) or next;
+        push @todo, map { $rel eq '' ? $_ : "$rel/$_" } grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+        closedir $dh;
+    }
+    return join("\n", sort @out);
 }
 
 sub expand_glob {
@@ -3341,6 +3408,22 @@ sub check {
                 push @e, "$p: mtime $now differs from snapshot $f->{same_mtime_as} ($was)" if defined $was && $now != $was;
             }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
+            # tree_snapshot <label> keeps a folder's listing (every entry's path, type, mode, size,
+            # mtime and bytes) for a later step's same_tree_as <label> (STATE-ROOT: nothing is written
+            # under the legacy root)
+            if (defined $f->{tree_snapshot}) { $V->{"__tree_$f->{tree_snapshot}"} = tree_sig($p) }
+            if (defined $f->{same_tree_as}) {
+                my $was = $V->{"__tree_$f->{same_tree_as}"};
+                push @e, "$p: no tree snapshot $f->{same_tree_as}" unless defined $was;
+                if (defined $was) {
+                    my $now = tree_sig($p);
+                    if ($now ne $was) {
+                        my %w = map { $_ => 1 } split /\n/, $was;
+                        my %n = map { $_ => 1 } split /\n/, $now;
+                        push @e, "$p: tree changed: " . join('; ', (map { "+$_" } grep { !$w{$_} } sort keys %n), (map { "-$_" } grep { !$n{$_} } sort keys %w));
+                    }
+                }
+            }
             next if -d $p;
             my $raw = util::read_file($p) // '';
             my $txt = $raw; utf8::decode($txt);

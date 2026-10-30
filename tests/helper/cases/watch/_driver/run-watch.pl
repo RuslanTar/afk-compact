@@ -211,7 +211,12 @@ sub run_case {
     if ($> == 0 && grep { $_ eq 'nonroot' } @{ $case->{needs} || [] }) { $SKIP = "needs nonroot (running as root)$note"; return () }
     my $tmp = File::Temp::tempdir('watchcase-XXXXXX', TMPDIR => 1, CLEANUP => 1);
     my %v = (TMP => $tmp, HOME => "$tmp/home", SID => $T::SID, BRAND => $T::BRAND, PLUGIN => "$tmp/plugin");
-    $v{ROOT} = "$v{HOME}/.claude/handoffs";
+    # STATE-ROOT (0.1.2): the default handoff root is the manifest's (~/.local/state/<name>/handoffs)
+    my $droot = do { my $m = watch::io::read_json_file("$REPO/plugin/.claude-plugin/plugin.json") || {};
+                     ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{handoff_root} eq 'HASH' ? $m->{userConfig}{handoff_root}{default} : undef };
+    $droot = '~/.local/state/' . $T::BRAND . '/handoffs' unless defined $droot && !ref $droot && $droot ne '';
+    $droot =~ s{\A~/}{$v{HOME}/};
+    $v{ROOT} = $droot;
     $v{WATCH} = "$v{ROOT}/.watch";
     $v{PROJ} = "$v{HOME}/.claude/projects/-synthetic-proj";
     watch::io::mkdir_p($v{HOME});

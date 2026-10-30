@@ -16,6 +16,15 @@ use utf8;
 
 sub dir { return rc::root() . '/.sessions' }
 sub by_pid { return dir() . '/by-pid' }
+# STATE-ROOT: the readers below also read the legacy root's records and lineage (rc::read_roots, the
+# effective root first); every write goes to dir() and by_pid() only.
+sub read_dirs { return map { "$_/.sessions" } rc::read_roots() }
+# _pid_files() -> ([folder, name] …): the by-pid file names of every read root.
+sub _pid_files {
+    my @out;
+    for my $d (map { "$_/by-pid" } read_dirs()) { push @out, map { [ $d, $_ ] } util::list_dir($d) }
+    return @out;
+}
 
 sub _key {
     my ($c) = @_;
@@ -72,21 +81,25 @@ sub close_gone {
     my $sid8 = substr($sid, 0, 8);
     my $end = util::clock_ms() + ($o{budget_ms} // $CLOSE_GONE_MS);
     my $dir = by_pid();
-    my @files = util::list_dir($dir);
-    my %ended = map { /^(\d+-\d+)\.ended-([^.]+)\.json$/ ? ("$1/$2" => 1) : () } @files;
+    my @pf = _pid_files();
+    my %ended = map { $_->[1] =~ /^(\d+-\d+)\.ended-([^.]+)\.json$/ ? ("$1/$2" => 1) : () } @pf;
     my $host = identity::host();
     my $me = rc::claude();
     my $n = 0;
-    for my $f (@files) {
+    for my $pf (@pf) {
+        my ($fd, $f) = @$pf;
         last if util::clock_ms() > $end;
         next unless $f =~ /^((\d+)-\d+)\.live-\Q$sid8\E\.json$/;
         my ($key, $pid) = ($1, $2);
         next if $ended{"$key/$sid8"} || ($me && defined $me->{pid} && $me->{pid} == $pid);
-        my $j = eval { jsonc::decode(util::read_file("$dir/$f") // '') };
+        my $j = eval { jsonc::decode(util::read_file("$fd/$f") // '') };
         next unless ref $j eq 'HASH' && ($j->{session_id} // '') eq $sid;
         next unless defined $j->{host} && !ref $j->{host} && $j->{host} eq $host;
         next unless _gone($j->{pid}, $j->{pid_lstart});
         my $rec = jsonc::obj(session_id => $j->{session_id}, reason => 'gone', ts => util::iso(util::now()));
+        $ended{"$key/$sid8"} = 1;
+        # the ended- twin of a legacy record goes to the effective root too (never the legacy one)
+        util::mkdir_p($dir) if $fd ne $dir;
         $n++ if util::write_excl("$dir/$key.ended-$sid8.json", jsonc::encode_bytes($rec) . "\n", 0600);
     }
     return $n;
@@ -97,9 +110,10 @@ sub last_cleared {
     my $c = rc::claude();
     my $k = _key($c);
     my ($best, $best_t);
-    for my $f (util::list_dir(by_pid())) {
+    for my $pf (_pid_files()) {
+        my ($fd, $f) = @$pf;
         next unless index($f, "$k.ended-") == 0;
-        my $raw = util::read_file(by_pid() . "/$f") // next;
+        my $raw = util::read_file("$fd/$f") // next;
         my $j = eval { jsonc::decode($raw) } or next;
         next unless ref $j eq 'HASH' && ($j->{reason} // '') eq 'clear';
         my $t = util::parse_iso($j->{ts} // '') // 0;
@@ -112,7 +126,7 @@ sub last_cleared {
 sub write_lineage {
     my ($sid, $source) = @_;
     my $f = dir() . "/$sid.lineage.json";
-    return { exists => 1 } if -e $f;
+    return { exists => 1 } if grep { -e "$_/$sid.lineage.json" } read_dirs();
     my $prev;
     my $e = last_cleared();
     $prev = $e->{session_id} if $e && ($e->{session_id} // '') ne $sid;
@@ -127,7 +141,8 @@ sub write_lineage {
 
 sub lineage {
     my ($sid) = @_;
-    my $raw = util::read_file(dir() . "/$sid.lineage.json") // return undef;
+    my ($raw) = grep { defined } map { util::read_file("$_/$sid.lineage.json") } read_dirs();
+    return undef unless defined $raw;
     my $j = eval { jsonc::decode($raw) };
     return ref $j eq 'HASH' ? $j : undef;
 }
@@ -140,11 +155,13 @@ sub records_for {
     my $sid8 = substr($sid // '', 0, 8);
     my (%ended, @live, $newest, $newest_t);
     my $n = 0;
-    my @files = util::list_dir(by_pid());
-    for my $f (@files) {
+    my %seen;
+    for my $pf (_pid_files()) {
+        my ($fd, $f) = @$pf;
         next unless $f =~ /^(\d+-\d+)\.(live|ended)-\Q$sid8\E\.json$/;
         my ($key, $kind) = ($1, $2);
-        my $raw = util::read_file(by_pid() . "/$f") // next;
+        next if $seen{$f}++;    # the same record in both roots counts once
+        my $raw = util::read_file("$fd/$f") // next;
         my $j = eval { jsonc::decode($raw) };
         next unless ref $j eq 'HASH' && ($j->{session_id} // '') eq $sid;
         $n++;
@@ -225,13 +242,16 @@ sub ended {
 sub live_peers {
     my %ended;
     my @live;
-    for my $f (util::list_dir(by_pid())) {
-        if ($f =~ /^(\d+-\d+)\.ended-([^.]+)\.json$/) { $ended{"$1/$2"} = 1; next }
+    my @pf = _pid_files();
+    for my $pf (@pf) {
+        if ($pf->[1] =~ /^(\d+-\d+)\.ended-([^.]+)\.json$/) { $ended{"$1/$2"} = 1; next }
     }
-    for my $f (util::list_dir(by_pid())) {
+    my %seen;
+    for my $pf (@pf) {
+        my ($fd, $f) = @$pf;
         next unless $f =~ /^(\d+-\d+)\.live-([^.]+)\.json$/;
-        next if $ended{"$1/$2"};
-        my $raw = util::read_file(by_pid() . "/$f") // next;
+        next if $ended{"$1/$2"} || $seen{$f}++;
+        my $raw = util::read_file("$fd/$f") // next;
         my $j = eval { jsonc::decode($raw) } or next;
         next unless ref $j eq 'HASH';
         next unless identity::alive($j->{pid}, $j->{pid_lstart});

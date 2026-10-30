@@ -78,15 +78,19 @@ sub pin {
     die skills::cli::refuse($rr) if $rr;
     my $p = skills::util::abs_path($o->{'resumed-from'});
     die skills::cli::refuse('not-found') unless defined $p && -f $p;
+    # STATE-ROOT: a handoff in the legacy root can be resumed too; the pin names its bucket under the
+    # store root, where the session's next writes go.
     my $root = skills::util::abs_path($ctx->{root}) // $ctx->{root};
-    die skills::cli::refuse('not-under-root') unless index($p, "$root/") == 0;
+    my ($from) = grep { index($p, "$_/") == 0 } map { skills::util::abs_path($_) // $_ } skills::ctx::read_roots($ctx);
+    die skills::cli::refuse('not-under-root') unless defined $from;
     my $lane;
     if (defined $o->{lane} && !skills::util::unset_value($o->{lane})) {
         die skills::cli::refuse('lane-id') unless $o->{lane} =~ $ADOPT_RE;
         $lane = $o->{lane};
     }
     my $bucket = skills::store::bucket_of($p);
-    (my $rel = $bucket) =~ s/\A\Q$root\E\///;
+    (my $rel = $bucket) =~ s/\A\Q$from\E\///;
+    $bucket = "$root/$rel" if $from ne $root;
     my $w = skills::gitfacts::where(skills::util::cwd());
     my ($ok, $res) = skills::ctx::pin_update($ctx, $id->{sid}, sub {
         my ($cur) = @_;
@@ -178,8 +182,13 @@ sub link_resume {
     my $claim = skills::approvals::claim_path($ctx, $ps);
     (my $sdir = $claim) =~ s{/[^/]+\z}{};
     my $json = skills::util::json_encode({ session_id => $sid, lineage_reason => 'handoff-resume', ts => skills::util::iso_local() }) . "\n";
-    my $made = eval { skills::util::mkdir_p($sdir); skills::util::write_excl($claim, $json, 0600) };
+    # STATE-ROOT: a claim in the legacy root (made before the upgrade) holds as one in the store root; it
+    # is read, never written, and a new claim goes to the store root only.
+    my $prior = skills::approvals::claim_found($ctx, $ps);
+    my $made = defined $prior && $prior ne $claim ? 0
+              : eval { skills::util::mkdir_p($sdir); skills::util::write_excl($claim, $json, 0600) };
     return ('none', 'claim failed') unless defined $made;
+    $claim = $prior if !$made && defined $prior;
     if (!$made) {
         my $c = eval { skills::util::json_decode(skills::util::read_file($claim, 65536)) };
         return ('none', 'claimed by another session') unless ref $c eq 'HASH' && ($c->{session_id} // '') eq $sid;
@@ -198,8 +207,8 @@ sub _newest_of {
     my $mine = skills::util::abs_path($d->{path}) // $d->{path};
     my $t = $d->{epoch};
     return 0 unless defined $t;
-    for my $repo (@{ skills::store::repos($ctx->{root}) }) {
-        for my $b (@{ skills::store::buckets($ctx->{root}, $repo) }) {
+    for my $rr (@{ skills::store::read_repos($ctx) }) {    # STATE-ROOT: both read roots
+        for my $b (@{ skills::store::buckets(@$rr) }) {
             for my $f (skills::util::list_dir($b)) {
                 next unless $f =~ /\.md\z/ && -f "$b/$f";
                 my $path = "$b/$f";
@@ -264,8 +273,8 @@ sub receipt {
     my $hrel = 'none';
     if (defined $h && $h ne '' && $h ne 'none') {
         my $p = skills::util::abs_path($h) // $h;
-        my $root = skills::util::abs_path($ctx->{root}) // $ctx->{root};
-        $hrel = index($p, "$root/") == 0 ? substr($p, length($root) + 1) : 'external';
+        my ($root) = grep { index($p, "$_/") == 0 } map { skills::util::abs_path($_) // $_ } skills::ctx::read_roots($ctx);
+        $hrel = defined $root ? substr($p, length($root) + 1) : 'external';
     }
     $ctx->log('resume_receipt', {
         handoff => $hrel, relation => $o->{relation}, tier => $o->{tier}, calls => 0 + $o->{calls},

@@ -22,6 +22,7 @@ my $repo = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../..');
         $E->is($a[0]{evidence}{continues_last_hour}, 7, 'A-19 for the 7th continue') if @a;
         my $m = watch::io::read_json_file("$repo/src/plugin.json") || {};
         my $uc = $m->{userConfig} || {};
+        my $brand = (watch::io::read_json_file("$repo/brand.json") || {})->{name} // 'plugin';
         local @ENV{ grep { /\ACLAUDE_PLUGIN_OPTION_/ } keys %ENV };
         delete @ENV{ grep { /\ACLAUDE_PLUGIN_OPTION_/ } keys %ENV };
         my $s = watch::ctx::_settings({ settings => {} });
@@ -30,7 +31,8 @@ my $repo = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../..');
             next unless ref $uc->{$k} eq 'HASH' && exists $uc->{$k}{default};
             my $want = $uc->{$k}{default};
             my $got = $s->{$k};
-            if ($k eq 'handoff_root') { $want =~ s{\A~}{$ENV{HOME}} }
+            # STATE-ROOT (0.1.2): the default names the plugin ({{plugin}} in src/plugin.json)
+            if ($k eq 'handoff_root') { $want =~ s{\A~}{$ENV{HOME}}; $want =~ s/{{plugin}}/$brand/g }
             if ($k eq 'triggers') { $want = $want ? 'true' : 'false' }
             $n++;
             $E->is($got, $want, "ctx default for $k equals plugin.json");

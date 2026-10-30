@@ -1,0 +1,76 @@
+{
+ "id": "AT-STATE-ROOT-03 (state-root: an old root in .planning is skipped)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "STATE-ROOT: an old default root whose real path lies in a .planning folder (here through a symlink) is skipped with a note line in locate and status.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "main",
+      "commits": [
+       {
+        "files": {
+         "a.txt": "a\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$TMP/p/.planning/handoffs/repo/LAB-5/2026-10-21_12-00-00_11111111_l.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d1d2d3d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=0d1d2d3d s=manual⟫\n# LAB-5 — old root\n⟪/$BRAND n=0d1d2d3d⟫\n"
+    },
+    {
+     "mkdir": "$HOME/.claude"
+    },
+    {
+     "symlink": "$LEGACY",
+     "to": "$TMP/p/.planning/handoffs"
+    }
+   ]
+  },
+  {
+   "name": "(g) the old root inside a .planning folder: skipped with a note, never picked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: none\\npick: none\\n",
+     "^legacy root ~/\\.claude/handoffs skipped \\(root-in-planning\\)$"
+    ],
+    "stdout_lacks": [
+     "\\.planning/handoffs/repo"
+    ]
+   }
+  },
+  {
+   "name": "(g) status says so",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^legacy handoff root ~/\\.claude/handoffs: skipped \\(root-in-planning\\)$"
+    ]
+   }
+  }
+ ]
+}

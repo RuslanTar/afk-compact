@@ -1079,7 +1079,7 @@ class Scenario:
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="fixtures-gen-setup-"))
         home = self.tmp + "/home"
         os.makedirs(home)
-        root = home + "/.claude/handoffs"
+        root = home + "/.local/state/" + b["name"] + "/handoffs"    # the default handoff_root (STATE-ROOT), as tests/helper/run.pl
         self.v = {"TMP": self.tmp, "HOME": home, "ROOT": root, "WATCH": root + "/.watch", "SID": sid, "SID8": sid[:8],
                   "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1), "HOST": os.uname().nodename}
         self.touched = {}

@@ -182,13 +182,13 @@
     "exit": 0,
     "files": [
      {
-      "path": "$HOME/.claude/handoffs/.watch/$SID/dispatch/5e770005.json",
+      "path": "$ROOT/.watch/$SID/dispatch/5e770005.json",
       "count": 1
      }
     ],
     "rows": [
      {
-      "file": "$HOME/.claude/handoffs/.watch/$SID.classic.jsonl",
+      "file": "$ROOT/.watch/$SID.classic.jsonl",
       "ev": "config_ambiguous",
       "count": 1
      }

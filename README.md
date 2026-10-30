@@ -140,7 +140,7 @@ Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.j
 
 | Key | Default | What it does |
 |---|---|---|
-| `handoff_root` | `~/.claude/handoffs` | Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default `~/.claude/handoffs`; change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository. |
+| `handoff_root` | `~/.local/state/afk-compact/handoffs` | Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default `~/.local/state/afk-compact/handoffs` (`$XDG_STATE_HOME/afk-compact/handoffs` when `XDG_STATE_HOME` is an absolute path), outside `~/.claude`, where Claude Code asks before every write in the default permission mode; while this is unset (or set to that default), handoffs an earlier version saved in `~/.claude/handoffs` are still read, never written (see [The handoff folder moved](#the-handoff-folder-moved-in-012)). Change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository. |
 | `log_dir` | empty = `<handoff_root>/.watch` | Where the plugin keeps its local logs (which hold no conversation text) and its per-compaction records. Empty (the default) means the `.watch` folder inside the handoff folder; set a path only if you want the logs kept apart from the handoffs. |
 | `disposable_root` | `~/.claude/trash-staging` | Where the plugin copies temporary files the session referred to (for example test output or logs in a temp folder), in one dated folder per day, so they are still there after the system clears its temp folder. Default `~/.claude/trash-staging`; nothing in it is deleted automatically, so remove old dated folders yourself when you no longer need them. |
 | `disposable_keep_days` | `0` (kept until you remove them) | How many days you plan to keep the temporary evidence copies; the plugin only prints this as a reminder in its handoff reports and never deletes anything. Default `0` means "kept until you remove them"; set a number of days if you clean the folder on a schedule and want the reports to say so. |
@@ -187,7 +187,7 @@ Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.j
 <details>
 <summary>Exact rules for each setting</summary>
 
-- `handoff_root`: Folder for handoffs and summary copies. Buckets are `<root>/<repo>/<ticket-or-topic>/`.
+- `handoff_root`: Folder for handoffs and summary copies. Buckets are `<root>/<repo>/<ticket-or-topic>/`. Unset in every source (flag, environment, settings file), or set to the default path itself (Claude Code fills unset options in with their defaults), the default root is the only one written, and the old default `~/.claude/handoffs`, if it exists, is read too: its buckets, pins, `/clear` lineage, session records, successor claims and approval records count as the private store's. That default root is `$XDG_STATE_HOME/afk-compact/handoffs` when `XDG_STATE_HOME` is set to an absolute path (a relative one is ignored, as the XDG Base Directory rules say), else `~/.local/state/afk-compact/handoffs`. Any other value you set, `~/.claude/handoffs` included, is the only root read.
 - `log_dir`: Watcher logs and per-compaction records.
 - `disposable_root`: Automatic evidence copies, in dated folders.
 - `disposable_keep_days`: Retention note only, shown in handoff reports. The plugin deletes nothing.
@@ -523,11 +523,12 @@ The helper waits 5 seconds at most (`NOT QUEUED (timeout)`); every non-zero exit
 
 | Where (defaults) | What | Written by |
 |---|---|---|
-| `~/.claude/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
-| `~/.claude/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/`, and under `.staging/` one work folder per handoff run: its draft (kept when refused) and `begin-full.json`, every entry `begin` measured, which a handoff points to when begin's reply left entries out | `/afk-compact:handoff` |
+| `~/.local/state/afk-compact/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
+| `~/.local/state/afk-compact/handoffs/<repo>/<ticket-or-topic>/` | Handoff files, with their judged evidence under `evidence/<stem>/`, and under `.staging/` one work folder per handoff run: its draft (kept when refused) and `begin-full.json`, every entry `begin` measured, which a handoff points to when begin's reply left entries out | `/afk-compact:handoff` |
 | `<repository>/.claude/handoffs/<topic>/` (repo mode only; the folder is the `root` of the declaration) | A portable export of each published handoff, left untracked. Also, from `project init`, `.claude/handoffs.json` and the folder's `README.md` and `.gitignore` | `/afk-compact:handoff`; `project init` |
-| `~/.claude/handoffs/.sessions/` | Session pins, `/clear` lineage, and one small record per session start and end | hooks and skills |
-| `~/.claude/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |
+| `~/.local/state/afk-compact/handoffs/.sessions/` | Session pins, `/clear` lineage, and one small record per session start and end | hooks and skills |
+| `~/.local/state/afk-compact/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |
+| `~/.claude/handoffs/` (the default before 0.1.2) | Read only, while `handoff_root` is unset or set to the default: nothing is moved or copied there, and nothing new is written there but the work folder of a handoff run begun before the update (see [Known limits of the move](#the-handoff-folder-moved-in-012)) | none |
 | `~/.claude/trash-staging/<YYYY-MM-DD>/` | Automatic evidence copies, one folder per compaction, each with a `MANIFEST.tsv`; disposable items of a handoff | evidence sweep after a compaction; `/afk-compact:handoff` |
 | `~/Downloads/` (else `<log_dir>/reports/`) | `afk-compact-report-<date>_<time>-<install>.zip`, only when you ask for a report | `/afk-compact:report` |
 | Claude Code's plugin store | Last seen Claude Code version and auto-continue timestamps | mod |
@@ -541,7 +542,16 @@ It registers one mod module and eight classic command hooks: `PreCompact`, `Post
 
 Files are private (folders 0700, files 0600, copies 0400). The private store (`handoff_root`, `log_dir` and `disposable_root`) is never written inside a git work tree (unless that path is git-ignored, which the plugin then logs) or inside a `.planning/` folder, in either mode. The only thing the plugin writes inside a repository is the repo-mode export described in [Handoffs in git](#handoffs-in-git-repo-mode), and the three files of `project init`.
 
-**Nothing is deleted by default.** The plugin removes no handoff, copy, evidence file or log on its own. A tool to analyze and prune old handoffs is on the backlog and not built. Cleanup is manual: remove what you no longer need, for example old dated folders under `disposable_root`. To see them first:
+### The handoff folder moved in 0.1.2
+
+Up to 0.1.1 the default `handoff_root` was `~/.claude/handoffs`. Claude Code treats `~/.claude` as a protected folder and, in the default permission mode, asks before every write there, so each handoff and summary copy asked. From 0.1.2 the default is `~/.local/state/afk-compact/handoffs` (`$XDG_STATE_HOME/afk-compact/handoffs` when `XDG_STATE_HOME` is an absolute path), outside it. The move is for that prompt only: in auto mode a write to the new folder still goes through Claude Code's safety checker, as any write does.
+
+- **Nothing is moved.** Your old folder stays where it is. While `handoff_root` is unset (or set to the new default itself), the plugin reads it as well: resume weighs its handoffs with the new ones by date, a session that started before the update keeps its folder, pin and approvals, and a handoff another session claimed there stays claimed. Everything new goes to the new folder. `/afk-compact:status` shows `legacy handoff root ~/.claude/handoffs: read-only, <n> buckets`. A legacy folder inside a git work tree (not ignored) or a `.planning/` folder is skipped, and status says so.
+- **To keep the old folder**, set `handoff_root` to `~/.claude/handoffs`; then only that folder is used, and each write there asks again.
+- **In the default permission mode** a write to the new folder asks until you allow it (Q-11). TODO(Q-11): allow rule that silences the manual-mode prompt for the new root — filled by the root after the probe
+- **Known limits of the move.** A handoff run begun before the update and published after it puts the handoff, the evidence kept after the update, the pin and records in the new folder; that run's work folder under `.staging/` (its draft and stamps) and the evidence it kept before the update stay in `~/.claude/handoffs`, where they began. Publishing refuses a restart recipe whose script was kept only before the update (`LINT recipe-script`) until the script is kept again. A session still running 0.1.1 reads and writes resume claims only in the old folder, so it cannot see a claim 0.1.2 made in the new one: during the update, a `once` approval could be lent to one session of each version. `/afk-compact:report` leaves out the old folder's handoffs and summaries, and `/afk-compact:status` may list a stash of a session from before the update as one with no process record.
+
+**Nothing is deleted by default.** The plugin removes no handoff, copy, evidence file or log on its own. A tool to analyze and prune old handoffs is on the backlog and not built. Cleanup is manual: remove what you no longer need, for example old dated folders under `disposable_root`, or the old `~/.claude/handoffs` once you no longer need what it holds. To see them first:
 
 ```
 ls -ld ~/.claude/trash-staging/*/

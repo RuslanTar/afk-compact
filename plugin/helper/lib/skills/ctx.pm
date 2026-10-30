@@ -57,6 +57,11 @@ sub new {
     $ctx->{root}       = $p->{root};
     $ctx->{watch}      = $p->{watch};
     $ctx->{disposable} = $p->{disposable};
+    # STATE-ROOT: the legacy root (~/.claude/handoffs while handoff_root is the default), read only; the run
+    # context checked it (rc::init), so a refused one is undef here and legacy_refused says why.
+    $ctx->{legacy}         = defined &rc::legacy ? rc::legacy() : undef;
+    $ctx->{legacy_refused} = defined &rc::legacy_refused ? rc::legacy_refused() : undef;
+    $ctx->{legacy_path}    = defined &rc::legacy_path ? rc::legacy_path() : undef;
     $ctx->{sid}        = 'unknown';
     return bless $ctx, __PACKAGE__;
 }
@@ -91,17 +96,27 @@ sub placeholder_sid {
 
 sub records_dir { my ($ctx) = @_; return "$ctx->{root}/.sessions/by-pid" }
 
-# All records: [{pid, epoch, state(live|ended), sid8, path, data}]
+# read_roots(ctx) -> the store root, then the legacy root when there is one (STATE-ROOT). Every reader of
+# the store's own files looks in both, in this order (the store root's file wins for one name);
+# writers use $ctx->{root} only.
+sub read_roots { my ($ctx) = @_; return grep { defined && $_ ne '' } ($ctx->{root}, $ctx->{legacy}) }
+
+# All records: [{pid, epoch, state(live|ended), sid8, path, data}], from both read roots (a
+# record file in both counts once, the store root's).
 sub records {
     my ($ctx, $sid8) = @_;
-    my $dir = records_dir($ctx);
     my @out;
-    for my $f (skills::util::list_dir($dir)) {
-        next unless $f =~ /\A(\d+)-(\d+)\.(live|ended)-([0-9a-z]+)\.json\z/;
-        # An optional sid8 keeps only that session's files, before any is read.
-        next if defined $sid8 && $4 ne $sid8;
-        my $d = eval { skills::util::json_decode(skills::util::read_file("$dir/$f", 65536)) };
-        push @out, { pid => $1, epoch => $2, state => $3, sid8 => $4, path => "$dir/$f", data => (ref $d eq 'HASH' ? $d : {}) };
+    my %seen;
+    for my $dir (map { "$_/.sessions/by-pid" } read_roots($ctx)) {
+        for my $f (skills::util::list_dir($dir)) {
+            next unless $f =~ /\A(\d+)-(\d+)\.(live|ended)-([0-9a-z]+)\.json\z/;
+            my ($pid, $epoch, $state, $s8) = ($1, $2, $3, $4);
+            # An optional sid8 keeps only that session's files, before any is read.
+            next if defined $sid8 && $s8 ne $sid8;
+            next if $seen{$f}++;
+            my $d = eval { skills::util::json_decode(skills::util::read_file("$dir/$f", 65536)) };
+            push @out, { pid => $pid, epoch => $epoch, state => $state, sid8 => $s8, path => "$dir/$f", data => (ref $d eq 'HASH' ? $d : {}) };
+        }
     }
     return \@out;
 }
@@ -201,10 +216,16 @@ sub live_peers {
 
 # ---------------------------------------------------------------- lineage and pins
 
+# The lineage link of sid: the first read root that holds one (STATE-ROOT: the store root's wins).
 sub lineage_of {
     my ($ctx, $sid) = @_;
-    my $d = eval { skills::util::json_decode(skills::util::read_file("$ctx->{root}/.sessions/$sid.lineage.json", 65536)) };
-    return ref $d eq 'HASH' ? $d : undef;
+    for my $r (read_roots($ctx)) {
+        my $p = "$r/.sessions/$sid.lineage.json";
+        next unless -e $p;
+        my $d = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
+        return ref $d eq 'HASH' ? $d : undef;
+    }
+    return undef;
 }
 
 # Predecessors up to 3 hops, same chain only (A-6).
@@ -224,12 +245,20 @@ sub chain {
     return \@out;
 }
 
+# The pin's path in the store root (where pin_update writes it).
 sub pin_path { my ($ctx, $sid) = @_; return "$ctx->{root}/.sessions/$sid.json" }
 
+# The pin of sid: the store root's, else the legacy root's (STATE-ROOT: a session that started before
+# 0.1.2 keeps its pin; the store root's wins). pin_update starts from it and writes the store root.
 sub pin_read {
     my ($ctx, $sid) = @_;
-    my $d = eval { skills::util::json_decode(skills::util::read_file(pin_path($ctx, $sid), 65536)) };
-    return ref $d eq 'HASH' ? $d : undef;
+    for my $r (read_roots($ctx)) {
+        my $p = "$r/.sessions/$sid.json";
+        next unless -e $p;
+        my $d = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
+        return ref $d eq 'HASH' ? $d : undef;
+    }
+    return undef;
 }
 
 # Read-modify-write of .sessions/<sid>.json under the TPL §6 lock.

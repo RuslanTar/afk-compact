@@ -215,7 +215,7 @@
    },
    "capture": {
     "PUB1": "re:^Wrote handoff to: (.+)$",
-    "PUB1_REL": "re:^Wrote handoff to: .*?/\\.claude/handoffs/(.+)$"
+    "PUB1_REL": "re:^Wrote handoff to: .*?/handoffs/(.+)$"
    }
   },
   {

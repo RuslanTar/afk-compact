@@ -1,0 +1,1108 @@
+{
+ "id": "AT-STATE-ROOT-01 (state-root: the old default root is read, never written)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; tier 5 counts one <repo>/<bucket> in both roots as one bucket, two repos' buckets of one name as two; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage, publish and pin under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there, the pin naming the bucket under the new root; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root; (c2) a session that pins another repo's handoff in the old root still reaches it through the pinned bucket's old-root twin (tier 4); (g) a previous compaction copy and a queue lane name come from the old root when only it holds them; (h) a stage begun before the update (its settings name the old root) publishes into the new root while handoff_root is the default: the handoff, pin and records go there and nothing under the old root's .sessions or .watch changes; (i) evidence kept before the update stays in the old root's bucket, so publish refuses a restart recipe citing it (recipe-script) until the script is kept again, which lands it in the new root (README: Known limits of the move).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "-C",
+      "$TMP/repo",
+      "rev-parse",
+      "--short=7",
+      "HEAD"
+     ],
+     "var": "HEADSHA"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194200-1072915200.live-51515151.json",
+     "content": "{\"pid\": 4194200, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"51515151-5151-4515-8515-515151515151\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/51515151-5151-4515-8515-515151515151.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p1\", \"sessionId\": \"51515151-5151-4515-8515-515151515151\", \"timestamp\": \"2026-10-21T12:10:00.000+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin once the suite passes\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "P (before the update, root ~/.claude/handoffs): begin",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "51515151-5151-4515-8515-515151515151",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {}
+   },
+   "capture": {
+    "STAGE_P": "json:stage"
+   }
+  },
+  {
+   "name": "P: stamp",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_P"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE_P/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "P: publish into the old root, U-2 checked and hashed there",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_P",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $LEGACY/repo/hr/"
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY/.sessions/approvals/51515151-5151-4515-8515-515151515151.*.json"
+     }
+    ]
+   },
+   "capture": {
+    "PUB_P": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194200-1072915200.ended-51515151.json",
+     "content": "{\"session_id\": \"51515151-5151-4515-8515-515151515151\", \"reason\": \"prompt_input_exit\", \"ts\": \"2026-10-21T12:30:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194201-1072915200.live-52525252.json",
+     "content": "{\"pid\": 4194201, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"52525252-5252-4525-8525-525252525252\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/repo/q/2026-10-21_11-00-00_61616161_q.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a1a2a3a\ndate: 2026-10-21T11:00:00+03:00\nsession_id: 61616161-6161-4616-8616-616161616161\nactor: main\n---\n⟪$BRAND v1 n=0a1a2a3a s=manual⟫\n# LAB-7 — work\n⟪/$BRAND n=0a1a2a3a⟫\n"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194210-1072915200.live-61616161.json",
+     "content": "{\"pid\": 4194210, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"61616161-6161-4616-8616-616161616161\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T10:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194210-1072915200.ended-61616161.json",
+     "content": "{\"session_id\": \"61616161-6161-4616-8616-616161616161\", \"reason\": \"prompt_input_exit\", \"ts\": \"2026-10-21T11:10:00+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/successors/61616161-6161-4616-8616-616161616161.json",
+     "content": "{\"session_id\": \"62626262-6262-4626-8626-626262626262\", \"lineage_reason\": \"handoff-resume\", \"ts\": \"2026-10-21T11:20:00+03:00\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194211-1072915200.live-63636363.json",
+     "content": "{\"pid\": 4194211, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"63636363-6363-4636-8636-636363636363\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:10:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194212-1072915200.live-64646464.json",
+     "content": "{\"pid\": 4194212, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"64646464-6464-4646-8646-646464646464\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"clear\", \"ts\": \"2026-10-21T11:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/64646464-6464-4646-8646-646464646464.json",
+     "content": "{\"session_id\": \"64646464-6464-4646-8646-646464646464\", \"bucket\": \"other/LAB-3\", \"bucket_path\": \"$LEGACY/other/LAB-3\", \"bucket_source\": \"pin\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/64646464-6464-4646-8646-646464646464.lineage.json",
+     "content": "{\"previous_session_id\": \"65656565-6565-4656-8656-656565656565\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$LEGACY/other/LAB-3/2026-10-21_10-30-00_65656565_u.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0b1b2b3b\ndate: 2026-10-21T10:30:00+03:00\nsession_id: 65656565-6565-4656-8656-656565656565\nactor: main\n---\n⟪$BRAND v1 n=0b1b2b3b s=manual⟫\n# LAB-3 — work\n⟪/$BRAND n=0b1b2b3b⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-5/2026-10-21_10-00-00_66666666_n.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0c1c2c3c\ndate: 2026-10-21T10:00:00+03:00\nsession_id: 66666666-6666-4666-8666-666666666666\nactor: main\n---\n⟪$BRAND v1 n=0c1c2c3c s=manual⟫\n# LAB-5 — new root\n⟪/$BRAND n=0c1c2c3c⟫\n"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d1d2d3d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 66666666-6666-4666-8666-666666666666\nactor: main\n---\n⟪$BRAND v1 n=0d1d2d3d s=manual⟫\n# LAB-5 — old root\n⟪/$BRAND n=0d1d2d3d⟫\n"
+    },
+    {
+     "write": "$TMP/elsewhere/repo/LAB-5/2026-10-21_09-00-00_66666666_e.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e1e2e3e\ndate: 2026-10-21T09:00:00+03:00\nsession_id: 66666666-6666-4666-8666-666666666666\nactor: main\n---\n⟪$BRAND v1 n=0e1e2e3e s=manual⟫\n# LAB-5 — elsewhere\n⟪/$BRAND n=0e1e2e3e⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "(a) default root: locate pools both roots by date and picks W's newer handoff in the old root as own",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md\\nrelation: same-session\\n",
+     "^integrity: ok$"
+    ],
+    "stdout_lacks": [
+     "^foreign:",
+     "^newer:",
+     "skipped"
+    ]
+   }
+  },
+  {
+   "name": "(a) the new root's older file given by path: the old root's newer twin supersedes it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-5/2026-10-21_10-00-00_66666666_n.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 1\\npick: $ROOT/repo/LAB-5/2026-10-21_10-00-00_66666666_n\\.md\\nrelation: same-session\\n",
+     "^warn: newer superseding file $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md ",
+     "^newer: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md · "
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "name": "(a) a value equal to the default (as Claude Code may fill it in) still reads the old root",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "~/.local/state/$BRAND/handoffs"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md\\n"
+    ]
+   }
+  },
+  {
+   "name": "(b) an explicit other root: only that root, no merge",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/elsewhere"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $TMP/elsewhere/repo/LAB-5/2026-10-21_09-00-00_66666666_e\\.md\\n"
+    ],
+    "stdout_lacks": [
+     "\\.claude/handoffs/",
+     "\\.local/state/"
+    ]
+   }
+  },
+  {
+   "name": "(b) ~/.claude/handoffs set explicitly in the settings file: that root alone, no merge (its .watch is written there: the user's choice)",
+   "cwd": "$TMP/repo",
+   "options": {
+    "handoff_root": "~/.claude/handoffs"
+   },
+   "argv": [
+    "locate",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md\\n"
+    ],
+    "stdout_lacks": [
+     "\\.local/state/",
+     "^newer:"
+    ]
+   }
+  },
+  {
+   "name": "(b) status with the explicit root: no legacy line",
+   "cwd": "$TMP/repo",
+   "options": {
+    "handoff_root": "~/.claude/handoffs"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^legacy handoff root"
+    ]
+   }
+  },
+  {
+   "name": "status (default root): the old root's line with its bucket count",
+   "cwd": "$TMP/repo",
+   "options": {
+    "handoff_root": ""
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "66666666-6666-4666-8666-666666666666"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^legacy handoff root ~/\\.claude/handoffs: read-only, 4 buckets$"
+    ]
+   }
+  },
+  {
+   "name": "(e) S before the pin: P's file is another session's",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 1\\npick: $PUB_P\\nrelation: other\\n",
+     "^integrity: ok$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY",
+      "tree_snapshot": "L0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "(e) S pins P's handoff in the old root: linked, U-2 carries (the old root is the own store)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--resumed-from",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned repo/hr$",
+     "^relation: successor \\(handoff-resume\\)$",
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ $HEADSHA$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/52525252-5252-4525-8525-525252525252.json",
+      "contains": [
+       "\"bucket\":\"repo/hr\"",
+       "\"bucket_path\":\"$ROOT/repo/hr\""
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/52525252-5252-4525-8525-525252525252.lineage.json",
+      "contains": [
+       "\"previous_session_id\":\"51515151-5151-4515-8515-515151515151\""
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/successors/51515151-5151-4515-8515-515151515151.json",
+      "contains": [
+       "\"session_id\":\"52525252-5252-4525-8525-525252525252\""
+      ]
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ],
+    "absent": [
+     "$LEGACY/.sessions/successors/51515151-5151-4515-8515-515151515151.json",
+     "$LEGACY/.sessions/52525252-5252-4525-8525-525252525252.json"
+    ]
+   }
+  },
+  {
+   "name": "(e) S's measure: the old root's hash record verifies U-2",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "$PUB_P"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 git push origin feat/x → branch feat/x @ $HEADSHA$"
+    ],
+    "stdout_lacks": [
+     "context only"
+    ]
+   }
+  },
+  {
+   "name": "(e) S's locate: tier 4 by the new link, own (no foreign line)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $PUB_P\\nrelation: successor\\n"
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "name": "(f) S: begin in the pinned bucket of the new root; P's file in the old twin is the carry base",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "52525252-5252-4525-8525-525252525252",
+    "--topic",
+    "hr"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "chain",
+     "bucket.path": "repo/hr",
+     "stage": {
+      "re": "^$ROOT/repo/hr/\\.staging/"
+     }
+    },
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   },
+   "capture": {
+    "STAGE_S": "json:stage"
+   }
+  },
+  {
+   "name": "(f) S: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_S"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_S/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 52525252\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(f) S publishes into the new root with the carried U-2; nothing under the old root changed",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_S",
+    "--slug",
+    "hr",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/hr/"
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/approvals/52525252-5252-4525-8525-525252525252.*.json"
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   },
+   "capture": {
+    "PUB_S": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "(d) S2 pins P2's handoff: the old root's claim by X blocks a second claim",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "63636363-6363-4636-8636-636363636363",
+    "--resumed-from",
+    "$LEGACY/repo/q/2026-10-21_11-00-00_61616161_q.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned repo/q$",
+     "^relation: other \\(not linked: claimed by another session\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/successors/61616161-6161-4616-8616-616161616161.json",
+     "$ROOT/.sessions/63636363-6363-4636-8636-636363636363.lineage.json"
+    ]
+   }
+  },
+  {
+   "name": "(c) T (pin and lineage only in the old root): locate follows the chain to U's handoff in the pinned bucket",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "64646464-6464-4646-8646-646464646464",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $LEGACY/other/LAB-3/2026-10-21_10-30-00_65656565_u\\.md\\nrelation: successor\\n"
+    ],
+    "stdout_lacks": [
+     "^foreign:"
+    ]
+   }
+  },
+  {
+   "name": "(c) T's begin keeps its pinned bucket, now under the new root; U's file is the chain base",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "64646464-6464-4646-8646-646464646464",
+    "--topic",
+    "zz"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "bucket.path": "other/LAB-3",
+     "bucket.source": "pin",
+     "previous_kind": "chain",
+     "stage": {
+      "re": "^$ROOT/other/LAB-3/\\.staging/"
+     }
+    },
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   },
+   "capture": {
+    "STAGE_T": "json:stage"
+   }
+  },
+  {
+   "name": "(c) T: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_T"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_T/body.md",
+   "content": "# LAB-3 — work\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 64646464\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(c) T publishes into the new root: its pin is written there, the old root's pin and tree unchanged",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_T",
+    "--slug",
+    "zz",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/other/LAB-3/"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/64646464-6464-4646-8646-646464646464.json",
+      "contains": [
+       "\"bucket\":\"other/LAB-3\"",
+       "\"bucket_path\":\"$ROOT/other/LAB-3\""
+      ]
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "(a) tier 5: LAB-5 names one bucket, repo/LAB-5, in both roots: the newest of its files, the old root's",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "67676767-6767-4676-8676-676767676767",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "LAB-5"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 5\\npick: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md\\nrelation: other\\n"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/other/LAB-5/2026-10-21_13-00-00_88888888_b.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f1f2f3f\ndate: 2026-10-21T13:00:00+03:00\nsession_id: 88888888-8888-4888-8888-888888888888\nactor: main\n---\n⟪$BRAND v1 n=0f1f2f3f s=manual⟫\n# LAB-5 — other repo\n⟪/$BRAND n=0f1f2f3f⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/68686868-6868-4686-8686-686868686868.json",
+     "content": "{\"session_id\": \"68686868-6868-4686-8686-686868686868\", \"bucket\": \"other/LAB-5\", \"bucket_path\": \"$ROOT/other/LAB-5\", \"bucket_source\": \"pin\"}"
+    }
+   ]
+  },
+  {
+   "name": "(a) tier 5 keys the bucket by <repo>/<bucket>: repo/LAB-5 (both roots) and the pinned other/LAB-5 are two, so ambiguous (tier 6)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "68686868-6868-4686-8686-686868686868",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "LAB-5"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 6\\n"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194300-1072915200.live-71717171.json",
+     "content": "{\"pid\": 4194300, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"71717171-7171-4717-8717-717171717171\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T10:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194300-1072915200.ended-71717171.json",
+     "content": "{\"session_id\": \"71717171-7171-4717-8717-717171717171\", \"reason\": \"prompt_input_exit\", \"ts\": \"2026-10-21T11:10:00+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/other/X/2026-10-21_11-00-00_71717171_x.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 1a2a3a4a\ndate: 2026-10-21T11:00:00+03:00\nsession_id: 71717171-7171-4717-8717-717171717171\nactor: main\n---\n⟪$BRAND v1 n=1a2a3a4a s=manual⟫\n# LAB-9 — work\n⟪/$BRAND n=1a2a3a4a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194301-1072915200.live-72727272.json",
+     "content": "{\"pid\": 4194301, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"72727272-7272-4727-8727-727272727272\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/69696969-6969-4696-8696-696969696969.json",
+     "content": "{\"session_id\": \"69696969-6969-4696-8696-696969696969\", \"bucket\": \"repo/LAB-11\", \"bucket_path\": \"$LEGACY/repo/LAB-11\", \"bucket_source\": \"pin\"}"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-11/compact/2026-10-21_12-00-00_69696969_c1-0a0b0c.md",
+     "content": "---\nkind: compact\nsession_id: 69696969-6969-4696-8696-696969696969\nactor: main\ndate: 2026-10-21T12:00:00+03:00\n---\nsummary\n"
+    },
+    {
+     "stub": "q-ok",
+     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/ok.calls\"\ncase \"$1\" in\n add) cat > \"$d/ok.stdin\"; if grep -qx \"$6\" \"$d/ok.seen\" 2>/dev/null; then st=exists; else st=queued; echo \"$6\" >> \"$d/ok.seen\"; fi; printf '{\"schema\":\"queue-add/v1\",\"status\":\"%s\",\"id\":\"proj/11111111-01\",\"lane\":\"lane:repo/lab-123\",\"client_id\":\"%s\"}\\n' \"$st\" \"$6\";;\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":0,\"pending\":0,\"commands\":[\"list\",\"adopt\",\"add\"]}\\n';;\nesac\nexit 0"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194220-1072915200.live-70707070.json",
+     "content": "{\"pid\": 4194220, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"70707070-7070-4707-8707-707070707070\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:00:00.000+03:00\"}"
+    }
+   ]
+  },
+  {
+   "name": "(c2) S3 (default root) pins P3's handoff of another repo in the old root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "72727272-7272-4727-8727-727272727272",
+    "--resumed-from",
+    "$LEGACY/other/X/2026-10-21_11-00-00_71717171_x.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned other/X$",
+     "^relation: successor \\(handoff-resume\\)$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/72727272-7272-4727-8727-727272727272.json",
+      "contains": [
+       "\"bucket_path\":\"$ROOT/other/X\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c2) S3's locate reaches P3's file through the pinned bucket's old-root twin (tier 4), as a single root does",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "72727272-7272-4727-8727-727272727272",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $LEGACY/other/X/2026-10-21_11-00-00_71717171_x\\.md\\nrelation: successor\\n"
+    ]
+   }
+  },
+  {
+   "name": "(g) prev-copy: the session's previous compaction copy is only in the old root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "prev-copy",
+    "--sid",
+    "69696969-6969-4696-8696-696969696969",
+    "--actor",
+    "main",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^~/\\.claude/handoffs/repo/LAB-11/compact/2026-10-21_12-00-00_69696969_c1-0a0b0c\\.md$"
+    ]
+   }
+  },
+  {
+   "name": "(g) queue-add: the lane name comes from the session's pin, only in the old root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "69696969-6969-4696-8696-696969696969",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "options": {
+    "queue_cmd": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "QUEUED proj/11111111-01\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 1,
+      "has": [
+       "^add --json --session 69696969-6969-4696-8696-696969696969 --client-id ck-[0-9a-f]{12} --lane-name lab-11$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(h) V before the update (root ~/.claude/handoffs): begin",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "70707070-7070-4707-8707-707070707070",
+    "--topic",
+    "v"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": {
+      "re": "^$LEGACY/repo/v/\\.staging/"
+     }
+    }
+   },
+   "capture": {
+    "STAGE_V": "json:stage"
+   }
+  },
+  {
+   "name": "(h) V: stamp, before the update",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_V"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY/.sessions",
+      "tree_snapshot": "L2S"
+     },
+     {
+      "path": "$LEGACY/.watch",
+      "tree_snapshot": "L2W"
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_V/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 70707070\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(h) V publishes after the update (default root): into repo/v under the new root; the old root's .sessions and .watch unchanged",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_V",
+    "--slug",
+    "v",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/v/"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/70707070-7070-4707-8707-707070707070.json",
+      "contains": [
+       "\"bucket\":\"repo/v\"",
+       "\"bucket_path\":\"$ROOT/repo/v\""
+      ]
+     },
+     {
+      "path": "$LEGACY/.sessions",
+      "same_tree_as": "L2S"
+     },
+     {
+      "path": "$LEGACY/.watch",
+      "same_tree_as": "L2W"
+     }
+    ],
+    "absent": [
+     "$LEGACY/repo/v/*.md",
+     "$LEGACY/repo/v/evidence"
+    ]
+   }
+  },
+  {
+   "write": "$TMP/s/run-suite.sh",
+   "content": "echo suite\n"
+  },
+  {
+   "name": "(i) W before the update (root ~/.claude/handoffs): begin",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "70707070-7070-4707-8707-707070707070",
+    "--topic",
+    "w"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": {
+      "re": "^$LEGACY/repo/w/\\.staging/"
+     }
+    }
+   },
+   "capture": {
+    "STAGE_W": "json:stage",
+    "STEM_W": "json:stem"
+   }
+  },
+  {
+   "name": "(i) W keeps a recipe's script before the update: the copy lands in the old root's bucket",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE_W",
+    "--keep",
+    "$TMP/s/run-suite.sh"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_W/restart/B-2.md",
+   "content": "item: B-2 · runtime id b8890 · class auto\nscript: evidence/$STEM_W/run-suite.sh\ncommand: sh run.sh\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/out.txt\nfinished parts: none yet\nidempotency check: ls $TMP/repo/out.txt\n"
+  },
+  {
+   "write": "$STAGE_W/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 70707070\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(i) W publishes after the update: the recipe's script kept before it stays in the old root, so publish refuses it (README: Known limits of the move)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_W",
+    "--slug",
+    "w",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT recipe-script restart/B-2\\.md:2$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ],
+    "absent": [
+     "$ROOT/repo/w/*.md",
+     "$ROOT/repo/w/evidence/$STEM_W/run-suite.sh"
+    ]
+   }
+  },
+  {
+   "name": "(i) W keeps the script again after the update: the copy lands in the new root's bucket",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE_W",
+    "--keep",
+    "$TMP/s/run-suite.sh"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(i) W publishes into the new root; the old root's copy is left where it was",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_W",
+    "--slug",
+    "w",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/w/"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$LEGACY/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ],
+    "absent": [
+     "$LEGACY/repo/w/*.md"
+    ]
+   }
+  }
+ ]
+}

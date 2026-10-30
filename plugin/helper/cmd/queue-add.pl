@@ -109,7 +109,7 @@ sub ledger_hit {
 sub lane_name {
     my $root = rc::root();
     return undef unless defined $root && rc::root_ok('handoff_root');
-    my $b = bucket::_pin_bucket($root, rc::sid()) // return undef;
+    my $b = bucket::_pin_of(rc::sid()) // return undef;
     my $s = bucket::slug(util::basename($b));
     return $s ne '' ? $s : undef;
 }

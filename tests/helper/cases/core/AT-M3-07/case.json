@@ -620,7 +620,7 @@
      "finish the review",
      "count the rows"
     ],
-    "stdout_re": "(?m)^  2026-10-21T14:30:00\\.000\\+03:00 · main · mod-hook · auto · ok · copy ~/\\.claude/handoffs/work/general/compact/",
+    "stdout_re": "(?m)^  2026-10-21T14:30:00\\.000\\+03:00 · main · mod-hook · auto · ok · copy ~/\\.local/state/$BRAND/handoffs/work/general/compact/",
     "stdout_has": [
      "^halt: on \\(2-nonok\\) · continues this hour: "
     ]

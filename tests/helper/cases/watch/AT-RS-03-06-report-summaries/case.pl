@@ -45,7 +45,7 @@ my %got;
           stdout_re => qr/^summaries: 3 available \(1 KB\)$/m },
         # RS-04
         { call => 'cli', argv => [ 'report', '--with-summaries', '--since', '7d', '--out', '$TMP/out1' ], env => { STORE_TEST_NO_GIT => '1' },
-          stdout_re => qr/^SUMMARY summaries\/[0-9a-f]{12}\.md \d+ B from ~\/\.claude\/handoffs\/qx\/b7\/compact\/2026-10-21_10-00-00_5e55a001_c1-c0c0c1\.md$/m },
+          stdout_re => qr/^SUMMARY summaries\/[0-9a-f]{12}\.md \d+ B from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/compact\/2026-10-21_10-00-00_5e55a001_c1-c0c0c1\.md$/m },
         # RS-05 (half)
         { call => 'cli', argv => [ 'report', '--out', '$TMP/out2' ], env => { STORE_TEST_NO_GIT => '1' },
           stdout_re => qr/^NOT INCLUDED: conversation text, summaries,/m },
@@ -88,9 +88,9 @@ my %got;
         $E->is($got{n0}, 0, 'RS-03: the dry runs wrote no zip');
         $E->ok(($dry->{stdout} !~ /^SUMMARY /m ? 1 : 0), 'RS-03: a dry run without the flag lists no summary file');
         my $out = $with->{stdout} // '';
-        $E->ok(($out =~ /^WITHHELD summaries\/[0-9a-f]{12}\.md \(secret: slack-token\) from ~\/\.claude\/handoffs\/qx\/b7\/compact\/2026-10-21_10-10-00_5e55a001_c2-c0c0c2\.md$/m ? 1 : 0),
+        $E->ok(($out =~ /^WITHHELD summaries\/[0-9a-f]{12}\.md \(secret: slack-token\) from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/compact\/2026-10-21_10-10-00_5e55a001_c2-c0c0c2\.md$/m ? 1 : 0),
                'RS-04: the secret copy is withheld with its rule id');
-        $E->ok(($out =~ /^WITHHELD summaries\/[0-9a-f]{12}\.md \(identity: your names, paths or hosts\) from ~\/\.claude\/handoffs\/qx\/b7\/compact\/2026-10-21_10-20-00_5e55a001_c3-c0c0c3\.md$/m ? 1 : 0),
+        $E->ok(($out =~ /^WITHHELD summaries\/[0-9a-f]{12}\.md \(identity: your names, paths or hosts\) from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/compact\/2026-10-21_10-20-00_5e55a001_c3-c0c0c3\.md$/m ? 1 : 0),
                'RS-04: the copy holding the home folder is withheld (identity)');
         $E->ok(($out =~ /^SUMMARIES: added at your request; .*business content is not masked$/m ? 1 : 0), 'RS-04: the output says business content is not masked');
         $E->ok(($out =~ /^FILES \d+: .*, summaries\/ \(1 files\)$/m ? 1 : 0), 'RS-04: FILES counts the summaries');

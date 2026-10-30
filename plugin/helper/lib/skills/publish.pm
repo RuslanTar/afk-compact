@@ -160,6 +160,8 @@ sub run {
     # ---- file the stage into evidence/<stem>/
     my $now = skills::util::now();
     my $bucket = $s->{bucket};
+    # STATE-ROOT: a stage begun before 0.1.2 publishes into its bucket under the new root (open_stage)
+    skills::util::mkdir_p($bucket) unless -d $bucket;
     my $edir = "$bucket/evidence/$s->{stem}";
     my @manifest;
     for my $r (@$ev) {

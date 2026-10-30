@@ -50,7 +50,7 @@
       "frontmatter": {
        "date": "2026-10-21T14:05:12+03:00",
        "compaction_seq": "3",
-       "previous_handoff": "~/.claude/handoffs/work/general/compact/2026-10-21_13-30-00_${SID8}_c2-0b0b0b.md"
+       "previous_handoff": "~/.local/state/$BRAND/handoffs/work/general/compact/2026-10-21_13-30-00_${SID8}_c2-0b0b0b.md"
       }
      }
     ]

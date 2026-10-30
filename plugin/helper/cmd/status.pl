@@ -193,6 +193,7 @@ sub store_lines {
         push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
             unless rc::root_ok($key);
     }
+    push @out, legacy_lines();
     push @out, mode_lines($cwd);
     push @out, relaunch_lines($d);
     push @out, restart_lines($sid, $mod || []);
@@ -210,6 +211,24 @@ sub store_lines {
     push @out, former_name_lines();
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
     return @out;
+}
+
+# STATE-ROOT (0.1.2): while handoff_root is the default, the old default ~/.claude/handoffs is read,
+# never written, and never moved or copied (D-8); one line says so, with its bucket count, or that
+# the unsafe-root checks skipped it. No line when there is no such folder.
+sub legacy_lines {
+    my $l = rc::legacy();
+    if (defined $l) {
+        my $n = 0;
+        for my $repo (grep { !/^\./ && -d "$l/$_" } util::list_dir($l)) {
+            $n += scalar grep { !/^\./ && -d "$l/$repo/$_" } util::list_dir("$l/$repo");
+        }
+        return 'legacy handoff root ' . util::abbrev($l) . ": read-only, $n bucket" . ($n == 1 ? '' : 's');
+    }
+    my $p = rc::legacy_path();
+    return 'legacy handoff root ' . util::abbrev($p) . ': skipped (' . util::text(rc::legacy_refused()) . ')'
+        if defined $p && defined rc::legacy_refused();
+    return ();
 }
 
 # watcher lines (WP-watch): this session's alerts only with a sid, then the store-wide counts.

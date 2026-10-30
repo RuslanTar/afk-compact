@@ -48,7 +48,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "watch": "$HOME/.claude/handoffs/.watch"
+     "watch": "$HOME/.local/state/$BRAND/handoffs/.watch"
     }
    }
   },
@@ -70,7 +70,7 @@
    "expect": {
     "exit": 0,
     "json": {
-     "watch": "$HOME/.claude/handoffs/.watch"
+     "watch": "$HOME/.local/state/$BRAND/handoffs/.watch"
     }
    }
   },
@@ -79,7 +79,7 @@
    "setup": [
     {
      "repo_fixture": "main-branch.json",
-     "at": "$HOME/.claude/handoffs"
+     "at": "$HOME/.local/state/$BRAND/handoffs"
     }
    ],
    "env": {

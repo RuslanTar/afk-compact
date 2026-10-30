@@ -11,7 +11,7 @@
 # {available: false, why: export-view-failed}. The file passes the identity and secret scans
 # (not withheld) and holds no path.
 my %got;
-my @K = ([handoff_root => 'dir', '~/.claude/handoffs', 'path'], [disposable_keep_days => 'num', 0, 'num'],
+my @K = ([handoff_root => 'dir', '~/.local/state/afk-compact/handoffs', 'path'], [disposable_keep_days => 'num', 0, 'num'],
          [triggers => 'bool', 1, 'bool'], [compact_target_tokens => 'num', 400000, 'num'],
          [compact_soft_max_tokens => 'num', 600000, 'num'], [native_window_tokens => 'num', 0, 'num'],
          [handoff_turn => 'str', 'halt', 'enum'], [handoff_turn_max_tokens => 'num', 64000, 'num'],
@@ -29,7 +29,7 @@ my $stub = sub {
         my $x = $v->{$key};
         my $out = $class eq 'num' ? 0 + $x : $class eq 'bool' ? jsonc::bool($x) : $class eq 'enum' ? $x
                 : $class eq 'list' ? scalar(grep { length } split /;/, $x // '')
-                : (($x // '') =~ m{/\.claude/handoffs\z} ? 'default' : 'custom-in-home');
+                : (($x // '') =~ m{/\.local/state/[^/]+/handoffs\z} ? 'default' : 'custom-in-home');
         push @kv, $key => $out;
     }
     return jsonc::obj(@kv);

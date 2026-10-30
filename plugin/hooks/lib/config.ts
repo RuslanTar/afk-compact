@@ -63,7 +63,9 @@ export type Config = {
 }
 
 export const DEFAULTS: Config = {
-  handoff_root: '~/.claude/handoffs',
+  // STATE-ROOT (0.1.2): out of ~/.claude, whose writes get Claude Code's protected-path prompt (helper
+  // lib/paths.pm); NAME_TOKEN is the plugin's name (parseOptions), so a rename needs no edit here
+  handoff_root: '~/.local/state/<plugin>/handoffs',
   log_dir: '',
   disposable_root: '~/.claude/trash-staging',
   triggers: true,
@@ -221,10 +223,19 @@ function handoffTokens(o: PluginOptions, notes: Config['notes']): number {
   return c
 }
 
-export function parseOptions(o: PluginOptions): Config {
+/** The token in DEFAULTS.handoff_root that stands for the plugin's name (STATE-ROOT). */
+export const NAME_TOKEN = '<plugin>'
+
+/**
+ * The options as the mod reads them. `name` (the plugin's, `$.plugin.name`, else `plugin` as in the
+ * helper's ctx::brand) fills NAME_TOKEN in the handoff_root default; a load fills the manifest's
+ * default in itself, so this is the fallback.
+ */
+export function parseOptions(o: PluginOptions, name?: string): Config {
   const notes: Config['notes'] = { invalid: [], clamped: [] }
+  const root = DEFAULTS.handoff_root.split(NAME_TOKEN).join(name || 'plugin')
   return {
-    handoff_root: str(o, 'handoff_root', DEFAULTS.handoff_root),
+    handoff_root: str(o, 'handoff_root', root),
     log_dir: str(o, 'log_dir', DEFAULTS.log_dir),
     disposable_root: str(o, 'disposable_root', DEFAULTS.disposable_root),
     triggers: bool(o, 'triggers', DEFAULTS.triggers),
@@ -375,9 +386,31 @@ export function expand(path: string, home: string | undefined): string | undefin
 
 export type Paths = { root: string; watch: string }
 
-/** `<root>` and `<watch>` (MOD-SPEC conventions); undefined when `~` cannot be expanded. */
-export function paths(cfg: Config, home: string | undefined): Paths | undefined {
-  const root = expand(cfg.handoff_root, home)
+/** Where the handoff_root default sits below the home folder (STATE-ROOT): `$XDG_STATE_HOME` stands for it. */
+const STATE_HOME_DEFAULT = '~/.local/state'
+
+/**
+ * The handoff root a value names, `~` expanded (STATE-ROOT). The default (DEFAULTS.handoff_root with
+ * `name`, else `plugin`) reads under `stateHome` (`$XDG_STATE_HOME`) when that is an absolute path, as
+ * the helper's paths::state_default does: the XDG Base Directory rule ignores a relative value. Any
+ * other value is returned as it is; undefined when `~` cannot be expanded.
+ */
+export function stateRoot(value: string, home: string | undefined, stateHome?: string, name?: string): string | undefined {
+  const root = expand(value, home)
+  if (root === undefined || stateHome === undefined || !stateHome.startsWith('/')) return root
+  const def = DEFAULTS.handoff_root.split(NAME_TOKEN).join(name || 'plugin')
+  if (!def.startsWith(STATE_HOME_DEFAULT + '/')) return root
+  const norm = (p: string | undefined) => p?.replace(/\/+/g, '/').replace(/(.)\/$/, '$1')
+  if (norm(root) !== norm(expand(def, home))) return root
+  return stateHome.replace(/\/+$/, '') + def.slice(STATE_HOME_DEFAULT.length)
+}
+
+/**
+ * `<root>` and `<watch>` (MOD-SPEC conventions); undefined when `~` cannot be expanded. `state` gives
+ * `$XDG_STATE_HOME` and the plugin's name for the default root (stateRoot).
+ */
+export function paths(cfg: Config, home: string | undefined, state?: { home?: string; name?: string }): Paths | undefined {
+  const root = stateRoot(cfg.handoff_root, home, state?.home, state?.name)
   if (root === undefined) return undefined
   const watch = cfg.log_dir === '' ? root.replace(/\/+$/, '') + '/.watch' : expand(cfg.log_dir, home)
   if (watch === undefined) return undefined

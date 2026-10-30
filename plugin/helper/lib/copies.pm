@@ -369,17 +369,19 @@ sub _seq {
     return $n + 1;
 }
 
-# session_copies(sid, actor) -> [{path, date, epoch}] across <root>/*/*/compact/
+# session_copies(sid, actor) -> [{path, date, epoch}] across <root>/*/*/compact/ of every read root
+# (STATE-ROOT: the legacy root too, so a session that spans the upgrade keeps its previous copy)
 sub session_copies {
     my ($sid, $actor, $extra_bucket) = @_;
-    my $root = rc::root();
     my $sid8 = substr($sid, 0, 8);
     my %b;
-    for my $repo (util::list_dir($root)) {
-        next if $repo =~ /^\./;
-        for my $top (util::list_dir("$root/$repo")) {
-            next if $top =~ /^\./;
-            $b{"$root/$repo/$top"} = 1 if -d "$root/$repo/$top/compact";
+    for my $root (rc::read_roots()) {
+        for my $repo (util::list_dir($root)) {
+            next if $repo =~ /^\./;
+            for my $top (util::list_dir("$root/$repo")) {
+                next if $top =~ /^\./;
+                $b{"$root/$repo/$top"} = 1 if -d "$root/$repo/$top/compact";
+            }
         }
     }
     $b{$extra_bucket} = 1 if defined $extra_bucket && -d "$extra_bucket/compact";

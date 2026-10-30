@@ -24,7 +24,29 @@ sub open_stage {
         unless defined $bucket && $bucket eq File::Basename::dirname(File::Basename::dirname($dir))
             && File::Basename::basename($dir) eq ($s->{sid8} // '') . '-' . ($s->{nonce} // '');
     my %flags = %{ $s->{settings} || {} };
-    my $ctx = skills::ctx::new(\%flags);
+    # STATE-ROOT (0.1.2): a stage begun before the update stored the old default root ~/.claude/handoffs
+    # as its handoff_root. While handoff_root is the default now (the run context reads the old root),
+    # the stage takes the current root instead, and its bucket the same <repo>/<bucket> there: the
+    # handoff, its evidence, pin, records and .watch rows go to the new root, never the old one. Only
+    # the stage's own work folder (its draft, stamps and attempts) stays where begin made it.
+    # The settings as they read now, without the stage's value, say whether the old root is read
+    # (legacy_path is set only while handoff_root is the default); the context built last is the
+    # run context (rc), so the stage's own value is built after the check when it stays.
+    my ($ctx, $was);
+    my $old = do { no warnings 'once'; defined $paths::LEGACY_ROOT ? skills::util::abs_path($paths::LEGACY_ROOT) : undef };
+    if (defined $old && defined $flags{handoff_root} && !ref $flags{handoff_root}
+        && (skills::util::abs_path($flags{handoff_root}) // '') eq $old) {
+        my %now = %flags;
+        delete $now{handoff_root};
+        my $c = skills::ctx::new(\%now);
+        my ($a, $b) = map { defined $_ ? skills::util::abs_path($_) // '' : '' } ($flags{handoff_root}, $c->{legacy_path});
+        ($ctx, $was) = ($c, $a) if $a ne '' && $a eq $b;
+    }
+    $ctx //= skills::ctx::new(\%flags);
+    if (defined $was) {
+        my $now = skills::util::abs_path($ctx->{root}) // $ctx->{root};
+        $s->{bucket} = $now . substr($bucket, length $was) if index($bucket, "$was/") == 0 && $now ne $was;
+    }
     skills::ctx::set_sid($ctx, $s->{session_id});
     return ($dir, $s, $ctx);
 }

@@ -7,6 +7,7 @@ use utf8;
 use File::Basename ();
 use skills::util;
 use skills::core;
+use skills::ctx;
 
 # Frontmatter: `---` first line, `key: value` lines, closing `---`.
 # Returns {ok, fm => {...}, body => text, body_line => n (1-based file line)}.
@@ -109,6 +110,64 @@ sub buckets {
 sub repos {
     my ($root) = @_;
     return [ grep { !/\A\./ && -d "$root/$_" } skills::util::list_dir($root) ];
+}
+
+# STATE-ROOT: the bucket folders of a repo in every read root (skills::ctx::read_roots: the store root,
+# then the legacy root ~/.claude/handoffs while handoff_root is the default). Readers pool the
+# documents of both and order them by frontmatter date; nothing is written under the legacy root.
+sub read_buckets {
+    my ($ctx, $repo) = @_;
+    return [ map { @{ buckets($_, $repo) } } skills::ctx::read_roots($ctx) ];
+}
+
+# [[root, repo] …]: the repo folders of every read root.
+sub read_repos {
+    my ($ctx) = @_;
+    return [ map { my $r = $_; map { [ $r, $_ ] } @{ repos($r) } } skills::ctx::read_roots($ctx) ];
+}
+
+# twin_buckets(ctx, bucket) -> the folders with the same <repo>/<bucket> name in every read root
+# that has one (the given folder first); a folder under no read root is returned alone.
+sub twin_buckets {
+    my ($ctx, $bucket) = @_;
+    my @roots = skills::ctx::read_roots($ctx);
+    my $b = skills::util::abs_path($bucket) // $bucket;
+    for my $r (@roots) {
+        my $ar = skills::util::abs_path($r) // $r;
+        next unless index($b, "$ar/") == 0;
+        my $rel = substr($b, length($ar) + 1);
+        return [ $bucket, grep { -d $_ && (skills::util::abs_path($_) // $_) ne $b } map { "$_/$rel" } @roots ];
+    }
+    return [$bucket];
+}
+
+# bucket_key(ctx, bucket) -> the folder's path below the read root that holds it (<repo>/<bucket>),
+# so the same bucket in both read roots gives one key; a folder under no read root gives its own path.
+sub bucket_key {
+    my ($ctx, $bucket) = @_;
+    my $b = skills::util::abs_path($bucket) // $bucket;
+    for my $r (skills::ctx::read_roots($ctx)) {
+        my $ar = skills::util::abs_path($r) // $r;
+        $ar =~ s{/+\z}{};
+        return substr($b, length($ar) + 1) if index($b, "$ar/") == 0;
+    }
+    return $b;
+}
+
+# in_store(ctx, path) -> 1 when the file's real path lies under a read root (the store root, or
+# the legacy root, which counts as the own store, STATE-ROOT), component by component.
+sub in_store {
+    my ($ctx, $path) = @_;
+    return 0 unless defined $path && $ctx;
+    my $p = skills::util::abs_path($path);
+    return 0 unless defined $p;
+    for my $root (skills::ctx::read_roots($ctx)) {
+        my $r = skills::util::abs_path($root);
+        next unless defined $r;
+        $r =~ s{/+\z}{};
+        return 1 if index($p, "$r/") == 0;
+    }
+    return 0;
 }
 
 # Documents in a bucket: top-level handoffs, plus compact/ copies on request.

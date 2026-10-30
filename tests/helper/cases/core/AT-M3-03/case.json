@@ -80,7 +80,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout_re": "^VERDICT ok marker_line=1 sentinel_from_end=1\\nEXISTS: ~/\\.claude/handoffs/work/general/compact/2026-10-21_14-05-12_${SID8}_c1-1a2b3c\\.md sha-match\\n$",
+    "stdout_re": "^VERDICT ok marker_line=1 sentinel_from_end=1\\nEXISTS: ~/\\.local/state/$BRAND/handoffs/work/general/compact/2026-10-21_14-05-12_${SID8}_c1-1a2b3c\\.md sha-match\\n$",
     "rows": [
      {
       "file": "$WATCH/$SID.classic.jsonl",

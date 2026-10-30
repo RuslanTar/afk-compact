@@ -43,7 +43,8 @@ use watch::io;
 use watch::json;
 
 my %DEFAULTS = (
-    handoff_root                => '~/.claude/handoffs',
+    # STATE-ROOT (0.1.2); <plugin> is the plugin's name from its manifest (_named)
+    handoff_root                => '~/.local/state/<plugin>/handoffs',
     log_dir                     => '',
     watcher                     => 'shadow',
     stall_min                   => 60,
@@ -69,6 +70,51 @@ my $THIS_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
 sub plugin_root_default {
     my $p = Cwd::abs_path("$THIS_DIR/../../..");
     return defined $p ? $p : "$THIS_DIR/../../..";
+}
+
+# _named(value) -> value with <plugin> replaced by the plugin's name (the handoff_root fallback default,
+# STATE-ROOT), in ctx::brand's order: the manifest's name, else the launcher's minus `-store`, else `plugin`.
+sub _named {
+    my ($v) = @_;
+    return $v unless defined $v && !ref $v && index($v, '<plugin>') >= 0;
+    my $m = watch::io::read_json_file(plugin_root_default() . '/.claude-plugin/plugin.json') || {};
+    my $n = ref $m eq 'HASH' && defined $m->{name} && !ref $m->{name} && $m->{name} ne '' ? $m->{name} : undef;
+    if (!defined $n) {
+        my $l = defined $ENV{STORE_LAUNCHER} && $ENV{STORE_LAUNCHER} ne '' ? File::Basename::basename($ENV{STORE_LAUNCHER}) : '';
+        ($n = $l) =~ s/-store\z//;
+        $n = 'plugin' if $n eq '';
+    }
+    $v =~ s/<plugin>/$n/g;
+    return $v;
+}
+
+# STATE-ROOT (0.1.2): the pre-0.1.2 default handoff root, the one watch-side copy of core's
+# paths::$LEGACY_ROOT (watch/ modules load no core module). export.pm reads its bucket names.
+our $LEGACY_ROOT = '~/.claude/handoffs';
+
+# legacy_root() -> $LEGACY_ROOT with ~ expanded (undef without HOME).
+sub legacy_root {
+    return undef unless defined $ENV{HOME} && $ENV{HOME} ne '';
+    return _expand($LEGACY_ROOT);
+}
+
+# _state_root(value) -> the handoff root a value names: the default (as the fallback names it, with ~
+# expanded) reads under $XDG_STATE_HOME when that is an absolute path, as core's paths::state_default
+# (STATE-ROOT); any other value is returned as it is.
+sub _state_root {
+    my ($v) = @_;
+    return $v unless defined $v && !ref $v;
+    my $d = _expand(_named($DEFAULTS{handoff_root}));
+    my $x = $ENV{XDG_STATE_HOME};
+    return $v unless defined $d && defined $x && $x =~ m{\A/};
+    $d =~ s{/+}{/}g;
+    (my $vv = $v) =~ s{/+}{/}g;
+    $vv =~ s{(?<=.)/\z}{};
+    my $home = defined $ENV{HOME} ? $ENV{HOME} : '';
+    $home =~ s{/+\z}{};
+    return $v unless $vv eq $d && index($d, "$home/.local/state/") == 0;
+    (my $xx = $x) =~ s{/+\z}{};
+    return $xx . substr($d, length("$home/.local/state"));
 }
 
 sub _expand {
@@ -111,7 +157,7 @@ sub _settings {
         $v = $DEFAULTS{$k} unless defined $v;
         $s{$k} = $v;
     }
-    $s{handoff_root} = _expand($s{handoff_root}) || _expand($DEFAULTS{handoff_root});
+    $s{handoff_root} = _expand(_named($s{handoff_root})) || _expand(_named($DEFAULTS{handoff_root}));
     for my $k (qw(stall_min cache_ttl_s compact_target_tokens compact_soft_max_tokens
                   native_window_tokens max_auto_continues_per_hour evidence_quota_mb
                   handoff_turn_max_tokens watch_quota_mb)) {
@@ -173,7 +219,7 @@ sub init {
     return $ctx if $ctx->{_init};
     $ctx->{_init} = 1;
     $ctx->{settings} = _settings($ctx);
-    $ctx->{root} = _expand($ctx->{root}) || $ctx->{settings}{handoff_root};
+    $ctx->{root} = _expand($ctx->{root}) || _state_root($ctx->{settings}{handoff_root});
     my $watch = _expand($ctx->{watch}) || _expand($ctx->{settings}{log_dir});
     $ctx->{watch} = defined $watch ? $watch : $ctx->{root} . '/.watch';
     $ctx->{watch} =~ s{/+\z}{};

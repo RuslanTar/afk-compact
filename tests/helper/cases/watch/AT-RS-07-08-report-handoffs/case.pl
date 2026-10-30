@@ -66,7 +66,7 @@ my %got;
           stdout_re => qr/^handoffs: 5 available \(1 KB\)$/m },
         # RS-07: handoffs only
         { call => 'cli', argv => [ 'report', '--with-handoffs', '--since', '7d', '--out', '$TMP/out1' ], env => { STORE_TEST_NO_GIT => '1' },
-          stdout_re => qr/^HANDOFF handoffs\/[0-9a-f]{12}\.md \d+ B from ~\/\.claude\/handoffs\/qx\/b7\/2026-10-21_10-00-00_5e55a001_retry\.md$/m },
+          stdout_re => qr/^HANDOFF handoffs\/[0-9a-f]{12}\.md \d+ B from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/2026-10-21_10-00-00_5e55a001_retry\.md$/m },
         # each kind its own yes: summaries alone, then both
         { call => 'cli', argv => [ 'report', '--with-summaries', '--since', '7d', '--out', '$TMP/out2' ], env => { STORE_TEST_NO_GIT => '1' },
           stdout_re => qr/^SUMMARY summaries\//m },
@@ -123,11 +123,11 @@ my %got;
         $E->is($got{n0}, 0, 'RS-07: the dry runs wrote no zip');
         $E->ok((($dry->{stdout} // '') !~ /^(?:HANDOFF|SUMMARY) /m ? 1 : 0), 'RS-07: a dry run lists no file');
         my $out = $h1->{stdout} // '';
-        $E->ok(($out =~ /^WITHHELD handoffs\/[0-9a-f]{12}\.md \(secret: slack-token\) from ~\/\.claude\/handoffs\/qx\/b7\/2026-10-21_10-10-00_5e55a001_deploy\.md$/m ? 1 : 0),
+        $E->ok(($out =~ /^WITHHELD handoffs\/[0-9a-f]{12}\.md \(secret: slack-token\) from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/2026-10-21_10-10-00_5e55a001_deploy\.md$/m ? 1 : 0),
                'RS-07: the handoff holding a secret is withheld with its rule id');
-        $E->ok(($out =~ /^WITHHELD handoffs\/[0-9a-f]{12}\.md \(identity: your names, paths or hosts\) from ~\/\.claude\/handoffs\/qx\/b7\/2026-10-21_10-20-00_5e55a001_paths\.md$/m ? 1 : 0),
+        $E->ok(($out =~ /^WITHHELD handoffs\/[0-9a-f]{12}\.md \(identity: your names, paths or hosts\) from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/2026-10-21_10-20-00_5e55a001_paths\.md$/m ? 1 : 0),
                'RS-07: the handoff holding the home folder is withheld (identity)');
-        $E->ok(($out =~ /^WITHHELD handoffs\/[0-9a-f]{12}\.md \(identity: your names, paths or hosts\) from ~\/\.claude\/handoffs\/qx\/b7\/2026-10-21_10-25-00_5e55a001_vocab\.md$/m ? 1 : 0),
+        $E->ok(($out =~ /^WITHHELD handoffs\/[0-9a-f]{12}\.md \(identity: your names, paths or hosts\) from ~\/\.local\/state\/[^\/]+\/handoffs\/qx\/b7\/2026-10-21_10-25-00_5e55a001_vocab\.md$/m ? 1 : 0),
                'RS-07: the handoff holding a repo folder named like a bundle word is withheld (full identity list)');
         $E->ok(($out =~ /^HANDOFFS: added at your request; .*business content is not masked$/m ? 1 : 0), 'RS-07: the output says business content is not masked');
         $E->ok(($out !~ /^SUMMAR/m ? 1 : 0), 'RS-07: no summary without its own yes');
