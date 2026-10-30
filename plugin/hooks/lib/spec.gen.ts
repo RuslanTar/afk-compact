@@ -369,7 +369,7 @@ export const SPEC = {
     },
     "step1-mismatch": {
       "why": "two versions of the next action make the next session guess",
-      "fix": "start Next steps item 1 with Step 1's command or edit, character for character"
+      "fix": "make Next steps item 1 the same command or edit as Step 1, character for character; put any extra detail after ` — `"
     },
     "none-form": {
       "why": "an empty section must say it was checked, not forgotten",

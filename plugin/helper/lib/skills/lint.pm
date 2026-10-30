@@ -466,10 +466,12 @@ sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
 
 # step1-mismatch (0.1.2 handoff-lint): Step 1 and Next steps item 1 name the same command or
 # edit. Backticks, white space, the "— for …" and "— done when …" tails and a proposed mark
-# (`| proposed`, `— proposed`, either with a trailing `(…)` note) do not count. When Step 1
-# begins with a backticked command, item 1 must begin with that same command (backticked or
-# not) and nothing else glued to it; otherwise the texts are equal, or item 1 is Step 1 followed
-# by ` — ` and more detail.
+# (`| proposed`, `— proposed`, either with a trailing `(…)` note) do not count. The texts are
+# equal, or item 1 is Step 1 followed by ` — ` and more detail. A Step 1 that is one backticked
+# command, alone or followed by ` — ` and detail, also matches an item 1 that is that command
+# (backticked or bare), alone or followed by ` — ` and detail. Nothing else may follow the
+# command on either side: an extra argument, a glued word, a second command or other words
+# after it are compared as text, so they block unless both sides say the same.
 sub _step1_same {
     my ($s1, $n1) = @_;
     return 0 unless defined $s1 && defined $n1;
@@ -481,9 +483,10 @@ sub _step1_same {
     return 0 if $fs eq '';
     return 1 if $fs eq $fn;
     return 1 if index($fn, "$fs \x{2014} ") == 0;
-    if ($s1 =~ /\A\s*`([^`]+)`/) {
+    my $rest = qr/(?:\s+\x{2014}\s.*)?\s*\z/;
+    if ($s1 =~ /\A\s*`([^`]+)`$rest/) {
         my $c = $flat->($1);
-        return 1 if $n1 =~ /\A\s*`([^`]+)`/ && $flat->($1) eq $c;
+        return 1 if $n1 =~ /\A\s*`([^`]+)`$rest/ && $flat->($1) eq $c;
         return 1 if $n1 !~ /\A\s*`/ && ($fn eq $c || index($fn, "$c \x{2014} ") == 0);
     }
     return 0;
@@ -491,25 +494,38 @@ sub _step1_same {
 
 # recipe-placeholder (0.1.2 handoff-lint): a `<…>` stand-in in a recipe line, except
 # - the note after `script: none`;
-# - in `expected outputs:`, a value the job prints (`EXIT=<n>`, `server=<pid>`): a `<…>` with
-#   no `/` beside it; one inside a path (`<scratch>/out.md`) still counts;
-# - the words of an agent prompt after `prompt=` / `prompt:`: they are the spawned agent's own
-#   text (an agent spawn is always class ask), unless the `<…>` is the whole prompt value
-#   (`prompt=<the brief above>`).
+# - in `expected outputs:`, a value the job prints: a `<…>` right after `=` or `-`
+#   (`EXIT=<n>`, `server=<pid>`, `run-<n>`) with no `/` after it; any other `<…>` there, one
+#   in a path (`<scratch>/out.md`, `run-<n>/log`) and a pointer still count;
+# - the words of an agent prompt after a `prompt=` / `prompt:` argument (not a CLI flag such as
+#   `--prompt=`): they are the spawned agent's own text, unless the `<…>` is the whole prompt
+#   value (`prompt="<the brief above>"`) or a pointer.
+# A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
+# (`<the brief above>`, `<same path>`, `<that copy>`).
 sub _placeholder {
     my ($l) = @_;
     my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
+    my $pointer = sub {
+        my ($t) = @_;
+        while ($t =~ /($ph)/g) {
+            return 1 if $1 =~ /\b(?:above|below|earlier|previous|prior|same|that|those|its|said|verbatim)\b/i;
+        }
+        return 0;
+    };
     return 0 if $l =~ /\A\s*script:\s*none\b/i;
     if ($l =~ /\A\s*expected outputs:/i) {
         while ($l =~ /$ph/g) {
             my ($x, $y) = ($-[0], $+[0]);
-            return 1 if ($x > 0 && substr($l, $x - 1, 1) eq q{/}) || ($y < length($l) && substr($l, $y, 1) eq q{/});
+            my $before = $x > 0 ? substr($l, $x - 1, 1) : '';
+            my $after = $y < length($l) ? substr($l, $y, 1) : '';
+            return 1 if ($before ne '=' && $before ne '-') || $after eq q{/} || $pointer->(substr($l, $x, $y - $x));
         }
         return 0;
     }
-    if ($l =~ /\bprompt\s*[=:]\s*["'`]?/g) {
+    if ($l =~ /(?<![-\w])prompt\s*[=:]\s*["'`]?/g) {
         my $at = pos($l);
-        return 1 if substr($l, $at) =~ /\A$ph["'`]?\s*(?:[),;]|\z)/;
+        my $tail = substr($l, $at);
+        return 1 if $tail =~ /\A$ph["'`]?\s*(?:[),;]|\z)/ || $pointer->($tail);
         return substr($l, 0, $at) =~ $ph ? 1 : 0;
     }
     return $l =~ $ph ? 1 : 0;
