@@ -1,7 +1,7 @@
 // U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
 import { expect, test } from 'claude-code/testing'
 import { detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
-import { AGENT, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
+import { AGENT, HOME, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce = record; [midturn]', async ($, on) => {
   const w = new World().install(on)
@@ -142,6 +142,66 @@ test('AT-M3-04: no summary message: copy_failed summary-not-found, toast, resume
   const block = ctx.blocks.find(b => b.name === `${w.name}-resume`)
   expect(block?.text).toContain('Summary not in handoff format: take state from Measured facts and kept messages.')
   expect(block?.text).toContain('saved copy of this summary: not saved (summary-not-found)')
+})
+
+test('AF-A1: a summary behind the Artifact header (2.1.312) is found: stashed from its prefix on, the PostCompact copy matches, verdict ok; two in a row never halt', async ($, on) => {
+  const w = new World().install(on)
+  w.summaryMode = 'artifact'
+  w.postCompactSaved = true
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('copy_failed')).toEqual([])
+  expect(w.callsOf('save-copy').length).toBe(2)
+  const nonce = w.flag(w.callsOf('dispatch')[1], '--nonce') ?? ''
+  expect(w.files.get(`${WATCH}/${SID_A}/pending/${nonce}.mod.md`)?.startsWith('This session is being continued')).toBe(true)
+  expect(w.rowsOf('copy_exists').length).toBe(2)
+  expect(w.rowsOf('copy_mismatch').length).toBe(0)
+  expect(w.rowsOf('halt')).toEqual([])
+  expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text).not.toContain('Summary not in handoff format')
+  expect(block?.text).toContain(`saved copy of this summary: ~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`)
+})
+
+/** The classic PostCompact hook's copy of the compaction now at the bottom, with this verdict (and nonce, by default its own). */
+function hooksSaved(w: World, verdict: string, nonceOf: (n: string) => string = n => n): void {
+  w.atCompact = () => {
+    const n = markerNonce(w, w.compacts[w.compacts.length - 1]?.instructions) ?? ''
+    const rel = `/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${n.slice(0, 6)}.md`
+    w.prevCopy = '~' + rel
+    w.files.set(HOME + rel, `---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: ${nonceOf(n)}\nsession_id: ${SID_A}\nactor: main\nverdict: ${verdict}\n---\nbody\n`)
+  }
+}
+
+test('AF-A2: summary not found by the mod: the hooks side\'s copy of this nonce gives the block its path and verdict; two in a row never halt', async ($, on) => {
+  const w = new World().install(on)
+  w.summaryMode = 'missing'
+  hooksSaved(w, 'ok')
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  const nonce = w.flag(w.callsOf('dispatch')[1], '--nonce') ?? ''
+  expect(w.rowsOf('copy_failed').map(r => r.reason)).toEqual(['summary-not-found', 'summary-not-found'])
+  expect(w.rowsOf('halt')).toEqual([])
+  expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text).not.toContain('Summary not in handoff format')
+  expect(block?.text).not.toContain('not saved')
+  expect(block?.text).toContain(`saved copy of this summary: ~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`)
+})
+
+test('AF-A3: summary not found and no hooks-side verdict of this nonce (none, or another nonce\'s copy): not counted toward 2-nonok; a hooks-side non-ok verdict still counts', async ($, on) => {
+  const w = new World().install(on)
+  w.summaryMode = 'missing'
+  await raiseCompact($, { trigger: 'auto' })
+  hooksSaved(w, 'unshaped', () => 'deadbeef')
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('halt')).toEqual([])
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text).toContain('saved copy of this summary: not saved (summary-not-found)')
+  hooksSaved(w, 'unshaped')
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
 })
 
 test('after-step: saved copy, verdict ok, main sweep, block via prompt.context once', async ($, on) => {
