@@ -1,0 +1,45 @@
+{
+ "id": "AT-VD-03 (visible defaults: source labels, an ambiguous options key, a consent key passed by env)",
+ "owner": "core",
+ "note": "0.1.2 visible defaults (spec Behaviour 1, AT-VD-03): two pluginConfigs keys for this plugin are ambiguous, so every key is at its default and the block warns with both key names; reset refuses such a file (exit 3) and leaves it as it was. A consent key passed as a plugin option (env) is ignored with the existing `settings file only` note and stays at its default; a protective key the same. A flag sets a key with the label `flag` (settings show takes the same --root and --log-dir as status).",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {"setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {
+      "$BRAND@m": {"options": {"cooldown_ms": 20000}}, "$BRAND@n": {"options": {"watcher": "off"}}}}}
+  ]},
+  {"name": "ambiguous: all at default, one warning naming both keys",
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^settings values: 0 not at default, 43 at default$",
+                    "^warning: several plugin option keys in your settings\\.json \\(\"$BRAND@m\", \"$BRAND@n\"\\): every key is at its default; remove the one no longer used$"],
+     "stdout_lacks": ["^  cooldown_ms 20000", "^  watcher off"]}},
+  {"name": "reset refuses an ambiguous file",
+   "argv": ["settings", "reset", "cooldown_ms", "--apply"],
+   "expect": {"exit": 3,
+     "stdout_has": ["^settings reset: refused, several plugin option keys in your settings\\.json \\(\"$BRAND@m\", \"$BRAND@n\"\\); remove the one no longer used, then run this again$"],
+     "files": [{"path": "$HOME/.claude/settings.json", "has": ["\"cooldown_ms\": ?20000"]}],
+     "absent": ["$WATCH/settings-backups"]}},
+  {"setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"cooldown_ms": 20000}}}}}
+  ]},
+  {"name": "a consent key and a protective key passed by env: ignored with the note, at default",
+   "argv": ["status", "--sid", "$SID"],
+   "env": {"CLAUDE_PLUGIN_OPTION_RELAUNCH_AUTO": "off", "CLAUDE_PLUGIN_OPTION_PROD_PATTERNS": "zzenvpat"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^settings values: 1 not at default, 42 at default$",
+                    "^  cooldown_ms 20000 \\(your settings\\.json; default 30000\\)$",
+                    "^  at default: .*relaunch_auto=on",
+                    "^  at default: .*prod_patterns=empty",
+                    "^note: relaunch_auto: settings file only$",
+                    "^note: prod_patterns: settings file only$"],
+     "stdout_lacks": ["zzenvpat", "^  relaunch_auto "]}},
+  {"name": "a flag: the label flag",
+   "argv": ["settings", "show", "--root", "$TMP/hr"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^handoff_root \\S+/hr \\(flag; default ~/\\.claude/handoffs\\)$",
+                    "^cooldown_ms 20000 \\(your settings\\.json; default 30000\\)$",
+                    "^watcher shadow \\(default\\)$"]}}
+ ]
+}

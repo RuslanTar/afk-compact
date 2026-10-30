@@ -1,0 +1,434 @@
+{
+ "id": "AT-VD-06 (visible defaults: settings reset --apply)",
+ "owner": "core",
+ "note": "0.1.2 visible defaults (spec Behaviour 4): `settings reset … --apply` removes exactly the named members of this plugin's pluginConfigs options by a text splice, so every other byte of the settings file stays (order, spacing, other plugins' options, unknown keys; jsonc::decode returns unordered hashes and a re-encode would reorder the file). Before it writes it saves a backup of the whole file in the plugin's own store (<log folder>/settings-backups/<stamp>.json, mode 0600; a second one in the same second gets -2), checks that the new text decodes to the old settings minus those members, and writes atomically to the file's real path with its mode (a symlinked settings.json keeps its link). An emptied options object stays {}. --all leaves the consent and protective keys and keys the plugin does not know. Refused (exit 3, nothing written, no backup): a file changed since the dry run (--plan), a file with comments, a file that is not JSON, and a file that names a member on the path twice.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 20000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    },
+    {
+     "write": "$TMP/expect/orig.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 20000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    },
+    {
+     "write": "$TMP/expect/a1.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"cooldown_ms\": 20000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    },
+    {
+     "write": "$TMP/expect/a2.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    },
+    {
+     "write": "$TMP/expect/a3.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "one key: only that member goes; a backup of the whole file; mode kept",
+   "argv": [
+    "settings",
+    "reset",
+    "compact_target_tokens",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings reset: removed compact_target_tokens from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
+     "^  backup: ~/\\.claude/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00\\.json$",
+     "^  takes effect: "
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/orig.json",
+      "snapshot": "orig"
+     },
+     {
+      "path": "$TMP/expect/a1.json",
+      "snapshot": "a1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a1",
+      "mode": "0644"
+     },
+     {
+      "path": "$WATCH/settings-backups/*.json",
+      "count": 1
+     },
+     {
+      "path": "$WATCH/settings-backups/2026-10-30_09-00-00.json",
+      "same_bytes_as": "orig",
+      "mode": "0600"
+     }
+    ]
+   }
+  },
+  {
+   "name": "--all: the rest but the consent key and the unknown key",
+   "argv": [
+    "settings",
+    "reset",
+    "--all",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings reset: removed cooldown_ms from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
+     "^  backup: ~/\\.claude/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-2\\.json$",
+     "^  takes effect: ",
+     "^  kept by --all \\(consent or protective; name one to reset it\\): relaunch_auto$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/a2.json",
+      "snapshot": "a2"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a2",
+      "mode": "0644"
+     },
+     {
+      "path": "$WATCH/settings-backups/2026-10-30_09-00-00-2.json",
+      "same_bytes_as": "a1"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a consent key named: removed, the last member of the object",
+   "argv": [
+    "settings",
+    "reset",
+    "relaunch_auto",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings reset: removed relaunch_auto from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
+     "^  backup: ~/\\.claude/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-3\\.json$",
+     "^  takes effect: ",
+     "^  note: relaunch_auto: its default on lets a lost background job start again by itself \\(looser than now\\)$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/a3.json",
+      "snapshot": "a3"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a3",
+      "mode": "0644"
+     }
+    ]
+   }
+  },
+  {
+   "name": "nothing left to remove: no write, no backup",
+   "argv": [
+    "settings",
+    "reset",
+    "--all",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings reset: nothing to remove$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a3"
+     },
+     {
+      "path": "$WATCH/settings-backups/*.json",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\n  \"cooldown_ms\": 1\n}}}, \"z\": 0}\n"
+    },
+    {
+     "write": "$TMP/expect/only.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}, \"z\": 0}\n"
+    }
+   ]
+  },
+  {
+   "name": "the only member: options stays {}",
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/only.json",
+      "snapshot": "only"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "only",
+      "mode": "0600"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/real"
+    },
+    {
+     "write": "$TMP/real/settings.json",
+     "mode": "0640",
+     "text": "{\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"watcher\": \"off\", \"cooldown_ms\": 20000}}}\n}\n"
+    },
+    {
+     "write": "$TMP/expect/link.json",
+     "text": "{\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"cooldown_ms\": 20000}}}\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "symlink setup",
+   "setup": [
+    {
+     "symlink": "$HOME/.claude/settings.link",
+     "to": "$TMP/real/settings.json"
+    },
+    {
+     "rename": "$HOME/.claude/settings.link",
+     "to": "$HOME/.claude/settings.json"
+    }
+   ]
+  },
+  {
+   "name": "a symlinked settings.json: written through the link, its mode kept",
+   "argv": [
+    "settings",
+    "reset",
+    "watcher",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/link.json",
+      "snapshot": "link"
+     },
+     {
+      "path": "$TMP/real/settings.json",
+      "same_bytes_as": "link",
+      "mode": "0640"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "link"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 20000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "dry run: the plan",
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms"
+   ],
+   "capture": {
+    "PLAN": "re:--plan ([0-9a-f]{12}) --apply"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^to apply it, type: ! \\\"/[^\\\"]+/scripts/$BRAND-store\\\" settings reset cooldown_ms --plan [0-9a-f]{12} --apply$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 25000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    },
+    {
+     "write": "$TMP/expect/changed.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 25000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "the file changed since the dry run: refused, nothing written",
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms",
+    "--plan",
+    "$PLAN",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^settings reset: refused, your settings\\.json changed since the dry run; run the dry run again$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/changed.json",
+      "snapshot": "changed"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "changed"
+     },
+     {
+      "path": "$WATCH/settings-backups/*.json",
+      "count": 5
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same plan with the file as planned would apply (the plan is the file's hash)",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 20000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
+    }
+   ],
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms",
+    "--plan",
+    "$PLAN",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings reset: removed cooldown_ms from "
+    ]
+   }
+  },
+  {
+   "name": "comments: refused",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\n  // mine\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"cooldown_ms\": 1}}}\n}\n"
+    }
+   ],
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^settings reset: refused, your settings\\.json is not plain JSON \\(comments, a trailing comma or a syntax error\\); edit it by hand or in /config$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "// mine",
+       "\"cooldown_ms\": 1"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "not JSON: refused, also as a dry run",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\"pluginConfigs\": "
+    }
+   ],
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^settings reset: refused, your settings\\.json is not plain JSON "
+    ]
+   }
+  },
+  {
+   "name": "a member named twice: refused",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0600",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"cooldown_ms\": 1, \"cooldown_ms\": 2}}}}\n"
+    }
+   ],
+   "argv": [
+    "settings",
+    "reset",
+    "cooldown_ms",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^settings reset: refused, your settings\\.json names \"cooldown_ms\" twice in one object; edit it by hand or in /config$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"cooldown_ms\": 1, \"cooldown_ms\": 2"
+      ]
+     },
+     {
+      "path": "$WATCH/settings-backups/*.json",
+      "count": 6
+     }
+    ]
+   }
+  }
+ ]
+}

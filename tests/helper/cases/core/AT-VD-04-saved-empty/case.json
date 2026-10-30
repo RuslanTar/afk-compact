@@ -1,0 +1,29 @@
+{
+ "id": "AT-VD-04 (visible defaults: a saved empty value)",
+ "owner": "core",
+ "note": "0.1.2 visible defaults (spec Behaviour 2): a value saved as \"\" counts as unset, so the plugin uses the default, but Claude Code keeps the \"\" and passes it to the hooks in place of the default (a saved \"\" shadows the default inside Claude Code). /status and settings show print one warning per such key, with the user-run reset line that removes it. A key saved with a value prints no such warning. (The off-list warning of the spec waits for the pick lists, which this build leaves out: OPEN-1.)",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {"setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"compact_target_tokens": "", "watcher": "", "cooldown_ms": 20000}}}}}
+  ]},
+  {"name": "status: one warning per saved empty value, the value at its default",
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^warning: compact_target_tokens: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with ! \"/[^\"]+/scripts/$BRAND-store\" settings reset compact_target_tokens --apply$",
+                    "^warning: watcher: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with ! \"/[^\"]+/scripts/$BRAND-store\" settings reset watcher --apply$",
+                    "^  at default: .*compact_target_tokens=400000",
+                    "^  cooldown_ms 20000 \\(your settings\\.json; default 30000\\)$"],
+     "stdout_lacks": ["^warning: cooldown_ms: saved empty"]}},
+  {"name": "settings show: the same warnings",
+   "argv": ["settings", "show"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^compact_target_tokens 400000 \\(default\\)$",
+                    "^warning: compact_target_tokens: saved empty, the plugin uses the default; "]}},
+  {"name": "reset of a saved empty value: listed as now empty",
+   "argv": ["settings", "reset", "compact_target_tokens"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^  would remove compact_target_tokens \\(now saved empty; default 400000\\)$"]}}
+ ]
+}

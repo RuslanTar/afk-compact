@@ -46,7 +46,8 @@
 #     "tmp_norm": false);
 #     stdout_has / stdout_lacks (regexes, /m); stderr_has (regexes, /m); json_keys; json {dotted path: value |
 #     {re} | {null} | {len} | {len_min} | {len_plus, total} | {present} | {max_bytes}}; files
-#     has / lacks (regexes, /m); {len_plus: "<dotted path>" or a list of them, total: N}: the
+#     has / lacks (regexes, /m), snapshot <label> (bytes and mtime) then same_bytes_as and
+#     same_mtime_as <label>; {len_plus: "<dotted path>" or a list of them, total: N}: the
 #     list's length plus the numbers at those paths (0 when absent) is N
 # Fixture recipes (tests/fixtures/README.md), used by the AT-E cases:
 #   setup: normalized_sha <path> + var (the normalized body's sha256 into $<var>);
@@ -3278,11 +3279,18 @@ sub check {
         if (!@m) { push @e, "$f->{path}: missing"; next }
         for my $p (@m) {
             # snapshot <label> keeps the file's bytes for a later step's same_bytes_as <label>
-            if (defined $f->{snapshot}) { $V->{"__snapshot_$f->{snapshot}"} = util::read_file($p) }
+            # (and its mtime, for a later same_mtime_as <label>: a read-only call left it untouched)
+            if (defined $f->{snapshot}) { $V->{"__snapshot_$f->{snapshot}"} = util::read_file($p); $V->{"__mtime_$f->{snapshot}"} = (stat $p)[9] }
             if (defined $f->{same_bytes_as}) {
                 my $was = $V->{"__snapshot_$f->{same_bytes_as}"};
                 push @e, "$p: no snapshot $f->{same_bytes_as}" unless defined $was;
                 push @e, "$p: bytes differ from snapshot $f->{same_bytes_as}" if defined $was && (util::read_file($p) // '') ne $was;
+            }
+            if (defined $f->{same_mtime_as}) {
+                my $was = $V->{"__mtime_$f->{same_mtime_as}"};
+                my $now = (stat $p)[9];
+                push @e, "$p: no snapshot $f->{same_mtime_as}" unless defined $was;
+                push @e, "$p: mtime $now differs from snapshot $f->{same_mtime_as} ($was)" if defined $was && $now != $was;
             }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
             next if -d $p;

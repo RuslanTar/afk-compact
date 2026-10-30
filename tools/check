@@ -49,7 +49,7 @@ only GEN tools write, other candidate names inside longer words, npm manifests o
 node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md
 description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
 AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
-self-heal table and resume SKILL size), a resume protocol over its hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults,
+self-heal table and resume SKILL size), a resume protocol over its hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults and VD-01 title defaults and pick lists,
 the BLD-05 content gates (AT-TX-01/03/05/06/07/08/12/13, AT-PR-06, AT-PK-02, AT-IC-11: a moved
 template bullet, a lint id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`,
 a starred read-back line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a
@@ -482,7 +482,12 @@ def probes(name):
         uc = doc["userConfig"]
         uc["watcher"]["default"] = "off"
         uc["disposable_keep_days"]["default"] = 30
-        uc["watch_keep_days"] = {"type": "number", "title": "x", "description": "x", "default": 30}
+        uc["watch_keep_days"] = {"type": "number", "title": "x [default 30]", "description": "x", "default": 30}
+        # VD-01 (0.1.2 visible defaults): a title default off the manifest, a title without one, and
+        # a pick list that is not settings.pm %ENUM's
+        uc["cooldown_ms"]["title"] = "Minimum gap between compactions (ms) [default 15,000]"
+        uc["stall_min"]["title"] = "Stalled job alert (minutes)"
+        uc["handoff_turn"]["options"] = ["halt", "off", "on"]
         write_text(p, json.dumps(doc, indent=2) + "\n")
 
     def launcher_move(d):
@@ -950,7 +955,11 @@ def probes(name):
         ("config-defaults", "AT-WD-02", gates_only("config-defaults"), config_defaults,
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
-          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days"], None),
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: cooldown_ms says \[default 15,000\], the manifest default is 30000$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: stall_min has no \[default 60\] suffix$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: watcher says \[default shadow\], the manifest default is 'off'$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 options: handoff_turn lists \['halt', 'off', 'on'\]"], None),
         ("launcher", "AT-PK-01", gates_only("launcher"), launcher_move,
          [r"^GATE launcher plugin/bin: AT-PK-01 bin-folder",
           r"^GATE launcher " + re.escape(launcher_rel(name)) + r": AT-PK-01 launcher: mode 644, want 755$",

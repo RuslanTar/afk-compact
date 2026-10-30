@@ -22,6 +22,9 @@
 # lines: the setting and the route (the launcher's install line when a terminal session was not
 # started through it), the drift, this session's last outcome, and store-wide the background
 # restarts that failed after the kill and the launcher's refusals, each with its resume command.
+# 0.1.2 visible defaults: the `settings values:` block after the `settings:` line (each value with
+# its source and default; a warning per saved ""), also without a session id, and the user-run
+# `settings reset <key> --apply` line.
 use strict;
 use warnings;
 use utf8;
@@ -196,7 +199,7 @@ sub store_lines {
     push @out, prod_lines();
     push @out, protected_lines();
     push @out, regex_lines($classic);
-    push @out, idle_lines($headless, $mod), settings_keys_line();
+    push @out, idle_lines($headless, $mod), settings_keys_line(), values_lines();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`. Without a
     # session id that outcome is not read, so `on` says so (CW-1 review 2)
@@ -572,7 +575,8 @@ sub user_run_lines {
     $store = util::text($store);
     return ('user-run commands (type them yourself, with the leading !):',
             map { "  ! $store $_" } ('smoke', 'project init', 'project copy', 'watch prune',
-                                     (defined $sid ? ("reconcile --sid $sid --orphans --full") : ()), 'report'));
+                                     (defined $sid ? ("reconcile --sid $sid --orphans --full") : ()), 'report',
+                                     'settings reset <key> --apply'));
 }
 
 # ---------------------------------------------------------------- prod reads (S-SETTINGS B)
@@ -777,6 +781,24 @@ sub settings_keys_line {
             qw(handoff_reuse_window_min evidence_total_max_mb watch_quota_mb);
     return (sprintf('settings: resume_proceed %s (%s) · handoff_reuse_window_min %s · ticket_pattern %s · secret_extra_rules %d · evidence_total_max_mb %s · watch_quota_mb %s',
                     $rp, $r->{source}{resume_proceed} // 'default', $n[0], $tk, $nx, $n[1], $n[2]));
+}
+
+# 0.1.2 visible defaults (spec Behaviour 1-2): every effective value, store-wide (also without
+# a session id). A key not at its default (or set anywhere: settings file, plugin option, flag,
+# safe value) gets one line with its source and default; the keys at their defaults share one or
+# two `at default:` lines. Then a warning per saved "" and for an ambiguous options key.
+our $AT_DEFAULT_PER_LINE = 22;
+sub values_lines {
+    my $rows = eval { settings::effective_rows(rc::settings()) } || [];
+    return () unless @$rows;
+    my @set = grep { !$_->{at_default} } @$rows;
+    my @def = grep { $_->{at_default} } @$rows;
+    my @l = (sprintf('settings values: %d not at default, %d at default', scalar @set, scalar @def));
+    push @l, "  $_->{key} " . settings::row_text($_) for @set;
+    my $per = @def > $AT_DEFAULT_PER_LINE ? int((@def + 1) / 2) : scalar @def;
+    while (my @part = splice(@def, 0, $per || 1)) { push @l, '  at default: ' . join(' · ', map { "$_->{key}=$_->{value}" } @part) }
+    push @l, settings::value_warnings($rows, ctx::store_cmd());
+    return @l;
 }
 
 # Rename order (ruling xxxxxxxx-32, 2026-10-23): options saved in the settings file under the

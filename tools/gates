@@ -102,6 +102,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                watch/ctx.pm %DEFAULTS equal the manifest defaults; manifest and @KEYS list the
                same keys; AT-IA-01: settings.pm and config.ts hold the same idle off/auto words
                and the same value for any other word
+  config-defaults (also) VD-01 (0.1.2 visible defaults): every non-boolean userConfig title ends
+               with `[default <manifest default>]` (`[default: empty = <meaning>]` for an empty
+               one); a key with `options` lists exactly settings.pm %ENUM's values, default in it
   export-classes AT-WB-08: every settings key exports as num/bool/enum/path/list/drop; dir and
                file keys as path or drop; enum keys have %ENUM values
   no-network   AT-WB-11 (static): report.pl and every helper module it loads name no
@@ -1309,6 +1312,57 @@ def config_sources_hits(target, brand):
     return out
 
 
+ENUM_BLOCK = re.compile(r"^our %ENUM = \((.*?)\);", re.S | re.M)
+TITLE_DEFAULT = re.compile(r" \[default(?:: empty = (?P<meaning>[^\]]+)| (?P<value>.+?)(?: = (?P<vm>[^\]]+))?)\]\Z")
+
+
+def _settings_enum(target):
+    """settings.pm %ENUM as {key: [values]}, or None."""
+    path = os.path.join(target, *SETTINGS_REL.split("/"))
+    if not os.path.isfile(path):
+        return None
+    m = ENUM_BLOCK.search(_read(path))
+    return {k: v.split() for k, v in re.findall(r"(\w+) => \[qw\(([^)]*)\)\]", m.group(1))} if m else None
+
+
+def config_titles_hits(target, brand):
+    """VD-01 (0.1.2 visible defaults): Claude Code fills a default into a dialog only for booleans
+    and pick lists, so every other userConfig title ends with its default: `[default <value>]`
+    (a number with thousands commas; ` = <meaning>` may follow) or, for an empty default,
+    `[default: empty = <meaning>]`, equal to the manifest default. A key with `options` (a pick
+    list) lists exactly settings.pm %ENUM's values for it, default included."""
+    if not _is_plugin(target):
+        return []
+    path = os.path.join(target, ".claude-plugin", "plugin.json")
+    with open(path, encoding="utf-8") as f:
+        uc = json.load(f).get("userConfig") or {}
+    enum = _settings_enum(target) or {}
+    out = []
+    for key, ent in uc.items():
+        if not isinstance(ent, dict):
+            continue
+        d = ent.get("default")
+        title = ent.get("title") or ""
+        if not isinstance(d, bool):
+            m = TITLE_DEFAULT.search(title)
+            want = "[default: empty = …]" if d == "" else "[default {}]".format("{:,}".format(d) if isinstance(d, (int, float)) else d)
+            if not m:
+                text = "VD-01 title: {} has no {} suffix".format(key, want)
+                out.append((path, None, "VD-01 title", text, text))
+            elif (d == "") != (m.group("meaning") is not None) or (d != "" and m.group("value") != want[9:-1]):
+                text = "VD-01 title: {} says {}, the manifest default is {!r}".format(key, m.group(0).strip(), d)
+                out.append((path, None, "VD-01 title", text, text))
+        if "options" in ent:
+            got = ent.get("options")
+            vals = got if isinstance(got, list) else None
+            if vals is not None:
+                vals = [v.get("value") if isinstance(v, dict) else v for v in vals]
+            if key not in enum or vals is None or sorted(map(str, vals)) != sorted(enum[key]) or d not in vals:
+                text = "VD-01 options: {} lists {!r}, settings.pm %ENUM {!r}, default {!r}".format(key, vals, enum.get(key), d)
+                out.append((path, None, "VD-01 options", text, text))
+    return out
+
+
 def _idle_words_hits(spath, cpath):
     """AT-IA-01 (owner xxxxxxxx-13, one value): settings.pm @IDLE_OFF_WORDS, @IDLE_AUTO_WORDS and
     $IDLE_INVALID hold the same words and value as config.ts IDLE_OFF_WORDS, IDLE_AUTO_WORDS and
@@ -2071,6 +2125,7 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("ic-desc", ic_desc_hits),
               ("nudge-folder", nudge_folder_hits),
               ("config-defaults", config_sources_hits),
+              ("config-defaults", config_titles_hits),
               ("export-classes", export_classes_hits),
               ("no-network", no_network_hits),
               ("export-schema", export_schema_hits),
