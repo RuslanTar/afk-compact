@@ -1,6 +1,6 @@
 // Auto-continue, the hourly cap, halt mode and the thrash rule (MOD-SPEC §9, S-14).
 import type { Deps } from './deps'
-import { submitPending, submitSettled } from './deps'
+import { submitPending, submitSettled, userFirst } from './deps'
 import type { HaltReason } from './handoff-turn'
 import { claimBy } from './helper'
 import { escalate, helperMissing, isoLocal, log } from './log'
@@ -212,6 +212,14 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
     }
     return
   }
+  // A person's turn runs or their prompt is entering: a continue would run after it and take the
+  // block that turn should get. Our prompt.submit hook checks again, with no await before the drop.
+  if (userFirst(s)) {
+    await log(d, sid, 'continue', { result: 'skipped:user-first', continues_last_hour: null })
+    // prompt.context may have been read already (after the compaction, before that turn).
+    if (pend) d.invalidateContext()
+    return
+  }
   /** Where this continue leaves the pending block (F2-3 `resume`). */
   let resume: string | undefined
   if (pend) {
@@ -227,14 +235,29 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
   await d.storeSet(key, stamps)
   await log(d, sid, 'continue', { result: 'submitted', continues_last_hour: stamps.length })
   submitPending(s, text)
+  s.contSubmitting = true
   let submitted = true
   try {
     await d.submit(text)
   } catch {
     submitted = false
     submitSettled(s)
+    if (userFirst(s)) {
+      // Our prompt.submit hook dropped it: a user prompt came first. The stamp is not spent, and a
+      // block this continue claimed goes to that prompt's turn by prompt.context.
+      s.contSubmitting = false
+      await d.storeSet(key, (await contStamps(d, sid, now)).filter(t => t !== now))
+      await log(d, sid, 'continue', { result: 'skipped:user-first', continues_last_hour: null })
+      if (pend && resume === 'delivered:prompt.submit' && s.pending === undefined) {
+        pend.heldClaim = true
+        s.pending = pend
+        d.invalidateContext()
+      }
+      return
+    }
     await log(d, sid, 'continue', { result: 'skipped:submit-failed', continues_last_hour: stamps.length })
   }
+  s.contSubmitting = false
   if (pend && resume !== undefined) {
     pend.outcome.continued = submitted
     pend.outcome.halt = s.halt.active

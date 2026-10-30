@@ -15,7 +15,7 @@ import { compactsAfter, endHandoffTurn, haltWins, isHalt, openAndSubmit, planHan
 import type { Checkpoint } from './helper'
 import { checkpoint, prevCopy } from './helper'
 import { armIdle } from './idle'
-import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText } from './deps'
+import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText, userFirst } from './deps'
 import { compactOff, log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
 import { undeliveredCheck } from './resume'
@@ -245,15 +245,16 @@ function nativeCheck(d: Deps, opts: BoundaryOpts): 'wait' | 'ran' | undefined {
  * The rows for a post-handoff compaction a native one made a second one: `skip why=compacted`,
  * and, when its dispatch record is already written (`prepared`), `compacted` with
  * `skip: native-ran` and that nonce, which closes the record: reconcile and the watcher then do
- * not report it unresolved (DP-29, E-M-15).
+ * not report it unresolved (DP-29, E-M-15). `user-first`: a compaction dropped after its record
+ * was written because a person's turn or prompt came first (`skip why=user-first`).
  */
-async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts): Promise<void> {
+async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts, skip: 'native-ran' | 'user-first' = 'native-ran'): Promise<void> {
   const ht = opts.afterHandoff?.ht ?? null
-  await log(d, sid, 'skip', { why: 'compacted', ht })
+  await log(d, sid, 'skip', { why: skip === 'native-ran' ? 'compacted' : skip, ht })
   const p = opts.prepared
   if (p === undefined) return
   await log(d, sid, 'compacted', {
-    nonce: p.nonce, skip: 'native-ran', tokens_before: null, tokens_after: null, usage_present: false, ms: null,
+    nonce: p.nonce, skip, tokens_before: null, tokens_after: null, usage_present: false, ms: null,
     ...(ht !== null ? { handoff_ht: ht } : {}),
   })
 }
@@ -305,7 +306,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
   const ah = opts.afterHandoff
   const idle = opts.idle
   if (pluginCompactOff(s)) return { ran: false, why: 'compact-off' }
-  if (s.busy || s.mainTurnRunning) return { ran: false, why: 'busy' }
+  if (s.busy || userFirst(s)) return { ran: false, why: 'busy' }
   if (s.askOpen > 0) return { ran: false, why: 'asks-user' }
   if (s.halt.active && !opts.exemptHalt) return { ran: false, why: 'halted' }
   // No await before this check, so a native compaction's end cannot slip past unseen.
@@ -363,6 +364,12 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
         s.nudgeNonce = named
         return stopped(again)
       }
+      // A person's turn started or their prompt entered during the checkpoint: nothing is
+      // compacted in front of it, and no record is left behind.
+      if (userFirst(s)) {
+        s.nudgeNonce = named
+        return { ran: false, why: 'busy' }
+      }
       s.selfNonces.add(nonce)
       await writeDispatch(d, {
         sid, nonce, agentId: null, trigger: 'plugin', channel: 'mod-self', resumePref: pref, midturn: false, tags: main.tags, text,
@@ -389,6 +396,12 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
     if (late !== undefined) {
       if (late === 'ran') await nativeRan(d, sid, withRecord)
       return stopped(late)
+    }
+    // So for a person's turn or prompt that came since the checkpoint: the record is closed
+    // (`skip: user-first`), nothing is compacted in front of it.
+    if (userFirst(s)) {
+      await nativeRan(d, sid, withRecord, 'user-first')
+      return { ran: false, why: 'busy' }
     }
     const run: SelfRun = { nonce, pref, t0, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
     // Headless: `$.session.compact` always rejects there; the compaction runs as `/compact`.

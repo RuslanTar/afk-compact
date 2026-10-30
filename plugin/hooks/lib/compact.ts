@@ -8,6 +8,7 @@ import type { Trigger } from './canary'
 import type { Verdict } from './detect'
 import { assemble } from './assemble'
 import { keysetCanary, triggerCanary } from './canary'
+import { expand } from './config'
 import { countVerdict } from './cont'
 import { detectSummary, isOk, lastInstrMarker } from './detect'
 import type { RaceBlock } from './handoff-turn'
@@ -402,6 +403,39 @@ export type AfterArgs = {
 }
 
 export const SUMMARY_PREFIX = 'This session is being continued'
+/** How far into the installed message the prefix may start, after header lines Claude Code puts first. */
+export const SUMMARY_SCAN = 4096
+
+/**
+ * The installed summary from its prefix on, or undefined: at the message's start, or at a line
+ * start in its first SUMMARY_SCAN chars, after a header Claude Code puts before it (2.1.312: an
+ * `<artifact-content-authored-by-others/>` line and its note, for a summary that restates
+ * Artifact content). The header is not part of the summary: the PostCompact copy has none.
+ * Past the start only behind such a header (a first line that is one `<.../>` tag), so a kept
+ * message that quotes the prefix line is not taken for a summary.
+ */
+export function summaryText(text: string): string | undefined {
+  if (text.startsWith(SUMMARY_PREFIX)) return text
+  if (!/^<[A-Za-z][\w-]*\/>\r?\n/.test(text)) return undefined
+  const at = text.slice(0, SUMMARY_SCAN).indexOf('\n' + SUMMARY_PREFIX)
+  return at < 0 ? undefined : text.slice(at + 1)
+}
+
+/**
+ * The hooks side's copy of this compaction (the classic PostCompact hook saves it first): this
+ * session's newest main copy when its frontmatter names this nonce, with its path and verdict.
+ */
+async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: string; verdict: Verdict } | undefined> {
+  const path = await prevCopy(d, sid)
+  const file = path === undefined ? undefined : expand(path, await d.home())
+  const raw = file === undefined ? undefined : await d.read(file)
+  const end = raw?.startsWith('---\n') ? raw.indexOf('\n---\n', 3) : -1
+  if (path === undefined || raw === undefined || end < 0) return undefined
+  const head = raw.slice(0, end + 1)
+  const verdict = /^verdict: (\S+)$/m.exec(head)?.[1]
+  if (/^nonce: (\S+)$/m.exec(head)?.[1] !== nonce || verdict === undefined || !isVerdict(verdict)) return undefined
+  return { path, verdict }
+}
 
 /** MOD-SPEC §5.2: the after-step, main and subagent. */
 export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdict }> {
@@ -410,8 +444,11 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   const actor = a.agentId ?? 'main'
   // Owner xxxxxxxx-17: the 55.5-min idle check reads this, first, so a later failure cannot hide it.
   if (main) await noteCompaction(d, a.sid, a.idle === true)
-  const summary = a.messages.find(m => m.role === 'user' && m.text.startsWith(SUMMARY_PREFIX))
+  let text: string | undefined
+  for (const m of a.messages) if (text === undefined && m.role === 'user') text = summaryText(m.text)
   let verdict: Verdict = 'unshaped'
+  // A summary the mod did not find counts toward the 2-in-a-row rule only by the hooks side's verdict.
+  let counted = text !== undefined
   let savedCopy: string | null = null
   let notSaved: string | undefined
   let chars = 0
@@ -422,21 +459,28 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   // refused (null) or unknown (no helper answer) means no stash, never the options' folder.
   const stash = await vettedWatch(d, a.sid)
   const p = await d.paths()
-  if (!summary) {
+  if (text === undefined) {
     notSaved = 'summary-not-found'
     await log(d, a.sid, 'copy_failed', { nonce: a.nonce, reason: notSaved }, actor)
-    escalate(d, 'copy-failed')
+    // The block's copy and verdict lines then take the hooks side's save and verdict.
+    const hooks = main ? await hooksCopy(d, a.sid, a.nonce) : undefined
+    if (hooks) {
+      savedCopy = hooks.path
+      notSaved = undefined
+      verdict = hooks.verdict
+      counted = true
+    } else escalate(d, 'copy-failed')
   } else {
-    const det = detectSummary(summary.text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
+    const det = detectSummary(text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
     verdict = det.verdict
     chars = det.normalized.length
-    if (main && a.idle === true) facts = laneFacts(summary.text)
+    if (main && a.idle === true) facts = laneFacts(text)
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
     // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
     // behind is found by another session's cross-session finish. Empty; an existing one is fine.
     // The `pending/` folder stays the truth: a failed marker write does not stop the stash.
     if (file && stash !== undefined) await d.write(`${stash}/.orphans/${a.sid}`, '')
-    if (!file || !(await d.write(file, summary.text))) {
+    if (!file || !(await d.write(file, text))) {
       notSaved = file ? 'pending-write-failed' : s.ident?.watch === null ? 'unsafe-root' : 'helper-missing'
       await log(d, a.sid, 'copy_failed', { nonce: a.nonce, reason: notSaved }, actor)
       escalate(d, 'copy-failed')
@@ -516,7 +560,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     s.fourthToasted = true
     d.toast(`${d.name}: 4 compactions in this session; consider /${d.name}:handoff and a fresh session.`)
   }
-  await countVerdict(d, a.sid, isOk(verdict))
+  if (counted) await countVerdict(d, a.sid, isOk(verdict))
   pend.outcome.halt = s.halt.active
   // Owner 2026-10-30 07:52 ("not clear if the compaction went well"): one dim transcript line
   // after every main compaction, whether a model turn follows or not; the model never reads it.
