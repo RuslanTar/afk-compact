@@ -414,7 +414,7 @@ sub clamp_notes {
     my $before = _clamp_flags($r, $r->{values}, $spec);
     my $now = _clamp_flags($r, \%after, $spec);
     my @k = grep { $now->{$_} && ($changed{$_} || !$before->{$_}) && ($settings::EXPORT{$_} // '') eq 'num' } map { $_->[0] } @settings::KEYS;
-    return map { "  note: $_: written as given, but with these settings the plugin's clamp lowers it (the target to at most two thirds of the soft max, both below what the window allows); /"
+    return map { "  note: $_: " . ($changed{$_} ? 'written as given' : 'not changed') . ", but with these settings the plugin's clamp lowers it (the target to at most two thirds of the soft max, both below what the window allows); /"
                  . ctx::brand() . ':status shows the value it uses' } @k;
 }
 

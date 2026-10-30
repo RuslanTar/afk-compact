@@ -537,6 +537,40 @@
    }
   },
   {
+   "name": "a target the clamp already lowered that the plan changes (5000000 -> 4000000): still a note",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=4000000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 5000000 -> 4000000$",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ]
+   }
+  },
+  {
+   "name": "with triggers off the plugin does not compact, so no two-thirds note",
+   "argv": [
+    "settings",
+    "set",
+    "triggers=false",
+    "compact_target_tokens=4000000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change triggers: default true -> false$",
+     "^  would change compact_target_tokens: 5000000 -> 4000000$"
+    ],
+    "stdout_lacks": [
+     "note:"
+    ]
+   }
+  },
+  {
    "name": "a target within what the soft max allows: no note",
    "argv": [
     "settings",
@@ -573,11 +607,12 @@
     "exit": 0,
     "stdout_has": [
      "^  would change native_window_tokens: ",
-     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
-     "^  note: compact_soft_max_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+     "^  note: compact_target_tokens: not changed, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
+     "^  note: compact_soft_max_tokens: not changed, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
     ],
     "stdout_lacks": [
-     "note: native_window_tokens"
+     "note: native_window_tokens",
+     "written as given"
     ]
    }
   }
