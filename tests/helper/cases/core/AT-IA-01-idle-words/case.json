@@ -2,7 +2,7 @@
  "id": "AT-IA-01",
  "layer": "H",
  "owner": "core",
- "note": "IA-1, owner xxxxxxxx-13 (2026-10-26, \"Off + common words\"): settings.pm reads idle_handoff_turn false, no, none, disabled or 0 (a JSON false too) as off and true, yes, 1 or on (a JSON true too) as auto, trimmed and case-folded; any other value reads as off ($IDLE_INVALID, one value with config.ts IDLE_INVALID_READS_AS) with a note /status shows. Before this ruling every unknown value read as auto. A value that is blank once trimmed (spaces, a tab) is unset, the default auto with no note, as config.ts unset() reads it (review r2: /status said off while the hooks ran auto). IDLE-COMPACT-SPEC §6.2: the idle_handoff_turn steps run with automatic compaction off in the user settings file (autoCompactEnabled false), where the line is the turn's alone; idle_compact (a new key) reads the same words the same way (config.ts idleCompact), with idleCompaction false: auto says the plugin compacts, off keeps the turn's text with (idle_compact: off), any other value is off with its note. Its default is auto; it has no legacy on note. The /status line these steps read is `idle compaction: …` (IDLE-COMPACT-SPEC §4.1, lane B).",
+ "note": "IA-1, owner xxxxxxxx-13 (2026-10-26, \"Off + common words\"): settings.pm reads idle_handoff_turn false, no, none, disabled or 0 (a JSON false too) as off and true, yes, 1 or on (a JSON true too) as auto, trimmed and case-folded; any other value reads as off ($IDLE_INVALID, one value with config.ts IDLE_INVALID_READS_AS) with a note /status shows. Before this ruling every unknown value read as auto. A value that is blank once trimmed (spaces, a tab) is unset, the default auto with no note, as config.ts unset() reads it (review r2: /status said off while the hooks ran auto). IDLE-COMPACT-SPEC §6.2: the idle_handoff_turn steps run with automatic compaction off in the user settings file (autoCompactEnabled false), where the line is the turn's alone; idle_compact (a new key) reads the same words the same way (config.ts idleCompact), with idleCompaction false: auto says the plugin compacts, off keeps the turn's text with (idle_compact: off), any other value is off with its note. Its default is auto; it has no legacy on note. The /status line these steps read is `idle compaction: …` (IDLE-COMPACT-SPEC §4.1, lane B). idle_handoff_near_limit (owner 2026-10-30, xxxxxxxx: \"I want the handoff anyway\") reads run or skip, trimmed and case-folded, as config.ts reads it; any other value is the default run with a note /status shows; a blank value is unset, no note.",
  "now": "2026-10-26T20:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -687,6 +687,123 @@
      "^note: idle_compact: not auto, off or a yes/no word, off used$"
     ]
    }
+  },
+  {
+   "name": "idle_handoff_near_limit \" SKIP \" reads as skip, no note",
+   "options": {
+    "idle_handoff_near_limit": " SKIP "
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^note: idle_handoff_near_limit"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit \"Run\" reads as run, no note",
+   "options": {
+    "idle_handoff_near_limit": "Run"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^note: idle_handoff_near_limit"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit '  ' (spaces only) is unset: the default run, no note",
+   "options": {
+    "idle_handoff_near_limit": "  "
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^note: idle_handoff_near_limit"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit \"maybe\" is not run or skip: run, with the /status note",
+   "options": {
+    "idle_handoff_near_limit": "maybe"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^note: idle_handoff_near_limit: not run or skip, run used$"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit \"off\" is not run or skip (no legacy words): run, with the /status note",
+   "options": {
+    "idle_handoff_near_limit": "off"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^note: idle_handoff_near_limit: not run or skip, run used$"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): \" SKIP \" resolves to skip (export_view over resolve, as the watch export reads it)",
+   "options": {
+    "idle_handoff_near_limit": " SKIP "
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "skip"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): \"Run\" resolves to run",
+   "options": {
+    "idle_handoff_near_limit": "Run"
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): spaces only resolve to the default run",
+   "options": {
+    "idle_handoff_near_limit": "  "
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (NL-3): \"maybe\" resolves to run, never other",
+   "options": {
+    "idle_handoff_near_limit": "maybe"
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
   }
  ]
 }

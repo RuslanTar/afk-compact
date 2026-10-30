@@ -553,7 +553,7 @@ test('AT-IC-06: off arms no timer: no submit and no row (native idle on as well)
   expect([w.submits.length, w.rowsOf('handoff_skipped').length]).toEqual([0, 0])
 })
 
-const SKIPS: { why: string; options?: Record<string, unknown>; world?: Partial<{ window: number }>; store?: Record<string, unknown>; setup?: (w: World) => void; tokens?: number; aborted?: boolean; limits?: World['rateLimits'] }[] = [
+const SKIPS: { why: string; tag?: string; options?: Record<string, unknown>; world?: Partial<{ window: number }>; store?: Record<string, unknown>; setup?: (w: World) => void; tokens?: number; aborted?: boolean; limits?: World['rateLimits'] }[] = [
   { why: 'triggers-off', options: { triggers: false } },
   { why: 'small-window', world: { window: 200000 } },
   { why: 'session-changed', setup: w => { w.sid = SID_B } },
@@ -561,12 +561,14 @@ const SKIPS: { why: string; options?: Record<string, unknown>; world?: Partial<{
   { why: 'ttl-5m', setup: w => { w.rateLimits = [] } },
   // D15: a Claude gateway reports only its spend limit, and its cache is the five-minute one.
   { why: 'ttl-5m', limits: [{ kind: 'spend_limit', percentUsed: 10 }] },
-  { why: 'near-limit', setup: w => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] } },
+  // Only with idle_handoff_near_limit `skip`; the default `run` runs the turn (below).
+  { why: 'near-limit', options: { idle_handoff_near_limit: 'skip' }, setup: w => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] } },
+  { why: 'near-limit', tag: 'a spend limit at 95% beside a plan window', options: { idle_handoff_near_limit: 'skip' }, setup: w => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }] } },
   { why: 'aborted', aborted: true },
   { why: 'cap', store: { ['ht:' + SID_A]: [T0 + 10 * MIN] } },
 ]
 for (const c of SKIPS) {
-  test(`AT-IC-06 (${c.why}${c.limits ? ', spend limit only' : ''}): one handoff_skipped {why: ${c.why}, reason: idle}, no submit`, { options: { ...TURN, ...(c.options ?? {}) } }, async ($, on) => {
+  test(`AT-IC-06 (${c.why}${c.tag ? ', ' + c.tag : ''}${c.limits ? ', spend limit only' : ''}): one handoff_skipped {why: ${c.why}, reason: idle}, no submit`, { options: { ...TURN, ...(c.options ?? {}) } }, async ($, on) => {
     const w = new World(c.world ?? {}).install(on, c.store ?? {})
     w.policy = NATIVE_OFF
     w.rateLimits = c.limits ?? LIMITS
@@ -579,6 +581,33 @@ for (const c of SKIPS) {
     await w.advance(1 * MIN)
     expect(idleSkips(w)).toEqual([c.why])
     expect(w.submits.length).toBe(0)
+  })
+}
+
+// Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): idle_handoff_near_limit `run`, the
+// default, runs the turn at any usage share; a spend limit at 95% or with no reading (NaN) does not stop it.
+for (const c of [
+  { name: 'a seven-day window at 95%', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] },
+  { name: 'a spend limit at 95% beside a plan window', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }] },
+  { name: 'a spend limit with no share (NaN) beside a plan window', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: NaN }] },
+]) {
+  test(`AT-IC-06 (near-limit, idle_handoff_near_limit run, the default): ${c.name}: no near-limit skip, the turn runs`, { options: TURN }, async ($, on) => {
+    const w = new World().install(on)
+    w.policy = NATIVE_OFF
+    w.rateLimits = LIMITS
+    await w.start($)
+    await w.userTurn($)
+    w.tokens = 260000
+    await w.turnEnd($, 'Done.')
+    await w.advance(48 * MIN)
+    w.rateLimits = c.limits
+    await w.advance(1 * MIN)
+    if (!IDLE) {
+      expect(idleSkips(w)).toEqual(['no-asset'])
+      return
+    }
+    expect(idleSkips(w)).toEqual([])
+    expect(w.submits).toEqual([idleText(w)])
   })
 }
 

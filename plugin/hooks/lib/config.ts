@@ -36,6 +36,12 @@ export type Config = {
   /** No pre-idle handoff turn below this context size. */
   idle_handoff_min_tokens: number
   /**
+   * Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): `run` runs the idle handoff turn at
+   * any usage share; `skip` skips it while a rate-limit window is at NEAR_LIMIT_PCT or more (idle.ts
+   * `near-limit`). The plugin's idle compaction keeps its own near-limit skip either way.
+   */
+  idle_handoff_near_limit: 'run' | 'skip'
+  /**
    * `auto`: while Claude Code's own idle compaction is off in the settings (`"idleCompaction":
    * false`) and automatic compaction is on, the plugin compacts an idle main session itself about
    * 54 minutes after its last request (idle.ts, kind `compact`); while Claude Code's own is on or
@@ -86,6 +92,8 @@ export const DEFAULTS: Config = {
   unattended_prod_reads: 'forbid',
   idle_handoff_turn: 'auto',
   idle_handoff_min_tokens: 200000,
+  // Owner xxxxxxxx (2026-10-30): "I want the handoff anyway"; skipping is the option.
+  idle_handoff_near_limit: 'run',
   // Owner Q3 (2026-10-27 18:54, "auto ig. will set myself"); the release note says it.
   idle_compact: 'auto',
   // Owner xxxxxxxx-09 (2026-10-27 12:5x): "default setting: submit right away"; owner rule (c)
@@ -256,6 +264,8 @@ export function parseOptions(o: PluginOptions, name?: string): Config {
     unattended_prod_reads: choice(o, 'unattended_prod_reads', ['forbid', 'allow'] as const, 'forbid', 'forbid', notes),
     idle_handoff_turn: idleTurn(o, notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
+    // Any other value is the default `run` (no legacy words); settings.pm reads it the same way.
+    idle_handoff_near_limit: choice(o, 'idle_handoff_near_limit', ['run', 'skip'] as const, DEFAULTS.idle_handoff_near_limit, DEFAULTS.idle_handoff_near_limit, notes),
     idle_compact: idleCompact(o, notes),
     // Any other value is `off`, the value with no extra plugin turn and no digest (rule (c)).
     idle_digest: choice(o, 'idle_digest', ['submit', 'return', 'off'] as const, DEFAULTS.idle_digest, 'off', notes),

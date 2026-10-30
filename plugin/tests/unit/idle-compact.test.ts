@@ -231,6 +231,25 @@ test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check ru
   expect(w.rowsOf('idle_mode')[0]?.compact_min).toBe(undefined)
 })
 
+// Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): the check's turn goes through the same
+// gate as the 49-min one; only idle_handoff_near_limit `skip` skips it at a window of 90% or more.
+for (const mode of ['run', 'skip'] as const) {
+  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
+    const w = world(on)
+    w.policy = {}
+    await w.start($)
+    await humanTurn($, w)
+    await w.advance(55 * MIN)
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.advance(MIN)
+    expect(w.rowsOf('idle_silent').length).toBe(1)
+    expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+    if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
+    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    else expect(skips(w)).toEqual([['no-asset', 'check']])
+  })
+}
+
 test('AT-IC-C09: armed vetoed; native switched on at 30 min: [native-on, compact] at 54, then the check re-armed for end + 55.5 min runs', { options: ON }, async ($, on) => {
   const w = world(on)
   await w.start($)
@@ -1048,9 +1067,9 @@ test('AT-IC-C30 (G12): a record adopted by a fresh process, armed at a 95% windo
 })
 
 /** A 49-min turn record another process armed 39 min before T0 (due T0 + 10 min), with what it read at arm. */
-const adoptedTurn = (ttl: string | null) => ({
+const adoptedTurn = (ttl: string | null, pct = 30) => ({
   [KEY]: {
-    kind: 'turn', due: T0 + 10 * MIN, sid: SID_A, end: T0 - 39 * MIN, anchor: T0 - 39 * MIN, load: 'old', tokens: 260000, ttl, pct: 30,
+    kind: 'turn', due: T0 + 10 * MIN, sid: SID_A, end: T0 - 39 * MIN, anchor: T0 - 39 * MIN, load: 'old', tokens: 260000, ttl, pct,
     cc: null, model: null, answer: true, published: false, episode: { since: T0 - 39 * MIN, done: false },
   },
 })
@@ -1074,6 +1093,21 @@ test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older bu
   expect(skips(w)).toEqual([['ttl-5m', 'turn']])
   expect(w.submits.length).toBe(0)
 })
+
+// Owner xxxxxxxx (2026-10-30): with no rate-limit reading the record's share decides, and only
+// idle_handoff_near_limit `skip` skips the turn at 90% or more.
+for (const mode of ['run', 'skip'] as const) {
+  test(`AT-IC-C30 (turn, G12): the adopted 49-min turn record armed at a 95% window, no reading yet, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, turn]'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
+    const w = world(on, {}, adoptedTurn('1h', 95))
+    w.rateLimits = []
+    w.tokens = undefined
+    await w.start($)
+    await w.advance(10 * MIN)
+    if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'turn']]])
+    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    else expect(skips(w)).toEqual([['no-asset', 'turn']])
+  })
+}
 
 test('AT-IC-C31 (§3.4): a due 30 s past at load, with no person\'s session.start (the load\'s first hook is another): it fires at once, late_s 30', { options: ON }, async ($, on) => {
   const probe = new World()
@@ -1721,6 +1755,72 @@ test('AT-IC-C45 (owner Q2, root call): no agents, halt for two bad summaries in 
   expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
   if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
   else expect(skips(w)).toEqual([['no-asset', 'check']])
+})
+
+// Root call NL-2 (0.1.2): in halt mode (not the cap) the check's compaction never runs, so a window
+// at 90% or more refuses nothing the halt had not; with idle_handoff_near_limit `run` the check
+// falls back to the turn as it does for `halted`, and only `skip` keeps [near-limit, check].
+for (const mode of ['run', 'skip'] as const) {
+  test(`AT-IC-C45 (NL-2): no agents, halt for two bad summaries, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'no compaction; the turn runs (or no-asset)' : '[near-limit, check], no compaction and no turn'}`, { options: { ...ON, idle_handoff_near_limit: mode } }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    await w.start($)
+    await w.userTurn($)
+    w.summaryMode = 'unshaped'
+    await raiseCompact($, { trigger: 'auto' })
+    await raiseCompact($, { trigger: 'auto' })
+    w.summaryMode = 'ok'
+    expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
+    await w.advance(1000)
+    w.tokens = 260000
+    await w.turnEnd($, 'Done with that step.')
+    const compacts = w.compacts.length
+    await w.advance(55 * MIN)
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.advance(MIN)
+    expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
+    if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
+    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    else expect(skips(w)).toEqual([['no-asset', 'check']])
+  })
+}
+
+// NL-2: a cap halt does not stop the check's compaction, so a window at 95% stays its refusal (no
+// turn after it, D2) under `run` too; and with agents running a thrash halt keeps [near-limit, check].
+for (const c of [{ reason: 'cap', agents: false }, { reason: 'thrash', agents: true }]) {
+  test(`AT-IC-C45 (NL-2): halt for ${c.reason}${c.agents ? ', agents running' : ''}, a window at 95%, idle_handoff_near_limit run: [near-limit, check], no compaction and no turn`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    if (c.agents) w.agents = RUNNING
+    w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: c.reason }))
+    await w.start($)
+    await w.userTurn($, 'Background task finished.', 'task-notification')
+    w.tokens = 260000
+    await w.turnEnd($)
+    await w.advance(55 * MIN)
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.advance(MIN)
+    expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[['near-limit', 'check']], 0, 0, 0])
+  })
+}
+
+// NL-2 is scoped to halt mode: with no halt and no agents, a window at 95% at the check stays its
+// refusal under `run` too (no turn after it, D2), as the README states.
+test('AT-IC-C45 (NL-2): no halt, no agents, a window at 95% at the check, idle_handoff_near_limit run: [near-limit, check], no compaction and no turn', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await w.userTurn($)
+  await w.advance(1000)
+  w.tokens = 260000
+  await w.turnEnd($, 'Done with that step.')
+  const compacts = w.compacts.length
+  await w.advance(55 * MIN)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.advance(MIN)
+  expect(w.rowsOf('halt').length).toBe(0)
+  expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
+  expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
 })
 
 for (const c of [{ turn: true, why: 'episode' }, { turn: false, why: 'halted' }]) {

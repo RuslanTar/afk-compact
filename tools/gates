@@ -554,9 +554,11 @@ def self_heal_hits(target, brand):
 # Owner-ruled manifest defaults (one constant each, so a ruling lands in one commit): precompact_turn
 # `model` (xxxxxxxx-18), idle_handoff_turn `auto` (idle D3, IA-1), idle_digest `off` (away digest,
 # owner 2026-10-27 12:5x xxxxxxxx-09 ruled `submit`; owner rule (c), 2026-10-28: on only after a
-# live PASS, else `off`, and the live AD2 probe failed the digest's text format), and the six keys of
+# live PASS, else `off`, and the live AD2 probe failed the digest's text format), idle_handoff_near_limit
+# `run` (owner 2026-10-30, xxxxxxxx: "I want the handoff anyway"), and the six keys of
 # xxxxxxxx-12/-13/-14 (S-SETTINGS E1-E6, SK-7) at today's behaviour.
 RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto", "idle_digest": "off",
+                  "idle_handoff_near_limit": "run",
                   "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "auto",
                   "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
 # STATE-ROOT (0.1.2): the handoff_root default, outside ~/.claude (whose writes get Claude
