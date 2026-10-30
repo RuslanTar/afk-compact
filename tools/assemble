@@ -120,9 +120,12 @@ FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
 # 2026-10-30: resume-context gains [idle-off] and [idle-done-off] (owner rule (c), 2026-10-28:
 # [idle] and [idle-done] under idle_digest off, one line on the lane state in place of the away
 # digest), last in the list so older golden names stay.
+# 2026-10-30: resume-context gains [handoff-ack] (owner 2026-10-30 07:49, "short message after
+# compaction": a published handoff whose report was not sent gets one ack line; only beside
+# [handoff]), last in the list so older golden names stay.
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
         "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
-                "idle-done", "idle-off", "idle-done-off"],
+                "idle-done", "idle-off", "idle-done-off", "handoff-ack"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
@@ -140,7 +143,9 @@ EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"),
                      (("driver", "idle-halt"), "most"), (("driver", "idle-done"), "most"), (("driver", "idle-done-off"), "most")]}
 # A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
 # block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
-NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off")}}
+# Owner 2026-10-30 07:49: [handoff-ack] is kept only beside [handoff], the path it names.
+NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"),
+                        "handoff-ack": ("handoff",)}}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
@@ -188,12 +193,13 @@ def assemble(text, tags, drop=()):
 # the least that fits the worst path (8,777 B, 8,792 B with a 16-character plugin name), with no
 # rule text removed.
 # Owner 2026-10-30 07:49 ("short message after compaction"; "feel free to raise any limits if
-# needed"): a saved handoff's report is no pending answer in full (`handoff ack`); 42 B more on
-# every main path. The total goes to 8,840 B, the least that fits the worst path (8,819 B,
-# 8,834 B with a 16-character plugin name), with no rule text removed.
+# needed"): a saved handoff's report in full is its one ack line, `✓ Handoff saved: <path>` (the
+# path so it explains itself: review of the first build); 54 B more on every main path. The total
+# goes to 8,850 B, the least that fits the worst path (8,833 B, 8,848 B with a 16-character plugin
+# name), with no rule text removed.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
-    "mod channel total":     ("bytes", None, 8840),
+    "mod channel total":     ("bytes", None, 8850),
     "classic channel total": ("bytes", None, 8192),
     "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
     "subagent mod":          ("chars", 900, None),
@@ -335,7 +341,9 @@ def combos(asset):
 # leftover walks still run over every combination (combos).
 # Away digest phase 1: [idle-done] likewise only beside a prod line and [idle-again] (4 goldens).
 # Owner rule (c): [idle-off] and [idle-done-off] likewise (4 goldens each).
-GOLDEN_SPARSE = {"res": {"driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
+# Owner 2026-10-30 07:49: [handoff-ack] only beside [handoff] and a prod line (2 goldens).
+GOLDEN_SPARSE = {"res": {"handoff-ack": {"handoff", "prod-forbid", "prod-allow"},
+                         "driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
                          "idle-done": {"prod-forbid", "prod-allow", "idle-again"},
                          "idle-off": {"prod-forbid", "prod-allow", "idle-again"},
                          "idle-done-off": {"prod-forbid", "prod-allow", "idle-again"}}}
@@ -652,20 +660,23 @@ def res_label(tags):
 
 # Owner xxxxxxxx-25 / -37: an idle block is [idle] or, in halt mode, [idle-halt]; a person's
 # return after a background result's turn took it adds [idle-again].
-IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"], ["idle", "nonok", "handoff-partial"],
+IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff", "handoff-ack"], ["idle", "nonok", "handoff-partial"],
              ["idle", "idle-again", "nonok", "handoff-partial"], ["idle-halt", "nonok", "handoff-partial"],
              ["idle-halt", "idle-again", "nonok", "handoff-partial"],
              # Away digest phase 1 (owner 2026-10-27 12:5x): a finished or blocked lane's idle line.
-             ["idle-done"], ["idle-done", "nonok"], ["idle-done", "nonok", "handoff"], ["idle-done", "nonok", "handoff-partial"],
+             ["idle-done"], ["idle-done", "nonok"], ["idle-done", "nonok", "handoff", "handoff-ack"], ["idle-done", "nonok", "handoff-partial"],
              ["idle-done", "idle-again", "nonok", "handoff-partial"],
              # Owner rule (c) (2026-10-28): the idle_digest off variants of [idle] and [idle-done].
-             ["idle-off"], ["idle-off", "nonok"], ["idle-off", "nonok", "handoff"], ["idle-off", "nonok", "handoff-partial"],
+             ["idle-off"], ["idle-off", "nonok"], ["idle-off", "nonok", "handoff", "handoff-ack"], ["idle-off", "nonok", "handoff-partial"],
              ["idle-off", "idle-again", "nonok", "handoff-partial"],
-             ["idle-done-off"], ["idle-done-off", "nonok"], ["idle-done-off", "nonok", "handoff"],
+             ["idle-done-off"], ["idle-done-off", "nonok"], ["idle-done-off", "nonok", "handoff", "handoff-ack"],
              ["idle-done-off", "nonok", "handoff-partial"], ["idle-done-off", "idle-again", "nonok", "handoff-partial"])
+# Owner 2026-10-30 07:49: [handoff-ack] names the path a second time, so a [handoff] row with the
+# ack can outgrow the [handoff-partial] one; each idle line with [idle-again] is checked with it.
+IDLE_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"))
 # Owner 2026-10-26 (GSD re-entry per session): [driver] can join any block, so every row is
-# checked again with it.
-PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
+# checked again with it. Owner 2026-10-30 07:49: a [handoff] row carries [handoff-ack] (its worst case).
+PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff", "handoff-ack"],
                  ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS
 for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b)):
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
@@ -676,6 +687,7 @@ TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["i
               ["idle-halt", "idle-again", "nonok", "handoff-partial"], ["idle-done", "nonok", "handoff-partial"],
               ["idle-done", "idle-again", "nonok", "handoff-partial"], ["idle-off", "idle-again", "nonok", "handoff-partial"],
               ["idle-done-off", "idle-again", "nonok", "handoff-partial"])
+TOTAL_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"))
 for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b)):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")

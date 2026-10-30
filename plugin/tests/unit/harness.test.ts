@@ -269,7 +269,7 @@ export class World {
       }
     })
     on('ui.log', (_$, e) => {
-      if (/^[a-z0-9-]+: compaction (?:ok|NOT) /.test(e.text)) this.compactLines.push(e.text)
+      if (/^[a-z0-9-]+: compaction (?:ok|NOT|done) /.test(e.text)) this.compactLines.push(e.text)
       else this.uiLogs.push(e.text)
       return { value: undefined }
     })

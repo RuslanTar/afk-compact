@@ -26,6 +26,8 @@ const SHOWN = '~/.claude/handoffs/r/LAB-42/2026-10-21_14-07-00_5e55a001_handoff.
 const CAPPED = { ['cont:' + SID_A]: [T0 - 50 * 60000, T0 - 30 * 60000, T0 - 10 * 60000] }
 /** These tests test cap semantics, not the default (6): they pin the cap at 3 (S-SETTINGS A). */
 const CAP3 = { max_auto_continues_per_hour: 3 }
+/** Owner 2026-10-30 07:49: the `[handoff-ack]` line's start for SHOWN (a report not sent). */
+const ACK = 'Its report was not sent: that report is only `✓ Handoff saved: ' + SHOWN + '`'
 
 /** A main turn that crosses the soft max (nudge) and ends with `answer` at `end` tokens. */
 async function lastCycleTurn($: Engine, w: World, answer = 'Checkpoint: clean · Step 1: run the tests', end = 640000): Promise<{ context?: readonly string[] }> {
@@ -340,6 +342,12 @@ for (const opt of VARIANTS) {
     const block = ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
     const resumeLine = assemble(w.name, 'resume-context', ['handoff'], { handoff_path: SHOWN, session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x' })
     if (resumeLine.includes(SHOWN)) expect(block).toContain(SHOWN)
+    // Owner 2026-10-30 07:49: the answer carried neither the receipt nor the path, so the report
+    // counts as not sent and the block asks for the one-line ack.
+    if (hasTag('resume-context', 'handoff-ack')) expect(block).toContain(ACK)
+    // Owner 2026-10-30 07:52: the plugin's own compaction gets its line too (boundary.ts settleSelf).
+    expect(w.compactLines.length).toBe(1)
+    expect(w.compactLines[0]?.startsWith(`${w.name}: compaction ok · copy saved · handoff ${SHOWN.replace(/^.*\//, '')}`)).toBe(true)
     expect(w.rowsOf('mod_outcome').find(r => r.nonce === nonce)?.handoff_turn).toBe('published')
     await w.advance(60000)
     expect(w.submits.length).toBe(1)
@@ -390,6 +398,45 @@ test('AT-LT-11: native auto during the handoff turn, draft present: [midturn] fu
   await w.advance(60000)
   expect(w.compacts.length).toBe(1)
   expect(w.rowsOf('handoff_turn_end').map(r => r.handoff_turn)).toEqual(['race'])
+})
+
+// Owner 2026-10-30 07:49 (review of the first build): the report the turn's answer carried is
+// sent, so the block after the plugin compaction has [handoff] without the ack.
+test('handoff turn whose answer carries the receipt: [handoff] with the path, no [handoff-ack]', { options: { ...CAP3, precompact_turn: 'code' } }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  w.publish(w.lastHt() ?? '', PUBLISHED)
+  w.tokens = 690000
+  await w.turnEnd($, 'Wrote handoff to: ' + PUBLISHED + '\nResume with: /afk-compact:resume ' + PUBLISHED)
+  await w.advance(500)
+  expect(w.compacts.length).toBe(1)
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(block).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
+  expect(block).not.toContain('Handoff saved')
+})
+
+// A native auto compaction that cuts the handoff turn off after its publish: the report was
+// certainly not sent, so the block has [handoff] and the ack.
+test('native auto during the handoff turn after its publish: [handoff] and [handoff-ack] with the path', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  w.tokens = 700000
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('handoff_race').map(r => [r.published, r.ht])).toEqual([[true, ht]])
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(block).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
+  if (hasTag('resume-context', 'handoff-ack')) expect(block).toContain(ACK)
+  expect(w.compactLines.length).toBe(1)
 })
 
 test('AT-LT-12, AT-LT-13: a second last cycle gets a new ht (first file unchanged); a third within 60 min: why=cap', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {

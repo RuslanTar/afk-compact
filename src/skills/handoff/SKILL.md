@@ -112,7 +112,7 @@ It lints and secret-scans the draft and recipes, adds frontmatter, marker and se
 
 ## Step 8 — Report (8 items, this order; the verdict's list and its `Coming up:` line may add lines)
 
-Published, then compacted before this report: the report is only `✓ Handoff saved: <path>`, plus ` · Needs you: <n> questions (in the handoff)` when Open questions has user-owned items; the file holds the rest. <!-- owner 2026-10-30 07:49 ("short message after compaction"): the resume block's [handoff] line asks for the same line -->
+Published, then compacted before this report: the report is only `✓ Handoff saved: <path>`, plus ` · Needs you: <n> questions (in the handoff)` when Open questions has user-owned items; the file holds the rest. <!-- owner 2026-10-30 07:49 ("short message after compaction"): the resume block's [handoff-ack] line and the summary's pending answer ask for the same line -->
 
 1. The receipt, verbatim, and the export line under it when printed.
 2. `Resume with: /{{plugin}}:resume <path>`

@@ -76,7 +76,7 @@ Extract:
 - **Goal**: the ticket goal and the user's latest request. Anchor on these, not the last sub-task.
 - **Acuity** (`stable` · `watch` · `unstable`): how carefully to check. A measured fact raises it (merge or rebase in progress → `unstable`; a running job → `watch`), never lowers it.
 - **Step 1** with `done when`. A `proposed` step was the previous agent's idea, not the user's.
-- **Pending answer** in Next steps: if the kept messages don't show it sent, deliver it in the report, marked "(if not already sent)"; `handoff ack` is only the line `✓ Handoff saved: <path>`.
+- **Pending answer** in Next steps: if the kept messages don't show it sent, deliver it in the report, marked "(if not already sent)"; a pending `✓ Handoff saved: <path>` is the whole report of the handoff at that path: send that one line, no recap.
 - **Ledger**: `U-`, `D-` (with `because`), `X-`, `Superseded:`, `Corrections:`.
 - **In flight**:
   - full table or compact rows `B-n <runtime id> · kind · what · due · probe · class`;

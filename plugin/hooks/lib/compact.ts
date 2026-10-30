@@ -317,13 +317,14 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     })
     block = await raceBlock(d, raceState)
   }
-  await guarded(d, sid, 'after-step', () => afterStep(d, {
+  const failed = await guarded(d, sid, 'after-step', () => afterStep(d, {
     sid, nonce, agentId, midturn, resumePref: 'prompt.context', messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
-    ...(block !== undefined ? { handoff: block } : after !== undefined ? { handoff: { published: after.path } } : {}),
+    ...(block !== undefined ? { handoff: block } : after !== undefined ? { handoff: { published: after.path, ...(after.reported ? {} : { ack: true }) } } : {}),
     ...(raced && raced.ht !== null && block !== undefined ? { stats: { handoff_turn: 'race', handoff_ht: raced.ht } } : {}),
     ...(prodConsent !== undefined ? { prodConsent } : {}),
     ...(idle ? { idle: true } : {}),
   }))
+  if (main && failed !== undefined) stepFailedLine(d, failed)
   // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
   // nothing running gets its digest turn right away with `idle_digest: submit` (`off`, the default
   // of this version by owner rule (c), and `return` log the skip and submit nothing).
@@ -334,14 +335,27 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   return r
 }
 
-/** Runs one step; an internal error becomes one `watch_error {stage, error_class}` row. */
-export async function guarded(d: Deps, sid: string, stage: string, fn: () => Promise<unknown>): Promise<void> {
+/**
+ * Runs one step; an internal error becomes one `watch_error {stage, error_class}` row, and its
+ * class is returned (undefined when the step ran through).
+ */
+export async function guarded(d: Deps, sid: string, stage: string, fn: () => Promise<unknown>): Promise<string | undefined> {
   try {
     await fn()
+    return undefined
   } catch (err) {
-    const cls = err instanceof Error ? err.name : typeof err
-    await log(d, sid, 'watch_error', { stage, error_class: cls.slice(0, 40) }).catch(() => undefined)
+    const cls = (err instanceof Error ? err.name : typeof err).slice(0, 40)
+    await log(d, sid, 'watch_error', { stage, error_class: cls }).catch(() => undefined)
+    return cls
   }
+}
+
+/**
+ * Review of the first build (owner 2026-10-30 07:52): a main after-step that threw never reached
+ * its compaction line, so the user still gets one, with the error class and the status pointer.
+ */
+export function stepFailedLine(d: Deps, cls: string): void {
+  if (d.cfg.warn_ui) d.uiLog(`${d.name}: compaction done · plugin step failed (${cls}) · see /${d.name}:status`)
 }
 
 export type AfterArgs = {

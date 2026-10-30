@@ -34,7 +34,10 @@ export type BlockArgs = {
   /** Path of this compaction's copy, or null with `notSaved` as the reason. */
   savedCopy: string | null
   notSaved?: string
-  /** `[handoff]` (a published handoff of this window) or `[handoff-partial]` (a raced handoff turn). */
+  /**
+   * `[handoff]` (a published handoff of this window, with `[handoff-ack]` when its report was not
+   * sent) or `[handoff-partial]` (a raced handoff turn).
+   */
   handoff?: RaceBlock
   /** `[prod-allow]` instead of `[prod-forbid]` (see `prodAllowed`). */
   prodAllow?: boolean
@@ -162,6 +165,7 @@ export async function buildBlockWith(
   const h = a.handoff
   if (h && 'published' in h) {
     tags.push('handoff')
+    if (h.ack === true) tags.push('handoff-ack')
     runtime.handoff_path = h.published
   } else if (h) {
     // Never together with `[handoff]`; a draft without a safe finish command counts as absent.

@@ -468,7 +468,30 @@ test('compaction line: none for a subagent compaction, a precompute or a skipped
   await raiseCompact($, { trigger: 'auto', agentId: AGENT })
   await raiseCompact($, { trigger: 'precompute' })
   expect(w.callsOf('save-copy').length).toBe(1)
+  // Claude Code skipped it: nothing was compacted, so no line either.
+  w.compactMode = { skip: 'nothing to compact' }
+  await raiseCompact($, { trigger: 'manual' })
+  expect(w.rowsOf('compacted').map(r => r.skip)).toEqual([null, 'other'])
   expect(w.compactLines).toEqual([])
+})
+
+// Review of the first build: an after-step that throws (here its first store write) still gets
+// a line, with the error class and the status pointer; never for a subagent.
+test('compaction line: an after-step that failed says so', async ($, on) => {
+  let down = false
+  // Registered before World.install, so it stands outside the World's store (first is outermost).
+  on('store.set', { key: 'idle_seen:' + SID_A }, (_$, e, next) => {
+    if (down) throw new TypeError('store down')
+    return next(e)
+  })
+  const w = new World().install(on)
+  await w.start($)
+  down = true
+  await raiseCompact($, { trigger: 'auto' })
+  // The kit hands a hook's throw back as its own error class.
+  const rows = w.rowsOf('watch_error').map(r => [r.stage, r.error_class])
+  expect(rows).toEqual([['after-step', 'HooksError']])
+  expect(w.compactLines).toEqual([`${w.name}: compaction done · plugin step failed (HooksError) · see /${w.name}:status`])
 })
 
 test('compaction line: warn_ui false shows none', { options: { warn_ui: false } }, async ($, on) => {
