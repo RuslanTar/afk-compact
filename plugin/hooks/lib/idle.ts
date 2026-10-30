@@ -86,7 +86,11 @@ export const IDLE_CHECK_MS = 55.5 * 60000
 export const IDLE_CHECK_MIN_TEXT = '55'
 /** Claude Code's default idle floor (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, IC-1 F3): `idle_silent` rows from here up only. */
 export const NATIVE_IDLE_FLOOR = 200000
-/** Every rate-limit window must stay below this share (else `near-limit`). */
+/**
+ * Every rate-limit window must stay below this share (else `near-limit`): always for the plugin's
+ * idle compaction; for the idle handoff turn only with `idle_handoff_near_limit: skip` (owner
+ * xxxxxxxx, 2026-10-30: "I want the handoff anyway", so the default `run` does not check it).
+ */
 export const NEAR_LIMIT_PCT = 90
 /** A tombstone outlives every timer that could still hold its record (§3.1): its due plus this. */
 const TOMBSTONE_LIFE_MS = IDLE_LATE_MS + 60000
@@ -483,7 +487,7 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   const tokens = u?.tokens ?? rec.tokens ?? undefined
   if (tokens === undefined || tokens < d.cfg.idle_handoff_min_tokens) return 'small'
   if (await ttl5m(d, await d.idleEnv(), u, rec)) return 'ttl-5m'
-  if (nearLimit(u, rec)) return 'near-limit'
+  if (d.cfg.idle_handoff_near_limit === 'skip' && nearLimit(u, rec)) return 'near-limit'
   const ep = s.idleEpisode
   if (!ep || ep.done) return 'episode'
   if (s.publishedSinceHuman) return 'published'
