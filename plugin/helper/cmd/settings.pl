@@ -1,11 +1,11 @@
 # cmd/settings.pl: the plugin's settings, for the onboarding settings flow (0.1.2). Owner: WP-core.
 #   settings show [--json] [--tier common|advanced|all] [settings flags]
-#     -> settings::view(): every key's section, tier, kind, manifest default, min/max, allowed
-#        values, current value and its source (flag|env|settings|default|safe), consent or
-#        protective class; the pluginConfigs key in use and `write_refused` (config-dir-foreign,
-#        inline or ambiguous: why a write there would be refused). --json prints that object on
-#        one line; without it, a heading per section and one `  <key> = <value> (<source>)` line
-#        per key. Read-only: no row, no file written.
+#     -> settings::view(): every key's section, tier, kind, default, min/max, allowed values,
+#        current value and its source (flag|env|settings|default|safe), consent or protective
+#        class; the pluginConfigs key in use and `write_refused` (config-dir-foreign,
+#        home-foreign, unparseable, inline or ambiguous: why a write there would be refused).
+#        --json prints that object on one line; without it, a heading per section and one
+#        `  <key> = <value> (<source>)` line per key. Read-only: no row, no file written.
 # There is no write verb: whether the plugin writes settings.json from a model-run call is open
 # (onboarding OPEN-1). Exit 0; 64 usage.
 use strict;
@@ -23,7 +23,8 @@ sub _text {
 sub run {
     my $verb = shift // '';
     die "usage: settings show [--json] [--tier common|advanced|all]\n" unless $verb eq 'show';
-    my ($opt) = args::parse(\@_, bools => ['json'], known => [qw(tier)]);
+    my ($opt, $rest) = args::parse(\@_, bools => ['json'], known => [qw(tier)]);
+    die "usage: settings show takes no argument ($rest->[0])\n" if @$rest;
     my $tier = $opt->{tier} // 'all';
     die "usage: --tier common|advanced|all\n" unless $tier =~ /\A(?:common|advanced|all)\z/;
     my $view = settings::view(settings::flags_from($opt), $tier);

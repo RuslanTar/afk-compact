@@ -331,13 +331,36 @@ sub _settings_file_options {
     return (ref $opts eq 'HASH' ? $opts : undef, $cand[0]);
 }
 
+# config_key_info() -> {state, key}: the user's settings file as a settings writer would see it
+# (0.1.2 onboarding). state: absent (no file, no pluginConfigs or no key for the plugin),
+# unparseable (the file is not a JSON object, or its pluginConfigs is not one: a writer refuses
+# it), ambiguous (two or more keys for the plugin), found (one key, with or without options).
+# key: that key; under --plugin-dir the @inline key, also while the file lacks it; else undef.
+sub config_key_info {
+    my $inline = inline_key();
+    my $raw = util::read_file(config_dir() . '/settings.json');
+    return { state => 'absent', key => $inline } unless defined $raw;
+    my $s = eval { jsonc::decode($raw) };
+    return { state => 'unparseable', key => undef }
+        unless ref $s eq 'HASH' && (!defined $s->{pluginConfigs} || ref $s->{pluginConfigs} eq 'HASH');
+    my $pc = $s->{pluginConfigs} || {};
+    return { state => (exists $pc->{$inline} ? 'found' : 'absent'), key => $inline } if defined $inline;
+    my $brand = ctx::brand();
+    my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %$pc;
+    return { state => 'absent', key => undef } unless @cand;
+    return { state => 'ambiguous', key => undef } if @cand > 1;
+    return { state => 'found', key => $cand[0] };
+}
+
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
-#   notes => [..], ambiguous => 0|1, config_key => key-or-undef}
+#   notes => [..], ambiguous => 0|1, config_key => key-or-undef,
+#   defaults => {key => the default used: the manifest's, else the @KEYS fallback, as written}}
 sub resolve {
     my ($flags) = @_;
     $flags ||= {};
     my %val;
     my %src;
+    my %def;
     my @notes;
     my ($opts, $ckey) = _settings_file_options();
     my $ambiguous = (defined $ckey && $ckey eq 'ambiguous') ? 1 : 0;
@@ -346,6 +369,7 @@ sub resolve {
     for my $k (@KEYS) {
         my ($key, $type, $fallback) = @$k[0 .. 2];
         my $default = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : $fallback;
+        $def{$key} = $default;
         my ($v, $s);
         my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
         my $file_only = $FILE_ONLY{$key};
@@ -436,7 +460,7 @@ sub resolve {
     my $sx = secret_extra({ values => \%val });
     push @notes, "secret_extra_rules: entry $_ dropped (invalid)" for @{ $sx->{invalid} };
     return { values => \%val, source => \%src, notes => \@notes, ambiguous => $ambiguous,
-             config_key => ($ambiguous ? undef : $ckey) };
+             config_key => ($ambiguous ? undef : $ckey), defaults => \%def };
 }
 
 # ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
@@ -859,10 +883,11 @@ sub export_view {
 # ---------------------------------------------------------------- view (0.1.2 onboarding)
 # view(\%flags[, tier]) -> ordered object: one row per key (key, title, section, tier, kind,
 # default, min, max, values, value, source, class) in @SECTIONS order (@KEYS order inside a
-# section), with the pluginConfigs key in use and why a write there would be refused. Defaults,
-# min and max are the manifest's; value and source are resolve()'s. tier: common, advanced or
-# all (default). A key with no %SECTION row goes to section `other`, tier advanced, and is listed
-# in `unsectioned` (the settings-sections gate fails on it). Read-only.
+# section), with the pluginConfigs key in use (config_key_info) and why a write there would be
+# refused. Min and max are the manifest's; default, value and source are resolve()'s (one place
+# works the default out). tier: common, advanced or all (default). A key with no %SECTION row
+# goes to section `other`, tier advanced, and is listed in `unsectioned` (the settings-sections
+# gate fails on it). Read-only.
 our %KIND = (num => 'number', bool => 'boolean', enum => 'enum', path => 'path', list => 'list', drop => 'text');
 sub view {
     my ($flags, $tier) = @_;
@@ -871,12 +896,12 @@ sub view {
     my $uc = ctx::user_config();
     my (%rows, %by, @unsectioned);
     for my $k (@KEYS) {
-        my ($key, $type, $fallback, $class) = @$k;
+        my ($key, $type, undef, $class) = @$k;
         my ($sec, $t) = @{ $SECTION{$key} || [] };
         if (!defined $sec) { push @unsectioned, $key; ($sec, $t) = ('other', 'advanced') }
         next unless $tier eq 'all' || $tier eq $t;
         my $u = ref $uc->{$key} eq 'HASH' ? $uc->{$key} : {};
-        my $default = exists $u->{default} ? $u->{default} : $fallback;
+        my $default = $r->{defaults}{$key};
         my $v = $r->{values}{$key};
         my ($lo, $hi) = limits($key);
         if ($type eq 'bool') { ($default, $v) = (jsonc::bool(_coerce($key, $default)), jsonc::bool($v)) }
@@ -893,14 +918,17 @@ sub view {
     for my $s (@SECTIONS, ['other' => 'Other']) {
         push @sections, jsonc::obj(id => $s->[0], title => $s->[1], keys => $by{ $s->[0] }) if $by{ $s->[0] };
     }
-    my ($opts, $ckey) = _settings_file_options();
+    my $ci = config_key_info();
+    my $state = $ci->{state};
     my $inline = inline_key();
-    my $state = !defined $ckey ? 'absent' : $ckey eq 'ambiguous' ? 'ambiguous' : ref $opts eq 'HASH' ? 'found' : 'absent';
-    my $key_used = $state eq 'ambiguous' ? undef : $inline // ($state eq 'found' ? $ckey : undef);
     my $foreign = config_dir_foreign();
-    my $refused = $foreign ? 'config-dir-foreign' : defined $inline ? 'inline' : $state eq 'ambiguous' ? 'ambiguous' : undef;
+    # Why a write would be refused, the first that holds: another settings folder
+    # (config-dir-foreign under CLAUDE_CONFIG_DIR, home-foreign when HOME is not the account
+    # home), a file a writer cannot merge into, a --plugin-dir run, two keys for the plugin.
+    my $refused = $foreign ? (($ENV{CLAUDE_CONFIG_DIR} // '') ne '' ? 'config-dir-foreign' : 'home-foreign')
+        : $state eq 'unparseable' ? 'unparseable' : defined $inline ? 'inline' : $state eq 'ambiguous' ? 'ambiguous' : undef;
     return jsonc::obj(
-        config_file => config_dir() . '/settings.json', config_key => $key_used, config_key_state => $state,
+        config_file => config_dir() . '/settings.json', config_key => $ci->{key}, config_key_state => $state,
         inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,
         sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
         unsectioned => \@unsectioned, notes => $r->{notes});
