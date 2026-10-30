@@ -514,7 +514,9 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string, answe
   // Owner 2026-10-30 07:49 (review of the first build): the report counts as sent when the turn
   // ended with an answer that carries the receipt or the path; only an unsent one gets the ack.
   // Review of the second build: after a race the race compaction's block already carried the ack,
-  // so a later native idle compaction does not ask for it a second time.
+  // so a later native idle compaction does not ask for it a second time. Review of the third build:
+  // a race before the publish (draft staged) carried [handoff-partial], which relays the finish's
+  // receipt as the same one-line ack, so a publish after it counts as reported too.
   const reported = h.race !== null || (reason === 'answer' && path !== undefined
     && (answer.includes('Wrote handoff to:') || answer.includes(path) || (shown !== undefined && answer.includes(shown))))
   if (path !== undefined) {

@@ -469,6 +469,36 @@ test('race after the publish, turn end, native idle auto: [handoff] again, the a
   expect(second).not.toContain('Handoff saved')
 })
 
+// Review of the third build, finding 1: a race before the publish (draft staged) carried
+// [handoff-partial], which relays the finish's receipt as the one-line ack; the turn then
+// publishes and ends with an answer that has neither the receipt nor the path. The next native
+// auto block has [handoff] but does not ask for the ack a second time.
+test('race before the publish, finish, answer without the report, native auto: [handoff], no second ack', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.htStates.set(ht, `staged ${STAGE} draft=1 finish=${FINISH}`)
+  w.tokens = 700000
+  await raiseCompact($, { trigger: 'auto' })
+  const first = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(first).not.toContain('Handoff saved: ' + SHOWN)
+  if (hasTag('resume-context', 'handoff-partial')) expect(first).toContain('Compaction cut off the plugin\'s handoff turn')
+  w.publish(ht, PUBLISHED)
+  w.tokens = 60000
+  await w.turnEnd($, 'Published after the compaction.')
+  await w.advance(60000)
+  expect(w.rowsOf('handoff_turn_end').map(r => r.handoff_turn)).toEqual(['race'])
+  await raiseCompact($, { trigger: 'auto' })
+  const second = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(second).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
+  expect(second).not.toContain(ACK)
+  expect(second).not.toContain('Handoff saved')
+})
+
 test('AT-LT-12, AT-LT-13: a second last cycle gets a new ht (first file unchanged); a third within 60 min: why=cap', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
