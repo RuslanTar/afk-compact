@@ -704,6 +704,14 @@
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-30-00_plugin-turn.md",
      "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7e7e7e7e\ndate: 2026-10-21T14:30:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7e7e7e7e s=manual⟫\n# LAB-9 — plugin handoff turn\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:03 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## Next steps\n1. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n⟪/$BRAND n=7e7e7e7e⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-31-00_both-forms.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7f7f7f7f\ndate: 2026-10-21T14:31:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n⟪$BRAND v1 n=7f7f7f7f s=manual⟫\n# LAB-9 — one id in both forms\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=7f7f7f7f⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7f7f7f7f.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"},\"nonce\":\"7f7f7f7f\",\"session_id\":\"$SID\",\"v\":1}"
     }
    ]
   },
@@ -725,6 +733,23 @@
     "stdout_lacks": [
      "^Approvals \\(checked\\): U-",
      "^Approvals \\(gate"
+    ]
+   }
+  },
+  {
+   "name": "D-8 an id with a hashed usable line and a context-only line is not carried",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-31-00_both-forms.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(written as context\\)$"
     ]
    }
   },

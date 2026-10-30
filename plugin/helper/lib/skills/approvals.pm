@@ -969,7 +969,8 @@ sub handoff_lines {
     $n{ $_->{id} }++ for @e;
     my $org = origins_of($ctx, $d);
     $_->{origin} = $org->{ $_->{id} } for @e;
-    my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
+    # An id that also has a context-only line is no one's check either.
+    my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 && !$cx{ $_->{id} } } @e ], [], 'handoff');
     my %ctx_only = (%cx, map { $_ => $HASH_WHY{ $unver->{$_} } } keys %$unver);
     my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %ctx_only;
     if (@bad) {
