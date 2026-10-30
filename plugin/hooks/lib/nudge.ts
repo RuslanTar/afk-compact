@@ -17,6 +17,24 @@ import { byteLength } from './normalize'
 
 export const ASK_TOOL = 'AskUserQuestion'
 
+/**
+ * An AskUserQuestion call the user answered: not denied, no error, not closed by the away
+ * timeout (`afkTimeoutMs`), and some answer, typed text or a request for another round. Only
+ * a question that went unanswered makes the turn one that asks the user (0.1.2).
+ */
+export function askAnswered(r: { deny?: string; isError?: true; result?: unknown }): boolean {
+  if (r.deny !== undefined || r.isError === true) return false
+  const o = r.result
+  if (typeof o !== 'object' || o === null) return false
+  const v = o as { afkTimeoutMs?: unknown; followUp?: unknown; response?: unknown; answers?: unknown }
+  if (v.afkTimeoutMs !== undefined) return false
+  if (v.followUp === true) return true
+  if (typeof v.response === 'string' && v.response.trim() !== '') return true
+  const a = v.answers
+  if (typeof a !== 'object' || a === null) return false
+  return Object.values(a).some(x => (typeof x === 'string' ? x.trim() !== '' : x !== undefined && x !== null))
+}
+
 /** `612,345`: the token count as the nudge shows it. */
 export function formatTokens(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')

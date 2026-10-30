@@ -234,6 +234,36 @@ test('AT-LT-04: no handoff turn after (a) a question, (b) an AskUserQuestion cal
   expect(w.callsOf('handoff-turn').length).toBe(0)
 })
 
+test('AT-LT-04a: an AskUserQuestion call the user answered does not skip the handoff turn', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+  const w = new World().install(on)
+  w.toolAnswer = tool => (tool === 'AskUserQuestion' ? { result: { questions: [], answers: { 'Which one?': 'Bold' } } } : { result: {} })
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 610000
+  await w.tool($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  w.tokens = 640000
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(5000)
+  expect(w.rowsOf('handoff_skipped').map(r => r.why)).toEqual(TURN ? [] : ['no-asset'])
+  expect(w.submits.length).toBe(TURN ? 1 : 0)
+})
+
+test('AT-LT-04b: an AskUserQuestion call that timed out (afkTimeoutMs) still skips the handoff turn (asks-user)', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+  const w = new World().install(on)
+  w.toolAnswer = tool => (tool === 'AskUserQuestion' ? { result: { questions: [], answers: {}, afkTimeoutMs: 600000 } } : { result: {} })
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 610000
+  await w.tool($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  w.tokens = 640000
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(5000)
+  expect(w.rowsOf('handoff_skipped').map(r => r.why)).toEqual(['asks-user'])
+  expect(w.submits.length).toBe(0)
+})
+
 test('AT-LT-05: turn ends at 745K with N 767K (H < 20K): why=headroom; one plugin compaction with the full text; no submit', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World({ window: 800000 }).install(on)
   await w.start($)

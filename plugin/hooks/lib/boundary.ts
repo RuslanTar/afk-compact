@@ -85,7 +85,8 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   // The turn our own `/compact` ran in (alive.ts): its end starts no plugin compaction.
   const ownCompactTurn = s.ownCompactTurn
   s.ownCompactTurn = false
-  s.lastTurnAsksUser = s.askedThisTurn || endsWithQuestion(t.answer)
+  // A dialog still open, or one closed unanswered (timed out, dismissed); an answered one does not count.
+  s.lastTurnAsksUser = s.askOpen > 0 || s.askedThisTurn || endsWithQuestion(t.answer)
   if (t.reason !== 'answer') s.resumeAfter = false
   // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
   // main turn end, whatever its origin.

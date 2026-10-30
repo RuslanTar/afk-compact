@@ -532,6 +532,75 @@ test('AT-B-12: a nudged turn ending on a question, or with an AskUserQuestion ca
   expect(w.submits.length).toBe(0)
 })
 
+/** A nudged turn that runs one AskUserQuestion call the bottom answers with `answer`; three quiet
+ * turns first when a plugin compaction ran before, so two in a row never read as a thrash. */
+async function askedTurn($: Engine, w: World, answer: unknown): Promise<void> {
+  if (w.compacts.length > 0) {
+    await w.advance(60000)
+    for (let i = 0; i < 3; i++) {
+      await w.userTurn($)
+      w.tokens = 50000
+      await w.turnEnd($, 'ok')
+    }
+  }
+  w.toolAnswer = tool => (tool === 'AskUserQuestion' ? answer : { result: {} })
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(500)
+}
+
+test('AT-B-12a: an answered AskUserQuestion call does not block auto-continue (a choice, typed text, or a follow-up request)', async ($, on) => {
+  const answers: unknown[] = [
+    { result: { questions: [], answers: { 'Which one?': 'Bold' } } },
+    { result: { questions: [], answers: {}, response: 'the second, please' } },
+    { result: { questions: [], answers: {}, followUp: true } },
+  ]
+  const w = new World().install(on)
+  await w.start($)
+  for (const [i, a] of answers.entries()) {
+    await askedTurn($, w, a)
+    expect(w.compacts.length).toBe(i + 1)
+    expect(w.submits.length).toBe(i + 1)
+  }
+  expect(w.rowsOf('skip').filter(r => r.why === 'asks-user').length).toBe(0)
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual(['submitted', 'submitted', 'submitted'])
+})
+
+test('AT-B-12b: a dialog that closed unanswered still blocks auto-continue: timed out, empty, rejected, denied', async ($, on) => {
+  const unanswered: unknown[] = [
+    { result: { questions: [], answers: { 'Which one?': 'Bold' }, afkTimeoutMs: 600000 } },
+    { result: { questions: [], answers: {} } },
+    { isError: true, result: 'The user doesn\'t want to proceed with this tool use.', text: 'rejected' },
+    { deny: 'not now' },
+  ]
+  const w = new World().install(on)
+  await w.start($)
+  for (const [i, a] of unanswered.entries()) {
+    await askedTurn($, w, a)
+    expect(w.compacts.length).toBe(i + 1)
+  }
+  expect(w.rowsOf('skip').filter(r => r.why === 'asks-user').length).toBe(4)
+  expect(w.submits.length).toBe(0)
+})
+
+test('AT-B-12c: an answered dialog does not hide a reply that ends on a question', async ($, on) => {
+  const w = new World().install(on)
+  w.toolAnswer = tool => (tool === 'AskUserQuestion' ? { result: { questions: [], answers: { 'Which one?': 'Bold' } } } : { result: {} })
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  await w.turnEnd($, 'Done with Bold.\n\nShould I push now?')
+  await w.advance(500)
+  expect(w.compacts.length).toBe(1)
+  expect(w.rowsOf('skip').map(r => r.why)).toEqual(['asks-user'])
+  expect(w.submits.length).toBe(0)
+})
+
 test('AT-B-13: halt mode: a turn end at 450K skips (halt); a tool call at 610K gets [halt]; that turn end starts a handoff turn', async ($, on) => {
   const w = new World().install(on)
   w.summaryMode = 'unshaped'
