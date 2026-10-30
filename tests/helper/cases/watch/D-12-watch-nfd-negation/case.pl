@@ -6,6 +6,10 @@
 # `git check-ignore -q --no-index <log_dir>` says not ignored: root-in-git. Paths read from
 # --stdin are not precomposed, so a stdin check sees `Cafe+U+0301`, misses `!Café/`, and
 # `*` makes the root look ignored.
+# Where git does not precompose (Linux: git init sets no core.precomposeUnicode, and the file
+# system keeps the NFD bytes), git reads the folder as `Cafe+U+0301` everywhere: `!Café/`
+# never matches it, `*` ignores Café/wlogs, git status shows nothing there, and the watcher
+# rightly writes its rows with no refusal. The case asserts the outcome of the git it runs.
 my $nfd = "Cafe\xcc\x81";
 my $nfc = "Caf\xc3\xa9";
 my $pre = watch::json::encode({ session_id => '$SID', transcript_path => '$PROJ/$SID.jsonl', cwd => '$HOME/work',
@@ -30,12 +34,20 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/' . $nfd . '/wlogs');
     expect => sub {
         my ($E) = @_;
         my $home = $E->var('HOME');
-        $E->ok(!-e "$home/$nfd/wlogs", 'log_dir not made');
+        my $pre_nfc = `git -C '$home' config --bool core.precomposeunicode 2>/dev/null`;
+        chomp $pre_nfc;
         my $st = `git -C '$home' status --porcelain --untracked-files=all 2>&1`;
         my @w = grep { m{wlogs/} } split /\n/, $st;
         $E->is(join(' | ', @w), '', 'git status shows nothing under wlogs');
         my @o = $E->outputs;
         my $txt = ref $o[-1] eq 'HASH' ? ($o[-1]{stdout} // '') : '';
-        $E->ok(scalar($txt =~ /^Watcher: writes nothing \(log_dir: root-in-git\)$/m), "status says log_dir is refused: $txt");
+        if ($pre_nfc eq 'true') {
+            $E->ok(!-e "$home/$nfd/wlogs", 'log_dir not made');
+            $E->ok(scalar($txt =~ /^Watcher: writes nothing \(log_dir: root-in-git\)$/m), "status says log_dir is refused: $txt");
+        } else {
+            $E->count([ $E->rows("$home/$nfd/wlogs/" . $E->var('SID') . '.classic.jsonl', 'precompact') ], 1,
+                      'git does not precompose: watcher precompact row in log_dir');
+            $E->ok(scalar($txt !~ /refused|writes nothing/), "git does not precompose: status has no refusal: $txt");
+        }
     },
 };
