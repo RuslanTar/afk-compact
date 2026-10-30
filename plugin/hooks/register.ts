@@ -10,6 +10,7 @@ import { laneTurnEnd } from './lib/digest'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
+import { noteDialog } from './lib/question'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { startsWork } from './lib/lane'
@@ -225,6 +226,8 @@ export const register: Register = (on, options) => {
       if (isAsk) state.askOpen--
     }
     if (r.deny !== undefined) return r
+    // Question carry: a dialog that closed on the AFK timeout leaves its questions open.
+    if (isAsk) noteDialog(state, input, r)
     // Away digest phase 1: work the model starts after an idle block went out supersedes its lane.
     if (r.isError !== true && startsWork(tool, r.result)) laneWorkStarted(state)
     if (job) await recordJob(d, sid, tool, input, r, job)

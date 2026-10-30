@@ -17,6 +17,7 @@ import type { HandoffState } from './helper'
 import { checkpoint, dispatch, failClass, handoffState, handoffTurnSupersede, prevCopy, saveCopy, sweep } from './helper'
 import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
+import { carriedQuestion } from './question'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
 import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, settleRecords } from './resume'
@@ -521,11 +522,15 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   s.published = undefined
   // §9.3: the next eligible turn end may have its pre-compaction turn again.
   s.precompactRan = false
+  const question = carriedQuestion(s)
   const blockArgs: BlockArgs = {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
     // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
     ...(a.idle === true ? { idle: true, halt: s.halt.active, ...(facts !== undefined ? { lane: facts } : {}) } : {}),
+    // Question carry (question.ts): a main turn's question no person's turn has followed yet, or
+    // the running turn's timed-out dialog.
+    ...(question !== undefined ? { question } : {}),
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
   // The idle episode of this compaction (a compaction that is not idle closes the one before).

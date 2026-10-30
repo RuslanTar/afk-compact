@@ -312,6 +312,13 @@ export type LoadState = {
   resumeAfter: boolean
   /** The last main turn ended on a user-owned question. */
   lastTurnAsksUser: boolean
+  /**
+   * Question carry (question.ts): the question a main turn ended on, on one line and clipped, open
+   * until a person's turn starts or the session ends; a main compaction carries it (`[question]`).
+   */
+  openQuestion: string | undefined
+  /** This main turn's AskUserQuestion dialog that closed on the AFK timeout: its questions (question.ts). */
+  askTimedOut: string | undefined
   /** The next main turn.start comes from our own `$.prompt.submit`. */
   ourSubmitPending: boolean
   /** The text of that submit: it tells our turn from a prompt that entered beside it (CR-F17). */
@@ -631,6 +638,8 @@ export function newState(loadId: string): LoadState {
     nudgedThisTurn: false,
     resumeAfter: false,
     lastTurnAsksUser: false,
+    openQuestion: undefined,
+    askTimedOut: undefined,
     ourSubmitPending: false,
     ourSubmitText: undefined,
     foreignPrompts: 0,

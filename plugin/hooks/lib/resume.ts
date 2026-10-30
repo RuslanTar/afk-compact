@@ -10,6 +10,7 @@ import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
+import { clipQuestion } from './question'
 import { escalate, helperMissing, isoLocal, log, vettedWatch } from './log'
 import type { Lane, LaneFacts, LaneResult } from './lane'
 import { LANES, LEGACY_STATUS, asLaneFacts, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
@@ -53,6 +54,11 @@ export type BlockArgs = {
    * blocked lane gets `[idle-done]` instead of `[idle]`.
    */
   lane?: LaneFacts
+  /**
+   * Question carry (0.1.2, question.ts): the question a main turn ended on that no person's turn
+   * has followed yet, on one line within QUESTION_MAX: `[question]` quotes it.
+   */
+  question?: string
 }
 
 /** The helper's `Active driver:` line (lib/gsd.pm) in a re-measure: `[driver]` is kept. */
@@ -173,6 +179,10 @@ export async function buildBlockWith(
     tags.push('handoff-partial')
     runtime.draft_state = present ? 'present' : 'absent'
     runtime.handoff_finish = present ? '`' + (h.finish ?? '') + '`' : NO_FINISH
+  }
+  if (a.question !== undefined && a.question !== '') {
+    tags.push('question')
+    runtime.question = a.question
   }
   const block = remeasure === undefined
     ? assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
@@ -619,6 +629,7 @@ function isArgs(a: unknown): a is BlockArgs {
   return typeof o.midturn === 'boolean' && typeof o.nonok === 'boolean' && (o.savedCopy === null || typeof o.savedCopy === 'string')
     && (o.notSaved === undefined || typeof o.notSaved === 'string')
     && (o.handoff === undefined || (o.handoff !== null && typeof o.handoff === 'object'))
+    && (o.question === undefined || typeof o.question === 'string')
 }
 
 function isOutcome(o: unknown): o is Outcome {
@@ -648,6 +659,10 @@ export async function restorePending(d: Deps, sid: string): Promise<PendingResum
   const a: BlockArgs = { ...args, prodAllow: args.prodAllow === true && d.cfg.unattended_prod_reads === 'allow' }
   if (facts !== undefined) a.lane = facts
   else delete a.lane
+  // Question carry: a stored question goes out on one line within QUESTION_MAX whatever wrote it.
+  const q = typeof a.question === 'string' ? clipQuestion(a.question, 'end') : ''
+  if (q !== '') a.question = q
+  else delete a.question
   const at = typeof measuredAt === 'number' ? measuredAt : builtAt
   const built = await buildBlockWith(d, sid, a, typeof remeasure === 'string' ? remeasure : null, at)
   return {
