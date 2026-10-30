@@ -8,10 +8,10 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
   --no-git-log  skip the attribution gate over `git log --format=%B`
   --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
                 skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal,
-                config-defaults, launcher, template-shape, lint-texts, xref, no-args-inline,
-                readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc, nudge-folder,
-                export-classes, no-network, export-schema, report-skill, no-age-rule, perl-utf8,
-                approvals, model-pin, queue-text, risk-corpus, store-flags, planning)
+                config-defaults, launcher, template-shape, lint-texts, section-caps, xref,
+                no-args-inline, readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc,
+                nudge-folder, export-classes, no-network, export-schema, report-skill, no-age-rule,
+                perl-utf8, approvals, model-pin, queue-text, risk-corpus, store-flags, planning)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -75,6 +75,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                §8's heading unchanged
   lint-texts   AT-TX-03: spec-literals `lint_texts` has why and fix (≤160 chars, no `{{`/`<!--`)
                for every `lint_ids` id and no other key
+  section-caps SC-01 (0.1.2 handoff-lint): template §2's section caps equal the spec's
+               section_caps, none missing or extra, and its `sum about N.NK` is their sum
   xref         AT-TX-05 (T-TEXT E8): every `template §N[.M]`, `template rule N` (and `rule N`
                inside the template), `spec §N`, handoff `Step N[.M]`/`Steps N–M` and resume
                `R<n>`/`5a`-`5d` resolves, and its target's first word equals the recorded map
@@ -736,6 +738,58 @@ def lint_texts_hits(target, brand):
             s = v[k]
             if not isinstance(s, str) or not s or len(s) > 160 or "{{" in s or "<!--" in s:
                 out.append((spec_path, None, "AT-TX-03 text", "AT-TX-03 text: lint_texts {}.{} empty, over 160 chars, or holds {{{{ or <!--".format(i, k), ""))
+    return out
+
+
+# SC-01 (0.1.2 handoff-lint): template §2's section caps name the spec's section_caps. The short
+# names of §2 map to the spec's heading literals; Title has no lint cap.
+TEMPLATE_CAP_NAMES = {"Resume here": "## Resume here", "User constraints": "## User constraints",
+                      "Approvals": "## Approvals", "Decisions": "## Decisions and do-not-re-raise",
+                      "In flight": "## In flight", "Live state": "## Live state", "Open questions": "## Open questions",
+                      "Location": "## Location", "Work done": "## Work done and findings", "Evidence": "## Evidence",
+                      "Next steps": "## Next steps"}
+TEMPLATE_CAPS_RE = re.compile(r"Section caps in characters \(sum about (\d+(?:\.\d)?)K\): (.*?)\.$")
+TEMPLATE_CAP_ITEM = re.compile(r"^([A-Z][a-z]+(?: [a-z]+)?) (\d{1,3}(?:,\d{3})*)\b")
+
+
+def section_caps_hits(target, brand):
+    """SC-01: template §2 lists every spec section_caps heading with the spec's number and no other
+    capped section (Title aside), and its `sum about N.NK` is the sum of its caps, Title included,
+    rounded to 100."""
+    path, lines = _shipped(target, TEMPLATE_REL, brand)
+    if lines is None:
+        return [_missing(path, "SC-01 template")]
+    spec_path, spec = spec_literals(target)
+    caps = spec.get("section_caps") if isinstance(spec, dict) else None
+    if not isinstance(caps, dict):
+        return [(spec_path, None, "SC-01 spec", "SC-01 spec: no section_caps in the spec-literals block", "")]
+    s2 = _section(lines, r"^## 2\. ", r"^## \d+\. ") or []
+    hit = [(no, m) for no, m in ((no, TEMPLATE_CAPS_RE.search(ln)) for no, ln in enumerate(lines, 1) if ln in s2) if m]
+    if not hit:
+        return [(path, None, "SC-01 caps-line", "SC-01 caps-line: §2 has no 'Section caps in characters (sum about N.NK): …' line", "")]
+    no, m = hit[0]
+    seen, total = {}, 0
+    for item in m.group(2).split(" · "):
+        im = TEMPLATE_CAP_ITEM.match(item)
+        if not im:
+            return [(path, no, "SC-01 item", "SC-01 item: cannot read {!r}".format(item), "")]
+        n = int(im.group(2).replace(",", ""))
+        total += n
+        if im.group(1) != "Title":
+            seen[im.group(1)] = n
+    out = []
+    for short, n in sorted(seen.items()):
+        head = TEMPLATE_CAP_NAMES.get(short)
+        if head is None or head not in caps:
+            out.append((path, no, "SC-01 extra", "SC-01 extra: §2 caps {!r}, which has no spec section_caps entry".format(short), ""))
+        elif caps[head] != n:
+            out.append((path, no, "SC-01 differs", "SC-01 differs: §2 {} {} != spec section_caps {!r} {}".format(short, n, head, caps[head]), ""))
+    named = {TEMPLATE_CAP_NAMES[s] for s in seen if s in TEMPLATE_CAP_NAMES}
+    for head in sorted(set(caps) - named):
+        out.append((path, no, "SC-01 missing", "SC-01 missing: spec section_caps {!r} is not in §2".format(head), ""))
+    want = "{:.1f}".format(round(total / 100.0) / 10.0)
+    if m.group(1) != want:
+        out.append((path, no, "SC-01 sum", "SC-01 sum: §2 says about {}K, its caps sum to {} ({}K)".format(m.group(1), total, want), ""))
     return out
 
 
@@ -2061,6 +2115,7 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("config-defaults", config_defaults_hits), ("launcher", launcher_hits),
               ("template-shape", template_shape_hits),
               ("lint-texts", lint_texts_hits),
+              ("section-caps", section_caps_hits),
               ("xref", xref_hits),
               ("no-args-inline", no_args_inline_hits),
               ("readback", readback_hits),
