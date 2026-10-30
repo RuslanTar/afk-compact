@@ -541,12 +541,13 @@ test('AT-IC-C00 idle_compact: default auto; common words; any other value reads 
 })
 
 // Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): `idle_handoff_near_limit` `run` (the
-// default) runs the idle handoff turn near a usage limit, `skip` skips it there; trimmed and
+// default) runs the idle handoff turn near a usage limit, `skip` skips it there, `skip-spend` (0.1.2)
+// only near a spend limit; trimmed and
 // case-folded; any other value is the default `run` plus config_invalid; no legacy words.
 test('MOD-02 options: idle_handoff_near_limit: default run; trim and fold; any other value reads as run with config_invalid', () => {
   expect(DEFAULTS.idle_handoff_near_limit).toBe('run')
   expect(parseOptions({}).idle_handoff_near_limit).toBe('run')
-  for (const [w, want] of [[' SKIP ', 'skip'], ['skip', 'skip'], ['Run', 'run'], [' run\t', 'run']] as const) {
+  for (const [w, want] of [[' SKIP ', 'skip'], ['skip', 'skip'], ['Run', 'run'], [' run\t', 'run'], ['skip-spend', 'skip-spend'], [' Skip-Spend ', 'skip-spend']] as const) {
     const r = parseOptions({ idle_handoff_near_limit: w } as never)
     expect([w, r.idle_handoff_near_limit, r.notes.invalid]).toEqual([w, want, []])
   }
@@ -554,7 +555,7 @@ test('MOD-02 options: idle_handoff_near_limit: default run; trim and fold; any o
     const r = parseOptions({ idle_handoff_near_limit: w } as never)
     expect([w, r.idle_handoff_near_limit, r.notes.invalid]).toEqual([w, 'run', []])
   }
-  for (const w of ['maybe', 'off', 'no', true, 0]) {
+  for (const w of ['maybe', 'off', 'no', 'skip spend', 'skip_spend', 'spend', true, 0]) {
     const r = parseOptions({ idle_handoff_near_limit: w } as never)
     expect([w, r.idle_handoff_near_limit, r.notes.invalid]).toEqual([w, 'run', ['idle_handoff_near_limit']])
   }

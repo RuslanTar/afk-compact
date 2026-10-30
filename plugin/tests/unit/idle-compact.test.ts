@@ -232,9 +232,10 @@ test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check ru
 })
 
 // Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): the check's turn goes through the same
-// gate as the 49-min one; only idle_handoff_near_limit `skip` skips it at a window of 90% or more.
-for (const mode of ['run', 'skip'] as const) {
-  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
+// gate as the 49-min one; only idle_handoff_near_limit `skip` skips it at a window of 90% or more
+// (`skip-spend`, 0.1.2: a plan window is not a spend limit, so the turn runs as under `run`).
+for (const mode of ['run', 'skip-spend', 'skip'] as const) {
+  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode !== 'skip' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
     const w = world(on)
     w.policy = {}
     await w.start($)
@@ -693,7 +694,7 @@ function guardDeps(over: Partial<Deps['state']> = {}): { d: Deps; rec: Due } {
   state.eff = { disabled: null } as never
   const rec: Due = {
     due: T0, sid: SID_A, episode: null, kind: 'compact', end: T0 - 54 * MIN, answer: true, published: false, load: 'load-1',
-    anchor: T0 - 54 * MIN, tokens: 260000, ttl: '1h', pct: 30, cc: '2.1.311', model: 'claude-test-model',
+    anchor: T0 - 54 * MIN, tokens: 260000, ttl: '1h', pct: 30, spct: null, cc: '2.1.311', model: 'claude-test-model',
   }
   const d = {
     cfg: DEFAULTS, state, now: async () => T0, storeGet: async () => undefined,
@@ -1067,9 +1068,10 @@ test('AT-IC-C30 (G12): a record adopted by a fresh process, armed at a 95% windo
 })
 
 /** A 49-min turn record another process armed 39 min before T0 (due T0 + 10 min), with what it read at arm. */
-const adoptedTurn = (ttl: string | null, pct = 30) => ({
+const adoptedTurn = (ttl: string | null, pct = 30, spct?: number) => ({
   [KEY]: {
     kind: 'turn', due: T0 + 10 * MIN, sid: SID_A, end: T0 - 39 * MIN, anchor: T0 - 39 * MIN, load: 'old', tokens: 260000, ttl, pct,
+    ...(spct === undefined ? {} : { spct }),
     cc: null, model: null, answer: true, published: false, episode: { since: T0 - 39 * MIN, done: false },
   },
 })
@@ -1106,6 +1108,39 @@ for (const mode of ['run', 'skip'] as const) {
     if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'turn']]])
     else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
     else expect(skips(w)).toEqual([['no-asset', 'turn']])
+  })
+}
+
+// 0.1.2: under `skip-spend` the record's spend share (`spct`) decides, not its highest share: a
+// record armed at a 95% plan window runs the turn; one armed at a 95% spend limit skips it; one an
+// older build armed (no `spct`) reads as no spend limit, so the turn runs.
+for (const c of [{ name: 'a 95% plan window, no spend limit', spct: null, skip: false }, { name: 'a 95% spend limit', spct: 95, skip: true }, { name: 'no spct (an older build)', spct: undefined, skip: false }]) {
+  test(`AT-IC-C30 (turn, G12, skip-spend): the adopted 49-min turn record armed at ${c.name}, no reading yet: ${c.skip ? '[near-limit, turn]' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+    const rec = adoptedTurn('1h', 95, c.spct ?? undefined)
+    if (c.spct === null) (rec[KEY] as Record<string, unknown>).spct = null
+    const w = world(on, {}, rec)
+    w.rateLimits = []
+    w.tokens = undefined
+    await w.start($)
+    await w.advance(10 * MIN)
+    if (c.skip) expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'turn']]])
+    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    else expect(skips(w)).toEqual([['no-asset', 'turn']])
+  })
+}
+
+// 0.1.2: the arm records the highest spend-limit share apart from the highest share of any window.
+for (const c of [
+  { limits: [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'spend_limit', percentUsed: 40 }], pct: 95, spct: 40 },
+  { limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }], pct: 30, spct: null },
+]) {
+  test(`AT-IC-C30 (arm, skip-spend): windows ${c.limits.map(l => `${l.kind} ${l.percentUsed}%`).join(', ')}: the record holds pct ${c.pct} and spct ${c.spct}`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.rateLimits = c.limits
+    await w.start($)
+    await humanTurn($, w)
+    const rec = w.storeGet(KEY) as Record<string, unknown>
+    expect([rec.pct, rec.spct]).toEqual([c.pct, c.spct])
   })
 }
 
@@ -1757,11 +1792,30 @@ test('AT-IC-C45 (owner Q2, root call): no agents, halt for two bad summaries in 
   else expect(skips(w)).toEqual([['no-asset', 'check']])
 })
 
+// 0.1.2: the check's turn under `skip-spend` with a spend limit at 95%: [near-limit, check], no turn;
+// a plan window at 95% beside a spend limit at 50%: the turn runs (or no-asset).
+for (const c of [{ spend: 95, plan: 12, skip: true }, { spend: 50, plan: 95, skip: false }]) {
+  test(`AT-IC-C08 (lane B, near-limit, skip-spend): native on, idle_compact off, a spend limit at ${c.spend}% and a plan window at ${c.plan}% at the check: ${c.skip ? '[near-limit, check], no turn' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+    const w = world(on)
+    w.policy = {}
+    await w.start($)
+    await humanTurn($, w)
+    await w.advance(55 * MIN)
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: c.plan }, { kind: 'spend_limit', percentUsed: c.spend }]
+    await w.advance(MIN)
+    expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+    if (c.skip) expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
+    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    else expect(skips(w)).toEqual([['no-asset', 'check']])
+  })
+}
+
 // Root call NL-2 (0.1.2): in halt mode (not the cap) the check's compaction never runs, so a window
 // at 90% or more refuses nothing the halt had not; with idle_handoff_near_limit `run` the check
-// falls back to the turn as it does for `halted`, and only `skip` keeps [near-limit, check].
-for (const mode of ['run', 'skip'] as const) {
-  test(`AT-IC-C45 (NL-2): no agents, halt for two bad summaries, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'no compaction; the turn runs (or no-asset)' : '[near-limit, check], no compaction and no turn'}`, { options: { ...ON, idle_handoff_near_limit: mode } }, async ($, on) => {
+// falls back to the turn as it does for `halted`, and only `skip` keeps [near-limit, check]
+// (`skip-spend`, 0.1.2: a plan window at 95% falls back as under `run`; a spend limit, below).
+for (const mode of ['run', 'skip-spend', 'skip'] as const) {
+  test(`AT-IC-C45 (NL-2): no agents, halt for two bad summaries, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode !== 'skip' ? 'no compaction; the turn runs (or no-asset)' : '[near-limit, check], no compaction and no turn'}`, { options: { ...ON, idle_handoff_near_limit: mode } }, async ($, on) => {
     const w = world(on)
     w.policy = NATIVE_ON
     await w.start($)
@@ -1784,6 +1838,30 @@ for (const mode of ['run', 'skip'] as const) {
     else expect(skips(w)).toEqual([['no-asset', 'check']])
   })
 }
+
+// NL-2 under `skip-spend` (0.1.2): halt for two bad summaries, no agents, a spend limit at 95%
+// beside a plan window: the turn's own rule skips there, so [near-limit, check] stays, no
+// compaction and no turn.
+test('AT-IC-C45 (NL-2, skip-spend): no agents, halt for two bad summaries, a spend limit at 95% at the check: [near-limit, check], no compaction and no turn', { options: { ...ON, idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = NATIVE_ON
+  await w.start($)
+  await w.userTurn($)
+  w.summaryMode = 'unshaped'
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  w.summaryMode = 'ok'
+  expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
+  await w.advance(1000)
+  w.tokens = 260000
+  await w.turnEnd($, 'Done with that step.')
+  const compacts = w.compacts.length
+  await w.advance(55 * MIN)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }]
+  await w.advance(MIN)
+  expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
+  expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
+})
 
 // NL-2: a cap halt does not stop the check's compaction, so a window at 95% stays its refusal (no
 // turn after it, D2) under `run` too; and with agents running a thrash halt keeps [near-limit, check].
@@ -2004,7 +2082,7 @@ test('AT-IC-C35 (D12): a cancel (a turn start) while a tick reads the clock: tha
   } as unknown as Deps
   const rec: Due = {
     due: T0 + 54 * MIN, sid: SID_A, episode: null, kind: 'compact', end: T0, answer: true, published: false, load: 'load-1',
-    anchor: T0, tokens: 260000, ttl: '1h', pct: 30, cc: null, model: null,
+    anchor: T0, tokens: 260000, ttl: '1h', pct: 30, spct: null, cc: null, model: null,
   }
   schedule(d, rec, T0 + 29 * MIN)
   expect(waits).toEqual([IDLE_TICK_MS])

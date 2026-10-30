@@ -611,6 +611,46 @@ for (const c of [
   })
 }
 
+// 0.1.2 (owner xxxxxxxx, configurable, `run` the default): all three idle_handoff_near_limit values
+// on plan windows and on a spend limit. The usage names a gateway's money cap `spend_limit`; the
+// five-hour and seven-day windows are the plan's. `skip-spend` skips only at a spend limit of 90%
+// or more (no reading, NaN, counts as there, as under `skip`).
+const NEAR_CASES: { name: string; limits: World['rateLimits']; skips: Record<'run' | 'skip-spend' | 'skip', boolean> }[] = [
+  { name: 'a seven-day plan window at 95%', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }], skips: { run: false, 'skip-spend': false, skip: true } },
+  { name: 'a five-hour plan window at 90% beside a spend limit at 50%', limits: [{ kind: 'five_hour', percentUsed: 90 }, { kind: 'spend_limit', percentUsed: 50 }], skips: { run: false, 'skip-spend': false, skip: true } },
+  { name: 'a spend limit at 95% beside a plan window at 12%', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }], skips: { run: false, 'skip-spend': true, skip: true } },
+  { name: 'a spend limit at 90% beside a plan window at 95%', limits: [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'spend_limit', percentUsed: 90 }], skips: { run: false, 'skip-spend': true, skip: true } },
+  { name: 'a spend limit with no share (NaN) beside a plan window', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: NaN }], skips: { run: false, 'skip-spend': true, skip: true } },
+  { name: 'a spend limit at 89% beside a plan window at 12%', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 89 }], skips: { run: false, 'skip-spend': false, skip: false } },
+  { name: 'a window with no kind at 95% beside a plan window', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: '', percentUsed: 95 }], skips: { run: false, 'skip-spend': false, skip: true } },
+]
+for (const mode of ['run', 'skip-spend', 'skip'] as const) {
+  for (const c of NEAR_CASES) {
+    const skip = c.skips[mode]
+    test(`AT-IC-06 (near-limit matrix, idle_handoff_near_limit ${mode}): ${c.name}: ${skip ? 'one handoff_skipped {why: near-limit}, no submit' : 'no near-limit skip, the turn runs'}`, { options: { ...TURN, idle_handoff_near_limit: mode } }, async ($, on) => {
+      const w = new World().install(on)
+      w.policy = NATIVE_OFF
+      w.rateLimits = LIMITS
+      await w.start($)
+      await w.userTurn($)
+      w.tokens = 260000
+      await w.turnEnd($, 'Done.')
+      await w.advance(48 * MIN)
+      w.rateLimits = c.limits
+      await w.advance(1 * MIN)
+      if (skip) {
+        expect(idleSkips(w)).toEqual(['near-limit'])
+        expect(w.submits.length).toBe(0)
+      } else if (!IDLE) {
+        expect(idleSkips(w)).toEqual(['no-asset'])
+      } else {
+        expect(idleSkips(w)).toEqual([])
+        expect(w.submits).toEqual([idleText(w)])
+      }
+    })
+  }
+}
+
 test('AT-IC-06 (busy): a plugin compaction in flight at the due: busy', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF

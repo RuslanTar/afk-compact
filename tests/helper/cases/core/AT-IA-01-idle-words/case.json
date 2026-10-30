@@ -740,7 +740,41 @@
    }
   },
   {
-   "name": "idle_handoff_near_limit \"maybe\" is not run or skip: run, with the /status note",
+   "name": "idle_handoff_near_limit \" Skip-Spend \" reads as skip-spend (0.1.2), no note",
+   "options": {
+    "idle_handoff_near_limit": " Skip-Spend "
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^note: idle_handoff_near_limit"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit \"skip_spend\" is not run, skip-spend or skip: run, with the /status note",
+   "options": {
+    "idle_handoff_near_limit": "skip_spend"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^note: idle_handoff_near_limit: not run, skip-spend or skip, run used$"
+    ]
+   }
+  },
+  {
+   "name": "idle_handoff_near_limit \"maybe\" is not run, skip-spend or skip: run, with the /status note",
    "options": {
     "idle_handoff_near_limit": "maybe"
    },
@@ -752,12 +786,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^note: idle_handoff_near_limit: not run or skip, run used$"
+     "^note: idle_handoff_near_limit: not run, skip-spend or skip, run used$"
     ]
    }
   },
   {
-   "name": "idle_handoff_near_limit \"off\" is not run or skip (no legacy words): run, with the /status note",
+   "name": "idle_handoff_near_limit \"off\" is not run, skip-spend or skip (no legacy words): run, with the /status note",
    "options": {
     "idle_handoff_near_limit": "off"
    },
@@ -769,7 +803,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^note: idle_handoff_near_limit: not run or skip, run used$"
+     "^note: idle_handoff_near_limit: not run, skip-spend or skip, run used$"
     ]
    }
   },
@@ -804,6 +838,14 @@
    },
    "lib": "settings_export",
    "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "run"}}
+  },
+  {
+   "name": "idle_handoff_near_limit value (0.1.2): \" Skip-Spend \" resolves to skip-spend (exported as itself)",
+   "options": {
+    "idle_handoff_near_limit": " Skip-Spend "
+   },
+   "lib": "settings_export",
+   "args": {"home": "$HOME", "noarg": true, "want": {"idle_handoff_near_limit": "skip-spend"}}
   }
  ]
 }

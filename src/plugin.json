@@ -216,7 +216,7 @@
     "idle_handoff_near_limit": {
       "type": "string",
       "title": "Handoff when idle: near a usage limit [default run]",
-      "description": "Values: run or skip. run (the default): the handoff-when-idle turn runs even when one of your usage limits (the five-hour or seven-day window, or a spend limit) is at 90% or more, so you get the handoff anyway; that turn then counts toward a nearly used allowance. skip: no such turn while any reported limit is at 90% or more, which saves that usage (any other value counts as run). The plugin's own idle compaction never runs at 90% or more either way.",
+      "description": "Values: run, skip-spend or skip. run (the default): the handoff-when-idle turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; it then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. skip-spend: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. skip: no such turn near any limit (any other value counts as run). The plugin's own idle compaction never runs at 90% or more.",
       "default": "run"
     },
     "idle_digest": {
