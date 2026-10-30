@@ -304,6 +304,15 @@ export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number)
 }
 
 /**
+ * Keep-warm (D-14): the latest moment a record it holds still fires on the idle path once handed
+ * back anchored at `warm`: the turn's 55.5-min bound (`fire`), else the compaction's lapse guard
+ * (G3, 58 min; the check compacts by the same guards).
+ */
+export function heldDeadline(rec: Due, warm: number, scale: number): number {
+  return warm + (rec.kind === 'turn' ? IDLE_CHECK_MS : IDLE_LAPSE_FRACTION * IDLE_CACHE_MS) * scale
+}
+
+/**
  * Keep-warm (D-14) holds the record while its gap warms: it stays in the store (not a tombstone),
  * due at the next ping and anchored at the last warm request, so a load that adopts it after a
  * reload (a hot reload, `claude respawn`, a supervisor move, SessionEnd `other`) still fires it

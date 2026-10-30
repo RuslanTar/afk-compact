@@ -216,7 +216,7 @@ our %SCHEMA = (
     keep_warm_ping => { n => 'int', result => [enum => qw(warm lapsed nothing-to-fork api-error aborted error)], cache_read => 'num',
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int' },
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed lapsed no-jobs ttl-5m prefix-changed
-                                             near-limit cutoff off error held-elsewhere reload)],
+                                             near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline)],
                         pings => 'int', gap_s => 'num', handover => 'bool' },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents

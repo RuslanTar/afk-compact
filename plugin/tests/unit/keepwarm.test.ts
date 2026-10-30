@@ -313,7 +313,7 @@ test('AT-KW-12: the cache switched to five minutes between pings: stop ttl-5m wi
   expect(skips(w)).toEqual([['keep-warm', 'compact'], ['ttl-5m', 'compact']])
 })
 
-test('AT-KW-13: a ping finds the cache lapsed (cache read near zero): stop lapsed, no hand-over, no compaction on the cold cache', { options: ON }, async ($, on) => {
+test('AT-KW-13: a later ping finds the cache lapsed (cache read near zero): stop lapsed; that ping wrote the cache again, so the held compaction goes back to the idle path and runs', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? WARM : COLD }))
   await w.start($)
@@ -323,34 +323,77 @@ test('AT-KW-13: a ping finds the cache lapsed (cache read near zero): stop lapse
   expect(f.at).toEqual([50, 100])
   expect(pings(w)).toEqual([['warm', 1], ['lapsed', 1]])
   expect(w.rowsOf('keep_warm_ping')[1]?.cache_read).toBe(0)
-  expect(stops(w)).toEqual([['lapsed', false, 1]])
-  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  expect(stops(w)).toEqual([['lapsed', true, 1]])
+  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 6000]])
+  expect(selfCompacts(w)).toBe(1)
 })
 
-test('AT-KW-14: nothing-to-fork (a main request in flight) is tried again a minute later at no cost; the next ping counts from the one that warmed', { options: ON }, async ($, on) => {
+test('AT-KW-13 (REV2-C): the first ping finds the cache lapsed: the same rule, nothing held yet, so the idle timer\'s compaction runs at 54 as armed', { options: ON }, async ($, on) => {
   const w = world(on)
-  const f = forks(on, w, i => (i < 2 ? { isAnswered: false, reason: 'nothing-to-fork' } : { isAnswered: true, text: 'OK', usage: WARM }))
+  const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
   await w.start($)
   const t0 = await humanTurn($, w)
   f.t0 = t0
-  await until(w, t0, 102)
-  expect(f.at).toEqual([50, 51, 52, 102])
-  expect(pings(w)).toEqual([['nothing-to-fork', 0], ['nothing-to-fork', 0], ['warm', 1], ['warm', 2]])
+  await until(w, t0, 120)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['lapsed', false, 0]])
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 3240]])
+  expect(selfCompacts(w)).toBe(1)
 })
 
-test('AT-KW-15 (the 58-min guard): no ping starts more than 58 min after the last warm request: retries end at 58, then stop missed, no hand-over', { options: ON }, async ($, on) => {
+test('AT-KW-14: nothing-to-fork while a request is out (a compaction starting beside the ping) is tried again at no cost once it ended; the next ping counts from the one that warmed', { options: ON }, async ($, on) => {
   const w = world(on)
-  const f = forks(on, w, () => ({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }))
+  let release: () => void = () => undefined
+  const f = forks(on, w, i => {
+    if (i > 0) return { isAnswered: true, text: 'OK', usage: WARM }
+    w.compactMode = { skip: 'nothing to compact' }
+    w.compactGate = new Promise<void>(r => { release = r })
+    void $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never)
+    return { isAnswered: false, reason: 'nothing-to-fork' }
+  })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 52.5)
+  expect(f.at).toEqual([50])
+  release()
+  await w.settle()
+  await until(w, t0, 103)
+  expect(f.at).toEqual([50, 53, 103])
+  expect(pings(w)).toEqual([['nothing-to-fork', 0], ['warm', 1], ['warm', 2]])
+  expect(stops(w)).toEqual([])
+})
+
+const OVERLOADED: Answer = { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }
+
+test('AT-KW-15 (the held record\'s deadline): retries never pass the held compaction\'s 58-min lapse bound: after the one at 58, stop deadline with the hand-over, the compaction runs then', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, () => OVERLOADED)
   await w.start($)
   const t0 = await humanTurn($, w)
   f.t0 = t0
   await until(w, t0, 70)
   expect(f.at).toEqual([50, 51, 52, 53, 54, 55, 56, 57, 58])
   expect(w.rowsOf('keep_warm_ping').map(r => r.status)).toEqual(Array(9).fill(529))
-  expect(stops(w)).toEqual([['missed', false, 0]])
-  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  expect(stops(w)).toEqual([['deadline', true, 0]])
+  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 3480]])
+  expect(selfCompacts(w)).toBe(1)
   await until(w, t0, 200)
   expect(f.at.length).toBe(9)
+})
+
+test('AT-KW-15: the held handoff turn\'s deadline is its 55.5-min bound: after the retry at 55, stop deadline with the hand-over, the turn runs then', { options: ON }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  const f = forks(on, w, () => OVERLOADED)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 70)
+  expect(f.at).toEqual([50, 51, 52, 53, 54, 55])
+  expect(stops(w)).toEqual([['deadline', true, 0]])
+  if (IDLE) expect(w.submits.length).toBe(1)
+  else expect(skips(w)).toEqual([['keep-warm', 'turn'], ['no-asset', 'turn']])
 })
 
 test('AT-KW-16: the session ends while warming: stop session-end, no ping after', { options: ON }, async ($, on) => {
@@ -617,4 +660,313 @@ test('AT-KW-27 (finding 7): a prompt entering that a peer hook drops starts no t
   expect(r.drop).toBe('a peer dropped it')
   await until(w, t0, 101)
   expect(f.at).toEqual([50, 100])
+})
+
+// ---- Review fixes (fix round 3)
+
+test('AT-KW-28 (REV2-A): nothing-to-fork with no request of the main session out (no snapshot to fork): stop at once, no retry; nothing held yet, so the compaction runs at 54 as armed', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, () => ({ isAnswered: false, reason: 'nothing-to-fork' }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 120)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['nothing-to-fork', false, 0]])
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-28 (REV2-A2): the same with the 49-min handoff turn held: stop nothing-to-fork with the hand-over, the turn runs at once', { options: ON }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  const f = forks(on, w, () => ({ isAnswered: false, reason: 'nothing-to-fork' }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['nothing-to-fork', true, 0]])
+  if (IDLE) expect(w.submits.length).toBe(1)
+  else expect(skips(w)).toEqual([['keep-warm', 'turn'], ['no-asset', 'turn']])
+})
+
+test('AT-KW-29: a compaction under way from before the next ping to past the 58-min bound: no fork beside it, then stop missed with no hand-over beside the busy session', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  let release: () => void = () => undefined
+  w.compactGate = new Promise<void>(r => { release = r })
+  const p = $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never)
+  // One advance each (a compaction under way slows every settle): the ping timer still ticks each minute.
+  await w.advance(48.5 * MIN)
+  expect(stops(w)).toEqual([])
+  await w.advance(1.5 * MIN)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['missed', false, 1]])
+  release()
+  await p
+  await w.settle()
+})
+
+test('AT-KW-30: after a hand-over, a person\'s turn lets the next gap warm again (the plugin\'s own handoff turn does not, AT-KW-05)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 160)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(selfCompacts(w)).toBe(1)
+  await humanTurn($, w)
+  await until(w, t0, 211)
+  expect(f.at).toEqual([50, 100, 210])
+  expect(w.rowsOf('keep_warm_start').length).toBe(2)
+})
+
+test('AT-KW-31: another load adopted the held record (a reload while this load runs on): stop held-elsewhere at the next ping, no fork, the record left to that load', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.storeSet(KEY, { ...(w.storeGet(KEY) as Record<string, unknown>), load: 'other' })
+  await until(w, t0, 160)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['held-elsewhere', false, 1]])
+  const v = w.storeGet(KEY) as Record<string, unknown>
+  expect([v.load, v.cancelled]).toEqual(['other', undefined])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-32: a load that adopts a held record already past its late-fire bound: one keep_warm_stop reload row with no hand-over, the lapsed skip, a tombstone', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const store = {
+    [KEY]: {
+      kind: 'compact', due: T0 - 5 * MIN, sid: SID_A, end: T0 - 70 * MIN, anchor: T0 - 55 * MIN, warm: T0 - 55 * MIN, load: 'old', tokens: 260000, ttl: '1h', pct: 30,
+      cc: probe.version.version, model: probe.model, answer: true, published: false, episode: { since: T0 - 70 * MIN, done: false }, held: { start: T0 - 70 * MIN, pings: 1 },
+    },
+  }
+  const w = new World().install(on, store)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  w.agents = RUNNING
+  const f = forks(on, w)
+  await w.start($)
+  expect(stops(w)).toEqual([['reload', false, 1]])
+  expect(w.rowsOf('keep_warm_stop')[0]?.gap_s).toBe(4200)
+  expect(skips(w)).toEqual([['lapsed', 'compact']])
+  expect((w.storeGet(KEY) as Record<string, unknown>).cancelled).toBe(true)
+  await w.advance(60 * MIN)
+  expect([f.at.length, selfCompacts(w)]).toEqual([0, 0])
+})
+
+/** A person's prompt that enters (cancelling the ping timer) and stays pending until `drop()`, sent at the first `send()` (from inside a read the plugin makes). */
+function pendingPrompt($: Engine, w: World): { send: () => void; sent: () => boolean; drop: () => Promise<void> } {
+  let open: () => void = () => undefined
+  let sub: Promise<unknown> | undefined
+  w.atSubmit = () => new Promise<void>(r => { open = r })
+  w.dropIf = () => 'a peer dropped it'
+  return {
+    send: () => {
+      if (sub === undefined) sub = $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never)
+    },
+    sent: () => sub !== undefined,
+    drop: async () => {
+      open()
+      await sub
+      await w.settle()
+    },
+  }
+}
+
+test('AT-KW-33: a prompt enters during a ping\'s checks and stays pending: that ping ends there and no timer runs meanwhile (no retry, no stop); once a hook drops it the gap goes on (missed by then)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  const pp = pendingPrompt($, w)
+  let armed = false
+  const agents = w.agents
+  Object.defineProperty(w, 'agents', { configurable: true, get() { if (armed) pp.send(); return agents }, set() {} })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 99.5)
+  armed = true
+  await w.advance(11.5 * MIN)
+  expect(pp.sent()).toBe(true)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([])
+  await pp.drop()
+  expect(stops(w)).toEqual([['missed', false, 1]])
+})
+
+test('AT-KW-33: a prompt enters while a warm ping moves the held record on and stays pending: no next ping is armed meanwhile; once a hook drops it the gap goes on (missed by then)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  let armed = false
+  const f = forks(on, w, i => {
+    if (i === 1) armed = true
+    return { isAnswered: true, text: 'OK', usage: WARM }
+  })
+  const pp = pendingPrompt($, w)
+  const mem = (w as unknown as { storeMem: Map<string, unknown> }).storeMem
+  const get = mem.get.bind(mem)
+  Object.defineProperty(mem, 'get', { configurable: true, value: (k: string) => { if (armed && k === KEY) pp.send(); return get(k) } })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 100.5)
+  await w.advance(60.5 * MIN)
+  expect(pp.sent()).toBe(true)
+  expect(f.at).toEqual([50, 100])
+  expect(stops(w)).toEqual([])
+  await pp.drop()
+  expect(stops(w)).toEqual([['missed', false, 2]])
+})
+
+test('AT-KW-34: the task ids a notification reported ended are forgotten at session end: after /clear a task with that id counts again', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($, '<task-notification><task-id>bsh1</task-id><status>completed</status><summary>done</summary></task-notification>', 'task-notification')
+  await w.turnEnd($)
+  await $.session.end({ reason: 'clear', sessionId: SID_A, resume: { id: SID_A } } as never)
+  w.sid = SID_B
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { session_id: SID_B, background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }] })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 51)
+  expect(f.at).toEqual([50])
+})
+
+const kwRows = (w: World) => w.rows.filter(r => String(r.ev).startsWith('keep_warm')).map(r => [r.ev, r.why ?? null])
+
+test('AT-KW-35 (REV2-F): a person\'s turn starts while the first ping writes keep_warm_start: the stop row comes after the start row, and no fork', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  let turn: Promise<void> | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub === 'log' && turn === undefined && args.some(a => a.includes('"keep_warm_start"'))) {
+      turn = w.userTurn($, 'back now')
+      await w.settle()
+    }
+  }
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 52)
+  await turn
+  await w.settle()
+  expect(turn).toBeDefined()
+  expect(kwRows(w)).toEqual([['keep_warm_start', null], ['keep_warm_stop', 'turn']])
+  expect(f.at).toEqual([])
+})
+
+test('AT-KW-35 (REV2-E): a person\'s turn starts during the 49-min fire\'s keep-warm checks: nothing held, no keep-warm row, the idle path skips busy', { options: ON }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  const f = forks(on, w)
+  let turn: Promise<void> | undefined
+  let armed = false
+  const agents = w.agents
+  Object.defineProperty(w, 'agents', { configurable: true, get() { if (armed && turn === undefined) turn = w.userTurn($, 'back now'); return agents }, set() {} })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 48.5)
+  armed = true
+  await until(w, t0, 49.5)
+  await turn
+  await w.settle()
+  expect(turn).toBeDefined()
+  expect(kwRows(w)).toEqual([])
+  expect(skips(w)).toEqual([['busy', 'turn']])
+  expect((w.storeGet(KEY) as Record<string, unknown>).cancelled).toBe(true)
+  await until(w, t0, 75)
+  expect([f.at.length, w.submits.length]).toEqual([0, 0])
+})
+
+test('AT-KW-36: a prompt enters while warming begins (its job count read) and stays pending: no start row and no fork meanwhile; once a hook drops it the first ping goes out', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  const pp = pendingPrompt($, w)
+  let reads = 0
+  let armed = false
+  const agents = w.agents
+  // The ping's checks list the agents first, then warming's start row counts the jobs: the prompt enters at that second list
+  // (the harness reads `agents` twice per list).
+  Object.defineProperty(w, 'agents', { configurable: true, get() { if (armed && ++reads === 3) pp.send(); return agents }, set() {} })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 49.5)
+  armed = true
+  await w.advance(2 * MIN)
+  expect(pp.sent()).toBe(true)
+  expect([f.at, w.rowsOf('keep_warm_start').length]).toEqual([[], 0])
+  await pp.drop()
+  expect(f.at).toEqual([52])
+  expect(w.rowsOf('keep_warm_start').length).toBe(1)
+})
+
+test('AT-KW-36: a prompt enters while the start row is written and stays pending: no fork meanwhile; once a hook drops it the ping goes out', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  const pp = pendingPrompt($, w)
+  w.atHelper = async (sub, args) => {
+    if (sub === 'log' && args.some(a => a.includes('"keep_warm_start"'))) pp.send()
+  }
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await w.advance(52 * MIN)
+  expect(pp.sent()).toBe(true)
+  expect([f.at, w.rowsOf('keep_warm_start').length]).toEqual([[], 1])
+  await pp.drop()
+  expect(f.at).toEqual([52])
+  expect(pings(w)).toEqual([['warm', 1]])
+})
+
+test('AT-KW-36: a prompt enters during the idle fire\'s compaction check while warming and stays pending: the record is not held (the idle path skips it as busy)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  const pp = pendingPrompt($, w)
+  let armed = false
+  const mem = (w as unknown as { storeMem: Map<string, unknown> }).storeMem
+  const get = mem.get.bind(mem)
+  Object.defineProperty(mem, 'get', { configurable: true, value: (k: string) => { if (armed && k.startsWith('idle_seen:')) pp.send(); return get(k) } })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 53.5)
+  armed = true
+  await w.advance(MIN)
+  expect(pp.sent()).toBe(true)
+  expect(f.at).toEqual([50])
+  expect(skips(w).filter(s => s[0] === 'keep-warm')).toEqual([])
+  expect((w.storeGet(KEY) as Record<string, unknown>).held).toBe(undefined)
+  await pp.drop()
+})
+
+test('AT-KW-37: pings that take 15 s: each retry a minute after the last one ended, the compaction held at 54:00 as a retry ends, and the deadline counted from the last warm request (the hand-over after the retry that ends at 57:45)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const at: number[] = []
+  let t0 = 0
+  on('model.fork', async () => {
+    at.push(w.clock.now() - t0)
+    await w.clock.sleep(15000)
+    return { value: OVERLOADED } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 70)
+  expect(at.slice(0, 4)).toEqual([50 * MIN, 51.25 * MIN, 52.5 * MIN, 53.75 * MIN])
+  expect(skips(w)).toEqual([['keep-warm', 'compact']])
+  expect(stops(w)).toEqual([['deadline', true, 0]])
+  expect(ic(w).length).toBe(1)
+  expect(selfCompacts(w)).toBe(1)
 })
