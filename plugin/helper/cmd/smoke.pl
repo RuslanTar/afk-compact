@@ -5,7 +5,12 @@
 # assets/canary-baseline.json. Then `SMOKE PASS <version>` (exit 0; clears smokeDue
 # in <watch>/version.json) or `SMOKE FAIL <check>` (exit 1). Never starts a session.
 # A check whose input is missing (no claude binary for C8, no type declarations for
-# C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14).
+# C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14; F2-9).
+# C9 reads --types FILE, else the file the running Claude Code wrote when its built-in
+# plugin-authoring skill loaded (bundled_types): no version writes declarations into an
+# installed plugin, so <plugin>/.claude-plugin/types is not read. That folder is swept a
+# few days later, so the missing-declarations message says to load the skill once and
+# run smoke again while that session is open.
 # --skip-cli (tests) skips the checks that run or read the claude binary: validate,
 # test and C8.
 use strict;
@@ -31,6 +36,40 @@ sub _version {
     return undef unless $bin;
     my $r = util::run([$bin, '--version'], timeout_ms => 20000);
     return ($r->{out} =~ /(\d+\.\d+\.\d+\S*)/)[0];
+}
+
+# The type declarations Claude Code <ver> wrote when its plugin-authoring skill loaded:
+# realpath(($CLAUDE_CODE_TMPDIR || /tmp)/claude-<uid>)/bundled-skills/<ver>/<per-process
+# folder>/plugin-authoring/types/claude-code.d.ts whose line 1 is `// Written by Claude
+# Code <ver>.`; the newest by mtime (ties: the last name). Only a plain file (not a
+# symlink) under a claude-<uid> folder this user owns: a folder another local user made
+# first could plant declarations that clear smokeDue. An internal layout, not a public
+# interface: when it changes this finds nothing and C9 fails closed.
+sub bundled_types {
+    my ($ver) = @_;
+    return undef unless defined $ver && $ver =~ /^\d+\.\d+\.\d+/ && $ver !~ m{/};
+    my $tmp = $ENV{CLAUDE_CODE_TMPDIR};
+    $tmp = '/tmp' unless defined $tmp && $tmp ne '';
+    my $base = util::real_path("$tmp/claude-$<") // "$tmp/claude-$<";
+    my @bs = stat $base;
+    return undef unless @bs && -d _ && $bs[4] == $<;
+    my $dir = "$base/bundled-skills/$ver";
+    my $head = "// Written by Claude Code $ver.";
+    my ($best, $best_m);
+    for my $n (util::list_dir($dir)) {
+        my $f = "$dir/$n/plugin-authoring/types/claude-code.d.ts";
+        next if -l $f;
+        next unless -f $f;
+        open(my $fh, '<:raw', $f) or next;
+        my $l1 = <$fh>;
+        close $fh;
+        next unless defined $l1;
+        $l1 =~ s/\r?\n\z//;
+        next unless $l1 eq $head;
+        my $m = (stat $f)[9] // 0;
+        ($best, $best_m) = ($f, $m) if !defined $best_m || $m >= $best_m;
+    }
+    return $best;
 }
 
 # Count non-overlapping occurrences of each string in a big file, 8 MB chunks; a
@@ -125,17 +164,23 @@ sub run {
         }
     }
     if (ref $base eq 'HASH' && ref $base->{c9} eq 'HASH') {
-        my $tf = $opt->{types} // "$root/.claude-plugin/types/claude-code.d.ts";
-        my $traw = -f $tf ? util::read_file($tf) : undef;
-        if (!defined $traw) { $check->('c9', 0, 'no type declarations; load the plugin once to write them') }
+        my $known = $ver =~ /^\d+\.\d+\.\d+/;
+        my $tf = $opt->{types} // bundled_types($known ? $ver : undef);
+        my $traw = defined $tf && -f $tf ? util::read_file($tf) : undef;
+        if (!defined $traw) {
+            $check->('c9', 0, defined $opt->{types} ? "no type declarations at $opt->{types}"
+                : "no type declarations for Claude Code $ver: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE");
+        }
         else {
             my @tl = split /\n/, $traw;
+            my ($tv) = ($tl[0] // '') =~ m{^// Written by Claude Code (\S+?)\.?\r?$};
             my @diff;
             for my $spec (@{ $base->{c9}{specs} || [] }) {
                 my $h = decl_hash(\@tl, $spec->{start_re});
                 push @diff, $spec->{name} unless defined $h && $h eq ($base->{c9}{hashes}{ $spec->{name} } // '');
             }
-            $check->('c9', @diff ? 0 : 1, @diff ? 'changed: ' . join(', ', @diff) : scalar(@{ $base->{c9}{specs} || [] }) . ' declarations');
+            $check->('c9', @diff ? 0 : 1, @diff ? 'changed: ' . join(', ', @diff)
+                : scalar(@{ $base->{c9}{specs} || [] }) . ' declarations' . (defined $tv ? "; Claude Code $tv types" : ''));
         }
     }
     args::out(@lines);

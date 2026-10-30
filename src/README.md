@@ -97,7 +97,7 @@ claude plugin update {{plugin}}
 /reload-plugins
 ```
 
-After a Claude Code update, `/{{plugin}}:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/{{plugin}}-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on.
+After a Claude Code update, `/{{plugin}}:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/{{plugin}}-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on. The type declarations come from Claude Code's built-in plugin-authoring skill, which writes them to a temporary folder when it loads; Claude Code clears that folder after a few days. If smoke says none were found, type `/plugin-authoring` once in any session (it costs one model turn), then run smoke again while that session is open (or pass `--types FILE`).
 
 ## Uninstall
 

@@ -3,7 +3,7 @@
  "needs": [
   "types"
  ],
- "note": "MOD-SPEC §5.6 and AT-M3-14 (F): smoke --skip-cli (validate, test and C8 skipped by flag) with the C9 type declarations of the tested version passes, writes smoke_pass and clears smokeDue; declarations that differ from one baseline hash fail C9 and keep smokeDue; missing declarations fail C9 too (never a pass that compared nothing)",
+ "note": "MOD-SPEC §5.6 and AT-M3-14 (F): smoke --skip-cli (validate, test and C8 skipped by flag) with the C9 type declarations of the tested version passes, writes smoke_pass and clears smokeDue; declarations that differ from one baseline hash fail C9 and keep smokeDue; missing declarations fail C9 too (never a pass that compared nothing): with no --types the message names the running version (unknown when it cannot be read) and says to load /plugin-authoring; a --types FILE that does not exist is named; the bundled-skills lookup is AT-M3-14b-bundled-types",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -29,10 +29,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^ok baseline \\(Claude Code 2\\.1\\.306\\)$",
+     "^ok baseline \\(Claude Code \\d+\\.\\d+\\.\\d+\\)$",
      "^skip validate \\(skipped by flag\\)$",
      "^skip c8 \\(skipped by flag\\)$",
-     "^ok c9 \\(6 declarations\\)$",
+     "^ok c9 \\(6 declarations; Claude Code \\S+ types\\)$",
      "^SMOKE PASS \\S+\\n\\z"
     ],
     "files": [
@@ -128,13 +128,13 @@
     "--sid",
     "$SID",
     "--skip-cli",
-    "--types",
-    "$TMP/none/claude-code.d.ts"
+    "--claude",
+    "$TMP/v/2.1.999"
    ],
    "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c9 \\(no type declarations; load the plugin once to write them\\)$",
+     "^FAIL c9 \\(no type declarations for Claude Code 2\\.1\\.999: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE\\)$",
      "^SMOKE FAIL c9\\n\\z"
     ],
     "files": [
@@ -152,7 +152,98 @@
       "count": 2
      }
     ]
+   },
+   "setup": [
+    {
+     "write": "$TMP/v/2.1.999",
+     "content": "#!/bin/sh\nexit 0\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "--types names a file that does not exist: C9 fails, smokeDue kept",
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TMP/none/claude-code.d.ts"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations at \\S+/none/claude-code\\.d\\.ts\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.306"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 3,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a binary whose version is unknown: C9 fails with the same message",
+   "setup": [
+    {
+     "write": "$TMP/bin/claude",
+     "content": "#!/bin/sh\necho no version here\n",
+     "mode": "0755"
+    }
+   ],
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/bin/claude"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations for Claude Code unknown: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.306"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 4,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
    }
   }
- ]
+ ],
+ "env": {
+  "CLAUDE_CODE_TMPDIR": "$TMP/cct"
+ }
 }

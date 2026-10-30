@@ -30,7 +30,8 @@ EVENTS = ["PreCompact", "PostCompact", "SessionStart", "SessionEnd", "Stop", "Su
 C8_STRINGS = ["Exit code 0 - stdout appended as custom compact instructions", "tengu_curried_trinket",
               "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH", "control", "no_scratchpad",
               "no_scratchpad_capped", "no_scratchpad_keep_asks", "lean", "short", "short_v2", "capped"]
-# IC-1 D1: the native informational rows after an idle compaction (2.1.306 has only the first)
+# IC-1 D1: the native informational rows after an idle compaction (2.1.306 had only the first;
+# 2.1.314 has both)
 IDLE_PREFIXES = {"notice": "Compacted while idle",
                  "return": "Compacted using a summary written while you were away"}
 C8_STRINGS += [IDLE_PREFIXES[k] for k in sorted(IDLE_PREFIXES)]
