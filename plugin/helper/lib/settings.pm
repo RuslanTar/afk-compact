@@ -85,6 +85,64 @@ our @KEYS = (
     # consent key (settings file only); any other value reads as off with a note.
     [restart_on_update           => 'str',  'off',                     'enum'],
 );
+# 0.1.2 onboarding (the settings flow, `settings show`): the section and tier of every key, here
+# because plugin.json cannot hold keys Claude Code does not know. `common` keys are asked by
+# the flow section by section; `advanced` ones (rare tuning: ms timings, quotas, patterns) only
+# by its advanced tier. The settings-sections gate holds this table equal to the manifest's
+# userConfig keys, so a new key cannot miss the flow.
+our @SECTIONS = (
+    [compaction => 'Compaction'],
+    [idle       => 'Idle sessions'],
+    [handoffs   => 'Handoffs'],
+    [logs       => 'Warnings and logs'],
+    [jobs       => 'Background jobs'],
+    [safety     => 'Safety'],
+);
+our %SECTION = (
+    triggers                    => [qw(compaction common)],
+    compact_target_tokens       => [qw(compaction common)],
+    native_window_tokens        => [qw(compaction common)],
+    max_auto_continues_per_hour => [qw(compaction common)],
+    handoff_turn                => [qw(compaction common)],
+    precompact_turn             => [qw(compaction common)],
+    compact_soft_max_tokens     => [qw(compaction advanced)],
+    boundary_delay_ms           => [qw(compaction advanced)],
+    cooldown_ms                 => [qw(compaction advanced)],
+    cache_ttl_s                 => [qw(compaction advanced)],
+    handoff_turn_max_tokens     => [qw(compaction advanced)],
+    driver_skills               => [qw(compaction advanced)],
+    idle_compact                => [qw(idle common)],
+    idle_handoff_turn           => [qw(idle common)],
+    idle_digest                 => [qw(idle common)],
+    idle_handoff_min_tokens     => [qw(idle common)],
+    handoff_root                => [qw(handoffs common)],
+    log_dir                     => [qw(handoffs common)],
+    disposable_root             => [qw(handoffs common)],
+    resume_proceed              => [qw(handoffs common)],
+    handoff_reuse_window_min    => [qw(handoffs common)],
+    disposable_keep_days        => [qw(handoffs advanced)],
+    evidence_quota_mb           => [qw(handoffs advanced)],
+    evidence_total_max_mb       => [qw(handoffs advanced)],
+    ticket_pattern              => [qw(handoffs advanced)],
+    warn_ui                     => [qw(logs common)],
+    watcher                     => [qw(logs common)],
+    stall_min                   => [qw(logs common)],
+    measured_block              => [qw(logs common)],
+    auto_evidence               => [qw(logs common)],
+    watch_quota_mb              => [qw(logs advanced)],
+    otel_log_path               => [qw(logs advanced)],
+    relaunch_quiet_s            => [qw(jobs common)],
+    relaunch_auto               => [qw(jobs common)],
+    relaunch_allow              => [qw(jobs common)],
+    queue_cmd                   => [qw(jobs common)],
+    repo_roots                  => [qw(safety common)],
+    unattended_prod_reads       => [qw(safety common)],
+    restart_on_update           => [qw(safety common)],
+    prod_patterns               => [qw(safety common)],
+    secret_extra_rules          => [qw(safety common)],
+    protected_branches          => [qw(safety common)],
+    deny_class_patterns         => [qw(safety advanced)],
+);
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 # The values an enum key exports as is (W-BETA D); any other value exports as `other`.
