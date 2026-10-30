@@ -29,8 +29,9 @@ on a quiet machine before taking a failure for a regression.
 X-gen: tools/build --check, tools/fixtures-gen --check, tools/helper-replies-gen --check,
 tools/canary-baseline --check (pinned to the Claude Code binary the baseline records, so an
 update does not make it flaky; when that binary is gone, every part but the C8 counts is
-compared with a render from the newest binary) and tools/assemble --check (goldens and
-goldens.gen.ts), each byte for byte (BH-4, BH-5).
+compared with a render from the newest binary) and tools/assemble --check (goldens, the
+goldens index goldens.gen.ts and its data modules goldens.<asset>[.<n>].gen.ts, stray
+_gen/goldens*.gen.ts files), each byte for byte (BH-4, BH-5).
 
 X-launcher (SESSION-RESTART §3.3, §7.1): tools/launcher-flags (the restart launcher's flag
 table against `claude --help` of the newest installed Claude Code), tools/respawn-keepset (B9:
@@ -45,16 +46,19 @@ credentials; both images must be present locally, the alpine one from docker.sh
 X-tools: plant known faults in temp copies of the work tree (tmp/selftest/) and confirm that
 the tool reports every one, while the unplanted copy passes the same command: CRLF line ends
 in GEN files (tools/build, helper-replies-gen, canary-baseline, assemble), stray files where
-only GEN tools write, other candidate names inside longer words, npm manifests or
-node_modules under plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md
-description over the BT-09 rule, the text gates of the 2026-10-21 rulings (AT-W-01 wait text,
-AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03 write-first line, AT-J-13
-self-heal table and resume SKILL size), a resume protocol over its hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults,
-the BLD-05 content gates (AT-TX-01/03/05/06/07/08/12/13, AT-PR-06, AT-PK-02, AT-IC-11: a moved
-template bullet, a lint id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`,
-a starred read-back line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a
-bare launcher call and `allowed-tools`, a situational resume trigger, the nudge folder fallback gone),
-the end-of-round gates (AT-CAP-02 a ctx.pm/settings.pm/config.ts default off the manifest,
+only GEN tools write (a stray _gen/goldens*.gen.ts, which tools/build accepts, by assemble), the
+goldens modules under a 64 KiB test cap (overflow modules that the same cap's checks and the
+test kit pass; goldens-split), a golden larger than the module cap, other candidate names inside
+longer words, npm manifests or node_modules under plugin/ (BT-06), a hand edit of the canary
+baseline (X-gen), a SKILL.md description over the BT-09 rule, the text gates of the 2026-10-21
+rulings (AT-W-01 wait text, AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03
+write-first line, AT-J-13 self-heal table and resume SKILL size), a resume protocol over its
+hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults, the BLD-05 content gates
+(AT-TX-01/03/05/06/07/08/12/13, AT-PR-06, AT-PK-02, AT-IC-11: a moved template bullet, a lint
+id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`, a starred read-back
+line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a bare launcher call
+and `allowed-tools`, a situational resume trigger, the nudge folder fallback gone), the
+end-of-round gates (AT-CAP-02 a ctx.pm/settings.pm/config.ts default off the manifest,
 AT-WB-08 a bad export class, AT-WB-11 a network module on the report path, AT-WB-01 an unlisted
 `ev`, AT-WB-15 a second helper call, a log read and a REVEAL line to run, AT-ST-06 a file-time test,
 AT-P5-06 a code-line `·` without `use utf8`), the gates of the 2026-10-23 rulings (AP-11
@@ -388,6 +392,57 @@ def probes(name):
 
     def crlf_file(*rel):
         return lambda d: to_crlf(os.path.join(d, *rel))
+
+    def run_seq(*argvs):
+        """A probe command that runs each argv in the copy: exit 1 if any exits 1, else the
+        highest exit; the outputs joined."""
+        def go(d):
+            codes, out = [], ""
+            for argv in argvs:
+                r = subprocess.run([os.path.join(d, argv[0])] + argv[1:], cwd=d, capture_output=True, text=True)
+                codes.append(r.returncode)
+                out += r.stdout + r.stderr
+            return (1 if 1 in codes else max(codes)), out
+        go.__name__ = " ; ".join(" ".join(a) for a in argvs)
+        return go
+
+    def stray_goldens(d):
+        write_text(os.path.join(d, "plugin", "tests", "unit", "_gen", "goldens.stray.gen.ts"), "stray\n")
+
+    # goldens-split (0.1.2): the goldens modules under a small test cap, so the big assets fill
+    # overflow modules (.2, .3, ...); the same cap's --check passes on them and tools/build accepts
+    # them, and a CRLF overflow module is caught.
+    CHUNK_TEST = "65536"
+
+    def goldens_chunks_prep(d):
+        r = subprocess.run([os.path.join(d, "tools", "assemble"), "--goldens", "--chunk-bytes", CHUNK_TEST],
+                           cwd=d, capture_output=True, text=True)
+        if r.returncode != 0:
+            raise Fail("X-tools goldens-chunks: tools/assemble --goldens --chunk-bytes {} exit {}:\n{}".format(
+                CHUNK_TEST, r.returncode, (r.stdout + r.stderr)[-1500:]))
+
+    def goldens_modules(d):
+        g = os.path.join(d, "plugin", "tests", "unit", "_gen")
+        return 0, "".join("module {} {}\n".format(f, os.path.getsize(os.path.join(g, f)))
+                          for f in sorted(os.listdir(g)) if f.startswith("goldens"))
+
+    def goldens_chunks(d):
+        """assemble --check and build --check under the test cap; when both pass, the test kit
+        too, so BT-04 reads every overflow module (about 50 s; skipped on a copy those checks
+        already fail, as the kit adds nothing there)."""
+        code, out = run_seq(["tools/assemble", "--check", "--chunk-bytes", CHUNK_TEST], ["tools/build", "--check"])(d)
+        if code == 0:
+            r = subprocess.run(["claude", "plugin", "test", os.path.join(d, "plugin")], cwd=d,
+                               capture_output=True, text=True)
+            code, out = r.returncode, out + r.stdout + r.stderr + "KIT EXIT {}\n".format(r.returncode)
+        return code, out + goldens_modules(d)[1]
+
+    # goldens-split (0.1.2): a golden larger than the module cap is a hard FAIL (oversize()), at
+    # the real GOLDEN_CHUNK_MAX: an asset grown past 512 KiB gives one golden that fits no module.
+    # (A low --chunk-bytes such as 1024 cannot be the probe's command: no clean copy passes it.)
+    def golden_oversize(d):
+        append(d, "src/assets/subagent-instructions.txt",
+               "\n" + "\n".join("Oversize probe line {} {}".format(i, "x" * 120) for i in range(4500)) + "\n")
 
     def canary_edit(d):
         p = os.path.join(d, "plugin", "assets", "canary-baseline.json")
@@ -920,9 +975,22 @@ def probes(name):
          crlf_file("plugin", "tests", "unit", "_gen", "helper-replies.gen.ts"), [r"^HELPER REPLIES CHECK: FAIL"], None),
         ("crlf-goldens", "BH-5", ["tools/assemble", "--check"],
          lambda d: (crlf_file("plugin", "tests", "unit", "_gen", "goldens.gen.ts")(d),
+                    crlf_file("plugin", "tests", "unit", "_gen", "goldens.resume-context.gen.ts")(d),
                     crlf_file("tests", "fixtures", "assembly", "expected", "handoff-instructions__base.txt")(d)),
          [r"^differs plugin/tests/unit/_gen/goldens\.gen\.ts$",
+          r"^differs plugin/tests/unit/_gen/goldens\.resume-context\.gen\.ts$",
           r"^differs tests/fixtures/assembly/expected/handoff-instructions__base\.txt$", r"^GOLDENS CHECK: FAIL"], None),
+        ("stray-goldens", "RN-5 (goldens-split)", run_seq(["tools/build", "--check"], ["tools/assemble", "--check"]),
+         stray_goldens,
+         [r"^BUILD CHECK: PASS$", r"^stale plugin/tests/unit/_gen/goldens\.stray\.gen\.ts$", r"^GOLDENS CHECK: FAIL"], None),
+        ("goldens-chunks", "goldens-split", goldens_chunks,
+         crlf_file("plugin", "tests", "unit", "_gen", "goldens.resume-context.3.gen.ts"),
+         [r"^module goldens\.handoff-instructions\.2\.gen\.ts \d+$", r"^module goldens\.resume-context\.2\.gen\.ts \d+$",
+          r"^BUILD CHECK: PASS$", r"^differs plugin/tests/unit/_gen/goldens\.resume-context\.3\.gen\.ts$",
+          r"^GOLDENS CHECK: FAIL"], goldens_chunks_prep),
+        ("golden-oversize", "goldens-split", ["tools/assemble", "--check"], golden_oversize,
+         [r"^FAIL plugin/tests/unit/_gen/goldens\.subagent-instructions\.gen\.ts is \d+ B > 524288 B "
+          r"\(GOLDEN_CHUNK_MAX\): one golden larger than the cap$", r"^GOLDENS CHECK: FAIL"], None),
         ("skill-desc", "BH-3", gates_only("skill-desc"), long_desc,
          [r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: description \d+ chars > 150$",
           r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: trigger 'handoff' not in the first 50 chars$"], None),

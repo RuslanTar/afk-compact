@@ -16,7 +16,7 @@ import { parseMeasure } from '../../hooks/lib/shadow'
 import { BRAND } from './_gen/brand.gen'
 import * as CORPUS_GEN from './_gen/corpus.gen'
 import { CORPUS } from './_gen/corpus.gen'
-import { GOLDENS, GOLDEN_RUNTIME } from './_gen/goldens.gen'
+import { GOLDENS, GOLDEN_COUNT, GOLDEN_RUNTIME } from './_gen/goldens.gen'
 import { HELPER_REPLIES, REPLY_INPUTS, REPLY_NONCE, REPLY_SID } from './_gen/helper-replies.gen'
 import type { RecordedReply } from './_gen/helper-replies.gen'
 import { World } from './harness.test'
@@ -30,6 +30,13 @@ describe('BT-04 TS assembler vs the goldens', () => {
   // Runtime values that carry the build name (queue_add, handoff_finish) are rendered with NAME.
   const runtime = Object.fromEntries(Object.entries(GOLDEN_RUNTIME)
     .map(([k, v]) => [k, typeof v === 'string' ? v.split(BRAND.name).join(NAME) : v]))
+  // goldens.gen.ts gathers the goldens from one data module per asset (and overflow modules past
+  // the size cap): a module left out of the index or listed twice changes the count or repeats a name.
+  test('the index holds every golden once', () => {
+    expect(cases.length).toBe(GOLDEN_COUNT)
+    const names = cases.map(g => g.asset + '__' + (g.tags.join('+') || 'base'))
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([])
+  })
   test('every golden, byte for byte', () => {
     expect(cases.length).toBeGreaterThan(20)
     for (const g of cases) {
