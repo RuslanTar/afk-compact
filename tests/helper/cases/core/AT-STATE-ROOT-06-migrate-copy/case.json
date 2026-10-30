@@ -81,6 +81,17 @@
       "grow": true,
       "want": "dies",
       "error": "changed while it was copied"
+     },
+     {
+      "id": "src not the size and mtime the caller read (expect): fails, nothing left",
+      "src": "$TMP/src/small.txt",
+      "dst": "$TMP/dst/expect.txt",
+      "expect": [
+       999,
+       0
+      ],
+      "want": "dies",
+      "error": "changed while it was copied"
      }
     ]
    }

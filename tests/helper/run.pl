@@ -3187,7 +3187,7 @@ sub builtin {
             };
             my $t = defined $c->{mtime} ? util::parse_iso($c->{mtime}) : undef;
             my $before = util::read_file($c->{dst});
-            my $n = eval { util::copy_new($c->{src}, $c->{dst}, mode => 0600, (defined $t ? (times => [$t, $t]) : ())) };
+            my $n = eval { util::copy_new($c->{src}, $c->{dst}, mode => 0600, (defined $t ? (times => [$t, $t]) : ()), (ref $c->{expect} eq 'ARRAY' ? (expect => $c->{expect}) : ())) };
             my $got = !defined $n ? 'dies' : $n < 0 ? 'exists' : 'copied';
             push @e, "$id: error '" . ($@ =~ s{\s+\z}{}r) . "', want /$c->{error}/" if $got eq 'dies' && defined $c->{error} && $@ !~ /$c->{error}/;
             push @e, "$id: $got, want $c->{want}" . ($got eq 'dies' ? " ($@)" : '') if $got ne $c->{want};
