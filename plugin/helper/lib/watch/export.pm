@@ -1172,6 +1172,11 @@ sub cli {
     my $ctx = watch::ctx::init({ %{ $seed || {} }, sid => 'unknown' });
     my $since = _since($o{since}, $ctx->{now});
     return _usage() if defined $since && $since eq 'bad';
+    # WATCH §6.1: a real run writes the salt, the install id and report_withheld rows under the
+    # watch dir; while it or the handoff root is refused, nothing runs (a dry run writes nothing)
+    if (!$o{dry}) {
+        if (my $refused = watch::ctx::refused($ctx)) { print "REFUSED: $refused\n"; return 3 }
+    }
     my ($dir, $why) = out_dir($ctx, $o{out});
     if (!defined $dir) { print "REFUSED: output folder not writable\n"; return 73 }
     my ($salt, $iid) = keys_for($ctx->{watch}, $o{dry});

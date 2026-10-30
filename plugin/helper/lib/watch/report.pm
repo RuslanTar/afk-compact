@@ -441,16 +441,22 @@ sub _opts {
 }
 
 # report_cli(\@argv) -> exit code. Prints `WATCH-REPORT <path>`, or the report itself with
-# --input and no --out.
+# --input and no --out. `REFUSED: <key>: <reason>`, exit 3, when it would write under a refused
+# watch dir or handoff root (WATCH §6.1).
 sub report_cli {
     my ($argv, $seed) = @_;
     my $o = _opts($argv, out => 1, export => 1) or return 64;
     my $ctx = watch::ctx::init({ %{ $seed || {} }, sid => 'unknown' });
     my ($since, $label) = _since_arg($o->{since}, $ctx->{now});
     return 64 if defined $since && $since eq 'bad';
+    return 64 if $o->{export} && defined $o->{input};
+    # WATCH §6.1: a report that writes under the watch dir (--export's salt, the default
+    # reports/ folder) writes nothing there while the watch dir or handoff root is refused
+    if ($o->{export} || (!defined $o->{out} && !defined $o->{input})) {
+        if (my $why = watch::ctx::refused($ctx)) { print "REFUSED: $why\n"; return 3 }
+    }
     my $X;
     if ($o->{export}) {
-        return 64 if defined $o->{input};
         my ($salt) = watch::export::keys_for($ctx->{watch}, 0);
         $X = { hash => watch::export::hasher($salt, $ctx->{sha256}), dropped => {},
                headings => watch::export::heading_ids($ctx->{spec}) };
