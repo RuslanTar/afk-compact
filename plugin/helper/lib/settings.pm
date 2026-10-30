@@ -902,12 +902,14 @@ sub effective_rows {
     return \@rows;
 }
 
-# row_text(row) -> `<value>[, clamped from N] (<source>; default <default>)`, or `(default)` at
-# the default.
+# row_text(row) -> `<value>[, clamped from N] (<source>; default <default>)`, or `(default)` for
+# a default the plugin fills in. A value set equal to its default still names where it is set
+# (`triggers true (your settings.json; default true)`, spec Behaviour 3), as `settings reset`
+# lists it; only the status block's grouping and count go by the value alone (at_default).
 sub row_text {
     my ($w) = @_;
     my $v = $w->{value} . (defined $w->{clamped_from} ? ", clamped from $w->{clamped_from}" : '');
-    return $w->{at_default} ? "$v (default)" : "$v ($w->{label}; default $w->{default})";
+    return $w->{at_default} && $w->{source} eq 'default' ? "$v (default)" : "$v ($w->{label}; default $w->{default})";
 }
 
 # value_warnings(rows, store word) -> the warning lines of Behaviour 2 (a saved "" per key) and
