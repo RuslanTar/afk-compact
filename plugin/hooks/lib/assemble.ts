@@ -23,12 +23,14 @@ import type { AssetName } from './assets.gen'
  * place of the away digest; in the same exclusive idle group).
  * 2026-10-30: the resume block's `handoff-ack` (owner 2026-10-30 07:49, "short message after
  * compaction": a published handoff whose report was not sent gets one ack line; only with `handoff`).
+ * 0.1.2: the resume block's `question` (question carry, investigation wf_c3788b4f-00e fix 1: the
+ * question a main turn ended on that no person's turn has followed yet; beside any other tag).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off' | 'handoff-ack'
+  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off' | 'handoff-ack' | 'question'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
@@ -43,6 +45,8 @@ export type Runtime = Partial<Record<
    * digest's Basis line (lane.ts), which `[idle]`'s step-5 digest carries too (owner 2026-10-27 22:32).
    */
   | 'lane' | 'lane_why' | 'lane_basis'
+  /** Question carry (`[question]`): the open question, on one line within QUESTION_MAX (question.ts). */
+  | 'question'
   /** The shadow trial's fork prompts (TRIAL-DUAL-HANDOFF §4.2): texts read at run time from the user's local files. */
   | 'old_skill' | 'old_template' | 'trial_facts' | 'trial_tail',
   string

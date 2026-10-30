@@ -106,6 +106,7 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   s.turnId = turnId
   s.nudgedThisTurn = false
   s.askedThisTurn = false
+  s.askTimedOut = undefined
   s.resumeAfter = false
   s.lastCycle = null
   // A published handoff names only a compaction before the next main turn (§3.1).
@@ -115,6 +116,8 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   // IC-1 D6: only a person's prompt clears halt; a task notification, a scheduled trigger, a
   // peer or another plugin does not (our own submits never did). It also ends the idle episode.
   if (human) {
+    // Question carry: a person's prompt is their answer, or replaces the question.
+    s.openQuestion = undefined
     await clearHalt(d, sid)
     s.idleEpisode = undefined
     s.publishedSinceHuman = false
@@ -145,6 +148,9 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   s.resumeAfter = false
   s.lastCycle = null
   s.idleAgain = undefined
+  // Question carry: the next conversation never gets this one's open question.
+  s.openQuestion = undefined
+  s.askTimedOut = undefined
   const h = s.handoffTurn
   s.handoffTurn = undefined
   if (h && h.phase !== 'running') shadowPluginSide(d, h, 'cancelled')

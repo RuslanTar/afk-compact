@@ -104,7 +104,10 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            # (LANE_BASIS_MAX, 113 chars: a branch with no upstream; review of fix rounds 1 and 2, M7),
            # which [idle]'s step-5 digest carries too (owner 2026-10-27 22:32).
            "lane": "hard-blocked", "lane_why": "no Status code could read, but every listed step is marked done",
-           "lane_basis": "999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed"}
+           "lane_basis": "999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed",
+           # 0.1.2 question carry [question]: the open question at its longest (question.ts
+           # QUESTION_MAX, 240 chars, one line).
+           "question": "q" * 239 + "?"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
@@ -123,9 +126,12 @@ FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
 # 2026-10-30: resume-context gains [handoff-ack] (owner 2026-10-30 07:49, "short message after
 # compaction": a published handoff whose report was not sent gets one ack line; only beside
 # [handoff]), last in the list so older golden names stay.
+# 0.1.2: resume-context gains [question] (question carry, investigation wf_c3788b4f-00e fix 1: the
+# question a main turn ended on that no person's turn has followed yet; beside any other tag), last
+# in the list so older golden names stay.
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
         "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
-                "idle-done", "idle-off", "idle-done-off", "handoff-ack"],
+                "idle-done", "idle-off", "idle-done-off", "handoff-ack", "question"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
@@ -346,7 +352,9 @@ def combos(asset):
 # Away digest phase 1: [idle-done] likewise only beside a prod line and [idle-again] (4 goldens).
 # Owner rule (c): [idle-off] and [idle-done-off] likewise (4 goldens each).
 # Owner 2026-10-30 07:49: [handoff-ack] only beside [handoff] and a prod line (2 goldens).
+# 0.1.2 [question]: only beside [prod-forbid] (1 golden: goldens.gen.ts had 13 KB left under the 1 MiB).
 GOLDEN_SPARSE = {"res": {"handoff-ack": {"handoff", "prod-forbid", "prod-allow"},
+                         "question": {"prod-forbid"},
                          "driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
                          "idle-done": {"prod-forbid", "prod-allow", "idle-again"},
                          "idle-off": {"prod-forbid", "prod-allow", "idle-again"},
@@ -682,7 +690,10 @@ IDLE_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in
 # checked again with it. Owner 2026-10-30 07:49: a [handoff] row carries [handoff-ack] (its worst case).
 PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff", "handoff-ack"],
                  ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS
-for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b)):
+PROTOCOL_ROWS += tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
+# 0.1.2 question carry: [question] can join any block, so every row is checked again with it.
+PROTOCOL_ROWS += tuple(b + ["question"] for b in PROTOCOL_ROWS)
+for base in PROTOCOL_ROWS:
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
@@ -692,7 +703,9 @@ TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["i
               ["idle-done", "idle-again", "nonok", "handoff-partial"], ["idle-off", "idle-again", "nonok", "handoff-partial"],
               ["idle-done-off", "idle-again", "nonok", "handoff-partial"])
 TOTAL_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"))
-for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b)):
+TOTAL_ROWS += tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
+TOTAL_ROWS += tuple(b + ["question"] for b in TOTAL_ROWS)
+for base in TOTAL_ROWS:
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")

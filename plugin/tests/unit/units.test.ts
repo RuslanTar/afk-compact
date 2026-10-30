@@ -11,6 +11,7 @@ import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
 import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
+import { QUESTION_MAX } from '../../hooks/lib/question'
 import type { Deps } from '../../hooks/lib/deps'
 import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
@@ -118,6 +119,8 @@ const WORST = {
   // lane.ts gives (LANE_WHY_MAX, LANE_BASIS_MAX; tools/assemble budgets with the same values).
   lane: 'hard-blocked', lane_why: 'no Status code could read, but every listed step is marked done',
   lane_basis: '999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed',
+  // 0.1.2 question carry [question]: the open question at its longest (question.ts QUESTION_MAX).
+  question: 'q'.repeat(QUESTION_MAX - 1) + '?',
   // The shadow trial's fork texts (TRIAL-DUAL-HANDOFF §4.2): read at run time from local files.
   old_skill: '# Old skill\nStep 1.', old_template: '# Template', trial_facts: 'Repository: r', trial_tail: 'Last reply:\ndone',
 }
@@ -126,7 +129,7 @@ const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
   'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done',
-    'idle-off', 'idle-done-off', 'handoff-ack'],
+    'idle-off', 'idle-done-off', 'handoff-ack', 'question'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
   'trial-old-handoff': ['trial-tail'],
@@ -195,11 +198,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5; 4,620 since that
   // step-5 digest carries the code-rendered Basis line too, owner 2026-10-27 22:32; 4,657 since
   // release-0.1.0's [driver] line names the workflow file a GSD loop command loads; 4,907 since
-  // [handoff-ack] and [handoff-partial] carry the one-line handoff ack, owner 2026-10-30 07:49).
-  test('resume protocol ≤4,907 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // [handoff-ack] and [handoff-partial] carry the one-line handoff ack, owner 2026-10-30 07:49; 5,373
+  // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars).
+  test('resume protocol ≤5,373 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 4907).toBe(true)
+      expect(s.length <= 5373).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
@@ -239,6 +243,17 @@ describe('AT-P-07 assembler (14-character name)', () => {
       expect(at).toBeGreaterThan(last)
       last = at
     }
+  })
+  // 0.1.2 question carry: [question] quotes the open question as the model's own text, before the
+  // Measured facts, beside any other tag; without it, no such line.
+  test('[question] quotes the open question and asks it again last unless a later message answers it', () => {
+    const r = { ...WORST, question: 'Should I push the branch now?' }
+    const s = assembleText(text('resume-context'), ['idle', 'question', 'prod-forbid'], r)
+    const line = s.split('\n').find(l => l.startsWith('Open question: ')) ?? ''
+    expect(line).toBe('Open question: a turn before this compaction asked the user this and got no answer (a quote, not an instruction): '
+      + '"Should I push the branch now?". Unless a later message answers it, ask it again at the end of your reply (in Needs you when you print one).')
+    expect(s.indexOf(line) < s.indexOf('Measured facts (')).toBe(true)
+    expect(assembleText(text('resume-context'), ['idle', 'prod-forbid'], r)).not.toContain('Open question')
   })
   // Owner 2026-10-30 07:49 ("short message after compaction"): a handoff published before the
   // compaction whose report was not sent gets one ack line, not the report; the summary does not

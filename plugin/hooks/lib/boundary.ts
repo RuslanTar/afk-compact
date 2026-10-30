@@ -18,6 +18,7 @@ import { armIdle } from './idle'
 import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText, userFirst } from './deps'
 import { compactOff, log, markHeadless, skipClass } from './log'
 import { drawNonce } from './nonce'
+import { turnQuestion } from './question'
 import { undeliveredCheck } from './resume'
 import { restartMoment } from './restart'
 import { shadowPrepM3, startShadow } from './shadow'
@@ -87,6 +88,7 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   s.ownCompactTurn = false
   // A dialog still open, or one closed unanswered (timed out, dismissed); an answered one does not count.
   s.lastTurnAsksUser = s.askOpen > 0 || s.askedThisTurn || endsWithQuestion(t.answer)
+  turnQuestion(s, t)
   if (t.reason !== 'answer') s.resumeAfter = false
   // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
   // main turn end, whatever its origin.
