@@ -220,8 +220,9 @@ sub watcher_on {
 # nothing and status says why"). Each path gets core's unsafe-root test (roots::check_path,
 # MOD-SPEC §1.2 D-12): inside .planning/ or a not-ignored git work tree is refused, a
 # git-ignored one is ok. Each path is first put in core's form (util::clean_path, as
-# paths::for does), so it hits the roots cache core filled. Order: the watch dir (the configured log_dir, else <root>/.watch,
-# then the folder this call writes to when core passed another), then handoff_root.
+# paths::for does), so it hits the roots cache core filled. Order: the watch dir (the
+# configured log_dir, else <root>/.watch, then the folder this call writes to when core
+# passed another), then handoff_root.
 # disposable_root is not checked: the watcher writes nothing under it. `root-unchecked` (git
 # check-ignore ran out of the hook's time) refuses too, for this call only: ctx and the
 # roots cache live for one helper call and nothing of the refusal is kept, so the next hook
@@ -330,9 +331,11 @@ sub log_row {
     return 0;
 }
 
-# One content-free error row: stage and class only.
+# One content-free error row: stage and class only. None under a refused watch dir or
+# handoff root (WATCH §6.1), also when init or watcher_on died before the hook's own check.
 sub error_row {
     my ($ctx, $stage, $err) = @_;
+    return 0 if eval { refused($ctx) };
     my $class = defined $err ? "$err" : 'unknown';
     $class =~ s/\s+\z//;
     $class = 'internal' unless $class =~ /\A[a-z][a-z0-9-]{0,39}\z/;
