@@ -408,15 +408,17 @@ sub _decimal {
     my $t = "$v";
     $t =~ s/\A\s+//;
     $t =~ s/\s+\z//;
+    my $n;
     if ($t =~ /\A0([xXoObB])([0-9a-fA-F]+)\z/) {
         my ($p, $d) = (lc $1, $2);
         return undef if ($p eq 'o' && $d =~ /[^0-7]/) || ($p eq 'b' && $d =~ /[^01]/);
         no warnings qw(overflow portable);
-        return $p eq 'x' ? hex($d) : $p eq 'o' ? oct($d) : oct("0b$d");
+        $n = $p eq 'x' ? hex($d) : $p eq 'o' ? oct($d) : oct("0b$d");
+    } else {
+        return undef unless $t =~ /\A[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?\z/;
+        $n = 0 + $t;
     }
-    return undef unless $t =~ /\A[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?\z/;
-    my $n = 0 + $t;
-    # Not finite (an exponent past the double range): the plugin keeps its default too.
+    # Not finite (an exponent, or 0x digits, past the double range): the plugin keeps its default too.
     return undef if $n - $n != 0;
     return $n;
 }

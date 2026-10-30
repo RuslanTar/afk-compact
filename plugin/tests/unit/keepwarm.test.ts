@@ -1258,4 +1258,90 @@ test('AT-KW-44 (REV3-2): the 49-min fire\'s checks find a window at 92% while th
   expect(skips(w).filter(s => s[0] === 'keep-warm')).toEqual([])
   expect(w.rowsOf('keep_warm_start').length).toBe(1)
   expect(stops(w).length).toBe(1)
+  // One submit, the 49-min fire's own handoff turn: the fire held nothing (keep-warm's read found the window near the limit), so
+  // the idle path ran as it does with keep-warm off, its own reads at 12%. That turn's start would end the gap (`turn`); in this
+  // world the submitted prompt starts no turn, so the gap ends at its stop row as above. Without the asset: no-asset, no submit.
+  if (IDLE) expect([skips(w), w.submits.length]).toEqual([[], 1])
+  else expect([skips(w), w.submits.length]).toEqual([[['no-asset', 'turn']], 0])
+})
+
+// ---- Review fixes (fix round 5)
+
+test('AT-KW-45: a prompt a hook drops while the ping is out, then a second that enters and stays pending: no timer runs while it waits (no retry, no stop); once a hook drops it the gap goes on (missed by then)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const at: number[] = []
+  let t0 = 0
+  let open: () => void = () => undefined
+  let second: Promise<unknown> | undefined
+  on('model.fork', async () => {
+    at.push(Math.round((w.clock.now() - t0) / MIN))
+    if (at.length === 1) {
+      w.dropIf = () => 'a peer dropped it'
+      // The first is dropped at once (the tick goes on with the gap), the second waits in a hook beneath.
+      await $.prompt.submit({ text: 'one', origin: { kind: 'composer' } } as never)
+      w.atSubmit = () => new Promise<void>(r => { open = r })
+      second = $.prompt.submit({ text: 'two', origin: { kind: 'composer' } } as never)
+    }
+    await w.clock.sleep(30000)
+    return { value: { isAnswered: true, text: 'OK', usage: WARM } } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 70)
+  expect(second).toBeDefined()
+  expect(at).toEqual([50])
+  // The ping came back while the second prompt waited: not counted, and the tick arms nothing after it.
+  expect([pings(w), stops(w)]).toEqual([[['warm', 0]], []])
+  open()
+  await second
+  await w.settle()
+  expect(stops(w)).toEqual([['missed', false, 0]])
+  expect(at).toEqual([50])
+})
+
+// The held check's deadline is the 58-min lapse bound of the last warm request: the last retry (57:30) comes back a few seconds
+// either side of it. Before it the check goes back to the idle path and still gets its turn (the 55.5-min turn bound does not
+// apply to a check); past it the gap stops missed with no hand-over.
+for (const c of [
+  { name: 'just before it (57:55): stop deadline with the hand-over, the check runs', ms: 25000, stop: ['deadline', true, 0], back: true },
+  { name: 'just past it (58:05): stop missed, no hand-over, nothing runs', ms: 35000, stop: ['missed', false, 0], back: false },
+]) {
+  test(`AT-KW-46: the held check's last retry comes back ${c.name}`, { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+    const w = world(on, {})
+    const at: number[] = []
+    let t0 = 0
+    on('model.fork', async () => {
+      const m = (w.clock.now() - t0) / MIN
+      at.push(m)
+      await w.clock.sleep(m >= 57 ? c.ms : 15000)
+      return { value: OVERLOADED } as never
+    })
+    t0 = await checkGap($, w)
+    await until(w, t0, 70)
+    expect(at).toEqual([50, 51.25, 52.5, 53.75, 55, 56.25, 57.5])
+    expect(stops(w)).toEqual([c.stop])
+    expect(selfCompacts(w)).toBe(0)
+    if (!c.back) {
+      expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 0])
+      // The record it held is cleared (a tombstone): nothing fires it later.
+      const v = w.storeGet(KEY) as Record<string, unknown> | undefined
+      expect(v === undefined || v.cancelled === true).toBe(true)
+    } else if (IDLE) expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 1])
+    else expect(skips(w)).toEqual([['keep-warm', 'check'], ['no-asset', 'check']])
+  })
+}
+
+test('AT-KW-46: a lapsed ping hands the check back at 56:30, past the turn\'s 55.5-min bound and before the 58-min one: the check still gets its turn', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, {})
+  let t0 = 0
+  on('model.fork', async () => {
+    const m = (w.clock.now() - t0) / MIN
+    await w.clock.sleep(15000)
+    return { value: m >= 56 ? { isAnswered: true, text: 'OK', usage: COLD } : OVERLOADED } as never
+  })
+  t0 = await checkGap($, w)
+  await until(w, t0, 70)
+  expect(stops(w)).toEqual([['lapsed', true, 0]])
+  if (IDLE) expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 1])
+  else expect(skips(w)).toEqual([['keep-warm', 'check'], ['no-asset', 'check']])
 })
