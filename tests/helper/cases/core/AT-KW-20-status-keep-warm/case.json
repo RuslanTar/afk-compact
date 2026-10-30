@@ -558,6 +558,74 @@
    "options": {
     "keep_warm_hours": " 2. "
    }
+  },
+  {
+   "name": "keep_warm_hours \"0x10\": 16, as the plugin's Number() reads a hex integer (not the default)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 16 h of an idle gap"
+    ]
+   },
+   "options": {
+    "keep_warm_hours": "0x10"
+   }
+  },
+  {
+   "name": "keep_warm_hours \"-0x2\": no number for Number() (a sign before 0x): the default 6",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap"
+    ]
+   },
+   "options": {
+    "keep_warm_hours": "-0x2"
+   }
   }
  ]
 }

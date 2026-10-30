@@ -147,7 +147,7 @@ sub _coerce {
         return $v ? 1 : 0 if ref $v;
         return ($v =~ /^(1|true|yes|on)$/i) ? 1 : 0;
     }
-    # A number as the plugin's Number() reads a decimal (`.5`, `5.`, a sign, an exponent, blanks around).
+    # A number as the plugin's Number() reads one (`.5`, `5.`, a sign, an exponent, blanks around, `0x10`).
     return _decimal($v) if $t eq 'num';
     if ($t eq 'dir' || $t eq 'file') { return util::expand_tilde(util::to_bytes("$v")) }
     return util::text("$v");    # a text value is characters (§2.6); paths above stay bytes (SR 1.1)
@@ -383,7 +383,8 @@ sub resolve {
 # min/max (S-SETTINGS E4-E6: handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
 # watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback. A number reads as the
 # plugin's `Number()` reads a decimal (config.ts `num`): a sign, `.5`, `5.`, an exponent and
-# surrounding blanks are accepted (keep_warm_hours `.5` is 0.5 on both sides).
+# surrounding blanks are accepted, and an unsigned 0x, 0o or 0b integer (keep_warm_hours `.5` is 0.5
+# and `0x10` is 16 on both sides).
 sub num_clamped {
     my ($key, $r) = @_;
     $r //= _current();
@@ -399,13 +400,20 @@ sub num_clamped {
     return ($used, $used == $v ? 0 : 1);
 }
 
-# A plain decimal (num_clamped): the number, else undef.
+# A number as the plugin's Number() reads a string (config.ts `num`): a decimal, or an unsigned
+# 0x, 0o or 0b integer (`0x10` is 16 on both sides); else undef.
 sub _decimal {
     my ($v) = @_;
     return undef unless defined $v && !ref $v;
     my $t = "$v";
     $t =~ s/\A\s+//;
     $t =~ s/\s+\z//;
+    if ($t =~ /\A0([xXoObB])([0-9a-fA-F]+)\z/) {
+        my ($p, $d) = (lc $1, $2);
+        return undef if ($p eq 'o' && $d =~ /[^0-7]/) || ($p eq 'b' && $d =~ /[^01]/);
+        no warnings qw(overflow portable);
+        return $p eq 'x' ? hex($d) : $p eq 'o' ? oct($d) : oct("0b$d");
+    }
     return undef unless $t =~ /\A[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?\z/;
     my $n = 0 + $t;
     # Not finite (an exponent past the double range): the plugin keeps its default too.
