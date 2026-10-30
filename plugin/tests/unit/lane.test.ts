@@ -11,7 +11,7 @@ import type { Tag } from '../../hooks/lib/assemble'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import type { LaneFacts } from '../../hooks/lib/lane'
-import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, asLaneFacts, digestLine, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
+import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, OFF_LINE_END_RE, asLaneFacts, digestLine, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
@@ -1832,7 +1832,8 @@ test('off: the [idle-done-off] and [idle-off] lines ask for the one-line form, n
   const RTB = { ...RT, lane: 'hard-blocked', lane_basis: 'B0' }
   const plain = assemble('p', 'resume-context', ['prod-forbid'], RTB).split('\n')
   const added = (tag: Tag) => assemble('p', 'resume-context', ['prod-forbid', tag], RTB).split('\n').filter(l => !plain.includes(l)).join('\n')
-  if (!hasTag('resume-context', 'idle-done-off') || !hasTag('resume-context', 'idle-off')) return
+  expect(hasTag('resume-context', 'idle-done-off')).toBe(true)
+  expect(hasTag('resume-context', 'idle-off')).toBe(true)
   const doneOff = added('idle-done-off')
   noDigest(doneOff)
   expect(doneOff).toContain('Else start nothing; say in one line that the lane is hard-blocked (Basis: B0, by code, as is), then last, ' + ENDING + '.')
@@ -1874,7 +1875,7 @@ kitTest('off (the shipped default): a finished lane, nothing running: no digest 
   await idleCompaction($, w)
   await w.advance(60 * 1000)
   expect(w.submits).toEqual([])
-  if (!hasTag('resume-context', 'idle-done-off')) return
+  expect(hasTag('resume-context', 'idle-done-off')).toBe(true)
   expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['finished', 'skipped:off']])
   await w.userTurn($, 'back')
   const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
@@ -1893,7 +1894,7 @@ test('off: hard-blocked with an agent running: no digest turn; the result turns 
   await idleCompaction($, w)
   await w.advance(5000)
   expect(w.submits).toEqual([])
-  if (!hasTag('resume-context', 'idle-done-off')) return
+  expect(hasTag('resume-context', 'idle-done-off')).toBe(true)
   expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off']])
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
   const first = await resultTurn($, w, 'Agent a1 finished.')
@@ -1915,7 +1916,7 @@ test('off: hard-blocked with an agent running: no digest turn; the result turns 
 test('off: a working lane\'s result turn gets [idle-off] (its step 5 asks for the one line); rule (b) at its end submits no digest turn (skipped:off); the next turn gets the one-line note', OFF, async ($, on) => {
   const w = new World().install(on)
   await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
-  if (!hasTag('resume-context', 'idle-off')) return
+  expect(hasTag('resume-context', 'idle-off')).toBe(true)
   expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off']])
   const t = await resultTurn($, w, notif('b7'))
   const block = t.block ?? ''
@@ -1933,20 +1934,66 @@ test('off: a working lane\'s result turn gets [idle-off] (its step 5 asks for th
   expect(w.submits).toEqual([])
 })
 
-test('DIGEST_END_RE: Needs you or Nothing needed from you opening a line, and Nothing needed from you closing one (the one-line form)', () => {
-  for (const s of ['Needs you:\n1. Approve the push.', 'x\n**Needs you:**\n1. y', '✅ Nothing needed from you', 'x\n- Nothing needed from you.',
-    'Lane hard-blocked (Basis: 0 of 2 listed steps marked done). ✅ Nothing needed from you', 'Lane finished (Basis: b). Nothing needed from you.\nmore',
-    'Lane finished. Nothing needed from you**'])
+// The one-line answers of `off`: DIGEST_END_RE (every setting, as on base) never takes them; OFF_LINE_END_RE (off only) does.
+const ONE_LINE = ['Lane hard-blocked (Basis: 0 of 2 listed steps marked done). ✅ Nothing needed from you', 'Lane finished (Basis: b). Nothing needed from you.\nmore',
+  'Lane finished. Nothing needed from you**', 'Ran the step; the lane is finished. Nothing needed from you.',
+  'Lane hard-blocked (Basis: 0 of 2 listed steps marked done). Needs you: 1. approve the push (blocks the release).',
+  'Lane hard-blocked. **Needs you:** 1) approve the push']
+const NEITHER = ['The timer ended; nothing new started.', 'If nothing needed from you was said, ask.', 'This needs you to approve the push.',
+  'Lane finished; Nothing needed from you yet, but the push waits.', 'say Nothing needed from you or not', 'Lane: Needs you later; step 21. waits',
+  'Lane hard-blocked; it needs you\n1. approve']
+
+test('DIGEST_END_RE (every setting, the base pattern): Needs you or Nothing needed from you opening a line only', () => {
+  for (const s of ['Needs you:\n1. Approve the push.', 'x\n**Needs you:**\n1. y', '✅ Nothing needed from you', 'x\n- Nothing needed from you.'])
     expect([s, DIGEST_END_RE.test(s)]).toEqual([s, true])
-  for (const s of ['The timer ended; nothing new started.', 'If nothing needed from you was said, ask.', 'This needs you to approve the push.',
-    'Lane finished; Nothing needed from you yet, but the push waits.', 'say Nothing needed from you or not'])
-    expect([s, DIGEST_END_RE.test(s)]).toEqual([s, false])
+  for (const s of [...ONE_LINE, ...NEITHER]) expect([s, DIGEST_END_RE.test(s)]).toEqual([s, false])
+})
+
+test('OFF_LINE_END_RE (idle_digest off only): Nothing needed from you closing a line, or Needs you with its 1. on the same line', () => {
+  for (const s of ONE_LINE) expect([s, OFF_LINE_END_RE.test(s)]).toEqual([s, true])
+  for (const s of NEITHER) expect([s, OFF_LINE_END_RE.test(s)]).toEqual([s, false])
+})
+
+test('rule (b) under submit: an answer whose line ends with Nothing needed from you is no digest; the digest turn still goes out', async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  expect(HAS).toBe(true)
+  await resultTurn($, w, notif('b7'))
+  await w.turnEnd($, 'Ran the step; the lane is finished. Nothing needed from you.')
+  await w.advance(5000)
+  expect(w.submits.length).toBe(1)
+  expect(w.submits[0] ?? '').toContain('print the away digest')
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:running'], ['hard-blocked', 'submitted']])
+})
+
+test('rule (b) under return: an answer whose line ends with Nothing needed from you is no digest; the next background turn gets the full-digest note', { options: { idle_digest: 'return' } }, async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  expect(HAS).toBe(true)
+  await resultTurn($, w, notif('b7'))
+  await w.turnEnd($, 'Ran the step; the lane is finished. Nothing needed from you.')
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  const cron = await resultTurn($, w, 'A scheduled check ran.')
+  expect(cron.ctx).toContain('Else start nothing and print the away digest')
+})
+
+test('off: a hard-blocked one-line answer with its Needs you list on the same line: the lane counts as told; no note on the next turn', OFF, async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  expect(hasTag('resume-context', 'idle-off')).toBe(true)
+  await resultTurn($, w, notif('b7'))
+  await w.turnEnd($, 'Lane hard-blocked (Basis: 0 of 2 listed steps marked done). Needs you: 1. approve the push (blocks the release).')
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off']])
+  expect((await resultTurn($, w, 'A scheduled check ran.')).ctx).toBe('')
 })
 
 test('off: the result turn\'s answer gives the one line with Nothing needed from you at its end: no row, no note on the next turn', OFF, async ($, on) => {
   const w = new World().install(on)
   await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
-  if (!hasTag('resume-context', 'idle-off')) return
+  expect(hasTag('resume-context', 'idle-off')).toBe(true)
   await resultTurn($, w, notif('b7'))
   await w.turnEnd($, 'Lane hard-blocked (Basis: 0 of 2 listed steps marked done). ✅ Nothing needed from you')
   await w.advance(5000)

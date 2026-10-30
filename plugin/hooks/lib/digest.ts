@@ -18,7 +18,7 @@ import { submitPending, submitSettled } from './deps'
 import { contStamps } from './cont'
 import { claimBy } from './helper'
 import type { LaneResult } from './lane'
-import { DIGEST_END_RE, digestLine, laneBasis, laneOf, resultDigestLine, runningUnits, showsDigest } from './lane'
+import { DIGEST_END_RE, OFF_LINE_END_RE, digestLine, laneBasis, laneOf, resultDigestLine, runningUnits, showsDigest } from './lane'
 import { helperMissing, isoLocal, log } from './log'
 import { claimedElsewhere, logLane, logOutcome } from './resume'
 
@@ -128,7 +128,7 @@ async function send(d: Deps, sid: string, text: string, g: { stamps: number[]; n
  * person's return gets it (the `[idle-again]` block, read again then, carries `[idle-done]`);
  * with `off` no turn either, and that block carries `[idle-done-off]` (one line, no digest).
  * No turn is submitted when this turn's answer already ends with the digest (the `[idle]` block's
- * step 5 asks for it when all left waits on the user), or when a turn of this episode was already
+ * step 5 asks for it when all left waits on the user; under `off`, the one line, `OFF_LINE_END_RE`), or when a turn of this episode was already
  * told a finished or blocked lane (one digest per episode): then the next turn not of a person's
  * gets the one-line note on the new state, as after any change (`laneRecheck`), and the person's
  * return the block read again. Something still running: no change (its result opens a turn,
@@ -145,7 +145,7 @@ export async function laneTurnEnd(d: Deps, sid: string, reason: string, answer: 
   const r = await laneNow(d, l)
   if (r === undefined) return
   await logLane(d, sid, l.nonce, l.facts, r.lane, 'recheck', r.running)
-  if (DIGEST_END_RE.test(answer)) {
+  if (DIGEST_END_RE.test(answer) || (d.cfg.idle_digest === 'off' && OFF_LINE_END_RE.test(answer))) {
     l.shown = r.lane.lane
     l.digested = true
     return
