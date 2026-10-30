@@ -1,12 +1,15 @@
 # AT-WB-06 (D-8; W-BETA B.6; BUILD-ROUND-9 WCH-09): after 3 reports every file that was under
 # <watch> before is byte-identical (mode too); the only new files are the zips, the salt
 # (32 bytes, 0600) and the install id (0600). Default out folder: ~/Downloads when it is a
-# writable folder outside a git work tree; inside a work tree, or missing, the fallback is
-# <watch>/reports/. An --out folder that does not exist: exit 73, nothing written. Usage
-# errors (an unknown flag, a value given to the bare `--with-summaries` flag (RS-2: the user's yes
-# in that run is the only way on), a bad --since) exit 64.
+# writable folder outside a git work tree; inside a work tree (here a home repository that
+# ignores .claude/), or missing, the fallback is <watch>/reports/. An --out folder that does
+# not exist: exit 73, nothing written. Usage errors (an unknown flag, a value given to the
+# bare `--with-summaries` flag (RS-2: the user's yes in that run is the only way on), a bad
+# --since) exit 64.
 my %got;
 {
+    needs => ['cmd:git'],
+    needs_note => 'the home work tree must ignore .claude/ (git check-ignore), or the report is refused',
     allow_canary => 1,
     files => T::beta_install(),
     transcript => [ T::prompt(0) ],
@@ -17,7 +20,15 @@ my %got;
               $got{w0} = T::tree($v->{WATCH});
           } },
         { call => 'cli', at => 3600, argv => [ 'report' ], env => { STORE_TEST_NO_GIT => '1' }, stdout_re => qr/\AREPORT / },
-        { call => 'code', code => sub { my ($v) = @_; watch::io::mkdir_p("$v->{HOME}/.git") } },
+        # a dotfiles repository that ignores .claude/: Downloads is in a work tree, the handoff
+        # root is git-ignored and ok (a not-ignored root would refuse the report: WATCH §6.1)
+        { call => 'code', code => sub {
+              my ($v) = @_;
+              system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
+              open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
+              print $fh ".claude/\n";
+              close $fh;
+          } },
         { call => 'cli', at => 3601, argv => [ 'report' ], env => { STORE_TEST_NO_GIT => '1' }, stdout_re => qr/\AREPORT / },
         { call => 'cli', at => 3602, argv => [ 'report', '--since', '1d' ], env => { STORE_TEST_NO_GIT => '1' }, stdout_re => qr/\AREPORT / },
         { call => 'cli', at => 3603, argv => [ 'report', '--out', '$TMP/nope' ], env => { STORE_TEST_NO_GIT => '1' },

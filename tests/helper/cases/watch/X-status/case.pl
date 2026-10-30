@@ -19,10 +19,10 @@ my $a = sub { my ($t, $rule, $sev, $id) = @_;
         my ($l) = $E->outputs;
         $E->ok(ref $l eq 'ARRAY', 'lines returned');
         my $all = join("\n", @$l);
-        $E->ok($l->[0] =~ /\AWatcher: shadow; alerts are shown here only/, 'mode line: status-only');
-        $E->ok($all =~ /^Alerts this session: 3 \(critical 1, warn 1, info 1\)$/m, 'session counts');
-        $E->ok($l->[2] =~ /\A  critical A-01 a01-00000003: test text 01\z/, 'critical first, fixed text');
-        $E->ok($all =~ /^Alerts, last 7 days: A-01 2, A-05 1, A-15 1 \(2 sessions\)$/m, '7-day counts (the 10-day-old row excluded)');
-        $E->ok($all =~ /^Last watcher row: 2026-10-21T14:00:05\.000\+03:00$/m, 'last watcher row');
+        $E->ok(scalar($l->[0] =~ /\AWatcher: shadow; alerts are shown here only/), 'mode line: status-only');
+        $E->ok(scalar($all =~ /^Alerts this session: 3 \(critical 1, warn 1, info 1\)$/m), 'session counts');
+        $E->ok(scalar($l->[2] =~ /\A  critical A-01 a01-00000003: test text 01\z/), 'critical first, fixed text');
+        $E->ok(scalar($all =~ /^Alerts, last 7 days: A-01 2, A-05 1, A-15 1 \(2 sessions\)$/m), '7-day counts (the 10-day-old row excluded)');
+        $E->ok(scalar($all =~ /^Last watcher row: 2026-10-21T14:00:05\.000\+03:00$/m), 'last watcher row');
     },
 };

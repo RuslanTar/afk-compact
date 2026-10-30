@@ -34,7 +34,7 @@ my $after1;
         my ($o1, $o2) = $E->outputs;
         $E->is($o1, undef, 'nothing printed past the hard stop');
         my $m2 = defined $o2 ? watch::json::decode($o2) : {};
-        $E->ok(($m2->{systemMessage} // '') =~ /test text 01/, 'the next Stop delivers the A-01 alert');
+        $E->ok(scalar(($m2->{systemMessage} // '') =~ /test text 01/), 'the next Stop delivers the A-01 alert');
         $E->count([ $E->alerts('A-01') ], 1, 'one A-01');
         $E->count([ $E->rows('classic', 'sweep') ], 1, 'the late run was committed (its sweep row)');
         $E->count([ $E->rows('classic', 'sweep_partial') ], 0, 'no sweep_partial for a late delivery');

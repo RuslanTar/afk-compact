@@ -8,6 +8,7 @@
 #   through the identity and secret scans)
 #   report verify --zip FILE
 # Exit: 0 written (also when files were withheld) or verified, 1 verify found a problem,
+# 3 REFUSED (not --dry-run, and the watch dir or handoff root is refused: WATCH §6.1),
 # 64 usage, 70 internal error, 73 output folder not writable. No network, no deletion.
 use strict;
 use warnings;
