@@ -63,7 +63,7 @@ plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
 plugin/helper/cmd/{trial-measure,trial-save}.*	core
 # Restart on update (SESSION-RESTART §8.1, lane RS-A): the helper's restart command.
 plugin/helper/cmd/restart.*	core
-# 0.1.2 visible defaults: settings show and settings reset (lib/settings_reset.pm).
+# 0.1.2 visible defaults and the settings writer: settings show, set and reset (lib/settings_write.pm, lib/settings_reset.pm).
 plugin/helper/cmd/settings.*	core
 plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt,risk}.*	skills
 plugin/helper/cmd/{wait,project}.*	skills

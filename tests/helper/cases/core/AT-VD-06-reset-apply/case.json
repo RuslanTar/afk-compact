@@ -1,7 +1,7 @@
 {
  "id": "AT-VD-06 (visible defaults: settings reset --apply)",
  "owner": "core",
- "note": "0.1.2 visible defaults (spec Behaviour 4): `settings reset … --apply` removes exactly the named members of this plugin's pluginConfigs options by a text splice, so every other byte of the settings file stays (order, spacing, other plugins' options, unknown keys; jsonc::decode returns unordered hashes and a re-encode would reorder the file). Before it writes it saves a backup of the whole file in the plugin's own store (<log folder>/settings-backups/<stamp>.json, mode 0600; a second one in the same second gets -2), checks that the new text decodes to the old settings minus those members, and writes atomically to the file's real path with its mode (a symlinked settings.json keeps its link). An emptied options object stays {}. --all leaves the consent and protective keys and keys the plugin does not know. Refused (exit 3, nothing written, no backup): a file changed since the dry run (--plan), a file with comments, a file that is not JSON, and a file that names a member on the path twice.",
+ "note": "0.1.2 visible defaults (spec Behaviour 4): `settings reset … --apply` removes exactly the named members of this plugin's pluginConfigs options by a text splice, so every other byte of the settings file stays (order, spacing, other plugins' options, unknown keys; jsonc::decode returns unordered hashes and a re-encode would reorder the file). Before it writes it saves a backup of the whole file next to it (settings.json.<plugin>-<stamp>.bak, mode 0600; a second one in the same second gets -2), checks that the new text decodes to the old settings minus those members, and writes atomically to the file's real path with its mode (a symlinked settings.json keeps its link). An emptied options object stays {}. Each removal prints as old -> default. All of it is the settings writer's (lib/settings_write.pm). --all leaves the consent and protective keys and keys the plugin does not know; a consent key named is refused, the writer never writes one. Refused (exit 3, nothing written, no backup): a consent key, a file changed since the dry run (--plan), a file with comments, a file that is not JSON, and a file that names a member on the path twice.",
  "now": "2026-10-30T09:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -42,7 +42,8 @@
     "exit": 0,
     "stdout_has": [
      "^settings reset: removed compact_target_tokens from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
-     "^  backup: ~/\\.local/state/$BRAND/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00\\.json$",
+     "^  compact_target_tokens: 350000 -> default 400000 \\(removed\\)$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00\\.bak \\(the file as it was\\)$",
      "^  takes effect: "
     ],
     "files": [
@@ -60,14 +61,17 @@
       "mode": "0644"
      },
      {
-      "path": "$WATCH/settings-backups/*.json",
+      "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
       "count": 1
      },
      {
-      "path": "$WATCH/settings-backups/2026-10-30_09-00-00.json",
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00.bak",
       "same_bytes_as": "orig",
       "mode": "0600"
      }
+    ],
+    "absent": [
+     "$WATCH/settings-backups"
     ]
    }
   },
@@ -83,9 +87,10 @@
     "exit": 0,
     "stdout_has": [
      "^settings reset: removed cooldown_ms from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
-     "^  backup: ~/\\.local/state/$BRAND/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-2\\.json$",
+     "^  cooldown_ms: 20000 -> default 30000 \\(removed\\)$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00-2\\.bak \\(the file as it was\\)$",
      "^  takes effect: ",
-     "^  kept by --all \\(consent or protective; name one to reset it\\): relaunch_auto$"
+     "^  kept by --all \\(consent or protective; a consent key is never written, name a protective one to reset it\\): relaunch_auto$"
     ],
     "files": [
      {
@@ -98,14 +103,14 @@
       "mode": "0644"
      },
      {
-      "path": "$WATCH/settings-backups/2026-10-30_09-00-00-2.json",
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00-2.bak",
       "same_bytes_as": "a1"
      }
     ]
    }
   },
   {
-   "name": "a consent key named: removed, the last member of the object",
+   "name": "a consent key named: refused, nothing written (the writer never writes one)",
    "argv": [
     "settings",
     "reset",
@@ -113,12 +118,13 @@
     "--apply"
    ],
    "expect": {
-    "exit": 0,
+    "exit": 3,
     "stdout_has": [
-     "^settings reset: removed relaunch_auto from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
-     "^  backup: ~/\\.local/state/$BRAND/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-3\\.json$",
-     "^  takes effect: ",
-     "^  note: relaunch_auto: its default on lets a lost background job start again by itself \\(looser than now\\)$"
+     "\\Asettings reset: refused, nothing written$",
+     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$"
+    ],
+    "stdout_lacks": [
+     "^  backup:"
     ],
     "files": [
      {
@@ -127,8 +133,12 @@
      },
      {
       "path": "$HOME/.claude/settings.json",
-      "same_bytes_as": "a3",
+      "same_bytes_as": "a2",
       "mode": "0644"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
+      "count": 2
      }
     ]
    }
@@ -144,16 +154,17 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^settings reset: nothing to remove$"
+     "^settings reset: nothing to remove$",
+     "^  kept by --all \\(consent or protective; a consent key is never written, name a protective one to reset it\\): relaunch_auto$"
     ],
     "files": [
      {
       "path": "$HOME/.claude/settings.json",
-      "same_bytes_as": "a3"
+      "same_bytes_as": "a2"
      },
      {
-      "path": "$WATCH/settings-backups/*.json",
-      "count": 3
+      "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
+      "count": 2
      }
     ]
    }
@@ -272,7 +283,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^to apply it, type: ! \\\"/[^\\\"]+/scripts/$BRAND-store\\\" settings reset cooldown_ms --plan [0-9a-f]{12} --apply$"
+     "^  would change cooldown_ms: 20000 -> default 30000 \\(removed\\)$", "^to apply it: \\\"/[^\\\"]+/scripts/$BRAND-store\\\" settings reset cooldown_ms --plan [0-9a-f]{12} --apply$"
     ]
    }
   },
@@ -314,8 +325,8 @@
       "same_bytes_as": "changed"
      },
      {
-      "path": "$WATCH/settings-backups/*.json",
-      "count": 5
+      "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
+      "count": 4
      }
     ]
    }
@@ -424,8 +435,8 @@
       ]
      },
      {
-      "path": "$WATCH/settings-backups/*.json",
-      "count": 6
+      "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
+      "count": 5
      }
     ]
    }

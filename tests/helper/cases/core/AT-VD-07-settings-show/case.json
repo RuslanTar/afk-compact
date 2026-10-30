@@ -1,7 +1,7 @@
 {
  "id": "AT-VD-07 (visible defaults: settings show)",
  "owner": "core",
- "note": "0.1.2 visible defaults (spec Behaviour 3): `settings show` is read-only and prints, after a header line naming the settings file and the plugin's options key, every one of the 44 keys in @KEYS order, one line each: `<key> <value> (<source>; default <default>)`, or `<key> <value> (default)` for a default the plugin fills in; a value set equal to its default still names its source (`triggers true (your settings.json; default true)`), while the status block counts it at its default by the value; a path's control characters print as spaces; then the warnings and notes and the user-run reset line. Never the ticket pattern's or a list's text. The settings file is not written.",
+ "note": "0.1.2 visible defaults (spec Behaviour 3): `settings show` is read-only and prints, after a header line naming the settings file and the plugin's options key, every one of the 44 keys in @KEYS order, one line each: `<key> <value> (<source>; default <default>)`, or `<key> <value> (default)` for a default the plugin fills in; a value set equal to its default still names its source (`triggers true (your settings.json; default true)`), while the status block counts it at its default by the value; a path's control characters print as spaces; then the warnings and notes and the line naming settings set and settings reset. Never the ticket pattern's or a list's text. The settings file is not written.",
  "now": "2026-10-30T09:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -60,7 +60,7 @@
      "^repo_roots 2 entries \\(your settings\\.json; default empty\\)$",
      "^watcher shadow \\(default\\)$",
      "^compact_target_tokens 400000 \\(default\\)$",
-     "^reset \\(a dry run unless you add --apply; type it yourself\\): ! \"/[^\"]+/scripts/$BRAND-store\" settings reset <key>\\.\\.\\.$"
+     "^change or reset \\(a dry run unless you add --apply; never a consent key\\): \"/[^\"]+/scripts/$BRAND-store\" settings set <key>=<value>\\.\\.\\. \\| settings reset <key>\\.\\.\\.$"
     ],
     "stdout_lacks": [
      "ZZTICKET",

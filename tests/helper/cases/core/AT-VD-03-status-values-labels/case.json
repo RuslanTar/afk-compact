@@ -1,7 +1,7 @@
 {
  "id": "AT-VD-03 (visible defaults: source labels, an ambiguous options key, a consent key passed by env)",
  "owner": "core",
- "note": "0.1.2 visible defaults (spec Behaviour 1, AT-VD-03): two pluginConfigs keys for this plugin are ambiguous, so every key is at its default and the block warns with both key names; reset refuses such a file (exit 3) and leaves it as it was. A consent key passed as a plugin option (env) is ignored with the existing `settings file only` note and stays at its default; a protective key the same. A flag sets a key with the label `flag` (settings show takes the same --root and --log-dir as status). A foreign CLAUDE_CONFIG_DIR with a consent key also passed by flag: the safe value, labelled so, with both notes. reset edits the settings.json of the CLAUDE_CONFIG_DIR folder, and refuses (exit 3, also as a dry run, nothing written, no backup) a settings.json that has a second name (a hard link to ~/.claude/settings.json, which the consent rule reads as the same file): its atomic write would put a new file under one name only.",
+ "note": "0.1.2 visible defaults (spec Behaviour 1, AT-VD-03): two pluginConfigs keys for this plugin are ambiguous, so every key is at its default and the block warns with both key names; reset refuses such a file (exit 3) and leaves it as it was. A consent key passed as a plugin option (env) is ignored with the existing `settings file only` note and stays at its default; a protective key the same. A flag sets a key with the label `flag` (settings show takes the same --root and --log-dir as status). A foreign CLAUDE_CONFIG_DIR with a consent key also passed by flag: the safe value, labelled so, with both notes. reset (the settings writer) refuses a CLAUDE_CONFIG_DIR folder that is not ~/.claude (a command can set it, so it never picks the file a write goes to) and leaves both files as they were, and it refuses (exit 3, also as a dry run, nothing written, no backup) a settings.json that has a second name (a hard link to ~/.claude/settings.json, which the consent rule reads as the same file): its atomic write would put a new file under one name only.",
  "now": "2026-10-30T09:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -60,7 +60,7 @@
    "argv": ["settings", "reset", "cooldown_ms"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc3"},
    "expect": {"exit": 3,
-     "stdout_has": ["^settings reset: refused, your settings\\.json has a second name \\(a hard link\\) and a reset writes a new file under one name only; edit it by hand or in /config$"]}},
+     "stdout_has": ["^settings reset: refused, your settings\\.json has a second name \\(a hard link\\) and a write puts a new file under one name only; edit it by hand or in /config$"]}},
   {"name": "and with --apply: both names keep the text, no backup",
    "argv": ["settings", "reset", "cooldown_ms", "--apply"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc3"},
@@ -70,12 +70,13 @@
                {"path": "$HOME/.claude/settings.json", "same_bytes_as": "home"},
                {"path": "$TMP/cc3/settings.json", "same_bytes_as": "home"}],
      "absent": ["$WATCH/settings-backups"]}},
-  {"name": "with CLAUDE_CONFIG_DIR set, reset edits that folder's settings.json and leaves ~/.claude/settings.json",
+  {"name": "with CLAUDE_CONFIG_DIR naming another folder, reset is refused and both files keep their text",
    "argv": ["settings", "reset", "cooldown_ms", "--apply"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc1"},
-   "expect": {"exit": 0,
-     "stdout_has": ["^settings reset: removed cooldown_ms from \\S+/cc1/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$"],
-     "files": [{"path": "$TMP/cc1/settings.json", "has": ["\"relaunch_auto\""], "lacks": ["cooldown_ms"]},
-               {"path": "$HOME/.claude/settings.json", "same_bytes_as": "home"}]}}
+   "expect": {"exit": 3,
+     "stdout_has": ["^settings reset: refused, CLAUDE_CONFIG_DIR names another folder than ~/\\.claude, and the writer edits ~/\\.claude/settings\\.json only; edit that folder's file by hand or in /config$"],
+     "files": [{"path": "$TMP/cc1/settings.json", "has": ["\"relaunch_auto\"", "cooldown_ms"]},
+               {"path": "$HOME/.claude/settings.json", "same_bytes_as": "home"},
+               {"path": "$TMP/cc1/settings.json.*", "count": 0}]}}
  ]
 }
