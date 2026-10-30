@@ -1655,8 +1655,10 @@ AT_TEXT_BANNED = (("AT-HC-04", HEAL_REL, "never run on its own"),)
 # Owner rule (c), 2026-10-28: under idle_digest off no line asks for the away digest. Rows: (id,
 # path, line selector, phrase no selected line may hold; at least one line must match).
 AT_TEXT_BANNED_SEL = [
-    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle(?:-done)?-off\] ", "away digest"),
-    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle(?:-done)?-off\] ", "Decided without you"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-off\] ", "away digest"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-done-off\] ", "away digest"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-off\] ", "Decided without you"),
+    ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-done-off\] ", "Decided without you"),
 ]
 
 
