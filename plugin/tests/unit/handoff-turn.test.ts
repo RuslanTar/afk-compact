@@ -412,7 +412,7 @@ test('handoff turn whose answer carries the receipt: [handoff] with the path, no
   await handoffTurnStarts($, w)
   w.publish(w.lastHt() ?? '', PUBLISHED)
   w.tokens = 690000
-  await w.turnEnd($, 'Wrote handoff to: ' + PUBLISHED + '\nResume with: /afk-compact:resume ' + PUBLISHED)
+  await w.turnEnd($, 'Wrote handoff to: ' + PUBLISHED + '\nResume with: /' + w.name + ':resume ' + PUBLISHED)
   await w.advance(500)
   expect(w.compacts.length).toBe(1)
   const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
