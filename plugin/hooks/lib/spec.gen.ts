@@ -369,7 +369,7 @@ export const SPEC = {
     },
     "step1-mismatch": {
       "why": "two versions of the next action make the next session guess",
-      "fix": "make Next steps item 1 the same command or edit as Step 1, character for character"
+      "fix": "start Next steps item 1 with Step 1's command or edit, character for character"
     },
     "none-form": {
       "why": "an empty section must say it was checked, not forgotten",
@@ -417,11 +417,11 @@ export const SPEC = {
     },
     "recipe-placeholder": {
       "why": "a recipe with <…> cannot run as written",
-      "fix": "write the literal value, or class the row ask"
+      "fix": "write the literal path, id or command, not a pointer such as <the path above>; class ask does not exempt it"
     },
     "recipe-script": {
-      "why": "a restart runs only a script whose sha256 is in the manifest",
-      "fix": "evidence --keep <script> and cite the durable path"
+      "why": "a restart runs only a script whose sha256 is in this handoff's manifest",
+      "fix": "evidence --keep <script> in this run, also for a copy an earlier handoff kept (no second copy is made), and cite the path it prints"
     },
     "recipe-spawn": {
       "why": "a spawn without model and effort runs on defaults nobody chose",

@@ -136,16 +136,7 @@ sub lint {
     if ($rh && $ns) {
         my ($s1) = map { $_->[1] =~ /\A\s*Step 1:\s*(.*)\z/ ? $1 : () } @{ $rh->{body} };
         my ($n1) = map { $_->[1] =~ /\A\s*1\.\s+(.*)\z/ ? $1 : () } @{ $ns->{body} };
-        if (defined $s1) {
-            $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
-            $s1 =~ s/\s*\|?\s*proposed\s*\z//;
-            $s1 =~ s/\A\s+|\s+\z//g;
-        }
-        if (defined $n1) {
-            $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
-            $n1 =~ s/\A\s+|\s+\z//g;
-        }
-        push @block, [ 'step1-mismatch', "line $rh->{line}" ] if !defined $s1 || !defined $n1 || $s1 ne $n1;
+        push @block, [ 'step1-mismatch', "line $rh->{line}" ] unless _step1_same($s1, $n1);
     }
 
     # ---- none-sections need content or their none-form
@@ -276,10 +267,27 @@ sub lint {
         }
     }
 
-    # ---- id ranges (the spec's id_range_re)
+    # ---- id ranges (the spec's id_range_re). 0.1.2 handoff-lint: a range blocks on a ledger
+    # pointer line (one naming ledger.md or inflight.md, which lists each moved id), or when it
+    # hides an id of the carry chain (a ledger line or table row of the base, the own previous
+    # file or the stage's ledger.md / inflight.md defines it) that the draft never names alone.
+    # A range of ids no chain file defines (another register's D-1255..D-1268, a summary of the
+    # B- rows the In flight table lists) loses no carried id.
     if (my $idr = skills::spec::id_range_re()) {
+        # Read through exists: a slice of $in->{extra} would create the keys, and publish files
+        # every key of extra into evidence/.
+        my $ex = $in->{extra} || {};
+        my $chain = _defined_ids(join "\n", grep { defined } $in->{previous}, $in->{own_previous},
+                                 map { exists $ex->{$_} ? $ex->{$_} : undef } qw(ledger.md inflight.md));
+        my $alone = _alone_ids($body, $idr);
         for my $i (0 .. $#lines) {
-            push @block, [ 'id-range', 'line ' . ($i + 1) ] if $lines[$i] =~ $idr;
+            my $l = $lines[$i];
+            my $hit = 0;
+            while (!$hit && $l =~ /($idr)/g) {
+                my $ids = _range_ids($1);
+                $hit = 1 if !$ids || $l =~ /\b(?:ledger|inflight)\.md\b/ || grep { $chain->{$_} && !$alone->{$_} } @$ids;
+            }
+            push @block, [ 'id-range', 'line ' . ($i + 1) ] if $hit;
         }
     }
 
@@ -291,7 +299,7 @@ sub lint {
         for my $l (split /\n/, $t) {
             $n++;
             push @block, [ 'recipe-placeholder', "restart/$name:$n" ]
-                if $l =~ /<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/ || $l =~ /\b(?:TODO|TBD|FIXME)\b/;
+                if _placeholder($l) || $l =~ /\b(?:TODO|TBD|FIXME)\b/;
             if ($l =~ /\A\s*script:\s*(\S+)/) {
                 my $sp = $1;
                 next if $sp =~ /\Anone\z/i;
@@ -455,6 +463,87 @@ sub _foreign_carried {
 }
 
 sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
+
+# step1-mismatch (0.1.2 handoff-lint): Step 1 and Next steps item 1 name the same command or
+# edit. Backticks, white space, the "— for …" and "— done when …" tails and a proposed mark
+# (`| proposed`, `— proposed`, either with a trailing `(…)` note) do not count. When Step 1
+# begins with a backticked command, item 1 must begin with that same command (backticked or
+# not) and nothing else glued to it; otherwise the texts are equal, or item 1 is Step 1 followed
+# by ` — ` and more detail.
+sub _step1_same {
+    my ($s1, $n1) = @_;
+    return 0 unless defined $s1 && defined $n1;
+    $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
+    $s1 =~ s/\s*(?:\||\x{2014})?\s*proposed(?:\s*\([^()]*\))?\s*\z//;
+    $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
+    my $flat = sub { my ($t) = @_; $t =~ s/`//g; $t =~ s/\s+/ /g; $t =~ s/\A | \z//g; return $t };
+    my ($fs, $fn) = ($flat->($s1), $flat->($n1));
+    return 0 if $fs eq '';
+    return 1 if $fs eq $fn;
+    return 1 if index($fn, "$fs \x{2014} ") == 0;
+    if ($s1 =~ /\A\s*`([^`]+)`/) {
+        my $c = $flat->($1);
+        return 1 if $n1 =~ /\A\s*`([^`]+)`/ && $flat->($1) eq $c;
+        return 1 if $n1 !~ /\A\s*`/ && ($fn eq $c || index($fn, "$c \x{2014} ") == 0);
+    }
+    return 0;
+}
+
+# recipe-placeholder (0.1.2 handoff-lint): a `<…>` stand-in in a recipe line, except
+# - the note after `script: none`;
+# - in `expected outputs:`, a value the job prints (`EXIT=<n>`, `server=<pid>`): a `<…>` with
+#   no `/` beside it; one inside a path (`<scratch>/out.md`) still counts;
+# - the words of an agent prompt after `prompt=` / `prompt:`: they are the spawned agent's own
+#   text (an agent spawn is always class ask), unless the `<…>` is the whole prompt value
+#   (`prompt=<the brief above>`).
+sub _placeholder {
+    my ($l) = @_;
+    my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
+    return 0 if $l =~ /\A\s*script:\s*none\b/i;
+    if ($l =~ /\A\s*expected outputs:/i) {
+        while ($l =~ /$ph/g) {
+            my ($x, $y) = ($-[0], $+[0]);
+            return 1 if ($x > 0 && substr($l, $x - 1, 1) eq q{/}) || ($y < length($l) && substr($l, $y, 1) eq q{/});
+        }
+        return 0;
+    }
+    if ($l =~ /\bprompt\s*[=:]\s*["'`]?/g) {
+        my $at = pos($l);
+        return 1 if substr($l, $at) =~ /\A$ph["'`]?\s*(?:[),;]|\z)/;
+        return substr($l, 0, $at) =~ $ph ? 1 : 0;
+    }
+    return $l =~ $ph ? 1 : 0;
+}
+
+# {id => 1} for the ids a ledger line (`- U-3: …`) or a table row (`| Q-2 | …`, `| B-1 · …`)
+# defines, and every id on a ledger pointer line (one naming ledger.md).
+sub _defined_ids {
+    my ($t) = @_;
+    my %d;
+    for my $l (split /\n/, $t // '') {
+        if ($l =~ /\A\s*(?:[-*]\s+)?([UDX]-[0-9]+):/ || $l =~ /\A\s*\|\s*([QB]-[0-9]+)\b/) { $d{$1} = 1 }
+        if ($l =~ /\bledger\.md\b/) { $d{$1} = 1 while $l =~ /\b([UDXQB]-[0-9]+)\b/g }
+    }
+    return \%d;
+}
+
+# {id => 1} for the ids the text names by themselves, outside any id range.
+sub _alone_ids {
+    my ($t, $idr) = @_;
+    $t =~ s/$idr/ /g;
+    my %got;
+    $got{$1} = 1 while $t =~ /\b([UDXQB]-[0-9]+)\b/g;
+    return \%got;
+}
+
+# The ids an id range covers ([U-1, U-2, U-3] for `U-1..U-3`), or undef when the two ends
+# differ in kind, run backwards or span more than 1000 ids (such a range always blocks).
+sub _range_ids {
+    my ($r) = @_;
+    my ($k, $x, $k2, $y) = $r =~ /\A([UDXQB])-([0-9]+)\D+?(?:([UDXQB])-)?([0-9]+)\z/ or return undef;
+    return undef if (defined $k2 && $k2 ne $k) || $y < $x || $y - $x > 1000;
+    return [ map { "$k-$_" } $x .. $y ];
+}
 
 sub _covered {
     my ($p, $cov) = @_;
