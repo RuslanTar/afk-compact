@@ -15,7 +15,7 @@ import type { Deps } from '../../hooks/lib/deps'
 import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
 import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
-import { isoLocal, stamp, zoneOfPath } from '../../hooks/lib/log'
+import { isoLocal, makeRow, stamp, zoneOfPath } from '../../hooks/lib/log'
 
 const NAME = 'x'.repeat(14)
 
@@ -677,6 +677,9 @@ test('zoneOfPath: the IANA name where /etc/localtime leads, only a zone the engi
   expect(zoneOfPath('/usr/share/zoneinfo/America/Argentina/Buenos_Aires')).toBe('America/Argentina/Buenos_Aires')
   expect(zoneOfPath('/usr/share/zoneinfo/posix/Asia/Kolkata')).toBe('Asia/Kolkata')
   expect(zoneOfPath('/usr/share/zoneinfo/UTC')).toBe('UTC')
+  // macOS: /var/db/timezone/zoneinfo may lead to the shipped copy instead of a downloaded tz tree.
+  expect(zoneOfPath('/usr/share/zoneinfo.default/Etc/GMT-1')).toBe('Etc/GMT-1')
+  expect(zoneOfPath('/usr/share/zoneinfo.default/posix/America/New_York')).toBe('America/New_York')
   expect(zoneOfPath('/usr/share/zoneinfo/Nowhere/Atlantis')).toBeUndefined()
   expect(zoneOfPath('/etc/localtime')).toBeUndefined()
   expect(zoneOfPath('/usr/share/zoneinfo/../../etc/passwd')).toBeUndefined()
@@ -693,4 +696,21 @@ test('stamp: each stamp reads the system zone again; a zone switch under a runni
   const failing = { zone: async () => { throw new Error('no fs') } } as unknown as Deps
   expect(await stamp(failing, ms)).toBe(isoLocal(ms))
   expect(await stamp({} as unknown as Deps, ms)).toBe(isoLocal(ms))
+})
+
+test('makeRow: ts is stamped in the system zone; the row fields are the state at now, not after the zone lookup', async () => {
+  const state = { turnSeq: 7, ccVersion: '9.9.9', ident: { pid: 4242 } }
+  const ms = Date.UTC(2026, 9, 30, 11, 21, 6, 5)
+  const d = {
+    state,
+    now: async () => ms,
+    // A turn starting while the lookup's file check runs: the row keeps the turn it was made in.
+    zone: async () => { state.turnSeq = 8; return 'Etc/GMT-1' },
+  } as unknown as Deps
+  const row = await makeRow(d, 'sid-1', 'probe', { k: 1 })
+  expect(row['ts']).toBe('2026-10-30T12:21:06.005+01:00')
+  expect(row['turn_seq']).toBe(7)
+  expect(row['cc_version']).toBe('9.9.9')
+  expect(row['pid']).toBe(4242)
+  expect(row['k']).toBe(1)
 })

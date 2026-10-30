@@ -73,13 +73,15 @@ export function isoLocal(ms: number, withMs = true, zone?: string): string {
 
 /**
  * The IANA zone a resolved `/etc/localtime` names (`.../zoneinfo/Etc/GMT-1`, a `posix/` or
- * `right/` tree too), when the engine knows it; else undefined.
+ * `right/` tree too, or macOS's shipped `/usr/share/zoneinfo.default/` copy), when the engine
+ * knows it; else undefined.
  */
 export function zoneOfPath(real: string | undefined): string | undefined {
   if (real === undefined) return undefined
-  const i = real.lastIndexOf('/zoneinfo/')
-  if (i < 0) return undefined
-  const name = real.slice(i + '/zoneinfo/'.length).replace(/^(?:posix|right)\//, '')
+  // Greedy: the cut is at the last zoneinfo directory in the path.
+  const m = /^.*\/zoneinfo(?:\.default)?\//.exec(real)
+  if (m === null) return undefined
+  const name = real.slice(m[0].length).replace(/^(?:posix|right)\//, '')
   if (!/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(name)) return undefined
   return zoneFormat(name) !== null ? name : undefined
 }
@@ -104,6 +106,11 @@ export type Row = Record<string, unknown>
 export async function makeRow(d: Deps, sid: string, ev: string, fields: Fields, actor = 'main'): Promise<Row> {
   const now = await d.now()
   const s = d.state
+  // The state is read at `now`, before the zone lookup awaits its file check: a turn starting
+  // during that check does not lend this row its turn_seq.
+  const pid = s.ident?.pid ?? null
+  const ccVersion = s.ccVersion
+  const turnSeq = s.turnSeq
   return {
     v: 1,
     ts: await stamp(d, now),
@@ -111,10 +118,10 @@ export async function makeRow(d: Deps, sid: string, ev: string, fields: Fields, 
     sid,
     actor,
     writer: 'mod',
-    pid: s.ident?.pid ?? null,
+    pid,
     plugin_version: PLUGIN_VERSION,
-    cc_version: s.ccVersion,
-    turn_seq: s.turnSeq,
+    cc_version: ccVersion,
+    turn_seq: turnSeq,
     ...fields,
   }
 }

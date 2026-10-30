@@ -182,10 +182,11 @@ export async function submitResultDigest(d: Deps, sid: string, nonce: string): P
   if (r === undefined) return
   const lane = r.lane.lane
   if (d.cfg.idle_digest !== 'submit') return row(d, sid, nonce, lane, `skipped:${d.cfg.idle_digest}`)
+  // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
+  // Stamped before `canSubmit`, so the zone lookup's file check does not widen its gap to `send`.
+  const asOf = l.measuredAt !== undefined ? (await stamp(d, l.measuredAt, false)).slice(11, 16) : undefined
   const g = await canSubmit(d, sid)
   if (typeof g === 'string') return row(d, sid, nonce, lane, g)
-  // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
-  const asOf = l.measuredAt !== undefined ? (await stamp(d, l.measuredAt, false)).slice(11, 16) : undefined
   const submitted = await send(d, sid, resultDigestLine(d.name, r.lane, laneBasis(l.facts, r.running, l.remeasure, asOf)), g)
   await row(d, sid, nonce, lane, submitted ? 'submitted' : 'skipped:submit-failed')
   if (!submitted) return
