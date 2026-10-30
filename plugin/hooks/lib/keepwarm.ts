@@ -32,7 +32,8 @@
 //   request is out (`nothing-to-fork` then), an API error or an abort cost nothing more: the ping
 //   is tried again a minute later, within the 58-minute bound and never past the held record's own
 //   deadline (idle.ts `heldDeadline`: the turn's 55.5 min, the compaction's 58 from the last warm
-//   request): a retry that would pass it stops first (`deadline`) with the hand-over.
+//   request): a retry that would pass it stops first (`deadline`) with the hand-over. A fork that
+//   comes back past that deadline (a slow one) hands nothing over: `missed`, the record dropped.
 // - It stops when a main turn starts (`turn`), the session ends or changes, a compaction ran since
 //   the gap began (`compacted`, Claude Code's own idle one included), no background job is open
 //   (`no-jobs`), the cache is not the one-hour one any more (`ttl-5m`), the main model or Claude
@@ -40,11 +41,13 @@
 //   ping on the new prefix would write it all again), a usage window reached 90% (`near-limit`),
 //   or the cutoff came (`cutoff`: `keep_warm_hours` of cache hours since the gap began; a gap past
 //   it before its first ping never warms). Those but `turn`, `session-end`, `session-changed`,
-//   `compacted`, `missed` (past the 58-minute bound: a sleep, or the session busy to the end) and
+//   `compacted`, `missed` (past the 58-minute bound: a sleep, or the session busy to the end; or a
+//   fork back past the held record's deadline) and
 //   `held-elsewhere` (another load adopted the record) hand the deferred idle record back.
 // - `keepWarmGen` counts what disturbs a gap (a turn or prompt, the session's end, a new gap, a
 //   stop); the ping timer's own re-arm does not bump it. Every step that awaits takes it first and
-//   returns where it changed, and a gap's stop row waits for its start row.
+//   returns where it changed, and a gap's stop row waits for its start row. A prompt a hook drops
+//   re-arms the timer (`resumeKeepWarm`), or, while a tick runs, leaves the gap to that tick.
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
 // the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
 // since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover}` per gap
@@ -102,6 +105,10 @@ export type KeepWarm = {
   model: string | null
   /** The `keep_warm_start` row's write while it runs: the gap's stop row waits for it. */
   startRow?: Promise<void>
+  /** A tick of this gap is under way (its clock read, a ping): a dropped prompt arms no second timer beside it. */
+  running?: boolean
+  /** The `keepWarmGen` a prompt a hook dropped left while a tick ran: that tick goes on with the gap. */
+  resumed?: number
 }
 
 /** The background tasks of the main session's last Stop (`background_tasks`), by id. */
@@ -202,32 +209,58 @@ async function ccVersion(d: Deps): Promise<string | undefined> {
 
 /**
  * A prompt entering that did not start a turn (dropped by a hook, or its submit threw): the ping
- * timer `prompt.submit` cancelled is armed again for the gap as it stands.
+ * timer `prompt.submit` cancelled is armed again for the gap as it stands, at once (its tick reads
+ * the clock; nothing awaited here). A tick under way (a ping out) goes on with the gap instead, so
+ * no second timer, and no second fork, runs beside it.
  */
 export async function resumeKeepWarm(d: Deps): Promise<void> {
   const s = d.state
   const kw = s.keepWarm
-  if (!kw || s.keepWarmTimer !== undefined || (kw.phase !== 'armed' && kw.phase !== 'warming')) return
-  const gen = s.keepWarmGen
-  const now = await d.now()
-  if (s.keepWarmGen !== gen || s.keepWarm !== kw || s.keepWarmTimer !== undefined) return
-  tick(d, kw, now)
+  if (!kw || (kw.phase !== 'armed' && kw.phase !== 'warming')) return
+  if (kw.running) {
+    kw.resumed = s.keepWarmGen
+    return
+  }
+  if (s.keepWarmTimer !== undefined) return
+  arm(d, kw, 0)
 }
 
 /** Ticks of at most a minute to the due, each re-reading the wall clock (as idle.ts `schedule`). */
 function tick(d: Deps, kw: KeepWarm, now: number): void {
+  arm(d, kw, Math.max(0, Math.min(kw.next - now, IDLE_TICK_MS)))
+}
+
+function arm(d: Deps, kw: KeepWarm, ms: number): void {
   const s = d.state
   clearTimer(d)
   const gen = s.keepWarmGen
-  s.keepWarmTimer = d.after(Math.max(0, Math.min(kw.next - now, IDLE_TICK_MS)), () => {
+  s.keepWarmTimer = d.after(ms, () => {
     s.keepWarmTimer = undefined
-    void (async () => {
-      const t = await d.now()
-      if (s.keepWarmGen !== gen || s.keepWarm !== kw) return
-      if (t < kw.next) return tick(d, kw, t)
-      await due(d, kw, t, gen)
-    })().catch(() => undefined)
+    if (s.keepWarmGen !== gen || s.keepWarm !== kw) return
+    void step(d, kw, gen).catch(() => undefined)
   })
+}
+
+/**
+ * One tick: the clock, then the ping when it is due. While it runs (`running`) a prompt a hook
+ * dropped leaves the gap to it (`resumed`): the ping goes on as if undisturbed when nothing else
+ * came since (`due`), and the tick arms the next one at its end if nothing armed one.
+ */
+async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
+  const s = d.state
+  kw.running = true
+  kw.resumed = undefined
+  try {
+    const t = await d.now()
+    if (s.keepWarmGen !== gen || s.keepWarm !== kw) return
+    if (t < kw.next) return tick(d, kw, t)
+    await due(d, kw, t, gen)
+  } finally {
+    kw.running = false
+  }
+  if (kw.resumed !== undefined && kw.resumed === s.keepWarmGen && s.keepWarm === kw && s.keepWarmTimer === undefined && (kw.phase === 'armed' || kw.phase === 'warming')) {
+    arm(d, kw, 0)
+  }
 }
 
 /**
@@ -264,9 +297,12 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
 
 /**
  * Warming starts for this gap: one `keep_warm_start` row (`windows` 0: no usage window read, the
- * near-limit guard is skipped). True when the gap still warms undisturbed after it; false, with
+ * near-limit guard is skipped). True when nothing disturbed the gap meanwhile; false, with
  * nothing more to do, when a turn, a prompt or a stop came during its reads (the gap stays `armed`
- * with no row) or during its row's write (a stop then writes its row after this one).
+ * with no row) or during its row's write (a stop then writes its row after this one). The first
+ * ping and the idle timer's fire can begin the same gap at once: the one that finds it begun
+ * already writes no second row, waits for that one's row and goes on as it does; one that finds
+ * it `off` (the other's checks failed) writes nothing, and its caller, reading the phase, stops.
  */
 async function begin(d: Deps, kw: KeepWarm, now: number): Promise<boolean> {
   const s = d.state
@@ -280,12 +316,15 @@ async function begin(d: Deps, kw: KeepWarm, now: number): Promise<boolean> {
   }
   if (moved()) return false
   const jobs = await openJobs(d, kw.sid)
-  if (moved() || kw.phase !== 'armed') return false
-  kw.phase = 'warming'
-  const row = log(d, kw.sid, 'keep_warm_start', { jobs, gap_s: secs(now - kw.start), hours: d.cfg.keep_warm_hours, windows })
-  kw.startRow = row
-  await row
-  return !moved() && kw.phase === 'warming'
+  if (moved()) return false
+  if (kw.phase === 'armed') {
+    kw.phase = 'warming'
+    kw.startRow = log(d, kw.sid, 'keep_warm_start', { jobs, gap_s: secs(now - kw.start), hours: d.cfg.keep_warm_hours, windows })
+  }
+  // Begun here, or by the other caller meanwhile: after its start row, while undisturbed (a gap
+  // found `off`, the other's checks failing, writes nothing: the callers go on only while it warms).
+  await kw.startRow?.catch(() => undefined)
+  return !moved()
 }
 
 /**
@@ -305,9 +344,11 @@ export async function keepWarmHolds(d: Deps, rec: Due, now: number): Promise<boo
     const b = await blocked(d, kw, now)
     if (moved()) return false
     if (b !== undefined) {
-      kw.phase = 'off'
+      // The first ping may have begun warming meanwhile: its own next checks stop it, with its row.
+      if (kw.phase === 'armed') kw.phase = 'off'
       return false
     }
+    // Begun by the first ping meanwhile: held as well (begin waits for its start row).
     if (!(await begin(d, kw, now))) return false
   }
   if (kw.phase !== 'warming') return false
@@ -383,13 +424,22 @@ export function forkOutcome(r: unknown): Outcome {
   return { result: share !== null && share >= KEEP_WARM_COLD_SHARE ? 'warm' : 'lapsed', read, created }
 }
 
-/** A ping is due: the checks, then one fork, its row, and the next due or the stop. */
-async function due(d: Deps, kw: KeepWarm, now: number, gen: number): Promise<void> {
+/**
+ * A ping is due: the checks, then one fork, its row, and the next due or the stop. `ours`: still
+ * this gap's tick, undisturbed, or disturbed only by prompts a hook dropped meanwhile (step).
+ */
+async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<void> {
   const s = d.state
+  let gen = gen0
+  const ours = (): boolean => {
+    if (s.keepWarm !== kw) return false
+    if (s.keepWarmGen !== gen && kw.resumed === s.keepWarmGen) gen = s.keepWarmGen
+    return s.keepWarmGen === gen
+  }
   const b = await blocked(d, kw, now)
   const scale = scaleOf(await d.idleEnv())
   // A turn that started meanwhile ends the gap as `turn` (alive.ts): no stop row or hand-over here.
-  if (s.keepWarmGen !== gen || s.keepWarm !== kw) return
+  if (!ours()) return
   // A turn, a prompt arriving, a plugin turn or compaction under way: no fork, and no stop that
   // hands the record back beside it (the idle path would skip it as busy); a minute later. A stop
   // without a hand-over (`missed` at the 58-minute bound, among others) still ends the gap.
@@ -400,9 +450,10 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen: number): Promise<voi
       kw.phase = 'off'
       return
     }
+    // False when the gap moved meanwhile: nothing more here.
     if (!(await begin(d, kw, now))) return
   } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now)
-  if (kw.phase !== 'warming' || s.keepWarmGen !== gen) return
+  if (kw.phase !== 'warming') return
   let r: unknown
   try {
     r = await d.fork(KEEP_WARM_PROMPT)
@@ -411,36 +462,50 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen: number): Promise<voi
   }
   const t1 = await d.now()
   const o = forkOutcome(r)
-  const live = s.keepWarmGen === gen && s.keepWarm === kw && kw.phase === 'warming'
-  if (o.result === 'warm' && live) kw.pings++
-  await log(d, kw.sid, 'keep_warm_ping', {
-    n: kw.pings, result: o.result, cache_read: o.read, cache_creation: o.created,
-    since_s: secs(now - kw.warm), gap_s: secs(now - kw.start), ms: t1 - now, ...(o.status !== undefined ? { status: o.status } : {}),
-  })
-  if (!live || s.keepWarmGen !== gen || s.keepWarm !== kw) return
-  if (o.result === 'warm') {
+  const live = ours() && kw.phase === 'warming'
+  const since = now - kw.warm
+  // A warm ping into the gap undisturbed: the gap counts from it at once (a turn starting during
+  // its row stops the gap with it counted).
+  if (o.result === 'warm' && live) {
+    kw.pings++
     kw.warm = now
     kw.next = now + KEEP_WARM_PING_MS * scale
+  }
+  await log(d, kw.sid, 'keep_warm_ping', {
+    n: kw.pings, result: o.result, cache_read: o.read, cache_creation: o.created,
+    since_s: secs(since), gap_s: secs(now - kw.start), ms: t1 - now, ...(o.status !== undefined ? { status: o.status } : {}),
+  })
+  // Disturbed during the row (a prompt entering and still pending): no next step here, nor a retry
+  // or a stop; the prompt's turn, or `resumeKeepWarm` once a hook drops it, takes the gap on.
+  if (!live || !ours()) return
+  if (o.result === 'warm') {
     // The held record follows: due at the next ping, anchored at this one (a reload fires it then).
-    if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) !== undefined && s.keepWarmGen === gen) {
+    if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) !== undefined && ours()) {
       await holdIdle(d, kw.deferred, { due: kw.next, warm: kw.warm, start: kw.start, pings: kw.pings })
     }
-    if (s.keepWarmGen !== gen) return
+    if (!ours()) return
     tick(d, kw, t1)
     return
   }
+  // A hand-over only while the held record can still fire on a warm cache: a fork that came back
+  // past its deadline (a slow one) ends the gap `missed`, with the record dropped.
+  const late = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
+  const handOver = (why: string): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1))
   // No more pings in this gap, with the hand-over: `lapsed`, the ping wrote the cache again (the
-  // idle path's own checks decide, as for a lapsed first ping that held nothing yet); `error`, a
+  // idle path's own checks decide, as for a lapsed first ping that held nothing yet, and they
+  // refuse a turn or a compaction past the 58-minute bound of the last warm request); `error`, a
   // fork the engine refused (a hook's deny), the cache as warm as the last ping left it.
-  if (o.result === 'lapsed' || o.result === 'error') return stop(d, kw, o.result, true, t1)
+  if (o.result === 'lapsed') return stop(d, kw, 'lapsed', true, t1)
+  if (o.result === 'error') return handOver('error')
   if (!busyNow(s)) {
     // No request of the main session out: there is no snapshot to fork, and a retry finds none either.
-    if (o.result === 'nothing-to-fork') return stop(d, kw, 'nothing-to-fork', true, t1)
+    if (o.result === 'nothing-to-fork') return handOver('nothing-to-fork')
     // The held record goes back while it can still fire, rather than be dropped at `missed`.
-    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) return stop(d, kw, 'deadline', true, t1)
+    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) return handOver('deadline')
   }
   return again(d, kw, t1, scale)
 }
+
 
 const retryMs = (scale: number): number => Math.max(1000, KEEP_WARM_RETRY_MS * scale)
 

@@ -80,6 +80,9 @@ test('AT-KW-01 options: keep_warm_hours default 6; 0 is off; fractions as given;
   const half = parseOptions({ keep_warm_hours: 0.5 } as never)
   expect([half.keep_warm_hours, half.notes.clamped]).toEqual([0.5, []])
   expect(parseOptions({ keep_warm_hours: '1.5' } as never).keep_warm_hours).toBe(1.5)
+  // As Number() reads a string (the helper's /status reads it alike, AT-KW-20): hex 16; a sign before 0x is no number.
+  expect(parseOptions({ keep_warm_hours: '0x10' } as never).keep_warm_hours).toBe(16)
+  expect(parseOptions({ keep_warm_hours: '-0x2' } as never).keep_warm_hours).toBe(6)
   const hi = parseOptions({ keep_warm_hours: 30 } as never)
   expect([hi.keep_warm_hours, hi.notes.clamped]).toEqual([24, [{ key: 'keep_warm_hours', configured: 30, effective: 24 }]])
   const lo = parseOptions({ keep_warm_hours: -1 } as never)
@@ -969,4 +972,290 @@ test('AT-KW-37: pings that take 15 s: each retry a minute after the last one end
   expect(stops(w)).toEqual([['deadline', true, 0]])
   expect(ic(w).length).toBe(1)
   expect(selfCompacts(w)).toBe(1)
+})
+
+// ---- Review fixes (fix round 4)
+
+/** P2's world: native on (the 55.5-min check), the plugin's idle compaction off, a background shell and no agent. */
+async function checkGap($: Engine, w: World): Promise<number> {
+  w.agents = []
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }] })
+  await w.turnEnd($)
+  return w.clock.now()
+}
+
+for (const c of [
+  { name: 'an API error', last: () => OVERLOADED },
+  { name: 'a fork the engine refuses', last: (): Answer => { throw new Error('denied by a hook') } },
+  { name: 'nothing-to-fork', last: (): Answer => ({ isAnswered: false, reason: 'nothing-to-fork' }) },
+]) {
+  test(`AT-KW-38 (REV3-1): the held check's last retry comes back past its deadline (a 3-min fork from 57:30 to 60:30, ${c.name}): stop missed, no hand-over, no turn on the lapsed cache`, { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+    const w = world(on, {})
+    const at: number[] = []
+    let t0 = 0
+    on('model.fork', async () => {
+      const m = (w.clock.now() - t0) / MIN
+      at.push(m)
+      await w.clock.sleep(m >= 57 ? 3 * MIN : 15000)
+      return { value: m >= 57 ? c.last() : OVERLOADED } as never
+    })
+    t0 = await checkGap($, w)
+    await until(w, t0, 70)
+    expect(at).toEqual([50, 51.25, 52.5, 53.75, 55, 56.25, 57.5])
+    expect(stops(w)).toEqual([['missed', false, 0]])
+    expect(skips(w)).toEqual([['keep-warm', 'check']])
+    expect([w.submits.length, selfCompacts(w)]).toEqual([0, 0])
+    // The record it held is cleared (a tombstone, deleted a minute or two later): nothing fires it.
+    const v = w.storeGet(KEY) as Record<string, unknown> | undefined
+    expect(v === undefined || v.cancelled === true).toBe(true)
+  })
+}
+
+test('AT-KW-38 (REV3-1): a lapsed ping that comes back past the 58-min bound hands the check back; its turn path skips lapsed (no turn on a cache past the bound of the last warm request)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, {})
+  let t0 = 0
+  on('model.fork', async () => {
+    const m = (w.clock.now() - t0) / MIN
+    await w.clock.sleep(m >= 57 ? 3 * MIN : 15000)
+    return { value: m >= 57 ? { isAnswered: true, text: 'OK', usage: COLD } : OVERLOADED } as never
+  })
+  t0 = await checkGap($, w)
+  await until(w, t0, 70)
+  expect(stops(w)).toEqual([['lapsed', true, 0]])
+  expect(skips(w)).toEqual([['keep-warm', 'check'], ['lapsed', 'check']])
+  expect(w.submits.length).toBe(0)
+})
+
+// The first ping and the 49-min fire meet on one gap: a gate holds one `session.usage` read (the n-th from `from` minutes on)
+// until 50:30. P3: the ping first (the turn ends 61 s after the last request: the fire at 50:01); P4: the fire first (59 s: 49:59).
+for (const c of [
+  { name: 'the first ping first', endAfter: 61000, from: 50 },
+  { name: 'the 49-min fire first', endAfter: 59000, from: 49 + 59 / 60 },
+]) {
+  for (const g of [1, 2, 3]) {
+    test(`AT-KW-39 (REV3-2): ${c.name}, usage read ${g} held: one start row, the turn held, the pings go on, the hand-over at the cutoff`, { options: ON }, async ($, on0) => {
+      let from = Infinity
+      let n = 0
+      let release: () => void = () => undefined
+      const gate = new Promise<void>(r => { release = r })
+      let wref: World | undefined
+      const on = ((name: string, h: (...a: unknown[]) => unknown) => on0(name as never, (name === 'session.usage'
+        ? async (...a: unknown[]) => {
+          if (wref && wref.clock.now() >= from && ++n === g) await gate
+          return h(...a)
+        }
+        : h) as never)) as unknown as On
+      const w = world(on, { autoCompactEnabled: false })
+      wref = w
+      const f = forks(on0, w)
+      await w.start($)
+      await w.userTurn($)
+      await w.step($)
+      const t0 = w.clock.now()
+      f.t0 = t0
+      from = t0 + c.from * MIN
+      await w.advance(c.endAfter)
+      w.tokens = 260000
+      await w.turnEnd($)
+      await until(w, t0, 50.5)
+      release()
+      await w.settle()
+      await until(w, t0, 52)
+      expect(f.at.length).toBe(1)
+      expect(w.rowsOf('keep_warm_start').length).toBe(1)
+      expect(skips(w)).toEqual([['keep-warm', 'turn']])
+      // The start row first, whichever began the gap.
+      expect(w.rows.findIndex(r => r.ev === 'keep_warm_start')).toBeLessThan(w.rows.findIndex(r => r.ev === 'handoff_skipped'))
+      expect(w.submits.length).toBe(0)
+      expect((w.storeGet(KEY) as Record<string, unknown>).held).toEqual({ start: t0, pings: 1 })
+      await until(w, t0, 160)
+      expect(f.at.length).toBe(2)
+      expect(stops(w)).toEqual([['cutoff', true, 2]])
+      if (IDLE) expect(w.submits.length).toBe(1)
+      else expect(skips(w)).toEqual([['keep-warm', 'turn'], ['no-asset', 'turn']])
+    })
+  }
+}
+
+test('AT-KW-40 (REV3-2): the first ping\'s warming start finds the gap off (the 49-min fire\'s checks found a window at 92% meanwhile): no start row, no fork; the fire skips near-limit', { options: ON }, async ($, on0) => {
+  let from = Infinity
+  let n = 0
+  let release: () => void = () => undefined
+  const gate = new Promise<void>(r => { release = r })
+  let wref: World | undefined
+  // The ping's checks read the usage once, warming's start once more: that second read waits, and the window reaches 92% then.
+  const on = ((name: string, h: (...a: unknown[]) => unknown) => on0(name as never, (name === 'session.usage'
+    ? async (...a: unknown[]) => {
+      if (wref && wref.clock.now() >= from && ++n === 2) {
+        wref.rateLimits = [{ kind: 'five_hour', percentUsed: 92 }, { kind: 'seven_day', percentUsed: 30 }]
+        await gate
+      }
+      return h(...a)
+    }
+    : h) as never)) as unknown as On
+  const w = world(on, { autoCompactEnabled: false })
+  wref = w
+  const f = forks(on0, w)
+  await w.start($)
+  await w.userTurn($)
+  await w.step($)
+  const t0 = w.clock.now()
+  f.t0 = t0
+  from = t0 + 50 * MIN
+  await w.advance(61000)
+  w.tokens = 260000
+  await w.turnEnd($)
+  await until(w, t0, 50.5)
+  release()
+  await w.settle()
+  await until(w, t0, 120)
+  expect(n).toBeGreaterThan(2)
+  expect([f.at, w.rowsOf('keep_warm_start').length, stops(w)]).toEqual([[], 0, []])
+  expect(skips(w)).toEqual([['near-limit', 'turn']])
+})
+
+test('AT-KW-41 (REV3-3): two prompts a hook drops while the ping is out: no second timer or fork beside it; the ping counts and the next comes at 100', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const at: number[] = []
+  let t0 = 0
+  let dropped: Promise<unknown> | undefined
+  on('model.fork', async () => {
+    at.push(Math.round((w.clock.now() - t0) / MIN))
+    if (at.length === 1) {
+      w.dropIf = () => 'a peer dropped it'
+      dropped = (async () => {
+        await $.prompt.submit({ text: 'one', origin: { kind: 'composer' } } as never)
+        await $.prompt.submit({ text: 'two', origin: { kind: 'composer' } } as never)
+      })()
+      await dropped
+    }
+    await w.clock.sleep(30000)
+    return { value: { isAnswered: true, text: 'OK', usage: WARM } } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 52)
+  expect(dropped).toBeDefined()
+  expect(at).toEqual([50])
+  expect(pings(w)).toEqual([['warm', 1]])
+  await until(w, t0, 101)
+  expect(at).toEqual([50, 100])
+  expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
+})
+
+test('AT-KW-41 (REV3-4): a prompt enters while a failed ping\'s row is written and stays pending: no retry, no stop meanwhile (no timer runs); once a hook drops it the gap goes on (missed by then)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, () => OVERLOADED)
+  const pp = pendingPrompt($, w)
+  w.atHelper = async (sub, args) => {
+    if (sub === 'log' && args.some(a => a.includes('"keep_warm_ping"'))) pp.send()
+  }
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 70)
+  expect(pp.sent()).toBe(true)
+  expect([f.at, stops(w)]).toEqual([[50], []])
+  await pp.drop()
+  expect(stops(w)).toEqual([['missed', false, 0]])
+  expect(f.at).toEqual([50])
+})
+
+test('AT-KW-42 (REV3-4): the session ends while the turn end arms the gap (its model read waits for the end): no gap is armed, so nothing pings after the end', { options: ON }, async ($, on0) => {
+  let armed = false
+  let ended: Promise<unknown> | undefined
+  // The idle timer is armed first (its record stored), keep-warm's gap after it: the first model read after that store is the gap's.
+  const on = ((name: string, h: (...a: unknown[]) => unknown) => on0(name as never, (name === 'session.model'
+    ? async (...a: unknown[]) => {
+      if (armed && ended === undefined) {
+        ended = $.session.end({ sessionId: SID_A, reason: 'prompt_input_exit' } as never)
+        await ended
+      }
+      return h(...a)
+    }
+    : h) as never)) as unknown as On
+  const w = world(on)
+  const f = forks(on0, w)
+  const mem = (w as unknown as { storeMem: Map<string, unknown> }).storeMem
+  const set = mem.set.bind(mem)
+  Object.defineProperty(mem, 'set', { configurable: true, value: (k: string, v: unknown) => { if (k === KEY && w.tokens === 260000) armed = true; return set(k, v) } })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  expect(ended).toBeDefined()
+  await until(w, t0, 120)
+  expect(f.at).toEqual([])
+  expect(w.rows.filter(r => String(r.ev).startsWith('keep_warm'))).toEqual([])
+})
+
+test('AT-KW-43 (REV3-3): a prompt a hook drops at once while warming begins (its job count read): that tick goes on with the gap, the first ping goes out', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  let reads = 0
+  let armed = false
+  let dropped: Promise<unknown> | undefined
+  w.dropIf = () => 'a peer dropped it'
+  const agents = w.agents
+  // As AT-KW-36: the second agent list of the ping is warming's job count.
+  Object.defineProperty(w, 'agents', {
+    configurable: true,
+    get() {
+      if (armed && ++reads === 3) dropped = $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never)
+      return agents
+    },
+    set() {},
+  })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 49.5)
+  armed = true
+  await until(w, t0, 52)
+  await dropped
+  expect(dropped).toBeDefined()
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').length).toBe(1)
+  expect(pings(w)).toEqual([['warm', 1]])
+})
+
+test('AT-KW-44 (REV3-2): the 49-min fire\'s checks find a window at 92% while the first ping began warming beside them: the fire holds nothing, the gap stays warming and ends with its stop row', { options: ON }, async ($, on0) => {
+  let from = Infinity
+  let n = 0
+  let release: () => void = () => undefined
+  const gate = new Promise<void>(r => { release = r })
+  let wref: World | undefined
+  // The fire's first usage read (49:59) waits past the first ping (50:00) and then reads the window at 92%; every other read 12%.
+  const on = ((name: string, h: (...a: unknown[]) => unknown) => on0(name as never, (name === 'session.usage'
+    ? async (...a: unknown[]) => {
+      if (wref && wref.clock.now() >= from && ++n === 1) {
+        await gate
+        const r = (await h(...a)) as { value: Record<string, unknown> }
+        return { value: { ...r.value, rateLimits: [{ kind: 'five_hour', percentUsed: 92 }] } }
+      }
+      return h(...a)
+    }
+    : h) as never)) as unknown as On
+  const w = world(on, { autoCompactEnabled: false })
+  wref = w
+  const f = forks(on0, w)
+  await w.start($)
+  await w.userTurn($)
+  await w.step($)
+  const t0 = w.clock.now()
+  f.t0 = t0
+  from = t0 + (49 + 59 / 60) * MIN
+  await w.advance(59000)
+  w.tokens = 260000
+  await w.turnEnd($)
+  await until(w, t0, 50.5)
+  expect(f.at).toEqual([50])
+  release()
+  await w.settle()
+  await until(w, t0, 160)
+  expect(skips(w).filter(s => s[0] === 'keep-warm')).toEqual([])
+  expect(w.rowsOf('keep_warm_start').length).toBe(1)
+  expect(stops(w).length).toBe(1)
 })

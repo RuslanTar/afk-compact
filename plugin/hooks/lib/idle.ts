@@ -700,6 +700,9 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   if (!d.cfg.triggers) return 'triggers-off'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'
+  // Keep-warm (D-14): a record handed back anchored at its last warm request submits no turn past
+  // the 58-minute lapse bound from it (the cache may have lapsed), as its compaction (G3) does not.
+  if (typeof rec.warm === 'number' && now > rec.warm + IDLE_LAPSE_FRACTION * IDLE_CACHE_MS * scale) return 'lapsed'
   return laterChecks(d, sid, eff, u, rec)
 }
 
