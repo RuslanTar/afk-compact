@@ -59,6 +59,9 @@ our @KEYS = (
     # Claude Code's own idle compaction is off; `off` = never (the old `on` reads as auto)
     [idle_handoff_turn           => 'str',  'auto',                    'enum'],
     [idle_handoff_min_tokens     => 'num',  200000,                    'num'],
+    # owner 2026-10-30 (xxxxxxxx, "I want the handoff anyway"): `run` = the pre-idle handoff turn
+    # also runs with a rate-limit window at 90% or more; `skip` = it skips there (near-limit)
+    [idle_handoff_near_limit     => 'str',  'run',                     'enum'],
     # IDLE-COMPACT-SPEC (D9): `auto` = the plugin compacts an idle session itself while Claude
     # Code's own idle compaction is off (`"idleCompaction": false`); `off` = never
     [idle_compact                => 'str',  'auto',                    'enum'],
@@ -90,6 +93,7 @@ our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 # The values an enum key exports as is (W-BETA D); any other value exports as `other`.
 our %ENUM = (watcher => [qw(shadow off)], handoff_turn => [qw(halt off)], relaunch_auto => [qw(on shadow off)],
              unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
+             idle_handoff_near_limit => [qw(run skip)],
              idle_digest => [qw(submit return off)],
              resume_proceed => [qw(auto confirm)], restart_on_update => [qw(off shadow on)]);
 
@@ -359,6 +363,14 @@ sub resolve {
         elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
         else { push @notes, "idle_compact: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
         $val{idle_compact} = $x;
+    }
+    # idle_handoff_near_limit (owner 2026-10-30, as config.ts reads it): trimmed and case-folded;
+    # run or skip, else the default run with a note. A blank value is unset: the default.
+    {
+        my $x = trim(lc($val{idle_handoff_near_limit} // 'run'));
+        if ($x eq '') { $x = 'run'; $src{idle_handoff_near_limit} = 'default' }
+        if ($x !~ /\A(?:run|skip)\z/) { push @notes, 'idle_handoff_near_limit: not run or skip, run used'; $x = 'run' }
+        $val{idle_handoff_near_limit} = $x;
     }
     # restart_on_update (SESSION-RESTART D1): trimmed and case-folded; off, shadow or on, else
     # off with a note (never the value). A blank value is unset: the default.
