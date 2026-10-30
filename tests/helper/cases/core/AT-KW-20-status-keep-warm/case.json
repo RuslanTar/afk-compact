@@ -628,7 +628,7 @@
    }
   },
   {
-   "name": "keep_warm_hours \"0x\" and 300 f digits: past the double range, Number() gives Infinity and the plugin keeps the default 6",
+   "name": "keep_warm_hours \"0x\" and 300 f digits: past the double range, Number() gives Infinity and the plugin keeps the default 6 (the settings read it as no number, with their note)",
    "setup": [
     {
      "write": "$WATCH/$SID.jsonl",
@@ -654,7 +654,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap"
+     "^keep-warm: on \\(up to 6 h of an idle gap",
+     "^note: keep_warm_hours: not a number, default used$"
     ]
    },
    "options": {
