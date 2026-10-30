@@ -14,7 +14,11 @@ Contents (no timestamps, so a re-run gives the same bytes):
             (classic events also take OBSERVED_OPTIONAL as optional: keys sent live but not typed)
   c8        binary string counts (TECH-FACTS Q6 §3 C8 list) for the tested binary, plus
             idle_prefixes: the two native idle-compaction notice prefixes (IC-1 D1) that
-            reconcile matches after a main boundary row (both are counted in `counts` too)
+            reconcile matches after a main boundary row (both are counted in `counts` too);
+            arm_list: the experiment's arm list as the binary writes it (counted too); rare_max:
+            smoke fails on a changed count of the arm list or of a string whose count here is
+            at most rare_max, and prints any other change as information (see RARE_MAX); a
+            binary where a string outside COMMON_WORDS is not rare is refused (exit 2)
   c9        sha256/16 of the declarations C9 names; `specs` holds the start regexes so the
             helper's `smoke` extracts with the same rule (helper/cmd/smoke.pl decl_hash)
   copy_trailers  installed-message trailers the normalizer cuts (none known)
@@ -27,9 +31,25 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 
 EVENTS = ["PreCompact", "PostCompact", "SessionStart", "SessionEnd", "Stop", "SubagentStop",
           "StopFailure", "PermissionDenied"]
+# The arms of the compaction-prompt experiment, in the order the binary lists them; ARM_LIST is
+# that list as the bundle writes it (a JS array literal), so an arm added, dropped or renamed
+# changes its count.
+ARMS = ["control", "no_scratchpad", "no_scratchpad_capped", "no_scratchpad_keep_asks", "lean", "short",
+        "short_v2", "capped"]
+ARM_LIST = "[" + ",".join('"{}"'.format(a) for a in ARMS) + "]"
 C8_STRINGS = ["Exit code 0 - stdout appended as custom compact instructions", "tengu_curried_trinket",
-              "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH", "control", "no_scratchpad",
-              "no_scratchpad_capped", "no_scratchpad_keep_asks", "lean", "short", "short_v2", "capped"]
+              "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH"] + ARMS + [ARM_LIST]
+# The C8 rule smoke applies: a string the recorded binary holds at most RARE_MAX times is rare
+# (the flag, its env variable, the notice texts, the experiment's own arm names: 2 to 12 in
+# 2.1.311 to 2.1.314), and smoke fails when its count changes; the arm list fails the same way.
+# Any other string is a common word (control, lean, short, capped: 244 to 4,735), used by
+# unrelated code, whose count moves with every release: smoke prints it as information only.
+RARE_MAX = 16
+# The strings meant to be common words. Every other C8 string must stay rare in the binary
+# recorded (count 1 to RARE_MAX; the arm list at least 1), or the tool refuses to write
+# (rare_guard): one that rose above RARE_MAX would silently become information only, and one
+# missing (count 0) would let smoke pass on its absence.
+COMMON_WORDS = ["control", "lean", "short", "capped"]
 # IC-1 D1: the native informational rows after an idle compaction (2.1.306 had only the first;
 # 2.1.314 has both)
 IDLE_PREFIXES = {"notice": "Compacted while idle",
@@ -99,6 +119,22 @@ def members(kept):
                 out.append((m.group(1), bool(m.group(2))))
         depth += len(re.findall(r"[{(\[]", l)) - len(re.findall(r"[})\]]", l))
     return out
+
+
+def rare_guard(counts, binary):
+    """The C8 strings outside COMMON_WORDS that the binary does not hold as rare strings."""
+    bad = []
+    for s in C8_STRINGS:
+        if s in COMMON_WORDS:
+            continue
+        n = counts[s]
+        top = None if s == ARM_LIST else RARE_MAX
+        if n < 1 or (top is not None and n > top):
+            want = "at least 1" if top is None else "1 to {}".format(top)
+            bad.append("{} {} (want {})".format("the arm list" if s == ARM_LIST else json.dumps(s), n, want))
+    if bad:
+        die("{}: not rare as C8 needs, so no baseline is written: {}. Check the strings, or move a "
+            "now-common one to COMMON_WORDS".format(binary, "; ".join(bad)))
 
 
 def keyset(req, opt):
@@ -174,6 +210,7 @@ def main(argv):
         data = f.read()
     counts = {s: data.count(s.encode()) for s in C8_STRINGS}
     del data
+    rare_guard(counts, binary)
 
     hashes = {}
     for spec in C9_SPECS:
@@ -183,7 +220,8 @@ def main(argv):
         hashes[spec["name"]] = hashlib.sha256("\n".join(kept).encode()).hexdigest()[:16]
 
     doc = {"v": 1, "cc_version": cc_version, "types_version": types_version, "keysets": keysets,
-           "c8": {"binary_version": cc_version, "counts": counts, "idle_prefixes": IDLE_PREFIXES},
+           "c8": {"arm_list": ARM_LIST, "binary_version": cc_version, "counts": counts,
+                  "idle_prefixes": IDLE_PREFIXES, "rare_max": RARE_MAX},
            "c9": {"types_version": types_version, "specs": C9_SPECS, "hashes": hashes},
            "copy_trailers": []}
     text_out = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
