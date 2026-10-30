@@ -40,6 +40,6 @@ my $unmarked = watch::json::encode({ %$base, hook_event_name => 'PostCompact', t
         $E->is(join('/', map { $_ // 'undef' } @{ $p[0] || {} }{qw(nonce_found marker_line verdict)}), "$n/1/ok",
                "the marked summary: nonce and marker line from core's scan");
         $E->is($p[1]{nonce_found}, undef, 'the unmarked summary has no nonce');
-        $E->ok(($p[1]{arm_fp} // '') =~ /\A[0-9a-f]{12}\z/, 'the unmarked summary has its arm fingerprint');
+        $E->ok(scalar(($p[1]{arm_fp} // '') =~ /\A[0-9a-f]{12}\z/), 'the unmarked summary has its arm fingerprint');
     },
 };

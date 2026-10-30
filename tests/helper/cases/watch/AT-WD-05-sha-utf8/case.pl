@@ -23,7 +23,7 @@ my %got;
     expect => sub {
         my ($E) = @_;
         $E->is($got{wide_err}, '', 'a wide character does not die');
-        $E->ok(defined $got{wide} && $got{wide} =~ /\A[0-9a-f]{64}\z/, 'a 64-hex digest');
+        $E->ok(scalar(defined $got{wide} && $got{wide} =~ /\A[0-9a-f]{64}\z/), 'a 64-hex digest');
         $E->is($got{wide}, $got{bytes}, 'characters hash as their UTF-8 bytes');
         $E->ok($got{latin} ne $got{latin_chars}, 'a latin-1 byte string is not re-encoded; the same text as characters is');
         $E->is($got{core_arg}, "a\xe2\x80\x94b", "core's sha256 sub is handed UTF-8 bytes");
