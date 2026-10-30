@@ -170,18 +170,19 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
   // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,720 B since
   // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS), 8,800 B since the
-  // away digest's lane Status and step marks (owner 2026-10-27 12:5x). Classic keeps 8,192.
-  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,800 B (the hard channel total)', () => {
+  // away digest's lane Status and step marks (owner 2026-10-27 12:5x), 8,840 B since a saved handoff's
+  // report is a `handoff ack` pending answer (owner 2026-10-30 07:49). Classic keeps 8,192.
+  test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,840 B (the hard channel total)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'handoff', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8800).toBe(true)
+    expect(byteLength(s) <= 8840).toBe(true)
   })
   test('classic fallback (main [auto]+[chain] + subagent [fallback]) ≤8,192 B', () => {
     const s = assembleText(text('handoff-instructions'), ['auto', 'chain'], WORST, ['measured']) + assembleText(text('subagent-instructions'), ['fallback'], WORST)
     expect(byteLength(s) <= 8192).toBe(true)
   })
-  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,800 B', () => {
+  test('mod main [midturn]+[chain]+[measured] with a full 3,000 B block ≤8,840 B', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
-    expect(byteLength(s) <= 8800).toBe(true)
+    expect(byteLength(s) <= 8840).toBe(true)
   })
   // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
   // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,130
@@ -191,11 +192,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // since the away digest's [idle-done] line with its code-rendered Basis, and the step-5 digest
   // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5; 4,620 since that
   // step-5 digest carries the code-rendered Basis line too, owner 2026-10-27 22:32; 4,657 since
-  // release-0.1.0's [driver] line names the workflow file a GSD loop command loads).
-  test('resume protocol ≤4,657 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // release-0.1.0's [driver] line names the workflow file a GSD loop command loads; 4,800 since
+  // [handoff] and [handoff-partial] carry the one-line handoff ack, owner 2026-10-30 07:49).
+  test('resume protocol ≤4,800 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 4657).toBe(true)
+      expect(s.length <= 4800).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
@@ -234,6 +236,30 @@ describe('AT-P-07 assembler (14-character name)', () => {
       const at = lines.findIndex(l => l.startsWith(h))
       expect(at).toBeGreaterThan(last)
       last = at
+    }
+  })
+  // Owner 2026-10-30 07:49 ("short message after compaction"): a handoff published before the
+  // compaction whose report was not sent gets one ack line, not the report; the summary does not
+  // copy that report as a pending answer in full.
+  test('[handoff] carries the one-line ack for the path it names; [handoff-partial] the same form for a written receipt', () => {
+    const path = '~/.claude/handoffs/x/2026-10-30_07-35-23_ab12cd34_x.md'
+    const s = assembleText(text('resume-context'), ['handoff', 'prod-forbid'], { ...WORST, handoff_path: path })
+    const line = s.split('\n').find(l => l.startsWith('A handoff was saved just before this compaction: ')) ?? ''
+    expect(line).toContain('this compaction: ' + path + '.')
+    expect(line).toContain('Its report not shown sent in kept messages: say only `✓ Handoff saved: <that path>`')
+    expect(line).toContain('(+ ` · Needs you: <n> questions (in the handoff)` for open user-owned questions); no recap.')
+    const p = assembleText(text('resume-context'), ['handoff-partial', 'prod-forbid'], { ...WORST, draft_state: 'present', handoff_finish: '`fin`' })
+    const pl = p.split('\n').find(l => l.startsWith('Compaction cut off the plugin\'s handoff turn')) ?? ''
+    expect(pl).toContain('run `fin` once and relay its receipt; `Wrote handoff to: <path>` as only `✓ Handoff saved: <path>`')
+    expect(pl).toContain('Never start a second handoff.')
+    // Without either tag, no ack rule.
+    expect(assembleText(text('resume-context'), ['prod-forbid'], WORST)).not.toContain('Handoff saved')
+  })
+  test('the summary instructions exempt a saved handoff\'s report from the pending answer "in full"', () => {
+    for (const tags of [[], ['handoff'], ['midturn', 'chain', 'measured', 'handoff', 'queue']] as Tag[][]) {
+      const s = assembleText(text('handoff-instructions'), tags, WORST)
+      const next = s.split('\n').find(l => l.startsWith('## Next steps: ')) ?? ''
+      expect(next.endsWith('pending answer: <in full>, unless shown sent (a saved handoff\'s report: `handoff ack`)')).toBe(true)
     }
   })
 })

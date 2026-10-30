@@ -187,9 +187,13 @@ def assemble(text, tags, drop=()):
 # Next step todo or done in the summary; 72 B more on every main path. The total goes to 8,800 B,
 # the least that fits the worst path (8,777 B, 8,792 B with a 16-character plugin name), with no
 # rule text removed.
+# Owner 2026-10-30 07:49 ("short message after compaction"; "feel free to raise any limits if
+# needed"): a saved handoff's report is no pending answer in full (`handoff ack`); 42 B more on
+# every main path. The total goes to 8,840 B, the least that fits the worst path (8,819 B,
+# 8,834 B with a 16-character plugin name), with no rule text removed.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
-    "mod channel total":     ("bytes", None, 8800),
+    "mod channel total":     ("bytes", None, 8840),
     "classic channel total": ("bytes", None, 8192),
     "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
     "subagent mod":          ("chars", 900, None),
