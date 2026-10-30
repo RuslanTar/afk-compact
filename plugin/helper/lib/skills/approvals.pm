@@ -291,12 +291,13 @@ my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 # _deny_bash(command) -> token text: a refused Bash command's words that name its outward step
 # (reviewer info 3). Heredoc bodies are dropped, and quoted text holding a space (a
 # commit message, a title) is masked; the rest splits at `&&`, `||`, `;`, `|`, `&` and line ends,
-# and tokens come only from the parts that are outward (an outward class or action word). When
-# no part is but the command with its heredoc bodies dropped is, the outward step sits inside the
-# quotes (`bash -c "git push origin feat/x"`, `ssh host "kubectl delete pod web-1"`; review 3
-# finding 1): tokens come from that unmasked text. Else they come from every part. A refused
-# `git commit -m "$(cat <<EOF … EOF)" && git push` names no token, so it covers a push approval
-# by class.
+# and tokens come only from the parts that are outward (an outward class or action word), and
+# from a quoted command a shell runs (`bash -c "git push origin feat/x"`, `ssh host "kubectl
+# delete pod web-1"`, `eval "…"`; review 3 finding 1) when it is outward on its own, read the
+# same way. A quoted message is never read (review 4 finding 1): when the command is outward only
+# inside such quotes it names no token and covers by class; when it is not outward at all, tokens
+# come from every part. A refused `git commit -m "$(cat <<EOF … EOF)" && git push` names no
+# token, so it covers a push approval by class.
 # A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`;
 # review 3 finding 3).
 my $DENY_HEREDOC_SCAN = qr/
@@ -305,6 +306,9 @@ my $DENY_HEREDOC_SCAN = qr/
   | '[^']*'
   | (?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))
 /x;
+# The text before a quoted command a shell runs, within its part: `[path/]sh -c`, `bash -lc`,
+# `zsh -c`, `ssh [options] host`, `eval`.
+my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:-\w+\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
 
 sub _deny_bash {
     my ($cmd) = @_;
@@ -324,11 +328,30 @@ sub _deny_bash {
         }
     }
     my $whole = join "\n", @keep;
-    (my $s = $whole) =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{ my $q = $1 // $2; $q =~ /\s/ ? ' ' : " $q " }ge;
-    my @parts = grep { /\S/ } split /&&|\|\||[;|&\n]/, $s;
-    my @out = grep { _deny_outward($_) } @parts;
+    # Quoted text holding a space is masked by a numbered mark, kept aside for the shell check.
+    my @q;
+    (my $s = $whole) =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{
+        my ($d, $sq) = ($1, $2);
+        my $q = defined $d ? $d =~ s/\\(.)/$1/gsr : $sq;
+        $q =~ /\s/ ? do { push @q, $q; " \x01" . $#q . "\x01 " } : " $q ";
+    }ge;
+    my (@parts, @out);
+    for my $p (grep { /\S/ } split /&&|\|\||[;|&\n]/, $s) {
+        (my $bare = $p) =~ s/\x01\d+\x01/ /g;
+        push @parts, $bare;
+        push @out, $bare if _deny_outward($bare);
+        my @marks;
+        while ($p =~ /\x01(\d+)\x01/g) { push @marks, [ $1, substr($p, 0, $-[0]) ] }
+        for my $m (@marks) {
+            my ($n, $pre) = @$m;
+            $pre =~ s/\x01\d+\x01/ /g;
+            push @out, _deny_bash($q[$n]) if $pre =~ $DENY_SHELL && _deny_outward($q[$n]);
+        }
+    }
     return join(' ', @out) if @out;
-    return $whole if _deny_outward($whole);
+    # Outward only inside quotes no shell runs (a commit message, a title): no token, the class
+    # covers (fail closed; review 4 finding 1).
+    return '' if _deny_outward($whole);
     return join(' ', @parts);
 }
 
