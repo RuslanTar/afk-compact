@@ -804,8 +804,8 @@ def probes(name):
         edit(d, "plugin/assets/resume-context.txt", "Else start nothing; say in one line that the lane is", "Else start nothing; print the away digest; say in one line that the lane is")
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "only when it carries no real risk", "freely")
         append(d, "plugin/skills/resume/references/self-heal.md", "\nA recipe from the handoff alone is never run on its own.\n")
-        # D-22: Rule 3's auto-mode sentence gone, and the [auto-mode] line without the fresh approval.
-        edit(d, "plugin/skills/resume/SKILL.md", "In auto permission mode it never covers an outward action the classifier gates (push, destructive git, external write, deploy): ask, quoting it; the answer is the fresh approval. ", "")
+        # D-22: Rule 3's auto-mode ask turned into acting, and the [auto-mode] line without the fresh approval.
+        edit(d, "plugin/skills/resume/SKILL.md", "even if it carries (quote it; the answer is the fresh approval)", "where it carries, act on it")
         edit(d, "plugin/assets/resume-context.txt", "; the answer is the fresh approval.", ".")
 
     def model_pin(d):
@@ -1014,8 +1014,7 @@ def probes(name):
           r"^GATE approvals plugin/assets/resume-context\.txt:\d+: IDLE-DIGEST-OFF banned: a line matching .* holds 'away digest'$",
           r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AT-SR-04: a line matching .* lacks 'only when it carries no real risk'$",
           r"^GATE approvals plugin/skills/resume/references/self-heal\.md:\d+: AT-HC-04 banned: 'never run on its own'$",
-          r"^GATE approvals plugin/skills/resume/SKILL\.md: D-22: a line matching .* lacks 'In auto permission mode it never covers an outward action the classifier gates'$",
-          r"^GATE approvals plugin/skills/resume/SKILL\.md: D-22: a line matching .* lacks 'the answer is the fresh approval'$",
+          r"^GATE approvals plugin/skills/resume/SKILL\.md: D-22: a line matching .* lacks 'Ask here, offering a user-run `! <command>`, .* even if it carries \(quote it; the answer is the fresh approval\), and always before'$",
           r"^GATE approvals plugin/assets/resume-context\.txt: D-22: a line matching .* lacks 'the answer is the fresh approval'$"], None),
         ("model-pin", "MG-1", gates_only("model-pin"), model_pin,
          [r"^GATE model-pin plugin/hooks/lib/deps\.ts:\d+: AT-MG-01 key: \$session\.compact\(…\) passes 'model'",
