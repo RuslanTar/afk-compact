@@ -74,6 +74,9 @@
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
 #   builtin hold_parity {file, lists {<const name>: job | user | none}, min}: copies::_hold_of (the
 #     staged copy) over each named string array of a TS test file in the staged plugin
+#   builtin settings_view {home, common}: settings::view (the staged copy) against the staged
+#     manifest: a row per userConfig key in one section, its title, default, min and max the
+#     manifest's; with `common` [keys], each row's tier common when listed, else advanced
 # Hosts for 0.1.0 (this runner and the watch driver, as a normal user, never as root):
 #   macOS, and the Linux rows MX-04 (debian:bookworm-slim + git), MX-09 (fedora:latest +
 #   git) and MX-12 (alpine:latest + perl git). None of the three has make, procps ps or
@@ -2835,6 +2838,51 @@ sub builtin {
         # it runs in a forked child this runner kills after `within_s` (default 20), so code
         # without the bound fails as "hung" instead of backtracking for minutes.
         return u06_within($a->{within_s} // 20, sub { u06_check($a->{check} // '', $a) });
+    }
+    if ($name eq 'settings_view') {
+        # AT-ON-01 (0.1.2 onboarding): settings::view (the staged copy) with no settings file holds
+        # one row per manifest userConfig key and no other, each in exactly one section's key
+        # list, with the manifest's title, default, min and max (read here from the staged
+        # plugin.json, not through settings.pm); `unsectioned` is empty.
+        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        local $ENV{CLAUDE_CONFIG_DIR};
+        local $ENV{CLAUDE_PLUGIN_ROOT};
+        delete local @ENV{ grep { /^CLAUDE_PLUGIN_OPTION_/ } keys %ENV };
+        my $m = eval { jsonc::decode(util::read_file("$STAGE/.claude-plugin/plugin.json")) };
+        return ('staged plugin.json: no userConfig') unless ref $m eq 'HASH' && ref $m->{userConfig} eq 'HASH';
+        my $uc = $m->{userConfig};
+        my %v = @{ settings::view({}, 'all') };
+        my %rows = @{ $v{settings} };
+        my %in;
+        for my $s (@{ $v{sections} }) { my %s = @$s; $in{$_}++ for @{ $s{keys} || [] } }
+        my $norm = sub {
+            my ($x) = @_;
+            return 'null' unless defined $x;
+            return "$x" if jsonc::is_bool($x);
+            return 0 + $x if !ref $x && $x =~ /\A-?[0-9]+(?:\.[0-9]+)?\z/;
+            return ref $x ? jsonc::encode($x) : "$x";
+        };
+        for my $k (sort keys %$uc) {
+            if (!$rows{$k}) { push @e, "$k: no row"; next }
+            my %r = @{ $rows{$k} };
+            push @e, "$k: in " . ($in{$k} // 0) . ' section key lists, want 1' unless ($in{$k} // 0) == 1;
+            for my $f (qw(title default min max)) {
+                my ($g, $w) = ($norm->($r{$f}), $norm->(ref $uc->{$k} eq 'HASH' ? $uc->{$k}{$f} : undef));
+                push @e, "$k.$f = $g, want $w (the manifest's)" unless $g eq $w;
+            }
+        }
+        if (ref $a->{common} eq 'ARRAY') {
+            my %common = map { $_ => 1 } @{ $a->{common} };
+            for my $k (sort keys %rows) {
+                my %r = @{ $rows{$k} };
+                my $want = $common{$k} ? 'common' : 'advanced';
+                push @e, "$k.tier = " . ($r{tier} // 'null') . ", want $want" unless ($r{tier} // '') eq $want;
+            }
+        }
+        push @e, "$_: a row with no manifest key" for grep { !exists $uc->{$_} } sort keys %rows;
+        push @e, "$_: in a section's key list, no row" for grep { !$rows{$_} } sort keys %in;
+        push @e, 'unsectioned: ' . join(', ', @{ $v{unsectioned} }) if @{ $v{unsectioned} || [] };
+        return @e;
     }
     if ($name eq 'settings_export') {
         # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).

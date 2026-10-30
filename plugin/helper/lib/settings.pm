@@ -85,6 +85,64 @@ our @KEYS = (
     # consent key (settings file only); any other value reads as off with a note.
     [restart_on_update           => 'str',  'off',                     'enum'],
 );
+# 0.1.2 onboarding (the settings flow, `settings show`): the section and tier of every key, here
+# because plugin.json cannot hold keys Claude Code does not know. `common` keys are asked by
+# the flow section by section; `advanced` ones (rare tuning: ms timings, quotas, patterns) only
+# by its advanced tier. The settings-sections gate holds this table equal to the manifest's
+# userConfig keys, so a new key cannot miss the flow.
+our @SECTIONS = (
+    [compaction => 'Compaction'],
+    [idle       => 'Idle sessions'],
+    [handoffs   => 'Handoffs'],
+    [logs       => 'Warnings and logs'],
+    [jobs       => 'Background jobs'],
+    [safety     => 'Safety'],
+);
+our %SECTION = (
+    triggers                    => [qw(compaction common)],
+    compact_target_tokens       => [qw(compaction common)],
+    native_window_tokens        => [qw(compaction common)],
+    max_auto_continues_per_hour => [qw(compaction common)],
+    handoff_turn                => [qw(compaction common)],
+    precompact_turn             => [qw(compaction common)],
+    compact_soft_max_tokens     => [qw(compaction advanced)],
+    boundary_delay_ms           => [qw(compaction advanced)],
+    cooldown_ms                 => [qw(compaction advanced)],
+    cache_ttl_s                 => [qw(compaction advanced)],
+    handoff_turn_max_tokens     => [qw(compaction advanced)],
+    driver_skills               => [qw(compaction advanced)],
+    idle_compact                => [qw(idle common)],
+    idle_handoff_turn           => [qw(idle common)],
+    idle_digest                 => [qw(idle common)],
+    idle_handoff_min_tokens     => [qw(idle common)],
+    handoff_root                => [qw(handoffs common)],
+    log_dir                     => [qw(handoffs common)],
+    disposable_root             => [qw(handoffs common)],
+    resume_proceed              => [qw(handoffs common)],
+    handoff_reuse_window_min    => [qw(handoffs common)],
+    disposable_keep_days        => [qw(handoffs advanced)],
+    evidence_quota_mb           => [qw(handoffs advanced)],
+    evidence_total_max_mb       => [qw(handoffs advanced)],
+    ticket_pattern              => [qw(handoffs advanced)],
+    warn_ui                     => [qw(logs common)],
+    watcher                     => [qw(logs common)],
+    stall_min                   => [qw(logs common)],
+    measured_block              => [qw(logs common)],
+    auto_evidence               => [qw(logs common)],
+    watch_quota_mb              => [qw(logs advanced)],
+    otel_log_path               => [qw(logs advanced)],
+    relaunch_quiet_s            => [qw(jobs common)],
+    relaunch_auto               => [qw(jobs common)],
+    relaunch_allow              => [qw(jobs common)],
+    queue_cmd                   => [qw(jobs common)],
+    repo_roots                  => [qw(safety common)],
+    unattended_prod_reads       => [qw(safety common)],
+    restart_on_update           => [qw(safety common)],
+    prod_patterns               => [qw(safety common)],
+    secret_extra_rules          => [qw(safety common)],
+    protected_branches          => [qw(safety common)],
+    deny_class_patterns         => [qw(safety advanced)],
+);
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
 # The values an enum key exports as is (W-BETA D); any other value exports as `other`.
@@ -244,6 +302,16 @@ sub former_name_keys {
     return @out;
 }
 
+# inline_key() -> `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and not under the config dir's
+# plugins/ (a --plugin-dir run, E-14), else undef.
+sub inline_key {
+    my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
+    return undef unless defined $pr && $pr ne '';
+    my $plugins = util::clean_path(config_dir() . '/plugins');
+    my $p = util::clean_path($pr);
+    return index("$p/", "$plugins/") != 0 ? ctx::brand() . '@inline' : undef;
+}
+
 # Returns (options hashref or undef, note) from the user's settings file.
 sub _settings_file_options {
     my $o = options_source();
@@ -257,11 +325,8 @@ sub _settings_file_options {
 sub options_key {
     my ($pc) = @_;
     my $brand = ctx::brand();
-    my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
-    if (defined $pr && $pr ne '') {
-        my $plugins = util::clean_path(config_dir() . '/plugins');
-        my $p = util::clean_path($pr);
-        return ("$brand\@inline", ["$brand\@inline"]) if index("$p/", "$plugins/") != 0;
+    if (defined(my $k = inline_key())) {
+        return ($k, [$k]);
     }
     my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %{ ref $pc eq 'HASH' ? $pc : {} };
     return (undef, \@cand) if @cand != 1;
@@ -289,13 +354,50 @@ sub options_source {
     return \%o;
 }
 
+# config_key_info() -> {state, key}: the user's settings file as a settings writer would see it
+# (0.1.2 onboarding). state: absent (no file, no pluginConfigs or no key for the plugin),
+# unreadable (the path exists, as a dangling link too, but cannot be read as a file: no
+# permission, a folder; a writer refuses it, never takes it for absent), unparseable (the file
+# is not a JSON object, its pluginConfigs is not one, or the plugin's entry or that entry's
+# options is there but not an object: a writer cannot merge into it and refuses it), ambiguous
+# (two or more keys for the plugin), found (one key, its options an object or missing).
+# key: that key, also when its entry is unparseable; under --plugin-dir the @inline key, also
+# while the file lacks it; else undef.
+sub config_key_info {
+    my $inline = inline_key();
+    my $file = config_dir() . '/settings.json';
+    my $raw = util::read_file($file);
+    if (!defined $raw) {
+        return { state => 'unreadable', key => undef } if -e $file || -l $file;
+        return { state => 'absent', key => $inline };
+    }
+    my $s = eval { jsonc::decode($raw) };
+    return { state => 'unparseable', key => undef }
+        unless ref $s eq 'HASH' && (!defined $s->{pluginConfigs} || ref $s->{pluginConfigs} eq 'HASH');
+    my $pc = $s->{pluginConfigs} || {};
+    my $entry = sub {
+        my ($k) = @_;
+        my $e = $pc->{$k};
+        return 'unparseable' unless ref $e eq 'HASH' && (!exists $e->{options} || ref $e->{options} eq 'HASH');
+        return 'found';
+    };
+    return { state => (exists $pc->{$inline} ? $entry->($inline) : 'absent'), key => $inline } if defined $inline;
+    my $brand = ctx::brand();
+    my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %$pc;
+    return { state => 'absent', key => undef } unless @cand;
+    return { state => 'ambiguous', key => undef } if @cand > 1;
+    return { state => $entry->($cand[0]), key => $cand[0] };
+}
+
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
-#   notes => [..], ambiguous => 0|1, config_key => key-or-undef}
+#   notes => [..], ambiguous => 0|1, config_key => key-or-undef,
+#   defaults => {key => the default used: the manifest's, else the @KEYS fallback, as written}}
 sub resolve {
     my ($flags) = @_;
     $flags ||= {};
     my %val;
     my %src;
+    my %def;
     my @notes;
     my ($opts, $ckey) = _settings_file_options();
     my $ambiguous = (defined $ckey && $ckey eq 'ambiguous') ? 1 : 0;
@@ -318,6 +420,17 @@ sub resolve {
         elsif (!$file_only && !$no_flag && !_unset($env)) { ($v, $s) = ($env, 'env') }
         elsif (!$ambiguous && ref $opts eq 'HASH' && !_unset($opts->{$key})) { ($v, $s) = ($opts->{$key}, 'settings') }
         else { ($v, $s) = ($default, 'default') }
+        # ON-5 (0.1.2): only the settings file holds JSON values. An array of strings or numbers
+        # for a `;` list key reads as its entries joined with `;` (a protective list written as an
+        # array still adds its entries); any other array or object is invalid: the default.
+        if (ref $v eq 'ARRAY' && ($EXPORT{$key} // '') eq 'list' && !grep { !defined || ref } @$v) {
+            push @notes, "$key: a JSON list, read as its entries joined with ;";
+            $v = join ';', @$v;
+        }
+        elsif (ref $v eq 'ARRAY' || ref $v eq 'HASH') {
+            push @notes, "$key: not a single value, default used";
+            ($v, $s) = ($default, 'default');
+        }
         my $c = _coerce($key, $v);
         if (!defined $c) {
             push @notes, "$key: not a number, default used";
@@ -325,6 +438,7 @@ sub resolve {
         }
         $val{$key} = $c;
         $src{$key} = $s;
+        $def{$key} = $default;
     }
     # Tighten-only keys (S-SETTINGS E3): the strictest valid value of flag, env, settings file
     # and default wins; an invalid value counts as unset (with a note).
@@ -394,7 +508,7 @@ sub resolve {
     my $sx = secret_extra({ values => \%val });
     push @notes, "secret_extra_rules: entry $_ dropped (invalid)" for @{ $sx->{invalid} };
     return { values => \%val, source => \%src, notes => \@notes, ambiguous => $ambiguous,
-             config_key => ($ambiguous ? undef : $ckey) };
+             config_key => ($ambiguous ? undef : $ckey), defaults => \%def };
 }
 
 # ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
@@ -927,6 +1041,67 @@ sub value_warnings {
                  . (defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
     return @l;
+}
+
+# ---------------------------------------------------------------- view (0.1.2 onboarding)
+# view(\%flags[, tier]) -> ordered object: one row per key (key, title, section, tier, kind,
+# default, min, max, values, value, source, clamped, class) in @SECTIONS order (@KEYS order inside a
+# section), with the pluginConfigs key in use (config_key_info) and why a write there would be
+# refused. Min and max are the manifest's; default, value and source are resolve()'s (one place
+# works the default out). tier: common, advanced or all (default). A key with no %SECTION row
+# goes to section `other`, tier advanced, and is listed in `unsectioned` (the settings-sections
+# gate fails on it). `clamped`: true for a key the clamp moves (a number outside its min/max, a
+# window below the floor, a soft max or target over the window's clamp), the watcher's export
+# flags (watch::export::clamped_keys); `value` stays the configured one; null when they cannot be
+# worked out. Read-only.
+our %KIND = (num => 'number', bool => 'boolean', enum => 'enum', path => 'path', list => 'list', drop => 'text');
+sub view {
+    my ($flags, $tier) = @_;
+    $tier //= 'all';
+    my $r = resolve($flags || {});
+    my $uc = ctx::user_config();
+    my (%rows, %by, @unsectioned);
+    my $cl = eval { require watch::export; watch::export::clamped_keys($r, scalar eval { spec::load() }) };
+    for my $k (@KEYS) {
+        my ($key, $type, undef, $class) = @$k;
+        my ($sec, $t) = @{ $SECTION{$key} || [] };
+        if (!defined $sec) { push @unsectioned, $key; ($sec, $t) = ('other', 'advanced') }
+        next unless $tier eq 'all' || $tier eq $t;
+        my $u = ref $uc->{$key} eq 'HASH' ? $uc->{$key} : {};
+        my $default = $r->{defaults}{$key};
+        my $v = $r->{values}{$key};
+        my ($lo, $hi) = limits($key);
+        if ($type eq 'bool') { ($default, $v) = (jsonc::bool(_coerce($key, $default)), jsonc::bool($v)) }
+        elsif ($type eq 'num') { $default = 0 + $default if defined $default && "$default" =~ /\A-?[0-9]+(\.[0-9]+)?\z/; $v = 0 + $v if defined $v }
+        $rows{$key} = jsonc::obj(
+            key => $key, title => $u->{title}, section => $sec, tier => $t, kind => $KIND{$class // ''} // 'text',
+            default => $default, min => $lo, max => $hi,
+            values => ($ENUM{$key} ? [ @{ $ENUM{$key} } ] : undef),
+            value => $v, source => $r->{source}{$key},
+            clamped => (ref $cl eq 'HASH' ? jsonc::bool($cl->{$key}) : undef),
+            class => ($FILE_ONLY{$key} ? 'consent' : $NO_FLAG{$key} ? 'protective' : undef));
+        push @{ $by{$sec} }, $key;
+    }
+    my @sections;
+    for my $s (@SECTIONS, ['other' => 'Other']) {
+        push @sections, jsonc::obj(id => $s->[0], title => $s->[1], keys => $by{ $s->[0] }) if $by{ $s->[0] };
+    }
+    my $ci = config_key_info();
+    my $state = $ci->{state};
+    my $inline = inline_key();
+    my $foreign = config_dir_foreign();
+    # Why a write would be refused, the first that holds: another settings folder
+    # (config-dir-foreign under CLAUDE_CONFIG_DIR, home-foreign when HOME is not the account
+    # home), a file that cannot be read or that a writer cannot merge into, a --plugin-dir run,
+    # two keys for the plugin.
+    my $refused = $foreign ? (($ENV{CLAUDE_CONFIG_DIR} // '') ne '' ? 'config-dir-foreign' : 'home-foreign')
+        : ($state eq 'unreadable' || $state eq 'unparseable') ? $state : defined $inline ? 'inline'
+        : $state eq 'ambiguous' ? 'ambiguous' : undef;
+    return jsonc::obj(
+        config_file => config_dir() . '/settings.json', config_key => $ci->{key}, config_key_state => $state,
+        inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,
+        sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
+        unsectioned => \@unsectioned, notes => $r->{notes});
 }
 
 # Pull settings flags out of a parsed-flag hash (keys as given on the command line).

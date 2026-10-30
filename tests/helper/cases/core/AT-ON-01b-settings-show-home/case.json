@@ -1,0 +1,16 @@
+{
+ "id": "AT-ON-01b (settings show: a HOME that is not the account home)",
+ "note": "0.1.2 onboarding: run without the runner's consent seam (consent_home account), the fresh HOME is not the account home, so its settings file is not the consent folder's own: `settings show` reports config_dir_foreign, the consent keys at their safe values, and write_refused home-foreign (config-dir-foreign is kept for a foreign CLAUDE_CONFIG_DIR, AT-ON-01)",
+ "now": "2026-10-30T12:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "consent_home": "account",
+ "steps": [
+  {"name": "a HOME that is not the account home: writes refused as home-foreign",
+   "setup": [{"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"relaunch_auto": "on", "watcher": "off"}}}}}],
+   "argv": ["settings", "show", "--json"],
+   "expect": {"exit": 0,
+     "json": {"config_dir_foreign": true, "write_refused": "home-foreign", "config_key": "$BRAND@m",
+              "settings.relaunch_auto.value": "off", "settings.relaunch_auto.source": "safe",
+              "settings.watcher.value": "off", "settings.watcher.source": "settings"}}}
+ ]
+}

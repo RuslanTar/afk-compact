@@ -1,8 +1,19 @@
-# cmd/settings.pl: `settings show` and `settings reset` (0.1.2 visible defaults). Owner: WP-core.
-#   settings show [--root D] [--log-dir D]
+# cmd/settings.pl: `settings show` and `settings reset` (0.1.2 visible defaults and onboarding).
+# Owner: WP-core.
+#   settings show [--root D] [--log-dir D] [settings flags]
 #       read-only: the settings file and the plugin's options key, then every key in @KEYS order
 #       with its value, source and default, the warnings (a saved "", an ambiguous key), the
-#       notes, and the user-run reset line.
+#       notes, and the user-run reset line (visible defaults).
+#   settings show --json | --tier common|advanced|all [settings flags]
+#       read-only, the data of the onboarding settings flow: settings::view(), every key's
+#       section, tier, kind, default, min/max, allowed values, current value and its source
+#       (flag|env|settings|default|safe), whether the clamp moves it, consent or protective
+#       class; the pluginConfigs key in use and `write_refused` (config-dir-foreign,
+#       home-foreign, unreadable, unparseable, inline or ambiguous: why a write there would be
+#       refused). --json prints that object on one line; --tier alone a heading per section and
+#       one `  <key> = <value> (<source>)` line per key. The flow has no write verb of its own:
+#       whether the plugin writes settings.json from a model-run call is open (onboarding
+#       OPEN-1); the only write is the user-run reset below.
 #   settings reset <key>...|--all [--plan P] [--apply]
 #       a dry run unless --apply (as `project copy`): the members it would remove with their
 #       values and defaults (never a pattern's or a list's text), and the line to type, which
@@ -21,7 +32,12 @@ my $USAGE_RESET = 'usage: settings reset <key>...|--all [--apply]';
 sub run {
     my $sub = shift @_;
     die "usage: settings show | settings reset <key>...|--all [--apply]\n" unless defined $sub && ($sub eq 'show' || $sub eq 'reset');
-    my ($opt, $rest) = args::parse(\@_, bools => [qw(apply all)], known => [qw(plan root log-dir)]);
+    my ($opt, $rest) = args::parse(\@_, bools => [qw(apply all json)], known => [qw(plan root log-dir tier)]);
+    if ($sub eq 'show') {
+        die "usage: settings show takes no argument ($rest->[0])\n" if @$rest;
+        die "usage: --tier common|advanced|all\n" if defined $opt->{tier} && $opt->{tier} !~ /\A(?:common|advanced|all)\z/;
+        return view($opt) if $opt->{json} || defined $opt->{tier};
+    }
     rc::init(sid => undef, writer => 'helper', flags => settings::flags_from($opt));
     return show() if $sub eq 'show';
     die "$USAGE_RESET\n" if ($opt->{all} && @$rest) || (!$opt->{all} && !@$rest);
@@ -30,6 +46,41 @@ sub run {
 }
 
 sub _file_text { return util::text(util::abbrev(settings::config_dir() . '/settings.json')) }
+
+sub _text {
+    my ($v) = @_;
+    return '(empty)' if !defined $v || (!ref $v && $v eq '');
+    return "$v";
+}
+
+# The onboarding settings flow's view (--json or --tier): settings::view() as one JSON object, or
+# a heading per section and one line per key.
+sub view {
+    my ($opt) = @_;
+    my $view = settings::view(settings::flags_from($opt), $opt->{tier} // 'all');
+    if ($opt->{json}) {
+        print STDOUT jsonc::encode_bytes($view), "\n";
+        return 0;
+    }
+    my %v = @$view;
+    my %rows = @{ $v{settings} };
+    my @out;
+    for my $s (@{ $v{sections} }) {
+        my %s = @$s;
+        push @out, $s{title};
+        for my $k (@{ $s{keys} }) {
+            my %r = @{ $rows{$k} };
+            my $why = $r{class} ? "; $r{class} key, settings file only" : '';
+            push @out, "  $k = " . _text($r{value}) . " ($r{source}$why)";
+        }
+    }
+    push @out, 'pluginConfigs key: ' . ($v{config_key} // "none ($v{config_key_state})");
+    push @out, "writes refused: $v{write_refused}" if defined $v{write_refused};
+    push @out, "note: $_" for @{ $v{notes} || [] };
+    push @out, 'not in a section: ' . join(', ', @{ $v{unsectioned} }) if @{ $v{unsectioned} };
+    print STDOUT map { my $l = $_; utf8::encode($l) if utf8::is_utf8($l); "$l\n" } @out;
+    return 0;
+}
 
 sub show {
     my $o = settings::options_source();

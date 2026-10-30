@@ -10,8 +10,9 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 skill-desc, wait-text, asset-bytes, skill-budget, write-first, self-heal,
                 config-defaults, launcher, template-shape, lint-texts, section-caps, xref,
                 no-args-inline, readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc,
-                nudge-folder, export-classes, no-network, export-schema, report-skill, no-age-rule,
-                perl-utf8, approvals, model-pin, queue-text, risk-corpus, store-flags, planning)
+                nudge-folder, export-classes, settings-sections, no-network, export-schema,
+                report-skill, no-age-rule, perl-utf8, approvals, model-pin, queue-text, risk-corpus,
+                store-flags, planning)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -109,6 +110,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                one); a key with `options` lists exactly settings.pm %ENUM's values, default in it
   export-classes AT-WB-08: every settings key exports as num/bool/enum/path/list/drop; dir and
                file keys as path or drop; enum keys have %ENUM values
+  settings-sections AT-ON-02 (0.1.2 onboarding): settings.pm %SECTION gives every manifest key,
+               and no other, a section of @SECTIONS and a tier (common or advanced)
   no-network   AT-WB-11 (static): report.pl and every helper module it loads name no
                IO::Socket, LWP, HTTP::Tiny or Net::
   export-schema AT-WB-01 (static): every `ev` the helper and mod code write has a
@@ -1473,6 +1476,50 @@ def export_classes_hits(target, brand):
     return out
 
 
+SECTION_ROW = re.compile(r"^\s*(\w+)\s*=>\s*\[qw\((\w+)\s+(\w+)\)\],?\s*$")
+SECTION_ID = re.compile(r"^\s*\[(\w+)\s*=>\s*'[^']*'\],?\s*$")
+SECTION_TIERS = ("common", "advanced")
+
+
+def settings_sections_hits(target, brand):
+    """AT-ON-02 (0.1.2 onboarding): settings.pm %SECTION gives every manifest userConfig key, and
+    no other key, a section listed in @SECTIONS and a tier (common or advanced), so a new key
+    cannot miss the settings flow."""
+    if not _is_plugin(target):
+        return []
+    spath = os.path.join(target, *SETTINGS_REL.split("/"))
+    if not os.path.isfile(spath):
+        return [_missing(spath, "AT-ON-02 settings")]
+    src = _read(spath)
+    sm = re.search(r"^our @SECTIONS = \((.*?)^\);", src, re.S | re.M)
+    tm = re.search(r"^our %SECTION = \((.*?)^\);", src, re.S | re.M)
+    if not sm or not tm:
+        return [(spath, None, "AT-ON-02 table", "AT-ON-02 table: settings.pm has no @SECTIONS or %SECTION block", "")]
+    ids = [m.group(1) for m in (SECTION_ID.match(ln) for ln in sm.group(1).split("\n")) if m]
+    _mp, defaults = _manifest_defaults(target)
+    out, seen = [], set()
+    for ln in tm.group(1).split("\n"):
+        if not ln.strip() or ln.strip().startswith("#"):
+            continue
+        m = SECTION_ROW.match(ln)
+        if not m:
+            out.append((spath, None, "AT-ON-02 row", "AT-ON-02 row: %SECTION line not `key => [qw(section tier)],`: " + ln.strip(), ""))
+            continue
+        key, sec, tier = m.groups()
+        if key in seen:
+            out.append((spath, None, "AT-ON-02 twice", "AT-ON-02 twice: {} has two %SECTION rows".format(key), ""))
+        seen.add(key)
+        if key not in defaults:
+            out.append((spath, None, "AT-ON-02 extra", "AT-ON-02 extra: %SECTION key {} is not in the manifest".format(key), ""))
+        if sec not in ids:
+            out.append((spath, None, "AT-ON-02 section", "AT-ON-02 section: {} is in section {}, not one of @SECTIONS".format(key, sec), ""))
+        if tier not in SECTION_TIERS:
+            out.append((spath, None, "AT-ON-02 tier", "AT-ON-02 tier: {} has tier {} (want common or advanced)".format(key, tier), ""))
+    for key in sorted(set(defaults) - seen):
+        out.append((spath, None, "AT-ON-02 missing", "AT-ON-02 missing: manifest key {} has no section in settings.pm %SECTION".format(key), ""))
+    return out
+
+
 REPORT_CMD_REL = "helper/cmd/report.pl"
 NETWORK = re.compile(r"\b(?:IO::Socket|LWP|HTTP::Tiny|Net::)")
 USE_MOD = re.compile(r"^\s*(?:use|require)\s+([A-Za-z_][\w:]*)\s*[;(\s]", re.M)
@@ -2183,6 +2230,7 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("config-defaults", config_sources_hits),
               ("config-defaults", config_titles_hits),
               ("export-classes", export_classes_hits),
+              ("settings-sections", settings_sections_hits),
               ("no-network", no_network_hits),
               ("export-schema", export_schema_hits),
               ("report-skill", report_skill_hits),

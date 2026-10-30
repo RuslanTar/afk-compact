@@ -1,0 +1,32 @@
+{
+ "id": "AT-ON-03 (a JSON array or object in the settings file)",
+ "note": "0.1.2 onboarding ON-5: settings::resolve reads a JSON array of strings or numbers for a list key (the `;` lists: protected_branches, prod_patterns, repo_roots, relaunch_allow, secret_extra_rules, deny_class_patterns, driver_skills) as its entries joined with `;`, with the note `<key>: a JSON list, read as its entries joined with ;`, so a protective list written as an array still adds its entries (it used to read as the text ARRAY(0x…) and add nothing). Any other array or object (one for a key that is not a list, or holding a non-scalar entry) is invalid: the default, with the note `<key>: not a single value, default used`. Notes never carry the value",
+ "now": "2026-10-30T12:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {"name": "list keys as arrays: joined with ;, one note each; other keys' arrays and objects: the default with a note",
+   "setup": [{"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {
+              "protected_branches": ["qa-env", "uat/*"], "prod_patterns": ["live-db", 7], "repo_roots": ["$HOME"],
+              "watcher": ["off"], "deny_class_patterns": [["x"]], "stall_min": {"n": 5}}}}}}],
+   "argv": ["settings", "show", "--json"],
+   "expect": {"exit": 0,
+     "json": {"settings.protected_branches.value": "qa-env;uat/*", "settings.protected_branches.source": "settings",
+              "settings.prod_patterns.value": "live-db;7", "settings.repo_roots.value": "$HOME",
+              "settings.repo_roots.source": "settings",
+              "settings.watcher.value": "shadow", "settings.watcher.source": "default",
+              "settings.deny_class_patterns.value": "", "settings.deny_class_patterns.source": "default",
+              "settings.stall_min.value": 60, "settings.stall_min.source": "default"},
+     "stdout_has": ["\"protected_branches: a JSON list, read as its entries joined with ;\"",
+                    "\"prod_patterns: a JSON list, read as its entries joined with ;\"",
+                    "\"watcher: not a single value, default used\"",
+                    "\"deny_class_patterns: not a single value, default used\"",
+                    "\"stall_min: not a single value, default used\""],
+     "stdout_lacks": ["ARRAY\\(0x", "HASH\\(0x", "live-db\""]}},
+  {"name": "status: a protected_branches array adds its entries to the shipped list",
+   "argv": ["status", "--sid", "s-on-03"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^protected branches: the shipped list \\+ 2 yours \\(settings file\\)$",
+                    "^note: protected_branches: a JSON list, read as its entries joined with ;$"],
+     "stdout_lacks": ["ARRAY\\(0x", "qa-env"]}}
+ ]
+}
