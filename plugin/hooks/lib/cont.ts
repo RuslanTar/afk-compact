@@ -3,7 +3,7 @@ import type { Deps } from './deps'
 import { submitPending, submitSettled, userFirst } from './deps'
 import type { HaltReason } from './handoff-turn'
 import { claimBy } from './helper'
-import { escalate, helperMissing, isoLocal, log } from './log'
+import { escalate, helperMissing, log, stamp } from './log'
 import { claimedElsewhere, logOutcome } from './resume'
 import { submitDropped } from './idle'
 
@@ -38,7 +38,7 @@ export async function enterHalt(d: Deps, sid: string, reason: '2-nonok' | 'thras
   if (s.halt.active) return
   s.halt = { active: true, reason }
   const path = await haltPath(d, sid)
-  if (path) await d.write(path, JSON.stringify({ active: true, reason, since: isoLocal(await d.now(), false) }) + '\n')
+  if (path) await d.write(path, JSON.stringify({ active: true, reason, since: await stamp(d, await d.now(), false) }) + '\n')
   await log(d, sid, 'halt', { reason, active: true })
   escalate(d, 'halt')
 }
@@ -54,7 +54,7 @@ export async function clearHalt(d: Deps, sid: string): Promise<void> {
   s.toasted.delete('halt')
   await d.storeSet(`cont:${sid}`, [])
   const path = await haltPath(d, sid)
-  if (path) await d.write(path, JSON.stringify({ active: false, reason: null, since: isoLocal(await d.now(), false) }) + '\n')
+  if (path) await d.write(path, JSON.stringify({ active: false, reason: null, since: await stamp(d, await d.now(), false) }) + '\n')
   await log(d, sid, 'halt', { reason: was, active: false })
 }
 

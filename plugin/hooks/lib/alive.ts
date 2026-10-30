@@ -10,7 +10,7 @@ import { clearHalt, loadHalt } from './cont'
 import { onHandoffTurnStart } from './handoff-turn'
 import { handoffTurnClose } from './helper'
 import { cancelIdle, cancelIdleTimer, loadIdle } from './idle'
-import { ensureIdent, isoLocal, log, markHeadless } from './log'
+import { ensureIdent, log, markHeadless, stamp } from './log'
 import { claimedElsewhere, logOutcome, settleRecords } from './resume'
 import { showNotice } from './notice'
 import { shadowPluginSide } from './shadow'
@@ -20,7 +20,7 @@ export async function writeAlive(d: Deps, sid: string, turnId: string | null): P
   const p = await d.paths()
   if (!p) return
   const id = d.state.ident ?? { pid: null, pid_lstart: null }
-  const rec = { pid: id.pid, pid_lstart: id.pid_lstart, load_id: d.state.loadId, turn_id: turnId, ts: isoLocal(await d.now(), false) }
+  const rec = { pid: id.pid, pid_lstart: id.pid_lstart, load_id: d.state.loadId, turn_id: turnId, ts: await stamp(d, await d.now(), false) }
   await d.write(`${p.watch}/${sid}/mod-alive.json`, JSON.stringify(rec) + '\n')
 }
 

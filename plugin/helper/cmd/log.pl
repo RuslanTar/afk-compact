@@ -2,10 +2,11 @@
 # §3.1, ROOT-RULINGS F2-6). Owner: WP-core.
 # mod (default): O_APPEND writes <= 4 KB per row to <watch>/<sid>.jsonl; paths: to
 # <watch>/<sid>/paths.jsonl. A row is the caller's (already enveloped), kept as given after
-# a parse check, but for its `ts`, set to this process's local offset (_restamp). `--stdin` reads one JSON object per line (blank lines skipped) and appends
-# them all in one locked write, so the mod sends one batch per tool call; every line is
-# checked before anything is written. A row > 4 KB -> exit 3 `REFUSED: row-too-large`
-# (nothing written); a batch over 1 MB -> exit 3 `REFUSED: batch-too-large`.
+# a parse check, but for its `ts`, set to this process's local offset (_restamp). `--stdin`
+# reads one JSON object per line (blank lines skipped) and appends them all in one locked
+# write, so the mod sends one batch per tool call; every line is checked before anything is
+# written. A row > 4 KB -> exit 3 `REFUSED: row-too-large` (nothing written); a batch over
+# 1 MB -> exit 3 `REFUSED: batch-too-large`.
 # jobs (Dev-1, `--stdin` only): the mod's raw fields of a background shell (or a TaskStop),
 # completed by lib/jobrec.pm and appended to <watch>/<sid>/jobs.jsonl, whatever the
 # watcher mode. Accepted only from the recorded Claude Code parent, else exit 3
@@ -36,11 +37,14 @@ sub _check {
 
 # _restamp(bytes, ts) -> bytes with the row's `ts` at this process's local offset of that
 # instant (0.1.2 log-tz). The mod's engine keeps the local zone it read at load: after the
-# system zone changes under a running session, its stamps carry the old offset while every
-# helper process (started fresh) writes the new one, so one log held +02:00 and +01:00 rows
-# for the same hour. The instant and its milliseconds are kept, and every other byte of the
-# row; a ts that is not `YYYY-MM-DDTHH:MM:SS[.mmm](+HH:MM|Z)` is left as given. The first
-# `"ts":"<that value>"` is the one rewritten (the envelope puts ts second, before any field).
+# system zone changes under a running session, its stamps carried the old offset while every
+# helper process (started fresh) wrote the new one, so one log held +02:00 and +01:00 rows
+# for the same hour. The mod now stamps in the system zone it reads at each stamp (log.ts
+# `stamp`); this is the backstop for a row it could only stamp in the engine's zone. The
+# instant and its milliseconds are kept, and every other byte of the row; a ts that is not
+# `YYYY-MM-DDTHH:MM:SS[.mmm](+HH:MM|Z)` is left as given (a JSON-escaped one too: its bytes
+# do not match). The first `"ts":"<that value>"` is the one rewritten (the envelope puts ts
+# second, before any field).
 sub _restamp {
     my ($bytes, $ts) = @_;
     return $bytes unless defined $ts && !ref $ts

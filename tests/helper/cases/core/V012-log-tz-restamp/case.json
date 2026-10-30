@@ -30,6 +30,14 @@
    }
   },
   {
+   "name": "a Z stamp takes the local offset (the row grows by 5 bytes)",
+   "argv": ["log", "--sid", "$SID", "--json", "{\"v\":1,\"ts\":\"2026-10-30T10:21:06.007Z\",\"ev\":\"t3z\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}"],
+   "expect": {
+    "exit": 0,
+    "rows": [{"file": "$WATCH/$SID.jsonl", "ev": "t3z", "fields": {"ts": "2026-10-30T11:21:06.007+01:00"}}]
+   }
+  },
+  {
    "name": "a stamp already in the helper's zone, and a ts that is no stamp, stay as given",
    "argv": ["log", "--sid", "$SID", "--stdin"],
    "stdin_text": "{\"v\":1,\"ts\":\"2026-10-30T10:21:06.007+01:00\",\"ev\":\"t4\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}\n{\"v\":1,\"ts\":\"later\",\"ev\":\"t5\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}\n",

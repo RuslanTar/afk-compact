@@ -19,7 +19,7 @@ import { contStamps } from './cont'
 import { claimBy } from './helper'
 import type { LaneResult } from './lane'
 import { DIGEST_END_RE, OFF_LINE_END_RE, digestLine, laneBasis, laneOf, resultDigestLine, runningUnits, showsDigest } from './lane'
-import { helperMissing, isoLocal, log } from './log'
+import { helperMissing, log, stamp } from './log'
 import { claimedElsewhere, logLane, logOutcome } from './resume'
 
 /** The digest turn waits this long after the compaction (the hook returns first; a person may type). */
@@ -185,7 +185,7 @@ export async function submitResultDigest(d: Deps, sid: string, nonce: string): P
   const g = await canSubmit(d, sid)
   if (typeof g === 'string') return row(d, sid, nonce, lane, g)
   // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
-  const asOf = l.measuredAt !== undefined ? isoLocal(l.measuredAt, false).slice(11, 16) : undefined
+  const asOf = l.measuredAt !== undefined ? (await stamp(d, l.measuredAt, false)).slice(11, 16) : undefined
   const submitted = await send(d, sid, resultDigestLine(d.name, r.lane, laneBasis(l.facts, r.running, l.remeasure, asOf)), g)
   await row(d, sid, nonce, lane, submitted ? 'submitted' : 'skipped:submit-failed')
   if (!submitted) return

@@ -10,7 +10,7 @@ import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
-import { escalate, helperMissing, isoLocal, log, vettedWatch } from './log'
+import { escalate, helperMissing, log, stamp, vettedWatch } from './log'
 import type { Lane, LaneFacts, LaneResult } from './lane'
 import { LANES, LEGACY_STATUS, asLaneFacts, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
 
@@ -153,8 +153,8 @@ export async function buildBlockWith(
   const measuredAt = at ?? (await d.now())
   const saved = a.savedCopy ?? `not saved (${a.notSaved ?? 'unknown'})`
   const store = storeRuntime(d)
-  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: isoLocal(measuredAt, false), ...store.runtime }
-  if (a.again !== undefined) runtime.idle_used_at = isoLocal(a.again, false)
+  const runtime: Runtime = { session_id: sid, saved_copy: saved, measured_at: await stamp(d, measuredAt, false), ...store.runtime }
+  if (a.again !== undefined) runtime.idle_used_at = await stamp(d, a.again, false)
   if (lane !== undefined) {
     runtime.lane = lane.lane
     runtime.lane_why = lane.why
@@ -347,7 +347,7 @@ export async function laneRecheck(d: Deps, kind: string, text: string): Promise<
   const digested = l.digested
   l.digested = true
   // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
-  const asOf = l.measuredAt !== undefined ? isoLocal(l.measuredAt, false).slice(11, 16) : undefined
+  const asOf = l.measuredAt !== undefined ? (await stamp(d, l.measuredAt, false)).slice(11, 16) : undefined
   const basis = laneBasis(l.facts, running, l.remeasure, asOf)
   return { text: laneNote(d.name, r, basis, showsDigest(was) || digested, d.cfg.idle_digest === 'off'), nonce: l.nonce, was, now: r.lane, digested }
 }
@@ -587,7 +587,7 @@ export async function settlePersisted(d: Deps, sid: string, nonce: string, resum
     if (path === undefined) return
     const j = parseRecord(await d.read(path))
     if (!j || j.state !== 'pending' || j.nonce !== nonce) continue
-    await d.write(path, JSON.stringify({ v: 1, state: 'settled', session_id: sid, nonce, resume, ts: isoLocal(await d.now(), false) }) + '\n')
+    await d.write(path, JSON.stringify({ v: 1, state: 'settled', session_id: sid, nonce, resume, ts: await stamp(d, await d.now(), false) }) + '\n')
   }
 }
 

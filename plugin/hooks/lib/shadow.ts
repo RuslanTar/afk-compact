@@ -15,7 +15,7 @@ import type { HandoffTurn } from './handoff-turn'
 import { assemble, hasAsset } from './assemble'
 import { call } from './helper'
 import { NEAR_LIMIT_PCT } from './idle'
-import { isoLocal } from './log'
+import { isoLocal, zoneOf } from './log'
 import { randomHex } from './nonce'
 import { sha256 } from './normalize'
 
@@ -434,7 +434,7 @@ async function finish(d: Deps, mo: Moment): Promise<void> {
   }
   mo.saved = true
   mo.lostTimer?.cancel()
-  const input = saveInput(d, mo)
+  const input = saveInput(d, mo, await zoneOf(d))
   const r = await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify(input) + '\n')
   if (r.ok) return
   // §4.7 "trial-save fails: one row": a second, minimal call (no reply, so no scan and no shadow).
@@ -449,15 +449,15 @@ async function finish(d: Deps, mo: Moment): Promise<void> {
   }) + '\n')
 }
 
-function armRecord(r: ArmResult | undefined, fallback: string, tokens: number | null): Record<string, unknown> {
+function armRecord(r: ArmResult | undefined, fallback: string, tokens: number | null, zone: string | undefined): Record<string, unknown> {
   if (!r) return { status: fallback }
   const u = r.usage
   const read = u?.cache_read_input_tokens ?? 0
   const total = u ? u.input_tokens + read + u.cache_creation_input_tokens : 0
   return {
     status: r.status,
-    started_at: isoLocal(r.startedAt, false),
-    ...(r.endedAt !== undefined ? { ended_at: isoLocal(r.endedAt, false) } : {}),
+    started_at: isoLocal(r.startedAt, false, zone),
+    ...(r.endedAt !== undefined ? { ended_at: isoLocal(r.endedAt, false, zone) } : {}),
     ...(u ? { ...u, read_share: total > 0 ? Math.round((read / total) * 1000) / 1000 : null } : {}),
     ...(u && tokens !== null && tokens > 0 ? { reads_est: Math.round((read / tokens) * 100) / 100 } : {}),
     ...(r.httpStatus !== undefined ? { http_status: r.httpStatus } : {}),
@@ -467,13 +467,13 @@ function armRecord(r: ArmResult | undefined, fallback: string, tokens: number | 
 }
 
 /** The content-free moment fields (§4.6); the replies ride only in the arms' `reply`. */
-export function momentFields(mo: { p: Prepared; pluginSide: string; htRerun?: string }): Record<string, unknown> {
+export function momentFields(mo: { p: Prepared; pluginSide: string; htRerun?: string }, zone: string | undefined): Record<string, unknown> {
   const p = mo.p
   const f = p.m?.facts
   return {
     kind: p.spec.kind,
     position: p.position,
-    opened_at: isoLocal(p.openedAt, false),
+    opened_at: isoLocal(p.openedAt, false, zone),
     plugin_side: mo.pluginSide,
     cc_version: p.ccVersion,
     ...(p.spec.trigger !== undefined ? { trigger: p.spec.trigger } : {}),
@@ -491,7 +491,7 @@ export function momentFields(mo: { p: Prepared; pluginSide: string; htRerun?: st
   }
 }
 
-function saveInput(d: Deps, mo: Moment): Record<string, unknown> {
+function saveInput(d: Deps, mo: Moment, zone: string | undefined): Record<string, unknown> {
   const p = mo.p
   const m = p.m
   const n = m?.native
@@ -501,15 +501,15 @@ function saveInput(d: Deps, mo: Moment): Record<string, unknown> {
     moment_id: mo.id,
     repo: m?.facts?.repo,
     ticket: m?.facts?.ticket,
-    moment: momentFields(mo),
+    moment: momentFields(mo, zone),
     old: {
-      ...armRecord(mo.old, p.oldStatus ?? 'rejected', p.tokens),
+      ...armRecord(mo.old, p.oldStatus ?? 'rejected', p.tokens, zone),
       ...(m?.old?.sums ? { skill_sha256: m.old.sums } : {}),
       ...(m?.old?.filled_sha256 ? { filled_sha256: m.old.filled_sha256 } : {}),
       ...(adapter ? { adapter_sha256: adapter } : {}),
     },
     native: {
-      ...armRecord(mo.native, p.nativeStatus ?? 'rejected', p.tokens),
+      ...armRecord(mo.native, p.nativeStatus ?? 'rejected', p.tokens, zone),
       cc_version: n?.cc_version ?? p.ccVersion,
       ...(n?.head_sha256 ? { head_sha256: n.head_sha256, tail_sha256: n.tail_sha256 } : {}),
       ...(n?.prompt_arm ? { prompt_arm: n.prompt_arm, arm_source: n.arm_source } : {}),
@@ -524,15 +524,17 @@ function saveInput(d: Deps, mo: Moment): Record<string, unknown> {
 
 async function saveSkip(d: Deps, mo: Moment): Promise<void> {
   mo.saved = true
-  const input = { kind: 'skip', moment_id: mo.id, moment: { ...momentFields(mo), status: 'skipped:' + (mo.p.skip ?? 'unknown') } }
+  const zone = await zoneOf(d)
+  const input = { kind: 'skip', moment_id: mo.id, moment: { ...momentFields(mo, zone), status: 'skipped:' + (mo.p.skip ?? 'unknown') } }
   await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify(input) + '\n')
 }
 
 async function saveLate(d: Deps, mo: Moment, arm: 'old' | 'native', r: ArmResult): Promise<void> {
   const m = mo.p.m
+  const zone = await zoneOf(d)
   const input = {
-    kind: 'late', arm, moment_id: mo.id, repo: m?.facts?.repo, ticket: m?.facts?.ticket, moment: momentFields(mo),
-    [arm]: { ...armRecord(r, 'lost', mo.p.tokens), late: true },
+    kind: 'late', arm, moment_id: mo.id, repo: m?.facts?.repo, ticket: m?.facts?.ticket, moment: momentFields(mo, zone),
+    [arm]: { ...armRecord(r, 'lost', mo.p.tokens, zone), late: true },
   }
   await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify(input) + '\n')
 }

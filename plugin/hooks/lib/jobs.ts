@@ -4,7 +4,7 @@
 // the command sha, the secret scan and both output-path candidates, and writes the row. The
 // model never writes a job record: subagent calls, denied calls and mod-off sessions record none.
 import type { Deps } from './deps'
-import { helperMissing, isoLocal } from './log'
+import { helperMissing, stamp } from './log'
 import { logJobs } from './helper'
 
 /** core-to-mod: `result_text` is the result as the model read it, first 4,000 chars. */
@@ -18,7 +18,7 @@ export async function jobStart(d: Deps, tool: string): Promise<JobStart | undefi
   if (tool !== 'Bash' && tool !== 'TaskStop') return undefined
   try {
     const cwd = tool === 'Bash' ? await d.cwd() : undefined
-    return { cwd, launchedAt: isoLocal(await d.now(), false) }
+    return { cwd, launchedAt: await stamp(d, await d.now(), false) }
   } catch {
     return undefined
   }
