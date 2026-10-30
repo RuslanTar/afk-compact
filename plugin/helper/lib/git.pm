@@ -26,15 +26,16 @@ sub available {
     return 1;
 }
 
-# run git with a timeout; -> run result, or {exit => -2, unavailable => 1}
+# run git with a timeout and optional stdin bytes; -> run result, or {exit => -2, unavailable => 1}
 sub cmd {
-    my ($cwd, $args, $timeout_ms) = @_;
+    my ($cwd, $args, $timeout_ms, $stdin) = @_;
     return { exit => -2, out => '', unavailable => 1, ms => 0 } unless available();
     util::trace('git');
     # `out` is the bytes git printed: paths (toplevel, git dir) stay bytes (SR 1.1); the text
     # parts (branch, status lines) are decoded once where they are read (MOD-SPEC §2.6)
     return util::run([$BIN, "-C", util::fsb($cwd), @$args], timeout_ms => $timeout_ms // 2000,
-                     env => { GIT_OPTIONAL_LOCKS => "0", LC_ALL => "C", GIT_TERMINAL_PROMPT => "0" });
+                     env => { GIT_OPTIONAL_LOCKS => "0", LC_ALL => "C", GIT_TERMINAL_PROMPT => "0" },
+                     (defined $stdin ? (stdin => $stdin) : ()));
 }
 
 # 1 ignored, 0 not ignored, -1 timed out, undef unknown (no git / error)
@@ -48,21 +49,28 @@ sub check_ignore {
     return undef;
 }
 
-# check_ignore_match(wt, path, timeout) -> (1, "source:line:pattern") ignored, 0 not ignored,
-# -1 timed out, undef unknown. With -v git also names a negated last match (`!x`) and exits 0;
-# that path is not ignored. -z needs --stdin, so the text form is read: `source:line:pattern`,
-# a tab, then the path.
-sub check_ignore_match {
-    my ($wt, $path, $timeout_ms) = @_;
-    my $r = cmd($wt, ['check-ignore', '-v', '--no-index', $path], $timeout_ms // 2000);
+# check_ignore_forms(wt, [paths], timeout) -> [[1, "source\0line\0pattern"] | [0], ...] in the
+# order given, or -1 (timed out) / undef (unknown: no git, an error, output of the wrong shape).
+# One git call for all paths: with -z --stdin git prints four NUL-terminated fields per path
+# (source, line, pattern, path), so no text is parsed and a source path holding `:1:` or a tab
+# cannot move a field; -n prints empty fields for a path no pattern matches. With -v git also
+# names a negated last match (`!x`); that path is not ignored.
+sub check_ignore_forms {
+    my ($wt, $paths, $timeout_ms) = @_;
+    my $r = cmd($wt, ['check-ignore', '-v', '-n', '-z', '--stdin', '--no-index'], $timeout_ms // 2000,
+                join('', map { "$_\0" } @$paths));
     return -1 if $r->{timed_out};
     return undef if $r->{unavailable};
-    return 0 if $r->{exit} == 1;
-    return undef unless $r->{exit} == 0;
-    my ($m) = split /\t/, $r->{out} // '', 2;
-    return undef unless defined $m && $m =~ /\A.*?:[0-9]+:(.+)\z/s;
-    return 0 if substr($1, 0, 1) eq '!';
-    return (1, $m);
+    return undef unless $r->{exit} == 0 || $r->{exit} == 1;
+    my @f = split /\0/, $r->{out} // '', -1;
+    pop @f if @f && $f[-1] eq '';
+    return undef unless @$paths && @f == 4 * @$paths;
+    my @a;
+    while (@f) {
+        my ($src, $line, $pat) = splice(@f, 0, 4);
+        push @a, ($line eq '' || $pat eq '' || substr($pat, 0, 1) eq '!') ? [0] : [1, "$src\0$line\0$pat"];
+    }
+    return \@a;
 }
 
 # where(cwd) -> {in_git, toplevel, common_dir, repo, branch, head} with one or two calls

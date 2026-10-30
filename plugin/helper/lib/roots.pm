@@ -45,26 +45,26 @@ sub _time_left {
 #   trailing slash, git checks each folder on the path (the root included) and then an
 #   empty-named entry inside the root, which `wlogs/*` or `*` also match although the folder
 #   itself is not ignored (`wlogs/*` with `!wlogs/*.jsonl` brings the plugin's files back).
-#   So both are asked: the slash form not ignored -> no folder on the path is ignored -> 0;
-#   its pattern ends in `/` (a folder-only one, which cannot match the empty entry) -> 1;
-#   else only when the path as written is ignored by that same pattern: a pattern that
-#   ignores the folder matches it in both forms, while one that only matched the empty
+#   So both forms are asked, in one git call (git::check_ignore_forms, NUL-separated fields):
+#   the slash form not ignored -> no folder on the path is ignored -> 0; its pattern ends in
+#   `/` (a folder-only one, which cannot match the empty entry) -> 1; else only when the path
+#   as written is ignored by that same pattern (same source, line and pattern): a pattern
+#   that ignores the folder matches it in both forms, while one that only matched the empty
 #   entry differs. Known limit: a pattern matching both (`*`) followed by `!wlogs/` and a
 #   re-include of the plugin's files counts as ignored until the folder is made.
+# Either way one git process per root, so the hook paths (PreCompact's 500 ms) pay one call.
 sub _ignored {
     my ($wt, $real) = @_;
     my $t = _time_left();
     return -1 if $t < 50;
     return git::check_ignore($wt, $real, $t) if -d $real;
-    my ($aw, $awm) = git::check_ignore_match($wt, $real, $t);
-    return $aw if defined $aw && $aw == -1;
-    $t = _time_left();
-    return -1 if $t < 50;
-    my ($sl, $slm) = git::check_ignore_match($wt, ($real =~ m{/\z} ? $real : "$real/"), $t);
-    return $sl if !defined $sl || $sl != 1;
+    my $a = git::check_ignore_forms($wt, [$real, ($real =~ m{/\z} ? $real : "$real/")], $t);
+    return $a unless ref $a eq 'ARRAY';
+    my ($aw, $awm) = @{ $a->[0] };
+    my ($sl, $slm) = @{ $a->[1] };
+    return 0 unless $sl;
     return 1 if $slm =~ m{/\z};
-    return undef unless defined $aw;
-    return ($aw == 1 && $awm eq $slm) ? 1 : 0;
+    return ($aw && $awm eq $slm) ? 1 : 0;
 }
 
 # check_path(path) -> {ok => 1} | {ok => 0, reason => ...} plus ignored => 1

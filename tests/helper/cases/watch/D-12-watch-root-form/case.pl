@@ -8,8 +8,8 @@
 # fix the watcher checked the raw strings: a trailing-slash HOME took 14 git calls against 9,
 # and with PreCompact's 500 ms mostly spent by core the check ran out of time
 # (root-unchecked) and the watcher's row was lost in 3 runs of 5. A first untraced run makes
-# the roots, so all three counted runs ask git about folders that exist (a root not made yet
-# takes a second check-ignore).
+# the roots, so all three counted runs ask git about the same folders in the same state
+# (D-12-watch-git-calls pins one call per root, made or not).
 my %sid = (base => '1b2c3d4e-0000-4000-8000-00000000f001', slash => '1b2c3d4e-0000-4000-8000-00000000f002',
            dot => '1b2c3d4e-0000-4000-8000-00000000f003', warm => '1b2c3d4e-0000-4000-8000-00000000f004');
 my $pre = sub {
