@@ -589,12 +589,13 @@ def config_defaults_hits(target, brand):
             text = "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(key, got if key in uc else "missing", val)
             out.append((path, None, "AT-CAP-02 ruled", text, text))
     # STATE-ROOT docs: the README's moved-folder section holds the Q-11 marker until the root fills in the
-    # allow rule for the new root (then a `Write(~/.local/state/…)` rule replaces it).
+    # allow rule for the new root (then an `Edit(~/.local/state/…)` rule replaces it: Claude Code checks the
+    # Write tool against Edit rules, a Write(…) rule does not stop the prompt).
     readme = os.path.join(target, "README.md")
     if os.path.isfile(readme):
         text = _read(readme)
-        if "TODO(Q-11)" not in text and not re.search(r"Write\(~/\.local/state/", text):
-            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: no TODO(Q-11) marker and no Write(~/.local/state/…) "
+        if "TODO(Q-11)" not in text and not re.search(r"Edit\(~/\.local/state/", text):
+            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: no TODO(Q-11) marker and no Edit(~/.local/state/…) "
                         "allow rule for the new handoff root", ""))
     for key in sorted(uc):
         if "keep_days" in key and key != "disposable_keep_days":
