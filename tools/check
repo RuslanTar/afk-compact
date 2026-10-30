@@ -940,7 +940,7 @@ def probes(name):
         ("write-first", "AT-SK-03", gates_only("write-first"), write_first,
          [r"^GATE write-first plugin/skills/handoff/SKILL\.md:\d+: AT-SK-03 before-final"], None),
         ("self-heal", "AT-J-13", gates_only("self-heal"), self_heal,
-         [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 21504 \(the logged reason covers up to 23508\)$",
+         [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 21504 \(the logged reason covers up to 23730\)$",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): 'with its `probe` if read-only'",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): \"the row's own probe only if read-only\"",
