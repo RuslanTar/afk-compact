@@ -334,11 +334,14 @@ sub lint {
     # ---- advisories
     my $size = skills::util::blen($body);
     push @adv, [ 'size', "$size B" ] if $size > 20480;
+    # In Evidence only the model's own lines count (0.1.2 handoff-lint): the lines the helper
+    # pasted (_helper_pasted) are its text, not a choice to cut.
     my $caps = skills::spec::section_caps();
     for my $name (sort keys %$caps) {
         my $s = $by_name{$name} or next;
         my $chars = 0;
-        $chars += _chars($_->[1]) + 1 for @{ $s->{body} };
+        my $skip = $name =~ /\AEvidence\b/;
+        $chars += _chars($_->[1]) + 1 for grep { !($skip && _helper_pasted($_->[1])) } @{ $s->{body} };
         push @adv, [ 'section-cap', "## $name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
     }
     # store-path (PKG-RUNTIME A.4): a body line naming the launcher by its path; handoffs
@@ -467,6 +470,19 @@ sub _chars { my ($s) = @_; return length skills::util::text($s) }
 
 sub _norm { my ($l) = @_; $l =~ s/\s+/ /g; $l =~ s/\A | \z//g; return $l }
 
+# A helper-pasted Evidence line (template §4.9): Evidence:, Disposable:, Ref-only: or Volatile:.
+sub _pasted { return $_[0] =~ /\A\s*(?:[-*]\s+)?(?:Evidence|Disposable|Ref-only|Volatile):/ ? 1 : 0 }
+
+# Only what the helper itself printed (evidence_cmd.pm): its Volatile: lines end in its own
+# `— missing at <stamp>` or `— withheld…` reason; a Volatile: line with the model's own reason
+# is model-written text and counts toward the Evidence cap (0.1.2 handoff-lint).
+sub _helper_pasted {
+    my ($l) = @_;
+    return 0 unless _pasted($l);
+    return 1 unless $l =~ /\A\s*(?:[-*]\s+)?Volatile:/;
+    return skills::util::text($l) =~ / — (?:missing at |withheld\b)/ ? 1 : 0;
+}
+
 # Lines that count for the overlap advisory (RV-30): not blank, not a
 # heading, not a ledger line, not a fixed none-form, not a pasted Evidence
 # line, not a table separator.
@@ -476,7 +492,7 @@ sub _counts {
     return 0 unless $l =~ /\S/;
     return 0 if $l =~ /\A#/;
     return 0 if $l =~ /\A\s*(?:[-*]\s+)?(?:[UDXQ]-\d+|Superseded:)/;
-    return 0 if $l =~ /\A\s*(?:[-*]\s+)?(?:Evidence|Disposable|Ref-only|Volatile):/;
+    return 0 if _pasted($l);
     return 0 if $l =~ /\A\s*\|\s*:?-{2,}/;
     $NONE //= (eval { skills::spec::none_res() } || []);
     my $n = _norm($l);

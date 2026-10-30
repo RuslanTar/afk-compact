@@ -593,6 +593,13 @@ def probes(name):
         lt[sorted(lt)[1]]["fix"] = "z" * 161
         write_text(p, t[:m.start(1)] + json.dumps(spec, indent=2, ensure_ascii=False) + t[m.end(1):])
 
+    def section_caps(d):
+        """SC-01: template §2 with a Location cap off the spec, Next steps left out, and the old sum.
+        The planted caps sum to 15,850, a half: the gate rounds it up (15.9K), not to even (15.8K)."""
+        rel = "plugin/skills/handoff/references/handoff-template.md"
+        edit(d, rel, "· Location 1,700 ·", "· Location 870 ·")
+        edit(d, rel, " · Next steps 1,200.", ".")
+
     def xref(d):
         """AT-TX-05: a renumbered template § (4.5 now heads Open questions), a renamed Step 6, and
         a spec § that does not exist."""
@@ -966,6 +973,10 @@ def probes(name):
          [r"^GATE lint-texts plugin/assets/handoff-spec\.md: AT-TX-03 missing: lint id \S+ has no lint_texts entry$",
           r"^GATE lint-texts plugin/assets/handoff-spec\.md: AT-TX-03 extra: lint_texts no-such-id is no lint id$",
           r"^GATE lint-texts plugin/assets/handoff-spec\.md: AT-TX-03 text: lint_texts \S+\.fix"], None),
+        ("section-caps", "SC-01", gates_only("section-caps"), section_caps,
+         [r"^GATE section-caps plugin/skills/handoff/references/handoff-template\.md:\d+: SC-01 differs: §2 Location 870 != spec section_caps '## Location' 1700$",
+          r"^GATE section-caps plugin/skills/handoff/references/handoff-template\.md:\d+: SC-01 missing: spec section_caps '## Next steps' is not in §2$",
+          r"^GATE section-caps plugin/skills/handoff/references/handoff-template\.md:\d+: SC-01 sum: §2 says about 17\.9K, its caps sum to 15850 \(15\.9K\)$"], None),
         ("xref", "AT-TX-05", gates_only("xref"), xref,
          [r"^GATE xref plugin/skills/handoff/SKILL\.md:\d+: AT-TX-05 meaning: template § 4\.5 now starts 'Open', recorded 'Live'$",
           r"^GATE xref plugin/skills/handoff/SKILL\.md:\d+: AT-TX-05 meaning: Step 6 now starts 'Write', recorded 'Draft'$",

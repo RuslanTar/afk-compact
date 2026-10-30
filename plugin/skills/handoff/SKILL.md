@@ -106,7 +106,7 @@ Write the body to `<stage>/body.md`, from the `#` title to Next steps in templat
 
 It lints and secret-scans the draft and recipes, adds frontmatter, marker and sentinel, files the stage into `evidence/<stem>/` and the manifest, publishes by exclusive create and re-reads the last line. It prints `LINT` (blocking) and `ADVISORY` lines, then one receipt: `Wrote handoff to: <path>` or `REFUSED: <reason>`. In repo mode one export line follows the written receipt: `Exported to repository: <path> (…)`, `Export refused: <reason>` (the handoff is still saved) or `Not exported: <how to accept>`.
 - `LINT` → one round = one Write of `body.md` (or of the recipe) that fixes every LINT line, then publish again. Never one Edit per LINT line. After 2 failed rounds → C. `LINT private-path` (repo mode) is fixed the same way: the path would reach git, so write a durable path or a pointer instead.
-- `ADVISORY` → at most one round: if one Edit fixes it, Edit and publish again; else list it in the report. A LINT round in progress absorbs it.
+- `ADVISORY` → at most one round: if one Edit fixes it, Edit and publish again; else list it in the report. A LINT round in progress absorbs it. `section-cap` alone starts no round: list it in the report.
 - `ADVISORY secret-warn rules=<ids>` → take the value out and say where it lives, or report those rule ids; never the value.
 - Saved only when the receipt says so.
 

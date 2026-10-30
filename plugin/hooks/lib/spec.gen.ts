@@ -339,16 +339,16 @@ export const SPEC = {
   "recipe_cap": 8,
   "section_caps": {
     "## Resume here": 1500,
-    "## User constraints": 1500,
+    "## User constraints": 2200,
     "## Approvals": 1000,
     "## Decisions and do-not-re-raise": 2200,
     "## In flight": 2000,
-    "## Live state": 1200,
+    "## Live state": 1400,
     "## Open questions": 2000,
-    "## Location": 1000,
+    "## Location": 1700,
     "## Work done and findings": 1800,
-    "## Evidence": 600,
-    "## Next steps": 1000
+    "## Evidence": 800,
+    "## Next steps": 1200
   },
   "lint_texts": {
     "headings": {
@@ -441,7 +441,7 @@ export const SPEC = {
     },
     "section-cap": {
       "why": "one section crowds out the others",
-      "fix": "cut that section toward its template §2 cap if §2 lets you cut it; else keep it and list the advisory in the report"
+      "fix": "list it in the report; alone it starts no Edit round; in a round another line starts, cut that section toward its template §2 cap if §2 allows"
     },
     "code-block": {
       "why": "code is recoverable from the repository",
