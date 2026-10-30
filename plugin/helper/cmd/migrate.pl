@@ -13,9 +13,16 @@
 #   - what is live or unfinished in the old handoff root is left out (%LEFT_OUT): unfinished drafts
 #     (.staging), the watcher's own folder (.watch), the per-process records (.sessions/by-pid) and
 #     pin locks (.sessions/*.lock); a copy of them would show a draft twice or a stale lock;
+#   - the pin and lineage files (.sessions/<sid>.json, .sessions/<sid>.lineage.json) of a session with
+#     a live record in the old root's .sessions/by-pid (sessions::live_in: the pid runs with the
+#     recorded start time, no ended- twin) are left out and listed by session: a session of an
+#     older version still writes them there, and a copy would hide its later changes (the new
+#     root's file is read first); a rerun once those sessions end copies them;
+#   - a file whose size or mtime changes while it is copied counts as failed (util::copy_new), and so
+#     does a folder it cannot read (listed with a trailing /), so a rerun copies them whole;
 #   - a root set to any other value (the old default included) is never changed: nothing is copied
 #     for it; an old folder the unsafe-root checks refuse is skipped, and so is a refused new root.
-# Exit 0; 3 when a new root is refused or a copy failed; 64 usage.
+# Exit 0; 3 when a new root is refused, a copy failed or a folder could not be read; 64 usage.
 use strict;
 use warnings;
 use utf8;
@@ -41,21 +48,45 @@ sub _show { my ($p) = @_; return util::text(util::abbrev($p)) }
 
 sub _mb { my ($b) = @_; return sprintf('%.1f MB', ($b // 0) / 1048576) }
 
-# walk(old, new, rel, skip_real, acc, apply, left_out): one folder of the old root, depth first, by lstat.
+# live_sessions(old handoff root) -> {session id => 1} of the sessions with a live record there.
+sub _live_sessions {
+    my ($old) = @_;
+    return { map { (defined $_->{session_id} && !ref $_->{session_id} ? ($_->{session_id} => 1) : ()) }
+             @{ sessions::live_in("$old/.sessions/by-pid") } };
+}
+
+# the session whose pin or lineage file rel is, when that session is live, else undef
+sub _live_file {
+    my ($r, $live) = @_;
+    return undef unless $live && $r =~ m{\A\.sessions/([^/]+?)(?:\.lineage)?\.json\z};
+    return $live->{$1} ? $1 : undef;
+}
+
+# walk(old, new, rel, skip_real, acc, apply, left_out, live): one folder of the old root, depth first, by lstat.
 sub _walk {
-    my ($old, $new, $rel, $skip, $acc, $apply, $left) = @_;
+    my ($old, $new, $rel, $skip, $acc, $apply, $left, $live) = @_;
     my $dir = $rel eq '' ? $old : "$old/$rel";
-    for my $e (util::list_dir($dir)) {
+    my $dh;
+    if (!opendir($dh, $dir)) {
+        (my $why = "$!") =~ s/\s+\z//;
+        $acc->{failed}++;
+        push @{ $acc->{failed_list} }, ($rel eq '' ? '.' : $rel) . "/ (cannot read: $why)";
+        return;
+    }
+    my @list = sort grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+    closedir $dh;
+    for my $e (@list) {
         my $r = $rel eq '' ? $e : "$rel/$e";
         my $src = "$old/$r";
         my @st = lstat $src;
         next unless @st;
         if (-l _ || (!-f _ && !-d _)) { $acc->{skipped}++; next }
         if ($left->($r, -d _)) { $acc->{left_out}++; next }
+        if (-f _ && defined(my $ls = _live_file($r, $live))) { $acc->{live}{ substr($ls, 0, 8) }++; next }
         if (-d _) {
             my $real = util::real_path($src);
             next if defined $real && defined $skip && $real eq $skip;    # the new root inside the old one
-            _walk($old, $new, $r, $skip, $acc, $apply, $left);
+            _walk($old, $new, $r, $skip, $acc, $apply, $left, $live);
             next;
         }
         my $dst = "$new/$r";
@@ -69,7 +100,7 @@ sub _walk {
         $acc->{bytes} += $st[7];
         next unless $apply;
         my $mode = ($st[2] & 0700) || 0600;
-        my $n = eval { util::copy_new($src, $dst, mode => $mode, times => [$st[8], $st[9]]) };
+        my $n = eval { util::copy_new($src, $dst, mode => $mode, times => [$st[8], $st[9]], expect => [$st[7], $st[9]]) };
         if (!defined $n) {
             (my $why = $@ // 'error') =~ s/\s+\z//;
             $acc->{failed}++;
@@ -104,6 +135,7 @@ sub run {
     my @out = ($apply ? 'migrate: copying (nothing is deleted, moved or overwritten)'
                       : 'migrate: dry run, nothing written (add --apply to copy; nothing is ever deleted, moved or overwritten)');
     my $code = 0;
+    my $live_left = 0;
     for my $pair (@PAIRS) {
         my ($key, $label) = @$pair;
         my $is_disp = $key eq 'disposable_root';
@@ -130,18 +162,25 @@ sub run {
         }
         my %acc = (files => 0, bytes => 0, same => 0, differs => 0, skipped => 0, left_out => 0, copied => 0, failed => 0);
         util::mkdir_p($new) if $apply;
-        _walk($old, $new, '', util::real_path($new), \%acc, $apply, $LEFT_OUT{$key});
+        my $live = $is_disp ? undef : _live_sessions($old);
+        _walk($old, $new, '', util::real_path($new), \%acc, $apply, $LEFT_OUT{$key}, $live);
         my $what = $apply ? "copied: $acc{copied} files" : "to copy: $acc{files} files";
         push @out, "  $what, " . _mb($acc{bytes}) . " · already there: $acc{same} · differ, left as they are: $acc{differs}"
                    . " · links and special files skipped: $acc{skipped}"
                    . " · drafts, watcher files, live records and locks left out: $acc{left_out}"
-                   . ($apply ? " · failed: $acc{failed}" : '');
+                   . ($apply || $acc{failed} ? " · failed: $acc{failed}" : '');
         push @out, _list('differs', $acc{differ_list}), _list('failed', $acc{failed_list});
+        for my $s8 (sort keys %{ $acc{live} || {} }) {
+            push @out, "  left out: live session $s8: $acc{live}{$s8}";
+            $live_left += $acc{live}{$s8};
+        }
         $code = 3 if $acc{failed};
     }
     push @out, 'the old folders stay where they are and are still read while these settings are the defaults; '
                . 'once no session of an older version runs and you have checked the copies, you may remove them yourself '
                . '(paths recorded under them are then read in the new folders; unfinished drafts and watcher files left out go with them)';
+    push @out, "$live_left files of sessions still running were left out (listed above): run migrate again after those sessions end"
+        if $live_left;
     args::out(@out);
     return $code;
 }

@@ -27,6 +27,8 @@
 #                            under /tmp, /private/tmp and /var/folders as ephemeral)
 #   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
 #                            case whose helper output depends on its path lengths)
+#   case "teardown"        [setup action...]: run after the steps, also after a failed one (a mode
+#                            restored, so the work dir can be removed)
 #   case "tmp_norm": false   stdout_max_bytes measures stdout as it is, also outside the
 #                            repo's tmp/: for a case whose helper trims its own output to a
 #                            real byte size at any path length (begin's 3,072 B fit, the U-04
@@ -705,7 +707,7 @@ sub run_case {
     my @errs;
     my $i = 0;
     $V{' before_steps'} = 0;
-    for my $st (@steps) {
+    STEP: for my $st (@steps) {
         $i++;
         my $label = $st->{name} // "step $i";
         # the zone this step's helper calls get, for $LSTART1 / $RUNNER_LSTART (lstart_var)
@@ -719,11 +721,11 @@ sub run_case {
         for my $o (($i == 1 ? $case->{options} : undef), $st->{options}) {
             next unless ref $o eq 'HASH';
             my $e = eval { write_options(subst_deep($o, \%V), \%V); 1 };
-            if (!$e) { push @errs, "$label options: $@"; return @errs }
+            if (!$e) { push @errs, "$label options: $@"; last STEP }
         }
         for my $s (@{ $st->{setup} || [] }) {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
-            if (!$e) { push @errs, "$label setup: $@"; return @errs }
+            if (!$e) { push @errs, "$label setup: $@"; last STEP }
         }
         if ($st->{risk_corpus}) {
             my @le = eval { risk_corpus($st, $case, \%V, $cdir, $i) };
@@ -739,7 +741,7 @@ sub run_case {
         }
         if (!$st->{argv} && !$st->{exec} && !$st->{setup} && is_setup_action($st)) {
             my $e = eval { setup($st, \%V, $case, $st, $cdir); 1 };
-            if (!$e) { push @errs, "$label setup: $@"; return @errs }
+            if (!$e) { push @errs, "$label setup: $@"; last STEP }
             next;
         }
         next unless $st->{argv} || $st->{exec};
@@ -749,6 +751,11 @@ sub run_case {
         if ($VERBOSE) {
             for my $r (@$res) { print "#   [$label] exit $r->{exit}\n"; print map { "#   | $_\n" } split /\n/, chars(substr($r->{out}, 0, 4000)) }
         }
+    }
+    # case "teardown": setup actions run after the steps, also when one failed (a folder's mode restored)
+    for my $s (@{ $case->{teardown} || [] }) {
+        my $e = eval { setup($s, \%V, $case, {}, $cdir); 1 };
+        push @errs, "teardown: $@" if !$e;
     }
     return @errs;
 }
@@ -3136,6 +3143,9 @@ sub builtin {
             push @e, "$id: watch $p->{watch}, want $c->{root}/.watch" if ($p->{watch} // '') ne "$c->{root}/.watch";
             push @e, "$id: from_default $p->{from_default}, want " . ($c->{from_default} ? 1 : 0) if exists $c->{from_default} && $p->{from_default} != ($c->{from_default} ? 1 : 0);
             push @e, "$id: legacy " . ($p->{legacy} // 'null') . ', want ' . ($c->{legacy} // 'null') if exists $c->{legacy} && ($p->{legacy} // '') ne ($c->{legacy} // '');
+            # moved: the [old, new] pairs paths::follow reads (none for a root set explicitly)
+            push @e, "$id: moved " . jsonc::encode($p->{moved} // []) . ', want ' . jsonc::encode($c->{moved} // [])
+                if exists $c->{moved} && jsonc::encode($p->{moved} // []) ne jsonc::encode($c->{moved} // []);
             next unless defined $c->{value};
             # the watcher's context from the same settings (pid and spec given: nothing else is read)
             my $w = watch::ctx::init({ sid => 'x', pid => 1, spec => {}, now => 0, settings => { handoff_root => $c->{value}, log_dir => '' } });
@@ -3164,14 +3174,22 @@ sub builtin {
         for my $c (@{ $a->{copy_new} || [] }) {
             my $id = $c->{id} // $c->{dst};
             my $calls = 0;
+            my $grown = 0;
             my $orig = \&util::_write_all;
             no warnings qw(redefine);
-            local *util::_write_all = defined $c->{fail_after}
-                ? sub { die "write: failed on purpose\n" if ++$calls > $c->{fail_after}; $orig->(@_) } : $orig;
+            # dst_appears: another writer creates dst while the copy runs (link must not replace it);
+            # grow: a writer appends to src while it is copied (the copy must fail)
+            local *util::_write_all = sub {
+                die "write: failed on purpose\n" if defined $c->{fail_after} && ++$calls > $c->{fail_after};
+                if (defined $c->{dst_appears} && !-e $c->{dst}) { open(my $d, '>', $c->{dst}) or die "dst_appears: $!\n"; print $d $c->{dst_appears}; close $d }
+                if ($c->{grow} && !$grown++) { open(my $g, '>>', $c->{src}) or die "grow: $!\n"; print $g "more\n"; close $g }
+                $orig->(@_);
+            };
             my $t = defined $c->{mtime} ? util::parse_iso($c->{mtime}) : undef;
             my $before = util::read_file($c->{dst});
             my $n = eval { util::copy_new($c->{src}, $c->{dst}, mode => 0600, (defined $t ? (times => [$t, $t]) : ())) };
             my $got = !defined $n ? 'dies' : $n < 0 ? 'exists' : 'copied';
+            push @e, "$id: error '" . ($@ =~ s{\s+\z}{}r) . "', want /$c->{error}/" if $got eq 'dies' && defined $c->{error} && $@ !~ /$c->{error}/;
             push @e, "$id: $got, want $c->{want}" . ($got eq 'dies' ? " ($@)" : '') if $got ne $c->{want};
             my @left = grep { /\.part-/ } util::list_dir(util::dirname($c->{dst}));
             push @e, "$id: temp names left beside it: @left" if @left;
@@ -3180,7 +3198,16 @@ sub builtin {
                 push @e, "$id: bytes differ from $c->{src}" if (util::read_file($c->{dst}) // '') ne (util::read_file($c->{src}) // 'x');
                 push @e, "$id: mtime " . (stat $c->{dst})[9] . ", want $t" if defined $t && (stat $c->{dst})[9] != $t;
             }
-            push @e, "$id: $c->{dst} was changed" if $got eq 'exists' && (util::read_file($c->{dst}) // '') ne ($before // '');
+            push @e, "$id: $c->{dst} was changed" if $got eq 'exists' && (util::read_file($c->{dst}) // '') ne ($before // $c->{dst_appears} // '');
+        }
+        # paths::follow: a recorded path under the old default root (as written, or through the real path of
+        # its parent: a home reached through a symlink) reads as its copy under the new root
+        for my $c (@{ $a->{follow} || [] }) {
+            delete local $ENV{XDG_STATE_HOME};
+            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'default' } };
+            my $got = paths::follow(paths::for($s, 'x')->{moved}, $c->{path});
+            push @e, "$c->{id}: follow " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
         }
         for my $c (@{ $a->{named} || [] }) {
             local *ctx::brand = $c->{brand_dies} ? sub { die "no brand\n" } : sub { $c->{brand} };
