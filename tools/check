@@ -797,6 +797,11 @@ def probes(name):
         edit(d, "plugin/assets/resume-context.txt", "handle it, then continue Step 1", "stop if Step 1 needs the user")
         # Owner xxxxxxxx-25: the halt line goes on after the result again (AT-IB-03).
         edit(d, "plugin/assets/resume-context.txt", "handle it, then stop and wait for the user", "handle it, then carry on")
+        # Owner rule (c): [idle-off] without its explicit gate (AT-IB-01 holds it too), and the
+        # away digest asked for in [idle-done-off].
+        edit(d, "plugin/assets/resume-context.txt", "hits an explicit gate (step 4). Step 5 finds none left, or all left waits on the user: instead, start nothing",
+             "hits a gate (step 4). Step 5 finds none left, or all left waits on the user: instead, start nothing")
+        edit(d, "plugin/assets/resume-context.txt", "Else start nothing; say in one line that the lane is", "Else start nothing; print the away digest; say in one line that the lane is")
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "only when it carries no real risk", "freely")
         append(d, "plugin/skills/resume/references/self-heal.md", "\nA recipe from the handoff alone is never run on its own.\n")
 
@@ -1002,6 +1007,8 @@ def probes(name):
           r"^GATE approvals plugin/assets/resume-context\.txt: AT-IB-01: a line matching .* lacks 'handle it, then continue Step 1'$",
           r"^GATE approvals plugin/assets/resume-context\.txt: AT-IB-01: a line matching .* lacks 'check the messages kept after the summary first; skip what is already done'$",
           r"^GATE approvals plugin/assets/resume-context\.txt: AT-IB-03: a line matching .* lacks 'handle it, then stop and wait for the user'$",
+          r"^GATE approvals plugin/assets/resume-context\.txt: AT-IB-01: a line matching .* lacks 'explicit gate'$",
+          r"^GATE approvals plugin/assets/resume-context\.txt:\d+: IDLE-DIGEST-OFF banned: a line matching .* holds 'away digest'$",
           r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AT-SR-04: a line matching .* lacks 'only when it carries no real risk'$",
           r"^GATE approvals plugin/skills/resume/references/self-heal\.md:\d+: AT-HC-04 banned: 'never run on its own'$"], None),
         ("model-pin", "MG-1", gates_only("model-pin"), model_pin,
