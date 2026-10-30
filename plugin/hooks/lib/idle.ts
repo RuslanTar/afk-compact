@@ -565,7 +565,8 @@ type Compact = { compact: true; gapS: number; tokens: number; agents: number }
  * Claude Code's automatic compaction once more (G0b, as the `compact` timer does at its fire):
  * switched off since the arm, it never compacts (D1). Two refusals still give the turn, as before
  * lane B, when no agents run and the turn is on (root call on Q2, 2026-10-27): `halted` (a thrash
- * or bad-summary halt stops plugin compactions, not the turn) and `compaction-off` (D1 keeps the
+ * or bad-summary halt stops plugin compactions, not the turn; with `idle_handoff_near_limit: run`
+ * also when `near-limit` came before it, root call NL-2) and `compaction-off` (D1 keeps the
  * turn there). Else the turn's checks, or `agents-running` while agents run (the skip of before
  * 2026-10-27, with `idle_compact: off`).
  */
@@ -595,7 +596,11 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
     const g = (await d.nativeIdle()) === 'compaction-off' ? { why: 'compaction-off' } : await compactGuards(d, sid, rec, now, env)
     // The gap is the timer's own (about 3,330 s) when the turn end is unknown.
     if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents }
-    if (agents > 0 || !on.turnOn || (g.why !== 'halted' && g.why !== 'compaction-off')) return g.why
+    // Root call NL-2 (0.1.2): `near-limit` comes before `halted` in the guards, so under
+    // `idle_handoff_near_limit: run` a halt that stops the compaction anyway (not the cap) falls
+    // back to the turn the same way; `skip` keeps the near-limit skip.
+    const haltedToo = g.why === 'near-limit' && d.cfg.idle_handoff_near_limit === 'run' && d.state.halt.active && d.state.halt.reason !== 'cap'
+    if (agents > 0 || !on.turnOn || (g.why !== 'halted' && g.why !== 'compaction-off' && !haltedToo)) return g.why
   }
   if (agents > 0) return 'agents-running'
   if (!d.cfg.triggers) return 'triggers-off'

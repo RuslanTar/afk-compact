@@ -1757,6 +1757,53 @@ test('AT-IC-C45 (owner Q2, root call): no agents, halt for two bad summaries in 
   else expect(skips(w)).toEqual([['no-asset', 'check']])
 })
 
+// Root call NL-2 (0.1.2): in halt mode (not the cap) the check's compaction never runs, so a window
+// at 90% or more refuses nothing the halt had not; with idle_handoff_near_limit `run` the check
+// falls back to the turn as it does for `halted`, and only `skip` keeps [near-limit, check].
+for (const mode of ['run', 'skip'] as const) {
+  test(`AT-IC-C45 (NL-2): no agents, halt for two bad summaries, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'no compaction; the turn runs (or no-asset)' : '[near-limit, check], no compaction and no turn'}`, { options: { ...ON, idle_handoff_near_limit: mode } }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    await w.start($)
+    await w.userTurn($)
+    w.summaryMode = 'unshaped'
+    await raiseCompact($, { trigger: 'auto' })
+    await raiseCompact($, { trigger: 'auto' })
+    w.summaryMode = 'ok'
+    expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
+    await w.advance(1000)
+    w.tokens = 260000
+    await w.turnEnd($, 'Done with that step.')
+    const compacts = w.compacts.length
+    await w.advance(55 * MIN)
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.advance(MIN)
+    expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
+    if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
+    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    else expect(skips(w)).toEqual([['no-asset', 'check']])
+  })
+}
+
+// NL-2: a cap halt does not stop the check's compaction, so a window at 95% stays its refusal (no
+// turn after it, D2) under `run` too; and with agents running a thrash halt keeps [near-limit, check].
+for (const c of [{ reason: 'cap', agents: false }, { reason: 'thrash', agents: true }]) {
+  test(`AT-IC-C45 (NL-2): halt for ${c.reason}${c.agents ? ', agents running' : ''}, a window at 95%, idle_handoff_near_limit run: [near-limit, check], no compaction and no turn`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.policy = NATIVE_ON
+    if (c.agents) w.agents = RUNNING
+    w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: c.reason }))
+    await w.start($)
+    await w.userTurn($, 'Background task finished.', 'task-notification')
+    w.tokens = 260000
+    await w.turnEnd($)
+    await w.advance(55 * MIN)
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.advance(MIN)
+    expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[['near-limit', 'check']], 0, 0, 0])
+  })
+}
+
 for (const c of [{ turn: true, why: 'episode' }, { turn: false, why: 'halted' }]) {
   test(`AT-IC-C45 (owner Q2, root call): no agents, halt for a thrash, the last turn a background result's${c.turn ? '' : ', the turn off'}: no compaction; [${c.why}, check]${c.turn ? ' (the turn\'s own rule: a background result opens no episode)' : ''}`, { options: c.turn ? ON : { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
     const w = world(on)
