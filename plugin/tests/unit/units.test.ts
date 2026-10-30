@@ -720,10 +720,13 @@ test('makeRow: ts is stamped in the system zone; the row fields are the state at
     state,
     now: async () => ms,
     // A turn starting while the lookup's file check runs: the row keeps the turn it was made in.
-    zone: async () => { state.turnSeq = 8; return 'Etc/GMT-1' },
+    // A half-hour zone no dev or CI machine of this project runs in, so a ts made in the
+    // engine's own zone (isoLocal(now)) cannot pass by chance.
+    zone: async () => { state.turnSeq = 8; return 'Asia/Kolkata' },
   } as unknown as Deps
   const row = await makeRow(d, 'sid-1', 'probe', { k: 1 })
-  expect(row['ts']).toBe('2026-10-30T12:21:06.005+01:00')
+  expect(row['ts']).toBe('2026-10-30T16:51:06.005+05:30')
+  expect(row['ts']).not.toBe(isoLocal(ms))
   expect(row['turn_seq']).toBe(7)
   expect(row['cc_version']).toBe('9.9.9')
   expect(row['pid']).toBe(4242)
