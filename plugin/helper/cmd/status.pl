@@ -70,7 +70,9 @@ sub run {
     my @out;
     my $brand = ctx::brand();
     if (!defined rc::watch()) {
-        args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')');
+        # the roots that refused it, with the fix for one in git (a home folder that is a dotfiles
+        # repository refuses the default ~/.local/state/<plugin>/ root until it is ignored there)
+        args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')', root_lines());
         return 0;
     }
     push @out, watcher_lines();
@@ -180,6 +182,56 @@ sub smoke_lines {
             . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05');
 }
 
+# The refused private-store roots, one line each (unsafe roots, D-12). For roots in a git work tree
+# and not ignored, one more line per folder to ignore: the roots, their work tree, and the two ways out
+# (ignore the folder there, or set the key to a folder outside any work tree). A root under the state
+# folder (~/.local/state/<plugin>, STATE-ROOT), which holds every default root, names that folder: a
+# home folder that is a git work tree (a dotfiles repository) refuses all of them until it is ignored.
+# log_dir is named as a key only when it is set (unset, it follows handoff_root).
+sub root_lines {
+    my @out;
+    my $p = rc::paths() || {};
+    my %path = (handoff_root => $p->{root}, log_dir => $p->{watch}, disposable_root => $p->{disposable});
+    my $state = eval { util::dirname(paths::state_default()) };
+    my (@dirs, %fix);
+    for my $key (qw(handoff_root log_dir disposable_root)) {
+        next if rc::root_ok($key);
+        my $why = rc::root_reason($key);
+        push @out, "root: $key refused (" . util::text($why) . '); copies and evidence under it are not written';
+        next unless ($why // '') eq 'root-in-git' && defined $path{$key};
+        my $wt = roots::check_path($path{$key})->{worktree};
+        next unless defined $wt;
+        my $dir = (defined $state && $state ne '/' && index("$path{$key}/", "$state/") == 0) ? $state : $path{$key};
+        push @dirs, $dir unless $fix{$dir};
+        $fix{$dir}{wt} //= $wt;
+        push @{ $fix{$dir}{paths} }, $path{$key};
+        push @{ $fix{$dir}{keys} }, $key unless $key eq 'log_dir' && (rc::val('log_dir') // '') eq '';
+    }
+    for my $dir (@dirs) {
+        my $f = $fix{$dir};
+        my $real = util::real_path($dir) // $dir;
+        my $top = $f->{wt} eq '/' ? '/' : "$f->{wt}/";
+        my $line = (index($real, $top) == 0 && length($real) > length($top))
+                 ? ' (the line /' . util::text(substr($real, length($top))) . '/ in ' . _home_form("$top.gitignore") . ')' : '';
+        my @keys = @{ $f->{keys} || [] };
+        my $set = @keys ? ', or set ' . join(' and ', @keys) . ' in /config to a folder outside any git work tree' : '';
+        push @out, '  in git, not ignored: ' . join(', ', map { util::abbrev($_) } @{ $f->{paths} })
+                   . ' (work tree ' . _home_form($f->{wt}) . '); to fix, ignore ' . util::abbrev($dir) . "/ there$line$set";
+    }
+    return @out;
+}
+
+# _home_form(real path) -> the path with the real home folder written `~` (a work tree is a real path).
+sub _home_form {
+    my ($p) = @_;
+    my $h = util::real_path(util::home());
+    if (defined $h && $h ne '' && $h ne '/') {
+        return '~' if $p eq $h;
+        return '~/' . util::text(substr($p, length($h) + 1)) if index($p, "$h/") == 0;
+    }
+    return util::abbrev($p);
+}
+
 # The lines from the settings and the store, not from this session's streams: unsafe roots,
 # handoff mode, automatic relaunch (this session's jobs only with its folder d), prod reads,
 # protected branches, idle compaction (with this session's idle_mode row when there is one),
@@ -189,10 +241,7 @@ sub smoke_lines {
 sub store_lines {
     my ($cwd, $d, $classic, $headless, $sid, $mod) = @_;
     my @out;
-    for my $key (qw(handoff_root log_dir disposable_root)) {
-        push @out, "root: $key refused (" . util::text(rc::root_reason($key)) . '); copies and evidence under it are not written'
-            unless rc::root_ok($key);
-    }
+    push @out, root_lines();
     push @out, legacy_lines();
     push @out, mode_lines($cwd);
     push @out, relaunch_lines($d);

@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1), the control of D-12-watch-root-in-git: the home
-# folder is a dotfiles git repository that ignores .claude/, so the handoff root and its
+# folder is a dotfiles git repository that ignores .claude/ and .local/state/<plugin>/, so the handoff root and its
 # .watch folder are git-ignored and ok. The watcher writes as before (the PreCompact,
 # PostCompact and sweep rows) and `status` has no refusal line; through the real launcher
 # core logs its root_in_git {ignored: true} rows beside the watcher's.
@@ -18,7 +18,7 @@ my $pre = watch::json::encode({ session_id => '$SID', transcript_path => '$PROJ/
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\n";
               close $fh;
           } },
         { call => 'hook', event => 'PreCompact', at => 9, payload => { trigger => 'auto', custom_instructions => undef } },

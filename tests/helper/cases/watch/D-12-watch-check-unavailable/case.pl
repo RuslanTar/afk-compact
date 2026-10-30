@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a root check that cannot run refuses, since unknown is
-# not safe. HOME is a dotfiles repository that ignores .claude/ (an ok root), but
+# not safe. HOME is a dotfiles repository that ignores .claude/ and .local/state/<plugin>/ (an ok root), but
 # roots::check_path has no body for this call (roots.pm loaded, the sub swapped out), so the library
 # PreCompact writes nothing and `status` says check-unavailable.
 my $saved;
@@ -22,14 +22,14 @@ my $restore = sub {
 };
 {
     needs => ['cmd:git'],
-    needs_note => 'the home work tree ignores .claude/ (git check-ignore)',
+    needs_note => 'the home work tree ignores .claude/ and .local/state/<plugin>/ (git check-ignore)',
     transcript => [ T::prompt(0), T::prompt(20) ],
     steps => [
         { call => 'code', code => sub {
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\n";
               close $fh;
               require 'util.pm';
               require 'git.pm';

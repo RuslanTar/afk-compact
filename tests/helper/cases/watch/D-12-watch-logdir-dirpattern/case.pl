@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir is $HOME/wlogs inside a dotfiles home that
-# ignores `.claude/` and `wlogs/`. A folder-only pattern (`wlogs/`) matches only a folder, so
+# ignores `.claude/`, `.local/state/<plugin>/` and `wlogs/`. A folder-only pattern (`wlogs/`) matches only a folder, so
 # git check-ignore must be asked about `wlogs/` (trailing slash) while the folder is not made
 # yet. Both roots are git-ignored, so the watcher writes its rows to $HOME/wlogs and `status`
 # has no refusal. Before the fix roots::check_path asked about `wlogs`, got root-in-git, and
@@ -16,7 +16,7 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/wlogs');
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\nwlogs/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\nwlogs/\n";
               close $fh;
           } },
         { call => 'cli', at => 40, argv => ['hook', 'PreCompact'], stdin => $pre, stdin_vars => 1, any_stdout => 1, env => \%env },

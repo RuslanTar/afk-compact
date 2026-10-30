@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): HOME is a work tree whose .gitignore says `Café/`
-# (NFC) and `.claude/`. log_dir $HOME/Café is not made yet and git ignores it once made, so
+# (NFC), `.claude/` and `.local/state/<plugin>/`. log_dir $HOME/Café is not made yet and git ignores it once made, so
 # the watcher writes its rows there and status has no refusal. The name is NFC-stable, so it
 # is asked on stdin with a trailing slash like an ASCII one (on the command line the folder-
 # only pattern misses the path as written and the root was refused until made).
@@ -16,7 +16,7 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/' . $w);
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh "$w/\n.claude/\n";
+              print $fh "$w/\n.claude/\n.local/state/$T::BRAND/\n";
               close $fh;
           } },
         { call => 'cli', at => 40, argv => ['hook', 'PreCompact'], stdin => $pre, stdin_vars => 1, any_stdout => 1, env => \%env },

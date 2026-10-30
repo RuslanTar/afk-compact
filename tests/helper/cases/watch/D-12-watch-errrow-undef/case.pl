@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): the root check itself dies (watch::ctx::_root_refusal
-# swapped for a sub that dies) in a home that ignores .claude/ (an ok root). The hook dies in
+# swapped for a sub that dies) in a home that ignores .claude/ and .local/state/<plugin>/ (an ok root). The hook dies in
 # refused(), error_row asks refused() again, it dies again: unknown is not safe, so no
 # watch_error row. Reading the undefined answer as "not refused" writes one.
 my $saved;
@@ -18,7 +18,7 @@ my $restore = sub {
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\n";
               close $fh;
               require watch::ctx;
               $saved = \&watch::ctx::_root_refusal;

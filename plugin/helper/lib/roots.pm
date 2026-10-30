@@ -104,10 +104,11 @@ sub check_path {
         $r = { ok => 0, reason => 'root-in-planning' };
     } elsif (my $wt = _worktree_of($real)) {
         my $ignored = _ignored($wt, $real);
-        $r = !defined $ignored ? { ok => 0, reason => 'root-in-git' }
+        # a root-in-git refusal names its work tree too (real path): status says where to ignore it
+        $r = !defined $ignored ? { ok => 0, reason => 'root-in-git', worktree => $wt }
            : $ignored == -1    ? { ok => 0, reason => 'root-unchecked' }
            : $ignored          ? { ok => 1, ignored => 1, worktree => $wt }
-           :                     { ok => 0, reason => 'root-in-git' };
+           :                     { ok => 0, reason => 'root-in-git', worktree => $wt };
     } else {
         $r = { ok => 1 };
     }

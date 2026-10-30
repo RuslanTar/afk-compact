@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): `root-unchecked` refuses for one call only. HOME is
-# a dotfiles repository that ignores .claude/ (an ok root), but this helper call's root-check
+# a dotfiles repository that ignores .claude/ and .local/state/<plugin>/ (an ok root), but this helper call's root-check
 # deadline ($roots::DEADLINE) has already passed, so git check-ignore cannot run: the library
 # PreCompact writes nothing and `status` says root-unchecked. A later launcher call (its own
 # deadline and roots cache) checks again and writes.
@@ -15,7 +15,7 @@ my $rows = 0;
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\n";
               close $fh;
               $roots::DEADLINE = 1;    # epoch ms: long past
           } },

@@ -15,7 +15,7 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/:(top)x/wlogs');
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh "x/\n.claude/\n";
+              print $fh "x/\n.claude/\n.local/state/$T::BRAND/\n";
               close $fh;
           } },
         { call => 'cli', at => 40, argv => ['hook', 'PreCompact'], stdin => $pre, stdin_vars => 1, any_stdout => 1, env => \%env },

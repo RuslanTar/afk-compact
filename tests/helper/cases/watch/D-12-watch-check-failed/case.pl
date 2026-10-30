@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): roots::check_path dies (swapped for a sub that dies)
-# in a home that ignores .claude/ (an ok root): refused() says `check-failed`, and the library
+# in a home that ignores .claude/ and .local/state/<plugin>/ (an ok root): refused() says `check-failed`, and the library
 # PreCompact writes nothing under the handoff root. Skipping the failed root instead writes
 # .watch/<sid>.classic.jsonl.
 my $saved;
@@ -29,7 +29,7 @@ my $restore = sub {
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\n";
               close $fh;
               require 'util.pm';
               require 'git.pm';

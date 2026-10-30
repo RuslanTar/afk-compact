@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir $HOME/wlogs, not made yet, in a dotfiles home
-# whose .gitignore says `wlogs/`, then `!*`, then `.claude/`. The last pattern that names wlogs
+# whose .gitignore says `wlogs/`, then `!*`, then `.claude/` and `.local/state/<plugin>/`. The last pattern that names wlogs
 # is the negation `!*`, so the folder is not ignored. `git check-ignore -v` names a negated
 # match too and exits 0; read as "ignored", the root would pass and the first call would write
 # into the repository. It is root-in-git: no call makes wlogs, `git status` shows nothing there.
@@ -15,7 +15,7 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/wlogs');
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh "wlogs/\n!*\n.claude/\n";
+              print $fh "wlogs/\n!*\n.claude/\n.local/state/$T::BRAND/\n";
               close $fh;
           } },
         { call => 'cli', at => 40, argv => ['hook', 'PreCompact'], stdin => $pre, stdin_vars => 1, any_stdout => 1, env => \%env },

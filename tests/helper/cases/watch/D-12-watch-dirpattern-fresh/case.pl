@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a fresh install in a dotfiles home that ignores the
-# default handoff root with a folder-only pattern (`.claude/handoffs/`); the root is not made
+# default handoff root with a folder-only pattern (`.local/state/<plugin>/handoffs/`); the root is not made
 # yet. The root is git-ignored, so it is ok from the first call on: every PreCompact (the
 # library call and both launcher calls) leaves its row, and `status` has no refusal. Before the
 # fix the first calls were refused as root-in-git until core's own write made the folder.
@@ -14,7 +14,7 @@ my $pre = watch::json::encode({ session_id => '$SID', transcript_path => '$PROJ/
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/handoffs/\n";
+              print $fh ".local/state/$T::BRAND/handoffs/\n";
               close $fh;
           } },
         { call => 'hook', event => 'PreCompact', at => 9, payload => { trigger => 'auto', custom_instructions => undef } },

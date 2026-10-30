@@ -14,7 +14,7 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/wlogs');
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\nwlogs/*\n!wlogs/*.jsonl\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\nwlogs/*\n!wlogs/*.jsonl\n";
               close $fh;
           } },
         { call => 'cli', at => 40, argv => ['hook', 'PreCompact'], stdin => $pre, stdin_vars => 1, any_stdout => 1, env => \%env },

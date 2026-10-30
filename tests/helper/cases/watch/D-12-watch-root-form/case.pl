@@ -1,9 +1,9 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1 review finding 1): the watcher checks its roots in
 # core's path form (util::clean_path, as paths::for), so roots.pm's per-string cache answers
 # from core's own check and the watcher runs no git check-ignore of its own. The home folder
-# is a dotfiles repository that ignores .claude/ (the roots are ok). The real launcher's
+# is a dotfiles repository that ignores .claude/ and .local/state/<plugin>/ (the roots are ok). The real launcher's
 # PreCompact runs three times, each a session of its own: HOME as is (the baseline), HOME with
-# a trailing slash, and handoff_root written `$HOME/.claude/./handoffs`. Each writes the
+# a trailing slash, and handoff_root written `$HOME/.local/state/<plugin>/./handoffs`. Each writes the
 # watcher's precompact row, and each asks git exactly as often as the baseline. Before the
 # fix the watcher checked the raw strings: a trailing-slash HOME took 14 git calls against 9,
 # and with PreCompact's 500 ms mostly spent by core the check ran out of time
@@ -33,7 +33,7 @@ my $git_calls = sub {
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\n";
               close $fh;
               my $t = watch::io::slurp($v->{TRANSCRIPT});
               for my $s (values %sid) {
@@ -49,7 +49,7 @@ my $git_calls = sub {
         { call => 'cli', at => 10, argv => ['hook', 'PreCompact'], stdin => $pre->($sid{slash}), stdin_vars => 1,
           any_stdout => 1, env => { HOME => '$HOME/', STORE_TEST_TRACE => '$TMP/trace-slash.log' } },
         { call => 'cli', at => 11, argv => ['hook', 'PreCompact'], stdin => $pre->($sid{dot}), stdin_vars => 1,
-          any_stdout => 1, env => { CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT => '$HOME/.claude/./handoffs',
+          any_stdout => 1, env => { CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT => '$HOME/.local/state/$BRAND/./handoffs',
                                     STORE_TEST_TRACE => '$TMP/trace-dot.log' } },
     ],
     expect => sub {

@@ -1,5 +1,5 @@
 # WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir is $HOME/wlogs, already made, in a dotfiles
-# home whose .gitignore ignores .claude/ and the contents of wlogs (`wlogs/*`) but brings
+# home whose .gitignore ignores .claude/, .local/state/<plugin>/ and the contents of wlogs (`wlogs/*`) but brings
 # `*.jsonl` back there. git says the folder wlogs itself is not ignored, so log_dir is
 # root-in-git: nothing is written there and `git status` shows nothing new under wlogs. Asked
 # with a trailing slash, git matched `wlogs/*` against an empty name inside wlogs and called
@@ -16,7 +16,7 @@ my %env = (CLAUDE_PLUGIN_OPTION_LOG_DIR => '$HOME/wlogs');
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";
               open(my $fh, '>', "$v->{HOME}/.gitignore") or die "gitignore: $!";
-              print $fh ".claude/\nwlogs/*\n!wlogs/*.jsonl\n";
+              print $fh ".claude/\n.local/state/$T::BRAND/\nwlogs/*\n!wlogs/*.jsonl\n";
               close $fh;
               mkdir "$v->{HOME}/wlogs" or die "mkdir: $!";
           } },
