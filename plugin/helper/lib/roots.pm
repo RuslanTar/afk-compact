@@ -32,6 +32,41 @@ sub _worktree_of {
     return undef;
 }
 
+sub _time_left {
+    my $t = defined $DEADLINE ? $DEADLINE - util::clock_ms() : 2000;
+    return $t > 2000 ? 2000 : $t;
+}
+
+# _ignored(worktree, real path) -> 1 | 0 | -1 (out of time) | undef (unknown): is the root
+# folder ignored, so that nothing written under it shows in git?
+# - The folder exists: git is asked about it as it is and knows it is a folder.
+# - Not made yet: git cannot know it will be a folder, so a folder-only pattern (`wlogs/`)
+#   misses the path as written and a folder-only negation (`!wlogs/`) is skipped. Asked with a
+#   trailing slash, git checks each folder on the path (the root included) and then an
+#   empty-named entry inside the root, which `wlogs/*` or `*` also match although the folder
+#   itself is not ignored (`wlogs/*` with `!wlogs/*.jsonl` brings the plugin's files back).
+#   So both are asked: the slash form not ignored -> no folder on the path is ignored -> 0;
+#   its pattern ends in `/` (a folder-only one, which cannot match the empty entry) -> 1;
+#   else only when the path as written is ignored by that same pattern: a pattern that
+#   ignores the folder matches it in both forms, while one that only matched the empty
+#   entry differs. Known limit: a pattern matching both (`*`) followed by `!wlogs/` and a
+#   re-include of the plugin's files counts as ignored until the folder is made.
+sub _ignored {
+    my ($wt, $real) = @_;
+    my $t = _time_left();
+    return -1 if $t < 50;
+    return git::check_ignore($wt, $real, $t) if -d $real;
+    my ($aw, $awm) = git::check_ignore_match($wt, $real, $t);
+    return $aw if defined $aw && $aw == -1;
+    $t = _time_left();
+    return -1 if $t < 50;
+    my ($sl, $slm) = git::check_ignore_match($wt, ($real =~ m{/\z} ? $real : "$real/"), $t);
+    return $sl if !defined $sl || $sl != 1;
+    return 1 if $slm =~ m{/\z};
+    return undef unless defined $aw;
+    return ($aw == 1 && $awm eq $slm) ? 1 : 0;
+}
+
 # check_path(path) -> {ok => 1} | {ok => 0, reason => ...} plus ignored => 1
 sub check_path {
     my ($path) = @_;
@@ -44,10 +79,7 @@ sub check_path {
     if (grep { lc($_) eq '.planning' } split m{/}, $real) {
         $r = { ok => 0, reason => 'root-in-planning' };
     } elsif (my $wt = _worktree_of($real)) {
-        my $t = defined $DEADLINE ? $DEADLINE - util::clock_ms() : 2000;
-        $t = 2000 if $t > 2000;
-        # the trailing slash says "a folder", so a dir pattern (`wlogs/`) matches a root not made yet
-        my $ignored = $t >= 50 ? git::check_ignore($wt, ($real =~ m{/\z} ? $real : "$real/"), $t) : -1;
+        my $ignored = _ignored($wt, $real);
         $r = !defined $ignored ? { ok => 0, reason => 'root-in-git' }
            : $ignored == -1    ? { ok => 0, reason => 'root-unchecked' }
            : $ignored          ? { ok => 1, ignored => 1, worktree => $wt }

@@ -48,6 +48,23 @@ sub check_ignore {
     return undef;
 }
 
+# check_ignore_match(wt, path, timeout) -> (1, "source:line:pattern") ignored, 0 not ignored,
+# -1 timed out, undef unknown. With -v git also names a negated last match (`!x`) and exits 0;
+# that path is not ignored. -z needs --stdin, so the text form is read: `source:line:pattern`,
+# a tab, then the path.
+sub check_ignore_match {
+    my ($wt, $path, $timeout_ms) = @_;
+    my $r = cmd($wt, ['check-ignore', '-v', '--no-index', $path], $timeout_ms // 2000);
+    return -1 if $r->{timed_out};
+    return undef if $r->{unavailable};
+    return 0 if $r->{exit} == 1;
+    return undef unless $r->{exit} == 0;
+    my ($m) = split /\t/, $r->{out} // '', 2;
+    return undef unless defined $m && $m =~ /\A.*?:[0-9]+:(.+)\z/s;
+    return 0 if substr($1, 0, 1) eq '!';
+    return (1, $m);
+}
+
 # where(cwd) -> {in_git, toplevel, common_dir, repo, branch, head} with one or two calls
 sub where {
     my ($cwd, $timeout_ms) = @_;
