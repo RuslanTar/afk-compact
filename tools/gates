@@ -576,6 +576,14 @@ def config_defaults_hits(target, brand):
             # The text is also the "line", so a PENDING row can name one key (its fragment).
             text = "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(key, got if key in uc else "missing", val)
             out.append((path, None, "AT-CAP-02 ruled", text, text))
+    # STATE-ROOT docs: the README's moved-folder section holds the Q-11 marker until the root fills in the
+    # allow rule for the new root (then a `Write(~/.local/state/…)` rule replaces it).
+    readme = os.path.join(target, "README.md")
+    if os.path.isfile(readme):
+        text = _read(readme)
+        if "TODO(Q-11)" not in text and not re.search(r"Write\(~/\.local/state/", text):
+            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: no TODO(Q-11) marker and no Write(~/.local/state/…) "
+                        "allow rule for the new handoff root", ""))
     for key in sorted(uc):
         if "keep_days" in key and key != "disposable_keep_days":
             out.append((path, None, "AT-WD-02 keep-days", "AT-WD-02 keep-days: {} (no retention key for .watch)".format(key), ""))
