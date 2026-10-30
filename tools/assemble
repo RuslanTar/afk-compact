@@ -4,16 +4,22 @@
 Port of the design-phase assembler (compaction DESIGN-NOTES §2 grammar, HK-39 / AT-P-07
 budgets, SIZE-CHECK worst cases), reading src/assets/.
 
-Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--goldens | --check]
+Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--chunk-bytes N] [--goldens | --check]
   --name      plugin name filled into {{plugin}} (default: brand.json name)
   --path-len  length of the worst-case previous-copy path (default 141)
   --dir       asset folder (default src/assets)
   --goldens   also write tests/fixtures/assembly/expected/<asset>__<tags|base>.txt for every
               tag combination, with the runtime values of tests/fixtures/assembly/runtime.json
               when that file exists (else the worst-case values below), and the same
-              texts as plugin/tests/unit/_gen/goldens.gen.ts for the U half of BT-04
+              texts for the U half of BT-04 under plugin/tests/unit/_gen/: one data module per
+              asset, goldens.<asset>.gen.ts (overflow modules goldens.<asset>.2.gen.ts, .3, ...
+              past GOLDEN_CHUNK_MAX bytes each, as the test kit reads no file over 1 MiB), and
+              the index goldens.gen.ts that gathers them
   --check     compare those files with a fresh render instead of writing them, byte for byte
-              (CRLF drift and stray .txt files count; BUILD-PLAN §4 X-gen, BH-5)
+              (CRLF drift, stray .txt files and stray _gen/goldens*.gen.ts files count, and so
+              does a module over GOLDEN_CHUNK_MAX; BUILD-PLAN §4 X-gen, BH-5)
+  --chunk-bytes  test only (tools/check goldens-chunks): the module size cap in bytes in place
+              of GOLDEN_CHUNK_MAX, so a small cap gives overflow modules
 
 Build step: strip <!-- ... --> comments, fill {{plugin}}. Runtime: fill @tokens@ with
 worst-case values. A line starting "[tag] " is kept (tag stripped) only when the tag is
@@ -49,8 +55,12 @@ with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
     NAME = json.load(f)["name"]
 PATH_LEN = 141   # longest real handoff path in the corpus (~-abbreviated; median 100, p90 116)
 GOLDENS = False
+# The size cap of each goldens module under plugin/tests/unit/_gen (bytes): about half the
+# 1,048,576 the test kit reads per file (claude plugin test: "over 1048576 bytes and was not
+# read"), so an asset's goldens fill overflow modules long before one reaches the kit's limit.
+GOLDEN_CHUNK_MAX = 512 * 1024
 args = sys.argv[1:]
-for flag in ("--name", "--path-len", "--dir"):
+for flag in ("--name", "--path-len", "--dir", "--chunk-bytes"):
     if flag in args:
         i = args.index(flag)
         if i + 1 >= len(args):
@@ -59,6 +69,10 @@ for flag in ("--name", "--path-len", "--dir"):
             NAME = args[i + 1]
         elif flag == "--path-len":
             PATH_LEN = int(args[i + 1])
+        elif flag == "--chunk-bytes":
+            if not args[i + 1].isdigit() or int(args[i + 1]) < 1024:
+                sys.exit("assemble: --chunk-bytes needs a whole number of at least 1024")
+            GOLDEN_CHUNK_MAX = int(args[i + 1])
         else:
             DIR = os.path.abspath(args[i + 1])
         del args[i:i + 2]
@@ -325,7 +339,9 @@ def combos(asset):
 
 # Owner 2026-10-26 [driver]: one more tag line that can join any resume block would double the
 # resume-context goldens (96 to 192), and goldens.gen.ts would pass the 1 MiB the test kit reads
-# (claude plugin test: "over 1048576 bytes and was not read"). Its goldens are rendered only
+# (claude plugin test: "over 1048576 bytes and was not read"). Since 0.1.2 (goldens-split) the
+# goldens are split into modules of at most GOLDEN_CHUNK_MAX bytes, so that limit applies to each
+# module, not to all the goldens; this rule stays as the owner ruled it. Its goldens are rendered only
 # beside these tags (6 more goldens: each prod line alone, with [midturn] or [idle]; never with
 # [idle-halt], EXCLUSIVE); the grammar is the same for every tag line, and the budget, step, store and
 # leftover walks still run over every combination (combos).
@@ -532,11 +548,23 @@ def heading_checks():
     return bad
 
 
-GOLDENS_MODULE = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "goldens.gen.ts")
+# The goldens for the U half of BT-04 (the kit has no fs): the index goldens.gen.ts and one data
+# module per asset, goldens.<asset>.gen.ts, with overflow modules goldens.<asset>.2.gen.ts, .3, ...
+# Every file name in that folder that GOLDENS_FILE matches is tools/assemble's (tools/build
+# accepts the same pattern there and leaves its stale scan to check_goldens).
+GOLDENS_DIR = os.path.join(REPO, "plugin", "tests", "unit", "_gen")
+GOLDENS_INDEX = os.path.join(GOLDENS_DIR, "goldens.gen.ts")
+GOLDENS_FILE = re.compile(r"^goldens(\.[a-z0-9-]+)*\.gen\.ts$")
+
+
+def goldens_module_path(stem, n):
+    """The n-th data module (1-based) of an asset's goldens."""
+    return os.path.join(GOLDENS_DIR, "goldens.{}.gen.ts".format(stem) if n == 1 else "goldens.{}.{}.gen.ts".format(stem, n))
 
 
 def render_goldens():
-    """{absolute path: text} for every golden .txt and for goldens.gen.ts (nothing written)."""
+    """({absolute path: text} for every golden .txt and goldens module, [module paths in index
+    order, the index first]); nothing written."""
     runtime = dict(RUNTIME)
     if os.path.exists(RUNTIME_JSON):
         with open(RUNTIME_JSON, encoding="utf-8") as f:
@@ -546,39 +574,139 @@ def render_goldens():
     saved = dict(RUNTIME)
     RUNTIME.update(runtime)
     out = {}
-    rows = []
+    rows = {}
     try:
         for asset, fname in FILES.items():
             stem = fname[:-4]
             for tags in golden_combos(asset):
                 text = assemble(TEXT[asset], tags)
                 out[os.path.join(GOLDEN_DIR, "{}__{}.txt".format(stem, "+".join(tags) or "base"))] = text
-                rows.append({"asset": stem, "tags": tags, "parts": text.split(NAME)})
+                rows.setdefault(stem, []).append({"asset": stem, "tags": tags, "parts": text.split(NAME)})
     finally:
         RUNTIME.clear()
         RUNTIME.update(saved)
-    out[GOLDENS_MODULE] = goldens_module(runtime, rows)
-    return out
+    data = []
+    for stem, asset_rows in rows.items():
+        for n, chunk in enumerate(golden_chunks(stem, asset_rows), 1):
+            path = goldens_module_path(stem, n)
+            out[path] = goldens_rows_module(stem, chunk)
+            data.append(path)
+    out[GOLDENS_INDEX] = goldens_index(runtime, data, sum(len(r) for r in rows.values()))
+    return out, [GOLDENS_INDEX] + data
+
+
+ROWS_HEAD = "export const ROWS: readonly { asset: string; tags: readonly string[]; parts: readonly string[] }[] = [\n"
+
+
+def golden_row(row):
+    """One row as the module writes it: JSON at indent 1, one level into the ROWS array."""
+    return " " + json.dumps(row, ensure_ascii=True, indent=1).replace("\n", "\n ")
+
+
+def goldens_rows_head(stem):
+    return ("// GEN by tools/assemble --goldens from tests/fixtures/assembly (runtime.json, expected/).\n"
+            "// Do not edit; edit the assets or runtime.json and run tools/assemble --goldens.\n"
+            "// Goldens of {}.txt in render order; goldens.gen.ts gathers every module.\n"
+            "// Each golden is split at the plugin name it was rendered with: join the parts with a name.\n\n"
+            .format(stem) + ROWS_HEAD)
+
+
+def golden_chunks(stem, rows):
+    """The rows in render order, cut into runs whose module stays within GOLDEN_CHUNK_MAX bytes
+    (the same cut on every render). A row too large for a module of its own stays alone, and
+    oversize() fails it. A module of k rows is head + the rows + k - 1 ",\\n" + "\\n]\\n" bytes,
+    so each row counts its length + 2 on top of head + 1."""
+    base = len(goldens_rows_head(stem).encode()) + 1
+    chunks, cur, size = [], [], base
+    for row in rows:
+        n = len(golden_row(row).encode()) + 2
+        if cur and size + n > GOLDEN_CHUNK_MAX:
+            chunks.append(cur)
+            cur, size = [], base
+        cur.append(row)
+        size += n
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def goldens_rows_module(stem, rows):
+    """plugin/tests/unit/_gen/goldens.<stem>[.<n>].gen.ts: one run of an asset's goldens. The row
+    type is written here, not imported from the index, which imports this module (no cycle)."""
+    return goldens_rows_head(stem) + ",\n".join(golden_row(r) for r in rows) + "\n]\n"
+
+
+def goldens_index(runtime, data, count):
+    """plugin/tests/unit/_gen/goldens.gen.ts: the runtime values and every data module, gathered
+    in FILES order (static imports: the kit loads no dynamic import()).
+
+    Each golden is kept in parts split at the plugin name it was rendered with, so no module
+    holds the name (the rename drill copies _gen unchanged; the file names hold asset stems only)
+    and a test joins the parts with the name it assembles for. ASCII escapes keep marker shapes
+    out of the plain text of plugin/.
+    """
+    rt = {k: v for k, v in sorted(runtime.items())}
+    names = ["ROWS_{}".format(i + 1) for i in range(len(data))]
+    imports = "".join("import {{ ROWS as {} }} from './{}'\n".format(v, os.path.basename(p)[:-len(".ts")])
+                      for v, p in zip(names, data))
+    return ("// GEN by tools/assemble --goldens from tests/fixtures/assembly (runtime.json, expected/).\n"
+            "// Do not edit; edit the assets or runtime.json and run tools/assemble --goldens.\n"
+            "// The goldens live in one module per asset (overflow modules past {} bytes each: the test\n"
+            "// kit reads no file over 1 MiB). Each golden is split at the plugin name it was rendered\n"
+            "// with: join the parts with a name.\n\n".format(GOLDEN_CHUNK_MAX)
+            + imports + "\n"
+            "export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = "
+            + json.dumps(rt, ensure_ascii=True, indent=1) + "\n\n"
+            "export type Golden = { asset: string; tags: readonly string[]; parts: readonly string[] }\n\n"
+            "export const GOLDENS: readonly Golden[] = [" + ", ".join("..." + v for v in names) + "]\n\n"
+            "export const GOLDEN_COUNT = {}\n".format(count))
+
+
+def oversize(files, mods):
+    """Print a FAIL line for every goldens module over GOLDEN_CHUNK_MAX bytes; True if any."""
+    bad = False
+    for path in mods:
+        n = len(files[path].encode("utf-8"))
+        if n > GOLDEN_CHUNK_MAX:
+            print("FAIL {} is {} B > {} B (GOLDEN_CHUNK_MAX): {}".format(
+                os.path.relpath(path, REPO), n, GOLDEN_CHUNK_MAX,
+                "the index of every module" if path == GOLDENS_INDEX else "one golden larger than the cap"))
+            bad = True
+    return bad
+
+
+def stray_goldens(files):
+    """_gen/goldens*.gen.ts files no render writes (an asset gone, fewer overflow modules)."""
+    if not os.path.isdir(GOLDENS_DIR):
+        return []
+    return [os.path.join(GOLDENS_DIR, f) for f in sorted(os.listdir(GOLDENS_DIR))
+            if GOLDENS_FILE.match(f) and os.path.join(GOLDENS_DIR, f) not in files]
 
 
 def write_goldens():
-    files = render_goldens()
+    files, mods = render_goldens()
     os.makedirs(GOLDEN_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(GOLDENS_MODULE), exist_ok=True)
+    os.makedirs(GOLDENS_DIR, exist_ok=True)
     for path, text in files.items():
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
     for f in os.listdir(GOLDEN_DIR):
         if f.endswith(".txt") and os.path.join(GOLDEN_DIR, f) not in files:
             os.unlink(os.path.join(GOLDEN_DIR, f))
-    print("goldens: {} files in {}".format(len(files) - 1, os.path.relpath(GOLDEN_DIR, REPO)))
-    print("goldens module: {} goldens in {}".format(len(files) - 1, os.path.relpath(GOLDENS_MODULE, REPO)))
+    for p in stray_goldens(files):
+        os.unlink(p)
+        print("removed stale " + os.path.relpath(p, REPO))
+    n = len(files) - len(mods)
+    print("goldens: {} files in {}".format(n, os.path.relpath(GOLDEN_DIR, REPO)))
+    print("goldens module: {} goldens in {} files under {}".format(n, len(mods), os.path.relpath(GOLDENS_DIR, REPO)))
+    return oversize(files, mods)
 
 
 def check_goldens():
-    """True when a golden or goldens.gen.ts differs from a fresh render (bytes), is missing,
-    or a .txt in expected/ is no golden's."""
-    files = render_goldens()
+    """True when a golden or goldens module differs from a fresh render (bytes) or is missing, a
+    .txt in expected/ is no golden's, a _gen/goldens*.gen.ts file is no module's, or a module is
+    over GOLDEN_CHUNK_MAX bytes."""
+    files, mods = render_goldens()
     bad = False
     for path, text in sorted(files.items()):
         rel = os.path.relpath(path, REPO)
@@ -595,25 +723,12 @@ def check_goldens():
             if f.endswith(".txt") and os.path.join(GOLDEN_DIR, f) not in files:
                 print("stale " + os.path.relpath(os.path.join(GOLDEN_DIR, f), REPO))
                 bad = True
+    for p in stray_goldens(files):
+        print("stale " + os.path.relpath(p, REPO))
+        bad = True
+    bad |= oversize(files, mods)
     print("GOLDENS CHECK: " + ("FAIL (run tools/assemble --goldens)" if bad else "PASS ({} files)".format(len(files))))
     return bad
-
-
-def goldens_module(runtime, rows):
-    """plugin/tests/unit/_gen/goldens.gen.ts: the goldens for the TS half of BT-04 (the kit has no fs).
-
-    Each golden is kept in parts split at the plugin name it was rendered with, so the module
-    holds no name (the rename drill copies _gen unchanged) and a test joins the parts with the
-    name it assembles for. ASCII escapes keep marker shapes out of the plain text of plugin/.
-    """
-    rt = {k: v for k, v in sorted(runtime.items())}
-    return ("// GEN by tools/assemble --goldens from tests/fixtures/assembly (runtime.json, expected/).\n"
-            "// Do not edit; edit the assets or runtime.json and run tools/assemble --goldens.\n"
-            "// Each golden is split at the plugin name it was rendered with: join the parts with a name.\n\n"
-            "export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = "
-            + json.dumps(rt, ensure_ascii=True, indent=1) + "\n\n"
-            "export type Golden = { asset: string; tags: readonly string[]; parts: readonly string[] }\n\n"
-            "export const GOLDENS: readonly Golden[] = " + json.dumps(rows, ensure_ascii=True, indent=1) + "\n")
 
 
 BLOCK = "x" * BUDGETS["measured block"][2]  # worst-case measured block (header + facts)
@@ -705,7 +820,7 @@ bad |= store_checks()
 bad |= queue_checks()
 bad |= heading_checks()
 if GOLDENS:
-    write_goldens()
+    bad |= write_goldens()
 if CHECK:
     bad |= check_goldens()
 for e in REASON_ERRORS:
