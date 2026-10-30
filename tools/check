@@ -482,6 +482,8 @@ def probes(name):
         uc = doc["userConfig"]
         uc["watcher"]["default"] = "off"
         uc["disposable_keep_days"]["default"] = 30
+        # AT-CAP-02 ruled (owner 2026-10-30, xxxxxxxx): the near-limit handoff setting ships `run`.
+        uc["idle_handoff_near_limit"]["default"] = "skip"
         uc["watch_keep_days"] = {"type": "number", "title": "x", "description": "x", "default": 30}
         write_text(p, json.dumps(doc, indent=2) + "\n")
 
@@ -950,6 +952,7 @@ def probes(name):
         ("config-defaults", "AT-WD-02", gates_only("config-defaults"), config_defaults,
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 ruled: idle_handoff_near_limit is 'skip', want 'run'$",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days"], None),
         ("launcher", "AT-PK-01", gates_only("launcher"), launcher_move,
          [r"^GATE launcher plugin/bin: AT-PK-01 bin-folder",
