@@ -29,7 +29,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^ok baseline \\(Claude Code 2\\.1\\.306\\)$",
+     "^ok baseline \\(Claude Code 2\\.1\\.314\\)$",
      "^skip validate \\(skipped by flag\\)$",
      "^skip c8 \\(skipped by flag\\)$",
      "^ok c9 \\(6 declarations\\)$",
