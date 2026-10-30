@@ -555,6 +555,71 @@
    }
   },
   {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy the v3 build to prod\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/y to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"create the release v7-b\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"create the release v8-c\"}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"close the ticket OPS-78\"}}\n{\"type\": \"user\", \"uuid\": \"h5\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge the fix pull request\"}}\n{\"type\": \"assistant\", \"uuid\": \"al0\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_l0\", \"name\": \"Bash\", \"input\": {\"command\": \"cd /work/x-1 && git commit -m \\\"deploy v1.2 later\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ul0\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_l0\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/x-1 && git commit -m \\\"deploy v1.2 later\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"al1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_l1\", \"name\": \"Bash\", \"input\": {\"command\": \"git commit -m \\\"push rel/3 later\\\" && bash -c \\\"git push\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ul1\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_l1\", \"is_error\": true, \"content\": \"Permission to use Bash with command git commit -m \\\"push rel/3 later\\\" && bash -c \\\"git push\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"al2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_l2\", \"name\": \"Bash\", \"input\": {\"command\": \"cd /work/e-1 && eval \\\"gh release create v7-b\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ul2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_l2\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/e-1 && eval \\\"gh release create v7-b\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"al3\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_l3\", \"name\": \"Bash\", \"input\": {\"command\": \"bash -c \\\"git commit -m \\\\\\\"push OPS-78 x\\\\\\\" && git push origin feat/n-1\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ul3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_l3\", \"is_error\": true, \"content\": \"Permission to use Bash with command bash -c \\\"git commit -m \\\\\\\"push OPS-78 x\\\\\\\" && git push origin feat/n-1\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"al4\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_l4\", \"name\": \"Bash\", \"input\": {\"command\": \"bash -c \\\"cd /work/q-1 && ls\\\" && gh pr merge\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ul4\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_l4\", \"is_error\": true, \"content\": \"Permission to use Bash with command bash -c \\\"cd /work/q-1 && ls\\\" && gh pr merge has been denied.\"}]}}\n"
+  },
+  {
+   "name": "begin (L)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEL": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (L)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEL"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEL/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"deploy the v3 build to prod\" — action deploy the v3 build to prod · targets the v3 build @ v1 · once · not yet used\n- U-3: approval \"push feat/y to origin\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-4: approval \"create the release v7-b\" — action gh release create v7-b · targets release v7-b @ 1a2b3c4 · once · not yet used\n- U-5: approval \"create the release v8-c\" — action gh release create v8-c · targets release v8-c @ 1a2b3c4 · once · not yet used\n- U-6: approval \"close the ticket OPS-78\" — action close the ticket OPS-78 · targets the ticket OPS-78 @ v1 · once · not yet used\n- U-7: approval \"merge the fix pull request\" — action merge the fix pull request · targets the fix pull request @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "a command outward only inside a quoted message names no token, so its unquoted cd does not narrow the deploy class; a quoted message outward on its own is never read beside a bash -c bare push; eval runs its quoted command, so the release of v7-b covers only v7-b; a quoted command is read the same way, its escaped inner message masked (OPS-78 not read); a quoted command that is not outward on its own names nothing beside a merge (review 4 finding 1)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEL",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 11$",
+     "^LINT approval-denied line 12$",
+     "^LINT approval-denied line 15$",
+     "^REFUSED: lint \\(4 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 13$",
+     "LINT approval-denied line 14$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
    "name": "canary: no tool input or approval text in any watch row",
    "expect": {
     "files": [
@@ -587,7 +652,12 @@
        "feat/s-9",
        "OPS-77",
        "repo-2",
-       "ok-1"
+       "ok-1",
+       "x-1",
+       "v7-b",
+       "OPS-78",
+       "feat/n-1",
+       "q-1"
       ]
      }
     ]
