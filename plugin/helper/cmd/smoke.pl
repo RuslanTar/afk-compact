@@ -6,6 +6,13 @@
 # in <watch>/version.json) or `SMOKE FAIL <check>` (exit 1). Never starts a session.
 # A check whose input is missing (no claude binary for C8, no type declarations for
 # C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14; F2-9).
+# C8 fails only on rare strings and the arm list (c8_compare): a string the baseline
+# counted at most c8.rare_max times is rare (plugin-specific: the flag, its env
+# variable, the notice texts, the experiment's own arm names), and c8.arm_list is the
+# experiment's arm list as the binary writes it; any change of their counts fails. Any
+# other string is a common word whose count moves with every release: a change prints
+# an `info c8` line and does not fail (AT-M3-14c). A baseline without rare_max treats
+# every string as rare.
 # C9 reads --types FILE, else the file the running Claude Code wrote when its built-in
 # plugin-authoring skill loaded (bundled_types): no version writes declarations into an
 # installed plugin, so <plugin>/.claude-plugin/types is not read. That folder is swept a
@@ -99,6 +106,39 @@ sub count_strings {
     return \%n;
 }
 
+# C8 against the baseline's c8 part (see the header): {ok => 1|0, note, info => [lines]}.
+# Rare: the arm list, and every string whose baseline count is at most rare_max (all of
+# them when rare_max is not a whole number); their changes fail, a common word's change
+# is one info line.
+sub c8_compare {
+    my ($c8, $bin) = @_;
+    my $want = $c8->{counts};
+    my @s = sort keys %$want;
+    my $arm = $c8->{arm_list};
+    my $max = $c8->{rare_max};
+    $max = undef unless defined $max && $max =~ /^\d+\z/;
+    return { ok => 0, note => 'the arm list is not counted in the baseline', info => [] }
+        if defined $arm && !exists $want->{$arm};
+    my $n = count_strings($bin, \@s);
+    return { ok => 0, note => "cannot read $bin", info => [] } unless defined $n;
+    my $label = sub { defined $arm && $_[0] eq $arm ? 'the arm list' : "\"$_[0]\"" };
+    my (@fail, @info);
+    my ($rare, $common) = (0, 0);
+    for my $k (@s) {
+        my $is_arm = defined $arm && $k eq $arm;
+        my $hard = $is_arm || !defined $max || $want->{$k} <= $max;
+        if (!$is_arm) { $hard ? $rare++ : $common++ }
+        next if $n->{$k} == $want->{$k};
+        my $d = $label->($k) . " $want->{$k} -> $n->{$k}";
+        if ($hard) { push @fail, $d }
+        else { push @info, "info c8 $d (a common word: information only)" }
+    }
+    my $what = "$rare rare string" . ($rare == 1 ? '' : 's') . (defined $arm ? ' and the arm list' : '');
+    return { ok => 0, note => 'changed: ' . join(', ', @fail), info => \@info } if @fail;
+    return { ok => 1, info => \@info,
+             note => "$what as recorded; $common common word" . ($common == 1 ? '' : 's') . ' not compared' };
+}
+
 # The C9 extraction, same algorithm as tools/canary-baseline: from the first line
 # matching start_re, comments stripped, until bracket depth returns to 0 on a line
 # ending with `;`; sha256 of the kept lines joined by \n, first 16 hex.
@@ -157,10 +197,9 @@ sub run {
         if ($opt->{'skip-cli'}) { $check->('c8', undef, 'skipped by flag') }
         elsif (!$bin) { $check->('c8', 0, 'claude binary not found') }
         else {
-            my @s = sort keys %{ $base->{c8}{counts} };
-            my $n = count_strings($bin, \@s);
-            my @diff = grep { !defined $n || $n->{$_} != $base->{c8}{counts}{$_} } @s;
-            $check->('c8', @diff ? 0 : 1, @diff ? scalar(@diff) . ' string count(s) differ from the baseline' : scalar(@s) . ' strings');
+            my $c = c8_compare($base->{c8}, $bin);
+            $check->('c8', $c->{ok}, $c->{note});
+            push @lines, @{ $c->{info} };
         }
     }
     if (ref $base eq 'HASH' && ref $base->{c9} eq 'HASH') {
