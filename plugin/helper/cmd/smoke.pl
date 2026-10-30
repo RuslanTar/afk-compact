@@ -41,19 +41,24 @@ sub _version {
 # The type declarations Claude Code <ver> wrote when its plugin-authoring skill loaded:
 # realpath(($CLAUDE_CODE_TMPDIR || /tmp)/claude-<uid>)/bundled-skills/<ver>/<per-process
 # folder>/plugin-authoring/types/claude-code.d.ts whose line 1 is `// Written by Claude
-# Code <ver>.`; the newest by mtime (ties: the last name). An internal layout, not a
-# public interface: when it changes this finds nothing and C9 fails closed.
+# Code <ver>.`; the newest by mtime (ties: the last name). Only a plain file (not a
+# symlink) under a claude-<uid> folder this user owns: a folder another local user made
+# first could plant declarations that clear smokeDue. An internal layout, not a public
+# interface: when it changes this finds nothing and C9 fails closed.
 sub bundled_types {
     my ($ver) = @_;
     return undef unless defined $ver && $ver =~ /^\d+\.\d+\.\d+/ && $ver !~ m{/};
     my $tmp = $ENV{CLAUDE_CODE_TMPDIR};
     $tmp = '/tmp' unless defined $tmp && $tmp ne '';
     my $base = util::real_path("$tmp/claude-$<") // "$tmp/claude-$<";
+    my @bs = stat $base;
+    return undef unless @bs && -d _ && $bs[4] == $<;
     my $dir = "$base/bundled-skills/$ver";
     my $head = "// Written by Claude Code $ver.";
     my ($best, $best_m);
     for my $n (util::list_dir($dir)) {
         my $f = "$dir/$n/plugin-authoring/types/claude-code.d.ts";
+        next if -l $f;
         next unless -f $f;
         open(my $fh, '<:raw', $f) or next;
         my $l1 = <$fh>;
