@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; tier 5 counts one <repo>/<bucket> in both roots as one bucket, two repos' buckets of one name as two; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage, publish and pin under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there, the pin naming the bucket under the new root; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root; (c2) a session that pins another repo's handoff in the old root still reaches it through the pinned bucket's old-root twin (tier 4); (g) a previous compaction copy and a queue lane name come from the old root when only it holds them; (h) a stage begun before the update (its settings name the old root) publishes into the new root while handoff_root is the default: the handoff, pin and records go there and nothing under the old root's .sessions or .watch changes.",
+ "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; tier 5 counts one <repo>/<bucket> in both roots as one bucket, two repos' buckets of one name as two; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage, publish and pin under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there, the pin naming the bucket under the new root; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root; (c2) a session that pins another repo's handoff in the old root still reaches it through the pinned bucket's old-root twin (tier 4); (g) a previous compaction copy and a queue lane name come from the old root when only it holds them; (h) a stage begun before the update (its settings name the old root) publishes into the new root while handoff_root is the default: the handoff, pin and records go there and nothing under the old root's .sessions or .watch changes; (i) evidence kept before the update stays in the old root's bucket, so publish refuses a restart recipe citing it (recipe-script) until the script is kept again, which lands it in the new root (README: Known limits of the move).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -952,6 +952,155 @@
     "absent": [
      "$LEGACY/repo/v/*.md",
      "$LEGACY/repo/v/evidence"
+    ]
+   }
+  },
+  {
+   "write": "$TMP/s/run-suite.sh",
+   "content": "echo suite\n"
+  },
+  {
+   "name": "(i) W before the update (root ~/.claude/handoffs): begin",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "70707070-7070-4707-8707-707070707070",
+    "--topic",
+    "w"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": {
+      "re": "^$LEGACY/repo/w/\\.staging/"
+     }
+    }
+   },
+   "capture": {
+    "STAGE_W": "json:stage",
+    "STEM_W": "json:stem"
+   }
+  },
+  {
+   "name": "(i) W keeps a recipe's script before the update: the copy lands in the old root's bucket",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE_W",
+    "--keep",
+    "$TMP/s/run-suite.sh"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_W/restart/B-2.md",
+   "content": "item: B-2 · runtime id b8890 · class auto\nscript: evidence/$STEM_W/run-suite.sh\ncommand: sh run.sh\ncwd: $TMP/repo\nspawns: none\nexpected outputs: $TMP/repo/out.txt\nfinished parts: none yet\nidempotency check: ls $TMP/repo/out.txt\n"
+  },
+  {
+   "write": "$STAGE_W/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 70707070\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(i) W publishes after the update: the recipe's script kept before it stays in the old root, so publish refuses it (README: Known limits of the move)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_W",
+    "--slug",
+    "w",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT recipe-script restart/B-2\\.md:2$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ],
+    "absent": [
+     "$ROOT/repo/w/*.md",
+     "$ROOT/repo/w/evidence/$STEM_W/run-suite.sh"
+    ]
+   }
+  },
+  {
+   "name": "(i) W keeps the script again after the update: the copy lands in the new root's bucket",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "evidence",
+    "--stage",
+    "$STAGE_W",
+    "--keep",
+    "$TMP/s/run-suite.sh"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(i) W publishes into the new root; the old root's copy is left where it was",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_W",
+    "--slug",
+    "w",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/w/"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$LEGACY/repo/w/evidence/$STEM_W/run-suite.sh",
+      "contains": [
+       "echo suite"
+      ]
+     }
+    ],
+    "absent": [
+     "$LEGACY/repo/w/*.md"
     ]
    }
   }
