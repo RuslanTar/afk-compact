@@ -194,6 +194,93 @@
    }
   },
   {
+   "name": "a gap a fork-miss ping stopped: that ping does not count, stopped: fork-miss (no claim the cache expired)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:00+03:00",
+       "ev": "keep_warm_start",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "jobs": 1,
+       "gap_s": 3000,
+       "hours": 6
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:05+03:00",
+       "ev": "keep_warm_ping",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "n": 1,
+       "result": "warm",
+       "cache_read": 228161,
+       "cache_creation": 9,
+       "since_s": 3000,
+       "gap_s": 3000,
+       "ms": 5000
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T11:40:05+03:00",
+       "ev": "keep_warm_ping",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "n": 1,
+       "result": "fork-miss",
+       "cache_read": 25289,
+       "cache_creation": 234319,
+       "since_s": 3000,
+       "gap_s": 6000,
+       "ms": 5000
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T11:40:06+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "fork-miss",
+       "pings": 1,
+       "gap_s": 6000,
+       "handover": true
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last warmed gap: 1 ping, stopped: fork-miss\\)$"
+    ],
+    "stdout_lacks": [
+     "lapsed|expired"
+    ]
+   }
+  },
+  {
    "name": "a newer gap started warming after a stopped one: counts restart",
    "setup": [
     {

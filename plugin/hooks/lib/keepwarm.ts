@@ -22,13 +22,20 @@
 // - While it warms, the idle timer's handoff turn (49 min), its compaction (54 min) and the
 //   55.5-min check wait (one `handoff_skipped {why: keep-warm}` row; idle.ts `fire`); the record
 //   comes back to the idle path when warming stops with the cache still warm (`handOverIdle`).
-// - Each ping reads its usage: a cache read share of the cached prefix below 0.5 means the cache
-//   had lapsed: warming stops for the gap (`lapsed`). That ping wrote the cache again, so the rule
-//   is the same at the first ping and later ones: the idle record goes on by the idle path's own
-//   checks (a record held by then is handed back, anchored at the last warm request; at the first
-//   ping none is held yet and the idle timer fires as armed). `nothing-to-fork` with no request of
-//   the main session out (the engine keeps no snapshot to fork: a host that keeps none, a `/clear`)
-//   will not change at a retry: warming stops (`nothing-to-fork`) with the hand-over. While a
+// - Each ping reads its usage: a cache read share of the cached prefix below 0.5 is a `fork-miss`:
+//   the fork's request did not match the main prefix (live probe 2026-10-31: a ping on a history
+//   whose last turn had a thinking block only in a middle step read 25,289 and wrote 234,319, while
+//   every main request had written the one-hour cache; the engine likely sends that fork with
+//   thinking off). It says nothing of the main cache, which stays as warm as the last warm request
+//   left it, and the next ping on the same history would miss alike: warming stops for the gap
+//   (`fork-miss`), the rule the same at the first ping and later ones (the idle record goes on by
+//   the idle path's own checks: a record held by then is handed back, anchored at the last warm
+//   request; at the first ping none is held yet and the idle timer fires as armed), and no gap of
+//   the session warms again until its next main request (a new turn changes the history; `blocked`
+//   turns such a gap `off` with no row, so the one stop row is the reason, logged once).
+//   `nothing-to-fork` with no request of the main session out (the engine keeps no snapshot to
+//   fork: a host that keeps none, a `/clear`) will not change at a retry: warming stops
+//   (`nothing-to-fork`) with the hand-over. While a
 //   request is out (`nothing-to-fork` then), an API error or an abort cost nothing more: the ping
 //   is tried again a minute later, within the 58-minute bound and never past the held record's own
 //   deadline (idle.ts `heldDeadline`: the turn's 55.5 min, the compaction's 58 from the last warm
@@ -71,7 +78,7 @@ export const KEEP_WARM_PING_MS = 50 * 60000
 export const KEEP_WARM_LATEST_MS = 58 * 60000
 /** A ping that found a request in flight, an API error or an abort is tried again this much later. */
 export const KEEP_WARM_RETRY_MS = 60000
-/** A ping whose cache read share of the cached prefix is below this found the cache lapsed. */
+/** A ping whose cache read share of the cached prefix is below this missed the main prefix (`fork-miss`). */
 export const KEEP_WARM_COLD_SHARE = 0.5
 /** The one user message of the fork: one word back, nothing read, every tool denied by the engine. */
 export const KEEP_WARM_PROMPT = 'Reply with the single word OK.'
@@ -277,6 +284,8 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
   if (now - kw.warm > KEEP_WARM_LATEST_MS * scale) return { why: 'missed', handover: false }
   // The record this gap holds was adopted by another load (a reload while this one runs on): that load fires it.
   if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) === undefined) return { why: 'held-elsewhere', handover: false }
+  // A ping on this history missed the main prefix, and no main request came since: another would miss alike.
+  if (forkMissed(s, kw.sid)) return { why: 'fork-miss', handover: true }
   if ((await openJobs(d, kw.sid)) === 0) return { why: 'no-jobs', handover: true }
   // G3a's reading (idle.ts compactGuards): another version or model since the gap began; a read that throws counts as changed.
   if ((kw.cc !== null && kw.cc !== (await ccVersion(d))) || (kw.model !== null && kw.model !== (await d.model()))) {
@@ -404,7 +413,7 @@ export async function stopKeepWarm(d: Deps, why: 'turn' | 'session-end', ours = 
 }
 
 /** A ping's outcome from the fork's result (content-free: counts, a class, an HTTP status). */
-type Outcome = { result: 'warm' | 'lapsed' | 'nothing-to-fork' | 'api-error' | 'aborted' | 'error'; read: number | null; created: number | null; status?: number }
+type Outcome = { result: 'warm' | 'fork-miss' | 'nothing-to-fork' | 'api-error' | 'aborted' | 'error'; read: number | null; created: number | null; status?: number }
 
 const count = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : null)
 
@@ -421,7 +430,7 @@ export function forkOutcome(r: unknown): Outcome {
     if (o.reason !== 'empty-reply') return { result: 'error', read, created }
   }
   const share = prefixRead(u as RequestUsage | undefined)
-  return { result: share !== null && share >= KEEP_WARM_COLD_SHARE ? 'warm' : 'lapsed', read, created }
+  return { result: share !== null && share >= KEEP_WARM_COLD_SHARE ? 'warm' : 'fork-miss', read, created }
 }
 
 /**
@@ -454,6 +463,8 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (!(await begin(d, kw, now))) return
   } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now)
   if (kw.phase !== 'warming') return
+  // The main requests before the fork: one that comes while it runs already changed the history.
+  const reqs = s.mainReqs
   let r: unknown
   try {
     r = await d.fork(KEEP_WARM_PROMPT)
@@ -462,6 +473,8 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   }
   const t1 = await d.now()
   const o = forkOutcome(r)
+  // Set even when the gap moved meanwhile (a prompt a hook then drops resumes this gap): its next check stops it.
+  if (o.result === 'fork-miss') s.keepWarmForkMiss = { sid: kw.sid, reqs }
   const live = ours() && kw.phase === 'warming'
   const since = now - kw.warm
   // A warm ping into the gap undisturbed: the gap counts from it at once (a turn starting during
@@ -491,11 +504,13 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   // past its deadline (a slow one) ends the gap `missed`, with the record dropped.
   const late = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
   const handOver = (why: string): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1))
-  // No more pings in this gap, with the hand-over: `lapsed`, the ping wrote the cache again (the
-  // idle path's own checks decide, as for a lapsed first ping that held nothing yet, and they
-  // refuse a turn or a compaction past the 58-minute bound of the last warm request); `error`, a
-  // fork the engine refused (a hook's deny), the cache as warm as the last ping left it.
-  if (o.result === 'lapsed') return stop(d, kw, 'lapsed', true, t1)
+  // No more pings in this gap, with the hand-over, the cache as warm as the last warm request left
+  // it: `fork-miss`, the fork did not read the main prefix and wrote nothing the main session reads
+  // (the idle path's own checks decide, as for a first ping that held nothing yet, and they refuse
+  // a turn or a compaction past the 58-minute bound of the last warm request), and no later gap
+  // pings before the session's next main request (`forkMissed`); `error`, a fork the engine
+  // refused (a hook's deny).
+  if (o.result === 'fork-miss') return stop(d, kw, 'fork-miss', true, t1)
   if (o.result === 'error') return handOver('error')
   if (!busyNow(s)) {
     // No request of the main session out: there is no snapshot to fork, and a retry finds none either.
@@ -506,6 +521,11 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   return again(d, kw, t1, scale)
 }
 
+/** A fork-miss of this session with no main request since (`mainReqs` unchanged from before that fork). */
+function forkMissed(s: Deps['state'], sid: string): boolean {
+  const m = s.keepWarmForkMiss
+  return m !== undefined && m.sid === sid && m.reqs === s.mainReqs
+}
 
 const retryMs = (scale: number): number => Math.max(1000, KEEP_WARM_RETRY_MS * scale)
 

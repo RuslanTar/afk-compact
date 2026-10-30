@@ -398,6 +398,8 @@ export type LoadState = {
   lastTurnAnswer: boolean
   /** When the last main-thread model request (`turn.step`) started: the idle compaction's anchor (D3). */
   lastMainReqAt: number | undefined
+  /** How many main-thread model requests (`turn.step`) this load has seen: keep-warm's fork-miss reads a new one. */
+  mainReqs: number
   /**
    * D11: the last sign of a person at the prompt (a `prompt.edit`, a `prompt.change` of theirs, an
    * interactive `session.start`); the idle compaction skips `present` for a minute after it.
@@ -527,6 +529,11 @@ export type LoadState = {
   keepWarmGen: number
   /** The last gap handed over to the idle path: no warming until a turn not of the plugin's own starts. */
   keepWarmSpent: boolean
+  /**
+   * A keep-warm ping that missed the main prefix (keepwarm.ts `fork-miss`): no ping for this session
+   * until a main request after `reqs` (the `mainReqs` before that fork).
+   */
+  keepWarmForkMiss: { sid: string; reqs: number } | undefined
   /** The background tasks the main session's last Stop listed as in flight (Monitors and crons left out). */
   bgTasks: BgTasks | undefined
   /** Task ids a background-task notification reported ended (keepwarm.ts `noteEndedTasks`); cleared at session end. */
@@ -688,6 +695,7 @@ export function newState(loadId: string): LoadState {
     lastTurnEndAt: undefined,
     lastTurnAnswer: false,
     lastMainReqAt: undefined,
+    mainReqs: 0,
     lastInputAt: undefined,
     idleCompactFails: 0,
     idleCompactOff: undefined,
@@ -725,6 +733,7 @@ export function newState(loadId: string): LoadState {
     keepWarmTimer: undefined,
     keepWarmGen: 0,
     keepWarmSpent: false,
+    keepWarmForkMiss: undefined,
     bgTasks: undefined,
     endedTasks: new Set(),
   }

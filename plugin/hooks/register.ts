@@ -93,9 +93,11 @@ export const register: Register = (on, options) => {
   // Nothing after the stream may throw: a failure there would hand the step to `.catch`.
   // The shadow trial stamps a main step's start for its cold rule (nothing without its config).
   // The start of every main-thread request anchors the idle compaction (D3): the prompt cache is
-  // refreshed when a request reads it, not at the turn end.
+  // refreshed when a request reads it, not at the turn end. Its count lets keep-warm ping again
+  // after a fork-miss (keepwarm.ts).
   on('turn.step', async function* ($, e, next) {
     if (e.agentId === undefined) {
+      state.mainReqs++
       try {
         state.lastMainReqAt = await $.clock.now()
       } catch {

@@ -213,9 +213,9 @@ our %SCHEMA = (
     # and wrote, its result, an HTTP status), then stops for one reason, handing the idle timer's
     # record back to the idle path or not
     keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int' },
-    keep_warm_ping => { n => 'int', result => [enum => qw(warm lapsed nothing-to-fork api-error aborted error)], cache_read => 'num',
+    keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error)], cache_read => 'num',
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int' },
-    keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed lapsed no-jobs ttl-5m prefix-changed
+    keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
                                              near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline)],
                         pings => 'int', gap_s => 'num', handover => 'bool' },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
