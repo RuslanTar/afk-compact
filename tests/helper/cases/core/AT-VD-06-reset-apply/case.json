@@ -42,7 +42,7 @@
     "exit": 0,
     "stdout_has": [
      "^settings reset: removed compact_target_tokens from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
-     "^  backup: ~/\\.claude/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00\\.json$",
+     "^  backup: ~/\\.local/state/$BRAND/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00\\.json$",
      "^  takes effect: "
     ],
     "files": [
@@ -83,7 +83,7 @@
     "exit": 0,
     "stdout_has": [
      "^settings reset: removed cooldown_ms from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
-     "^  backup: ~/\\.claude/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-2\\.json$",
+     "^  backup: ~/\\.local/state/$BRAND/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-2\\.json$",
      "^  takes effect: ",
      "^  kept by --all \\(consent or protective; name one to reset it\\): relaunch_auto$"
     ],
@@ -116,7 +116,7 @@
     "exit": 0,
     "stdout_has": [
      "^settings reset: removed relaunch_auto from ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
-     "^  backup: ~/\\.claude/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-3\\.json$",
+     "^  backup: ~/\\.local/state/$BRAND/handoffs/\\.watch/settings-backups/2026-10-30_09-00-00-3\\.json$",
      "^  takes effect: ",
      "^  note: relaunch_auto: its default on lets a lost background job start again by itself \\(looser than now\\)$"
     ],
