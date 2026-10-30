@@ -6,7 +6,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.2 AC-2 class-A round 3 (root decisions of 2026-10-30): of a refused Bash command only its outward step names tokens, never a heredoc body or a quoted message (reviewer info 3); a refusal in a subagent or workflow agent transcript of this session counts; a denied directory, a built-in safety check and an ungranted write permission are refusals; the structured permissionDecision on the tool result row wins over the text when present (reject counts unless a hook made it, accept never does)",
+ "note": "0.1.2 AC-2 class-A round 3 (root decisions of 2026-10-30): of a refused Bash command only its outward step names tokens, never a heredoc body or a quoted message (reviewer info 3); a refusal in a subagent or workflow agent transcript of this session counts; a denied directory, a built-in safety check and an ungranted write permission are refusals; the structured permissionDecision on the tool result row wins over the text when present (reject counts unless a hook made it, accept never does); review 3: an outward step inside quotes (bash -c, sh -c, ssh host) names its tokens, a << inside quotes or shell arithmetic starts no heredoc, the refusal texts of versions without permissionDecision each count only at the start of the result",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -172,6 +172,204 @@
    }
   },
   {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feature/x2 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push rel/2.1 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"evict pod web-7f9\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/k-8 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push rel/9-a to origin\"}}\n{\"type\": \"assistant\", \"uuid\": \"af1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f1\", \"name\": \"Bash\", \"input\": {\"command\":\"cd /work/repo-2 && bash -c \\\"git push origin feature/x2\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf1\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f1\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/repo-2 && bash -c \\\"git push origin feature/x2\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"af2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f2\", \"name\": \"Bash\", \"input\": {\"command\":\"timeout 60 sh -c 'git push origin rel/2.1' && echo ok-1\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf2\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f2\", \"is_error\": true, \"content\": \"Permission to use Bash with command timeout 60 sh -c 'git push origin rel/2.1' && echo ok-1 has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"af3\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f3\", \"name\": \"Bash\", \"input\": {\"command\":\"ssh prod-1 \\\"kubectl delete pod web-7f9\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf3\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f3\", \"is_error\": true, \"content\": \"Permission to use Bash with command ssh prod-1 \\\"kubectl delete pod web-7f9\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"af4\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f4\", \"name\": \"Bash\", \"input\": {\"command\":\"git push origin \\\"feat/k-7\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf4\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f4\", \"is_error\": true, \"content\": \"Permission to use Bash with command git push origin \\\"feat/k-7\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"af5\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f5\", \"name\": \"Bash\", \"input\": {\"command\":\"tee /tmp/n-1.txt <<-EOF\\n\\tnotes\\n\\tEOF\\ngit push origin rel/9-a\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf5\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f5\", \"is_error\": true, \"content\": \"Permission to use Bash with command tee /tmp/n-1.txt <<-EOF\\n\\tnotes\\n\\tEOF\\ngit push origin rel/9-a has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"af6\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f6\", \"name\": \"Bash\", \"input\": {\"command\":\"x=$((1<<4)) y=$(( (2<<1) + 1 ))\\ngit push origin feat/s-4\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf6\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f6\", \"is_error\": true, \"content\": \"Permission to use Bash with command x=$((1<<4)) y=$(( (2<<1) + 1 ))\\ngit push origin feat/s-4 has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"af7\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_f7\", \"name\": \"Bash\", \"input\": {\"command\":\"echo \\\"a <<EOF\\\"\\ngit push origin feat/s-6\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uf7\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_f7\", \"is_error\": true, \"content\": \"Permission to use Bash with command echo \\\"a <<EOF\\\"\\ngit push origin feat/s-6 has been denied.\"}]}}\n"
+  },
+  {
+   "name": "begin (F)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEF": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (F)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEF"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEF/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feature/x2 to origin\" — action git push origin feature/x2 · targets branch feature/x2 @ 1a2b3c4 · once · not yet used\n- U-3: approval \"push rel/2.1 to origin\" — action git push origin rel/2.1 · targets branch rel/2.1 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"evict pod web-7f9\" — action evict pod web-7f9 · targets the web pod @ v1 · once · not yet used\n- U-5: approval \"push feat/k-8 to origin\" — action git push origin feat/k-8 · targets branch feat/k-8 @ 1a2b3c4 · once · not yet used\n- U-6: approval \"push rel/9-a to origin\" — action git push origin rel/9-a · targets branch rel/9-a @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "an outward step inside quotes names its tokens (bash -c, sh -c, ssh host: review 3 finding 1); quoted text with no space is kept, so a push of feat/k-7 does not cover feat/k-8; a <<- end line may be tab-indented; $((1<<4)) and a quoted \"a <<EOF\" start no heredoc (finding 3)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEF",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 11$",
+     "^LINT approval-denied line 12$",
+     "^LINT approval-denied line 14$",
+     "^REFUSED: lint \\(4 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 13$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push hotfix/q9 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"wipe the scratch tree\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"apply the infrastructure change\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rebase the topic branch\"}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"publish the widget build\"}}\n{\"type\": \"user\", \"uuid\": \"h5\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"open a pull request for the fix\"}}\n{\"type\": \"user\", \"uuid\": \"h6\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"call the retry webhook\"}}\n{\"type\": \"user\", \"uuid\": \"h7\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rotate the API secret\"}}\n{\"type\": \"assistant\", \"uuid\": \"ag1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g1\", \"name\": \"Bash\", \"input\": {\"command\":\"bash -c \\\"git push\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug1\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g1\", \"is_error\": true, \"content\": \"Permission to use Bash with command bash -c \\\"git push\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ag2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g2\", \"name\": \"Bash\", \"input\": {\"command\":\"cd /work/half-1 && git clean -fdx\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug2\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g2\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/half-1 && git clean -fdx has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ag3\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g3\", \"name\": \"Bash\", \"input\": {\"command\":\"cd /work/half-2 && terraform plan\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug3\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g3\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/half-2 && terraform plan has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ag4\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g4\", \"name\": \"Bash\", \"input\": {\"command\":\"cd /work/semi-1; git rebase main\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug4\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g4\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/semi-1; git rebase main has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ag5\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g5\", \"name\": \"Bash\", \"input\": {\"command\":\"echo /work/pipe-2 | gh release create v4\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug5\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g5\", \"is_error\": true, \"content\": \"Permission to use Bash with command echo /work/pipe-2 | gh release create v4 has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ag6\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g6\", \"name\": \"Bash\", \"input\": {\"command\":\"cd /work/nl-3\\ngh pr merge 12\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug6\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g6\", \"is_error\": true, \"content\": \"Permission to use Bash with command cd /work/nl-3\\ngh pr merge 12 has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ag7\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g7\", \"name\": \"Bash\", \"input\": {\"command\":\"cat <<EOF\\nnotes\\ncurl -X POST https://hooks.example.com/r-1\"}}]}}\n{\"type\": \"user\", \"uuid\": \"ug7\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g7\", \"is_error\": true, \"content\": \"Permission to use Bash with command cat <<EOF\\nnotes\\ncurl -X POST https://hooks.example.com/r-1 has been denied.\"}]}}\n"
+  },
+  {
+   "name": "begin (G)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEG": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (G)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEG"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEG/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push hotfix/q9 to origin\" — action git push origin hotfix/q9 · targets branch hotfix/q9 @ 1a2b3c4 · once · not yet used\n- U-3: approval \"wipe the scratch tree\" — action wipe the scratch tree · targets the scratch tree @ v1 · once · not yet used\n- U-4: approval \"apply the infrastructure change\" — action apply the infrastructure change · targets the staging stack @ v1 · once · not yet used\n- U-5: approval \"rebase the topic branch\" — action rebase the topic branch · targets the topic branch @ 1a2b3c4 · once · not yet used\n- U-6: approval \"publish the widget build\" — action publish the widget build · targets the widget build @ 1a2b3c4 · once · not yet used\n- U-7: approval \"open a pull request for the fix\" — action open a pull request for the fix · targets the fix branch @ 1a2b3c4 · once · not yet used\n- U-8: approval \"call the retry webhook\" — action call the retry webhook · targets the retry webhook @ v1 · once · not yet used\n- U-9: approval \"rotate the API secret\" — action rotate the API secret · targets the API secret @ v1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "a quoted bash -c \"git push\" is still a push; an outward class only (git clean) and an action word only (terraform) each make a step outward and are read from the whole command; ; | and a line end each split a command; a heredoc with no end line takes the rest as its body; the secret approval shares no class",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEG",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 11$",
+     "^LINT approval-denied line 12$",
+     "^LINT approval-denied line 13$",
+     "^LINT approval-denied line 14$",
+     "^LINT approval-denied line 15$",
+     "^LINT approval-denied line 16$",
+     "^REFUSED: lint \\(7 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 17$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"change settings-v1.json\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/req-1 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/multi-2 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/multi-3 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/var-4 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h5\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"copy dump-5.sql to the vault\"}}\n{\"type\": \"user\", \"uuid\": \"h6\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/abort-6 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h7\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"share src-v7 with ops\"}}\n{\"type\": \"assistant\", \"uuid\": \"ah1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h1\", \"name\": \"Edit\", \"input\": {\"file_path\":\"/repo/conf/settings-v1.json\",\"new_string\":\"b\",\"old_string\":\"a\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh1\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h1\", \"is_error\": true, \"content\": \"Claude requested permissions to edit /repo/conf/settings-v1.json which is a sensitive file.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h2\", \"name\": \"Bash\", \"input\": {\"command\":\"git push origin feat/req-1\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh2\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h2\", \"is_error\": true, \"content\": \"This command requires approval\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah3\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h3\", \"name\": \"Bash\", \"input\": {\"command\":\"git status && git push origin feat/multi-2\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh3\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h3\", \"is_error\": true, \"content\": \"This Bash command contains multiple operations. The following part requires approval: git push origin feat/multi-2\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah4\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h4\", \"name\": \"Bash\", \"input\": {\"command\":\"git fetch && git push origin feat/multi-3\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh4\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h4\", \"is_error\": true, \"content\": \"This Bash command contains multiple operations. The following parts require approval: git fetch, git push origin feat/multi-3\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah5\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h5\", \"name\": \"Bash\", \"input\": {\"command\":\"git push origin feat/var-4 \\\"$tip\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh5\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h5\", \"is_error\": true, \"content\": \"A variable in this command can't be checked before it runs.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah6\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h6\", \"name\": \"Bash\", \"input\": {\"command\":\"cp notes.md /srv/vault/dump-5.sql\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh6\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h6\", \"is_error\": true, \"content\": \"cp to '/srv/vault/dump-5.sql' was blocked by a deny rule.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah7\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h7\", \"name\": \"Bash\", \"input\": {\"command\":\"git push origin feat/abort-6\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh7\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h7\", \"is_error\": true, \"content\": \"Permission for this tool use was denied. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). Try a different approach or report the limitation to complete your task.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"ah8\", \"timestamp\": \"2026-10-21T13:15:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_h8\", \"name\": \"Bash\", \"input\": {\"command\":\"rg -n denied /repo/src-v7\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uh8\", \"timestamp\": \"2026-10-21T13:16:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_h8\", \"is_error\": false, \"content\": \"src-v7/t.pm:1: Permission for this action was denied by the auto mode classifier.\\nsrc-v7/t.pm:2: Permission to use Bash with command x has been denied.\\nsrc-v7/t.pm:3: File is in a directory that is denied by your permission settings.\\nsrc-v7/t.pm:4: Permission for this command was denied by a built-in Claude Code safety check, not by the user.\\nsrc-v7/t.pm:5: Claude requested permissions to write to /x, but you haven't granted it yet.\\nsrc-v7/t.pm:6: Claude requested permissions to edit /x which is a sensitive file.\\nsrc-v7/t.pm:7: This command requires approval\\nsrc-v7/t.pm:8: This Bash command contains multiple operations. The following part requires approval: x\\nsrc-v7/t.pm:9: A variable in this command can't be checked before it runs.\\nsrc-v7/t.pm:10: ls from '/x' was blocked by a deny rule.\\nsrc-v7/t.pm:11: The user doesn't want to proceed with this tool use.\\nsrc-v7/t.pm:12: Permission for this tool use was denied. The tool use was rejected.\"}]}}\n"
+  },
+  {
+   "name": "begin (H)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEH": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (H)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEH"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEH/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"change settings-v1.json\" — action edit settings-v1.json · targets the settings file @ v1 · once · not yet used\n- U-3: approval \"push feat/req-1 to origin\" — action git push origin feat/req-1 · targets branch feat/req-1 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"push feat/multi-2 to origin\" — action git push origin feat/multi-2 · targets branch feat/multi-2 @ 1a2b3c4 · once · not yet used\n- U-5: approval \"push feat/multi-3 to origin\" — action git push origin feat/multi-3 · targets branch feat/multi-3 @ 1a2b3c4 · once · not yet used\n- U-6: approval \"push feat/var-4 to origin\" — action git push origin feat/var-4 · targets branch feat/var-4 @ 1a2b3c4 · once · not yet used\n- U-7: approval \"copy dump-5.sql to the vault\" — action copy dump-5.sql to the vault · targets the vault entry @ v1 · once · not yet used\n- U-8: approval \"push feat/abort-6 to origin\" — action git push origin feat/abort-6 · targets branch feat/abort-6 @ 1a2b3c4 · once · not yet used\n- U-9: approval \"share src-v7 with ops\" — action share src-v7 with ops · targets the ops channel @ v1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "the refusal texts with no structured decision count: an edit of a sensitive file, a command that requires approval, a multi-part command whose part or parts require approval, a variable that cannot be checked, a deny rule on a path and a tool use the user rejected (review 3 finding 4); a search result that quotes every refusal text mid-line counts as none",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEH",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 11$",
+     "^LINT approval-denied line 12$",
+     "^LINT approval-denied line 13$",
+     "^LINT approval-denied line 14$",
+     "^LINT approval-denied line 15$",
+     "^LINT approval-denied line 16$",
+     "^REFUSED: lint \\(7 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 17$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
    "name": "canary: no tool input or approval text in any watch row",
    "expect": {
     "files": [
@@ -189,7 +387,17 @@
        "key-v3",
        "cache-v2",
        "token-v6",
-       "retry webhook"
+       "retry webhook",
+       "feature/x2",
+       "web-7f9",
+       "feat/k-7",
+       "rel/9-a",
+       "hotfix/q9",
+       "hooks.example",
+       "settings-v1",
+       "dump-5",
+       "feat/abort-6",
+       "src-v7"
       ]
      }
     ]

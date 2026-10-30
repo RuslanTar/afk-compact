@@ -705,8 +705,18 @@ our @DENIED = (
     [ rule       => qr/\A\s*(?:<tool_use_error>\s*)?File is in a directory that is denied by your permission settings/ ],
     [ rule       => qr/\A\s*Permission for this command was denied by a built-in Claude Code safety check/ ],
     [ rule       => qr/\A\s*Claude requested permissions to write to [\s\S]+?, but you haven't granted it yet/ ],
+    # Review 3 finding 4: refusal texts of Claude Code versions without permissionDecision.
+    [ rule       => qr/\A\s*Claude requested permissions to edit [\s\S]+? which is a sensitive file/ ],
+    [ rule       => qr/\A\s*This command requires approval/ ],
+    [ rule       => qr/\A\s*This (?:Bash )?command contains multiple operations\. The following parts? requires? approval/ ],
+    [ rule       => qr/\A\s*A [A-Za-z ]{1,40} in this command can't be checked before it runs/ ],
+    [ rule       => qr/\A\s*\S+ (?:from|to) '[^\n]*?' was blocked by a deny rule/ ],
     [ user       => qr/\A\s*The user doesn't want to proceed with this tool use/ ],
+    [ user       => qr/\A\s*Permission for this tool use was denied\. The tool use was rejected/ ],
 );
+# Words one of the texts above holds: a result row with none of them is not decoded.
+our @DENIED_HINTS = ('denied', 'want to proceed', "haven't granted", '"reject"', 'sensitive file',
+    'requires approval', 'require approval', "can't be checked", 'deny rule');
 # Tools whose input holds file text: only their path is kept.
 my %DENIED_PATH_ONLY = map { $_ => 1 } qw(Write Edit MultiEdit NotebookEdit);
 our $DENIED_VALUE_MAX = 200;      # longer input values (a body, a description) are skipped
@@ -779,9 +789,7 @@ sub _denied_in_file {
     open(my $fh, '<:raw', $path) or return undef;
     my %res;
     while (my $line = <$fh>) {
-        next unless index($line, '"tool_use_id"') >= 0
-            && (index($line, 'denied') >= 0 || index($line, "want to proceed") >= 0
-                || index($line, "haven't granted") >= 0 || index($line, '"reject"') >= 0);
+        next unless index($line, '"tool_use_id"') >= 0 && grep { index($line, $_) >= 0 } @DENIED_HINTS;
         my $j = eval { jsonc::decode($line) };
         next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user';
         my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;

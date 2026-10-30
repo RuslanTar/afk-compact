@@ -291,9 +291,21 @@ my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 # _deny_bash(command) -> token text: a refused Bash command's words that name its outward step
 # (reviewer info 3). Heredoc bodies are dropped, and quoted text holding a space (a
 # commit message, a title) is masked; the rest splits at `&&`, `||`, `;`, `|`, `&` and line ends,
-# and tokens come only from the parts that are outward (an outward class or action word), or from
-# every part when none is. A refused `git commit -m "$(cat <<EOF … EOF)" && git push` names no
-# token, so it covers a push approval by class.
+# and tokens come only from the parts that are outward (an outward class or action word). When
+# no part is but the command with its heredoc bodies dropped is, the outward step sits inside the
+# quotes (`bash -c "git push origin feat/x"`, `ssh host "kubectl delete pod web-1"`; review 3
+# finding 1): tokens come from that unmasked text. Else they come from every part. A refused
+# `git commit -m "$(cat <<EOF … EOF)" && git push` names no token, so it covers a push approval
+# by class.
+# A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`;
+# review 3 finding 3).
+my $DENY_HEREDOC_SCAN = qr/
+    \$?\(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\)
+  | "(?:[^"\\]|\\.)*"
+  | '[^']*'
+  | (?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))
+/x;
+
 sub _deny_bash {
     my ($cmd) = @_;
     my @lines = split /\n/, $cmd, -1;
@@ -302,7 +314,7 @@ sub _deny_bash {
         my $l = shift @lines;
         push @keep, $l;
         my @tags;
-        while ($l =~ /(?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))/g) { push @tags, [ $2 // $3 // $4, $1 ] }
+        while ($l =~ /$DENY_HEREDOC_SCAN/g) { push @tags, [ $2 // $3 // $4, $1 ] if defined($2 // $3 // $4) }
         for my $tg (@tags) {
             my ($tag, $dash) = @$tg;
             my ($k) = grep { ($dash ? $lines[$_] =~ s/\A\t+//r : $lines[$_]) eq $tag } 0 .. $#lines;
@@ -311,11 +323,13 @@ sub _deny_bash {
             last unless defined $k;
         }
     }
-    my $s = join "\n", @keep;
-    $s =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{ my $q = $1 // $2; $q =~ /\s/ ? ' ' : " $q " }ge;
+    my $whole = join "\n", @keep;
+    (my $s = $whole) =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{ my $q = $1 // $2; $q =~ /\s/ ? ' ' : " $q " }ge;
     my @parts = grep { /\S/ } split /&&|\|\||[;|&\n]/, $s;
     my @out = grep { _deny_outward($_) } @parts;
-    return join(' ', @out ? @out : @parts);
+    return join(' ', @out) if @out;
+    return $whole if _deny_outward($whole);
+    return join(' ', @parts);
 }
 
 sub _deny_outward {
