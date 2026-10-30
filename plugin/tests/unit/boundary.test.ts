@@ -6,7 +6,7 @@ import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import { rejectClass, storeWord } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
-import { AGENT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
+import { AGENT, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 /** The handoff-turn asset ships in this build (else last cycles degrade to no handoff turn). */
 const TURN = hasAsset('handoff-turn')
@@ -360,6 +360,38 @@ test('halt mode survives a reload (halt.json) until a user-typed turn clears it'
   await w.userTurn($)
   expect(w.rowsOf('halt').map(r => r.active)).toEqual([false])
 })
+
+/**
+ * Halt on, a task notification's turn running: a prompt of `origin` is queued over it (typed
+ * mid-turn, `turnId` set) and starts its own turn after it ends (xxxxxxxx 2026-10-30 04:36).
+ */
+async function queuedTurn($: Engine, w: World, origin: { kind: string; name?: string }): Promise<void> {
+  w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: '2-nonok' }))
+  w.storeSet(`cont:${SID_A}`, [T0 - 1000, T0 - 500])
+  await w.start($)
+  await w.userTurn($, 'Background task finished.', 'task-notification')
+  await $.prompt.submit({ text: 'look at the failing spec', origin, turnId: 't1', wait: false } as never)
+  await w.turnEnd($)
+  await w.turnStart($, 'look at the failing spec')
+}
+
+test('AF-B1: halt on; a person\'s prompt queued while a turn runs starts its own turn after it: halt clears and the continue stamps reset', async ($, on) => {
+  const w = new World().install(on)
+  await queuedTurn($, w, { kind: 'composer' })
+  expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', false]])
+  expect(w.files.get(`${WATCH}/${SID_A}/halt.json`)).toContain('"active":false')
+  expect(w.storeGet(`cont:${SID_A}`)).toEqual([])
+})
+
+for (const origin of [{ kind: 'task-notification' }, { kind: 'plugin', name: 'other' }]) {
+  test(`AF-B2: halt on; a ${origin.kind} prompt queued mid-turn that starts its own turn leaves halt on`, async ($, on) => {
+    const w = new World().install(on)
+    await queuedTurn($, w, origin)
+    expect(w.rowsOf('halt')).toEqual([])
+    expect(w.files.get(`${WATCH}/${SID_A}/halt.json`)).toContain('"active":true')
+    expect(w.storeGet(`cont:${SID_A}`)).toEqual([T0 - 1000, T0 - 500])
+  })
+}
 
 test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no timer; the next turn end schedules again', { options: { precompact_turn: 'code' } }, async ($, on) => {
   const w = new World().install(on)

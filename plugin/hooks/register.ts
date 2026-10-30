@@ -5,7 +5,7 @@ import type { Register } from 'claude-code'
 import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onOwnCompact, onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
-import { claimOwnCompact, isOwnOrigin, newState, promptEntering, promptNotEntered, realDeps, refuseOwnSubmit } from './lib/deps'
+import { claimOwnCompact, isOwnOrigin, newState, promptEntering, promptNotEntered, promptQueued, realDeps, refuseOwnSubmit } from './lib/deps'
 import { laneTurnEnd } from './lib/digest'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
@@ -182,6 +182,9 @@ export const register: Register = (on, options) => {
       else await againSent(realDeps($, options, state), again)
     }
     if (entering && r.drop !== undefined) promptNotEntered(state, kind)
+    // A prompt queued while a turn runs may start its own turn after it: its origin kind decides
+    // there whether halt clears, as for one entering an idle session.
+    if (!own && e.turnId !== undefined && r.drop === undefined) promptQueued(state, kind, r.text, e.turnId)
     if (entering && r.drop === undefined) {
       const d = realDeps($, options, state)
       await cancelIdle(d, await d.sessionId())

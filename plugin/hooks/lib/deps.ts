@@ -376,6 +376,12 @@ export type LoadState = {
   precompactRan: boolean
   /** Origin kinds of the prompts counted in `foreignPrompts`, oldest first (IC-1 D6). */
   enteringKinds: string[]
+  /**
+   * Prompts of others queued while a main turn ran (`turnId` set), oldest first: the origin kind,
+   * the text that entered and the turn it was queued over. One delivered into that turn starts
+   * none; one that starts its own turn after it is told by its text there (`claimTurn`).
+   */
+  queuedKinds: { kind: string; text: string; over: string }[]
   /** The origin kind of the prompt that opened the current main turn: `plugin` for ours, undefined when none was seen. */
   turnOrigin: string | undefined
   /** When the last main turn ended, and whether it ended `answer` (§9.4, the idle predicate). */
@@ -654,6 +660,7 @@ export function newState(loadId: string): LoadState {
     afterNative: undefined,
     precompactRan: false,
     enteringKinds: [],
+    queuedKinds: [],
     turnOrigin: undefined,
     lastTurnEndAt: undefined,
     lastTurnAnswer: false,
@@ -1059,17 +1066,25 @@ export function isOurText(turnText: string, sent: string | undefined): boolean {
  * the other turn leaves our submit pending for the turn still to come (CR-F17).
  */
 export function claimTurn(s: LoadState, turnText: string): boolean {
-  const foreign = s.foreignPrompts > 0
+  // A prompt queued over the turn that just ended (or kept from before it) whose text this turn carries.
+  const q = s.queuedKinds.findIndex(k => isOurText(turnText, k.text))
+  const foreign = s.foreignPrompts > 0 || q >= 0
   const ours = s.ourSubmitPending && (!foreign || isOurText(turnText, s.ourSubmitText))
   if (ours) {
     submitSettled(s)
     s.turnOrigin = 'plugin'
+  } else if (q >= 0) {
+    // A prompt typed while a turn ran starts its own turn after it (xxxxxxxx 2026-10-30): its
+    // origin kind was kept when it was queued, never counted as entering.
+    s.turnOrigin = s.queuedKinds.splice(q, 1)[0]?.kind
   } else {
-    if (foreign) s.foreignPrompts--
+    if (s.foreignPrompts > 0) s.foreignPrompts--
     // A prompt queued beside a turn of ours starts its turn after that turn's end, where the
     // entering count was reset (a bound): its origin kind is still the oldest one kept.
     s.turnOrigin = s.enteringKinds.shift()
   }
+  // Still `turnId` of the turn before this one: a prompt queued over an earlier turn went into it.
+  s.queuedKinds = s.queuedKinds.filter(k => k.over === s.turnId)
   return ours
 }
 
@@ -1090,6 +1105,17 @@ export function promptEntering(s: LoadState, kind = 'unknown'): void {
 
 /** The origin kinds kept for prompts that entered and have not started their turns. */
 export const MAX_ENTERING = 4
+
+/**
+ * `prompt.submit` of another's prompt queued while main turn `over` ran (`turnId` set), once it
+ * entered: delivered into that turn, or its own turn starts after it (`claimTurn` tells which by
+ * its text). Not counted in `foreignPrompts`: no turn of its own may follow.
+ */
+export function promptQueued(s: LoadState, kind: string, text: string, over: string): void {
+  if (text.trim() === '') return
+  s.queuedKinds.push({ kind, text, over })
+  if (s.queuedKinds.length > MAX_ENTERING) s.queuedKinds.shift()
+}
 
 /**
  * That prompt did not enter (`{ drop }` or a failed chain): no turn of its own will start. A
