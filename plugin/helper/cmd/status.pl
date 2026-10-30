@@ -263,21 +263,31 @@ sub store_lines {
 }
 
 # STATE-ROOT (0.1.2): while handoff_root is the default, the old default ~/.claude/handoffs is read,
-# never written, and never moved or copied (D-8); one line says so, with its bucket count, or that
-# the unsafe-root checks skipped it. No line when there is no such folder.
+# never written, and never moved (D-8; `migrate --apply` copies it on request); one line says so, with
+# its bucket count, or that the unsafe-root checks skipped it. The same for disposable_root and the old
+# ~/.claude/trash-staging, with its dated folders. No line when there is no such folder.
 sub legacy_lines {
+    my @out;
     my $l = rc::legacy();
     if (defined $l) {
         my $n = 0;
         for my $repo (grep { !/^\./ && -d "$l/$_" } util::list_dir($l)) {
             $n += scalar grep { !/^\./ && -d "$l/$repo/$_" } util::list_dir("$l/$repo");
         }
-        return 'legacy handoff root ' . util::abbrev($l) . ": read-only, $n bucket" . ($n == 1 ? '' : 's');
+        push @out, 'legacy handoff root ' . util::abbrev($l) . ": read-only, $n bucket" . ($n == 1 ? '' : 's');
+    } elsif (defined rc::legacy_path() && defined rc::legacy_refused()) {
+        push @out, 'legacy handoff root ' . util::abbrev(rc::legacy_path()) . ': skipped (' . util::text(rc::legacy_refused()) . ')';
     }
-    my $p = rc::legacy_path();
-    return 'legacy handoff root ' . util::abbrev($p) . ': skipped (' . util::text(rc::legacy_refused()) . ')'
-        if defined $p && defined rc::legacy_refused();
-    return ();
+    my $d = rc::disposable_legacy();
+    if (defined $d) {
+        my $n = scalar grep { !/^\./ && -d "$d/$_" } util::list_dir($d);
+        push @out, 'legacy disposable root ' . util::abbrev($d) . ": read-only, $n folder" . ($n == 1 ? '' : 's');
+    } elsif (defined rc::disposable_legacy_path() && defined rc::disposable_legacy_refused()) {
+        push @out, 'legacy disposable root ' . util::abbrev(rc::disposable_legacy_path()) . ': skipped ('
+                   . util::text(rc::disposable_legacy_refused()) . ')';
+    }
+    push @out, '  migrate (user-run, above) lists what it would copy into the new folders; --apply copies; nothing is deleted' if @out && grep { /read-only/ } @out;
+    return @out;
 }
 
 # watcher lines (WP-watch): this session's alerts only with a sid, then the store-wide counts.
@@ -636,7 +646,8 @@ sub _rule_folders {
 }
 
 # The commands the user types (with the leading !), with the real plugin folder. Without a
-# session id the reconcile line is left out: it works on this session first (CW-1).
+# session id the reconcile line is left out: it works on this session first (CW-1). `migrate` only while an
+# old default folder is read (STATE-ROOT).
 sub user_run_lines {
     my ($sid) = @_;
     my $store = ctx::store_cmd() // return ();
@@ -644,7 +655,9 @@ sub user_run_lines {
     return ('user-run commands (type them yourself, with the leading !):',
             map { "  ! $store $_" } ('smoke', 'project init', 'project copy', 'watch prune',
                                      (defined $sid ? ("reconcile --sid $sid --orphans --full") : ()), 'report',
-                                     'settings reset <key> --apply'));
+                                     'settings reset <key> --apply',
+                                     # STATE-ROOT: only while an old default folder is read (a dry run; --apply copies)
+                                     (defined rc::legacy() || defined rc::disposable_legacy() ? ('migrate') : ())));
 }
 
 # ---------------------------------------------------------------- prod reads (S-SETTINGS B)

@@ -1,0 +1,215 @@
+{
+ "id": "AT-STATE-ROOT-07 (state-root: migrate leaves out the pin and lineage of a session that still runs, and copies them once it ended)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "core",
+ "note": "STATE-ROOT (0.1.2): a session of an older version still writes its pin and lineage in the old handoff root, and the new root's file is read first, so a copy made while it runs would hide its later changes. migrate leaves out the pin (.sessions/<sid>.json) and lineage (.sessions/<sid>.lineage.json) of every session with a live record in the old root's .sessions/by-pid (the pid runs with the recorded start time, no ended- twin), lists them by session and ends by asking for a rerun once those sessions end; the rerun copies them as new files, and locate then reads the session's newest pin. begin's re-pin check reads a live session's pin folder recorded under the removed old root as its copy under the new root.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/LAB-7-x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$LEGACY/.sessions/23232323-2323-4232-8232-232323232323.json",
+     "content": "{\"session_id\": \"23232323-2323-4232-8232-232323232323\", \"bucket\": \"repo/OLD-1\", \"bucket_path\": \"$LEGACY/repo/OLD-1\", \"bucket_source\": \"pin\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/23232323-2323-4232-8232-232323232323.lineage.json",
+     "content": "{\"previous_session_id\": \"20202020-2020-4020-8020-202020202020\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/1-1792580001.live-23232323.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"host\": \"$HOST\", \"session_id\": \"23232323-2323-4232-8232-232323232323\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-20T13:00:00+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/25252525-2525-4252-8252-252525252525.json",
+     "content": "{\"session_id\": \"25252525-2525-4252-8252-252525252525\", \"bucket\": \"repo/OLD-1\"}"
+    },
+    {
+     "write": "$LEGACY/repo/OLD-1/2026-10-20_14-00-00_23232323_w.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f1f2f3f\ndate: 2026-10-20T14:00:00+03:00\nsession_id: 23232323-2323-4232-8232-232323232323\nactor: main\n---\n⟪$BRAND v1 n=0f1f2f3f s=manual⟫\n# OLD-1 — work\n⟪/$BRAND n=0f1f2f3f⟫\n"
+    },
+    {
+     "write": "$LEGACY/repo/NEW-2/2026-10-20_15-00-00_23232323_v.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f1f2f40\ndate: 2026-10-20T15:00:00+03:00\nsession_id: 23232323-2323-4232-8232-232323232323\nactor: main\n---\n⟪$BRAND v1 n=0f1f2f40 s=manual⟫\n# NEW-2 — work\n⟪/$BRAND n=0f1f2f40⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "the dry run lists the running session's files as left out and asks for a rerun",
+   "argv": [
+    "migrate"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  to copy: 3 files, ",
+     "^  left out: live session 23232323: 2$",
+     "\\n2 files of sessions still running were left out \\(listed above\\): run migrate again after those sessions end\\n\\z"
+    ]
+   }
+  },
+  {
+   "name": "migrate --apply copies the rest, never the running session's pin or lineage",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 3 files, .* · failed: 0$",
+     "^  left out: live session 23232323: 2$",
+     "\\n2 files of sessions still running were left out \\(listed above\\): run migrate again after those sessions end\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/23232323-2323-4232-8232-232323232323.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/23232323-2323-4232-8232-232323232323.lineage.json",
+      "exists": false
+     },
+     {
+      "path": "$ROOT/.sessions/25252525-2525-4252-8252-252525252525.json",
+      "exists": true
+     },
+     {
+      "path": "$ROOT/repo/NEW-2/2026-10-20_15-00-00_23232323_v.md",
+      "exists": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "the running session re-pins to NEW-2 in the old root: locate reads it",
+   "setup": [
+    {
+     "write": "$LEGACY/.sessions/23232323-2323-4232-8232-232323232323.json",
+     "content": "{\"session_id\": \"23232323-2323-4232-8232-232323232323\", \"bucket\": \"repo/NEW-2\", \"bucket_path\": \"$LEGACY/repo/NEW-2\", \"bucket_source\": \"pin\"}"
+    }
+   ],
+   "argv": [
+    "locate",
+    "--sid",
+    "23232323-2323-4232-8232-232323232323",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $LEGACY/repo/NEW-2/2026-10-20_15-00-00_23232323_v\\.md\\n"
+    ]
+   }
+  },
+  {
+   "name": "once the session ended, the rerun copies its pin and lineage as new files",
+   "setup": [
+    {
+     "write": "$LEGACY/.sessions/by-pid/1-1792580001.ended-23232323.json",
+     "content": "{\"session_id\": \"23232323-2323-4232-8232-232323232323\", \"reason\": \"exit\", \"ts\": \"2026-10-21T12:00:00+03:00\"}"
+    }
+   ],
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 2 files, .* · already there: 3 · differ, left as they are: 0 · .* · failed: 0$"
+    ],
+    "stdout_lacks": [
+     "left out: live session",
+     "run migrate again"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/23232323-2323-4232-8232-232323232323.json",
+      "contains": [
+       "repo/NEW-2"
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/23232323-2323-4232-8232-232323232323.lineage.json",
+      "exists": true
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "rename": "$LEGACY",
+     "to": "$TMP/gone/handoffs"
+    }
+   ]
+  },
+  {
+   "name": "with the old root removed, locate reads the session's newest pin from the copy",
+   "argv": [
+    "locate",
+    "--sid",
+    "23232323-2323-4232-8232-232323232323",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 3\\npick: $ROOT/repo/NEW-2/2026-10-20_15-00-00_23232323_v\\.md\\n"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/1-1792580002.live-24242424.json",
+     "content": "{\"pid\": 1, \"pid_lstart\": \"$LSTART1\", \"host\": \"$HOST\", \"session_id\": \"24242424-2424-4242-8242-242424242424\", \"cwd\": \"$TMP/other\", \"worktree\": \"$TMP/other\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/24242424-2424-4242-8242-242424242424.json",
+     "content": "{\"session_id\": \"24242424-2424-4242-8242-242424242424\", \"bucket_path\": \"$LEGACY/repo/held\"}"
+    },
+    {
+     "mkdir": "$ROOT/repo/held"
+    }
+   ]
+  },
+  {
+   "name": "begin --topic-explicit: a live session's pin folder recorded under the removed old root holds its copy",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "held",
+    "--topic-explicit"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ownership.repin.result": "refused",
+     "ownership.repin.held_by": "24242424"
+    }
+   }
+  }
+ ]
+}

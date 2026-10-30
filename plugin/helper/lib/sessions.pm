@@ -239,10 +239,19 @@ sub ended {
 
 # live_peers() -> [{session_id, pid, pid_lstart, cwd, worktree}] : a session is
 # live when its pid runs with the same start time and it has no ended- record.
-sub live_peers {
+sub live_peers { return _live(_pid_files()) }
+
+# live_in(by-pid folder) -> the same as live_peers, from one folder's records only (STATE-ROOT
+# `migrate`: the sessions that still write in the old handoff root).
+sub live_in {
+    my ($d) = @_;
+    return _live(map { [ $d, $_ ] } util::list_dir($d));
+}
+
+sub _live {
+    my @pf = @_;
     my %ended;
     my @live;
-    my @pf = _pid_files();
     for my $pf (@pf) {
         if ($pf->[1] =~ /^(\d+-\d+)\.ended-([^.]+)\.json$/) { $ended{"$1/$2"} = 1; next }
     }

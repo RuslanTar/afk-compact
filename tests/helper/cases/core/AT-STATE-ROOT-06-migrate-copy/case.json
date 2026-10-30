@@ -1,0 +1,313 @@
+{
+ "id": "AT-STATE-ROOT-06 (state-root: migrate's copy never leaves a cut-off file; a new root inside the old one is not copied into itself)",
+ "layer": "H",
+ "owner": "core",
+ "note": "STATE-ROOT (0.1.2): util::copy_new, migrate's copy, writes under a temp name beside the file and links it into place: a write that fails part way leaves nothing under the file's name and no temp name, a rerun copies it, the mtime given is kept, and an existing file is never replaced; through migrate too (STORE_TEST_COPY_FAIL_AFTER, test mode: a disk that fills part way), with exit 3 and the file copied whole by the next run. migrate skips the new root when it lies inside the old one ($XDG_STATE_HOME under ~/.claude/trash-staging), so nothing is copied into itself. A source missing while the file is there is left alone without being opened; a file that appears under the name while the copy runs is never replaced (link, not rename); a source that grows while it is copied (a session still writing it; STORE_TEST_COPY_GROW_AFTER in test mode) fails with exit 3 and nothing under its name, and the next run copies it whole. A new root the unsafe-root checks refuse gets nothing, exit 3.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/src/big.bin",
+     "bytes": 200000
+    },
+    {
+     "write": "$TMP/src/small.txt",
+     "content": "small\n"
+    },
+    {
+     "write": "$LEGACY_DISP/2026-10-01/a-evidence/a.log",
+     "content": "old a\n"
+    },
+    {
+     "touch": "$LEGACY_DISP/2026-10-01/a-evidence/a.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$TMP/src/grow.bin",
+     "bytes": 200000
+    }
+   ]
+  },
+  {
+   "name": "util::copy_new: a failed write leaves no file and no temp name; a rerun copies with the mtime; nothing is replaced",
+   "lib": "state_root",
+   "args": {
+    "copy_new": [
+     {
+      "id": "a write fails after the first block",
+      "src": "$TMP/src/big.bin",
+      "dst": "$TMP/dst/big.bin",
+      "fail_after": 1,
+      "want": "dies"
+     },
+     {
+      "id": "the rerun copies it, mtime kept",
+      "src": "$TMP/src/big.bin",
+      "dst": "$TMP/dst/big.bin",
+      "mtime": "2026-10-01T10:00:00+03:00",
+      "want": "copied"
+     },
+     {
+      "id": "an existing file is left as it is",
+      "src": "$TMP/src/small.txt",
+      "dst": "$TMP/dst/big.bin",
+      "want": "exists"
+     },
+     {
+      "id": "a small file",
+      "src": "$TMP/src/small.txt",
+      "dst": "$TMP/dst/small.txt",
+      "want": "copied"
+     },
+     {
+      "id": "dst exists and src is gone: left as it is, src never opened",
+      "src": "$TMP/src/none.bin",
+      "dst": "$TMP/dst/small.txt",
+      "want": "exists"
+     },
+     {
+      "id": "dst appears while the copy runs: never replaced",
+      "src": "$TMP/src/big.bin",
+      "dst": "$TMP/dst/race.bin",
+      "dst_appears": "the other writer\n",
+      "want": "exists"
+     },
+     {
+      "id": "src grows while it is copied: fails, nothing left",
+      "src": "$TMP/src/grow.bin",
+      "dst": "$TMP/dst/grow.bin",
+      "grow": true,
+      "want": "dies",
+      "error": "changed while it was copied"
+     },
+     {
+      "id": "src not the size and mtime the caller read (expect): fails, nothing left",
+      "src": "$TMP/src/small.txt",
+      "dst": "$TMP/dst/expect.txt",
+      "expect": [
+       999,
+       0
+      ],
+      "want": "dies",
+      "error": "changed while it was copied"
+     }
+    ]
+   }
+  },
+  {
+   "name": "migrate --apply with the new disposable root inside the old one copies once, never into itself",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root: ~/\\.claude/trash-staging -> ~/\\.claude/trash-staging/st/$BRAND/disposable$",
+     "^  copied: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · .* · failed: 0$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-01/a-evidence/a.log",
+      "contains": [
+       "old a"
+      ],
+      "mtime_at": "2026-10-01T10:00:00+03:00"
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/st",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 0 files, 0\\.0 MB · already there: 1 · differ, left as they are: 0 "
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/st",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$LEGACY_DISP/2026-10-03/b-evidence/big.bin",
+     "bytes": 200000
+    }
+   ]
+  },
+  {
+   "name": "migrate --apply: a copy that fails part way leaves nothing under its name and exits 3",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st",
+    "STORE_TEST_COPY_FAIL_AFTER": "1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  copied: 0 files, [0-9.]+ MB · already there: 1 · .* · failed: 1$",
+     "^    failed: 2026-10-03/b-evidence/big\\.bin \\(write: no space left \\(test\\)\\)$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-03/b-evidence/big.bin",
+      "exists": false
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-03/b-evidence/.big.bin.part-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the rerun copies it whole",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 1 files, 0\\.2 MB · already there: 1 · .* · failed: 0$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/2026-10-03/b-evidence/big.bin",
+      "snapshot": "BIG"
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-03/b-evidence/big.bin",
+      "same_bytes_as": "BIG"
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-03/b-evidence/.big.bin.part-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$LEGACY_DISP/2026-10-04/c-evidence/grow.bin",
+     "bytes": 200000
+    }
+   ]
+  },
+  {
+   "name": "migrate --apply: a file that grows while it is copied (a session still writing it) fails, nothing under its name, exit 3",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st",
+    "STORE_TEST_COPY_GROW_AFTER": "1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  copied: 0 files, [0-9.]+ MB · already there: 2 · .* · failed: 1$",
+     "^    failed: 2026-10-04/c-evidence/grow\\.bin \\(changed while it was copied\\)$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-04/c-evidence/grow.bin",
+      "exists": false
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-04/c-evidence/.grow.bin.part-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the rerun copies the grown file whole",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$LEGACY_DISP/st"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 1 files, 0\\.2 MB · already there: 2 · .* · failed: 0$"
+    ],
+    "files": [
+     {
+      "path": "$LEGACY_DISP/2026-10-04/c-evidence/grow.bin",
+      "snapshot": "GROWN"
+     },
+     {
+      "path": "$LEGACY_DISP/st/$BRAND/disposable/2026-10-04/c-evidence/grow.bin",
+      "same_bytes_as": "GROWN"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "git": [
+      "init",
+      "-q",
+      "$TMP/gitrepo"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a new root the unsafe-root checks refuse (inside a git work tree): nothing copied, exit 3",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "env": {
+    "XDG_STATE_HOME": "$TMP/gitrepo/st"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^disposable_root: ~/\\.claude/trash-staging -> .*/gitrepo/st/$BRAND/disposable$",
+     "^  new folder refused \\([^)]+\\); nothing copied$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/gitrepo/st",
+      "exists": false
+     }
+    ]
+   }
+  }
+ ]
+}

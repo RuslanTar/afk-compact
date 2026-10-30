@@ -329,6 +329,64 @@ sub append {
     return 1;
 }
 
+# copy_new(src, dst, mode => M, times => [atime, mtime], expect => [size, mtime]) -> bytes copied, or -1
+# when dst exists. Never overwrites and never leaves a cut-off dst (STATE-ROOT `migrate`): the bytes go
+# to a fresh temp name beside dst (.<name>.part-<pid>-<n>), which link() then also names dst (link fails
+# when dst exists, so nothing is replaced); the temp name is removed either way. A failed copy dies with
+# dst absent, so a rerun copies it again. A src whose size or mtime changes while it is copied (a
+# session of an older version still writing it), or differs from expect (the size and mtime the
+# caller read before), fails the same way: a rerun copies it whole.
+sub copy_new {
+    my ($src, $dst, %o) = @_;
+    my $mode = $o{mode} // 0600;
+    return -1 if -e $dst || -l $dst;
+    open(my $in, '<:raw', $src) or die "open $src: $!\n";
+    my @s0 = stat $in;
+    my $dir = dirname($dst);
+    mkdir_p($dir);
+    my ($tmp, $out);
+    for (1 .. 5) {
+        my $t = "$dir/." . basename($dst) . ".part-$$-" . int(rand(1_000_000_000));
+        if (sysopen($out, $t, O_WRONLY | O_CREAT | O_EXCL, $mode)) { $tmp = $t; last }
+        die "create $t: $!\n" unless $!{EEXIST};
+    }
+    die "create a temp name beside $dst: none free\n" unless defined $tmp;
+    my $total = 0;
+    # test mode: STORE_TEST_COPY_FAIL_AFTER=N fails the write after N blocks (a disk that fills part way)
+    my $fail = test_mode() && ($ENV{STORE_TEST_COPY_FAIL_AFTER} // '') =~ /\A[0-9]+\z/ ? $ENV{STORE_TEST_COPY_FAIL_AFTER} : undef;
+    # test mode: STORE_TEST_COPY_GROW_AFTER=N appends to src after N blocks (a writer that is still at it)
+    my $grow = test_mode() && ($ENV{STORE_TEST_COPY_GROW_AFTER} // '') =~ /\A[0-9]+\z/ ? $ENV{STORE_TEST_COPY_GROW_AFTER} : undef;
+    my $blocks = 0;
+    my $ok = eval {
+        while (1) {
+            my $n = sysread($in, my $buf, 1 << 16);
+            die "read $src: $!\n" unless defined $n;
+            last if $n == 0;
+            die "write: no space left (test)\n" if defined $fail && $blocks++ >= $fail;
+            _write_all($out, $buf);
+            $total += $n;
+            if (defined $grow && $blocks++ >= $grow) { undef $grow; if (open(my $g, '>>', $src)) { print $g "more\n"; close $g } }
+        }
+        my @s1 = stat $in;
+        die "changed while it was copied\n"
+            if !@s0 || !@s1 || $s1[7] != $s0[7] || $s1[9] != $s0[9] || $total != $s1[7]
+            || (ref $o{expect} eq 'ARRAY' && ($o{expect}[0] != $s1[7] || $o{expect}[1] != $s1[9]));
+        close($out) or die "close $tmp: $!\n";
+        chmod $mode, $tmp;
+        utime($o{times}[0], $o{times}[1], $tmp) if ref $o{times} eq 'ARRAY';
+        1;
+    };
+    my $err = $@;
+    close $in;
+    if (!$ok) { close $out; unlink $tmp; die $err }
+    my $linked = link($tmp, $dst);
+    my ($exists, $why) = ($!{EEXIST}, "$!");
+    unlink $tmp;
+    return $total if $linked;
+    return -1 if $exists;
+    die "link $dst: $why\n";
+}
+
 # Stream copy (File::Copy is off the floor). Returns bytes copied.
 sub copy_file {
     my ($src, $dst, %o) = @_;

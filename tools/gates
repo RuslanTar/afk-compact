@@ -102,8 +102,9 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   nudge-folder AT-TX-13: nudge step 3 current-folder fallback and `Dirty in <folder git ran in>:`
   BLD-05 end-of-round gates over a built plugin folder (build round 9, after the last merge):
   config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS,
-               watch/ctx.pm %DEFAULTS, paths.pm $DEFAULT_ROOT and the launcher's hroot equal
-               the manifest defaults (handoff_root ~/.local/state/<name>/handoffs, STATE-ROOT); manifest and @KEYS list the
+               watch/ctx.pm %DEFAULTS, paths.pm $DEFAULT_ROOT and $DEFAULT_DISPOSABLE and the launcher's
+               hroot equal the manifest defaults (handoff_root ~/.local/state/<name>/handoffs and
+               disposable_root ~/.local/state/<name>/disposable, STATE-ROOT); manifest and @KEYS list the
                same keys; AT-IA-01: settings.pm and config.ts hold the same idle off/auto words
                and the same value for any other word
   config-defaults (also) VD-01 (0.1.2 visible defaults): every non-boolean userConfig title ends
@@ -563,9 +564,10 @@ RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto", "idle
                   "idle_handoff_near_limit": "run",
                   "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "auto",
                   "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
-# STATE-ROOT (0.1.2): the handoff_root default, outside ~/.claude (whose writes get Claude
-# Code's protected-path prompt); {} is the plugin name.
+# STATE-ROOT (0.1.2): the handoff_root and disposable_root defaults, outside ~/.claude (whose writes get
+# Claude Code's protected-path prompt, which no allow rule lifts); {} is the plugin name.
 STATE_ROOT = "~/.local/state/{}/handoffs"
+STATE_DISPOSABLE = "~/.local/state/{}/disposable"
 
 
 def config_defaults_hits(target, brand):
@@ -582,21 +584,25 @@ def config_defaults_hits(target, brand):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if got != val or isinstance(got, bool):
             out.append((path, None, "AT-WD-02 default", "AT-WD-02 default: {} is {!r}, want {!r}".format(key, got, val), ""))
-    for key, val in sorted(dict(RULED_DEFAULTS, handoff_root=STATE_ROOT.format(brand)).items()):
+    for key, val in sorted(dict(RULED_DEFAULTS, handoff_root=STATE_ROOT.format(brand),
+                                disposable_root=STATE_DISPOSABLE.format(brand)).items()):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if key not in uc or got != val or isinstance(got, bool):
             # The text is also the "line", so a PENDING row can name one key (its fragment).
             text = "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(key, got if key in uc else "missing", val)
             out.append((path, None, "AT-CAP-02 ruled", text, text))
-    # STATE-ROOT docs: the README's moved-folder section holds the Q-11 marker until the root fills in the
-    # allow rule for the new root (then an `Edit(~/.local/state/…)` rule replaces it: Claude Code checks the
-    # Write tool against Edit rules, a Write(…) rule does not stop the prompt).
+    # STATE-ROOT docs (Q-11, measured): the README's moved-folder section names the allow rule that lifts the
+    # default-mode prompt for the new folders, an Edit(~/.local/state/…) rule; a Write(…) rule does not
+    # match a file write there, so the README never offers one, and the TODO(Q-11) marker is gone.
     readme = os.path.join(target, "README.md")
     if os.path.isfile(readme):
         text = _read(readme)
-        if "TODO(Q-11)" not in text and not re.search(r"Edit\(~/\.local/state/", text):
-            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: no TODO(Q-11) marker and no Edit(~/.local/state/…) "
-                        "allow rule for the new handoff root", ""))
+        if "TODO(Q-11)" in text or not re.search(r"Edit\(~/\.local/state/", text):
+            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: no Edit(~/.local/state/…) allow rule for the "
+                        "new folders, or the TODO(Q-11) marker is still there", ""))
+        if re.search(r"Write\(~/\.local/state/", text):
+            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: a Write(~/.local/state/…) rule does not lift "
+                        "the prompt (measured); name the Edit(…) rule", ""))
     for key in sorted(uc):
         if "keep_days" in key and key != "disposable_keep_days":
             out.append((path, None, "AT-WD-02 keep-days", "AT-WD-02 keep-days: {} (no retention key for .watch)".format(key), ""))
@@ -1393,27 +1399,29 @@ def config_sources_hits(target, brand):
             if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _named(_lit(r.group(2)), brand), perl_bool=True):
                 out.append((wpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: watch/ctx.pm {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
-    out.extend(_root_fallback_hits(target, brand, defaults.get("handoff_root")))
+    out.extend(_root_fallback_hits(target, brand, defaults.get("handoff_root"), defaults.get("disposable_root")))
     return out
 
 
 PATHS_REL = "helper/lib/paths.pm"
 
 
-def _root_fallback_hits(target, brand, want):
-    """AT-CAP-02 (STATE-ROOT): the two handoff_root fallbacks outside the key tables equal the manifest
-    default too: lib/paths.pm $DEFAULT_ROOT and the launcher's shell fallback for `.watch`
-    (`hroot='…'`, built from src/launcher.tmpl). A missed one splits the hooks' root from the
-    helper's."""
+def _root_fallback_hits(target, brand, want, want_disp=None):
+    """AT-CAP-02 (STATE-ROOT): the root fallbacks outside the key tables equal the manifest defaults
+    too: lib/paths.pm $DEFAULT_ROOT and $DEFAULT_DISPOSABLE, and the launcher's shell fallback for
+    `.watch` (`hroot='…'`, built from src/launcher.tmpl). A missed one splits the hooks' root from
+    the helper's."""
     out = []
     ppath = os.path.join(target, *PATHS_REL.split("/"))
     if not os.path.isfile(ppath):
         out.append(_missing(ppath, "AT-CAP-02 paths.pm"))
     else:
-        m = re.search(r"^our \$DEFAULT_ROOT = '([^']*)';", _read(ppath), re.M)
-        if not m or _named(m.group(1), brand) != want:
-            out.append((ppath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: paths.pm $DEFAULT_ROOT {} != manifest {!r}".format(
-                m.group(1) if m else "missing", want), ""))
+        ptext = _read(ppath)
+        for var, w in (("DEFAULT_ROOT", want), ("DEFAULT_DISPOSABLE", want_disp)):
+            m = re.search(r"^our \$" + var + r" = '([^']*)';", ptext, re.M)
+            if not m or _named(m.group(1), brand) != w:
+                out.append((ppath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: paths.pm ${} {} != manifest {!r}".format(
+                    var, m.group(1) if m else "missing", w), ""))
     lpath = os.path.join(target, LAUNCHER_DIR, brand + "-store")
     if not os.path.isfile(lpath):
         out.append(_missing(lpath, "AT-CAP-02 launcher"))

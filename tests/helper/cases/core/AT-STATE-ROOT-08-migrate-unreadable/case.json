@@ -1,0 +1,97 @@
+{
+ "id": "AT-STATE-ROOT-08 (state-root: a folder migrate cannot read counts as failed, exit 3)",
+ "layer": "H",
+ "owner": "core",
+ "needs": [
+  "nonroot"
+ ],
+ "note": "STATE-ROOT (0.1.2): a folder of an old root that migrate cannot open is counted and listed as failed (exit 3), in the dry run too, never skipped silently: its files were not copied. Once it can be read, the rerun copies them. The teardown gives the folder its mode back.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$LEGACY_DISP/2026-10-01/a-evidence/a.log",
+     "content": "a\n"
+    },
+    {
+     "write": "$LEGACY_DISP/2026-10-02/b-evidence/b.log",
+     "content": "b\n"
+    },
+    {
+     "mkdir": "$LEGACY_DISP/2026-10-02",
+     "mode": "0000"
+    }
+   ]
+  },
+  {
+   "name": "the dry run lists the folder as failed and exits 3",
+   "argv": [
+    "migrate"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  to copy: 1 files, .* · failed: 1$",
+     "^    failed: 2026-10-02/ \\(cannot read: [^)]+\\)$"
+    ]
+   }
+  },
+  {
+   "name": "migrate --apply copies the rest, lists the folder as failed and exits 3",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  copied: 1 files, .* · failed: 1$",
+     "^    failed: 2026-10-02/ \\(cannot read: [^)]+\\)$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-01/a-evidence/a.log",
+      "exists": true
+     },
+     {
+      "path": "$DISP/2026-10-02/b-evidence/b.log",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "mkdir": "$LEGACY_DISP/2026-10-02",
+   "mode": "0700"
+  },
+  {
+   "name": "readable again: the rerun copies its files",
+   "argv": [
+    "migrate",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  copied: 1 files, .* already there: 1 · .* · failed: 0$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-02/b-evidence/b.log",
+      "contains": [
+       "b"
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "teardown": [
+  {
+   "mkdir": "$LEGACY_DISP/2026-10-02",
+   "mode": "0700"
+  }
+ ]
+}

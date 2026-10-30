@@ -383,7 +383,8 @@ sub _bucket_holder {
         my $other = $1;
         next if $other eq $sid || !$live{$other} || $seen{$other}++;
         my $pin = skills::ctx::pin_read($ctx, $other) or next;
-        my $bp = $pin->{bucket_path} // ($pin->{bucket} ? "$ctx->{root}/$pin->{bucket}" : '');
+        # (a bucket_path under an old default root that is gone reads as its copy under the new root)
+        my $bp = skills::ctx::follow($ctx, $pin->{bucket_path} // ($pin->{bucket} ? "$ctx->{root}/$pin->{bucket}" : ''));
         # a legacy pin names its bucket under the legacy root: its relative name counts too
         return skills::ctx::sid8($other) if $bp eq $bucket || (defined $pin->{bucket} && !ref $pin->{bucket} && "$ctx->{root}/$pin->{bucket}" eq $bucket);
     }

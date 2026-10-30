@@ -17,7 +17,7 @@
 #   shortcuts), stub (executable script), bin_mirror (links to a folder's entries, some left
 #   out: a PATH without git), run (a helper call without assertions).
 # Placeholders in every string: $TMP $HOME $ROOT $LEGACY (the pre-0.1.2 default root) $WATCH $SID $SID8 $PLUGIN $FIX $CASE
-#   $BRAND $HOST $CLAUDE_BIN $DISP $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
+#   $BRAND $HOST $CLAUDE_BIN $DISP $LEGACY_DISP (the pre-0.1.2 default disposable root) $TODAY $LSTART1 (pid 1's start time, like $RUNNER_LSTART
 #   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), $LAUNCH_ENV (the restart
 #   launcher's env name; an env name may hold it too), plus every variable a step captured.
@@ -27,6 +27,8 @@
 #                            under /tmp, /private/tmp and /var/folders as ephemeral)
 #   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
 #                            case whose helper output depends on its path lengths)
+#   case "teardown"        [setup action...]: run after the steps, also after a failed one (a mode
+#                            restored, so the work dir can be removed)
 #   case "tmp_norm": false   stdout_max_bytes measures stdout as it is, also outside the
 #                            repo's tmp/: for a case whose helper trims its own output to a
 #                            real byte size at any path length (begin's 3,072 B fit, the U-04
@@ -694,7 +696,14 @@ sub run_case {
     $V{LEGACY} = "$V{HOME}/.claude/handoffs";
     $V{ROOT} = defined $cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT}) : $droot;
     $V{WATCH} = defined $cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_LOG_DIR}) : "$V{ROOT}/.watch";
-    $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : "$V{HOME}/.claude/trash-staging";
+    # the default disposable root is the staged manifest's too (~/.local/state/<brand>/disposable); $LEGACY_DISP
+    # is the old default ~/.claude/trash-staging, read while disposable_root is unset
+    my $ddisp = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) };
+                     ref $m eq 'HASH' && ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{disposable_root} eq 'HASH'
+                         ? $m->{userConfig}{disposable_root}{default} : undef } // '~/.local/state/' . $BRAND . '/disposable';
+    $ddisp =~ s{\A~/}{$V{HOME}/};
+    $V{LEGACY_DISP} = "$V{HOME}/.claude/trash-staging";
+    $V{DISP} = defined $cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT} ? $sub->($cenv{CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT}) : $ddisp;
     my $vars = subst_deep($case->{vars} || {}, \%V);
     %V = (%V, %$vars);
     my @steps = $case->{steps} ? @{ $case->{steps} } : ({ %$case, then => undef });
@@ -702,7 +711,7 @@ sub run_case {
     my @errs;
     my $i = 0;
     $V{' before_steps'} = 0;
-    for my $st (@steps) {
+    STEP: for my $st (@steps) {
         $i++;
         my $label = $st->{name} // "step $i";
         # the zone this step's helper calls get, for $LSTART1 / $RUNNER_LSTART (lstart_var)
@@ -716,11 +725,11 @@ sub run_case {
         for my $o (($i == 1 ? $case->{options} : undef), $st->{options}) {
             next unless ref $o eq 'HASH';
             my $e = eval { write_options(subst_deep($o, \%V), \%V); 1 };
-            if (!$e) { push @errs, "$label options: $@"; return @errs }
+            if (!$e) { push @errs, "$label options: $@"; last STEP }
         }
         for my $s (@{ $st->{setup} || [] }) {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
-            if (!$e) { push @errs, "$label setup: $@"; return @errs }
+            if (!$e) { push @errs, "$label setup: $@"; last STEP }
         }
         if ($st->{risk_corpus}) {
             my @le = eval { risk_corpus($st, $case, \%V, $cdir, $i) };
@@ -736,7 +745,7 @@ sub run_case {
         }
         if (!$st->{argv} && !$st->{exec} && !$st->{setup} && is_setup_action($st)) {
             my $e = eval { setup($st, \%V, $case, $st, $cdir); 1 };
-            if (!$e) { push @errs, "$label setup: $@"; return @errs }
+            if (!$e) { push @errs, "$label setup: $@"; last STEP }
             next;
         }
         next unless $st->{argv} || $st->{exec};
@@ -746,6 +755,11 @@ sub run_case {
         if ($VERBOSE) {
             for my $r (@$res) { print "#   [$label] exit $r->{exit}\n"; print map { "#   | $_\n" } split /\n/, chars(substr($r->{out}, 0, 4000)) }
         }
+    }
+    # case "teardown": setup actions run after the steps, also when one failed (a folder's mode restored)
+    for my $s (@{ $case->{teardown} || [] }) {
+        my $e = eval { setup($s, \%V, $case, {}, $cdir); 1 };
+        push @errs, "teardown: $@" if !$e;
     }
     return @errs;
 }
@@ -794,8 +808,8 @@ sub subst {
     $s =~ s/\{\{plugin\}\}/$BRAND/g;
     $s =~ s/\{\{marketplace\}\}/$MARKETPLACE/g;
     $s =~ s/\$FIXTURES\b/$FIXTURES_DIR/g;
-    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\}}{$V->{$1} // ''}ge;
-    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY)\b/$V->{$1} \/\/ ''/ge;
+    $s =~ s{\$\{(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY_DISP|LEGACY)\}}{$V->{$1} // ''}ge;
+    $s =~ s/\$(TMP|HOME|ROOT|WATCH|SID8|SID|PLUGIN|STORE|FIX|CASE|BRAND|HOST|CLAUDE_BIN|DISP|TODAY|LEGACY_DISP|LEGACY)\b/$V->{$1} \/\/ ''/ge;
     # $LSTART1 / $RUNNER_LSTART (lstart_var), then any other $NAME the case defined (vars) or a
     # step captured; unknown names stay as written.
     $s =~ s/\$([A-Z][A-Z0-9_]*)/my $n = $1; $n eq 'LSTART1' || $n eq 'RUNNER_LSTART' ? lstart_var($n, $V) : exists $V->{$n} && defined $V->{$n} ? $V->{$n} : "\$$n"/ge;
@@ -3178,11 +3192,71 @@ sub builtin {
             push @e, "$id: watch $p->{watch}, want $c->{root}/.watch" if ($p->{watch} // '') ne "$c->{root}/.watch";
             push @e, "$id: from_default $p->{from_default}, want " . ($c->{from_default} ? 1 : 0) if exists $c->{from_default} && $p->{from_default} != ($c->{from_default} ? 1 : 0);
             push @e, "$id: legacy " . ($p->{legacy} // 'null') . ', want ' . ($c->{legacy} // 'null') if exists $c->{legacy} && ($p->{legacy} // '') ne ($c->{legacy} // '');
+            # moved: the [old, new] pairs paths::follow reads (none for a root set explicitly)
+            push @e, "$id: moved " . jsonc::encode($p->{moved} // []) . ', want ' . jsonc::encode($c->{moved} // [])
+                if exists $c->{moved} && jsonc::encode($p->{moved} // []) ne jsonc::encode($c->{moved} // []);
             next unless defined $c->{value};
             # the watcher's context from the same settings (pid and spec given: nothing else is read)
             my $w = watch::ctx::init({ sid => 'x', pid => 1, spec => {}, now => 0, settings => { handoff_root => $c->{value}, log_dir => '' } });
             push @e, "$id: watch::ctx root " . ($w->{root} // 'null') . ", want $c->{root}" if ($w->{root} // '') ne $c->{root};
             push @e, "$id: watch::ctx watch " . ($w->{watch} // 'null') . ", want $c->{root}/.watch" if ($w->{watch} // '') ne "$c->{root}/.watch";
+        }
+        # the disposable root the same way: the default (unset, or equal to it) under $XDG_STATE_HOME when
+        # absolute, its legacy root ~/.claude/trash-staging when that folder exists; any other value as given
+        for my $c (@{ $a->{disposable} || [] }) {
+            delete local $ENV{XDG_STATE_HOME};
+            $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
+            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            my $s = { values => { handoff_root => $c->{handoff_root} // "/x/hr", log_dir => '', disposable_root => $c->{value} },
+                      source => { handoff_root => 'flag', disposable_root => $c->{source} // 'flag' } };
+            my $p = paths::for($s, 'x');
+            my $id = $c->{id} // ($c->{value} // 'unset');
+            push @e, "$id: disposable " . ($p->{disposable} // 'null') . ", want $c->{disposable}" if ($p->{disposable} // '') ne $c->{disposable};
+            push @e, "$id: disposable_from_default $p->{disposable_from_default}, want " . ($c->{from_default} ? 1 : 0)
+                if exists $c->{from_default} && $p->{disposable_from_default} != ($c->{from_default} ? 1 : 0);
+            push @e, "$id: disposable_legacy " . ($p->{disposable_legacy} // 'null') . ', want ' . ($c->{legacy} // 'null')
+                if exists $c->{legacy} && ($p->{disposable_legacy} // '') ne ($c->{legacy} // '');
+        }
+        # util::copy_new (migrate's copy): copied, or `exists` when dst is there (never replaced), or
+        # `dies` when a write fails after fail_after writes; dst is then absent, and no temp name is left
+        # beside dst either way, so a rerun copies it again
+        for my $c (@{ $a->{copy_new} || [] }) {
+            my $id = $c->{id} // $c->{dst};
+            my $calls = 0;
+            my $grown = 0;
+            my $orig = \&util::_write_all;
+            no warnings qw(redefine);
+            # dst_appears: another writer creates dst while the copy runs (link must not replace it);
+            # grow: a writer appends to src while it is copied (the copy must fail)
+            local *util::_write_all = sub {
+                die "write: failed on purpose\n" if defined $c->{fail_after} && ++$calls > $c->{fail_after};
+                if (defined $c->{dst_appears} && !-e $c->{dst}) { open(my $d, '>', $c->{dst}) or die "dst_appears: $!\n"; print $d $c->{dst_appears}; close $d }
+                if ($c->{grow} && !$grown++) { open(my $g, '>>', $c->{src}) or die "grow: $!\n"; print $g "more\n"; close $g }
+                $orig->(@_);
+            };
+            my $t = defined $c->{mtime} ? util::parse_iso($c->{mtime}) : undef;
+            my $before = util::read_file($c->{dst});
+            my $n = eval { util::copy_new($c->{src}, $c->{dst}, mode => 0600, (defined $t ? (times => [$t, $t]) : ()), (ref $c->{expect} eq 'ARRAY' ? (expect => $c->{expect}) : ())) };
+            my $got = !defined $n ? 'dies' : $n < 0 ? 'exists' : 'copied';
+            push @e, "$id: error '" . ($@ =~ s{\s+\z}{}r) . "', want /$c->{error}/" if $got eq 'dies' && defined $c->{error} && $@ !~ /$c->{error}/;
+            push @e, "$id: $got, want $c->{want}" . ($got eq 'dies' ? " ($@)" : '') if $got ne $c->{want};
+            my @left = grep { /\.part-/ } util::list_dir(util::dirname($c->{dst}));
+            push @e, "$id: temp names left beside it: @left" if @left;
+            push @e, "$id: $c->{dst} exists after a failed copy" if $got eq 'dies' && (-e $c->{dst} || -l $c->{dst});
+            if ($got eq 'copied') {
+                push @e, "$id: bytes differ from $c->{src}" if (util::read_file($c->{dst}) // '') ne (util::read_file($c->{src}) // 'x');
+                push @e, "$id: mtime " . (stat $c->{dst})[9] . ", want $t" if defined $t && (stat $c->{dst})[9] != $t;
+            }
+            push @e, "$id: $c->{dst} was changed" if $got eq 'exists' && (util::read_file($c->{dst}) // '') ne ($before // $c->{dst_appears} // '');
+        }
+        # paths::follow: a recorded path under the old default root (as written, or through the real path of
+        # its parent: a home reached through a symlink) reads as its copy under the new root
+        for my $c (@{ $a->{follow} || [] }) {
+            delete local $ENV{XDG_STATE_HOME};
+            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'default' } };
+            my $got = paths::follow(paths::for($s, 'x')->{moved}, $c->{path});
+            push @e, "$c->{id}: follow " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
         }
         for my $c (@{ $a->{named} || [] }) {
             local *ctx::brand = $c->{brand_dies} ? sub { die "no brand\n" } : sub { $c->{brand} };
@@ -3408,6 +3482,12 @@ sub check {
                 push @e, "$p: mtime $now differs from snapshot $f->{same_mtime_as} ($was)" if defined $was && $now != $was;
             }
             if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
+            # mtime_at <ISO>: the file's modification time (a copy that keeps its source's; touch sets it)
+            if (defined $f->{mtime_at}) {
+                my $want = util::parse_iso($f->{mtime_at});
+                my $got = (stat $p)[9];
+                push @e, "$p: mtime " . ($got // 'none') . ", want $f->{mtime_at}" unless defined $want && defined $got && $got == $want;
+            }
             # tree_snapshot <label> keeps a folder's listing (every entry's path, type, mode, size,
             # mtime and bytes) for a later step's same_tree_as <label> (STATE-ROOT: nothing is written
             # under the legacy root)

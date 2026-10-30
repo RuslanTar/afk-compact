@@ -541,6 +541,7 @@ def probes(name):
         uc["disposable_keep_days"]["default"] = 30
         # AT-CAP-02 ruled (owner 2026-10-30, xxxxxxxx): the near-limit handoff setting ships `run`.
         uc["idle_handoff_near_limit"]["default"] = "skip"
+        uc["disposable_root"]["default"] = "~/.claude/trash-staging"
         uc["watch_keep_days"] = {"type": "number", "title": "x [default 30]", "description": "x", "default": 30}
         # VD-01 (0.1.2 visible defaults): a title default off the manifest, a title without one, and
         # a pick list that is not settings.pm %ENUM's
@@ -734,8 +735,9 @@ def probes(name):
         edit(d, "plugin/helper/lib/settings.pm", "[stall_min                   => 'num',  60,",
              "[stall_min                   => 'num',  90,")
         edit(d, "plugin/hooks/lib/config.ts", "  cooldown_ms: 30000,", "  cooldown_ms: 15000,")
-        # STATE-ROOT: the two handoff_root fallbacks outside the key tables
+        # STATE-ROOT: the root fallbacks outside the key tables
         edit(d, "plugin/helper/lib/paths.pm", "our $DEFAULT_ROOT = '~/.local/state/<plugin>/", "our $DEFAULT_ROOT = '~/.claude/x/")
+        edit(d, "plugin/helper/lib/paths.pm", "our $DEFAULT_DISPOSABLE = '~/.local/state/<plugin>/", "our $DEFAULT_DISPOSABLE = '~/.claude/y/")
         edit(d, launcher_rel(name), "|| hroot='~/.local/state/", "|| hroot='~/.claude/x/")
 
     def export_classes(d):
@@ -1045,6 +1047,7 @@ def probes(name):
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 ruled: idle_handoff_near_limit is 'skip', want 'run'$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 ruled: disposable_root is '~/\.claude/trash-staging'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: cooldown_ms says \[default 15,000\], the manifest default is 30000$",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: stall_min has no \[default 60\] suffix$",
@@ -1153,6 +1156,7 @@ def probes(name):
           r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-CAP-02 differs: settings\.pm stall_min fallback 90 != manifest 60$",
           r"^GATE config-defaults plugin/hooks/lib/config\.ts: AT-CAP-02 differs: config\.ts DEFAULTS cooldown_ms 15000 != manifest 30000$",
           r"^GATE config-defaults plugin/helper/lib/paths\.pm: AT-CAP-02 differs: paths\.pm \$DEFAULT_ROOT ~/\.claude/x/",
+          r"^GATE config-defaults plugin/helper/lib/paths\.pm: AT-CAP-02 differs: paths\.pm \$DEFAULT_DISPOSABLE ~/\.claude/y/",
           r"^GATE config-defaults " + re.escape(launcher_rel(name)) + r": AT-CAP-02 differs: launcher hroot ~/\.claude/x/",
           r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm \$IDLE_INVALID off != config\.ts IDLE_INVALID_READS_AS auto$",
           r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm @IDLE_OFF_WORDS off false no disabled 0 != config\.ts IDLE_OFF_WORDS off false no none disabled 0$"], None),

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "core",
- "note": "STATE-ROOT (0.1.2): while handoff_root is the default (unset, or a value equal to the default), the root is $XDG_STATE_HOME/<plugin>/handoffs when XDG_STATE_HOME is an absolute path (a relative or empty one is ignored, the XDG Base Directory rule), else ~/.local/state/<plugin>/handoffs; any other value is the only root. The old root ~/.claude/handoffs is still read beside it. lib/paths.pm and watch/ctx.pm agree; paths::named and watch::ctx::_named fall back to `plugin` when no plugin name can be read. Through the helper: begin stages under the XDG root and writes nothing under ~/.local/state; locate still pools the old root's buckets.",
+ "note": "STATE-ROOT (0.1.2): while handoff_root is the default (unset, or a value equal to the default), the root is $XDG_STATE_HOME/<plugin>/handoffs when XDG_STATE_HOME is an absolute path (a relative or empty one is ignored, the XDG Base Directory rule), else ~/.local/state/<plugin>/handoffs; any other value is the only root. The old root ~/.claude/handoffs is still read beside it. lib/paths.pm and watch/ctx.pm agree; paths::named and watch::ctx::_named fall back to `plugin` when no plugin name can be read. Through the helper: begin stages under the XDG root and writes nothing under ~/.local/state; locate still pools the old root's buckets. paths::for's moved pair is there only while handoff_root is the default, and paths::follow reads a path recorded under the old root as written or through the real path of its parent (a home reached through a symlink).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -32,11 +32,22 @@
     {
      "write": "$LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l.md",
      "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d1d2d3d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 66666666-6666-4666-8666-666666666666\nactor: main\n---\n⟪$BRAND v1 n=0d1d2d3d s=manual⟫\n# LAB-5 — old root\n⟪/$BRAND n=0d1d2d3d⟫\n"
+    },
+    {
+     "mkdir": "$TMP/hreal/.claude"
+    },
+    {
+     "symlink": "$TMP/hlink",
+     "to": "$TMP/hreal"
+    },
+    {
+     "write": "$TMP/hreal/.local/state/$BRAND/handoffs/repo/X/f.md",
+     "content": "copied\n"
     }
    ]
   },
   {
-   "name": "paths::for and watch::ctx: the root under each value and XDG_STATE_HOME",
+   "name": "paths::for and watch::ctx: the root under each value and XDG_STATE_HOME; the old and new roots paths::follow reads (none for a root set explicitly), also through a home reached by a symlink",
    "lib": "state_root",
    "args": {
     "roots": [
@@ -48,7 +59,13 @@
       "xdg": "$TMP/xdg",
       "root": "$TMP/xdg/$BRAND/handoffs",
       "from_default": true,
-      "legacy": "$TMP/h1/.claude/handoffs"
+      "legacy": "$TMP/h1/.claude/handoffs",
+      "moved": [
+       [
+        "$TMP/h1/.claude/handoffs",
+        "$TMP/xdg/$BRAND/handoffs"
+       ]
+      ]
      },
      {
       "id": "unset, XDG_STATE_HOME with a trailing slash",
@@ -127,7 +144,8 @@
       "xdg": "$TMP/xdg",
       "root": "$TMP/elsewhere",
       "from_default": false,
-      "legacy": null
+      "legacy": null,
+      "moved": []
      },
      {
       "id": "~/.claude/handoffs set explicitly stays the only root",
@@ -137,7 +155,8 @@
       "xdg": "$TMP/xdg",
       "root": "$TMP/h1/.claude/handoffs",
       "from_default": false,
-      "legacy": null
+      "legacy": null,
+      "moved": []
      },
      {
       "id": "no old root folder",
@@ -147,7 +166,47 @@
       "xdg": "$TMP/xdg",
       "root": "$TMP/xdg/$BRAND/handoffs",
       "from_default": true,
-      "legacy": null
+      "legacy": null,
+      "moved": [
+       [
+        "$TMP/h2/.claude/handoffs",
+        "$TMP/xdg/$BRAND/handoffs"
+       ]
+      ]
+     }
+    ],
+    "follow": [
+     {
+      "id": "a home reached through a symlink, the path as written",
+      "home": "$TMP/hlink",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "path": "$TMP/hlink/.claude/handoffs/repo/X/f.md",
+      "want": "$TMP/hlink/.local/state/$BRAND/handoffs/repo/X/f.md"
+     },
+     {
+      "id": "a home reached through a symlink, the path through its real parent",
+      "home": "$TMP/hlink",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "path": "$TMP/hreal/.claude/handoffs/repo/X/f.md",
+      "want": "$TMP/hlink/.local/state/$BRAND/handoffs/repo/X/f.md"
+     },
+     {
+      "id": "no copy under the new root: the path as it is",
+      "home": "$TMP/hlink",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "path": "$TMP/hlink/.claude/handoffs/repo/Y/g.md",
+      "want": "$TMP/hlink/.claude/handoffs/repo/Y/g.md"
+     },
+     {
+      "id": "handoff_root set explicitly: the path as it is",
+      "home": "$TMP/hlink",
+      "value": "$TMP/elsewhere",
+      "source": "settings",
+      "path": "$TMP/hlink/.claude/handoffs/repo/X/f.md",
+      "want": "$TMP/hlink/.claude/handoffs/repo/X/f.md"
      }
     ]
    }

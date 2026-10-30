@@ -19,9 +19,9 @@
     },
     "disposable_root": {
       "type": "directory",
-      "title": "Temporary evidence folder [default ~/.claude/trash-staging]",
-      "description": "Where the plugin copies temporary files the session referred to (for example test output or logs in a temp folder), in one dated folder per day, so they are still there after the system clears its temp folder. Default ~/.claude/trash-staging; nothing in it is deleted automatically, so remove old dated folders yourself when you no longer need them.",
-      "default": "~/.claude/trash-staging"
+      "title": "Temporary evidence folder [default ~/.local/state/{{plugin}}/disposable]",
+      "description": "Where the plugin copies temporary files the session referred to (for example test output or logs in a temp folder), in one dated folder per day, so they are still there after the system clears its temp folder. Default ~/.local/state/{{plugin}}/disposable ($XDG_STATE_HOME/{{plugin}}/disposable when XDG_STATE_HOME is an absolute path), outside ~/.claude, for the same reason as the handoff folder; while this is unset (or set to that default), copies an earlier version made in ~/.claude/trash-staging are still read, never written. Nothing in it is deleted automatically, so remove old dated folders yourself when you no longer need them.",
+      "default": "~/.local/state/{{plugin}}/disposable"
     },
     "disposable_keep_days": {
       "type": "number",

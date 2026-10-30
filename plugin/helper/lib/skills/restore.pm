@@ -20,16 +20,19 @@ sub _handoff_arg {
     return $p;
 }
 
-# verify: one row per MANIFEST entry, ok · missing · withheld · redacted.
+# verify: one row per MANIFEST entry, ok · missing · withheld · redacted. A copy recorded under an
+# old default root (~/.claude/trash-staging, ~/.claude/handoffs) that is gone there is read under the
+# new root, where `migrate --apply` put it (STATE-ROOT; skills::ctx::follow).
 sub verify {
     my ($argv) = @_;
     skills::cli::opts($argv);
     my $p = _handoff_arg($argv, 'verify <handoff>');
+    my $ctx = skills::ctx::new({});
     my $rows = skills::store::read_manifest(skills::store::manifest_path($p));
     if (!$rows) { skills::cli::say('no manifest'); return 0 }
     for my $r (@$rows) {
         my $scan = $r->{scan} // '';
-        my $copy = $r->{copy_path} // '';
+        my $copy = skills::ctx::follow($ctx, $r->{copy_path} // '');
         if ($scan eq 'withheld') { skills::cli::say("withheld $r->{origin}"); next }
         if ($scan eq 'ref-only') {
             my $sz = -s $r->{origin};
@@ -44,11 +47,13 @@ sub verify {
     return 0;
 }
 
-# restore-evidence: copy the listed files into DIR (0700/0600), never move.
+# restore-evidence: copy the listed files into DIR (0700/0600), never move; a copy gone from an old
+# default root is read under the new one, as in verify.
 sub restore {
     my ($argv) = @_;
     my $o = skills::cli::opts($argv, 'to=s');
     my $p = _handoff_arg($argv, 'restore-evidence <handoff> --to DIR');
+    my $ctx = skills::ctx::new({});
     die skills::cli::usage('--to DIR') unless defined $o->{to} && $o->{to} ne '';
     my $rows = skills::store::read_manifest(skills::store::manifest_path($p));
     die skills::cli::refuse('no-manifest') unless $rows;
@@ -57,7 +62,7 @@ sub restore {
     for my $r (@$rows) {
         my $scan = $r->{scan} // '';
         next if $scan eq 'withheld' || $scan eq 'ref-only';
-        my $src = $r->{copy_path} // '';
+        my $src = skills::ctx::follow($ctx, $r->{copy_path} // '');
         next unless $src ne '' && -f $src;
         my $name = File::Basename::basename($src);
         my ($stem, $ext) = $name =~ /\A(.*?)((?:\.[^.]+)?)\z/;

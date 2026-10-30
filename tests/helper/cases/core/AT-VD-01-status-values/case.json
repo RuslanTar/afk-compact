@@ -21,7 +21,7 @@
                     "^  secret_extra_rules 2 entries \\(your settings\\.json; default empty\\)$",
                     "^  prod_patterns 1 entry \\(your settings\\.json; default empty\\)$",
                     "^  handoff_reuse_window_min 60, clamped from 90 \\(your settings\\.json; default 15\\)$",
-                    "^  at default: handoff_root=~/\\.local/state/$BRAND/handoffs · log_dir=empty · disposable_root=~/\\.claude/trash-staging · ",
+                    "^  at default: handoff_root=~/\\.local/state/$BRAND/handoffs · log_dir=empty · disposable_root=~/\\.local/state/$BRAND/disposable · ",
                     "^  at default: .*· watcher=shadow · ",
                     "· restart_on_update=off$",
                     "^settings: resume_proceed auto \\(default\\) · handoff_reuse_window_min 60 · ticket_pattern custom · secret_extra_rules 2 · ",

@@ -57,7 +57,7 @@ plugin/helper/lib/skills/{wait,jobs,export,project_cmd}.pm	skills
 plugin/helper/lib/skills/**	skills
 plugin/helper/lib/{repomode,handoff_turn}.pm	core
 plugin/helper/lib/**	core
-plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke,notice,settings}.*	core
+plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke,notice,settings,migrate}.*	core
 plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
 # The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-MEAS/P-DH-SAVE): two read/save commands beside lib/trial.pm.
 plugin/helper/cmd/{trial-measure,trial-save}.*	core

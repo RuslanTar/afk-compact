@@ -54,6 +54,21 @@ sub legacy   { $R{legacy} }
 sub legacy_refused { $R{legacy_refused} }
 sub legacy_path { $R{paths}{legacy} }
 sub read_roots { return grep { defined } ($R{paths}{root}, $R{legacy}) }
+# disposable_legacy() / _refused() / _path(): the same for the old default disposable root
+# (~/.claude/trash-staging while disposable_root is the default), checked on first use only (status
+# and migrate ask; nothing writes there, and copies record their own paths, so verify and
+# restore-evidence read the copies in it as they are, or under the new root once it is gone:
+# paths::follow).
+sub _disposable_legacy_check {
+    return if $R{disposable_legacy_checked}++;
+    my $dl = $R{paths}{disposable_legacy};
+    return unless defined $dl;
+    my $c = roots::check_path($dl);
+    if ($c->{ok}) { $R{disposable_legacy} = $dl } else { $R{disposable_legacy_refused} = $c->{reason} }
+}
+sub disposable_legacy { _disposable_legacy_check(); $R{disposable_legacy} }
+sub disposable_legacy_refused { _disposable_legacy_check(); $R{disposable_legacy_refused} }
+sub disposable_legacy_path { $R{paths}{disposable_legacy} }
 
 sub claude {
     $R{claude} ||= identity::claude_pid();
