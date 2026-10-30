@@ -853,7 +853,9 @@ sub clamped_keys {
 sub _clamped {
     my ($ctx, $v) = @_;
     my %c;
-    my $n = sub { my $x = $v->{ $_[0] }; return (defined $x && !ref $x && $x =~ /\A-?[0-9]+(?:\.[0-9]+)?\z/) ? 0 + $x : undef };
+    # a whole-number key rounded down first, as config.ts reads it (settings::whole)
+    my $n = sub { my $x = $v->{ $_[0] }; return undef unless defined $x && !ref $x && $x =~ /\A-?[0-9]+(?:\.[0-9]+)?\z/;
+                  return defined &settings::whole ? settings::whole($_[0], 0 + $x) : 0 + $x };
     for my $key (keys %$v) {
         next unless (defined $settings::EXPORT{$key} ? $settings::EXPORT{$key} : '') eq 'num' && defined &settings::limits;
         my $x = $n->($key);

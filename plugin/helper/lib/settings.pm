@@ -525,6 +525,19 @@ sub resolve {
 }
 
 # ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
+# The whole-number keys: the number keys the mod's config.ts rounds down (Math.floor) before its
+# clamp (bounded(), handoffTokens() and max_auto_continues_per_hour in parseOptions), as the
+# watcher's rules.pm does for handoff_turn_max_tokens. whole(key, number) -> the number as the
+# plugin reads it: those keys rounded down (0.5 is 0, -0.5 is -1), every other key as is (the
+# helper reads handoff_reuse_window_min and the MB keys with their fraction).
+our %WHOLE = map { $_ => 1 } qw(max_auto_continues_per_hour handoff_turn_max_tokens idle_handoff_min_tokens);
+sub whole {
+    my ($key, $v) = @_;
+    return $v unless $WHOLE{$key} && defined $v && !ref $v;
+    my $i = int($v);
+    return 0 + ($i > $v ? $i - 1 : $i);
+}
+
 # num_clamped(key[, resolved]) -> (value, clamped 0|1): a number key within the manifest's
 # min/max (S-SETTINGS E4-E6: handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
 # watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback.
@@ -538,6 +551,7 @@ sub num_clamped {
     $fb = $uc->{default} if ref $uc eq 'HASH' && defined $uc->{default} && !ref $uc->{default};
     $v = $fb unless defined $v && !ref $v && "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/;
     return (undef, 0) unless defined $v;
+    $v = whole($key, $v);
     my ($lo, $hi) = eval { limits($key) };
     my $used = (defined $lo && $v < $lo) ? $lo : (defined $hi && $v > $hi) ? $hi : 0 + $v;
     return ($used, $used == $v ? 0 : 1);
@@ -967,7 +981,7 @@ sub manifest_default {
 }
 
 # show_value(key, value) -> the value as /status and `settings show` print it: true/false; a
-# number; a path (~ for the home) or `empty`; a list key's entry count (never its entries);
+# number (a whole-number key rounded down, whole()); a path (~ for the home) or `empty`; a list key's entry count (never its entries);
 # ticket_pattern built-in, custom or invalid (never the pattern); any other text trimmed and cut
 # to 40 characters.
 sub show_value {
@@ -989,7 +1003,7 @@ sub show_value {
         $p =~ s/[\x00-\x1f\x7f]/ /g;
         return $p;
     }
-    if ($t eq 'num') { return "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/ ? 0 + $v : 'not a number' }
+    if ($t eq 'num') { return "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/ ? whole($key, 0 + $v) : 'not a number' }
     my $s = trim(util::text("$v"));
     $s =~ s/[\x00-\x1f\x7f]/ /g;
     return length($s) > 40 ? substr($s, 0, 39) . '…' : $s;
@@ -1014,7 +1028,7 @@ sub effective_rows {
         my ($shown, $from);
         if ($TYPE{$key} eq 'num' && defined $val) {
             my ($used, $cl) = num_clamped($key, $r);
-            ($shown, $from) = (defined $used ? $used : show_value($key, $val), $cl ? 0 + $val : undef);
+            ($shown, $from) = (defined $used ? $used : show_value($key, $val), $cl ? whole($key, 0 + $val) : undef);
         } else {
             $shown = show_value($key, $val);
         }
@@ -1065,7 +1079,8 @@ sub value_warnings {
 # goes to section `other`, tier advanced, and is listed in `unsectioned` (the settings-sections
 # gate fails on it). `clamped`: true for a key the clamp moves (a number outside its min/max, a
 # window below the floor, a soft max or target over the window's clamp), the watcher's export
-# flags (watch::export::clamped_keys); `value` stays the configured one; null when they cannot be
+# flags (watch::export::clamped_keys); `value` stays the configured one (a whole-number key
+# rounded down as the plugin reads it, whole()); null when they cannot be
 # worked out. Read-only.
 our %KIND = (num => 'number', bool => 'boolean', enum => 'enum', path => 'path', list => 'list', drop => 'text');
 sub view {
@@ -1085,7 +1100,7 @@ sub view {
         my $v = $r->{values}{$key};
         my ($lo, $hi) = limits($key);
         if ($type eq 'bool') { ($default, $v) = (jsonc::bool(_coerce($key, $default)), jsonc::bool($v)) }
-        elsif ($type eq 'num') { $default = 0 + $default if defined $default && "$default" =~ /\A-?[0-9]+(\.[0-9]+)?\z/; $v = 0 + $v if defined $v }
+        elsif ($type eq 'num') { $default = 0 + $default if defined $default && "$default" =~ /\A-?[0-9]+(\.[0-9]+)?\z/; $v = whole($key, 0 + $v) if defined $v }
         $rows{$key} = jsonc::obj(
             key => $key, title => $u->{title}, section => $sec, tier => $t, kind => $KIND{$class // ''} // 'text',
             default => $default, min => $lo, max => $hi,

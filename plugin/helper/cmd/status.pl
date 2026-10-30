@@ -148,7 +148,7 @@ sub run {
                       && $now - (util::parse_iso($_->{ts} // '') // 0) <= 3600 } @$mod;
     push @out, sprintf('halt: %s · continues this hour: %d of %s',
                        ($halted ? 'on (' . ($h->{reason} // 'unknown') . ')' : 'off'),
-                       $cont, rc::val('max_auto_continues_per_hour'));
+                       $cont, (eval { settings::num_clamped('max_auto_continues_per_hour') })[0] // rc::val('max_auto_continues_per_hour'));
 
     push @out, smoke_lines(), allow_lines($opt->{cwd}), user_run_lines($sid);
 
@@ -473,7 +473,7 @@ sub min_window {
     my $need = _ceil($c->{min_target} * $c->{target_den} / $c->{target_num});
     return 'never' if $target < $c->{min_target} || $soft < $need;
     my $ht = settings::trim(lc(rc::val('handoff_turn') // 'halt'));
-    my $h = rc::val('handoff_turn_max_tokens') // 64000;
+    my $h = settings::whole('handoff_turn_max_tokens', rc::val('handoff_turn_max_tokens') // 64000);
     $h = $c->{handoff_tokens_min} if $h < $c->{handoff_tokens_min};
     $h = $c->{handoff_tokens_max} if $h > $c->{handoff_tokens_max};
     my $reserve = $ht eq 'off' ? $c->{reserve_no_handoff} : $c->{reserve_base} + $h;
