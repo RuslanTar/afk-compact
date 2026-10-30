@@ -9,6 +9,9 @@ package skills::locate;
 # with a private twin (same nonce and session) is not listed: the twin is, with the
 # export path beside it. Outside repo mode nothing under the repository root is read:
 # one note line says how many exports it holds.
+# STATE-ROOT: while handoff_root is the default, the buckets of the legacy root ~/.claude/handoffs are
+# candidates too (pooled with the store's, ordered by date; they count as the private store); a
+# legacy root refused by the unsafe-root checks is skipped with a note line.
 use strict;
 use warnings;
 use utf8;
@@ -36,7 +39,7 @@ sub run {
     my $chain = skills::ctx::chain($ctx, $sid);
     my %rel_of = ($sid => 'same-session', map { $_->{sid} => 'successor' } @$chain);
 
-    my %bdirs = map { $_ => 1 } @{ skills::store::buckets($ctx->{root}, $w->{repo}) };
+    my %bdirs = map { $_ => 1 } @{ skills::store::read_buckets($ctx, $w->{repo}) };
     for my $s ($sid, map { $_->{sid} } @$chain) {
         my $pin = skills::ctx::pin_read($ctx, $s) or next;
         $bdirs{ $pin->{bucket_path} } = 1 if $pin->{bucket_path} && -d $pin->{bucket_path};
@@ -48,6 +51,8 @@ sub run {
 
     my $m = skills::core::mode($cwd);
     my (@xdocs, @notes);
+    push @notes, 'legacy root ' . skills::util::abbrev_home($ctx->{legacy_path}) . " skipped ($ctx->{legacy_refused})"
+        if defined $ctx->{legacy_refused} && defined $ctx->{legacy_path};
     if ($m->{mode} eq 'repo' && defined $m->{root_rel}) {
         my $top = $m->{toplevel};
         push @xdocs, @{ skills::store::export_docs($top, $m->{root_rel}, File::Basename::basename($top)) };
@@ -75,7 +80,7 @@ sub run {
             my $is_copy = $p =~ m{/compact/} || ($d->{fm}{writer} // '') =~ /\A(?:mod|postcompact-fallback)\z/;
             $tier = ($is_copy && $sid_of->($d) eq $sid) ? 2 : 1;
             $pick = $d;
-            for my $n (@{ skills::store::docs_in($d->{bucket}, compact => 1) }) {
+            for my $n (map { @{ skills::store::docs_in($_, compact => 1) } } @{ skills::store::twin_buckets($ctx, $d->{bucket}) }) {
                 next if $n->{path} eq $p || ($n->{epoch} // 0) <= ($d->{epoch} // 0);
                 push @warn, $n if ($n->{fm}{previous_handoff} // '') eq $p || $sid_of->($n) eq $sid_of->($d);
             }
@@ -103,8 +108,11 @@ sub run {
         @matching = grep { lc(File::Basename::basename($_)) eq $tok } @all;
         $exact = 1 if @matching;
         @matching = grep { index(lc(File::Basename::basename($_)), $tok) >= 0 } @all unless @matching;
-        if ($exact && @matching == 1) {
-            my ($d) = grep { $_->{bucket} eq $matching[0] && !_is_sub($_) } @pool;
+        # one bucket name, which may be in both read roots (STATE-ROOT): the newest of its files
+        my %mb = map { $_ => 1 } @matching;
+        my %names = map { lc(File::Basename::basename($_)) => 1 } @matching;
+        if ($exact && keys %names == 1) {
+            my ($d) = grep { $mb{ $_->{bucket} } && !_is_sub($_) } @pool;
             ($tier, $pick) = (5, $d) if $d;
         }
         if (!$pick && !@matching) {
@@ -146,7 +154,7 @@ sub run {
         # Owner xxxxxxxx-26 (read-only alias): this session's or a predecessor's file in the store
         # may carry its marker under the plugin's former name.
         my $alias = $rel_of{$ps} && !skills::store::is_export($pick) && !skills::store::imported($pick)
-            && _in_store($pick->{path}, $ctx->{root}) ? 1 : 0;
+            && skills::store::in_store($ctx, $pick->{path}) ? 1 : 0;
         my $int = skills::store::integrity($pick, alias => $alias);
         my $age_s = defined $pick->{epoch} ? $now - $pick->{epoch} : undef;
         skills::cli::say("relation: $rel");
@@ -171,7 +179,7 @@ sub run {
             # is foreign whatever its session id.
             my $why = skills::store::is_export($pick) ? 'a repository export'
                     : skills::store::imported($pick) ? 'an imported copy'
-                    : !_in_store($pick->{path}, $ctx->{root}) ? 'a file outside your private store' : undef;
+                    : !skills::store::in_store($ctx, $pick->{path}) ? 'a file outside your private store' : undef;
             skills::cli::say("foreign: $why, not an own handoff (commands only without real risk; approvals context only)") if defined $why;
         }
         if ($int->{integrity} eq 's=sub') {
@@ -180,7 +188,8 @@ sub run {
         }
         skills::cli::say("warn: newer superseding file $_->{path} (" . ($_->{fm}{date} // '?') . ')') for @warn;
         my $n = 0;
-        for my $d (@{ skills::store::docs_in($pick->{bucket}, compact => 1) }) {
+        my @newer = map { @{ skills::store::docs_in($_, compact => 1) } } @{ skills::store::twin_buckets($ctx, $pick->{bucket}) };
+        for my $d (sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) } @newer) {
             next if $d->{path} eq $pick->{path} || ($d->{epoch} // 0) <= ($pick->{epoch} // 0);
             my $r = $rel_of{ $sid_of->($d) } // 'other';
             skills::cli::say(join ' · ', "newer: $d->{path}", $d->{fm}{date} // '?', skills::ctx::sid8($sid_of->($d)), $r);
@@ -232,17 +241,6 @@ sub _is_sub {
     my ($d) = @_;
     return 1 if $d->{path} =~ m{/compact/subagents/};
     return 0;
-}
-
-# 1 when the file's real path lies under the store root.
-sub _in_store {
-    my ($path, $root) = @_;
-    return 0 unless defined $path && defined $root;
-    my $p = skills::util::abs_path($path);
-    my $r = skills::util::abs_path($root);
-    return 0 unless defined $p && defined $r;
-    $r =~ s{/+\z}{};
-    return index($p, "$r/") == 0 ? 1 : 0;
 }
 
 sub _age {

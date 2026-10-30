@@ -129,12 +129,11 @@ sub run {
     return 0;
 }
 
-# 1 when the path lies under the private handoff root (the store this machine owns).
+# 1 when the path lies under the private handoff root (the store this machine owns), or under the
+# legacy root, which is the own store too (STATE-ROOT).
 sub _under_root {
     my ($ctx, $p) = @_;
-    my $root = skills::util::abs_path($ctx->{root}) // $ctx->{root};
-    my $real = skills::util::abs_path($p) // $p;
-    return index($real, "$root/") == 0 ? 1 : 0;
+    return skills::store::in_store($ctx, $p);
 }
 
 sub _file {

@@ -142,8 +142,10 @@ sub run {
 
     # Carry base (small-rulings §2.1, RV-19 refined): the newest handoff in the bucket by
     # frontmatter date, name as tiebreak, whoever wrote it; never one with imported_from.
-    # own_chain = this session or a lineage predecessor (A-6, 3 hops).
-    my $docs = [ sort _newest_first grep { skills::store::is_handoff($_) } @{ skills::store::docs_in($bucket) } ];
+    # own_chain = this session or a lineage predecessor (A-6, 3 hops). STATE-ROOT: the bucket's twin in the
+    # legacy root counts too (read only; the stage and the handoff go to the store root's bucket).
+    my $docs = [ sort _newest_first grep { skills::store::is_handoff($_) }
+                  map { @{ skills::store::docs_in($_) } } @{ skills::store::twin_buckets($ctx, $bucket) } ];
     my $is_own = sub { ($_[0]{fm}{session_id} // '') eq $sid };
     my $is_pred = sub { $chain_sids{ $_[0]{fm}{session_id} // '' } ? 1 : 0 };
     my @cands = grep { !skills::store::imported($_) } @$docs;
@@ -373,15 +375,17 @@ sub _rel {
 # Another live session pinned to this bucket holds it (RV-28 ownership check).
 sub _bucket_holder {
     my ($ctx, $bucket, $sid) = @_;
-    my $dir = "$ctx->{root}/.sessions";
     my %live = map { $_->{session_id} => $_ } @{ skills::ctx::live_peers($ctx, undef, $sid) };
-    for my $f (skills::util::list_dir($dir)) {
+    my %seen;
+    # STATE-ROOT: pins in both read roots (pin_read takes the store root's first)
+    for my $f (map { skills::util::list_dir("$_/.sessions") } skills::ctx::read_roots($ctx)) {
         next unless $f =~ /\A(.+)\.json\z/ && $f !~ /\.lineage\.json\z/;
         my $other = $1;
-        next if $other eq $sid || !$live{$other};
+        next if $other eq $sid || !$live{$other} || $seen{$other}++;
         my $pin = skills::ctx::pin_read($ctx, $other) or next;
         my $bp = $pin->{bucket_path} // ($pin->{bucket} ? "$ctx->{root}/$pin->{bucket}" : '');
-        return skills::ctx::sid8($other) if $bp eq $bucket;
+        # a legacy pin names its bucket under the legacy root: its relative name counts too
+        return skills::ctx::sid8($other) if $bp eq $bucket || (defined $pin->{bucket} && !ref $pin->{bucket} && "$ctx->{root}/$pin->{bucket}" eq $bucket);
     }
     return undef;
 }

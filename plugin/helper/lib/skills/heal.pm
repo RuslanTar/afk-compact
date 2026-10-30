@@ -297,9 +297,10 @@ sub find_recipe {
     my ($ctx, $origin, $item) = @_;
     my %b;
     my $pin = skills::ctx::pin_read($ctx, $origin);
-    $b{ $pin->{bucket_path} } = 1 if $pin && $pin->{bucket_path};
+    # STATE-ROOT: the pinned bucket's twin and the buckets of both read roots
+    $b{$_} = 1 for $pin && $pin->{bucket_path} ? grep { -d } @{ skills::store::twin_buckets($ctx, $pin->{bucket_path}) } : ();
     my $w = skills::gitfacts::where(skills::util::cwd());
-    $b{$_} = 1 for @{ skills::store::buckets($ctx->{root}, $w->{repo}) };
+    $b{$_} = 1 for @{ skills::store::read_buckets($ctx, $w->{repo}) };
     my @docs = sort { ($b->{epoch} // 0) <=> ($a->{epoch} // 0) }
                grep { ($_->{fm}{session_id} // '') eq $origin } map { @{ skills::store::docs_in($_) } } sort keys %b;
     for my $d (@docs) {

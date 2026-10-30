@@ -1,0 +1,95 @@
+{
+ "id": "AT-STATE-ROOT-02 (state-root: an unsafe old root is skipped)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "STATE-ROOT: the unsafe-root checks (lib/roots.pm) apply to the old default root on read; inside a git work tree (not ignored) it is skipped with a note line in locate and status, and none of its files is read. No old root: status has no legacy line.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "main",
+      "commits": [
+       {
+        "files": {
+         "a.txt": "a\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "name": "no old root: status has no legacy line",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^legacy handoff root"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$LEGACY/repo/LAB-5/2026-10-21_12-00-00_11111111_l.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0d1d2d3d\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\n---\n⟪$BRAND v1 n=0d1d2d3d s=manual⟫\n# LAB-5 — old root\n⟪/$BRAND n=0d1d2d3d⟫\n"
+    },
+    {
+     "git": [
+      "init",
+      "-q",
+      "$HOME/.claude"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "(g) the old root inside a git work tree (not ignored): skipped with a note, never picked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: none\\npick: none\\n",
+     "^legacy root ~/\\.claude/handoffs skipped \\(root-in-git\\)$"
+    ],
+    "stdout_lacks": [
+     "\\.claude/handoffs/repo"
+    ]
+   }
+  },
+  {
+   "name": "(g) status says the old root was skipped",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^legacy handoff root ~/\\.claude/handoffs: skipped \\(root-in-git\\)$"
+    ]
+   }
+  }
+ ]
+}

@@ -7,6 +7,9 @@ package bucket;
 #   writes a pin.
 # A pin's `bucket` is a path relative to <root> (`<repo>/<topic>`) or an absolute
 # path under <root> (the pin format is WP-skills'; see the WP-core report).
+# STATE-ROOT: a pin or lineage file is read from the effective root, else from the legacy root
+# (rc::read_roots; a session that started before 0.1.2 keeps its bucket). A legacy pin's bucket
+# is taken relative to the legacy root, and the bucket path is always under the effective root.
 use strict;
 use warnings;
 use utf8;
@@ -31,6 +34,18 @@ sub _pin_bucket {
     return $b;
 }
 
+# _pin_of(sid) -> the bucket of the first read root that holds sid's pin (undef: none, or that
+# pin names no bucket: the effective root's pin wins even then).
+sub _pin_of {
+    my ($sid) = @_;
+    return undef unless defined $sid && $sid ne '';
+    for my $r (rc::read_roots()) {
+        next unless -e "$r/.sessions/$sid.json";
+        return _pin_bucket($r, $sid);
+    }
+    return undef;
+}
+
 sub slug {
     my ($s) = @_;
     $s = lc($s // '');
@@ -47,13 +62,13 @@ sub resolve {
     my $repo = $where->{repo} // (defined $cwd ? util::basename($cwd) : 'general');
     $repo = 'general' if !defined $repo || $repo eq '' || $repo eq '/';
     my ($rel, $source);
-    if (defined(my $b = _pin_bucket($root, $sid))) {
+    if (defined(my $b = _pin_of($sid))) {
         ($rel, $source) = ($b, 'pin');
     } else {
-        my $lin = util::read_file("$root/.sessions/$sid.lineage.json");
+        my ($lin) = grep { defined } map { util::read_file("$_/.sessions/$sid.lineage.json") } rc::read_roots();
         my $l = defined $lin ? eval { jsonc::decode($lin) } : undef;
         my $prev = ref $l eq 'HASH' ? $l->{previous_session_id} : undef;
-        if (defined $prev && $prev ne 'unknown' && defined(my $pb = _pin_bucket($root, $prev))) {
+        if (defined $prev && $prev ne 'unknown' && defined(my $pb = _pin_of($prev))) {
             ($rel, $source) = ($pb, 'pin-lineage');
         } elsif (defined $where->{branch} && defined(my $tk = settings::ticket($where->{branch}))) {
             # SK-1 (S-SETTINGS E1): the ticket_pattern setting; the id rule keeps `..` and `/` out

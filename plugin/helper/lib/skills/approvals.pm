@@ -94,6 +94,10 @@ our $HEADING = '## Approvals';
 # approvals to two sessions.
 our %CARRY_REASON = map { $_ => 1 } qw(clear handoff-resume);
 our $SUCCESSORS_DIR = 'successors';           # under <handoff_root>/.sessions/
+# STATE-ROOT (0.1.2): while handoff_root is the default, the legacy root ~/.claude/handoffs is read too
+# (_read_roots). A claim or a hash record found in either root counts, so a predecessor claimed
+# before the upgrade is never claimed again and one handoff still lends its `once` approvals to
+# one session only; new claims and records go to the store root only.
 # Production (owner 2026-10-23 xxxxxxxx-28, "Named read carries. forbid setting is default rule,
 # but user explicit ask/approval always wins"): an approval whose action or targets match a
 # production class is the prod-write gate (re-asked) unless it is one production read by an allow
@@ -651,6 +655,28 @@ sub hash_path {
     return "$ctx->{root}/.sessions/$HASH_DIR/$sid.$n.json";
 }
 
+# _read_roots(ctx) -> the store root, then the legacy root (STATE-ROOT). A context without a `legacy`
+# key (built from the run context's root, summary_lines) takes the run context's legacy root
+# when its root is the run context's.
+sub _read_roots {
+    my ($ctx) = @_;
+    return () unless $ctx && defined $ctx->{root};
+    my $l = exists $ctx->{legacy} ? $ctx->{legacy}
+          : (defined &rc::root && defined &rc::legacy && (eval { rc::root() } // '') eq $ctx->{root}) ? rc::legacy() : undef;
+    return grep { defined && $_ ne '' } ($ctx->{root}, $l);
+}
+
+# _found(ctx, rel) -> the first read root's path of rel (under <root>/.sessions/) that exists,
+# else the store root's (where a writer would put it).
+sub _found {
+    my ($ctx, $rel) = @_;
+    for my $r (_read_roots($ctx)) {
+        my $p = "$r/.sessions/$rel";
+        return $p if -e $p || -l $p;
+    }
+    return "$ctx->{root}/.sessions/$rel";
+}
+
 # The parsed, untagged lines of a body's `## Approvals`, each with its exact text.
 sub _section_entries {
     my ($body) = @_;
@@ -701,6 +727,9 @@ sub record_hashes {
 sub _record_of {
     my ($ctx, $d) = @_;
     my $p = hash_path($ctx, $d->{fm}) or return undef;
+    # STATE-ROOT: the record of a handoff published before the upgrade is in the legacy root
+    (my $rel = $p) =~ s{\A\Q$ctx->{root}\E/\.sessions/}{};
+    $p = _found($ctx, $rel);
     return undef unless -f $p && !-l $p;
     my $r = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
     return undef unless ref $r eq 'HASH' && ($r->{v} // 0) eq '1' && ref $r->{lines} eq 'HASH'
@@ -817,12 +846,22 @@ sub own_relation {
 # line over by resuming its newest handoff (skills::session_cmds::link_resume, exclusive create).
 sub claim_path { my ($ctx, $s) = @_; return "$ctx->{root}/.sessions/$SUCCESSORS_DIR/$s.json" }
 
+# claim_found(ctx, sid) -> the path of sid's claim in the first read root that holds one, or undef
+# (STATE-ROOT: the legacy root's claims count).
+sub claim_found {
+    my ($ctx, $s) = @_;
+    return undef unless $ctx && defined $ctx->{root} && skills::ctx::valid_sid($s);
+    my $p = _found($ctx, "$SUCCESSORS_DIR/$s.json");
+    return (-e $p || -l $p) ? $p : undef;
+}
+
 # successor_claim(ctx, sid) -> undef (no claim) | {session_id, epoch} | {bad => 1} (a claim file
 # that does not read as one session id and a time).
 sub successor_claim {
     my ($ctx, $s) = @_;
     return undef unless $ctx && defined $ctx->{root} && skills::ctx::valid_sid($s);
-    my $p = claim_path($ctx, $s);
+    # STATE-ROOT: a claim in either read root counts (the store root's first)
+    my $p = _found($ctx, "$SUCCESSORS_DIR/$s.json");
     return undef unless -e $p || -l $p;
     my $c = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
     my ($cs, $ts) = ref $c eq 'HASH' ? ($c->{session_id}, $c->{ts}) : ();
@@ -867,15 +906,20 @@ sub quote_floor {
     return (1, $c->{session_id} eq $sid ? undef : $c->{epoch});
 }
 
-# 1 when the file's real path lies under the store root (handoff_root), component by component.
+# 1 when the file's real path lies under a read root (handoff_root, or the legacy root, which is
+# the own store too, STATE-ROOT), component by component.
 sub _in_store {
     my ($path, $ctx) = @_;
     return 0 unless defined $path && $ctx && defined $ctx->{root};
     my $p = skills::util::abs_path($path);
-    my $r = skills::util::abs_path($ctx->{root});
-    return 0 unless defined $p && defined $r;
-    $r =~ s{/+\z}{};
-    return index($p, "$r/") == 0 ? 1 : 0;
+    return 0 unless defined $p;
+    for my $root (_read_roots($ctx)) {
+        my $r = skills::util::abs_path($root);
+        next unless defined $r;
+        $r =~ s{/+\z}{};
+        return 1 if index($p, "$r/") == 0;
+    }
+    return 0;
 }
 
 # handoff_lines(doc, ctx, sid) -> (lines, row): `measure <handoff>` (AP-5).

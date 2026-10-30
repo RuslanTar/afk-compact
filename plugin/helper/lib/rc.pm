@@ -25,6 +25,13 @@ sub init {
         $w = ($dr->{ok} && $def ne $R{paths}{watch}) ? $def : undef;
     }
     $R{watch} = $w;
+    # STATE-ROOT (lib/paths.pm legacy): the old default root, read and never written; the unsafe-root
+    # checks apply to it too, and a refused one is skipped (legacy_refused names the reason).
+    my $l = $R{paths}{legacy};
+    if (defined $l) {
+        my $c = roots::check_path($l);
+        if ($c->{ok}) { $R{legacy} = $l } else { $R{legacy_refused} = $c->{reason} }
+    }
     return \%R;
 }
 
@@ -38,6 +45,15 @@ sub watch    { $R{watch} }
 sub sid_dir  { return defined $R{watch} && defined $R{sid} ? "$R{watch}/$R{sid}" : undef }
 sub root_ok  { my ($key) = @_; return $R{roots}{$key}{ok} ? 1 : 0 }
 sub root_reason { my ($key) = @_; return $R{roots}{$key}{reason} }
+# legacy() -> the legacy root to read (STATE-ROOT), or undef; legacy_refused() -> the reason a legacy root
+# that exists was skipped (root-in-planning, root-in-git, root-unchecked), or undef.
+# read_roots() -> the effective root, then the legacy root when there is one: every reader of the
+# store's own files (pins, lineage, records, claims, approval hashes, buckets) looks in both, in
+# this order, so for the same name the effective root's file wins. Writers use root() only.
+sub legacy   { $R{legacy} }
+sub legacy_refused { $R{legacy_refused} }
+sub legacy_path { $R{paths}{legacy} }
+sub read_roots { return grep { defined } ($R{paths}{root}, $R{legacy}) }
 
 sub claude {
     $R{claude} ||= identity::claude_pid();
