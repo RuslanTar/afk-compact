@@ -17,6 +17,7 @@ Subagent: skip step 3; never end a turn while your job runs: wait in the foregro
 [idle-again] A background result's turn got this block at @idle_used_at@; do not redo what that turn did.
 [driver] Measured facts name an Active driver: unless its skill text and any workflow file it loads are fully in your context, run its re-enter command (Skill tool), then step 5; never redo a step shown done, nor an outward or destructive one.
 [handoff] A handoff was saved just before this compaction: @handoff_path@. Where the summary says `see handoff`, read that part there before you act on it.
-[handoff-partial] Compaction cut off the plugin's handoff turn; draft @draft_state@. If present, run @handoff_finish@ once and relay its receipt. Never start a second handoff.
+[handoff-ack] Its report was not sent: that report is only `✓ Handoff saved: @handoff_path@` (+ ` · Needs you: <n> questions (in the handoff)` for open user-owned questions), as your first line; no recap of it; the rest of this block applies.
+[handoff-partial] Compaction cut off the plugin's handoff turn; draft @draft_state@. If present, run @handoff_finish@ once and relay its receipt; `Wrote handoff to: <path>` as only `✓ Handoff saved: <path>` (+ ` · Needs you: <n> questions (in the handoff)` for open user-owned questions), as your first line. Never start a second handoff.
 Measured facts (@measured_at@; saved copy of this summary: @saved_copy@):
 @remeasure@

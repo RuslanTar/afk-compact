@@ -142,8 +142,12 @@ export function onStep(d: Deps, turnId: string, index: number, usage: RequestUsa
   h.firstReadShare = readShare(usage)
 }
 
-/** A handoff published by a handoff turn, until the next main turn or compaction. */
-export type Published = { ht: string; path: string }
+/**
+ * A handoff published by a handoff turn, until the next main turn or compaction; `reported` when
+ * that turn's answer carried the skill's receipt or the path (owner 2026-10-30 07:49: else the
+ * next window's `[handoff-ack]` stands in for the report).
+ */
+export type Published = { ht: string; path: string; reported: boolean }
 
 /** `c` = 1 + `call_cap` + `recipe_cap` from the shared spec (RV-25), or undefined without them. */
 export function maxCalls(): number | undefined {
@@ -469,7 +473,7 @@ export type HandoffEnd =
    * One plugin compaction, exempt from cooldown (and from halt after a last cycle), `[handoff]`
    * when published.
    */
-  | { kind: 'compact'; ht: string; path: string | undefined; stats: Record<string, string | number | null>; exemptHalt: boolean }
+  | { kind: 'compact'; ht: string; path: string | undefined; reported: boolean; stats: Record<string, string | number | null>; exemptHalt: boolean }
 
 /**
  * The handoff turn's `turn.complete`: one `handoff_turn_end` row (MOD-SPEC §2.5 fields) and
@@ -477,7 +481,7 @@ export type HandoffEnd =
  * the same compaction with the full text; `2-nonok`/`thrash` → no compaction, halt stays, the
  * toast says why; aborted or raced → nothing.
  */
-export async function endHandoffTurn(d: Deps, sid: string, reason: string): Promise<HandoffEnd> {
+export async function endHandoffTurn(d: Deps, sid: string, reason: string, answer = ''): Promise<HandoffEnd> {
   const s = d.state
   const h = running(d)
   if (!h || h.ht === null) return { kind: 'normal' }
@@ -507,8 +511,16 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   }
   const path = state.state === 'published' ? state.path : undefined
   const shown = path === undefined ? undefined : await tilde(d, path)
+  // Owner 2026-10-30 07:49 (review of the first build): the report counts as sent when the turn
+  // ended with an answer that carries the receipt or the path; only an unsent one gets the ack.
+  // Review of the second build: after a race the race compaction's block already carried the ack,
+  // so a later native idle compaction does not ask for it a second time. Review of the third build:
+  // a race before the publish (draft staged) carried [handoff-partial], which relays the finish's
+  // receipt as the same one-line ack, so a publish after it counts as reported too.
+  const reported = h.race !== null || (reason === 'answer' && path !== undefined
+    && (answer.includes('Wrote handoff to:') || answer.includes(path) || (shown !== undefined && answer.includes(shown))))
   if (path !== undefined) {
-    s.published = { ht: h.ht, path: shown ?? path }
+    s.published = { ht: h.ht, path: shown ?? path, reported }
     s.publishedSinceHuman = true
     await markIdlePublished(d, sid)
   }
@@ -531,11 +543,11 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string): Prom
   }
   if (reason !== 'answer' || h.race !== null) return { kind: 'done' }
   // The optional turns toast nothing (§9.3: one `handoff_turn_end` row; `/status` counts them).
-  if (halt === undefined) return compact ? { kind: 'compact', ht: h.ht, path: shown, stats, exemptHalt: false } : { kind: 'done' }
+  if (halt === undefined) return compact ? { kind: 'compact', ht: h.ht, path: shown, reported, stats, exemptHalt: false } : { kind: 'done' }
   const why = HALT_REASON_TEXT[haltWins(d, halt)]
   if (compact) {
     if (shown !== undefined) d.toast(`${d.name}: auto-continue paused (${why}); handoff saved: ${shown}`)
-    return { kind: 'compact', ht: h.ht, path: shown, stats, exemptHalt: true }
+    return { kind: 'compact', ht: h.ht, path: shown, reported, stats, exemptHalt: true }
   }
   d.toast(shown !== undefined
     ? `${d.name}: handoff saved: ${shown}; no plugin compaction because ${why}`
@@ -556,11 +568,15 @@ export function racedTurn(d: Deps, trigger: string): HandoffTurn | undefined {
   return h && h.ht !== null && (trigger === 'auto' || trigger === 'precompute') ? h : undefined
 }
 
-/** `[handoff-partial]` runtime for a resume block after a race, or `[handoff]` when published. */
-export type RaceBlock = { published: string } | { draft: boolean; finish: string | null }
+/**
+ * `[handoff-partial]` runtime for a resume block after a race, or `[handoff]` when published;
+ * `ack` adds `[handoff-ack]`: its report was not sent (owner 2026-10-30 07:49).
+ */
+export type RaceBlock = { published: string; ack?: boolean } | { draft: boolean; finish: string | null }
 
 export async function raceBlock(d: Deps, st: HandoffState): Promise<RaceBlock> {
-  if (st.state === 'published') return { published: await tilde(d, st.path) }
+  // A race cut the turn off before its report.
+  if (st.state === 'published') return { published: await tilde(d, st.path), ack: true }
   if (st.state === 'staged') return { draft: st.draft, finish: st.finish }
   return { draft: false, finish: null }
 }

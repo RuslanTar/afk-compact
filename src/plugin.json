@@ -121,8 +121,8 @@
     },
     "warn_ui": {
       "type": "boolean",
-      "title": "Pop-up warnings",
-      "description": "Show the plugin's short pop-up notices in Claude Code when something needs your attention, for example when it pauses automatic work or saves a handoff. Default true; set false for fewer interruptions and check /{{plugin}}:status instead.",
+      "title": "Pop-up warnings and compaction line",
+      "description": "Show the plugin's short pop-up notices in Claude Code when something needs your attention, for example when it pauses automatic work or saves a handoff, and one dim line in the conversation after each compaction saying whether it went well (the model does not see it). Default true; set false for fewer interruptions and check /{{plugin}}:status instead.",
       "default": true
     },
     "watcher": {

@@ -6,7 +6,7 @@
 import type { SessionCompactInput, SessionCompactResult } from 'claude-code'
 import type { Deps, OwnCompact } from './deps'
 import type { ResumePref } from './compact'
-import { afterStep, cacheRows, dispatchExists, guarded, mainText, writeDispatch } from './compact'
+import { afterStep, cacheRows, dispatchExists, guarded, mainText, stepFailedLine, writeDispatch } from './compact'
 import { effective } from './config'
 import { autoContinue, lastCycleEnd, thrashCheck } from './cont'
 import { armDigest } from './digest'
@@ -39,6 +39,8 @@ export type BoundaryOpts = {
   afterHandoff?: {
     ht: string
     path: string | undefined
+    /** The turn's answer carried the report (`endHandoffTurn`): no `[handoff-ack]`. */
+    reported: boolean
     stats: Record<string, string | number | null>
     /** `nativeCompactSeq` when scheduled: a native compaction since then makes it a second one. */
     seq: number
@@ -93,10 +95,10 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   if (isHuman(s.turnOrigin)) s.idleEpisode = { since: endAt, done: false }
   await armIdle(d, sid, endAt)
   await undeliveredCheck(d, sid)
-  const end = await endHandoffTurn(d, sid, t.reason)
+  const end = await endHandoffTurn(d, sid, t.reason, t.answer)
   if (end.kind === 'done') return
   if (end.kind === 'compact') {
-    schedule(d, 500, { exemptHalt: end.exemptHalt, afterHandoff: { ht: end.ht, path: end.path, stats: end.stats, seq } })
+    schedule(d, 500, { exemptHalt: end.exemptHalt, afterHandoff: { ht: end.ht, path: end.path, reported: end.reported, stats: end.stats, seq } })
     return
   }
   const nudged = s.lastCycle
@@ -475,13 +477,14 @@ async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactR
   const msgs = r.messages
   const before = r.tokensBefore
   const after = r.tokensAfter
-  await guarded(d, sid, 'after-step', () => afterStep(d, {
+  const failed = await guarded(d, sid, 'after-step', () => afterStep(d, {
     sid, nonce, agentId: null, midturn: false, resumePref: run.pref, messages: msgs, tokensBefore: before, tokensAfter: after,
-    ...(ah?.path !== undefined ? { handoff: { published: ah.path } } : {}),
+    ...(ah?.path !== undefined ? { handoff: { published: ah.path, ...(ah.reported ? {} : { ack: true }) } } : {}),
     ...(ah ? { stats: ah.stats } : {}),
     ...(run.prodConsent !== undefined ? { prodConsent: run.prodConsent } : {}),
     ...(run.idle ? { idle: true } : {}),
   }))
+  if (failed !== undefined) stepFailedLine(d, failed)
   // IDLE-COMPACT D16: the plugin's own idle compaction arms the away digest as Claude Code's does
   // (compact.ts onCompact): under `"idleCompaction": false` it is the only idle compaction there is.
   // armDigest skips while anything runs; submitDigest skips a headless session.

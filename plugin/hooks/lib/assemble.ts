@@ -21,12 +21,14 @@ import type { AssetName } from './assets.gen'
  * 2026-10-30: the resume block's `idle-off` and `idle-done-off` (owner rule (c), 2026-10-28:
  * `[idle]` and `[idle-done]` under `idle_digest: off`, which ask for one line on the lane state in
  * place of the away digest; in the same exclusive idle group).
+ * 2026-10-30: the resume block's `handoff-ack` (owner 2026-10-30 07:49, "short message after
+ * compaction": a published handoff whose report was not sent gets one ack line; only with `handoff`).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off'
+  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off' | 'handoff-ack'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
