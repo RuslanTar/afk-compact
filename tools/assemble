@@ -120,9 +120,11 @@ FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
 # 2026-10-30: resume-context gains [idle-off] and [idle-done-off] (owner rule (c), 2026-10-28:
 # [idle] and [idle-done] under idle_digest off, one line on the lane state in place of the away
 # digest), last in the list so older golden names stay.
+# 2026-10-31: resume-context gains [auto-mode] (D-22, root: in auto permission mode the classifier
+# blocks a gated outward action a carried approval covers, so the block asks first), last in the list.
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
         "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
-                "idle-done", "idle-off", "idle-done-off"],
+                "idle-done", "idle-off", "idle-done-off", "auto-mode"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
@@ -331,10 +333,12 @@ def combos(asset):
 # leftover walks still run over every combination (combos).
 # Away digest phase 1: [idle-done] likewise only beside a prod line and [idle-again] (4 goldens).
 # Owner rule (c): [idle-off] and [idle-done-off] likewise (4 goldens each).
+# D-22 [auto-mode]: only beside a prod line and [midturn] (4 goldens; goldens.gen.ts stays under 1 MiB).
 GOLDEN_SPARSE = {"res": {"driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
                          "idle-done": {"prod-forbid", "prod-allow", "idle-again"},
                          "idle-off": {"prod-forbid", "prod-allow", "idle-again"},
-                         "idle-done-off": {"prod-forbid", "prod-allow", "idle-again"}}}
+                         "idle-done-off": {"prod-forbid", "prod-allow", "idle-again"},
+                         "auto-mode": {"prod-forbid", "prod-allow", "midturn"}}}
 
 
 def golden_combos(asset):
@@ -663,7 +667,10 @@ IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff"], ["idle",
 # checked again with it.
 PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff"],
                  ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS
-for base in PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b)):
+# D-22 [auto-mode] can join any block too (the mod saw auto permission mode), so every row is
+# checked again with it.
+PROTOCOL_ROWS = PROTOCOL_ROWS + tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
+for base in PROTOCOL_ROWS + tuple(b + ["auto-mode"] for b in PROTOCOL_ROWS):
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
@@ -672,7 +679,8 @@ TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["i
               ["idle-halt", "idle-again", "nonok", "handoff-partial"], ["idle-done", "nonok", "handoff-partial"],
               ["idle-done", "idle-again", "nonok", "handoff-partial"], ["idle-off", "idle-again", "nonok", "handoff-partial"],
               ["idle-done-off", "idle-again", "nonok", "handoff-partial"])
-for base in TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b)):
+TOTAL_ROWS = TOTAL_ROWS + tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
+for base in TOTAL_ROWS + tuple(b + ["auto-mode"] for b in TOTAL_ROWS):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")

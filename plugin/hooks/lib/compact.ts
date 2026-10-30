@@ -442,6 +442,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   const blockArgs: BlockArgs = {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
+    // D-22: the mode this compaction saw goes with the block (a restored block reads it).
+    ...(s.modeSeen?.mode === 'auto' ? { autoMode: true } : {}),
     // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
     ...(a.idle === true ? { idle: true, halt: s.halt.active, ...(facts !== undefined ? { lane: facts } : {}) } : {}),
   }

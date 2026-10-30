@@ -1650,6 +1650,13 @@ AT_TEXT_NEEDS = [
     ("AT-AP-06", RESUME_REL, r"^2\. Step 1 is an explicit gate", "no carried approval covers it"),
     ("AT-AP-09", RESUME_CTX_REL, r"^(?:\[[a-z-]+\] )?4\. ", "protected-branch push"),
     ("AT-HC-04", HEAL_REL, r"^\*\*Restart gate\*\*", "`run-source: handoff`"),
+    # D-22 (root 2026-10-31, the 0.1.2 classifier probe): in auto permission mode a carried approval
+    # does not pass the classifier on a gated outward action; Rule 3 and the block's [auto-mode]
+    # line ask first, and the user's answer is the fresh approval.
+    ("D-22", RESUME_REL, r"^3\. \*\*Approvals", "In auto permission mode it never covers an outward action the classifier gates"),
+    ("D-22", RESUME_REL, r"^3\. \*\*Approvals", "the answer is the fresh approval"),
+    ("D-22", RESUME_CTX_REL, r"^\[auto-mode\] ", "approval covers, so ask first, quoting the approval and offering `! <cmd>`"),
+    ("D-22", RESUME_CTX_REL, r"^\[auto-mode\] ", "the answer is the fresh approval"),
 ]
 AT_TEXT_BANNED = (("AT-HC-04", HEAL_REL, "never run on its own"),)
 # Owner rule (c), 2026-10-28: under idle_digest off no line asks for the away digest. Rows: (id,

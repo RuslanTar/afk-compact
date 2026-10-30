@@ -308,3 +308,47 @@ for (const ageS of [60, 700]) {
     expect(block).toContain('production or self-modifying actions')
   })
 }
+
+/** Raise a classic hook event the way the engine does (the mod's observe-only D10 hooks). */
+async function classic($: unknown, ev: 'Stop' | 'UserPromptSubmit', e: Record<string, unknown>): Promise<void> {
+  await ($ as { classic: Record<string, (e: unknown) => Promise<unknown>> }).classic[ev]?.(e)
+}
+
+const AUTO_LINE = "Auto mode: its classifier blocks a push, destructive git, external write or deploy that step 4's approval covers"
+
+// D-22 (root 2026-10-31, the 0.1.2 classifier probe): in auto permission mode a carried approval
+// does not pass the classifier, so the block keeps [auto-mode] (ask first); the mode is the newest
+// main hook input's (restart.ts noteMode), and the record keeps it for a block restored later.
+for (const mode of ['auto', 'default'] as const) {
+  test(`D-22: a compaction after a main prompt in ${mode} mode ${mode === 'auto' ? 'keeps' : 'has no'} [auto-mode] (block and record)`, async ($, on) => {
+    const w = new World().install(on)
+    await w.start($)
+    await classic($, 'UserPromptSubmit', { prompt: 'x', permission_mode: mode })
+    await w.settle()
+    await w.turnStart($)
+    await raiseCompact($, { trigger: 'auto' })
+    // The record before delivery (delivery settles it).
+    expect(json(w, PENDING)).toMatchObject({ state: 'pending' })
+    expect((json(w, PENDING)?.args as Record<string, unknown> | undefined)?.autoMode).toBe(mode === 'auto' ? true : undefined)
+    const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+    expect(block).toContain('Approvals: act on one the summary records')
+    expect(block.includes(AUTO_LINE)).toBe(mode === 'auto')
+  })
+}
+
+for (const seen of [undefined, 'acceptEdits'] as const) {
+  test(`D-22: a restored block recorded in auto mode ${seen === undefined ? 'keeps [auto-mode] while this load has seen no main mode' : 'drops [auto-mode] once this load saw ' + seen}`, async ($, on) => {
+    const w = new World()
+    w.files.set(ARMED, seededWith(60, { autoMode: true }))
+    w.install(on)
+    await w.start($)
+    if (seen !== undefined) {
+      await classic($, 'UserPromptSubmit', { prompt: 'x', permission_mode: seen })
+      await w.settle()
+    }
+    await w.userTurn($)
+    const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+    expect(block).toContain('Approvals: act on one the summary records')
+    expect(block.includes(AUTO_LINE)).toBe(seen === undefined)
+  })
+}

@@ -2,6 +2,7 @@ package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
 # resume-context.txt with [midturn]/[nonok], exactly one of [prod-forbid]/[prod-allow], and
 # [driver] when the re-measure names this session's Active driver (lib/gsd.pm; owner 2026-10-26),
+# [auto-mode] when the newest main Stop ran in auto permission mode (D-22),
 # @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total soft
 # 6,500 chars (compaction-rem-6; soft since the owner overturned ratify xxxxxxxx#R3 on 2026-10-23,
 # SPEC-DELTAS RP-2): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
@@ -33,6 +34,10 @@ sub build {
     # Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver
     # (never with [idle-halt], which this classic path never sets).
     push @tags, 'driver' if $re =~ /^Active driver: /m;
+    # D-22 (root 2026-10-31): in auto permission mode the classifier blocks a gated outward action
+    # a carried approval covers, so [auto-mode] asks first. The mode is the newest main Stop's,
+    # which on_Stop already keeps (restart::note_stop, D10); no new probe.
+    push @tags, 'auto-mode' if auto_mode(rc::sid_dir());
     my $max = 3000;
     my $text;
     for (1 .. 12) {
@@ -47,6 +52,13 @@ sub build {
     }
     rc::emit('resume_block_over_soft', [nonce => $a{nonce}, chars => length($text)]) if length($text) > $SOFT_CHARS;
     return $text;
+}
+
+# auto_mode(sid_dir) -> 1 when the newest main Stop of this session ran in auto permission mode.
+sub auto_mode {
+    my ($d) = @_;
+    my $m = eval { restart::read_mode($d)->{stop_mode} };
+    return (defined $m && $m eq 'auto') ? 1 : 0;
 }
 
 sub pending_line {

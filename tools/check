@@ -804,6 +804,9 @@ def probes(name):
         edit(d, "plugin/assets/resume-context.txt", "Else start nothing; say in one line that the lane is", "Else start nothing; print the away digest; say in one line that the lane is")
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "only when it carries no real risk", "freely")
         append(d, "plugin/skills/resume/references/self-heal.md", "\nA recipe from the handoff alone is never run on its own.\n")
+        # D-22: Rule 3's auto-mode sentence gone, and the [auto-mode] line without the fresh approval.
+        edit(d, "plugin/skills/resume/SKILL.md", "In auto permission mode it never covers an outward action the classifier gates (push, destructive git, external write, deploy): ask, quoting it; the answer is the fresh approval. ", "")
+        edit(d, "plugin/assets/resume-context.txt", "; the answer is the fresh approval.", ".")
 
     def model_pin(d):
         """MG-1 / AT-MG-01: a compact call that pins a model, and a userConfig key named for one."""
@@ -1010,7 +1013,10 @@ def probes(name):
           r"^GATE approvals plugin/assets/resume-context\.txt: AT-IB-01: a line matching .* lacks 'explicit gate'$",
           r"^GATE approvals plugin/assets/resume-context\.txt:\d+: IDLE-DIGEST-OFF banned: a line matching .* holds 'away digest'$",
           r"^GATE approvals plugin/skills/handoff/references/handoff-template\.md: AT-SR-04: a line matching .* lacks 'only when it carries no real risk'$",
-          r"^GATE approvals plugin/skills/resume/references/self-heal\.md:\d+: AT-HC-04 banned: 'never run on its own'$"], None),
+          r"^GATE approvals plugin/skills/resume/references/self-heal\.md:\d+: AT-HC-04 banned: 'never run on its own'$",
+          r"^GATE approvals plugin/skills/resume/SKILL\.md: D-22: a line matching .* lacks 'In auto permission mode it never covers an outward action the classifier gates'$",
+          r"^GATE approvals plugin/skills/resume/SKILL\.md: D-22: a line matching .* lacks 'the answer is the fresh approval'$",
+          r"^GATE approvals plugin/assets/resume-context\.txt: D-22: a line matching .* lacks 'the answer is the fresh approval'$"], None),
         ("model-pin", "MG-1", gates_only("model-pin"), model_pin,
          [r"^GATE model-pin plugin/hooks/lib/deps\.ts:\d+: AT-MG-01 key: \$session\.compact\(…\) passes 'model'",
           r"^GATE model-pin plugin/hooks/lib/deps\.ts:\d+: AT-MG-01 literal: \$prompt\.submit\(…\) argument is not an object literal$",
