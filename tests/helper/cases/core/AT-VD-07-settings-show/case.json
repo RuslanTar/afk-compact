@@ -1,0 +1,162 @@
+{
+ "id": "AT-VD-07 (visible defaults: settings show)",
+ "owner": "core",
+ "note": "0.1.2 visible defaults (spec Behaviour 3): `settings show` is read-only and prints, after a header line naming the settings file and the plugin's options key, every one of the 43 keys in @KEYS order, one line each: `<key> <value> (<source>; default <default>)`, or `<key> <value> (default)` for a default the plugin fills in; a value set equal to its default still names its source (`triggers true (your settings.json; default true)`), while the status block counts it at its default by the value; a path's control characters print as spaces; then the warnings and notes and the user-run reset line. Never the ticket pattern's or a list's text. The settings file is not written.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "cooldown_ms": 20000,
+         "ticket_pattern": "ZZTICKET-[0-9]+",
+         "repo_roots": "$TMP/zzroot;$TMP/zzroot2",
+         "triggers": false
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "snapshot",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "snapshot": "orig"
+     }
+    ]
+   }
+  },
+  {
+   "name": "every key in order, value, source and default",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\A[^\\n]*\\n^handoff_root [^\\n]*\\n^log_dir [^\\n]*\\n^disposable_root [^\\n]*\\n^disposable_keep_days [^\\n]*\\n^evidence_quota_mb [^\\n]*\\n^queue_cmd [^\\n]*\\n^triggers [^\\n]*\\n^compact_target_tokens [^\\n]*\\n^compact_soft_max_tokens [^\\n]*\\n^native_window_tokens [^\\n]*\\n^boundary_delay_ms [^\\n]*\\n^cooldown_ms [^\\n]*\\n^max_auto_continues_per_hour [^\\n]*\\n^measured_block [^\\n]*\\n^auto_evidence [^\\n]*\\n^warn_ui [^\\n]*\\n^watcher [^\\n]*\\n^stall_min [^\\n]*\\n^cache_ttl_s [^\\n]*\\n^otel_log_path [^\\n]*\\n^deny_class_patterns [^\\n]*\\n^handoff_turn [^\\n]*\\n^handoff_turn_max_tokens [^\\n]*\\n^repo_roots [^\\n]*\\n^relaunch_auto [^\\n]*\\n^relaunch_allow [^\\n]*\\n^relaunch_quiet_s [^\\n]*\\n^unattended_prod_reads [^\\n]*\\n^prod_patterns [^\\n]*\\n^precompact_turn [^\\n]*\\n^idle_handoff_turn [^\\n]*\\n^idle_handoff_min_tokens [^\\n]*\\n^idle_compact [^\\n]*\\n^idle_digest [^\\n]*\\n^ticket_pattern [^\\n]*\\n^secret_extra_rules [^\\n]*\\n^resume_proceed [^\\n]*\\n^handoff_reuse_window_min [^\\n]*\\n^evidence_total_max_mb [^\\n]*\\n^watch_quota_mb [^\\n]*\\n^protected_branches [^\\n]*\\n^driver_skills [^\\n]*\\n^restart_on_update [^\\n]*\\n",
+     "\\Asettings file: ~/\\.claude/settings\\.json · plugin options under \"$BRAND@m\"$",
+     "^handoff_root ~/\\.claude/handoffs \\(default\\)$",
+     "^log_dir empty \\(default\\)$",
+     "^cooldown_ms 20000 \\(your settings\\.json; default 30000\\)$",
+     "^triggers false \\(your settings\\.json; default true\\)$",
+     "^ticket_pattern custom \\(your settings\\.json; default built-in\\)$",
+     "^repo_roots 2 entries \\(your settings\\.json; default empty\\)$",
+     "^watcher shadow \\(default\\)$",
+     "^compact_target_tokens 400000 \\(default\\)$",
+     "^reset \\(a dry run unless you add --apply; type it yourself\\): ! \"/[^\"]+/scripts/$BRAND-store\" settings reset <key>\\.\\.\\.$"
+    ],
+    "stdout_lacks": [
+     "ZZTICKET",
+     "zzroot"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig",
+      "same_mtime_as": "orig"
+     }
+    ],
+    "absent": [
+     "$WATCH/settings-backups"
+    ]
+   }
+  },
+  {
+   "name": "no settings file",
+   "setup": [
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$HOME/.claude/settings.old"
+    }
+   ],
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings file: ~/\\.claude/settings\\.json \\(none\\) · no plugin options saved$",
+     "^cooldown_ms 30000 \\(default\\)$"
+    ]
+   }
+  },
+  {
+   "name": "a saved value equal to its default still names its source; a path's control characters print as spaces",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "triggers": true,
+         "compact_target_tokens": 400000,
+         "watcher": "shadow",
+         "otel_log_path": "$TMP/ot\u0007el.log"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^triggers true \\(your settings\\.json; default true\\)$",
+     "^compact_target_tokens 400000 \\(your settings\\.json; default 400000\\)$",
+     "^watcher shadow \\(your settings\\.json; default shadow\\)$",
+     "^otel_log_path [^\\n]*/ot el\\.log \\(your settings\\.json; default empty\\)$",
+     "^warn_ui true \\(default\\)$",
+     "^cooldown_ms 30000 \\(default\\)$"
+    ],
+    "stdout_lacks": [
+     "\u0007"
+    ]
+   }
+  },
+  {
+   "name": "the status block counts those by value: at their default",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings values: 1 not at default, 42 at default$",
+     "^  otel_log_path [^\\n]*/ot el\\.log \\(your settings\\.json; default empty\\)$",
+     "^  at default: [^\\n]*triggers=true"
+    ],
+    "stdout_lacks": [
+     "^  triggers ",
+     "^  compact_target_tokens ",
+     "\u0007"
+    ]
+   }
+  }
+ ]
+}

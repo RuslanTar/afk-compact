@@ -1,0 +1,22 @@
+{
+ "id": "AT-VD-03 (visible defaults: the safe-value label under a settings folder that is not the account's)",
+ "owner": "core",
+ "note": "0.1.2 visible defaults (spec Behaviour 1, AT-VD-03): with a settings folder that is not the account's ~/.claude (CR-F34), each consent key takes its safe value; the settings-values block labels it `safe value` beside the existing note. A safe value equal to the default (repo_roots empty) is at its default, since the block decides by the value alone, and the `safe value used` note still names it. This case runs without the runner's consent seam, as CR-F34 does.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "consent_home": "account",
+ "steps": [
+  {"setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"relaunch_auto": "shadow", "cooldown_ms": 20000}}}}}
+  ]},
+  {"name": "consent keys: safe value; other keys still from the file",
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^  relaunch_auto off \\(safe value; default on\\)$",
+                    "^  at default: .*repo_roots=empty",
+                    "^  cooldown_ms 20000 \\(your settings\\.json; default 30000\\)$",
+                    "^note: relaunch_auto: HOME is not the account home, safe value used$",
+                    "^note: repo_roots: HOME is not the account home, safe value used$"],
+     "stdout_lacks": ["^  repo_roots "]}}
+ ]
+}

@@ -20,6 +20,7 @@ Run `<store> status --sid '${CLAUDE_SESSION_ID}'` and relay its lines as printed
 - policy flags, handoff mode (private, or repo with its export folder and how to accept a repository) and the automatic-relaunch state;
 - `unattended_prod_reads: … · production patterns: …`, then `queue: off|on|degraded (<why>)`;
 - `settings: resume_proceed … · handoff_reuse_window_min … · ticket_pattern … · secret_extra_rules … · evidence_total_max_mb … · watch_quota_mb …`;
+- `settings values: <n> not at default, <n> at default`: one line per value not at its default, with its source and default, then `at default:` lines; `warning: <key>: saved empty, …` ends with a `! <store> settings reset <key> --apply` line, which edits the user's settings file: relay it, never run it (`<store> settings show` only reads, and lists every value);
 - `kept mismatch stashes: <n>` with their paths.
 
 Repo mode is set up by the user, never by you: `! <store> project status --cwd <repo>`, then `! <store> project init --cwd <repo>` (writes the declaration, README and `.gitignore`; commits nothing), then adding the repository to `repo_roots` in `/config`. `project copy` is a dry run unless the user adds `--apply`. With `--from repo` it never imports an export that has a HARD secret hit: it prints `skip secret <rel> (rules <ids>)`, counted under `skip` in `TOTAL`.

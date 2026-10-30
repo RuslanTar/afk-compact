@@ -246,27 +246,47 @@ sub former_name_keys {
 
 # Returns (options hashref or undef, note) from the user's settings file.
 sub _settings_file_options {
+    my $o = options_source();
+    return ($o->{ambiguous} ? (undef, 'ambiguous') : ($o->{options}, $o->{key}));
+}
+
+# options_key(pluginConfigs hash) -> (key or undef, [candidates]): the plugin's key in
+# pluginConfigs (E-14): `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and not under the config
+# dir's plugins/; otherwise the single key whose part before `@` is the brand. Several such keys:
+# (undef, [them]), ambiguous.
+sub options_key {
+    my ($pc) = @_;
     my $brand = ctx::brand();
-    my $file = config_dir() . '/settings.json';
-    my $raw = util::read_file($file);
-    return (undef, undef) unless defined $raw;
-    my $s = eval { jsonc::decode($raw) };
-    return (undef, undef) unless ref $s eq 'HASH' && ref $s->{pluginConfigs} eq 'HASH';
-    my $pc = $s->{pluginConfigs};
     my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
     if (defined $pr && $pr ne '') {
         my $plugins = util::clean_path(config_dir() . '/plugins');
         my $p = util::clean_path($pr);
-        if (index("$p/", "$plugins/") != 0) {
-            my $k = "$brand\@inline";
-            return (ref $pc->{$k} eq 'HASH' ? $pc->{$k}{options} : undef, $k);
-        }
+        return ("$brand\@inline", ["$brand\@inline"]) if index("$p/", "$plugins/") != 0;
     }
-    my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %$pc;
-    return (undef, undef) unless @cand;
-    return (undef, 'ambiguous') if @cand > 1;
-    my $opts = ref $pc->{ $cand[0] } eq 'HASH' ? $pc->{ $cand[0] }{options} : undef;
-    return (ref $opts eq 'HASH' ? $opts : undef, $cand[0]);
+    my @cand = grep { (split /\@/, $_, 2)[0] eq $brand } sort keys %{ ref $pc eq 'HASH' ? $pc : {} };
+    return (undef, \@cand) if @cand != 1;
+    return ($cand[0], \@cand);
+}
+
+# options_source() -> {file, exists, json (0|1: decodes as plain JSON), key, candidates,
+#   ambiguous, options (hash or undef)}: where the plugin's saved options are, read-only.
+sub options_source {
+    my $file = config_dir() . '/settings.json';
+    my %o = (file => $file, exists => (-e util::fsb($file) ? 1 : 0), json => 0, key => undef, candidates => [], ambiguous => 0);
+    my $raw = util::read_file($file);
+    return \%o unless defined $raw;
+    my $s = eval { jsonc::decode($raw) };
+    return \%o unless ref $s eq 'HASH';
+    $o{json} = 1;
+    return \%o unless ref $s->{pluginConfigs} eq 'HASH';
+    my $pc = $s->{pluginConfigs};
+    my ($k, $cand) = options_key($pc);
+    $o{candidates} = $cand;
+    if (!defined $k) { $o{ambiguous} = @$cand > 1 ? 1 : 0; return \%o }
+    $o{key} = $k;
+    my $opts = ref $pc->{$k} eq 'HASH' ? $pc->{$k}{options} : undef;
+    $o{options} = $opts if ref $opts eq 'HASH';
+    return \%o;
 }
 
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
@@ -792,6 +812,121 @@ sub export_view {
         push @kv, $key => $out;
     }
     return jsonc::obj(@kv);
+}
+
+# ---------------------------------------------------------------- visible defaults (0.1.2)
+# The ten keys `settings reset --all` leaves (OPEN-2 of the visible-defaults spec, its
+# recommendation): the six consent keys, the three protective lists and resume_proceed. Named
+# on its own one is reset, with what its default does (%RESET_EFFECT).
+our %RESET_KEEP = map { $_ => 1 } (keys %FILE_ONLY, keys %NO_FLAG, 'resume_proceed');
+our %RESET_EFFECT = (
+    repo_roots => 'its default accepts no repository for exports', relaunch_auto => 'its default on lets a lost background job start again by itself (looser than now)',
+    relaunch_allow => 'its default allows no command to start again by itself', unattended_prod_reads => 'its default forbid asks before production reads',
+    queue_cmd => 'its default runs no queue program', restart_on_update => 'its default off restarts nothing on an update',
+    prod_patterns => 'its default leaves only the built-in production rule (looser than now)',
+    secret_extra_rules => 'its default leaves only the built-in secret rules (looser than now)',
+    protected_branches => 'its default leaves only the built-in protected branches (looser than now)',
+    resume_proceed => 'its default auto lets a resume you start go on after its report (looser than now)',
+);
+# Source labels (spec Behaviour 1).
+our %SOURCE_LABEL = (settings => 'your settings.json', default => 'default', env => 'plugin option', flag => 'flag', safe => 'safe value');
+
+sub manifest_default {
+    my ($key) = @_;
+    my $uc = ctx::user_config();
+    return $uc->{$key}{default} if ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default};
+    my ($row) = grep { $_->[0] eq $key } @KEYS;
+    return $row ? $row->[2] : undef;
+}
+
+# show_value(key, value) -> the value as /status and `settings show` print it: true/false; a
+# number; a path (~ for the home) or `empty`; a list key's entry count (never its entries);
+# ticket_pattern built-in, custom or invalid (never the pattern); any other text trimmed and cut
+# to 40 characters.
+sub show_value {
+    my ($key, $v) = @_;
+    my $t = $TYPE{$key} // 'str';
+    my $class = $EXPORT{$key} // '';
+    if ($t eq 'bool') { return (ref $v ? ($$v ? 1 : 0) : _coerce($key, $v // 0)) ? 'true' : 'false' }
+    if ($key eq 'ticket_pattern') {
+        return 'built-in' if _unset($v) || ref $v || $v eq $TICKET_DEFAULT;
+        return pattern_ok($v, 200) ? 'custom' : 'invalid';
+    }
+    if ($class eq 'list') {
+        my $n = scalar(my @e = list(ref $v ? undef : $v));
+        return $n == 0 ? 'empty' : $n == 1 ? '1 entry' : "$n entries";
+    }
+    return 'empty' if _unset($v) || ref $v;
+    if ($t eq 'dir' || $t eq 'file') {
+        my $p = util::text(util::abbrev(util::expand_tilde(util::to_bytes("$v"))));
+        $p =~ s/[\x00-\x1f\x7f]/ /g;
+        return $p;
+    }
+    if ($t eq 'num') { return "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/ ? 0 + $v : 'not a number' }
+    my $s = trim(util::text("$v"));
+    $s =~ s/[\x00-\x1f\x7f]/ /g;
+    return length($s) > 40 ? substr($s, 0, 39) . '…' : $s;
+}
+
+# effective_rows([resolved]) -> [{key, value, source, label, default, at_default, clamped_from,
+#   saved (present in the saved options), saved_empty}] in @KEYS order (spec Behaviour 1, 3):
+# the value each key has for the plugin, where it comes from and the manifest default, all as
+# show_value prints them. A number key with min/max says what it was clamped from.
+sub effective_rows {
+    my ($r) = @_;
+    $r //= _current();
+    my $v = $r->{values} || {};
+    my $src = $r->{source} || {};
+    my $o = options_source();
+    my $saved = !$o->{ambiguous} && ref $o->{options} eq 'HASH' ? $o->{options} : {};
+    my @rows;
+    for my $k (@KEYS) {
+        my $key = $k->[0];
+        my $s = $src->{$key} // 'default';
+        my $val = $v->{$key};
+        my ($shown, $from);
+        if ($TYPE{$key} eq 'num' && defined $val) {
+            my ($used, $cl) = num_clamped($key, $r);
+            ($shown, $from) = (defined $used ? $used : show_value($key, $val), $cl ? 0 + $val : undef);
+        } else {
+            $shown = show_value($key, $val);
+        }
+        my $def = show_value($key, manifest_default($key));
+        push @rows, { key => $key, value => $shown, source => $s, label => $SOURCE_LABEL{$s} // $s, default => $def,
+                      # by the value alone (spec Behaviour 1): a value saved equal to its default
+                      # (the configure dialog saves every on/off key) is at its default
+                      at_default => ($shown eq $def && !defined $from) ? 1 : 0, clamped_from => $from,
+                      saved => exists $saved->{$key} ? 1 : 0,
+                      saved_empty => (exists $saved->{$key} && defined $saved->{$key} && !ref $saved->{$key} && $saved->{$key} eq '') ? 1 : 0 };
+    }
+    return \@rows;
+}
+
+# row_text(row) -> `<value>[, clamped from N] (<source>; default <default>)`, or `(default)` for
+# a default the plugin fills in. A value set equal to its default still names where it is set
+# (`triggers true (your settings.json; default true)`, spec Behaviour 3), as `settings reset`
+# lists it; only the status block's grouping and count go by the value alone (at_default).
+sub row_text {
+    my ($w) = @_;
+    my $v = $w->{value} . (defined $w->{clamped_from} ? ", clamped from $w->{clamped_from}" : '');
+    return $w->{at_default} && $w->{source} eq 'default' ? "$v (default)" : "$v ($w->{label}; default $w->{default})";
+}
+
+# value_warnings(rows, store word) -> the warning lines of Behaviour 2 (a saved "" per key) and
+# of an ambiguous options key.
+sub value_warnings {
+    my ($rows, $store) = @_;
+    my @l;
+    my $o = options_source();
+    if ($o->{ambiguous}) {
+        push @l, 'warning: several plugin option keys in your settings.json (' . join(', ', map { '"' . util::text($_) . '"' } @{ $o->{candidates} })
+                 . '): every key is at its default; remove the one no longer used';
+    }
+    for my $w (grep { $_->{saved_empty} } @$rows) {
+        push @l, "warning: $w->{key}: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with "
+                 . (defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
+    }
+    return @l;
 }
 
 # Pull settings flags out of a parsed-flag hash (keys as given on the command line).

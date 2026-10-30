@@ -1,0 +1,22 @@
+{
+ "id": "AT-VD-02 (visible defaults: the settings-values block without a session id)",
+ "owner": "core",
+ "note": "0.1.2 visible defaults (spec Behaviour 1): the settings-values block is store-wide, so /status shows it on the no-session-id path too (CW-1), and the user-run lines name the reset command there as well. Nothing is written.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {"setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"watcher": "off"}}}}}
+  ]},
+  {"name": "empty --sid: the block and the reset line",
+   "argv": ["status", "--sid", "", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^session: unknown \\(no session id\\); ",
+                    "^settings values: 1 not at default, 42 at default$",
+                    "^  watcher off \\(your settings\\.json; default shadow\\)$",
+                    "^  at default: handoff_root=",
+                    "^  ! \"/[^\"]+/scripts/$BRAND-store\" settings reset <key> --apply$"],
+     "absent": ["$WATCH/unknown", "$WATCH/settings-backups"]}}
+ ]
+}
