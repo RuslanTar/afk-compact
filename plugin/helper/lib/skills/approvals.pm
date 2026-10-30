@@ -276,8 +276,8 @@ sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{bloc
 # step asks.
 # A denied call covers an approval when, in the approval's action and targets,
 #   - a distinctive token of the call's input (a word with a digit or a `/ . : # ! @ _ -` inside:
-#     a ticket key, a branch with a slash, a path or its file name, a URL; of a Bash command
-#     only its outward step, see _deny_bash) stands whole, or
+#     a ticket key, a branch with a slash, a path or its file name, the host of `user@host`, a
+#     URL; of a Bash command only its outward step, see _deny_bash) stands whole, or
 #   - a service word of an MCP tool's server or name (not one of %DENY_STOP) stands as a word
 #     (`mcp__…Atlassian…__editJiraIssue` names `atlassian`, `jira`), or
 #   - the call names no such token and shares an outward class with the approval (a denied bare
@@ -289,64 +289,115 @@ our %DENY_STOP = map { $_ => 1 } qw(mcp plugin claude server api app get set edi
 my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 
 # _deny_bash(command) -> token text: a refused Bash command's words that name its outward step
-# (reviewer info 3). Heredoc bodies are dropped, and quoted text holding a space (a
-# commit message, a title) is masked; the rest splits at `&&`, `||`, `;`, `|`, `&` and line ends,
-# and tokens come only from the parts that are outward (an outward class or action word), and
+# (reviewer info 3). Heredoc bodies are dropped (except the body of a heredoc a shell runs,
+# below), and quoted text holding a space (a commit message, a title) is masked; the rest splits
+# at `&&`, `||`, `;`, `|`, `&` and line ends, and tokens come only from the parts that are outward (an outward class or action word), and
 # from a quoted command a shell runs (`bash -c "git push origin feat/x"`, `ssh host "kubectl
 # delete pod web-1"`, `eval "…"`; review 3 finding 1) when it is outward on its own, read the
 # same way. A quoted message is never read (review 4 finding 1): when the command is outward only
 # inside such quotes it names no token and covers by class; when it is not outward at all, tokens
 # come from every part. A refused `git commit -m "$(cat <<EOF … EOF)" && git push` names no
 # token, so it covers a push approval by class.
+# The runner's own words count with the command it runs (review 5 finding 1): the part of a
+# shell-run quote (`ssh prod-1 "kubectl delete pod web-1"` names `prod-1`, `docker exec api-3 sh
+# -c "…"` names `api-3`) and the runner of a heredoc a shell runs (review 5 finding 2: `bash
+# <<EOF`, `ssh prod-1 <<EOF`, `cat <<EOF | bash`; its body is read as the command, the same way;
+# a heredoc fed to anything else, or to `bash -c …`, stays dropped).
 # A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`;
-# review 3 finding 3).
-my $DENY_HEREDOC_SCAN = qr/
-    \$?\(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\)
-  | "(?:[^"\\]|\\.)*"
-  | '[^']*'
+# review 3 finding 3); quoted text may span lines, so a `<<` on a later line of a quoted message
+# starts none (review 5 finding 3).
+my $DENY_HEREDOC_SCAN = qr/\G(?:
+    ( \$?\(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\)
+    | "(?:[^"\\]|\\.)*"
+    | '[^']*'
+    | \\. )
   | (?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))
-/x;
+  | (\n)
+  | (&&|\|\||[;|&])
+  | (.)
+)/xs;
 # The text before a quoted command a shell runs, within its part: `[path/]sh -c`, `bash -lc`,
-# `zsh -c`, `ssh [options] host`, `eval`.
-my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:-\w+\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
+# `zsh -c`, `sh -o pipefail -c`, `bash --norc -c`, `ssh [options] host`, `eval`.
+my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:(?:[-+]\w*o\s+\w+|--?[\w-]+)\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
+# The text before a heredoc a shell runs, within its part: `[path/]bash`, `sh -s`, `ssh [options]
+# host [command]`; not a shell with `-c` (the heredoc then feeds that command).
+my $DENY_RUNNER = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh(?:\s+(?:[-+][abd-zA-Z0-9]*o\s+\w+|--[\w-]*|-[abd-zA-Z0-9]+))*|(?:\S*/)?ssh\s.*?)\s*\z}s;
 
-sub _deny_bash {
-    my ($cmd) = @_;
-    my @lines = split /\n/, $cmd, -1;
-    my @keep;
-    while (@lines) {
-        my $l = shift @lines;
-        push @keep, $l;
-        my @tags;
-        while ($l =~ /$DENY_HEREDOC_SCAN/g) { push @tags, [ $2 // $3 // $4, $1 ] if defined($2 // $3 // $4) }
-        for my $tg (@tags) {
-            my ($tag, $dash) = @$tg;
-            my ($k) = grep { ($dash ? $lines[$_] =~ s/\A\t+//r : $lines[$_]) eq $tag } 0 .. $#lines;
-            # No end line: the rest is its body, as in the shell (a cut command included).
-            splice(@lines, 0, defined $k ? $k + 1 : scalar @lines);
-            last unless defined $k;
-        }
-    }
-    my $whole = join "\n", @keep;
-    # Quoted text holding a space is masked by a numbered mark, kept aside for the shell check.
+# _deny_mask(text) -> (masked text, [quoted texts]): quoted text holding a space becomes a
+# numbered mark; quoted text with none stays, unquoted.
+sub _deny_mask {
+    my ($text) = @_;
     my @q;
-    (my $s = $whole) =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{
+    $text =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{
         my ($d, $sq) = ($1, $2);
         my $q = defined $d ? $d =~ s/\\(.)/$1/gsr : $sq;
         $q =~ /\s/ ? do { push @q, $q; " \x01" . $#q . "\x01 " } : " $q ";
     }ge;
+    return ($text, \@q);
+}
+
+sub _deny_bash {
+    my ($cmd) = @_;
+    # Drop heredoc bodies; keep the body and runner of each heredoc a shell runs.
+    my ($whole, $part, @tags, @run) = ('', '');
+    pos($cmd) = 0;
+    while ($cmd =~ /$DENY_HEREDOC_SCAN/gc) {
+        my $hit = substr($cmd, $-[0], $+[0] - $-[0]);
+        if (defined($3 // $4 // $5)) {
+            push @tags, [ $3 // $4 // $5, $2, $part, length($whole) + length($hit) ];
+        } elsif (defined $6) {
+            my $at = pos $cmd;
+            for my $tg (@tags) {
+                my ($tag, $dash, $pre, $end) = @$tg;
+                my @lines = split /\n/, substr($cmd, $at), -1;
+                my ($k) = grep { ($dash ? $lines[$_] =~ s/\A\t+//r : $lines[$_]) eq $tag } 0 .. $#lines;
+                # No end line: the rest is its body, as in the shell (a cut command included).
+                my @body = defined $k ? @lines[0 .. $k - 1] : @lines;
+                $at = defined $k ? $at + length(join "\n", @lines[0 .. $k]) + 1 : length $cmd;
+                $at = length $cmd if $at > length $cmd;
+                # The shell is the heredoc's own command or the next step of its pipe.
+                my ($next) = substr($whole, $end) =~ /\A[^|&;]*\|(?!\|)([^|&;]*)/;
+                my $runner = $pre =~ $DENY_RUNNER ? $pre
+                    : defined $next && $next =~ $DENY_RUNNER ? $next : undef;
+                push @run, [ $runner, join "\n", @body ] if defined $runner;
+            }
+            @tags = ();
+            $part = '';
+            $whole .= $hit;
+            pos($cmd) = $at;
+            next;
+        } elsif (defined $7) {
+            $whole .= $hit;
+            $part = '';
+            next;
+        }
+        $whole .= $hit;
+        $part .= $hit;
+    }
+    my ($s, $q) = _deny_mask($whole);
+    my @q = @$q;
     my (@parts, @out);
     for my $p (grep { /\S/ } split /&&|\|\||[;|&\n]/, $s) {
         (my $bare = $p) =~ s/\x01\d+\x01/ /g;
         push @parts, $bare;
-        push @out, $bare if _deny_outward($bare);
-        my @marks;
+        my $outward = _deny_outward($bare);
+        push @out, $bare if $outward;
+        my (@marks, $ran);
         while ($p =~ /\x01(\d+)\x01/g) { push @marks, [ $1, substr($p, 0, $-[0]) ] }
         for my $m (@marks) {
             my ($n, $pre) = @$m;
             $pre =~ s/\x01\d+\x01/ /g;
-            push @out, _deny_bash($q[$n]) if $pre =~ $DENY_SHELL && _deny_outward($q[$n]);
+            next unless $pre =~ $DENY_SHELL && _deny_outward($q[$n]);
+            push @out, _deny_bash($q[$n]);
+            $ran = 1;
         }
+        push @out, $bare if $ran && !$outward;
+    }
+    for my $r (@run) {
+        my ($runner, $body) = @$r;
+        next unless _deny_outward($body);
+        (my $w = (_deny_mask($runner))[0]) =~ s/\x01\d+\x01/ /g;
+        push @out, _deny_bash($body), $w;
     }
     return join(' ', @out) if @out;
     # Outward only inside quotes no shell runs (a commit message, a title): no token, the class
@@ -381,6 +432,11 @@ sub _deny_keys {
         if ($t =~ m{/([^/]{3,})\z}) {
             my $base = $1;
             $tok{$base} = 1 if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
+        }
+        # The host of `user@host` (`ssh deploy@prod-1` names `prod-1`; review 5 finding 1).
+        if ($t =~ /\A[^\@\/]+\@([^\@\/]{3,})\z/) {
+            my $host = $1;
+            $tok{$host} = 1 if $host =~ /[0-9.:_-]/ && $host =~ /[A-Za-z0-9]{2}/;
         }
     }
     if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
