@@ -3,7 +3,7 @@
  "needs": [
   "types"
  ],
- "note": "AT-M3-14 (F), the C9 source: without --types smoke reads the declarations Claude Code <version> wrote when its built-in plugin-authoring skill loaded, realpath(<CLAUDE_CODE_TMPDIR or /tmp>)/claude-<uid>/bundled-skills/<version>/<per-process folder>/plugin-authoring/types/claude-code.d.ts whose line 1 is `// Written by Claude Code <version>.`, the newest by mtime; a root with a space and glob characters works; another version's folder or header and the old <plugin>/.claude-plugin/types path (staged here with valid declarations) are not read; --types wins. The fake binary 2.1.999 (smoke takes a version-named binary's name) keeps every step off the real temp folder's files",
+ "note": "AT-M3-14 (F), the C9 source: without --types smoke reads the declarations Claude Code <version> wrote when its built-in plugin-authoring skill loaded, realpath(<CLAUDE_CODE_TMPDIR or /tmp>)/claude-<uid>/bundled-skills/<version>/<per-process folder>/plugin-authoring/types/claude-code.d.ts whose line 1 is `// Written by Claude Code <version>.`, the newest by mtime; a root with a space and glob characters works; a symlink at the bundled path is not read; another version's folder or header and the old <plugin>/.claude-plugin/types path (staged here with valid declarations) are not read; --types wins. The fake binary 2.1.999 (smoke takes a version-named binary's name) keeps every step off the real temp folder's files",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -80,7 +80,7 @@
    }
   },
   {
-   "name": "(b) two per-process folders: the newer by mtime is read, not the last by name",
+   "name": "(b) three per-process folders: the newest by mtime is read, which is neither the first nor the last by name",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -111,6 +111,21 @@
     "$CASE/bundled-types.pl",
     "$TMP/cct-b",
     "2.1.999",
+    "00000000000000000000000000000000",
+    "2.1.999",
+    "$TYPES",
+    "1761000000"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cct-b",
+    "2.1.999",
     "ffffffffffffffffffffffffffffffff",
     "2.1.999",
     "$TYPES",
@@ -126,7 +141,7 @@
     "$CASE/bundled-types.pl",
     "$TMP/cct-b",
     "2.1.999",
-    "00000000000000000000000000000000",
+    "88888888888888888888888888888888",
     "2.1.999",
     "$TMP/types/claude-code.d.ts",
     "1761000100"
@@ -228,14 +243,14 @@
    }
   },
   {
-   "name": "(d) only another version's folder: C9 fails naming the running version",
+   "name": "(d) only another version's folder, its file headed by the running version: the folder rule alone rejects it, C9 fails naming the running version",
    "exec": [
     "/usr/bin/perl",
     "$CASE/bundled-types.pl",
     "$TMP/cct-d",
     "2.1.998",
     "1f60531e296ca255cadf5ff37c5cb65f",
-    "2.1.998",
+    "2.1.999",
     "$TYPES",
     "1761000000"
    ],
@@ -351,6 +366,61 @@
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_fail",
       "count": 5,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(g) the bundled path is a symlink to valid declarations: not read (plain files only), C9 fails",
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cct-g",
+    "2.1.999",
+    "1f60531e296ca255cadf5ff37c5cb65f",
+    "2.1.999",
+    "$TYPES",
+    "1761000000",
+    "$TMP/elsewhere/claude-code.d.ts"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999"
+   ],
+   "env": {
+    "CLAUDE_CODE_TMPDIR": "$TMP/cct-g"
+   },
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations for Claude Code 2\\.1\\.999: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 6,
       "fields": {
        "check": "c9"
       }
