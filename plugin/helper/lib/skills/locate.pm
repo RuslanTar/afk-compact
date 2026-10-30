@@ -42,7 +42,9 @@ sub run {
     my %bdirs = map { $_ => 1 } @{ skills::store::read_buckets($ctx, $w->{repo}) };
     for my $s ($sid, map { $_->{sid} } @$chain) {
         my $pin = skills::ctx::pin_read($ctx, $s) or next;
-        $bdirs{ $pin->{bucket_path} } = 1 if $pin->{bucket_path} && -d $pin->{bucket_path};
+        # STATE-ROOT: the pinned bucket and its twin in the other read root (a pin made by the new
+        # root names its bucket there before anything is written to it)
+        $bdirs{$_} = 1 for $pin->{bucket_path} ? grep { -d } @{ skills::store::twin_buckets($ctx, $pin->{bucket_path}) } : ();
     }
     my @pool;
     push @pool, @{ skills::store::docs_in($_, compact => 1) } for sort keys %bdirs;

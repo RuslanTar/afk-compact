@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; tier 5 counts one <repo>/<bucket> in both roots as one bucket, two repos' buckets of one name as two; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage, publish and pin under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there, the pin naming the bucket under the new root; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root.",
+ "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; tier 5 counts one <repo>/<bucket> in both roots as one bucket, two repos' buckets of one name as two; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage, publish and pin under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there, the pin naming the bucket under the new root; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root; (c2) a session that pins another repo's handoff in the old root still reaches it through the pinned bucket's old-root twin (tier 4); (g) a previous compaction copy and a queue lane name come from the old root when only it holds them; (h) a stage begun before the update (its settings name the old root) publishes into the new root while handoff_root is the default: the handoff, pin and records go there and nothing under the old root's .sessions or .watch changes.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -714,6 +714,244 @@
     "exit": 0,
     "stdout_has": [
      "\\Atier: 6\\n"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194300-1072915200.live-71717171.json",
+     "content": "{\"pid\": 4194300, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"71717171-7171-4717-8717-717171717171\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T10:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194300-1072915200.ended-71717171.json",
+     "content": "{\"session_id\": \"71717171-7171-4717-8717-717171717171\", \"reason\": \"prompt_input_exit\", \"ts\": \"2026-10-21T11:10:00+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/other/X/2026-10-21_11-00-00_71717171_x.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 1a2a3a4a\ndate: 2026-10-21T11:00:00+03:00\nsession_id: 71717171-7171-4717-8717-717171717171\nactor: main\n---\n⟪$BRAND v1 n=1a2a3a4a s=manual⟫\n# LAB-9 — work\n⟪/$BRAND n=1a2a3a4a⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194301-1072915200.live-72727272.json",
+     "content": "{\"pid\": 4194301, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"72727272-7272-4727-8727-727272727272\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:00:00.000+03:00\"}"
+    },
+    {
+     "write": "$LEGACY/.sessions/69696969-6969-4696-8696-696969696969.json",
+     "content": "{\"session_id\": \"69696969-6969-4696-8696-696969696969\", \"bucket\": \"repo/LAB-11\", \"bucket_path\": \"$LEGACY/repo/LAB-11\", \"bucket_source\": \"pin\"}"
+    },
+    {
+     "write": "$LEGACY/repo/LAB-11/compact/2026-10-21_12-00-00_69696969_c1-0a0b0c.md",
+     "content": "---\nkind: compact\nsession_id: 69696969-6969-4696-8696-696969696969\nactor: main\ndate: 2026-10-21T12:00:00+03:00\n---\nsummary\n"
+    },
+    {
+     "stub": "q-ok",
+     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/ok.calls\"\ncase \"$1\" in\n add) cat > \"$d/ok.stdin\"; if grep -qx \"$6\" \"$d/ok.seen\" 2>/dev/null; then st=exists; else st=queued; echo \"$6\" >> \"$d/ok.seen\"; fi; printf '{\"schema\":\"queue-add/v1\",\"status\":\"%s\",\"id\":\"proj/11111111-01\",\"lane\":\"lane:repo/lab-123\",\"client_id\":\"%s\"}\\n' \"$st\" \"$6\";;\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":0,\"pending\":0,\"commands\":[\"list\",\"adopt\",\"add\"]}\\n';;\nesac\nexit 0"
+    },
+    {
+     "write": "$LEGACY/.sessions/by-pid/4194220-1072915200.live-70707070.json",
+     "content": "{\"pid\": 4194220, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"70707070-7070-4707-8707-707070707070\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:00:00.000+03:00\"}"
+    }
+   ]
+  },
+  {
+   "name": "(c2) S3 (default root) pins P3's handoff of another repo in the old root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "pin",
+    "--sid",
+    "72727272-7272-4727-8727-727272727272",
+    "--resumed-from",
+    "$LEGACY/other/X/2026-10-21_11-00-00_71717171_x.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^pinned other/X$",
+     "^relation: successor \\(handoff-resume\\)$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/72727272-7272-4727-8727-727272727272.json",
+      "contains": [
+       "\"bucket_path\":\"$ROOT/other/X\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c2) S3's locate reaches P3's file through the pinned bucket's old-root twin (tier 4), as a single root does",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "72727272-7272-4727-8727-727272727272",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 4\\npick: $LEGACY/other/X/2026-10-21_11-00-00_71717171_x\\.md\\nrelation: successor\\n"
+    ]
+   }
+  },
+  {
+   "name": "(g) prev-copy: the session's previous compaction copy is only in the old root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "prev-copy",
+    "--sid",
+    "69696969-6969-4696-8696-696969696969",
+    "--actor",
+    "main",
+    "--cwd",
+    "$TMP/repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^~/\\.claude/handoffs/repo/LAB-11/compact/2026-10-21_12-00-00_69696969_c1-0a0b0c\\.md$"
+    ]
+   }
+  },
+  {
+   "name": "(g) queue-add: the lane name comes from the session's pin, only in the old root",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "queue-add",
+    "--sid",
+    "69696969-6969-4696-8696-696969696969",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "options": {
+    "queue_cmd": "$TMP/bin/q-ok"
+   },
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "QUEUED proj/11111111-01\n",
+    "files": [
+     {
+      "path": "$TMP/bin/ok.calls",
+      "lines": 1,
+      "has": [
+       "^add --json --session 69696969-6969-4696-8696-696969696969 --client-id ck-[0-9a-f]{12} --lane-name lab-11$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "(h) V before the update (root ~/.claude/handoffs): begin",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "begin",
+    "--sid",
+    "70707070-7070-4707-8707-707070707070",
+    "--topic",
+    "v"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "stage": {
+      "re": "^$LEGACY/repo/v/\\.staging/"
+     }
+    }
+   },
+   "capture": {
+    "STAGE_V": "json:stage"
+   }
+  },
+  {
+   "name": "(h) V: stamp, before the update",
+   "cwd": "$TMP/repo",
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$LEGACY"
+   },
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_V"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY/.sessions",
+      "tree_snapshot": "L2S"
+     },
+     {
+      "path": "$LEGACY/.watch",
+      "tree_snapshot": "L2W"
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_V/body.md",
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 70707070\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(h) V publishes after the update (default root): into repo/v under the new root; the old root's .sessions and .watch unchanged",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_V",
+    "--slug",
+    "v",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/v/"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/70707070-7070-4707-8707-707070707070.json",
+      "contains": [
+       "\"bucket\":\"repo/v\"",
+       "\"bucket_path\":\"$ROOT/repo/v\""
+      ]
+     },
+     {
+      "path": "$LEGACY/.sessions",
+      "same_tree_as": "L2S"
+     },
+     {
+      "path": "$LEGACY/.watch",
+      "same_tree_as": "L2W"
+     }
+    ],
+    "absent": [
+     "$LEGACY/repo/v/*.md",
+     "$LEGACY/repo/v/evidence"
     ]
    }
   }
