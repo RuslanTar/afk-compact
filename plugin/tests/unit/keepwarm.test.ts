@@ -10,7 +10,7 @@ import { hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION } from '../../hooks/lib/idle'
 import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_PING_MS, forkOutcome } from '../../hooks/lib/keepwarm'
-import { SID_A, World } from './harness.test'
+import { SID_A, SID_B, T0, World } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
 const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code', keep_warm_hours: 2 }
@@ -19,6 +19,7 @@ const MIN = 60000
 const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
 const RUNNING = [{ id: 'sub-1', status: 'running' }]
 const WARM = { input_tokens: 11, output_tokens: 4, cache_read_input_tokens: 228161, cache_creation_input_tokens: 9 }
+const KEY = `idle_due:${SID_A}`
 const COLD = { input_tokens: 11, output_tokens: 4, cache_read_input_tokens: 0, cache_creation_input_tokens: 228170 }
 
 type Answer = { isAnswered: boolean; reason?: string; text?: string; usage?: unknown; status?: number; error?: string }
@@ -70,11 +71,15 @@ async function stopHook($: Engine, e: Record<string, unknown>): Promise<void> {
 
 // ---- The setting
 
-test('AT-KW-01 options: keep_warm_hours default 6; 0 is off; clamped to 0..24 with config_clamped', () => {
+test('AT-KW-01 options: keep_warm_hours default 6; 0 is off; fractions as given; clamped to 0..24 with config_clamped', () => {
   expect(DEFAULTS.keep_warm_hours).toBe(6)
   expect(parseOptions({}).keep_warm_hours).toBe(6)
   expect(parseOptions({ keep_warm_hours: 0 } as never).keep_warm_hours).toBe(0)
   expect(parseOptions({ keep_warm_hours: '3' } as never).keep_warm_hours).toBe(3)
+  // Not floored (review finding 3): 0.5 stays 0.5 (not off), 1.5 stays 1.5, with no clamp note.
+  const half = parseOptions({ keep_warm_hours: 0.5 } as never)
+  expect([half.keep_warm_hours, half.notes.clamped]).toEqual([0.5, []])
+  expect(parseOptions({ keep_warm_hours: '1.5' } as never).keep_warm_hours).toBe(1.5)
   const hi = parseOptions({ keep_warm_hours: 30 } as never)
   expect([hi.keep_warm_hours, hi.notes.clamped]).toEqual([24, [{ key: 'keep_warm_hours', configured: 30, effective: 24 }]])
   const lo = parseOptions({ keep_warm_hours: -1 } as never)
@@ -116,7 +121,7 @@ test('AT-KW-03: vetoed, an agent running: pings at 50 and 100 min, the 54-min co
   expect(f.prompts[0]).toBe('Reply with the single word OK.')
   expect(skips(w)).toEqual([['keep-warm', 'compact']])
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
-  expect(w.rowsOf('keep_warm_start').map(r => [r.jobs, r.gap_s, r.hours])).toEqual([[1, 3000, 2]])
+  expect(w.rowsOf('keep_warm_start').map(r => [r.jobs, r.gap_s, r.hours, r.windows])).toEqual([[1, 3000, 2, 2]])
   await until(w, t0, 149)
   expect(f.at).toEqual([50, 100])
   expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
@@ -178,7 +183,12 @@ test('AT-KW-06: a background shell from the main Stop counts as a job; a Monitor
   await w.start($)
   await w.userTurn($)
   w.tokens = 260000
-  await stopHook($, { background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }, { id: 'm1', type: 'monitor', status: 'running', description: 'x' }] })
+  await stopHook($, {
+    background_tasks: [
+      { id: 'bsh1', type: 'shell', status: 'running', description: 'x' }, { id: 'm1', type: 'monitor', status: 'running', description: 'x' },
+      { id: 'bsh0', type: 'shell', status: 'completed', description: 'x' }, { id: 'cr1', type: 'cron', status: 'running', description: 'x' },
+    ],
+  })
   await w.turnEnd($)
   f.t0 = w.clock.now()
   await until(w, f.t0, 51)
@@ -235,6 +245,8 @@ test('AT-KW-08: the explicit one-hour TTL with no usage windows readable: it war
   f.t0 = t0
   await until(w, t0, 101)
   expect(f.at).toEqual([50, 100])
+  // No usage window read: the start row says so (the near-limit guard is skipped).
+  expect(w.rowsOf('keep_warm_start').map(r => r.windows)).toEqual([0])
 })
 
 // ---- Stop rules
@@ -368,4 +380,241 @@ test('AT-KW-17: Claude Code compacted the session during the gap: warming stops 
   await until(w, t0, 101)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['compacted', false, 1]])
+})
+
+// ---- Review fixes (fix round 1)
+
+test('AT-KW-18 (finding 1): a realistic Stop lists the running subagent; it ends with no result turn: stop no-jobs at the next ping, the compaction runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: [{ id: 'sub-1', type: 'subagent', status: 'running', description: 'x', agent_type: 'general-purpose' }] })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 60)
+  w.agents = [{ id: 'sub-1', status: 'completed' }]
+  await until(w, f.t0, 160)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-18: a task a notification reported ended does not count, though the next Stop still lists it running', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  const shell = [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }]
+  await stopHook($, { background_tasks: shell })
+  await w.turnEnd($)
+  const t0 = w.clock.now()
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(f.at).toEqual([50])
+  await w.userTurn($, '<task-notification><task-id>bsh1</task-id><status>completed</status><summary>done</summary></task-notification>', 'task-notification')
+  await stopHook($, { background_tasks: shell })
+  await w.turnEnd($)
+  const t1 = w.clock.now()
+  await until(w, t1, 120)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').length).toBe(1)
+})
+
+test('AT-KW-19 (finding 2): while warming the store holds the idle record (due at the next ping, anchored at the last warm one), so a reload can adopt it; a turn start clears it', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  const at60 = w.storeGet(KEY) as Record<string, unknown>
+  expect([at60.cancelled, at60.kind, at60.due, at60.warm, at60.anchor, at60.held]).toEqual([undefined, 'compact', t0 + 100 * MIN, t0 + 50 * MIN, t0 + 50 * MIN, { start: t0, pings: 1 }])
+  await until(w, t0, 110)
+  const at110 = w.storeGet(KEY) as Record<string, unknown>
+  expect([at110.due, at110.warm, at110.held]).toEqual([t0 + 150 * MIN, t0 + 100 * MIN, { start: t0, pings: 2 }])
+  await w.userTurn($, 'Agent sub-1 finished.', 'task-notification')
+  expect((w.storeGet(KEY) as Record<string, unknown>).cancelled).toBe(true)
+  expect(stops(w)).toEqual([['turn', false, 2]])
+})
+
+test('AT-KW-19: a load that adopts a held record (a reload while warming): one keep_warm_stop reload row, then the compaction at its due while warm', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const store = {
+    [KEY]: {
+      kind: 'compact', due: T0 + 40 * MIN, sid: SID_A, end: T0 - 60 * MIN, anchor: T0 - 10 * MIN, warm: T0 - 10 * MIN, load: 'old', tokens: 260000, ttl: '1h', pct: 30,
+      cc: probe.version.version, model: probe.model, answer: true, published: false, episode: { since: T0 - 60 * MIN, done: false }, held: { start: T0 - 60 * MIN, pings: 1 },
+    },
+  }
+  const w = new World().install(on, store)
+  w.policy = NATIVE_OFF
+  w.rateLimits = LIMITS
+  w.agents = RUNNING
+  w.tokens = 260000
+  const f = forks(on, w)
+  await w.start($)
+  expect(stops(w)).toEqual([['reload', true, 1]])
+  expect(w.rowsOf('keep_warm_stop')[0]?.gap_s).toBe(3600)
+  expect((w.storeGet(KEY) as Record<string, unknown>).held).toBe(undefined)
+  await w.advance(39 * MIN)
+  expect(selfCompacts(w)).toBe(0)
+  await w.advance(2 * MIN)
+  expect(ic(w).map(r => [r.at, r.agents, r.adopted])).toEqual([['timer', 1, true]])
+  expect(selfCompacts(w)).toBe(1)
+  expect(f.at).toEqual([])
+})
+
+test('AT-KW-19: SessionEnd other while warming: stop session-end with the record kept for the next process (no held mark, due at the next ping)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  await $.session.end({ sessionId: SID_A, reason: 'other' } as never)
+  await w.settle()
+  expect(stops(w)).toEqual([['session-end', true, 1]])
+  const v = w.storeGet(KEY) as Record<string, unknown>
+  expect([v.cancelled, v.due, v.warm, v.held]).toEqual([undefined, t0 + 100 * MIN, t0 + 50 * MIN, undefined])
+  await until(w, t0, 200)
+  expect(f.at).toEqual([50])
+})
+
+test('AT-KW-21 (finding 4): the main model changed since the gap began (/model sends no request): stop prefix-changed before forking; the idle path\'s G3a skips the compaction', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.model = 'claude-other-model'
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['prefix-changed', true, 1]])
+  expect(skips(w)).toEqual([['keep-warm', 'compact'], ['prefix-changed', 'compact']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-21: the Claude Code version changed since the gap began: stop prefix-changed, no fork', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.version = { version: '2.1.399' }
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['prefix-changed', true, 1]])
+})
+
+test('AT-KW-22 (finding 3): keep_warm_hours 0.5: the cutoff comes before the first ping, so the gap never warms; the idle compaction runs at 54 min', { options: { ...ON, keep_warm_hours: 0.5 } }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 56)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('keep_warm_start').length).toBe(0)
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-22: keep_warm_hours 1.5: one ping at 50, the cutoff at the next due (100 min), with the hand-over', { options: { ...ON, keep_warm_hours: 1.5 } }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['cutoff', true, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-23 (M16): a compaction under way at the ping: no fork beside it; once it ran, the gap stops warming (never started: no rows)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 49)
+  let release: () => void = () => undefined
+  w.compactGate = new Promise<void>(r => { release = r })
+  const p = $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never)
+  await until(w, t0, 52)
+  expect(f.at).toEqual([])
+  release()
+  await p
+  await w.settle()
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_stop').length]).toEqual([0, 0])
+})
+
+test('AT-KW-24 (M17): a fork the engine refuses (a hook\'s deny): stop error with the hand-over, the compaction runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const at: number[] = []
+  let t0 = 0
+  on('model.fork', () => {
+    at.push(Math.round((w.clock.now() - t0) / MIN))
+    if (at.length > 1) throw new Error('denied by a hook')
+    return { value: { isAnswered: true, text: 'OK', usage: WARM } } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 102)
+  expect(at).toEqual([50, 100])
+  expect(pings(w)).toEqual([['warm', 1], ['error', 1]])
+  expect(stops(w)).toEqual([['error', true, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-25 (M20): the session id changed during the gap: stop session-changed, no hand-over, no fork after', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.sid = SID_B
+  await until(w, t0, 101)
+  expect(stops(w)).toEqual([['session-changed', false, 1]])
+  expect((w.storeGet(KEY) as Record<string, unknown>).cancelled).toBe(true)
+  await until(w, t0, 160)
+  expect(f.at).toEqual([50])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-26 (M26): automatic compaction off and no job open: the 49-min handoff turn runs as before, keep-warm holds nothing', { options: ON }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  w.agents = []
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 51)
+  expect(f.at).toEqual([])
+  expect(skips(w).filter(s => s[0] === 'keep-warm')).toEqual([])
+  expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_stop').length]).toEqual([0, 0])
+  if (IDLE) expect(w.submits.length).toBe(1)
+  else expect(skips(w)).toEqual([['no-asset', 'turn']])
+})
+
+test('AT-KW-27 (finding 7): a prompt entering that a peer hook drops starts no turn: the ping timer runs again, the ping comes at 50', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 49)
+  w.dropIf = () => 'a peer dropped it'
+  const r = await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never)
+  expect(r.drop).toBe('a peer dropped it')
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50, 100])
 })

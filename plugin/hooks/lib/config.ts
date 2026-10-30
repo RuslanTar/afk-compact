@@ -161,8 +161,9 @@ function choice<T extends string>(o: PluginOptions, k: keyof Config, values: rea
 }
 
 /** A number option clamped to [min, max] (floored), with a `config_clamped` note when it moved. */
-function bounded(o: PluginOptions, k: keyof Config, dflt: number, min: number, max: number, notes: Config['notes']): number {
-  const n = Math.floor(num(o, k, dflt))
+function bounded(o: PluginOptions, k: keyof Config, dflt: number, min: number, max: number, notes: Config['notes'], whole = true): number {
+  const v = num(o, k, dflt)
+  const n = whole ? Math.floor(v) : v
   const c = Math.max(min, Math.min(max, n))
   if (c !== n) notes.clamped.push({ key: k, configured: n, effective: c })
   return c
@@ -261,7 +262,8 @@ export function parseOptions(o: PluginOptions): Config {
     idle_compact: idleCompact(o, notes),
     // Any other value is `off`, the value with no extra plugin turn and no digest (rule (c)).
     idle_digest: choice(o, 'idle_digest', ['submit', 'return', 'off'] as const, DEFAULTS.idle_digest, 'off', notes),
-    keep_warm_hours: bounded(o, 'keep_warm_hours', DEFAULTS.keep_warm_hours, KEEP_WARM_HOURS_MIN, KEEP_WARM_HOURS_MAX, notes),
+    // Hours, fractions as given (1.5 is an hour and a half; /status reads the same value).
+    keep_warm_hours: bounded(o, 'keep_warm_hours', DEFAULTS.keep_warm_hours, KEEP_WARM_HOURS_MIN, KEEP_WARM_HOURS_MAX, notes, false),
     watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
   }

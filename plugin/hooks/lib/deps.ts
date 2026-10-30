@@ -529,6 +529,8 @@ export type LoadState = {
   keepWarmSpent: boolean
   /** The background tasks the main session's last Stop listed as in flight (Monitors and crons left out). */
   bgTasks: BgTasks | undefined
+  /** Task ids a background-task notification reported ended (keepwarm.ts `noteEndedTasks`); cleared at session end. */
+  endedTasks: Set<string>
 }
 
 /**
@@ -724,6 +726,7 @@ export function newState(loadId: string): LoadState {
     keepWarmGen: 0,
     keepWarmSpent: false,
     bgTasks: undefined,
+    endedTasks: new Set(),
   }
 }
 

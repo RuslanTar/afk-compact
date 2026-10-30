@@ -160,8 +160,10 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   s.restoreClosed = undefined
   if (reason === 'other') d.state.idleDueSid = undefined
   else await cancelIdle(d, endedSid)
-  await stopKeepWarm(d, 'session-end')
+  // SessionEnd `other` keeps the idle record for the next process, the one a warming gap holds too.
+  await stopKeepWarm(d, 'session-end', false, reason === 'other')
   s.bgTasks = undefined
+  s.endedTasks.clear()
   if (h && h.ht !== null && h.phase !== 'running') await handoffTurnClose(d, endedSid, h.ht, 'cancelled')
   if (pend && (reason === 'clear' || pend.persisted !== true)) await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'dropped:session-end')
   else if (pend) {

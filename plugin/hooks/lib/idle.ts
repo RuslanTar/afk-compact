@@ -119,7 +119,11 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * arm, which a new process reads before its first request reports any (G10-G12); `cc` and `model`
  * are the Claude Code version and main model at arm (G3a). `warm` is the start of the last keep-warm
  * ping of a record handed back by keep-warm (`handOverIdle`): the cache counts from there, not
- * from the turn end, for the turn's 55.5-min bound and the check re-armed after it.
+ * from the turn end, for the turn's 55.5-min bound and the check re-armed after it. `held` marks a
+ * record keep-warm holds while the gap warms (`holdIdle`: due at its next ping, anchored at the last
+ * warm one, with the gap's start and its warm pings so far); no timer of the holding load runs for
+ * it, and a load that adopts it (a reload while warming) ends that warming (`keep_warm_stop {why:
+ * reload}`) and fires it at that due, while the cache is still warm.
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
@@ -134,6 +138,7 @@ export type Due = {
   load: string | null; anchor: number | null; tokens: number | null
   ttl: '1h' | '5m' | null; pct: number | null; cc: string | null; model: string | null
   warm?: number | null
+  held?: { start: number; pings: number }
 }
 
 /** Every clear of a record (§3.1): which load cleared which due, and when. */
@@ -163,7 +168,16 @@ function readDue(v: unknown): Due | undefined {
     load: strOrNull(o.load), anchor: numOrNull(o.anchor), tokens: numOrNull(o.tokens),
     ttl: o.ttl === '1h' || o.ttl === '5m' ? o.ttl : null, pct: numOrNull(o.pct), cc: strOrNull(o.cc), model: strOrNull(o.model),
     ...(numOrNull(o.warm) !== null ? { warm: numOrNull(o.warm) } : {}),
+    ...(readHeld(o.held) ?? {}),
   }
+}
+
+function readHeld(v: unknown): { held: { start: number; pings: number } } | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const h = v as Record<string, unknown>
+  const start = numOrNull(h.start)
+  const pings = numOrNull(h.pings)
+  return start !== null && pings !== null ? { held: { start, pings } } : undefined
 }
 
 /** The moment a record's turn-time bounds count from: its last keep-warm ping, else its turn end. */
@@ -271,7 +285,8 @@ export function schedule(d: Deps, rec: Due, now: number, atLoad = false): void {
 }
 
 async function persist(d: Deps, rec: Due): Promise<void> {
-  const own: Due = { ...rec, load: d.state.loadId }
+  const { held: _held, ...plain } = rec
+  const own: Due = { ...plain, load: d.state.loadId }
   await d.storeSet(dueKey(own.sid), own)
   dropTombDelete(d, own.sid)
   d.state.idleDueSid = own.sid
@@ -286,6 +301,41 @@ async function persist(d: Deps, rec: Due): Promise<void> {
 export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number): Promise<void> {
   const s = d.state
   await persist(d, { ...rec, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman })
+}
+
+/**
+ * Keep-warm (D-14) holds the record while its gap warms: it stays in the store (not a tombstone),
+ * due at the next ping and anchored at the last warm request, so a load that adopts it after a
+ * reload (a hot reload, `claude respawn`, a supervisor move, SessionEnd `other`) still fires it
+ * while the cache is warm. No timer of this load runs for it: keep-warm hands it back
+ * (`handOverIdle`) or releases it (`releaseHeld`).
+ */
+export async function holdIdle(d: Deps, rec: Due, h: { due: number; warm: number; start: number; pings: number }): Promise<void> {
+  const s = d.state
+  const own: Due = { ...rec, due: h.due, anchor: h.warm, warm: h.warm, load: s.loadId, held: { start: h.start, pings: h.pings } }
+  await d.storeSet(dueKey(rec.sid), own)
+  dropTombDelete(d, rec.sid)
+  s.idleDueSid = rec.sid
+}
+
+/** The record keep-warm holds for `sid` in the store, when this load still holds it (G1's reading). */
+export async function heldHere(d: Deps, sid: string): Promise<Due | undefined> {
+  const v = readStored(await d.storeGet(dueKey(sid)))
+  return v !== 'missing' && v !== 'tombstone' && v.held !== undefined && v.load === d.state.loadId ? v : undefined
+}
+
+/**
+ * Keep-warm stopped with no hand-over: the record it held is cleared (a tombstone), or with `keep`
+ * (SessionEnd `other`, whose next process resumes the session) left for that process as a plain
+ * record due at the next ping. Nothing when another load holds it now.
+ */
+export async function releaseHeld(d: Deps, sid: string, keep: boolean): Promise<void> {
+  const v = await heldHere(d, sid)
+  if (!v) return
+  if (d.state.idleDueSid === sid) d.state.idleDueSid = undefined
+  if (!keep) return writeTombstone(d, sid, v.due)
+  const { held: _held, ...plain } = v
+  await d.storeSet(dueKey(sid), plain)
 }
 
 /** The policy at this moment (§1.2): Claude Code's own idle compaction and the plugin's paths. */
@@ -455,6 +505,9 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   if (rec.due <= now) {
     if (rec.end === null) return
     if (!lateFireOk(rec, now, scaleOf(p.env))) {
+      if (rec.held !== undefined && rec.load !== s.loadId) {
+        await log(d, sid, 'keep_warm_stop', { why: 'reload', pings: rec.held.pings, gap_s: secs(now - rec.held.start), handover: false })
+      }
       await idleSkip(d, sid, 'lapsed', rec.kind, secs(now - rec.due))
       await writeTombstone(d, sid, rec.due, now)
       return
@@ -468,7 +521,13 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
     if (rec.published) s.publishedSinceHuman = true
   }
   s.idleAdopted = rec.load !== s.loadId
-  const own: Due = { ...rec, load: s.loadId }
+  // Keep-warm (D-14): a record its gap held while warming in another load ends that warming here
+  // (the load that pinged is gone), and goes on as a plain record at the due it holds.
+  const { held, ...plain } = rec
+  if (held !== undefined && rec.load !== s.loadId) {
+    await log(d, sid, 'keep_warm_stop', { why: 'reload', pings: held.pings, gap_s: secs(now - held.start), handover: true })
+  }
+  const own: Due = { ...plain, load: s.loadId }
   await d.storeSet(dueKey(sid), own)
   s.idleDueSid = sid
   schedule(d, own, now, rec.due <= now)

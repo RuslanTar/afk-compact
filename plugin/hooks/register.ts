@@ -12,7 +12,7 @@ import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
-import { cancelKeepWarmTimer, noteBackground } from './lib/keepwarm'
+import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
 import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
@@ -146,6 +146,8 @@ export const register: Register = (on, options) => {
     const entering = e.turnId === undefined && !own
     // IC-1 D6: the entering prompt's origin kind decides at its turn.start whether halt clears.
     const kind = e.origin.kind
+    // Keep-warm (D-14): a task a notification reports ended is not an open job any more.
+    if (!own) noteEndedTasks(state, kind, e.text)
     if (entering) {
       promptEntering(state, kind, e.text)
       // §9.4: a prompt entering cancels the pre-idle timer, and keep-warm's ping timer (D-14).
@@ -176,7 +178,10 @@ export const register: Register = (on, options) => {
     } catch (err) {
       if (note !== undefined) laneNoteLost(state, note)
       if (again !== undefined) againLost(state, again)
-      if (entering) promptNotEntered(state, kind)
+      if (entering) {
+        promptNotEntered(state, kind)
+        await resumeKeepWarm(realDeps($, options, state)).catch(() => undefined)
+      }
       throw err
     }
     if (note !== undefined && r.drop !== undefined) laneNoteLost(state, note)
@@ -184,7 +189,11 @@ export const register: Register = (on, options) => {
       if (r.drop !== undefined) againLost(state, again)
       else await againSent(realDeps($, options, state), again)
     }
-    if (entering && r.drop !== undefined) promptNotEntered(state, kind)
+    if (entering && r.drop !== undefined) {
+      promptNotEntered(state, kind)
+      // Keep-warm (D-14): no turn starts, so the ping timer cancelled above runs again for the gap.
+      await resumeKeepWarm(realDeps($, options, state))
+    }
     // A prompt queued while a turn runs may start its own turn after it: its origin kind decides
     // there whether halt clears, as for one entering an idle session.
     if (!own && e.turnId !== undefined && r.drop === undefined) promptQueued(state, kind, r.text, e.turnId)
