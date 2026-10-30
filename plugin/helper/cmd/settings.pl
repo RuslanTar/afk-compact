@@ -1,5 +1,5 @@
-# cmd/settings.pl: `settings show` and `settings reset` (0.1.2 visible defaults and onboarding).
-# Owner: WP-core.
+# cmd/settings.pl: `settings show`, `settings set` and `settings reset` (0.1.2 visible defaults,
+# onboarding and the settings writer). Owner: WP-core.
 #   settings show [--root D] [--log-dir D] [settings flags]
 #       read-only: the settings file and the plugin's options key, then every key in @KEYS order
 #       with its value, source and default, the warnings (a saved "", an ambiguous key), the
@@ -11,27 +11,33 @@
 #       class; the pluginConfigs key in use and `write_refused` (config-dir-foreign,
 #       home-foreign, unreadable, unparseable, inline or ambiguous: why a write there would be
 #       refused). --json prints that object on one line; --tier alone a heading per section and
-#       one `  <key> = <value> (<source>)` line per key. The flow has no write verb of its own:
-#       whether the plugin writes settings.json from a model-run call is open (onboarding
-#       OPEN-1); the only write is the user-run reset below.
+#       one `  <key> = <value> (<source>)` line per key.
+#   settings set <key>=<value>... [--plan P] [--apply]
 #   settings reset <key>...|--all [--plan P] [--apply]
-#       a dry run unless --apply (as `project copy`): the members it would remove with their
-#       values and defaults (never a pattern's or a list's text), and the line to type, which
-#       carries --plan (the file's hash) so the apply refuses a file changed since. The user runs
-#       --apply (`!`); the skills relay that line and never run it. lib/settings_reset.pm.
+#       the settings writer (lib/settings_write.pm; owner 2026-10-30, "helper writer, safe keys"):
+#       a dry run unless --apply (as `project copy`), which lists each change as old -> new
+#       (never a pattern's or a list's text) and the way to apply it with --plan (the file's
+#       hash), so the apply refuses a file changed since. A model-run call may apply it for any
+#       key but the six consent keys, which the writer refuses on every path (it cannot tell a
+#       user's `!` line from a model's call); for those it prints the user-run ways. A value set
+#       to its default (or empty) removes the member. --apply prints each change, the backup next
+#       to the file and when it takes effect.
 # Exit codes: 0, 3 (refused: nothing written), 64 (usage), 70.
 use strict;
 use warnings;
 use utf8;
+require "settings_write.pm";
 require "settings_reset.pm";
 
 package cmd_settings;
 
 my $USAGE_RESET = 'usage: settings reset <key>...|--all [--apply]';
+my $USAGE_SET = 'usage: settings set <key>=<value>... [--apply]';
 
 sub run {
     my $sub = shift @_;
-    die "usage: settings show | settings reset <key>...|--all [--apply]\n" unless defined $sub && ($sub eq 'show' || $sub eq 'reset');
+    die "usage: settings show | settings set <key>=<value>... [--apply] | settings reset <key>...|--all [--apply]\n"
+        unless defined $sub && ($sub eq 'show' || $sub eq 'reset' || $sub eq 'set');
     my ($opt, $rest) = args::parse(\@_, bools => [qw(apply all json)], known => [qw(plan root log-dir tier)]);
     if ($sub eq 'show') {
         die "usage: settings show takes no argument ($rest->[0])\n" if @$rest;
@@ -40,9 +46,24 @@ sub run {
     }
     rc::init(sid => undef, writer => 'helper', flags => settings::flags_from($opt));
     return show() if $sub eq 'show';
+    if ($sub eq 'set') {
+        die "$USAGE_SET\n" if $opt->{all} || !@$rest;
+        my (@req, %seen);
+        for my $a (@$rest) {
+            my ($k, $v) = $a =~ /\A([A-Za-z0-9_]+)=(.*)\z/s or die "usage: settings set: $a is not <key>=<value>\n";
+            die "usage: settings set: $k is no setting of this plugin\n" unless exists $settings::TYPE{$k};
+            die "usage: settings set: $k given twice\n" if $seen{$k}++;
+            push @req, { key => $k, kind => 'set', text => $v };
+        }
+        return write_cmd('set', \@req, $opt->{plan}, $opt->{apply});
+    }
     die "$USAGE_RESET\n" if ($opt->{all} && @$rest) || (!$opt->{all} && !@$rest);
-    for my $k (@$rest) { die "usage: settings reset: $k is no setting of this plugin\n" unless exists $settings::TYPE{$k} }
-    return reset_cmd($opt->{all} ? 'all' : $rest, $opt->{plan}, $opt->{apply});
+    my %seen;
+    for my $k (@$rest) {
+        die "usage: settings reset: $k is no setting of this plugin\n" unless exists $settings::TYPE{$k};
+        die "usage: settings reset: $k given twice\n" if $seen{$k}++;
+    }
+    return write_cmd('reset', $opt->{all} ? 'all' : $rest, $opt->{plan}, $opt->{apply});
 }
 
 sub _file_text { return util::text(util::abbrev(settings::config_dir() . '/settings.json')) }
@@ -95,63 +116,108 @@ sub show {
     my $store = ctx::store_cmd();
     push @out, settings::value_warnings($rows, $store);
     push @out, map { 'note: ' . util::text($_) } @{ rc::settings()->{notes} || [] };
-    push @out, 'reset (a dry run unless you add --apply; type it yourself): ! ' . util::text($store) . ' settings reset <key>...' if defined $store;
+    push @out, 'change or reset (a dry run unless you add --apply; never a consent key): ' . util::text($store)
+               . ' settings set <key>=<value>... | settings reset <key>...' if defined $store;
     args::out(@out);
     return 0;
 }
 
 my %REFUSED = (
     'not-json' => 'your settings.json is not plain JSON (comments, a trailing comma or a syntax error); edit it by hand or in /config',
+    unparseable => 'your settings.json, its pluginConfigs or the plugin\'s entry there is not a JSON object; edit it by hand or in /config',
+    unreadable => 'your settings.json cannot be read as a file',
+    'no-file' => 'there is no settings.json yet; save a setting in /config first',
+    'config-dir-foreign' => 'CLAUDE_CONFIG_DIR names another folder than ~/.claude, and the writer edits ~/.claude/settings.json only; edit that folder\'s file by hand or in /config',
+    'home-foreign' => 'HOME is not your account\'s home folder, and the writer edits your own ~/.claude/settings.json only',
+    inline => 'the plugin runs from --plugin-dir, so its options key there is not one Claude Code saves; use /config',
+    'no-key' => 'your settings.json has no entry for the plugin and its marketplace is not known here; save one setting in /config first',
     changed => 'your settings.json changed since the dry run; run the dry run again',
-    verify => 'the edited text did not read back as your settings minus those keys; nothing written',
-    'no-watch' => 'no log folder for the backup (see the root lines of /status)',
+    'changed-now' => 'your settings.json changed while this ran (another program wrote it); nothing written, run it again',
+    verify => 'the edited text did not read back as your settings with exactly those changes; nothing written',
     'not-file' => 'your settings.json is not a regular file',
-    'hard-link' => 'your settings.json has a second name (a hard link) and a reset writes a new file under one name only; edit it by hand or in /config',
-    backup => 'no backup could be written',
+    'hard-link' => 'your settings.json has a second name (a hard link) and a write puts a new file under one name only; edit it by hand or in /config',
+    backup => 'no backup could be written next to your settings.json',
+    write => 'the new text could not be written; your settings.json keeps its old text',
+    after => 'the file read back after the write is not the text written (another program wrote it at the same moment); check it, the backup holds the text before',
 );
 
-sub _refused {
+sub _refused_text {
     my ($p, $why) = @_;
-    my $t = $why eq 'ambiguous'
-        ? 'several plugin option keys in your settings.json (' . join(', ', map { '"' . util::text($_) . '"' } @{ $p->{candidates} || [] })
-          . '); remove the one no longer used, then run this again'
-        : $why =~ /\A(?:splice:)?twice:(.*)\z/s ? 'your settings.json names "' . util::text($1) . '" twice in one object; edit it by hand or in /config'
-        : $REFUSED{$why} // "refused ($why)";
-    args::out("settings reset: refused, $t");
+    return 'several plugin option keys in your settings.json (' . join(', ', map { '"' . util::text($_) . '"' } @{ settings::options_source()->{candidates} || [] })
+           . '); remove the one no longer used, then run this again' if $why eq 'ambiguous';
+    return 'your settings.json names "' . util::text($1) . '" twice in one object; edit it by hand or in /config' if $why =~ /\Atwice:(.*)\z/s;
+    return $REFUSED{$why} // "refused ($why)";
+}
+
+# The refusal: one line for the file, or a heading and a line per key (consent keys with the
+# user-run ways to change them).
+sub _refused {
+    my ($sub, $p, $r) = @_;
+    my @key = grep { defined $_->{key} } @{ $p->{refusals} || [] };
+    if (!@key) {
+        my $why = $r ? $r->{why} : $p->{refusals}[0]{why};
+        my @l = ("settings $sub: refused, " . _refused_text($p, $why));
+        push @l, "  error: $r->{error}" if $r && defined $r->{error};
+        push @l, '  backup: ' . util::text(util::abbrev($r->{backup})) . ' (the file as it was)' if $r && defined $r->{backup};
+        args::out(@l);
+        return 3;
+    }
+    my @l = ("settings $sub: refused, nothing written");
+    for my $x (@key) {
+        if ($x->{why} eq 'consent') { push @l, settings_write::consent_lines($x, $p->{ckey}); next }
+        push @l, "  $x->{key}: " . ($x->{why} eq 'loosen' ? 'looser, refused: ' : 'not valid: ') . $x->{detail};
+    }
+    args::out(@l);
     return 3;
 }
 
-sub reset_cmd {
-    my ($want, $given, $apply) = @_;
-    my $p = settings_reset::plan($want);
-    return _refused($p, $p->{why}) if $p->{state} eq 'refused';
+sub _where {
+    my ($p) = @_;
+    return '' unless defined $p->{ckey};
+    return 'plugin options under "' . util::text($p->{ckey}) . '"' . (($p->{ckey_how} // 'found') eq 'found' ? '' : ' (a new entry)');
+}
+
+sub _takes_effect {
+    return "  takes effect: the plugin's helper reads the new values at its next call; Claude Code passes them to the hooks once it "
+           . 'reads its settings again (whether a running session does that by itself is not checked yet: run /reload-plugins or restart Claude Code to be sure)';
+}
+
+# write_cmd(set|reset, requests | keys | 'all', --plan, --apply)
+sub write_cmd {
+    my ($sub, $want, $given, $apply) = @_;
+    my $kept = [];
+    my $reqs = $want;
+    if ($sub eq 'reset') {
+        my $o = settings::options_source();
+        ($reqs, $kept) = settings_reset::requests($want, $o->{options});
+    }
+    my $p = settings_write::plan($reqs);
+    return _refused($sub, $p) if $p->{state} eq 'refused';
     my $ft = _file_text();
-    my $where = defined $p->{ckey} ? 'plugin options under "' . util::text($p->{ckey}) . '"' : '';
-    my @kept = @{ $p->{kept} } ? ('  kept by --all (consent or protective; name one to reset it): ' . join(', ', @{ $p->{kept} })) : ();
-    my @ns = @{ $p->{not_saved} } ? ('  not saved, nothing to remove: ' . join(', ', @{ $p->{not_saved} })) : ();
+    my $where = _where($p);
+    my @kept = @$kept ? ('  kept by --all (consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand): ' . join(', ', @$kept)) : ();
+    my @ns = map { $_->{why} eq 'not-saved' ? "  not saved, nothing to remove: $_->{key}" : "  unchanged: $_->{key}" } @{ $p->{same} };
     if ($p->{state} eq 'nothing') {
-        my $why = ($p->{why} // '') eq 'no-file' ? " (no $ft)" : ($p->{why} // '') eq 'no-options' ? " (no plugin options in $ft)" : '';
-        args::out("settings reset: nothing to remove$why", @ns, @kept);
+        my $why = !defined $p->{raw} ? " (no $ft)" : !%{ $p->{options} || {} } ? " (no plugin options in $ft)" : '';
+        args::out("settings $sub: nothing to " . ($sub eq 'reset' ? 'remove' : 'change') . $why, @ns, @kept);
         return 0;
     }
-    return _refused($p, 'changed') if defined $given && $given ne $p->{sha};
-    my @rm = map { "  would remove $_ (now " . settings_reset::now_text($p, $_) . '; default '
-                   . settings::show_value($_, settings::manifest_default($_)) . ')' } @{ $p->{remove} };
-    my @notes = settings_reset::notes($p);
+    return _refused($sub, $p, { why => 'changed' }) if defined $given && $given ne $p->{sha};
+    my @ch = map { "  $_->{key}: $_->{old} -> $_->{new}" . ($_->{kind} eq 'remove' ? ' (removed)' : '') } @{ $p->{changes} };
+    my @notes = (settings_reset::notes($p), settings_write::clamp_notes($p));
     if (!$apply) {
         my $store = ctx::store_cmd();
-        my $args = ref $want ? join(' ', @{ $p->{remove} }) : '--all';
-        args::out("settings reset: dry run, nothing written · $ft · $where", @rm, @ns, @kept, @notes,
-                  defined $store ? 'to apply it, type: ! ' . util::text($store) . " settings reset $args --plan $p->{sha} --apply"
-                                 : "to apply it, run the plugin's settings reset with --plan $p->{sha} --apply");
+        my $line = $sub eq 'set' ? "to apply it: the same command with --plan $p->{sha} --apply"
+            : 'to apply it: ' . (defined $store ? util::text($store) . ' ' : '') . 'settings reset '
+              . (ref $want ? join(' ', map { $_->{key} } @{ $p->{changes} }) : '--all') . " --plan $p->{sha} --apply";
+        args::out("settings $sub: dry run, nothing written · $ft · $where", map({ s/\A  /  would change /r } @ch), @ns, @kept, @notes, $line);
         return 0;
     }
-    my $r = settings_reset::apply($p, rc::watch());
-    return _refused($p, $r->{why}) if $r->{state} ne 'done';
-    args::out('settings reset: removed ' . join(', ', @{ $p->{remove} }) . " from $ft ($where)",
-              '  backup: ' . util::text(util::abbrev($r->{backup})), @ns, @kept, @notes,
-              "  takes effect: the plugin's helper reads the new values at its next call; Claude Code passes them to the hooks once it "
-              . 'reads its settings again (whether a running session does that by itself is not checked yet: restart Claude Code to be sure)');
+    my $r = settings_write::apply($p);
+    return _refused($sub, $p, $r) if $r->{state} ne 'done';
+    my $head = $sub eq 'reset' ? 'removed ' . join(', ', map { $_->{key} } @{ $p->{changes} }) . " from $ft ($where)" : "changed $ft ($where)";
+    args::out("settings $sub: $head", @ch, '  backup: ' . util::text(util::abbrev($r->{backup})) . ' (the file as it was)',
+              @ns, @kept, @notes, _takes_effect());
     return 0;
 }
 

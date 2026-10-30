@@ -958,8 +958,10 @@ sub export_view {
 
 # ---------------------------------------------------------------- visible defaults (0.1.2)
 # The ten keys `settings reset --all` leaves (OPEN-2 of the visible-defaults spec, its
-# recommendation): the six consent keys, the three protective lists and resume_proceed. Named
-# on its own one is reset, with what its default does (%RESET_EFFECT).
+# recommendation): the six consent keys, the three protective lists and resume_proceed. Named on
+# its own a consent key is still refused (the writer never writes one, lib/settings_write.pm), and
+# a protective list or resume_proceed is removed only when that loosens nothing, with what its
+# default does (%RESET_EFFECT).
 our %RESET_KEEP = map { $_ => 1 } (keys %FILE_ONLY, keys %NO_FLAG, 'resume_proceed');
 our %RESET_EFFECT = (
     repo_roots => 'its default accepts no repository for exports', relaunch_auto => 'its default on lets a lost background job start again by itself (looser than now)',
@@ -1065,8 +1067,10 @@ sub value_warnings {
                  . '): every key is at its default; remove the one no longer used';
     }
     for my $w (grep { $_->{saved_empty} } @$rows) {
+        # a consent key is never written by the plugin (lib/settings_write.pm), a reset included
         push @l, "warning: $w->{key}: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with "
-                 . (defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
+                 . ($FILE_ONLY{ $w->{key} } ? "/config or by hand (a consent key: the plugin never writes it)"
+                    : defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
     return @l;
 }
@@ -1119,18 +1123,27 @@ sub view {
     my $state = $ci->{state};
     my $inline = inline_key();
     my $foreign = config_dir_foreign();
-    # Why a write would be refused, the first that holds: another settings folder
-    # (config-dir-foreign under CLAUDE_CONFIG_DIR, home-foreign when HOME is not the account
-    # home), a file that cannot be read or that a writer cannot merge into, a --plugin-dir run,
-    # two keys for the plugin.
-    my $refused = $foreign ? (($ENV{CLAUDE_CONFIG_DIR} // '') ne '' ? 'config-dir-foreign' : 'home-foreign')
-        : ($state eq 'unreadable' || $state eq 'unparseable') ? $state : defined $inline ? 'inline'
-        : $state eq 'ambiguous' ? 'ambiguous' : undef;
+    my $refused = write_refused($ci);
     return jsonc::obj(
         config_file => config_dir() . '/settings.json', config_key => $ci->{key}, config_key_state => $state,
         inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,
         sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
         unsectioned => \@unsectioned, notes => $r->{notes});
+}
+
+# write_refused([config_key_info]) -> why the settings writer (lib/settings_write.pm) refuses the
+# settings file, the first that holds, else undef: another settings folder (config-dir-foreign
+# under CLAUDE_CONFIG_DIR, home-foreign when HOME is not the account home: a command can set
+# both, so neither picks the file a write goes to), a file that cannot be read or that a writer
+# cannot merge into (unreadable, unparseable), a --plugin-dir run (inline), two keys for the
+# plugin (ambiguous). The view's `write_refused` is this value.
+sub write_refused {
+    my ($ci) = @_;
+    $ci //= config_key_info();
+    my $state = $ci->{state};
+    return config_dir_foreign() ? (($ENV{CLAUDE_CONFIG_DIR} // '') ne '' ? 'config-dir-foreign' : 'home-foreign')
+        : ($state eq 'unreadable' || $state eq 'unparseable') ? $state : defined inline_key() ? 'inline'
+        : $state eq 'ambiguous' ? 'ambiguous' : undef;
 }
 
 # Pull settings flags out of a parsed-flag hash (keys as given on the command line).

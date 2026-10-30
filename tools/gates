@@ -23,7 +23,7 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   markers      `<!--` and `{{`
   attribution  `Co-Authored-By`, `Generated with`, `noreply@anthropic.com`, `claude.ai/code`
                in files and in every commit message reachable from HEAD
-  stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status`, `X-store`, `X:handoff skill`
+  stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status|settings`, `X-store`, `X:handoff skill`
                and manifest names have X equal to the brand; no other A-1 candidate
                (`compactseam`, `wheelover`, `hold-thread`), no `compact-handoff` and not the
                name before the rename (`compactinue`, NM-2), matched case-insensitively anywhere
@@ -172,7 +172,7 @@ FORMER_NAMES_ALLOWED = {"compactinue"}
 PLANNING_DIR = ".planning"
 NAME_SHAPES = [
     re.compile(r"⟪/?([^\s⟫/]+) (?:v1|n=)"),
-    re.compile(B + r"/([A-Za-z0-9_{}@<>-]+):(?:handoff|resume|status)\b"),
+    re.compile(B + r"/([A-Za-z0-9_{}@<>-]+):(?:handoff|resume|status|settings)\b"),
     re.compile(B + r"([A-Za-z0-9_{}@<>]+(?:-[A-Za-z0-9_{}@<>]+)*)-store" + E),
     re.compile(B + r"([A-Za-z0-9_{}@<>-]+):handoff skill"),
 ]
@@ -182,7 +182,9 @@ SKIP_DIRS = {".git", "node_modules", ".types"}
 # BT-09: the phrase a user says for each skill (AT-S-01 names "handoff status" for status).
 SKILL_TRIGGERS = {"handoff": "handoff", "resume": "resume", "status": "handoff status",
                   # W-BETA C (TXT-10): "Only when the user asks for a ... report"
-                  "report": "report"}
+                  "report": "report",
+                  # 0.1.2 onboarding: the settings flow ("only when the user asks")
+                  "settings": "settings"}
 DESC_MAX = 150
 TRIGGER_WITHIN = 50
 
@@ -1140,7 +1142,7 @@ def prod_reads_hits(target, brand):
     return out
 
 
-CALL_FORM_SKILLS = ("handoff", "resume", "status", "report")
+CALL_FORM_SKILLS = ("handoff", "resume", "status", "report", "settings")
 FRONTMATTER_BANNED = re.compile(r"^(allowed-tools|disable-model-invocation)\s*:")
 
 

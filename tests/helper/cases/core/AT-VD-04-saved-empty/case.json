@@ -24,6 +24,6 @@
   {"name": "reset of a saved empty value: listed as now empty",
    "argv": ["settings", "reset", "compact_target_tokens"],
    "expect": {"exit": 0,
-     "stdout_has": ["^  would remove compact_target_tokens \\(now saved empty; default 400000\\)$"]}}
+     "stdout_has": ["^  would change compact_target_tokens: saved empty -> default 400000 \\(removed\\)$"]}}
  ]
 }

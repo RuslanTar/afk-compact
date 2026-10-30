@@ -1,0 +1,232 @@
+{
+ "id": "AT-SW-03 (settings writer: a concurrent change and a failed write leave no partial file)",
+ "owner": "core",
+ "note": "0.1.2 settings writer, the moments around the write. A file another program writes after the plan read it (test seam STORE_TEST_SETTINGS_RACE: right after the backup) is refused (exit 3) and keeps that program's bytes; the backup holds the text the plan read. A write that fails halfway (STORE_TEST_SETTINGS_FAIL=write: the temp file's write stops at half, as on a full disk) is refused with the error, the settings file keeps its bytes and mode, and the temp file is gone: no partial file anywhere. A backup that fails halfway (STORE_TEST_SETTINGS_FAIL=backup) is refused with the error and leaves no partial backup. A settings folder where no backup can be written (mode 0500) is refused before any write.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "needs": [
+  "nonroot"
+ ],
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"env\": {\"ZZ_KEEP\": \"1\"},\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    },
+    {
+     "write": "$TMP/expect/orig.json",
+     "text": "{\n  \"env\": {\"ZZ_KEEP\": \"1\"},\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    },
+    {
+     "write": "$TMP/expect/race.json",
+     "text": "{\"written\": \"by another program\"}\n"
+    }
+   ]
+  },
+  {
+   "name": "snapshot",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/orig.json",
+      "snapshot": "orig"
+     },
+     {
+      "path": "$TMP/expect/race.json",
+      "snapshot": "race"
+     }
+    ]
+   }
+  },
+  {
+   "name": "another program writes the file between the read and the rename: refused, its bytes kept",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "env": {
+    "STORE_TEST_SETTINGS_RACE": "{\"written\": \"by another program\"}\n"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json changed while this ran \\(another program wrote it\\); nothing written, run it again$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00\\.bak \\(the file as it was\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "race"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00.bak",
+      "same_bytes_as": "orig",
+      "mode": "0600"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*tmp*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"env\": {\"ZZ_KEEP\": \"1\"},\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "a write that fails halfway: refused with the error; the file keeps its bytes and mode; no temp file left",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "env": {
+    "STORE_TEST_SETTINGS_FAIL": "write"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, the new text could not be written; your settings\\.json keeps its old text$",
+     "^  error: write: no space left on device \\(test\\)$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00-2\\.bak "
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig",
+      "mode": "0644"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*tmp*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same call without the seam goes through",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  stall_min: 60 -> 90$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"stall_min\": 90",
+       "\"ZZ_KEEP\": \"1\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"env\": {\"ZZ_KEEP\": \"1\"},\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "a backup that fails halfway: refused with the error, the partial backup removed, the file untouched",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "env": {
+    "STORE_TEST_SETTINGS_FAIL": "backup"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, no backup could be written next to your settings\\.json$",
+     "^  error: write: no space left on device \\(test\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig",
+      "mode": "0644"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"env\": {\"ZZ_KEEP\": \"1\"},\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    },
+    {
+     "mkdir": "$HOME/.claude",
+     "mode": "0500"
+    }
+   ]
+  },
+  {
+   "name": "no backup can be written: refused before any write",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, no backup could be written next to your settings\\.json$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$HOME/.claude",
+     "mode": "0700"
+    }
+   ]
+  }
+ ]
+}

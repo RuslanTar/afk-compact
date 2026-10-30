@@ -1,0 +1,585 @@
+{
+ "id": "AT-SW-01 (settings writer: settings set, dry run and apply)",
+ "owner": "core",
+ "note": "0.1.2 settings writer (owner 2026-10-30, helper writer for the non-consent keys): `settings set <key>=<value>...` is a dry run unless --apply; it lists each change as old -> new and the --plan of the file. The apply edits exactly those members of pluginConfigs[\"<plugin>@<marketplace>\"].options by a text splice (a value replaced, a member inserted after the last one with its spacing, a member removed), so every other key keeps its bytes (and so its meaning: env, permissions, another plugin's options, an unknown option key, numbers written 2.50, a \\u escape, non-ASCII text). A value equal to its default (or empty) removes the member, so a default is never written. It saves the whole file as settings.json.<plugin>-<stamp>.bak next to it (mode 0600; -2 for a second one in the same second), keeps the file's mode and writes through a symbolic link. A missing options object, plugin entry or pluginConfigs is created, the key taken from the one enabledPlugins entry of the plugin (or its installed folder); the file's indent (tabs here) and line break (CRLF) are kept. A number the clamp lowers once the change is in (a target over two thirds of the soft max, a soft max or target over what a configured window allows) is written as given with a note in the dry run and the apply; one the clamp leaves gets none.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "mtime_ago_s": 3600,
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 300000,\n        \"cooldown_ms\": 20000\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
+    },
+    {
+     "write": "$TMP/expect/orig.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 300000,\n        \"cooldown_ms\": 20000\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
+    },
+    {
+     "write": "$TMP/expect/a1.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"watcher\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
+    },
+    {
+     "write": "$TMP/expect/a2.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"watcher\": \"off\",\n        \"triggers\": false,\n        \"log_dir\": \"~/afk logs\"\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "snapshots",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "snapshot": "live"
+     },
+     {
+      "path": "$TMP/expect/orig.json",
+      "snapshot": "orig"
+     },
+     {
+      "path": "$TMP/expect/a1.json",
+      "snapshot": "a1"
+     },
+     {
+      "path": "$TMP/expect/a2.json",
+      "snapshot": "a2"
+     }
+    ]
+   }
+  },
+  {
+   "name": "dry run: old -> new per key, a default removes, unchanged and unsaved keys named; nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000",
+    "watcher=OFF",
+    "cooldown_ms=30000",
+    "stall_min=60"
+   ],
+   "capture": {
+    "PLAN": "re:--plan ([0-9a-f]{12}) --apply"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings set: dry run, nothing written · ~/\\.claude/settings\\.json · plugin options under \"$BRAND@m\"$",
+     "^  would change compact_target_tokens: 300000 -> 350000$",
+     "^  would change watcher: default shadow -> off$",
+     "^  would change cooldown_ms: 20000 -> default 30000 \\(removed\\)$",
+     "^  not saved, nothing to remove: stall_min$",
+     "^to apply it: the same command with --plan [0-9a-f]{12} --apply$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig",
+      "same_mtime_as": "live",
+      "mode": "0644"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "a --plan of another file text: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000",
+    "--plan",
+    "000000000000",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^settings set: refused, your settings\\.json changed since the dry run; run the dry run again$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "apply: exactly those members change, every other byte stays; a backup of the whole file next to it; mode kept",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000",
+    "watcher=OFF",
+    "cooldown_ms=30000",
+    "stall_min=60",
+    "--plan",
+    "$PLAN",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings set: changed ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
+     "^  compact_target_tokens: 300000 -> 350000$",
+     "^  watcher: default shadow -> off$",
+     "^  cooldown_ms: 20000 -> default 30000 \\(removed\\)$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00\\.bak \\(the file as it was\\)$",
+     "^  takes effect: "
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a1",
+      "mode": "0644"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00.bak",
+      "same_bytes_as": "orig",
+      "mode": "0600"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00*",
+      "count": 1
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*tmp*",
+      "count": 0
+     }
+    ],
+    "absent": [
+     "$WATCH/settings-backups"
+    ]
+   }
+  },
+  {
+   "name": "the same values again: nothing to change, no backup",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000",
+    "watcher=off",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings set: nothing to change$",
+     "^  unchanged: compact_target_tokens$",
+     "^  unchanged: watcher$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00*",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "a boolean and a path appended after the last member; a second backup that second gets -2",
+   "argv": [
+    "settings",
+    "set",
+    "triggers=no",
+    "log_dir=~/afk logs",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  triggers: default true -> false$",
+     "^  log_dir: default empty -> ~/afk logs$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00-2\\.bak "
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a2",
+      "mode": "0644"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-2026-10-30_09-00-00-2.bak",
+      "same_bytes_as": "a1",
+      "mode": "0600"
+     }
+    ]
+   }
+  },
+  {
+   "name": "the plugin reads what was written",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^compact_target_tokens 350000 \\(your settings\\.json; default 400000\\)$",
+     "^watcher off \\(your settings\\.json; default shadow\\)$",
+     "^triggers false \\(your settings\\.json; default true\\)$",
+     "^cooldown_ms 30000 \\(default\\)$"
+    ]
+   }
+  },
+  {
+   "name": "an empty value removes the member",
+   "argv": [
+    "settings",
+    "set",
+    "log_dir=",
+    "triggers=true",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  log_dir: ~/afk logs -> default empty \\(removed\\)$",
+     "^  triggers: false -> default true \\(removed\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "a1"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "text": "{\n\t\"enabledPlugins\": {\"$BRAND@mkt\": true},\n\t\"pluginConfigs\": {\n\t\t\"other@m\": {\"options\": {}}\n\t}\n}\n"
+    },
+    {
+     "write": "$TMP/expect/ne.json",
+     "text": "{\n\t\"enabledPlugins\": {\"$BRAND@mkt\": true},\n\t\"pluginConfigs\": {\n\t\t\"other@m\": {\"options\": {}},\n\t\t\"$BRAND@mkt\": {\n\t\t\t\"options\": {\n\t\t\t\t\"stall_min\": 90\n\t\t\t}\n\t\t}\n\t}\n}\n"
+    },
+    {
+     "write": "$TMP/expect/np.json",
+     "text": "{\"enabledPlugins\": {\"$BRAND@mkt\": true}, \"model\": \"opus\", \"pluginConfigs\": {\"$BRAND@mkt\": {\"options\": {\"stall_min\": 90}}}}\n"
+    },
+    {
+     "write": "$TMP/expect/eo.json",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\"options\": {\n      \"warn_ui\": false\n    }}\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "no entry for the plugin: created under the enabledPlugins key, tab indent kept",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings set: changed ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@mkt\" \\(a new entry\\)\\)$",
+     "^  stall_min: default 60 -> 90$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/ne.json",
+      "snapshot": "ne"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "ne"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "text": "{\"enabledPlugins\": {\"$BRAND@mkt\": true}, \"model\": \"opus\"}\n"
+    }
+   ]
+  },
+  {
+   "name": "no pluginConfigs: created, on one line as the file is",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/np.json",
+      "snapshot": "np"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "np"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\"options\": {}}\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "an empty options object gets its first member",
+   "argv": [
+    "settings",
+    "set",
+    "warn_ui=false",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/eo.json",
+      "snapshot": "eo"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "eo"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/real/settings.json",
+     "mode": "0640",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\"options\": {}}\n  }\n}\n"
+    },
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$TMP/old.json"
+    },
+    {
+     "symlink": "$HOME/.claude/settings.json",
+     "to": "$TMP/real/settings.json"
+    }
+   ]
+  },
+  {
+   "name": "a symlinked settings.json: the link's target gets the change and keeps its mode; the backup sits next to the link",
+   "argv": [
+    "settings",
+    "set",
+    "warn_ui=false",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/real/settings.json",
+      "same_bytes_as": "eo",
+      "mode": "0640"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "eo"
+     },
+     {
+      "path": "$TMP/real/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$TMP/old-link"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"stall_min\": 60\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    },
+    {
+     "write": "$TMP/expect/c1",
+     "text": "{\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"stall_min\": 60,\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    },
+    {
+     "write": "$TMP/expect/e0",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {}\r\n  }\r\n}\r\n"
+    },
+    {
+     "write": "$TMP/expect/e1",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    }
+   ]
+  },
+  {
+   "name": "a file with CRLF line breaks: an added member is joined with CRLF too",
+   "argv": [
+    "settings",
+    "set",
+    "watcher=off",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/c1",
+      "snapshot": "c1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "c1"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {}\r\n  }\r\n}\r\n"
+    }
+   ]
+  },
+  {
+   "name": "and an options object created inside an empty entry: CRLF at every level",
+   "argv": [
+    "settings",
+    "set",
+    "watcher=off",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/e1",
+      "snapshot": "e1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "e1"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a target the clamp lowers (over two thirds of the soft max): written as given, with a note in the dry run",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=5000000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings set: dry run, nothing written",
+     "^  would change compact_target_tokens: default 400000 -> 5000000$",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
+     "^to apply it: "
+    ],
+    "stdout_lacks": [
+     "compact_soft_max_tokens"
+    ]
+   }
+  },
+  {
+   "name": "and in the apply",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=5000000",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  compact_target_tokens: default 400000 -> 5000000$",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"compact_target_tokens\": 5000000"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a target within what the soft max allows: no note",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 5000000 -> 350000$"
+    ],
+    "stdout_lacks": [
+     "note:"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    }
+   ]
+  },
+  {
+   "name": "a window the clamp lowers the soft max and the target under: a note for each, none for the window",
+   "argv": [
+    "settings",
+    "set",
+    "native_window_tokens=700000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change native_window_tokens: ",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
+     "^  note: compact_soft_max_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ],
+    "stdout_lacks": [
+     "note: native_window_tokens"
+    ]
+   }
+  }
+ ]
+}

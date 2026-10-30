@@ -118,7 +118,7 @@ def launcher_rel(name, folder=LAUNCHER_DIR):
 EVENTS = {"PreCompact": 5, "PostCompact": 15, "SessionStart": 5, "SessionEnd": 5,
           "Stop": 8, "SubagentStop": 3, "StopFailure": 2, "PermissionDenied": 2}   # MOD §1.3, D-4
 SESSION_START_MATCHER = "startup|resume|clear|compact|fork"
-SKILLS_ALL = ["handoff", "resume", "status", "report"]   # report: W-BETA C (TXT-10)
+SKILLS_ALL = ["handoff", "resume", "status", "report", "settings"]   # report: W-BETA C (TXT-10); settings: 0.1.2 onboarding
 WATCH_DRIVERS = ["tests/helper/cases/watch/_driver/run-watch.pl"]
 DRILL_NAME = "x" * 14
 DRILL_DIR = os.path.join(REPO, "tmp", "rename")

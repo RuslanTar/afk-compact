@@ -1,0 +1,1085 @@
+{
+ "id": "AT-SW-02 (settings writer: every refusal writes nothing)",
+ "owner": "core",
+ "note": "0.1.2 settings writer: refused calls exit 3, write nothing and leave no backup. The six consent keys are refused on every path (set and reset, dry run and --apply, beside a valid key), since the helper cannot tell a user's ! line from a model's call; the refusal names the user-run ways (/config, the file by hand, and for a value the plugin reads Claude Code's own `claude plugin configure <plugin>@<marketplace> --values-stdin`). A value the plugin would not read as written (type, min and max, enum values, a whole number, the window floor, a relative path or one with a space at an end, a control character, a value over 4096 bytes, a list over 32 entries, a number from 1e15 or one that prints in e-notation, each pattern list's own rules: a deny class name, a NAME glob with a /) is refused with the reason, never with a pattern's text. A protective list only gains entries and resume_proceed only goes towards confirm (a removal that loosens nothing still goes). Files refused: not plain JSON, a non-object on the path, a member named twice, two keys for the plugin, no entry and no marketplace known, an @inline run, another CLAUDE_CONFIG_DIR, a hard link, no file (a reset then has nothing to remove), a folder.",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"model\": \"opus\",\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 300000,\n        \"prod_patterns\": \"zzprod-a;zzprod-b\",\n        \"resume_proceed\": \"confirm\",\n        \"relaunch_auto\": \"off\",\n        \"secret_extra_rules\": \"\"\n      }\n    }\n  }\n}\n"
+    },
+    {
+     "write": "$TMP/expect/orig.json",
+     "text": "{\n  \"model\": \"opus\",\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 300000,\n        \"prod_patterns\": \"zzprod-a;zzprod-b\",\n        \"resume_proceed\": \"confirm\",\n        \"relaunch_auto\": \"off\",\n        \"secret_extra_rules\": \"\"\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "snapshot",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/orig.json",
+      "snapshot": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a consent key: refused on every path, with the user-run ways (/config, Claude Code's plugin configure)",
+   "argv": [
+    "settings",
+    "set",
+    "relaunch_auto=Shadow",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, nothing written$",
+     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$",
+     "^  relaunch_auto: or type: ! printf '%s' '\\{\"relaunch_auto\":\"shadow\"\\}' \\| claude plugin configure '$BRAND@m' --values-stdin$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "a consent key in the dry run too",
+   "argv": [
+    "settings",
+    "set",
+    "relaunch_auto=shadow"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, nothing written$",
+     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ],
+    "stdout_lacks": [
+     "^to apply it"
+    ]
+   }
+  },
+  {
+   "name": "all six consent keys; a valid key beside them is not written either",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000",
+    "repo_roots=/tmp",
+    "relaunch_auto=on",
+    "relaunch_allow=^make test$",
+    "unattended_prod_reads=allow",
+    "queue_cmd=/bin/true",
+    "restart_on_update=on",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, nothing written$",
+     "^  repo_roots: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.repo_roots\\) or in your settings\\.json by hand$",
+     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$",
+     "^  relaunch_allow: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_allow\\) or in your settings\\.json by hand$",
+     "^  unattended_prod_reads: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.unattended_prod_reads\\) or in your settings\\.json by hand$",
+     "^  queue_cmd: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.queue_cmd\\) or in your settings\\.json by hand$",
+     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.restart_on_update\\) or in your settings\\.json by hand$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ],
+    "stdout_lacks": [
+     "compact_target_tokens"
+    ]
+   }
+  },
+  {
+   "name": "a consent key with a value the plugin would not read: no configure line, the reason",
+   "argv": [
+    "settings",
+    "set",
+    "restart_on_update=always",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.restart_on_update\\) or in your settings\\.json by hand$",
+     "^  restart_on_update: the value given: not off, shadow or on$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ],
+    "stdout_lacks": [
+     "plugin configure"
+    ]
+   }
+  },
+  {
+   "name": "a consent key named in a reset: refused too",
+   "argv": [
+    "settings",
+    "reset",
+    "relaunch_auto",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings reset: refused, nothing written$",
+     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ],
+    "stdout_lacks": [
+     "plugin configure"
+    ]
+   }
+  },
+  {
+   "name": "values the plugin would not read as written: each one named, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "max_auto_continues_per_hour=11",
+    "compact_target_tokens=lots",
+    "handoff_turn_max_tokens=30000.5",
+    "watcher=loud",
+    "triggers=maybe",
+    "log_dir=logs",
+    "native_window_tokens=5000",
+    "deny_class_patterns=nope",
+    "ticket_pattern=(",
+    "cooldown_ms=-5",
+    "handoff_root=/a\tb",
+    "relaunch_quiet_s=10",
+    "secret_extra_rules=HARD:(?{1})",
+    "protected_branches=!main",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, nothing written$",
+     "^  max_auto_continues_per_hour: not valid: above its maximum 10$",
+     "^  compact_target_tokens: not valid: not a number of 0 or more$",
+     "^  handoff_turn_max_tokens: not valid: not a whole number \\(the plugin rounds it down\\)$",
+     "^  watcher: not valid: not shadow or off$",
+     "^  triggers: not valid: not true or false$",
+     "^  log_dir: not valid: not an absolute path",
+     "^  native_window_tokens: not valid: 0 \\(the model's window\\) or at least 100000$",
+     "^  deny_class_patterns: not valid: entry 1: not <class>=<pattern>",
+     "^  ticket_pattern: not valid: not a pattern the plugin runs",
+     "^  cooldown_ms: not valid: not a number of 0 or more$",
+     "^  handoff_root: not valid: it holds a control character$",
+     "^  relaunch_quiet_s: not valid: below its minimum 30$",
+     "^  secret_extra_rules: not valid: entry 1: not a pattern the plugin runs",
+     "^  protected_branches: not valid: entry 1: not a branch name or glob the plugin takes$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ],
+    "stdout_lacks": [
+     "\\(\\?\\{1\\}\\)"
+    ]
+   }
+  },
+  {
+   "name": "more values the plugin would not read as written: the size caps, the class names, a path with a space at its end, a NAME glob with a /, digits that print as 1e-07",
+   "argv": [
+    "settings",
+    "set",
+    "driver_skills=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "deny_class_patterns=bogus=zz",
+    "disposable_keep_days=1000000000000000",
+    "stall_min=0.0000001",
+    "log_dir=/tmp/zz-log ",
+    "secret_extra_rules=NAME:a/b",
+    "prod_patterns=zzprod-a;zzprod-b;zz3;zz4;zz5;zz6;zz7;zz8;zz9;zz10;zz11;zz12;zz13;zz14;zz15;zz16;zz17;zz18;zz19;zz20;zz21;zz22;zz23;zz24;zz25;zz26;zz27;zz28;zz29;zz30;zz31;zz32;zz33",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, nothing written$",
+     "^  driver_skills: not valid: it is longer than 4096 bytes$",
+     "^  deny_class_patterns: not valid: entry 1: not <class>=<pattern> \\(class sleep-poll, routing, secret, write-guard, scope or other\\)$",
+     "^  disposable_keep_days: not valid: too large$",
+     "^  stall_min: not valid: too many digits$",
+     "^  log_dir: not valid: it starts or ends with a space$",
+     "^  secret_extra_rules: not valid: entry 1: a NAME glob with a / or over 200 characters$",
+     "^  prod_patterns: not valid: more than 32 entries$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "a protective list only gains entries: one dropped is refused",
+   "argv": [
+    "settings",
+    "set",
+    "prod_patterns=zzprod-a",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, nothing written$",
+     "^  prod_patterns: looser, refused: a protective list only gains entries here; 1 of its saved entries would go$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ],
+    "stdout_lacks": [
+     "zzprod"
+    ]
+   }
+  },
+  {
+   "name": "and a reset of it (every entry would go)",
+   "argv": [
+    "settings",
+    "reset",
+    "prod_patterns",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  prod_patterns: looser, refused: a protective list only gains entries here; 2 of its saved entries would go$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "an entry added: allowed (dry run), never echoed",
+   "argv": [
+    "settings",
+    "set",
+    "prod_patterns=zzprod-a;zzprod-b;zzprod-c"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change prod_patterns: 2 entries -> 3 entries$"
+    ],
+    "stdout_lacks": [
+     "zzprod"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "resume_proceed only goes towards confirm",
+   "argv": [
+    "settings",
+    "set",
+    "resume_proceed=auto",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  resume_proceed: looser, refused: it only goes towards confirm here \\(saved confirm\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "and its reset",
+   "argv": [
+    "settings",
+    "reset",
+    "resume_proceed",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  resume_proceed: looser, refused: it only goes towards confirm here \\(saved confirm\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "a protective list saved empty: its reset loosens nothing, with what the default does",
+   "argv": [
+    "settings",
+    "reset",
+    "secret_extra_rules"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change secret_extra_rules: saved empty -> default empty \\(removed\\)$",
+     "^  note: secret_extra_rules: its default leaves only the built-in secret rules$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "usage: not key=value, an unknown key, a key twice, nothing",
+   "argv": [
+    "settings",
+    "set",
+    "watcher"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^usage: settings set: watcher is not <key>=<value>$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "settings",
+    "set",
+    "no_such_key=1"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^usage: settings set: no_such_key is no setting of this plugin$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "settings",
+    "set",
+    "watcher=off",
+    "watcher=shadow"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^usage: settings set: watcher given twice$"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "settings",
+    "set"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^usage: settings set <key>=<value>\\.\\.\\. \\[--apply\\]$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  // a comment\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}\n}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\n  // a comment\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}\n}\n"
+    },
+    {
+     "write": "$TMP/expect/f0",
+     "text": "{\n  // a comment\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "a file with comments: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json is not plain JSON \\(comments, a trailing comma or a syntax error\\); edit it by hand or in /config$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f0",
+      "snapshot": "f0"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f0"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f0"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"stall_min\": 60,}}}}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"stall_min\": 60,}}}}\n"
+    },
+    {
+     "write": "$TMP/expect/f1",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"stall_min\": 60,}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "not JSON at all: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json is not plain JSON "
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f1",
+      "snapshot": "f1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f1"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": []}}}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": []}}}\n"
+    },
+    {
+     "write": "$TMP/expect/f2",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": []}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "an options value that is not an object: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json, its pluginConfigs or the plugin's entry there is not a JSON object"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f2",
+      "snapshot": "f2"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f2"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f2"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"stall_min\": 60, \"stall_min\": 70}}}}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"stall_min\": 60, \"stall_min\": 70}}}}\n"
+    },
+    {
+     "write": "$TMP/expect/f3",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"stall_min\": 60, \"stall_min\": 70}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "a member named twice on the path: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json names \"stall_min\" twice in one object; edit it by hand or in /config$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f3",
+      "snapshot": "f3"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f3"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f3"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}, \"$BRAND@n\": {\"options\": {}}}}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}, \"$BRAND@n\": {\"options\": {}}}}\n"
+    },
+    {
+     "write": "$TMP/expect/f4",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}, \"$BRAND@n\": {\"options\": {}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "two keys for the plugin: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, several plugin option keys in your settings\\.json \\(\"$BRAND@m\", \"$BRAND@n\"\\); remove the one no longer used, then run this again$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f4",
+      "snapshot": "f4"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f4"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f4"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"model\": \"opus\"}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"model\": \"opus\"}\n"
+    },
+    {
+     "write": "$TMP/expect/f5",
+     "text": "{\"model\": \"opus\"}\n"
+    }
+   ]
+  },
+  {
+   "name": "no entry for the plugin and no marketplace known: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json has no entry for the plugin and its marketplace is not known here; save one setting in /config first$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f5",
+      "snapshot": "f5"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f5"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f5"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}}\n"
+    },
+    {
+     "write": "$TMP/expect/f6",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "a --plugin-dir run (an @inline key): refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, the plugin runs from --plugin-dir"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f6",
+      "snapshot": "f6"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f6"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f6"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   },
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$TMP/elsewhere"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}}\n"
+    },
+    {
+     "write": "$TMP/cc1/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}}\n"
+    },
+    {
+     "write": "$TMP/expect/f7",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "CLAUDE_CONFIG_DIR names another folder: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, CLAUDE_CONFIG_DIR names another folder than ~/\\.claude, and the writer edits ~/\\.claude/settings\\.json only"
+    ],
+    "files": [
+     {
+      "path": "$TMP/expect/f7",
+      "snapshot": "f7"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "f7"
+     },
+     {
+      "path": "$TMP/cc1/settings.json",
+      "same_bytes_as": "f7"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     },
+     {
+      "path": "$TMP/cc1/settings.json.*",
+      "count": 0
+     }
+    ]
+   },
+   "env": {
+    "CLAUDE_CONFIG_DIR": "$TMP/cc1"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"model\": \"opus\",\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 300000,\n        \"prod_patterns\": \"zzprod-a;zzprod-b\",\n        \"resume_proceed\": \"confirm\",\n        \"relaunch_auto\": \"off\",\n        \"secret_extra_rules\": \"\"\n      }\n    }\n  }\n}\n"
+    },
+    {
+     "hardlink": "$TMP/second-name.json",
+     "to": "$HOME/.claude/settings.json"
+    }
+   ]
+  },
+  {
+   "name": "a settings.json with a second name (a hard link): refused, both names keep the text",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json has a second name \\(a hard link\\)"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$TMP/second-name.json",
+      "same_bytes_as": "orig"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$TMP/gone.json"
+    }
+   ]
+  },
+  {
+   "name": "no settings.json: a set is refused",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, there is no settings\\.json yet; save a setting in /config first$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "exists": false
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "and a reset has nothing to remove",
+   "argv": [
+    "settings",
+    "reset",
+    "stall_min",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings reset: nothing to remove \\(no ~/\\.claude/settings\\.json\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "text": "{\"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"relaunch_auto\": \"\", \"watcher\": \"\"}}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "a consent key saved empty: the warning points to /config, never to a reset the writer refuses",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^warning: relaunch_auto: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with /config or by hand \\(a consent key: the plugin never writes it\\)$",
+     "^warning: watcher: saved empty, .* clear it with ! \"/[^\"]+/scripts/$BRAND-store\" settings reset watcher --apply$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$TMP/gone2.json"
+    },
+    {
+     "mkdir": "$HOME/.claude/settings.json"
+    }
+   ]
+  },
+  {
+   "name": "a settings.json that is a folder: refused as unreadable",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, your settings\\.json cannot be read as a file$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*",
+      "count": 0
+     }
+    ]
+   }
+  }
+ ]
+}
