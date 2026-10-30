@@ -349,11 +349,15 @@ sub copy_new {
     }
     die "create a temp name beside $dst: none free\n" unless defined $tmp;
     my $total = 0;
+    # test mode: STORE_TEST_COPY_FAIL_AFTER=N fails the write after N blocks (a disk that fills part way)
+    my $fail = test_mode() && ($ENV{STORE_TEST_COPY_FAIL_AFTER} // '') =~ /\A[0-9]+\z/ ? $ENV{STORE_TEST_COPY_FAIL_AFTER} : undef;
+    my $blocks = 0;
     my $ok = eval {
         while (1) {
             my $n = sysread($in, my $buf, 1 << 16);
             die "read $src: $!\n" unless defined $n;
             last if $n == 0;
+            die "write: no space left (test)\n" if defined $fail && $blocks++ >= $fail;
             _write_all($out, $buf);
             $total += $n;
         }
