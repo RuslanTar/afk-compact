@@ -52,6 +52,14 @@ export type Config = {
    * the lane state with its Basis, then Needs you or Nothing needed from you.
    */
   idle_digest: 'submit' | 'return' | 'off'
+  /**
+   * Keep-warm (D-14, 2026-10-30; keepwarm.ts): while the main session is idle and one of its own
+   * background jobs (an agent, a workflow, a background shell) is still open, the plugin keeps its
+   * one-hour prompt cache warm with a hidden fork ping, for up to this many hours of the idle gap,
+   * then hands over to the idle path (the handoff turn or the compaction) while the cache is warm.
+   * `0`: off.
+   */
+  keep_warm_hours: number
   /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
   watcher_off: boolean
   /**
@@ -90,6 +98,8 @@ export const DEFAULTS: Config = {
   // (2026-10-28): the away digest ships on only after a live PASS, else off. The live AD2 probe
   // failed the digest's text format, so 0.1.1 ships `off`; a later build flips this one value.
   idle_digest: 'off',
+  // D-14 (2026-10-30): the decision model's cutoff, warm to 6 h then compact while warm.
+  keep_warm_hours: 6,
   watcher_off: false,
   notes: { invalid: [], clamped: [] },
 }
@@ -97,6 +107,9 @@ export const DEFAULTS: Config = {
 /** MOD-SPEC §1.2 `idle_handoff_min_tokens` bounds (the native idle floor, IC-1 F3). */
 export const IDLE_TOKENS_MIN = 100000
 export const IDLE_TOKENS_MAX = 1000000
+/** `keep_warm_hours` bounds (0 = off; a day at most). */
+export const KEEP_WARM_HOURS_MIN = 0
+export const KEEP_WARM_HOURS_MAX = 24
 
 /** Empty values and unsubstituted `${user_config.…` count as unset (MOD-SPEC §2.6). */
 function unset(v: unknown): boolean {
@@ -248,6 +261,7 @@ export function parseOptions(o: PluginOptions): Config {
     idle_compact: idleCompact(o, notes),
     // Any other value is `off`, the value with no extra plugin turn and no digest (rule (c)).
     idle_digest: choice(o, 'idle_digest', ['submit', 'return', 'off'] as const, DEFAULTS.idle_digest, 'off', notes),
+    keep_warm_hours: bounded(o, 'keep_warm_hours', DEFAULTS.keep_warm_hours, KEEP_WARM_HOURS_MIN, KEEP_WARM_HOURS_MAX, notes),
     watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
     notes,
   }

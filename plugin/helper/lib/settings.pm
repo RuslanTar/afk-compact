@@ -17,7 +17,7 @@ use warnings;
 use utf8;
 require "userre.pm";    # U-06: the time bound for the user's own patterns
 
-# The keys of MOD-SPEC §1.2 (43 with idle_digest and restart_on_update): type; fallback (used only when the manifest lacks the key:
+# The keys of MOD-SPEC §1.2 (44 with idle_digest, restart_on_update and keep_warm_hours): type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
@@ -66,6 +66,9 @@ our @KEYS = (
     # idle compaction of a finished or blocked lane (`submit`), or none until the next turn
     # (`return`); `off` (owner rule (c), 2026-10-28: on only after a live PASS) asks for no digest
     [idle_digest                 => 'str',  'off',                     'enum'],
+    # keep-warm (D-14, 2026-10-30): while this session's own background jobs run, the plugin keeps
+    # the one-hour prompt cache warm for up to this many hours of an idle gap; 0 = off
+    [keep_warm_hours             => 'num',  6,                         'num'],
     # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
     [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
     [secret_extra_rules          => 'str',  '',                        'list'],
