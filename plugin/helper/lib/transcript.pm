@@ -693,10 +693,11 @@ sub user_quote_found {
 # Denied calls (0.1.2 AC-2, mitigation 1 of the classifier incident): a tool call of the main
 # thread whose result Claude Code wrote as a permission denial. `classifier`: the auto-mode
 # classifier refused it; `rule`: a deny rule or the permission mode did; `user`: the user
-# rejected it at the prompt.
+# rejected it at the prompt. A rule's text quotes the command, which may span lines (a heredoc
+# commit message chained with a push; review finding 3).
 our @DENIED = (
     [ classifier => qr/\A\s*Permission for this action (?:was|has been) denied by (?:the )?(?:Claude Code )?auto[- ]mode classifier/ ],
-    [ rule       => qr/\A\s*Permission to use \S+ (?:[^\n]*? )?has been denied/ ],
+    [ rule       => qr/\A\s*Permission to use \S+ (?:[\s\S]*? )?has been denied/ ],
     [ user       => qr/\A\s*The user doesn't want to proceed with this tool use/ ],
 );
 # Tools whose input holds file text: only their path is kept.

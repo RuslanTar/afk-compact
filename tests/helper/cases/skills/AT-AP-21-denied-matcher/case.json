@@ -1,0 +1,262 @@
+{
+ "id": "AT-AP-21 (denied matcher)",
+ "needs": [
+  "nonroot"
+ ],
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.2 AC-2 class-A review round 2 (findings 1-7): the denied-call matcher, one path at a time. A plain word holding letters of HASH(0x...) is no distinctive token (finding 1: an unescaped @_), so a refused `git push origin HEAD` covers every push approval by class; a refused Write covers the approval naming its file name only (finding 2); a rule refusal quoting a multi-line command is read (finding 3); `plugin` of a plugin MCP server name is a stop word (finding 4); the user's rejection at the prompt covers by a service word alone; a token stands whole (hotfix/7 is not hotfix/77); a subagent's refusal is not read (finding 5); a usable line with a denial note in its action or after given is approval-denied (finding 6); a malformed tagged line in a plugin handoff turn is approval-plugin-turn (finding 7)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"rename the widget plugin folder\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"set the Jira summary\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"close OPS-41 in the tracker\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_b1\", \"name\": \"Bash\", \"input\": {\"command\": \"git push origin HEAD\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_b1\", \"is_error\": true, \"content\": \"Permission to use Bash with command git push origin HEAD has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"a2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_s1\", \"name\": \"mcp__plugin_slack_slack__slack_send_message\", \"input\": {\"channel_id\": \"C0123ABC\", \"text\": \"the build is green\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_s1\", \"is_error\": true, \"content\": \"Permission for this action was denied by the Claude Code auto mode classifier. Reason: [External System Writes]. If you have other tasks that don't depend on this action, continue working on those.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_j1\", \"name\": \"mcp__claude_ai_Atlassian__editJiraIssue\", \"input\": {\"issueIdOrKey\": \"LAB-99\", \"fields\": {\"summary\": \"Retry window\"}}}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_j1\", \"is_error\": true, \"content\": \"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"a4\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_g1\", \"name\": \"Bash\", \"input\": {\"command\": \"gh issue close OPS-41\"}}]}, \"isSidechain\": true}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_g1\", \"is_error\": true, \"content\": \"Permission to use Bash with command gh issue close OPS-41 has been denied.\"}]}, \"isSidechain\": true}\n"
+    }
+   ]
+  },
+  {
+   "name": "begin (A)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEA": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (A)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEA"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEA/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"rename the widget plugin folder\" — action rename the widget plugin folder · targets src/widget @ 1a2b3c4 · once · not yet used\n- U-4: approval \"set the Jira summary\" — action set the Jira summary of the retry ticket · targets the retry ticket summary @ v1 · once · not yet used\n- U-5: approval \"close OPS-41 in the tracker\" — action close OPS-41 in the tracker · targets OPS-41 @ open · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "a bare push names nothing distinctive (HEAD is a plain word) and covers the feat/x push by class; a word of the Jira call the user rejected at the prompt covers the Jira approval; the word plugin of a plugin MCP server covers nothing; a subagent's refusal is not read",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEA",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 12$",
+     "^REFUSED: lint \\(2 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 11$",
+     "LINT approval-denied line 13$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"copy JIRA-v2.md into the wiki\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push hotfix/7 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push hotfix/77 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag v1.4.0 on that commit\"}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag v1.4.1 on that commit\"}}\n{\"type\": \"user\", \"uuid\": \"h5\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag v1.4.2 on that commit\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_w1\", \"name\": \"Write\", \"input\": {\"file_path\": \"/repo/docs/JIRA-v2.md\", \"content\": \"spec v2\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_w1\", \"is_error\": true, \"content\": \"Permission to use Write has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"a2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_b2\", \"name\": \"Bash\", \"input\": {\"command\": \"git commit -m \\\"$(cat <<'EOF'\\nretry window fix\\nEOF\\n)\\\" && git push origin hotfix/7\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_b2\", \"is_error\": true, \"content\": \"Permission to use Bash with command git commit -m \\\"$(cat <<'EOF'\\nretry window fix\\nEOF\\n)\\\" && git push origin hotfix/7 has been denied.\"}]}}\n"
+  },
+  {
+   "name": "begin (B)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEB": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (B)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEB"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEB/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"copy JIRA-v2.md into the wiki\" — action copy JIRA-v2.md into the wiki · targets docs/JIRA-v2.md @ 1a2b3c4 · once · not yet used\n- U-3: approval \"push hotfix/7 to origin\" — action git push origin hotfix/7 · targets branch hotfix/7 @ 1a2b3c4 · once · not yet used\n- U-4: approval \"push hotfix/77 to origin\" — action git push origin hotfix/77 · targets branch hotfix/77 @ 1a2b3c4 · once · not yet used\n- U-5: approval \"tag v1.4.0 on that commit\" — action git tag v1.4.0 · denied by the user 2026-10-21 13:06 +0300 · targets commit 1a2b3c4 · once · not yet used\n- U-6: approval \"tag v1.4.1 on that commit\" — action git tag v1.4.1 · targets commit 1a2b3c4 · once · not yet used · given 11111111 2026-10-21 13:00 +0300 · denied by the user 2026-10-21 13:06 +0300\n- U-7: approval \"tag v1.4.2 on that commit\" — action git tag v1.4.2 · targets commit 1a2b3c4 · once · not yet used · given 11111111 2026-10-21 13:00 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "a refused Write covers the approval naming its file name; a refused multi-line command covers the hotfix/7 push but not hotfix/77 (whole token); a denial note in a usable line's action or after given is approval-denied",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEB",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 11$",
+     "^LINT approval-denied line 13$",
+     "^LINT approval-denied line 14$",
+     "^REFUSED: lint \\(4 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 12$",
+     "LINT approval-denied line 15$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"copy JIRA-v2.md into the wiki\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push hotfix/7 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push hotfix/77 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h3\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag v1.4.0 on that commit\"}}\n{\"type\": \"user\", \"uuid\": \"h4\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag v1.4.1 on that commit\"}}\n{\"type\": \"user\", \"uuid\": \"h5\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"tag v1.4.2 on that commit\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_w1\", \"name\": \"Write\", \"input\": {\"file_path\": \"/repo/docs/JIRA-v2.md\", \"content\": \"spec v2\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_w1\", \"is_error\": true, \"content\": \"Permission to use Write has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"a2\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_b2\", \"name\": \"Bash\", \"input\": {\"command\": \"git commit -m \\\"$(cat <<'EOF'\\nretry window fix\\nEOF\\n)\\\" && git push origin hotfix/7\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_b2\", \"is_error\": true, \"content\": \"Permission to use Bash with command git commit -m \\\"$(cat <<'EOF'\\nretry window fix\\nEOF\\n)\\\" && git push origin hotfix/7 has been denied.\"}]}}\n"
+  },
+  {
+   "name": "the plugin opens an idle handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "idle",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin (C)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEC": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (C)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEC"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEC/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 [from 1a2b3c4d · U-2 · 2026-10-20 handoff]\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "in a plugin handoff turn a malformed tagged line is approval-plugin-turn, never approval-shape",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEC",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-plugin-turn line 10$"
+    ],
+    "stdout_lacks": [
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "name": "canary: no tool input or approval text in any watch row",
+   "expect": {
+    "files": [
+     {
+      "path": "$WATCH/*.jsonl",
+      "lacks": [
+       "C0123ABC",
+       "LAB-99",
+       "OPS-41",
+       "JIRA-v2",
+       "hotfix/7",
+       "widget plugin"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

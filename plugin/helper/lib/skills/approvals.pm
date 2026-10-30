@@ -280,7 +280,7 @@ sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{bloc
 #   - the call names no such token and shares an outward class with the approval (a denied bare
 #     `git push` covers every push approval).
 # Fail closed: a wrong match costs one re-ask in the next session.
-our %DENY_STOP = map { $_ => 1 } qw(mcp claude server api app get set edit create update delete add remove write
+our %DENY_STOP = map { $_ => 1 } qw(mcp plugin claude server api app get set edit create update delete add remove write
     read list search find send post put patch fetch query run new the issue issues page pages comment comments
     message messages file files item items record records data info for and with tool tools);
 my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
@@ -292,9 +292,16 @@ sub _deny_keys {
     for my $t (split $DENY_TOKEN_SPLIT, $text) {
         $t =~ s/[.:?]+\z//;
         next if length($t) < 3 || $t =~ /\A-/;
-        next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!@_-]/;
+        # `\@` stays escaped: a bare `@_` in a class interpolates the sub's arguments (review
+        # finding 1: `HASH(0x…)` made plain words distinctive, by memory address).
+        next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!\@_-]/;
         $tok{$t} = 1;
-        $tok{$1} = 1 if $t =~ m{/([^/]{3,})\z} && $1 =~ /[0-9.:#!@_-]/ && $1 =~ /[A-Za-z0-9]{2}/;
+        # The file name of a path: copied out of $1 first, since the next match resets it
+        # (review finding 2).
+        if ($t =~ m{/([^/]{3,})\z}) {
+            my $base = $1;
+            $tok{$base} = 1 if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
+        }
     }
     my $tool = $c->{tool} // '';
     if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
@@ -667,7 +674,8 @@ sub lint {
         next unless $l =~ /\S/;
         $r{lines}++;
         if ($tagged) {
-            push @{ $r{blocking} }, [ 'approval-shape', $where ] unless $l =~ $LINE_RE && $l =~ /"[^"]+"/ && index($l, $note) >= 0;
+            # In a plugin handoff turn this is approval-plugin-turn too (review finding 7).
+            push @{ $r{blocking} }, [ $shape, $where ] unless $l =~ $LINE_RE && $l =~ /"[^"]+"/ && index($l, $note) >= 0;
             next;
         }
         my $e;
@@ -682,6 +690,12 @@ sub lint {
             # A denial note on a line that is no context line: the action was denied, so the
             # line must be context only (X-5: never a denial note on a usable approval).
             if (!$e) { push @{ $r{blocking} }, [ ($dn_ok && $l =~ /\bdenied\b/i ? 'approval-denied' : 'approval-shape'), $where ]; next }
+            # A usable line that parses with a denial note in its action, targets or after
+            # `given` (review finding 6; the user's words and the question are not read).
+            if ($dn_ok && !$e->{context}) {
+                my $at = index($l, " — action $e->{action} · targets ");
+                if ($at >= 0 && substr($l, $at) =~ /·\s*denied\b/i) { push @{ $r{blocking} }, [ 'approval-denied', $where ]; next }
+            }
         }
         # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
         # with a checked line's id would ride on its check.
