@@ -137,8 +137,10 @@ export class World {
   abortThrow = false
   /** While set, a `prompt.submit` reaching the bottom is not recorded (the person's own prompts of `userTurn`). */
   private quiet = false
-  /** SESSION-RESTART: `$.ui.log` lines (§4.2). */
+  /** SESSION-RESTART: `$.ui.log` lines (§4.2), less the compaction lines below. */
   uiLogs: string[] = []
+  /** Owner 2026-10-30 07:52: the `$.ui.log` line after each main compaction (compact.ts compactLine). */
+  compactLines: string[] = []
   /** `$.prompt.read()`'s draft (G8). */
   draft = ''
   /** `$.session.surfaces()` (G9, G3b); undefined: the call throws. */
@@ -267,7 +269,8 @@ export class World {
       }
     })
     on('ui.log', (_$, e) => {
-      this.uiLogs.push(e.text)
+      if (/^[a-z0-9-]+: compaction (?:ok|NOT) /.test(e.text)) this.compactLines.push(e.text)
+      else this.uiLogs.push(e.text)
       return { value: undefined }
     })
     on('prompt.read', () => ({ value: { text: this.draft, cursor: this.draft.length } }))

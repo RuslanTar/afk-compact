@@ -1,5 +1,6 @@
 // U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
 import { expect, test } from 'claude-code/testing'
+import { compactLine } from '../../hooks/lib/compact'
 import { detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
 import { AGENT, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -426,4 +427,62 @@ test('QA-B3 (mod part): queue_cmd unset: no [queue] line and no queue tag', asyn
   await raiseCompact($, { trigger: 'auto' })
   expect(w.compacts[0]?.instructions ?? '').not.toContain(QUEUE_LINE)
   expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).not.toContain('queue')
+})
+
+// Owner 2026-10-30 07:52 ("not clear if the compaction went well"): one dim transcript line after
+// every main compaction (compact.ts compactLine), never sent to the model, never for a subagent.
+test('compaction line: ok main compaction: one line, copy saved, running jobs counted from the measure', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight (sidecar 2026-10-30 07:35 +0200):\n  b1 · workflow · running\n  b2 · shell · running\n  b3 · shell · completed\nEvidence: none'
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compactLines).toEqual([`${w.name}: compaction ok · copy saved · 2 jobs running`])
+  // Nothing in flight: no count; a manual compaction gets its line too.
+  w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
+  await raiseCompact($, { trigger: 'manual' })
+  expect(w.compactLines[1]).toBe(`${w.name}: compaction ok · copy saved`)
+  // The model never reads it: the resume block does not carry it.
+  const ctx = await $.prompt.context({ blocks: [] })
+  expect(ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text).not.toContain('compaction ok')
+})
+
+test('compaction line: not in handoff format, and no summary at all: NOT, the verdict, the copy state and the status pointer', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  w.summaryMode = 'unshaped'
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compactLines).toEqual([`${w.name}: compaction NOT in handoff format (unshaped) · copy saved · see /${w.name}:status`])
+  w.summaryMode = 'missing'
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compactLines[1]).toBe(`${w.name}: compaction NOT in handoff format (unshaped) · copy NOT saved (summary-not-found) · see /${w.name}:status`)
+  // An ok summary whose copy was refused still says so.
+  w.summaryMode = 'ok'
+  w.saveLine = 'REFUSED: root-in-git'
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compactLines[2]).toBe(`${w.name}: compaction ok · copy NOT saved (root-in-git) · see /${w.name}:status`)
+})
+
+test('compaction line: none for a subagent compaction, a precompute or a skipped one', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  await raiseCompact($, { trigger: 'precompute' })
+  expect(w.callsOf('save-copy').length).toBe(1)
+  expect(w.compactLines).toEqual([])
+})
+
+test('compaction line: warn_ui false shows none', { options: { warn_ui: false } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('compacted').length).toBe(1)
+  expect(w.compactLines).toEqual([])
+})
+
+test('compactLine: a published handoff by file name, a cut-off handoff turn, one job', () => {
+  const base = { ok: true, verdict: 'ok' as const, savedCopy: '/r/c.md', notSaved: undefined, running: 1 }
+  expect(compactLine('p', { ...base, handoff: { published: '~/.claude/handoffs/p/x/2026-10-30_07-35-23_ab_x.md' } }))
+    .toBe('p: compaction ok · copy saved · handoff 2026-10-30_07-35-23_ab_x.md · 1 job running')
+  expect(compactLine('p', { ...base, running: 0, handoff: { draft: true, finish: 'fin' } })).toBe('p: compaction ok · copy saved · handoff cut off (draft present)')
+  expect(compactLine('p', { ...base, running: 0, handoff: { draft: true, finish: null } })).toBe('p: compaction ok · copy saved · handoff cut off (draft absent)')
 })

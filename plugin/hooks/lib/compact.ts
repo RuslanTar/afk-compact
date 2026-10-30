@@ -20,7 +20,7 @@ import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
 import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, settleRecords } from './resume'
 import type { LaneFacts } from './lane'
-import { laneFacts } from './lane'
+import { laneFacts, measuredRunning } from './lane'
 import { armDigest } from './digest'
 import { shadowPrepM3, startShadow } from './shadow'
 import { restartMoment } from './restart'
@@ -480,7 +480,40 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   }
   await countVerdict(d, a.sid, isOk(verdict))
   pend.outcome.halt = s.halt.active
+  // Owner 2026-10-30 07:52 ("not clear if the compaction went well"): one dim transcript line
+  // after every main compaction, whether a model turn follows or not; the model never reads it.
+  // Built from what this step already measured: no new I/O.
+  if (d.cfg.warn_ui) {
+    const running = built.running ?? new Set([...s.agentTurns, ...measuredRunning(built.remeasure)]).size
+    d.uiLog(compactLine(d.name, { ok: isOk(verdict), verdict, savedCopy, notSaved, handoff: a.handoff, running }))
+  }
   return { verdict }
+}
+
+export type LineFacts = {
+  ok: boolean
+  verdict: Verdict
+  savedCopy: string | null
+  notSaved: string | undefined
+  handoff: RaceBlock | undefined
+  /** Units running now (agents and the measure's running tasks); 0 or unknown says nothing. */
+  running: number
+}
+
+/**
+ * Owner 2026-10-30 07:52: the one line the user sees after a main compaction, e.g.
+ * `<name>: compaction ok · copy saved · handoff <file> · 2 jobs running`, or with `NOT` and a
+ * pointer to the status skill when the summary is not in handoff format or its copy failed.
+ */
+export function compactLine(name: string, f: LineFacts): string {
+  const parts = [f.ok ? 'compaction ok' : `compaction NOT in handoff format (${f.verdict})`]
+  parts.push(f.savedCopy !== null ? 'copy saved' : `copy NOT saved (${(f.notSaved ?? 'unknown').slice(0, 40)})`)
+  const h = f.handoff
+  if (h && 'published' in h) parts.push(`handoff ${h.published.replace(/^.*\//, '')}`)
+  else if (h) parts.push(`handoff cut off (draft ${h.draft && h.finish !== null ? 'present' : 'absent'})`)
+  if (f.running > 0) parts.push(`${f.running} ${f.running === 1 ? 'job' : 'jobs'} running`)
+  if (!f.ok || f.savedCopy === null) parts.push(`see /${name}:status`)
+  return `${name}: ${parts.join(' · ')}`
 }
 
 const VERDICTS: readonly string[] = ['stale', 'scope-leak', 'unshaped', 'truncated', 'ok-trailer', 'ok']
