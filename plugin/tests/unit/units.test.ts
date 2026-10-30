@@ -15,6 +15,7 @@ import type { Deps } from '../../hooks/lib/deps'
 import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
 import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { isoLocal } from '../../hooks/lib/log'
 
 const NAME = 'x'.repeat(14)
 
@@ -627,4 +628,26 @@ test('AT-GR-08: keepGsdLines keeps replacement patterns in a stored GSD line lit
   const out = keepGsdLines(fresh, `Git: main @ 3f9c2e1\n${gsd}\nIn flight: none listed`)
   expect(out).toBe(`Git: main @ 9e9e9e9\n${gsd}\nIn flight: none listed`)
   expect(keepGsdLines(fresh, undefined)).toBe(fresh)
+})
+
+// 0.1.2 log-tz: each stamp carries the offset of its own instant, on both sides of a DST
+// change (EU 2026-03-29 and 2026-10-25 at 01:00Z, US 2026-03-08 and 2026-11-01), whatever zone
+// the engine runs in. The zone itself is the engine's from load; the helper's `log` writes a
+// mod row's ts at its own offset (tests/helper/cases/core/V012-log-tz-restamp).
+test('isoLocal: the offset of each instant across a DST change; the stamp reads back as the same instant', () => {
+  const at = [Date.UTC(2026, 2, 29, 0, 59, 59, 999), Date.UTC(2026, 2, 29, 1, 0, 0, 0),
+    Date.UTC(2026, 9, 25, 0, 30, 0, 250), Date.UTC(2026, 9, 25, 1, 30, 0, 0),
+    Date.UTC(2026, 2, 8, 6, 59, 59, 0), Date.UTC(2026, 2, 8, 11, 0, 0, 0),
+    Date.UTC(2026, 10, 1, 5, 59, 59, 0), Date.UTC(2026, 10, 1, 10, 0, 0, 0)]
+  for (const ms of at) {
+    const s = isoLocal(ms)
+    expect(s).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}[+-]\d\d:\d\d$/)
+    expect(Date.parse(s)).toBe(ms)
+    const off = -new Date(ms).getTimezoneOffset()
+    const m = /([+-])(\d\d):(\d\d)$/.exec(s)
+    expect(m === null ? NaN : (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]))).toBe(off)
+    const short = isoLocal(ms, false)
+    expect(short).toBe(s.slice(0, 19) + s.slice(23))
+    expect(Date.parse(short)).toBe(Math.floor(ms / 1000) * 1000)
+  }
 })

@@ -12,7 +12,11 @@ import { byteLength } from './normalize'
 
 export type Fields = Record<string, string | number | boolean | null | readonly string[] | Record<string, number>>
 
-/** ISO 8601 local time with milliseconds and offset. */
+/**
+ * ISO 8601 local time with milliseconds and the offset of that instant. The zone is the one
+ * the engine read at load: after a system zone change under a running session it is stale, so
+ * the helper's `log` writes each row's ts again at its own offset (cmd/log.pl `_restamp`).
+ */
 export function isoLocal(ms: number, withMs = true): string {
   const dt = new Date(ms)
   const off = -dt.getTimezoneOffset()
