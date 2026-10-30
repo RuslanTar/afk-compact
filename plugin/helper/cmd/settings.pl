@@ -55,6 +55,7 @@ my %REFUSED = (
     verify => 'the edited text did not read back as your settings minus those keys; nothing written',
     'no-watch' => 'no log folder for the backup (see the root lines of /status)',
     'not-file' => 'your settings.json is not a regular file',
+    'hard-link' => 'your settings.json has a second name (a hard link) and a reset writes a new file under one name only; edit it by hand or in /config',
     backup => 'no backup could be written',
 );
 

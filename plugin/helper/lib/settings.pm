@@ -857,7 +857,11 @@ sub show_value {
         return $n == 0 ? 'empty' : $n == 1 ? '1 entry' : "$n entries";
     }
     return 'empty' if _unset($v) || ref $v;
-    if ($t eq 'dir' || $t eq 'file') { return util::text(util::abbrev(util::expand_tilde(util::to_bytes("$v")))) }
+    if ($t eq 'dir' || $t eq 'file') {
+        my $p = util::text(util::abbrev(util::expand_tilde(util::to_bytes("$v"))));
+        $p =~ s/[\x00-\x1f\x7f]/ /g;
+        return $p;
+    }
     if ($t eq 'num') { return "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/ ? 0 + $v : 'not a number' }
     my $s = trim(util::text("$v"));
     $s =~ s/[\x00-\x1f\x7f]/ /g;
@@ -889,7 +893,9 @@ sub effective_rows {
         }
         my $def = show_value($key, manifest_default($key));
         push @rows, { key => $key, value => $shown, source => $s, label => $SOURCE_LABEL{$s} // $s, default => $def,
-                      at_default => ($s eq 'default' && $shown eq $def && !defined $from) ? 1 : 0, clamped_from => $from,
+                      # by the value alone (spec Behaviour 1): a value saved equal to its default
+                      # (the configure dialog saves every on/off key) is at its default
+                      at_default => ($shown eq $def && !defined $from) ? 1 : 0, clamped_from => $from,
                       saved => exists $saved->{$key} ? 1 : 0,
                       saved_empty => (exists $saved->{$key} && defined $saved->{$key} && !ref $saved->{$key} && $saved->{$key} eq '') ? 1 : 0 };
     }

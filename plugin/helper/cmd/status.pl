@@ -784,9 +784,9 @@ sub settings_keys_line {
 }
 
 # 0.1.2 visible defaults (spec Behaviour 1-2): every effective value, store-wide (also without
-# a session id). A key not at its default (or set anywhere: settings file, plugin option, flag,
-# safe value) gets one line with its source and default; the keys at their defaults share one or
-# two `at default:` lines. Then a warning per saved "" and for an ambiguous options key.
+# a session id). A key whose value is not its default gets one line with its source and default
+# (a value equal to its default counts as at its default wherever it comes from); the keys at
+# their defaults share one or two `at default:` lines. Then a warning per saved "" and for an ambiguous options key.
 our $AT_DEFAULT_PER_LINE = 22;
 sub values_lines {
     my $rows = eval { settings::effective_rows(rc::settings()) } || [];

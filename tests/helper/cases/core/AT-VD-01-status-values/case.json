@@ -1,7 +1,7 @@
 {
  "id": "AT-VD-01 (visible defaults: the status settings-values block)",
  "owner": "core",
- "note": "0.1.2 visible defaults (spec Behaviour 1): /status prints a settings-values block. A key whose value is not its default, or that is set somewhere (settings file, plugin option, flag, safe value), gets one line `<key> <value> (<source>; default <default>)`; the keys at their defaults share one or two `at default:` lines, so every effective value is visible without one line per key. Source labels: settings file -> `your settings.json`, CLAUDE_PLUGIN_OPTION_* -> `plugin option`, default. A clamped number says `clamped from N`. Never echoed: ticket_pattern shows built-in or custom, secret_extra_rules and the other list keys their entry count. The existing `settings:` and `thresholds:` lines stay as they were.",
+ "note": "0.1.2 visible defaults (spec Behaviour 1): /status prints a settings-values block. A key whose value is not its default gets one line `<key> <value> (<source>; default <default>)`; the keys at their defaults share one or two `at default:` lines, so every effective value is visible without one line per key. At its default is decided by the value alone, wherever it comes from: the four on/off keys the configure dialog always saves, and plugin option values Claude Code passes, equal to their defaults stay on the at-default lines. Source labels: settings file -> `your settings.json`, CLAUDE_PLUGIN_OPTION_* -> `plugin option`, default. A clamped number says `clamped from N`. Never echoed: ticket_pattern shows built-in or custom, secret_extra_rules and the other list keys their entry count. The existing `settings:` and `thresholds:` lines stay as they were.",
  "now": "2026-10-30T09:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -40,6 +40,20 @@
    "expect": {"exit": 0,
      "stdout_has": ["^settings values: 0 not at default, 43 at default$", "^  at default: handoff_root=",
                     "· ticket_pattern=built-in · secret_extra_rules=empty · "],
-     "stdout_lacks": ["your settings\\.json; default", "\\(plugin option; default"]}}
+     "stdout_lacks": ["your settings\\.json; default", "\\(plugin option; default"]}},
+  {"setup": [
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {
+      "triggers": true, "measured_block": false, "auto_evidence": true, "warn_ui": true, "cooldown_ms": 20000}}}}}
+  ]},
+  {"name": "values saved or passed equal to their defaults (the configure dialog's on/off keys) are at default",
+   "argv": ["status", "--sid", "$SID"],
+   "env": {"CLAUDE_PLUGIN_OPTION_WATCHER": "shadow", "CLAUDE_PLUGIN_OPTION_HANDOFF_TURN": "halt"},
+   "expect": {"exit": 0,
+     "stdout_has": ["^settings values: 1 not at default, 42 at default$",
+                    "^  cooldown_ms 20000 \\(your settings\\.json; default 30000\\)$",
+                    "^  at default: .*triggers=true", "^  at default: .*measured_block=false",
+                    "^  at default: .*auto_evidence=true", "^  at default: .*warn_ui=true",
+                    "^  at default: .*watcher=shadow", "^  at default: .*handoff_turn=halt"],
+     "stdout_lacks": ["^  (triggers|measured_block|auto_evidence|warn_ui|watcher|handoff_turn) "]}}
  ]
 }

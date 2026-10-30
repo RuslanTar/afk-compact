@@ -4,7 +4,7 @@ package settings_reset;
 # ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json; apply(plan, watch) does it. The options key is
 # found by settings::options_key, the rule the settings are read with; an ambiguous key, a file
 # that is not plain JSON (comments, a trailing comma) and a file that names a member on the
-# path twice are refused. --all leaves %settings::RESET_KEEP (the consent and protective keys
+# path twice are refused, and so is a hard-linked file (the write would split its names). --all leaves %settings::RESET_KEEP (the consent and protective keys
 # and resume_proceed; OPEN-2, the spec's recommendation) and keys the plugin does not know.
 # The write is a text splice of exactly those members: jsonc::decode returns unordered hashes
 # and encode_pretty sorts keys, so a re-encode would reorder the user's whole file. Before it
@@ -109,6 +109,14 @@ sub splice_out {
 # ---------------------------------------------------------------- plan and apply
 sub _sha12 { return substr(sha::hex256($_[0]), 0, 12) }
 
+# _links(file) -> the link count of the file's real path (0 when it cannot be read)
+sub _links {
+    my ($file) = @_;
+    my $real = Cwd::abs_path(util::fsb($file)) // $file;
+    my @st = stat $real;
+    return @st ? $st[3] : 0;
+}
+
 # plan(\@keys | 'all') -> {state => refused|nothing|ok, why, file, raw, sha, ckey, remove => [..],
 #   not_saved => [..], kept => [..], options => {..}}; keys in @KEYS order.
 sub plan {
@@ -143,6 +151,7 @@ sub plan {
     # a member named twice (the decoded file keeps only the last) is refused before any plan
     my ($ob, $why) = _options_object(\$raw, $ckey);
     return { %p, state => 'refused', why => $why } if !$ob && $why =~ /\Atwice:/;
+    return { %p, state => 'refused', why => 'hard-link' } if @{ $p{remove} } && _links($file) > 1;
     return { %p, state => (@{ $p{remove} } ? 'ok' : 'nothing'), why => (@{ $p{remove} } ? undef : 'none-saved') };
 }
 
@@ -187,6 +196,9 @@ sub apply {
     my $real = Cwd::abs_path(util::fsb($p->{file})) // $p->{file};
     my @st = stat $real;
     return { state => 'refused', why => 'not-file' } unless @st && -f _;
+    # a hard-linked settings.json (a CLAUDE_CONFIG_DIR's link to ~/.claude/settings.json): the
+    # atomic write puts a new file under this name only, so the other name would keep the old text
+    return { state => 'refused', why => 'hard-link' } if $st[3] > 1;
     my $mode = $st[2] & 07777;
     my $before = util::read_file($real);
     return { state => 'refused', why => 'changed' } unless defined $before && $before eq $p->{raw};
