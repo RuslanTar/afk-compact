@@ -90,7 +90,7 @@
      "^  cooldown_ms: 20000 -> default 30000 \\(removed\\)$",
      "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00-2\\.bak \\(the file as it was\\)$",
      "^  takes effect: ",
-     "^  kept by --all \\(consent or protective; a consent key is never written, name a protective one to reset it\\): relaunch_auto$"
+     "^  kept by --all \\(consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand\\): relaunch_auto$"
     ],
     "files": [
      {
@@ -155,7 +155,7 @@
     "exit": 0,
     "stdout_has": [
      "^settings reset: nothing to remove$",
-     "^  kept by --all \\(consent or protective; a consent key is never written, name a protective one to reset it\\): relaunch_auto$"
+     "^  kept by --all \\(consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand\\): relaunch_auto$"
     ],
     "files": [
      {

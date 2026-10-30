@@ -28,7 +28,7 @@
      "stdout_has": ["^  would change compact_target_tokens: 350000 -> default 400000 \\(removed\\)$",
                     "^  would change ticket_pattern: custom -> default built-in \\(removed\\)$",
                     "^  would change watcher: off -> default shadow \\(removed\\)$",
-                    "^  kept by --all \\(consent or protective; a consent key is never written, name a protective one to reset it\\): relaunch_auto, secret_extra_rules, resume_proceed$",
+                    "^  kept by --all \\(consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand\\): relaunch_auto, secret_extra_rules, resume_proceed$",
                     "^to apply it: \"/[^\"]+/scripts/$BRAND-store\" settings reset --all --plan [0-9a-f]{12} --apply$"],
      "stdout_lacks": ["ZZTICKET", "zzsecret", "relaunch_auto: ", "resume_proceed: ", "secret_extra_rules: "],
      "files": [{"path": "$HOME/.claude/settings.json", "same_bytes_as": "orig", "same_mtime_as": "orig"}],

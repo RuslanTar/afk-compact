@@ -1,7 +1,7 @@
 {
  "id": "AT-SW-01 (settings writer: settings set, dry run and apply)",
  "owner": "core",
- "note": "0.1.2 settings writer (owner 2026-10-30, helper writer for the non-consent keys): `settings set <key>=<value>...` is a dry run unless --apply; it lists each change as old -> new and the --plan of the file. The apply edits exactly those members of pluginConfigs[\"<plugin>@<marketplace>\"].options by a text splice (a value replaced, a member inserted after the last one with its spacing, a member removed), so every other key keeps its bytes (and so its meaning: env, permissions, another plugin's options, an unknown option key, numbers written 2.50, a \\u escape, non-ASCII text). A value equal to its default (or empty) removes the member, so a default is never written. It saves the whole file as settings.json.<plugin>-<stamp>.bak next to it (mode 0600; -2 for a second one in the same second), keeps the file's mode and writes through a symbolic link. A missing options object, plugin entry or pluginConfigs is created, the key taken from the one enabledPlugins entry of the plugin (or its installed folder); the file's indent (tabs here) is kept.",
+ "note": "0.1.2 settings writer (owner 2026-10-30, helper writer for the non-consent keys): `settings set <key>=<value>...` is a dry run unless --apply; it lists each change as old -> new and the --plan of the file. The apply edits exactly those members of pluginConfigs[\"<plugin>@<marketplace>\"].options by a text splice (a value replaced, a member inserted after the last one with its spacing, a member removed), so every other key keeps its bytes (and so its meaning: env, permissions, another plugin's options, an unknown option key, numbers written 2.50, a \\u escape, non-ASCII text). A value equal to its default (or empty) removes the member, so a default is never written. It saves the whole file as settings.json.<plugin>-<stamp>.bak next to it (mode 0600; -2 for a second one in the same second), keeps the file's mode and writes through a symbolic link. A missing options object, plugin entry or pluginConfigs is created, the key taken from the one enabledPlugins entry of the plugin (or its installed folder); the file's indent (tabs here) and line break (CRLF) are kept. A number the clamp lowers once the change is in (a target over two thirds of the soft max, a soft max or target over what a configured window allows) is written as given with a note in the dry run and the apply; one the clamp leaves gets none.",
  "now": "2026-10-30T09:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -411,6 +411,173 @@
       "path": "$TMP/real/settings.json.*",
       "count": 0
      }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$TMP/old-link"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"stall_min\": 60\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    },
+    {
+     "write": "$TMP/expect/c1",
+     "text": "{\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"stall_min\": 60,\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    },
+    {
+     "write": "$TMP/expect/e0",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {}\r\n  }\r\n}\r\n"
+    },
+    {
+     "write": "$TMP/expect/e1",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    }
+   ]
+  },
+  {
+   "name": "a file with CRLF line breaks: an added member is joined with CRLF too",
+   "argv": [
+    "settings",
+    "set",
+    "watcher=off",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/c1",
+      "snapshot": "c1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "c1"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {}\r\n  }\r\n}\r\n"
+    }
+   ]
+  },
+  {
+   "name": "and an options object created inside an empty entry: CRLF at every level",
+   "argv": [
+    "settings",
+    "set",
+    "watcher=off",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/e1",
+      "snapshot": "e1"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "e1"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a target the clamp lowers (over two thirds of the soft max): written as given, with a note in the dry run",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=5000000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings set: dry run, nothing written",
+     "^  would change compact_target_tokens: default 400000 -> 5000000$",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
+     "^to apply it: "
+    ],
+    "stdout_lacks": [
+     "compact_soft_max_tokens"
+    ]
+   }
+  },
+  {
+   "name": "and in the apply",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=5000000",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  compact_target_tokens: default 400000 -> 5000000$",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"compact_target_tokens\": 5000000"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a target within what the soft max allows: no note",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=350000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 5000000 -> 350000$"
+    ],
+    "stdout_lacks": [
+     "note:"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+    }
+   ]
+  },
+  {
+   "name": "a window the clamp lowers the soft max and the target under: a note for each, none for the window",
+   "argv": [
+    "settings",
+    "set",
+    "native_window_tokens=700000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change native_window_tokens: ",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
+     "^  note: compact_soft_max_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ],
+    "stdout_lacks": [
+     "note: native_window_tokens"
     ]
    }
   }

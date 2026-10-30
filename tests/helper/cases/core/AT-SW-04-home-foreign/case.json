@@ -1,0 +1,106 @@
+{
+ "id": "AT-SW-04 (settings writer: a HOME that is not the account home)",
+ "owner": "core",
+ "note": "0.1.2 settings writer: run without the runner's consent seam (consent_home account), the fresh HOME is not the account home (a command can set HOME), so the writer refuses with home-foreign (exit 3) for a set and a reset, dry run or apply, and writes nothing: no change, no backup (config-dir-foreign for another CLAUDE_CONFIG_DIR is AT-SW-02's).",
+ "now": "2026-10-30T09:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "consent_home": "account",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    },
+    {
+     "write": "$TMP/expect/o4",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"stall_min\": 60\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "snapshot",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/o4",
+      "snapshot": "o4"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a set with --apply: refused, nothing written",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, HOME is not your account's home folder, and the writer edits your own ~/\\.claude/settings\\.json only$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "o4"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the dry run too",
+   "argv": [
+    "settings",
+    "set",
+    "stall_min=90"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings set: refused, HOME is not your account's home folder, and the writer edits your own ~/\\.claude/settings\\.json only$"
+    ],
+    "stdout_lacks": [
+     "^to apply it"
+    ]
+   }
+  },
+  {
+   "name": "a reset with --apply: refused, nothing written",
+   "argv": [
+    "settings",
+    "reset",
+    "stall_min",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\Asettings reset: refused, HOME is not your account's home folder, and the writer edits your own ~/\\.claude/settings\\.json only$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "o4"
+     },
+     {
+      "path": "$HOME/.claude/settings.json.*",
+      "count": 0
+     }
+    ]
+   }
+  }
+ ]
+}

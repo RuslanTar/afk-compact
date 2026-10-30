@@ -10,7 +10,10 @@ package settings_write;
 #     cannot tell a command the user typed (`!`) from one the model ran, so it never writes them;
 #     consent_lines() gives the user-run ways (/config, Claude Code's own `plugin configure`);
 #   - a value the plugin would not read as written (check_value: the manifest's type, min and max,
-#     the enum values, the list rules of each pattern key, a path that is not absolute);
+#     the enum values, the list rules of each pattern key, a path that is not absolute). A number
+#     the clamp lowers against the other keys (the soft max and target against the window, the
+#     target against the soft max) is not refused: it is written with a note (clamp_notes), as
+#     the clamp's window is often the model's, known only at run time;
 #   - a looser protective value: the three protective lists only gain entries (a command cannot
 #     replace a list with a shorter one, as for flags), resume_proceed only goes towards confirm;
 #   - a settings file the view (settings::write_refused) refuses: another settings folder, an
@@ -28,13 +31,15 @@ package settings_write;
 # whole file. Before the rename: the new text must decode to the old settings with exactly those
 # changes (a JSON round trip of every other key), a backup of the whole file is written next to it
 # (settings.json.<plugin>-<stamp>.bak, mode 0600, never pruned), and the file is read again and
-# must still hold the bytes the plan read. The new text goes to a temp file in the real file's
-# folder with the file's mode, then a rename (a symlinked settings.json keeps its link); a failed
-# write removes the temp file, so no partial file is left. Then the file is read once more and
-# must hold the new bytes.
+# must still hold the bytes the plan read. A backup that fails partway is removed (no partial
+# backup is left). The new text goes to a temp file in the real file's folder with the file's
+# mode, then a rename (a symlinked settings.json keeps its link); a failed write removes the temp
+# file, so no partial file is left. Then the file is read once more and must hold the new bytes.
+# Inserted lines use the file's own line break (\r\n in a file that has one, else \n).
 # Test seams (STORE_TEST_MODE=1 only): STORE_TEST_SETTINGS_RACE=<text> writes that text over the
 # settings file right after the backup (another program writing it then);
-# STORE_TEST_SETTINGS_FAIL=write fails the temp file's write halfway (a full disk).
+# STORE_TEST_SETTINGS_FAIL=write fails the temp file's write halfway (a full disk), =backup the
+# backup's write.
 use strict;
 use warnings;
 use utf8;
@@ -125,6 +130,9 @@ sub _line_indent {
     return substr($$t, $ls, $p - $ls) =~ /\A([ \t]*)/ ? $1 : '';
 }
 
+# The file's line break: the first one in it (\r\n or \n), else \n.
+sub _nl { my ($t) = @_; return $$t =~ /(\r?\n)/ ? $1 : "\n" }
+
 # The file's indent step: the white space before its first member, else two spaces.
 sub _unit {
     my ($t) = @_;
@@ -136,15 +144,16 @@ sub _unit {
 
 sub _key_json { return jsonc::encode_bytes($_[0]) }
 
-# _nest([names], leaf value text, indent or undef) -> the text of {n1: {n2: … leaf}}, as many
-# levels as names (the leaf alone for none); multi-line at that indent, one line for undef.
+# _nest([names], leaf value text, indent or undef, indent step, line break) -> the text of
+# {n1: {n2: … leaf}}, as many levels as names (the leaf alone for none); multi-line at that
+# indent, one line for undef.
 sub _nest {
-    my ($names, $leaf, $ind, $unit) = @_;
+    my ($names, $leaf, $ind, $unit, $nl) = @_;
     return $leaf unless @$names;
     my ($first, @rest) = @$names;
     my $in = defined $ind ? $ind . $unit : undef;
-    my $inner = _nest(\@rest, $leaf, $in, $unit);
-    return defined $ind ? "{\n$in" . _key_json($first) . ": $inner\n$ind}" : '{' . _key_json($first) . ": $inner}";
+    my $inner = _nest(\@rest, $leaf, $in, $unit, $nl);
+    return defined $ind ? "{$nl$in" . _key_json($first) . ": $inner$nl$ind}" : '{' . _key_json($first) . ": $inner}";
 }
 
 # _insert(text ref, offset of an object's `{`, [names], leaf value text): a member names[0] whose
@@ -154,6 +163,7 @@ sub _insert {
     my ($t, $open, $names, $leaf) = @_;
     my ($first, @rest) = @$names;
     my $unit = _unit($t);
+    my $nl = _nl($t);
     my ($m, $close) = _members($t, $open);
     if (@$m) {
         my $last = $m->[-1];
@@ -162,14 +172,14 @@ sub _insert {
         my $multi = $gap =~ /\n/ ? 1 : 0;
         my $ind = $multi ? _line_indent($t, $last->{kstart}) : undef;
         my $sep = substr($$t, $last->{kend}, $last->{vstart} - $last->{kend});
-        my $val = _nest(\@rest, $leaf, $ind, $unit);
-        substr($$t, $last->{vend}, 0) = ',' . ($multi ? "\n$ind" : ' ') . _key_json($first) . $sep . $val;
+        my $val = _nest(\@rest, $leaf, $ind, $unit, $nl);
+        substr($$t, $last->{vend}, 0) = ',' . ($multi ? "$nl$ind" : ' ') . _key_json($first) . $sep . $val;
         return;
     }
     my $ind = _line_indent($t, $open);
     my $in = $ind . $unit;
-    my $val = _nest(\@rest, $leaf, $in, $unit);
-    substr($$t, $open + 1, $close - $open - 1) = "\n$in" . _key_json($first) . ": $val\n$ind";
+    my $val = _nest(\@rest, $leaf, $in, $unit, $nl);
+    substr($$t, $open + 1, $close - $open - 1) = "$nl$in" . _key_json($first) . ": $val$nl$ind";
 }
 
 # edit(text, options key, [changes]) -> (new text) or (undef, why): each change {key, kind =>
@@ -257,7 +267,9 @@ sub _entry_bad {
 # check_value(key, text) -> ({unset => 1}) for an empty value (the default), ({data, json}) with the
 # value as JSON (a number, true or false, or a string), or (undef, why). The rules are the
 # plugin's readers' (settings.pm resolve and its list readers, the mod's config.ts), so a
-# value that passes is read as written: no clamp, no fallback to the default.
+# value that passes is read as written on its own: no min/max clamp, no fallback to the
+# default. The cross-key clamp (a soft max or target over what the window or the soft max
+# allows) depends on other keys and the model's window: clamp_notes says so, nothing refuses it.
 sub check_value {
     my ($key, $in) = @_;
     my $t = util::text($in // '');
@@ -364,6 +376,46 @@ sub shown {
     return 'saved empty' if defined $v && !ref $v && $v eq '';
     $v = join ';', map { "$_" } @$v if ref $v eq 'ARRAY';
     return settings::show_value($key, $v);
+}
+
+# _clamp_flags(values, spec) -> {key => 1} for the numbers the clamp lowers with these values:
+# the watcher's flags (watch::export::clamped_keys: min/max, the window floor, the soft max and
+# target over the configured window's clamp), and a target over what its soft max allows
+# (target_num/target_den of it), which holds for any window, the model's too.
+sub _clamp_flags {
+    my ($r, $vals, $spec) = @_;
+    my $cl = eval { require watch::export; watch::export::clamped_keys({ %$r, values => $vals }, $spec) };
+    my %c = ref $cl eq 'HASH' ? %$cl : ();
+    my $K = eval { require watch::rules; watch::rules::clamp_constants($spec) };
+    my ($soft, $target) = map { settings::_coerce($_, $vals->{$_}) } qw(compact_soft_max_tokens compact_target_tokens);
+    if (ref $K eq 'HASH' && defined $soft && defined $target && lc($vals->{triggers} // 'true') !~ /\A(?:0|false)\z/) {
+        my $q = ($soft * $K->{target_num}) / $K->{target_den};
+        $c{compact_target_tokens} = 1 if $target > $q;
+    }
+    return \%c;
+}
+
+# clamp_notes(plan) -> a note per number the clamp lowers once the plan's changes are in place
+# and did not before, or that the plan changes: the value is still written as given (the plugin
+# reads it so, and its clamp works the threshold out), never refused here.
+sub clamp_notes {
+    my ($p) = @_;
+    my $r = eval { settings::resolve({}) };
+    return () unless ref $r eq 'HASH' && ref $r->{values} eq 'HASH';
+    my $spec = eval { spec::load() };
+    my %after = %{ $r->{values} };
+    my %changed;
+    for my $c (@{ $p->{changes} || [] }) {
+        my $raw = $c->{kind} eq 'remove' ? $r->{defaults}{ $c->{key} } : $c->{data};
+        my $x = defined $raw ? settings::_coerce($c->{key}, $raw) : undef;
+        $after{ $c->{key} } = $x if defined $x;
+        $changed{ $c->{key} } = 1 if $c->{kind} eq 'set';
+    }
+    my $before = _clamp_flags($r, $r->{values}, $spec);
+    my $now = _clamp_flags($r, \%after, $spec);
+    my @k = grep { $now->{$_} && ($changed{$_} || !$before->{$_}) && ($settings::EXPORT{$_} // '') eq 'num' } map { $_->[0] } @settings::KEYS;
+    return map { "  note: $_: written as given, but with these settings the plugin's clamp lowers it (the target to at most two thirds of the soft max, both below what the window allows); /"
+                 . ctx::brand() . ':status shows the value it uses' } @k;
 }
 
 # ---------------------------------------------------------------- the plugin's key
@@ -491,15 +543,20 @@ sub plan {
     return { %p, state => 'ok' };
 }
 
-# _write(real path, bytes, mode): a temp file in the same folder, then a rename; any failure
-# removes the temp file and dies, so the file keeps its old bytes and no partial file is left.
-sub _write {
-    my ($real, $data, $mode) = @_;
-    my $tmp = sprintf('%s.%s-tmp-%d-%04x', $real, ctx::brand(), $$, int(rand(65536)));
+# _put(new path, bytes, mode, seam name, then) -> 1 when the file was created and written, 0 when
+# the name is taken; else dies after removing what it created, so no partial file is left. The
+# file is created 0600 (O_EXCL), written in full, synced and closed, then given its mode and
+# handed to `then` (the rename for the settings file). Test seam STORE_TEST_SETTINGS_FAIL=<seam
+# name> stops the write at half, as on a full disk.
+sub _put {
+    my ($path, $data, $mode, $seam, $then) = @_;
     my $fh;
-    sysopen($fh, $tmp, Fcntl::O_WRONLY() | Fcntl::O_CREAT() | Fcntl::O_EXCL(), 0600) or die "create a temp file: $!\n";
+    if (!sysopen($fh, $path, Fcntl::O_WRONLY() | Fcntl::O_CREAT() | Fcntl::O_EXCL(), 0600)) {
+        return 0 if $!{EEXIST};
+        die "create: $!\n";
+    }
     my $ok = eval {
-        my $half = (util::test_mode() && ($ENV{STORE_TEST_SETTINGS_FAIL} // '') eq 'write') ? int(length($data) / 2) : undef;
+        my $half = (util::test_mode() && ($ENV{STORE_TEST_SETTINGS_FAIL} // '') eq $seam) ? int(length($data) / 2) : undef;
         my $out = defined $half ? substr($data, 0, $half) : $data;
         my $off = 0;
         while ($off < length $out) {
@@ -510,16 +567,25 @@ sub _write {
         die "write: no space left on device (test)\n" if defined $half;
         eval { require IO::Handle; $fh->sync };
         close($fh) or die "close: $!\n";
-        chmod($mode, $tmp) or die "chmod: $!\n";
-        rename($tmp, $real) or die "rename: $!\n";
+        chmod($mode, $path) or die "chmod: $!\n";
+        $then->() if $then;
         1;
     };
     if (!$ok) {
         my $e = $@ || "write failed\n";
         close $fh if defined fileno($fh);
-        unlink $tmp;
+        unlink $path;
         die $e;
     }
+    return 1;
+}
+
+# _write(real path, bytes, mode): a temp file in the same folder, then a rename; any failure
+# removes the temp file and dies, so the file keeps its old bytes and no partial file is left.
+sub _write {
+    my ($real, $data, $mode) = @_;
+    my $tmp = sprintf('%s.%s-tmp-%d-%04x', $real, ctx::brand(), $$, int(rand(65536)));
+    _put($tmp, $data, $mode, 'write', sub { rename($tmp, $real) or die "rename: $!\n" }) or die "create a temp file: it exists\n";
     return 1;
 }
 
@@ -547,14 +613,15 @@ sub apply {
     my $before = util::read_file($real);
     return { state => 'refused', why => 'changed-now' } unless defined $before && $before eq $p->{raw};
     my $stamp = util::file_stamp();
-    my $backup;
+    my ($backup, $berr);
     for my $n (1 .. 99) {
         my $b = backup_path($stamp, $n);
-        my $made = eval { util::write_excl($b, $p->{raw}, 0600) };
+        # a backup that fails partway is removed by _put: no partial .bak is left
+        my $made = eval { _put($b, $p->{raw}, 0600, 'backup') };
         if ($made) { $backup = $b; last }
-        last unless defined $made;
+        if (!defined $made) { $berr = $@ =~ s/\n.*//sr; last }
     }
-    return { state => 'refused', why => 'backup' } unless defined $backup;
+    return { state => 'refused', why => 'backup', (defined $berr ? (error => $berr) : ()) } unless defined $backup;
     if (util::test_mode() && defined $ENV{STORE_TEST_SETTINGS_RACE}) {
         open(my $fh, '>:raw', $real) or die "race seam: $!\n";
         print $fh $ENV{STORE_TEST_SETTINGS_RACE};

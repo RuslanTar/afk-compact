@@ -195,7 +195,7 @@ sub write_cmd {
     return _refused($sub, $p) if $p->{state} eq 'refused';
     my $ft = _file_text();
     my $where = _where($p);
-    my @kept = @$kept ? ('  kept by --all (consent or protective; a consent key is never written, name a protective one to reset it): ' . join(', ', @$kept)) : ();
+    my @kept = @$kept ? ('  kept by --all (consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand): ' . join(', ', @$kept)) : ();
     my @ns = map { $_->{why} eq 'not-saved' ? "  not saved, nothing to remove: $_->{key}" : "  unchanged: $_->{key}" } @{ $p->{same} };
     if ($p->{state} eq 'nothing') {
         my $why = !defined $p->{raw} ? " (no $ft)" : !%{ $p->{options} || {} } ? " (no plugin options in $ft)" : '';
@@ -204,7 +204,7 @@ sub write_cmd {
     }
     return _refused($sub, $p, { why => 'changed' }) if defined $given && $given ne $p->{sha};
     my @ch = map { "  $_->{key}: $_->{old} -> $_->{new}" . ($_->{kind} eq 'remove' ? ' (removed)' : '') } @{ $p->{changes} };
-    my @notes = settings_reset::notes($p);
+    my @notes = (settings_reset::notes($p), settings_write::clamp_notes($p));
     if (!$apply) {
         my $store = ctx::store_cmd();
         my $line = $sub eq 'set' ? "to apply it: the same command with --plan $p->{sha} --apply"
