@@ -10,7 +10,7 @@ import { laneTurnEnd } from './lib/digest'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
-import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
+import { ASK_TOOL, askAnswered, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer } from './lib/idle'
 import { startsWork } from './lib/lane'
 import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
@@ -205,10 +205,9 @@ export const register: Register = (on, options) => {
     onWorktreeTool(d, tool)
     const input = e as unknown as Record<string, unknown>
     const isAsk = tool === ASK_TOOL
-    if (isAsk) {
-      state.askOpen++
-      state.askedThisTurn = true
-    }
+    // An open dialog counts through askOpen; once it settles, only one left unanswered marks the
+    // turn as asking the user (an answered dialog blocks nothing after it).
+    if (isAsk) state.askOpen++
     // Dev-1: the session's directory as the job will see it is read before the call runs.
     const job = await jobStart(d, tool)
     // The temp paths of this call are recorded beside it, never before it: the tool does not
@@ -221,9 +220,13 @@ export const register: Register = (on, options) => {
     let r
     try {
       r = await next(e)
+    } catch (err) {
+      if (isAsk) state.askedThisTurn = true
+      throw err
     } finally {
       if (isAsk) state.askOpen--
     }
+    if (isAsk && !askAnswered(r)) state.askedThisTurn = true
     if (r.deny !== undefined) return r
     // Away digest phase 1: work the model starts after an idle block went out supersedes its lane.
     if (r.isError !== true && startsWork(tool, r.result)) laneWorkStarted(state)

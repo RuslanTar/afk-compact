@@ -306,6 +306,7 @@ export type LoadState = {
   turnSeq: number
   turnId: string | null
   askOpen: number
+  /** An AskUserQuestion call of this main turn closed unanswered (an answered one never sets it). */
   askedThisTurn: boolean
   nudgedThisTurn: boolean
   /** A nudge-driven compaction should auto-continue (MOD-SPEC §9). */
