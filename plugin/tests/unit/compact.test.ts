@@ -1,7 +1,8 @@
 // U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
 import { expect, test } from 'claude-code/testing'
+import { summaryText } from '../../hooks/lib/compact'
 import { detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
-import { AGENT, HOME, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
+import { AGENT, ARTIFACT_HEAD, HOME, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce = record; [midturn]', async ($, on) => {
   const w = new World().install(on)
@@ -161,6 +162,14 @@ test('AF-A1: a summary behind the Artifact header (2.1.312) is found: stashed fr
   const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
   expect(block?.text).not.toContain('Summary not in handoff format')
   expect(block?.text).toContain(`saved copy of this summary: ~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${nonce.slice(0, 6)}.md`)
+})
+
+test('AF-A4: the prefix past the start is taken only behind a header tag line; a kept message that quotes the prefix line is not a summary', () => {
+  const body = 'This session is being continued from a previous conversation.\nSummary:\n1. ...'
+  expect(summaryText(body)).toBe(body)
+  expect(summaryText(ARTIFACT_HEAD + body)).toBe(body)
+  expect(summaryText('the line it starts with:\n' + body)).toBeUndefined()
+  expect(summaryText('<artifact-content-authored-by-others/>\nno summary here')).toBeUndefined()
 })
 
 /** The classic PostCompact hook's copy of the compaction now at the bottom, with this verdict (and nonce, by default its own). */

@@ -373,9 +373,12 @@ export const SUMMARY_SCAN = 4096
  * start in its first SUMMARY_SCAN chars, after a header Claude Code puts before it (2.1.312: an
  * `<artifact-content-authored-by-others/>` line and its note, for a summary that restates
  * Artifact content). The header is not part of the summary: the PostCompact copy has none.
+ * Past the start only behind such a header (a first line that is one `<.../>` tag), so a kept
+ * message that quotes the prefix line is not taken for a summary.
  */
 export function summaryText(text: string): string | undefined {
   if (text.startsWith(SUMMARY_PREFIX)) return text
+  if (!/^<[A-Za-z][\w-]*\/>\r?\n/.test(text)) return undefined
   const at = text.slice(0, SUMMARY_SCAN).indexOf('\n' + SUMMARY_PREFIX)
   return at < 0 ? undefined : text.slice(at + 1)
 }
