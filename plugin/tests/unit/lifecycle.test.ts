@@ -377,6 +377,39 @@ test('unsafe roots: the mod writes under the watch folder ident gives, not the c
   expect(w.writes.some(p => p.startsWith(`${other}/${SID_A}/pending/`))).toBe(true)
 })
 
+/** An ident answer that names no watch folder: the mod writes under the one its own settings give. */
+const identNoWatch = () => ({ exitCode: 0, stdout: JSON.stringify({ pid: 43210, pid_lstart: 'Tue Oct 21 14:00:00 2026', execpath_version: null }) + '\n' })
+
+test('STATE-ROOT (SR-5): ident names no watch: the mod writes .watch under an absolute $XDG_STATE_HOME, as the helper', async ($, on) => {
+  const w = new World().install(on)
+  w.env['XDG_STATE_HOME'] = '/xs/u/'
+  w.replies['ident'] = identNoWatch
+  // the default root below ~/.local/state, moved under $XDG_STATE_HOME (<name>/handoffs)
+  const xwatch = '/xs/u' + ROOT.slice((HOME + '/.local/state').length) + '/.watch'
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  // the raw summary is stashed only under a watch folder ident gives (PRIV-04); here, the files the mod writes itself
+  expect(w.writes.length).toBeGreaterThan(0)
+  expect(w.writes.filter(p => !p.startsWith(xwatch + '/'))).toEqual([])
+  expect(w.files.has(`${xwatch}/${SID_A}/mod-alive.json`)).toBe(true)
+  expect(w.files.has(`${xwatch}/version.json`)).toBe(true)
+})
+
+test('STATE-ROOT (SR-5): ident names no watch, $XDG_STATE_HOME relative: ignored, the mod writes under ~/.local/state', async ($, on) => {
+  const w = new World().install(on)
+  w.env['XDG_STATE_HOME'] = 'rel/state'
+  w.replies['ident'] = identNoWatch
+  await w.start($)
+  await w.turnStart($)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(w.writes.length).toBeGreaterThan(0)
+  expect(w.writes.filter(p => !p.startsWith(WATCH + '/'))).toEqual([])
+  expect(w.files.has(`${WATCH}/${SID_A}/mod-alive.json`)).toBe(true)
+})
+
 test('tool.call: the tool starts before its temp paths are recorded (no helper spawn ahead of the tool)', async ($, on) => {
   const w = new World().install(on)
   let atStart = -1
