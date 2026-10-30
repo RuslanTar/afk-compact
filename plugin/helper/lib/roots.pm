@@ -46,7 +46,8 @@ sub check_path {
     } elsif (my $wt = _worktree_of($real)) {
         my $t = defined $DEADLINE ? $DEADLINE - util::clock_ms() : 2000;
         $t = 2000 if $t > 2000;
-        my $ignored = $t >= 50 ? git::check_ignore($wt, $real, $t) : -1;
+        # the trailing slash says "a folder", so a dir pattern (`wlogs/`) matches a root not made yet
+        my $ignored = $t >= 50 ? git::check_ignore($wt, ($real =~ m{/\z} ? $real : "$real/"), $t) : -1;
         $r = !defined $ignored ? { ok => 0, reason => 'root-in-git' }
            : $ignored == -1    ? { ok => 0, reason => 'root-unchecked' }
            : $ignored          ? { ok => 1, ignored => 1, worktree => $wt }
