@@ -787,7 +787,8 @@ def section_caps_hits(target, brand):
     named = {TEMPLATE_CAP_NAMES[s] for s in seen if s in TEMPLATE_CAP_NAMES}
     for head in sorted(set(caps) - named):
         out.append((path, no, "SC-01 missing", "SC-01 missing: spec section_caps {!r} is not in §2".format(head), ""))
-    want = "{:.1f}".format(round(total / 100.0) / 10.0)
+    # Half up, as a person writes it (18,250 is 18.3K); round() would take a half to even.
+    want = "{:.1f}".format(int(total / 100.0 + 0.5) / 10.0)
     if m.group(1) != want:
         out.append((path, no, "SC-01 sum", "SC-01 sum: §2 says about {}K, its caps sum to {} ({}K)".format(m.group(1), total, want), ""))
     return out
