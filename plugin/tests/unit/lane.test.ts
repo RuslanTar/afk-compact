@@ -11,7 +11,7 @@ import type { Tag } from '../../hooks/lib/assemble'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import type { LaneFacts } from '../../hooks/lib/lane'
-import { LANE_BASIS_MAX, LANE_WHY_MAX, asLaneFacts, digestLine, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
+import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, asLaneFacts, digestLine, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
@@ -1928,6 +1928,33 @@ test('off: a working lane\'s result turn gets [idle-off] (its step 5 asks for th
   const cron = await resultTurn($, w, 'A scheduled check ran.')
   expect(cron.ctx).toContain('Else start nothing: say in one line that the lane is now hard-blocked (Basis: ')
   noDigest(cron.ctx)
+  await w.turnEnd($)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+})
+
+test('DIGEST_END_RE: Needs you or Nothing needed from you opening a line, and Nothing needed from you closing one (the one-line form)', () => {
+  for (const s of ['Needs you:\n1. Approve the push.', 'x\n**Needs you:**\n1. y', '✅ Nothing needed from you', 'x\n- Nothing needed from you.',
+    'Lane hard-blocked (Basis: 0 of 2 listed steps marked done). ✅ Nothing needed from you', 'Lane finished (Basis: b). Nothing needed from you.\nmore',
+    'Lane finished. Nothing needed from you**'])
+    expect([s, DIGEST_END_RE.test(s)]).toEqual([s, true])
+  for (const s of ['The timer ended; nothing new started.', 'If nothing needed from you was said, ask.', 'This needs you to approve the push.',
+    'Lane finished; Nothing needed from you yet, but the push waits.', 'say Nothing needed from you or not'])
+    expect([s, DIGEST_END_RE.test(s)]).toEqual([s, false])
+})
+
+test('off: the result turn\'s answer gives the one line with Nothing needed from you at its end: no row, no note on the next turn', OFF, async ($, on) => {
+  const w = new World().install(on)
+  await ad2($, w, 'On the timer notification, reply with one line acknowledging it')
+  if (!hasTag('resume-context', 'idle-off')) return
+  await resultTurn($, w, notif('b7'))
+  await w.turnEnd($, 'Lane hard-blocked (Basis: 0 of 2 listed steps marked done). ✅ Nothing needed from you')
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:off']])
+  expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at]).slice(-1)).toEqual([['hard-blocked', 'recheck']])
+  // The lane was told in that line: a later turn not of a person's gets no note repeating it.
+  expect((await resultTurn($, w, 'A scheduled check ran.')).ctx).toBe('')
   await w.turnEnd($)
   await w.advance(5000)
   expect(w.submits).toEqual([])

@@ -566,5 +566,7 @@ export function resultDigestLine(name: string, r: LaneResult, basis: string, off
  * A turn's answer that already ends with the digest's last section (`Needs you` or `Nothing
  * needed from you` opening a line): the `[idle]` block's step 5 asks for the digest when all
  * that is left waits on the user, so a result's turn may have printed it; no second one follows.
+ * The one-line form (`idle_digest: off`, and a note after a digest) may end its only line with
+ * `Nothing needed from you`, so that phrase closing a line counts as well.
  */
-export const DIGEST_END_RE = /^[^\w\n]*(?:Needs you\b|Nothing needed from you\b)/m
+export const DIGEST_END_RE = /^[^\w\n]*(?:Needs you\b|Nothing needed from you\b)|\bNothing needed from you\b[^\w\n]*$/m
