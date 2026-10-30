@@ -268,16 +268,18 @@ sub lint {
     }
 
     # ---- id ranges (the spec's id_range_re). 0.1.2 handoff-lint: a range blocks on a ledger
-    # pointer line (one naming ledger.md or inflight.md, which lists each moved id), or when it
-    # hides an id of the carry chain (a ledger line or table row of the base, the own previous
-    # file or the stage's ledger.md / inflight.md defines it) that the draft never names alone.
-    # A range of ids no chain file defines (another register's D-1255..D-1268, a summary of the
-    # B- rows the In flight table lists) loses no carried id.
+    # pointer line (one naming ledger.md or inflight.md, which lists each moved id), on a
+    # ledger-shaped line (one that starts with the range, after a bullet or a table bar:
+    # `- D-1..D-6: settled`), or when it covers a chain id (one a ledger line or table row of the
+    # draft itself, the base, the own previous file or the stage's ledger.md / inflight.md
+    # defines) and any of its ids is never named alone in the draft. A range of ids the chain
+    # never defines (another register's D-1255..D-1268) and a summary of ids the draft lists one
+    # by one (the B- rows of the In flight table) lose no id.
     if (my $idr = skills::spec::id_range_re()) {
         # Read through exists: a slice of $in->{extra} would create the keys, and publish files
         # every key of extra into evidence/.
         my $ex = $in->{extra} || {};
-        my $chain = _defined_ids(join "\n", grep { defined } $in->{previous}, $in->{own_previous},
+        my $chain = _defined_ids(join "\n", grep { defined } $body, $in->{previous}, $in->{own_previous},
                                  map { exists $ex->{$_} ? $ex->{$_} : undef } qw(ledger.md inflight.md));
         my $alone = _alone_ids($body, $idr);
         for my $i (0 .. $#lines) {
@@ -285,7 +287,8 @@ sub lint {
             my $hit = 0;
             while (!$hit && $l =~ /($idr)/g) {
                 my $ids = _range_ids($1);
-                $hit = 1 if !$ids || $l =~ /\b(?:ledger|inflight)\.md\b/ || grep { $chain->{$_} && !$alone->{$_} } @$ids;
+                $hit = 1 if !$ids || $l =~ /\b(?:ledger|inflight)\.md\b/ || $l =~ /\A\s*(?:[-*]\s+|\|\s*)?$idr/
+                    || ((grep { $chain->{$_} } @$ids) && (grep { !$alone->{$_} } @$ids));
             }
             push @block, [ 'id-range', 'line ' . ($i + 1) ] if $hit;
         }
@@ -465,29 +468,41 @@ sub _foreign_carried {
 sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
 
 # step1-mismatch (0.1.2 handoff-lint): Step 1 and Next steps item 1 name the same command or
-# edit. Backticks, white space, the "— for …" and "— done when …" tails and a proposed mark
-# (`| proposed`, `— proposed`, either with a trailing `(…)` note) do not count. The texts are
-# equal, or item 1 is Step 1 followed by ` — ` and more detail. A Step 1 that is one backticked
-# command, alone or followed by ` — ` and detail, also matches an item 1 that is that command
-# (backticked or bare), alone or followed by ` — ` and detail. Nothing else may follow the
-# command on either side: an extra argument, a glued word, a second command or other words
-# after it are compared as text, so they block unless both sides say the same.
+# edit. Two texts that are the same (backticks and white space aside) always match. Else the
+# "— for …" and "— done when …" tails and a proposed mark on either side (`| proposed`,
+# `— proposed`, `as proposed`, each with an optional trailing `(…)` note) do not count, and
+# the texts are equal, or item 1 is Step 1 followed by ` — ` and detail. A Step 1 that is one
+# backticked command, alone or followed by ` — ` and detail, also matches an item 1 that is
+# that command (backticks do not count), alone or followed by ` — ` and detail. Detail is
+# prose: a backticked span in it (a second command riding along) blocks. Anything else after
+# the command on either side (an extra argument, a glued word, other words) is compared as
+# text, so it blocks unless both sides say the same.
 sub _step1_same {
     my ($s1, $n1) = @_;
     return 0 unless defined $s1 && defined $n1;
-    $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
-    $s1 =~ s/\s*(?:\||\x{2014})?\s*proposed(?:\s*\([^()]*\))?\s*\z//;
-    $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
     my $flat = sub { my ($t) = @_; $t =~ s/`//g; $t =~ s/\s+/ /g; $t =~ s/\A | \z//g; return $t };
+    return 0 if $flat->($s1) eq '';
+    return 1 if $flat->($s1) eq $flat->($n1);
+    $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
+    $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
+    s/\s*(?:\||\x{2014})?\s*proposed(?:\s*\([^()]*\))?\s*\z// for $s1, $n1;
     my ($fs, $fn) = ($flat->($s1), $flat->($n1));
     return 0 if $fs eq '';
     return 1 if $fs eq $fn;
-    return 1 if index($fn, "$fs \x{2014} ") == 0;
-    my $rest = qr/(?:\s+\x{2014}\s.*)?\s*\z/;
-    if ($s1 =~ /\A\s*`([^`]+)`$rest/) {
+    # $raw is $head (flattened), then ` — ` and detail with no backtick.
+    my $detail = sub {
+        my ($raw, $head) = @_;
+        while ($raw =~ /\s+\x{2014}\s+/g) {
+            my ($x, $y) = ($-[0], $+[0]);
+            next unless $flat->(substr($raw, 0, $x)) eq $head;
+            return substr($raw, $y) =~ /`/ ? 0 : 1;
+        }
+        return 0;
+    };
+    return 1 if $detail->($n1, $fs);
+    if ($s1 =~ /\A\s*`([^`]+)`(?:\s+\x{2014}\s[^`]*)?\s*\z/) {
         my $c = $flat->($1);
-        return 1 if $n1 =~ /\A\s*`([^`]+)`$rest/ && $flat->($1) eq $c;
-        return 1 if $n1 !~ /\A\s*`/ && ($fn eq $c || index($fn, "$c \x{2014} ") == 0);
+        return 1 if $fn eq $c || $detail->($n1, $c);
     }
     return 0;
 }
@@ -499,7 +514,8 @@ sub _step1_same {
 #   in a path (`<scratch>/out.md`, `run-<n>/log`) and a pointer still count;
 # - the words of an agent prompt after a `prompt=` / `prompt:` argument (not a CLI flag such as
 #   `--prompt=`): they are the spawned agent's own text, unless the `<…>` is the whole prompt
-#   value (`prompt="<the brief above>"`) or a pointer.
+#   value (`prompt="<the brief above>"`), a pointer or part of a path (`<scratch>/out.md`,
+#   `$TMP/<name>.md`).
 # A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
 # (`<the brief above>`, `<same path>`, `<that copy>`).
 sub _placeholder {
@@ -525,7 +541,7 @@ sub _placeholder {
     if ($l =~ /(?<![-\w])prompt\s*[=:]\s*["'`]?/g) {
         my $at = pos($l);
         my $tail = substr($l, $at);
-        return 1 if $tail =~ /\A$ph["'`]?\s*(?:[),;]|\z)/ || $pointer->($tail);
+        return 1 if $tail =~ /\A$ph["'`]?\s*(?:[),;]|\z)/ || $pointer->($tail) || $tail =~ m{$ph/|/$ph};
         return substr($l, 0, $at) =~ $ph ? 1 : 0;
     }
     return $l =~ $ph ? 1 : 0;
