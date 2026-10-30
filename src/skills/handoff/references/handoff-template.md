@@ -18,7 +18,7 @@ This mirrors the plugin's shared spec (`assets/handoff-spec.md` in the plugin fo
 
 ## 2. Size
 
-Target 6–15 KB; over 20 KB is flagged; under 6 KB is fine when it stands alone. No global cap. Section caps in characters (sum about 18.2K): Title 80 · Resume here 1,500 and 5 lines · User constraints 2,200 · Approvals 1,000 · Decisions 2,200 · In flight 2,000 · Live state 1,400 · Open questions 2,000 (never compressed) · Location 1,700 · Work done 1,800 · Evidence 1,100, the helper's pasted lines not counted · Next steps 1,200. <!-- 0.1.2 handoff-lint, 2026-10-30: caps raised with the spec's section_caps (spec §15 section-cap row) -->
+Target 6–18 KB; over 20 KB is flagged; under 6 KB is fine when it stands alone. No global cap. Section caps in characters (sum about 17.9K): Title 80 · Resume here 1,500 and 5 lines · User constraints 2,200 · Approvals 1,000 · Decisions 2,200 · In flight 2,000 · Live state 1,400 · Open questions 2,000 (never compressed) · Location 1,700 · Work done 1,800 · Evidence 800, the helper's pasted lines not counted · Next steps 1,200. <!-- 0.1.2 handoff-lint, 2026-10-30: caps raised with the spec's section_caps (spec §15 section-cap row) -->
 Cut first, in order: Work done detail beyond one line per task and finding; changes beyond the top 5; Evidence items beyond 3; `if → then` lines; Environment detail that project docs hold. Never cut the other sections, the `Queued:` line or a pending answer.
 
 ## 3. Frontmatter, marker and end sentinel (helper-written; never type them)

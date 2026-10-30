@@ -215,7 +215,7 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 | `recipe-placeholder` · `recipe-script` · `recipe-spawn` | blocking | a recipe with a placeholder; a script not in the manifest; an agent spawn without model and effort |
 | `secret-hard` | blocking | a HARD secret hit in the draft or recipes |
 | `queue-off` | blocking | queue mode off, and a model-typed `Queued:` line or a `· queued` question row <!-- Q-ADAPTER QA-4, XR-18 --> |
-| `size` · `section-cap` | advisory | over 20 KB; a section over its `section_caps` value (in `## Evidence`, the helper-pasted lines that `overlap` also leaves out do not count) <!-- 0.1.2 handoff-lint, 2026-10-30 (owner U-6 "feel free to raise any limits if needed"): section_caps raised to about the p90 of 41 published handoffs, where 37 had a section over its cap: User constraints 1500 to 2200, Live state 1200 to 1400, Location 1000 to 1700, Evidence 600 to 1100, Next steps 1000 to 1200; the others unchanged. section-cap was on 66 of 78 publish attempts (43 of 47 first attempts). The 20 KB size advisory stays the backstop. --> |
+| `size` · `section-cap` | advisory | over 20 KB; a section over its `section_caps` value (in `## Evidence` the helper's pasted lines do not count: `Evidence:`, `Disposable:`, `Ref-only:`, and `Volatile:` in the helper's `— missing at` / `— withheld` form). `section-cap` alone starts no Edit round: the skill lists it in the report <!-- 0.1.2 handoff-lint, 2026-10-30 (owner U-6 "feel free to raise any limits if needed"): section_caps raised to about the p90 of 41 published handoffs, where 37 had a section over its cap: User constraints 1500 to 2200, Live state 1200 to 1400, Location 1000 to 1700, Evidence 600 to 800, Next steps 1000 to 1200; the others unchanged. Evidence uses the p90 of the lines the model writes (about 790 over 48 files, 830 with its own Volatile: lines), the text this cap counts, not the whole section's (about 1100). In the handoff_publish log rows from 2026-10-28 22:00, section-cap was on 66 of 78 publish attempts (43 of 47 first attempts), and 14 of the 19 first-try passes paid an Edit and republish for it alone, so section-cap alone no longer starts that round. The 20 KB size advisory stays the backstop. The first-try pass rate M-LINT1 counts blocking rules only, so these advisory changes leave it unchanged by construction. --> |
 | `code-block` · `log-lines` · `hash-lines` | advisory | a code block over 5 lines; log-, warning- or stack-shaped lines; 4 or more consecutive hash lines |
 | `changes` · `must-read` | advisory | over 15 changes; over 3 must-read paths |
 | `recipe-mismatch` | advisory | a recorded job's recipe whose `command:` differs from its record |
@@ -394,7 +394,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   },
   "call_cap": 25,
   "recipe_cap": 8,
-  "section_caps": {"## Resume here": 1500, "## User constraints": 2200, "## Approvals": 1000, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1400, "## Open questions": 2000, "## Location": 1700, "## Work done and findings": 1800, "## Evidence": 1100, "## Next steps": 1200},
+  "section_caps": {"## Resume here": 1500, "## User constraints": 2200, "## Approvals": 1000, "## Decisions and do-not-re-raise": 2200, "## In flight": 2000, "## Live state": 1400, "## Open questions": 2000, "## Location": 1700, "## Work done and findings": 1800, "## Evidence": 800, "## Next steps": 1200},
   "lint_texts": {
     "headings": {"why": "readers find sections by their literal heading, in this order", "fix": "use the template §4 headings unchanged and in order; omit only an empty section without a none-form"},
     "meta-in-draft": {"why": "frontmatter, marker and sentinel come from code; typed ones break detection", "fix": "delete them from body.md; start at the # title"},
@@ -418,7 +418,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "secret-hard": {"why": "the file would hold a live credential", "fix": "remove the value and say where it lives; the rule ids name the pattern"},
     "queue-off": {"why": "no queue is configured, so nothing was queued", "fix": "keep the question in full and drop the Queued: line and the · queued mark"},
     "size": {"why": "past 20 KB the next session reads less of what matters", "fix": "cut in the template §2 order"},
-    "section-cap": {"why": "one section crowds out the others", "fix": "cut that section toward its template §2 cap if §2 lets you cut it; else keep it and list the advisory in the report"},
+    "section-cap": {"why": "one section crowds out the others", "fix": "list it in the report; alone it starts no Edit round; in a round another line starts, cut that section toward its template §2 cap if §2 allows"},
     "code-block": {"why": "code is recoverable from the repository", "fix": "point to path#Symbol; keep ≤5 lines only mid-edit"},
     "log-lines": {"why": "pasted logs push out decisions", "fix": "write the conclusion and a reproducer command"},
     "hash-lines": {"why": "hash lists are recoverable from git", "fix": "write the commit range <base>..<head>"},

@@ -344,7 +344,7 @@
     "## Open questions": 2000,
     "## Location": 1700,
     "## Work done and findings": 1800,
-    "## Evidence": 1100,
+    "## Evidence": 800,
     "## Next steps": 1200
   },
   "lint_texts": {
@@ -438,7 +438,7 @@
     },
     "section-cap": {
       "why": "one section crowds out the others",
-      "fix": "cut that section toward its template §2 cap if §2 lets you cut it; else keep it and list the advisory in the report"
+      "fix": "list it in the report; alone it starts no Edit round; in a round another line starts, cut that section toward its template §2 cap if §2 allows"
     },
     "code-block": {
       "why": "code is recoverable from the repository",
