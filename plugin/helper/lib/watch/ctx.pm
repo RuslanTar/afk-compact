@@ -219,7 +219,8 @@ sub watcher_on {
 # "if the configured root or watch dir resolves inside a git work tree, the watcher writes
 # nothing and status says why"). Each path gets core's unsafe-root test (roots::check_path,
 # MOD-SPEC §1.2 D-12): inside .planning/ or a not-ignored git work tree is refused, a
-# git-ignored one is ok. Order: the watch dir (the configured log_dir, else <root>/.watch,
+# git-ignored one is ok. Each path is first put in core's form (util::clean_path, as
+# paths::for does), so it hits the roots cache core filled. Order: the watch dir (the configured log_dir, else <root>/.watch,
 # then the folder this call writes to when core passed another), then handoff_root.
 # disposable_root is not checked: the watcher writes nothing under it. `root-unchecked` (git
 # check-ignore ran out of the hook's time) refuses too, for this call only: ctx and the
@@ -255,7 +256,9 @@ sub _root_refusal {
                ['handoff_root', $s->{handoff_root}]) {
         my ($key, $p) = @$c;
         next unless defined $p && !ref $p && $p ne '';
-        $p =~ s{/+\z}{} unless $p eq '/';
+        # core's form (paths::for): roots.pm caches by the exact string, so a raw `~/x/./h`
+        # or a HOME with a trailing slash would miss core's entry and run git check-ignore again
+        $p = util::clean_path($p) // next;
         next if $seen{$p}++;
         push @check, [$key, $p];
     }
