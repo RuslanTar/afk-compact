@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Re-judged blocking rules, each pinned both ways (a former false refusal now passes, a true catch still blocks). HL-03 step1-mismatch: backticks, a `— proposed (…)` mark and words after the same backticked command do not count; a glued extra argument or a different wording still blocks. HL-04 id-range: a range of ids no chain file defines passes; a range hiding ids the stage ledger.md defines blocks until the draft names them alone (a ledger pointer line naming ledger.md always blocks: the earlier D-2..D-3 lines). HL-05 recipe-placeholder: a `script: none` note, a printed value in expected outputs and words inside an agent prompt pass; a whole-prompt placeholder, a placeholder path and a pointer to a stated path block, class ask included. HL-06 recipe-script: an earlier handoff's copy blocks until `evidence --keep` names it in this run (dup, no second copy); the fix text says so.",
+ "note": "Re-judged blocking rules, each pinned both ways (a former false refusal now passes, a true catch still blocks). HL-03 step1-mismatch: backticks, a `— proposed` mark (with or without a `(…)` note) and words after the same backticked command do not count; a glued extra argument or a different wording still blocks. HL-04 id-range: a range of ids no chain file defines passes; a range hiding ids the stage ledger.md or the base's ledger pointer defines blocks until the draft names them alone; a range whose ends differ in kind always blocks (a ledger pointer line naming ledger.md always blocks: the earlier D-2..D-3 lines). HL-05 recipe-placeholder: a `script: none` note, a printed value in expected outputs and words inside an agent prompt pass; a whole-prompt placeholder, a placeholder path and a pointer to a stated path block, class ask included. HL-06 recipe-script: an earlier handoff's copy blocks until `evidence --keep` names it in this run (dup, no second copy); the fix text says so.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -49,6 +49,60 @@
   },
   {
    "name": "HL-03 step1-mismatch: a `— proposed (…)` mark on Step 1 and item 1 without backticks are the same command: no LINT",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "rj1",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range ",
+     "^REFUSED: lint \\(\\d+ blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT step1-mismatch "
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` then `bin/report` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2..D-3 settled; full text in evidence/x/ledger.md\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. bin/test retry then bin/report — done when the suite passes\n"
+  },
+  {
+   "name": "HL-03 step1-mismatch: two backticked commands in Step 1, the same words bare in item 1: no LINT",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "rj1",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range ",
+     "^REFUSED: lint \\(\\d+ blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT step1-mismatch "
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: run the retry suite — proposed\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2..D-3 settled; full text in evidence/x/ledger.md\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. run the retry suite — done when it passes\n"
+  },
+  {
+   "name": "HL-03 step1-mismatch: a `— proposed` mark on a Step 1 without backticks: no LINT",
    "cwd": "$TMP/repo",
    "argv": [
     "publish",
@@ -281,6 +335,74 @@
   },
   {
    "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-5: keep the budget and delays of D-3..D-4 — because both still hold (agent)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "HL-04 id-range: a range hiding ids the base's ledger pointer lists, never named alone here: still blocks",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "rj4",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line \\d+$",
+     "^REFUSED: lint \\(\\d+ blocking\\); draft kept at $STAGE/body.md$"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-3, D-4 settled; full text in evidence/$STEM/ledger.md\n- D-5: keep the budget and delays of D-3..D-4 — because both still hold (agent)\n- D-6: see U-1..D-3 — because they belong together (agent)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "HL-04 id-range: a range whose two ends differ in kind always blocks",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "rj4",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 13$",
+     "^REFUSED: lint \\(\\d+ blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT id-range line 12$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "rj5"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
    "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2..D-3 settled; full text in evidence/x/ledger.md\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
@@ -295,7 +417,7 @@
     "--stage",
     "$STAGE",
     "--slug",
-    "rj4",
+    "rj5",
     "--status",
     "in-progress"
    ],
@@ -326,7 +448,7 @@
     "--stage",
     "$STAGE",
     "--slug",
-    "rj4",
+    "rj5",
     "--status",
     "in-progress"
    ],
@@ -352,7 +474,7 @@
     "--stage",
     "$STAGE",
     "--slug",
-    "rj4",
+    "rj5",
     "--status",
     "in-progress"
    ],
@@ -371,7 +493,7 @@
     "--sid",
     "$SID",
     "--topic",
-    "rj5"
+    "rj6"
    ],
    "expect": {
     "exit": 0
@@ -413,7 +535,7 @@
     "--stage",
     "$S1",
     "--slug",
-    "rj5",
+    "rj6",
     "--status",
     "in-progress"
    ],
@@ -434,7 +556,7 @@
     "--sid",
     "$SID",
     "--topic",
-    "rj6"
+    "rj7"
    ],
    "expect": {
     "exit": 0
@@ -460,7 +582,7 @@
     "--stage",
     "$S2",
     "--slug",
-    "rj6",
+    "rj7",
     "--status",
     "in-progress"
    ],
@@ -497,7 +619,7 @@
     "--stage",
     "$S2",
     "--slug",
-    "rj6",
+    "rj7",
     "--status",
     "in-progress"
    ],
