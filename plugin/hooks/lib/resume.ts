@@ -221,7 +221,8 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
   const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
   s.pending = undefined
-  if (c.result === 'TAKEN') {
+  // A continue that claimed the block and was dropped for a user prompt (cont.ts) holds it for this turn.
+  if (c.result === 'TAKEN' && !(pend.heldClaim === true && c.by === 'prompt.submit')) {
     await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:' + (c.by ?? 'unknown'))
     return undefined
   }

@@ -319,6 +319,8 @@ export type LoadState = {
   orphanHt: string | null
   /** Our handoff-turn `$.prompt.submit` call is in flight: our own `prompt.submit` hook drops it when a user prompt came first. */
   handoffSubmitting: boolean
+  /** Our auto-continue's `$.prompt.submit` call is in flight: dropped there the same way (cont.ts). */
+  contSubmitting: boolean
   /** The handoff turn deferred for a prompt that entered but has not started its turn: run again if it never does (CR-F17). */
   afterForeign: (() => void) | undefined
   /** Boundary scheduler. */
@@ -553,6 +555,8 @@ export type PendingResume = {
   persisted?: boolean
   /** An idle block's work lane as code read it when the block was built (away digest phase 1). */
   lane?: LaneResult
+  /** Our continue claimed it for `prompt.submit` and was dropped for a user prompt: `prompt.context` still delivers it. */
+  heldClaim?: boolean
 }
 
 /** The open idle episode of away digest phase 1 (`LoadState.idleLane`). */
@@ -627,6 +631,7 @@ export function newState(loadId: string): LoadState {
     orphanSubmit: false,
     orphanHt: null,
     handoffSubmitting: false,
+    contSubmitting: false,
     afterForeign: undefined,
     timer: undefined,
     busy: false,
@@ -1142,10 +1147,16 @@ export function isOwnOrigin(origin: { kind: string; name?: string }, name: strin
 }
 
 /**
- * Our own handoff-turn submit reaching our `prompt.submit` hook after a user prompt came first
- * (a main turn started, or a prompt entered whose turn has not started): it is dropped there,
- * so it never runs after that turn as a plain one (CR-F17, CR-F25).
+ * Our own handoff-turn submit or auto-continue reaching our `prompt.submit` hook after a user
+ * prompt came first (a main turn started, or a prompt entered whose turn has not started): it is
+ * dropped there, so it never runs after that turn as a plain one (CR-F17, CR-F25), nor takes the
+ * resume block that turn should get.
  */
 export function refuseOwnSubmit(s: LoadState): boolean {
-  return s.handoffSubmitting && (s.mainTurnRunning || s.foreignPrompts > 0)
+  return (s.handoffSubmitting || s.contSubmitting) && userFirst(s)
+}
+
+/** A main turn runs, or a prompt of another entered and its turn has not started. */
+export function userFirst(s: LoadState): boolean {
+  return s.mainTurnRunning || s.foreignPrompts > 0
 }

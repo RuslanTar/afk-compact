@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
-import { rejectClass, storeWord } from '../../hooks/lib/deps'
+import { newState, promptEntering, promptNotEntered, refuseOwnSubmit, rejectClass, storeWord } from '../../hooks/lib/deps'
 import { HALT_REASON_TEXT, maxCalls } from '../../hooks/lib/handoff-turn'
 import { AGENT, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -164,6 +164,94 @@ test('CR-F20: a continue answered { drop }: continue skipped:submit-failed', asy
   await nudgedTurn($, w)
   expect(w.compacts.length).toBe(1)
   expect(w.rowsOf('continue').map(r => r.result)).toEqual(['submitted', 'skipped:submit-failed'])
+})
+
+/** A nudged turn ends; `meanwhile` runs after its end, before the 500-ms compaction and its continue. */
+async function userFirst($: Engine, w: World, meanwhile: () => Promise<void>): Promise<string> {
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await meanwhile()
+  await w.advance(500)
+  expect(w.compacts.length).toBe(1)
+  return w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+}
+
+const PERSON = 'stop, use the staging database instead'
+const isCont = (t: string) => t.includes(CONT)
+
+test('AF-C1: a person\'s prompt entering before the continue: no continue, the block stays for that prompt\'s turn', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  const nonce = await userFirst($, w, async () => {
+    await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+  })
+  expect(w.submits.filter(isCont)).toEqual([])
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual(['skipped:user-first'])
+  expect(w.storeGet(`cont:${SID_A}`) ?? []).toEqual([])
+  expect(w.claims.get(nonce)).toBeUndefined()
+  await w.turnStart($, PERSON)
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text.startsWith(`The ${w.name} plugin adds this after compaction`)).toBe(true)
+  expect(w.claims.get(nonce)).toBe('prompt.context')
+})
+
+test('AF-C1: a main turn that started during the compaction: no continue', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  let open!: () => void
+  await userFirst($, w, async () => {
+    w.compactGate = new Promise<void>(r => { open = r })
+  })
+  await w.turnStart($, PERSON)
+  open()
+  await w.advance(10)
+  // That turn's start already turned the continue off (resumeAfter): no row.
+  expect(w.submits.filter(isCont)).toEqual([])
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual([])
+})
+
+test('AF-C2: a person\'s prompt entering after the continue\'s claim: our prompt.submit hook drops the continue (no await between check and drop); the block goes to that prompt\'s turn, the stamp is not spent', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  // Our own prompt.submit hook drops ours in this state (refuseOwnSubmit, unit test below); a hook beneath stands in for it here.
+  w.dropIf = text => (isCont(text) ? 'a user prompt came first' : undefined)
+  let release: (() => void) | undefined
+  w.atHelper = async (sub, args) => {
+    if (sub === 'claim' && args.includes('prompt.submit')) await new Promise<void>(r => { release = r })
+  }
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(500)
+  expect(release).toBeDefined()
+  await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+  release?.()
+  await w.settle()
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  expect(w.rowsOf('continue').map(r => r.result)).toEqual(['submitted', 'skipped:user-first'])
+  expect(w.storeGet(`cont:${SID_A}`)).toEqual([])
+  expect(w.claims.get(nonce)).toBe('prompt.submit')
+  await w.turnStart($, PERSON)
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text.startsWith(`The ${w.name} plugin adds this after compaction`)).toBe(true)
+  expect(w.rowsOf('mod_outcome').find(r => r.nonce === nonce)?.resume).toBe('delivered:prompt.context')
+})
+
+test('AF-C2: refuseOwnSubmit covers the continue: refused while a main turn runs or a prompt of another is entering', () => {
+  const s = newState('l')
+  s.contSubmitting = true
+  expect(refuseOwnSubmit(s)).toBe(false)
+  promptEntering(s, 'composer')
+  expect(refuseOwnSubmit(s)).toBe(true)
+  promptNotEntered(s, 'composer')
+  expect(refuseOwnSubmit(s)).toBe(false)
+  s.mainTurnRunning = true
+  expect(refuseOwnSubmit(s)).toBe(true)
+  s.contSubmitting = false
+  expect(refuseOwnSubmit(s)).toBe(false)
 })
 
 test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped at its nudged turn end, then the handoff turn, then one compaction, no continue', { options: { max_auto_continues_per_hour: 3 } }, async ($, on) => {
