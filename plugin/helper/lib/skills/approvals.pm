@@ -268,13 +268,16 @@ sub context_enabled {
 sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{blocking}{'approval-denied'} ? 1 : 0 }
 
 # Denied actions (0.1.2 AC-2, mitigation 1, in the owner's 0.1.2 scope of 2026-10-30): in a
-# handoff the user asked for, a usable approval whose action a call of this session was refused
-# for (the classifier, a deny rule or the user at the prompt; transcript::denied_calls) is
+# handoff the user asked for, a usable approval whose action a call of this session (its subagents
+# and workflow agents included) was refused for (the classifier, a deny rule, a denied directory,
+# a built-in safety check, the permission mode or the user at the prompt, not a hook;
+# transcript::denied_calls) is
 # blocked (`approval-denied`): it is written context only with its denial note, and its Next
 # step asks.
 # A denied call covers an approval when, in the approval's action and targets,
 #   - a distinctive token of the call's input (a word with a digit or a `/ . : # ! @ _ -` inside:
-#     a ticket key, a branch with a slash, a path or its file name, a URL) stands whole, or
+#     a ticket key, a branch with a slash, a path or its file name, a URL; of a Bash command
+#     only its outward step, see _deny_bash) stands whole, or
 #   - a service word of an MCP tool's server or name (not one of %DENY_STOP) stands as a word
 #     (`mcp__…Atlassian…__editJiraIssue` names `atlassian`, `jira`), or
 #   - the call names no such token and shares an outward class with the approval (a denied bare
@@ -285,10 +288,50 @@ our %DENY_STOP = map { $_ => 1 } qw(mcp plugin claude server api app get set edi
     message messages file files item items record records data info for and with tool tools);
 my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 
+# _deny_bash(command) -> token text: a refused Bash command's words that name its outward step
+# (reviewer info 3). Heredoc bodies are dropped, and quoted text holding a space (a
+# commit message, a title) is masked; the rest splits at `&&`, `||`, `;`, `|`, `&` and line ends,
+# and tokens come only from the parts that are outward (an outward class or action word), or from
+# every part when none is. A refused `git commit -m "$(cat <<EOF … EOF)" && git push` names no
+# token, so it covers a push approval by class.
+sub _deny_bash {
+    my ($cmd) = @_;
+    my @lines = split /\n/, $cmd, -1;
+    my @keep;
+    while (@lines) {
+        my $l = shift @lines;
+        push @keep, $l;
+        my @tags;
+        while ($l =~ /(?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))/g) { push @tags, [ $2 // $3 // $4, $1 ] }
+        for my $tg (@tags) {
+            my ($tag, $dash) = @$tg;
+            my ($k) = grep { ($dash ? $lines[$_] =~ s/\A\t+//r : $lines[$_]) eq $tag } 0 .. $#lines;
+            # No end line: the rest is its body, as in the shell (a cut command included).
+            splice(@lines, 0, defined $k ? $k + 1 : scalar @lines);
+            last unless defined $k;
+        }
+    }
+    my $s = join "\n", @keep;
+    $s =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{ my $q = $1 // $2; $q =~ /\s/ ? ' ' : " $q " }ge;
+    my @parts = grep { /\S/ } split /&&|\|\||[;|&\n]/, $s;
+    my @out = grep { _deny_outward($_) } @parts;
+    return join(' ', @out ? @out : @parts);
+}
+
+sub _deny_outward {
+    my ($p) = @_;
+    for my $k (@{ (eval { skills::spec::outward_classes() }) || [] }) { return 1 if $p =~ $k->{re} }
+    for my $w (@ACTION_WORDS) { return 1 if $p =~ $w->[1] }
+    return 0;
+}
+
 sub _deny_keys {
     my ($c) = @_;
     my (%tok, %word, %cls);
-    my $text = $c->{text} // '';
+    my $tool = $c->{tool} // '';
+    # Classes read the whole command (fail closed: `bash -c "git push"` is still a push).
+    my $ctext = $c->{text} // '';
+    my $text = $tool eq 'Bash' ? _deny_bash($ctext) : $ctext;
     for my $t (split $DENY_TOKEN_SPLIT, $text) {
         $t =~ s/[.:?]+\z//;
         next if length($t) < 3 || $t =~ /\A-/;
@@ -303,16 +346,15 @@ sub _deny_keys {
             $tok{$base} = 1 if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
         }
     }
-    my $tool = $c->{tool} // '';
     if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
         for my $w (map { lc } map { split /(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+/ } $1, $2) {
             $word{$w} = 1 if length($w) >= 3 && $w =~ /[a-z]/ && !$DENY_STOP{$w};
         }
     }
     for my $k (@{ (eval { skills::spec::outward_classes() }) || [] }) {
-        $cls{ $k->{class} } = 1 if $tool =~ $k->{re} || ($tool eq 'Bash' && $text =~ $k->{re});
+        $cls{ $k->{class} } = 1 if $tool =~ $k->{re} || ($tool eq 'Bash' && $ctext =~ $k->{re});
     }
-    if ($tool eq 'Bash') { for my $w (@ACTION_WORDS) { $cls{ $w->[0] } = 1 if $text =~ $w->[1] } }
+    if ($tool eq 'Bash') { for my $w (@ACTION_WORDS) { $cls{ $w->[0] } = 1 if $ctext =~ $w->[1] } }
     return { tok => [ sort keys %tok ], word => [ sort keys %word ], cls => \%cls };
 }
 
@@ -705,7 +747,7 @@ sub lint {
     }
     # AC-2: a usable line whose action this session was refused for (see _denied).
     if ($dn_ok && grep { !$_->{context} } @own) {
-        my $calls = defined $a{transcript} && defined &transcript::denied_calls ? transcript::denied_calls($a{transcript}) : undef;
+        my $calls = defined $a{transcript} && defined &transcript::denied_calls ? transcript::denied_calls($a{transcript}, $a{sid}) : undef;
         my @keys = map { _deny_keys($_) } @{ $calls || [] };
         if (@keys) {
             my @keep;

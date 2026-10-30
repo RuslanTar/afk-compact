@@ -690,52 +690,110 @@ sub user_quote_found {
     return $r->[0];
 }
 
-# Denied calls (0.1.2 AC-2, mitigation 1 of the classifier incident): a tool call of the main
-# thread whose result Claude Code wrote as a permission denial. `classifier`: the auto-mode
-# classifier refused it; `rule`: a deny rule or the permission mode did; `user`: the user
-# rejected it at the prompt. A rule's text quotes the command, which may span lines (a heredoc
-# commit message chained with a push; review finding 3).
+# Denied calls (0.1.2 AC-2, mitigation 1 of the classifier incident): a tool call of this
+# session, its subagents and workflow agents included, whose result Claude Code wrote as a
+# permission denial. `classifier`: the auto-mode classifier refused it; `rule`: a deny rule, a
+# denied directory, a built-in safety check or the permission mode did; `user`: the user rejected
+# it at the prompt. A refusal by a hook is none of these and does not count.
+# The structured decision Claude Code writes on the tool result's row (`permissionDecision`:
+# {decision accept|reject, source, reasonType}) is read when present; the text patterns below are
+# the fallback for versions without it. A rule's text quotes the command, which may span lines (a
+# heredoc commit message chained with a push; review finding 3).
 our @DENIED = (
     [ classifier => qr/\A\s*Permission for this action (?:was|has been) denied by (?:the )?(?:Claude Code )?auto[- ]mode classifier/ ],
     [ rule       => qr/\A\s*Permission to use \S+ (?:[\s\S]*? )?has been denied/ ],
+    [ rule       => qr/\A\s*(?:<tool_use_error>\s*)?File is in a directory that is denied by your permission settings/ ],
+    [ rule       => qr/\A\s*Permission for this command was denied by a built-in Claude Code safety check/ ],
+    [ rule       => qr/\A\s*Claude requested permissions to write to [\s\S]+?, but you haven't granted it yet/ ],
     [ user       => qr/\A\s*The user doesn't want to proceed with this tool use/ ],
 );
 # Tools whose input holds file text: only their path is kept.
 my %DENIED_PATH_ONLY = map { $_ => 1 } qw(Write Edit MultiEdit NotebookEdit);
 our $DENIED_VALUE_MAX = 200;      # longer input values (a body, a description) are skipped
 our $DENIED_TEXT_MAX = 2000;
+our $DENIED_AGENT_FILES_MAX = 2000;
 
-# denied_calls(path) -> [{tool, class, epoch, text}] | undef (unreadable): the main thread's
-# denied calls, oldest first, any session's rows of the file included (a copied denial counts:
-# fail closed). `text` is the call's input words in memory only, for the approvals lint to tell
-# which approval a denial covers; it is never logged or printed: the Bash command, the path of a
-# Write, Edit, MultiEdit or NotebookEdit, else the input's scalar values up to
-# $DENIED_VALUE_MAX characters each. Two passes: the results are found by plain index first, so
-# a transcript with no denial is read once without decoding.
+# _denied_class(row, tool_result text, results on the row) -> class | undef. The row's
+# structured decision wins when present (one result on the row): `reject` by the user at the
+# prompt is `user`, by the classifier `classifier`, by a hook nothing, else `rule`; `accept` is
+# no denial whatever the text says. Without it, the text patterns decide.
+sub _denied_class {
+    my ($j, $t, $n) = @_;
+    my $pd = $j->{permissionDecision};
+    if ($n == 1 && ref $pd eq 'HASH' && defined $pd->{decision} && !ref $pd->{decision}) {
+        return undef unless $pd->{decision} eq 'reject';
+        my ($src, $why) = map { defined $_ && !ref $_ ? $_ : '' } $pd->{source}, $pd->{reasonType};
+        return undef if $src eq 'hook' || $why eq 'hook';
+        return 'user' if $src =~ /\Auser/;
+        return 'classifier' if $why eq 'classifier';
+        return 'rule';
+    }
+    return undef unless defined $t && !ref $t;
+    for my $d (@DENIED) { return $d->[0] if $t =~ $d->[1] }
+    return undef;
+}
+
+# denied_calls(path, sid) -> [{tool, class, epoch, text}] | undef (main transcript unreadable):
+# the denied calls of the main transcript (sidechain rows included) and of the session's subagent
+# and workflow agent transcripts (`<transcript or sid>/subagents/agent-*.jsonl`,
+# `…/subagents/workflows/<run>/agent-*.jsonl`), oldest first, any session's rows of a file
+# included (a copied denial counts: fail closed). `text` is the call's input words in memory only,
+# for the approvals lint to tell which approval a denial covers; it is never logged or printed:
+# the Bash command, the path of a Write, Edit, MultiEdit or NotebookEdit, else the input's scalar
+# values up to $DENIED_VALUE_MAX characters each.
 sub denied_calls {
-    my ($path) = @_;
+    my ($path, $sid) = @_;
     return undef unless defined $path && -f $path && -r _;
+    my $main = _denied_in_file($path);
+    return undef unless $main;
+    my @out = @$main;
+    push @out, @{ _denied_in_file($_) || [] } for _denied_agent_files($path, $sid);
+    my $i = 0;
+    return [ map { $_->[1] } sort { ($a->[1]{epoch} // 0) <=> ($b->[1]{epoch} // 0) || $a->[0] <=> $b->[0] } map { [ $i++, $_ ] } @out ];
+}
+
+# The session's subagent and workflow agent transcripts (at most $DENIED_AGENT_FILES_MAX).
+sub _denied_agent_files {
+    my ($path, $sid) = @_;
+    my $dir = util::dirname($path);
+    (my $stem = util::basename($path)) =~ s/\.jsonl\z//;
+    my @out;
+    for my $base (grep { defined && $_ ne '' } $stem, $sid) {
+        my $d = "$dir/$base/subagents";
+        next unless -d $d;
+        push @out, map { "$d/$_" } grep { /\Aagent-[A-Za-z0-9_-]+\.jsonl\z/ } util::list_dir($d);
+        my $w = "$d/workflows";
+        for my $run (grep { /\A[A-Za-z0-9_.-]+\z/ && !/\A\.\.?\z/ && -d "$w/$_" } util::list_dir($w)) {
+            push @out, map { "$w/$run/$_" } grep { /\Aagent-[A-Za-z0-9_-]+\.jsonl\z/ } util::list_dir("$w/$run");
+        }
+        last if @out;
+    }
+    splice(@out, $DENIED_AGENT_FILES_MAX) if @out > $DENIED_AGENT_FILES_MAX;
+    return @out;
+}
+
+# One transcript's denied calls. Two passes: the results are found by plain index first, so a
+# transcript with no denial is read once without decoding.
+sub _denied_in_file {
+    my ($path) = @_;
     open(my $fh, '<:raw', $path) or return undef;
     my %res;
     while (my $line = <$fh>) {
         next unless index($line, '"tool_use_id"') >= 0
-            && (index($line, 'denied') >= 0 || index($line, "want to proceed") >= 0);
+            && (index($line, 'denied') >= 0 || index($line, "want to proceed") >= 0
+                || index($line, "haven't granted") >= 0 || index($line, '"reject"') >= 0);
         my $j = eval { jsonc::decode($line) };
-        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user' && !$j->{isSidechain};
+        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'user';
         my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
         next unless ref $c eq 'ARRAY';
-        for my $it (@$c) {
-            next unless ref $it eq 'HASH' && ($it->{type} // '') eq 'tool_result';
+        my @tr = grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c;
+        for my $it (@tr) {
             my $id = $it->{tool_use_id};
             next unless defined $id && !ref $id && $id ne '';
             my $t = $it->{content};
             $t = join("\n", map { $_->{text} // '' } grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'text' } @$t) if ref $t eq 'ARRAY';
-            next unless defined $t && !ref $t;
-            for my $d (@DENIED) {
-                next unless $t =~ $d->[1];
-                $res{$id} = { class => $d->[0], epoch => _row_epoch($j) };
-                last;
-            }
+            my $class = _denied_class($j, $t, scalar @tr);
+            $res{$id} = { class => $class, epoch => _row_epoch($j) } if defined $class;
         }
     }
     unless (%res) { close $fh; return [] }
@@ -744,7 +802,7 @@ sub denied_calls {
     while (my $line = <$fh>) {
         next unless index($line, '"tool_use"') >= 0 && grep { index($line, $_) >= 0 } keys %res;
         my $j = eval { jsonc::decode($line) };
-        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'assistant' && !$j->{isSidechain};
+        next unless ref $j eq 'HASH' && ($j->{type} // '') eq 'assistant';
         my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
         next unless ref $c eq 'ARRAY';
         for my $it (@$c) {
