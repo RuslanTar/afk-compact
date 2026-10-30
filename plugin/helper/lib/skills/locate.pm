@@ -108,10 +108,11 @@ sub run {
         @matching = grep { lc(File::Basename::basename($_)) eq $tok } @all;
         $exact = 1 if @matching;
         @matching = grep { index(lc(File::Basename::basename($_)), $tok) >= 0 } @all unless @matching;
-        # one bucket name, which may be in both read roots (STATE-ROOT): the newest of its files
+        # one bucket, which may be in both read roots (STATE-ROOT): the newest of its files. The key is
+        # the folder below its root (<repo>/<bucket>), so two repos' buckets of one name stay two.
         my %mb = map { $_ => 1 } @matching;
-        my %names = map { lc(File::Basename::basename($_)) => 1 } @matching;
-        if ($exact && keys %names == 1) {
+        my %keys = map { skills::store::bucket_key($ctx, $_) => 1 } @matching;
+        if ($exact && keys %keys == 1) {
             my ($d) = grep { $mb{ $_->{bucket} } && !_is_sub($_) } @pool;
             ($tier, $pick) = (5, $d) if $d;
         }

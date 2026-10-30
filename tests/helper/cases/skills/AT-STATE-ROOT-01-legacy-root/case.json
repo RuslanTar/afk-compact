@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root.",
+ "note": "STATE-ROOT (0.1.2): the default handoff_root is ~/.local/state/<plugin>/handoffs; while handoff_root is unset (or equal to the default), the old default ~/.claude/handoffs is read too. (a) locate pools the buckets of both roots by date and reads an old-root file as own store, and a newer twin there supersedes; tier 5 counts one <repo>/<bucket> in both roots as one bucket, two repos' buckets of one name as two; (b) an explicit other root, or ~/.claude/handoffs set explicitly, is the only root; (c) a session whose pin and /clear lineage are only in the old root keeps its chain and bucket, its next stage, publish and pin under the new root; (d) a successor claim in the old root blocks a second claim in the new one, so a once approval is never lent twice; (e) a handoff published in the old root links and carries its checked approval, its hash record read there, the pin naming the bucket under the new root; (f) pin, begin, stamp and publish write nothing under the old root (tree unchanged); status shows the old root's line only for the default root.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -375,7 +375,8 @@
      {
       "path": "$ROOT/.sessions/52525252-5252-4525-8525-525252525252.json",
       "contains": [
-       "\"bucket\":\"repo/hr\""
+       "\"bucket\":\"repo/hr\"",
+       "\"bucket_path\":\"$ROOT/repo/hr\""
       ]
      },
      {
@@ -603,6 +604,116 @@
       "path": "$LEGACY",
       "same_tree_as": "L0"
      }
+    ]
+   },
+   "capture": {
+    "STAGE_T": "json:stage"
+   }
+  },
+  {
+   "name": "(c) T: stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE_T"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE_T/body.md",
+   "content": "# LAB-3 — work\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 64646464\n## Approvals\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "(c) T publishes into the new root: its pin is written there, the old root's pin and tree unchanged",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE_T",
+    "--slug",
+    "zz",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/other/LAB-3/"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/64646464-6464-4646-8646-646464646464.json",
+      "contains": [
+       "\"bucket\":\"other/LAB-3\"",
+       "\"bucket_path\":\"$ROOT/other/LAB-3\""
+      ]
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "(a) tier 5: LAB-5 names one bucket, repo/LAB-5, in both roots: the newest of its files, the old root's",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "67676767-6767-4676-8676-676767676767",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "LAB-5"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 5\\npick: $LEGACY/repo/LAB-5/2026-10-21_12-00-00_66666666_l\\.md\\nrelation: other\\n"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/other/LAB-5/2026-10-21_13-00-00_88888888_b.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f1f2f3f\ndate: 2026-10-21T13:00:00+03:00\nsession_id: 88888888-8888-4888-8888-888888888888\nactor: main\n---\n⟪$BRAND v1 n=0f1f2f3f s=manual⟫\n# LAB-5 — other repo\n⟪/$BRAND n=0f1f2f3f⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/68686868-6868-4686-8686-686868686868.json",
+     "content": "{\"session_id\": \"68686868-6868-4686-8686-686868686868\", \"bucket\": \"other/LAB-5\", \"bucket_path\": \"$ROOT/other/LAB-5\", \"bucket_source\": \"pin\"}"
+    }
+   ]
+  },
+  {
+   "name": "(a) tier 5 keys the bucket by <repo>/<bucket>: repo/LAB-5 (both roots) and the pinned other/LAB-5 are two, so ambiguous (tier 6)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "68686868-6868-4686-8686-686868686868",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "LAB-5"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Atier: 6\\n"
     ]
    }
   }

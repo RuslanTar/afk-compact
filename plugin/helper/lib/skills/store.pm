@@ -141,6 +141,19 @@ sub twin_buckets {
     return [$bucket];
 }
 
+# bucket_key(ctx, bucket) -> the folder's path below the read root that holds it (<repo>/<bucket>),
+# so the same bucket in both read roots gives one key; a folder under no read root gives its own path.
+sub bucket_key {
+    my ($ctx, $bucket) = @_;
+    my $b = skills::util::abs_path($bucket) // $bucket;
+    for my $r (skills::ctx::read_roots($ctx)) {
+        my $ar = skills::util::abs_path($r) // $r;
+        $ar =~ s{/+\z}{};
+        return substr($b, length($ar) + 1) if index($b, "$ar/") == 0;
+    }
+    return $b;
+}
+
 # in_store(ctx, path) -> 1 when the file's real path lies under a read root (the store root, or
 # the legacy root, which counts as the own store, STATE-ROOT), component by component.
 sub in_store {
