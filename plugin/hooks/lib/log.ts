@@ -12,15 +12,93 @@ import { byteLength } from './normalize'
 
 export type Fields = Record<string, string | number | boolean | null | readonly string[] | Record<string, number>>
 
-/** ISO 8601 local time with milliseconds and offset. */
-export function isoLocal(ms: number, withMs = true): string {
-  const dt = new Date(ms)
-  const off = -dt.getTimezoneOffset()
-  const sign = off >= 0 ? '+' : '-'
-  const a = Math.abs(off)
+const FORMATS = new Map<string, Intl.DateTimeFormat | null>()
+
+/** A formatter of the named IANA zone's wall clock, or null when the engine does not know the zone. */
+function zoneFormat(zone: string): Intl.DateTimeFormat | null {
+  let f = FORMATS.get(zone)
+  if (f !== undefined) return f
+  try {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+  } catch {
+    f = null
+  }
+  if (FORMATS.size < 16) FORMATS.set(zone, f)
+  return f
+}
+
+/** The wall clock of `ms` in `zone` and its offset in minutes; undefined when the zone is unknown. */
+function zoneWall(ms: number, zone: string): { y: number; mo: number; d: number; h: number; mi: number; s: number; off: number } | undefined {
+  const f = zoneFormat(zone)
+  if (f === null) return undefined
+  try {
+    const part: Record<string, number> = {}
+    for (const x of f.formatToParts(ms)) if (x.type !== 'literal') part[x.type] = Number(x.value)
+    const y = part['year'], mo = part['month'], d = part['day'], h = part['hour'], mi = part['minute'], s = part['second']
+    if (y === undefined || mo === undefined || d === undefined || h === undefined || mi === undefined || s === undefined) return undefined
+    if (![y, mo, d, h, mi, s].every(Number.isInteger)) return undefined
+    const wall = new Date(Date.UTC(2000, mo - 1, d, h, mi, s))
+    wall.setUTCFullYear(y)
+    const off = Math.round((wall.getTime() - Math.floor(ms / 1000) * 1000) / 60000)
+    return { y, mo, d, h, mi, s, off }
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * ISO 8601 local time with milliseconds and the offset of that instant. `zone` is the system's
+ * zone now (`stamp`, `zoneOf`); without it, or when the engine does not know it, the zone is the
+ * one the engine read at load, which goes stale when the system zone changes under a running
+ * session (0.1.2 log-tz). The helper's `log` also writes each row's ts at its own offset
+ * (cmd/log.pl `_restamp`), a backstop for a row stamped in the engine's zone.
+ */
+export function isoLocal(ms: number, withMs = true, zone?: string): string {
   const p = (n: number, w = 2) => String(n).padStart(w, '0')
-  const base = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}T${p(dt.getHours())}:${p(dt.getMinutes())}:${p(dt.getSeconds())}`
-  return base + (withMs ? '.' + p(dt.getMilliseconds(), 3) : '') + `${sign}${p(Math.floor(a / 60))}:${p(a % 60)}`
+  const z = zone !== undefined ? zoneWall(ms, zone) : undefined
+  const dt = new Date(ms)
+  const w = z ?? {
+    y: dt.getFullYear(), mo: dt.getMonth() + 1, d: dt.getDate(), h: dt.getHours(), mi: dt.getMinutes(), s: dt.getSeconds(),
+    off: -dt.getTimezoneOffset(),
+  }
+  const sign = w.off >= 0 ? '+' : '-'
+  const a = Math.abs(w.off)
+  const msPart = ((ms % 1000) + 1000) % 1000
+  const base = `${p(w.y, 4)}-${p(w.mo)}-${p(w.d)}T${p(w.h)}:${p(w.mi)}:${p(w.s)}`
+  return base + (withMs ? '.' + p(msPart, 3) : '') + `${sign}${p(Math.floor(a / 60))}:${p(a % 60)}`
+}
+
+/**
+ * The IANA zone a resolved `/etc/localtime` names (`.../zoneinfo/Etc/GMT-1`, a `posix/` or
+ * `right/` tree too, or macOS's shipped `/usr/share/zoneinfo.default/` copy), when the engine
+ * knows it; else undefined.
+ */
+export function zoneOfPath(real: string | undefined): string | undefined {
+  if (real === undefined) return undefined
+  // Greedy: the cut is at the last zoneinfo directory in the path.
+  const m = /^.*\/zoneinfo(?:\.default)?\//.exec(real)
+  if (m === null) return undefined
+  const name = real.slice(m[0].length).replace(/^(?:posix|right)\//, '')
+  if (!/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(name)) return undefined
+  return zoneFormat(name) !== null ? name : undefined
+}
+
+/** The system zone now (`Deps.zone`, read again at each stamp), or undefined for the engine's own. */
+export async function zoneOf(d: Deps): Promise<string | undefined> {
+  if (d.zone === undefined) return undefined
+  try {
+    return await d.zone()
+  } catch {
+    return undefined
+  }
+}
+
+/** `isoLocal` of `ms` in the system zone now. */
+export async function stamp(d: Deps, ms: number, withMs = true): Promise<string> {
+  return isoLocal(ms, withMs, await zoneOf(d))
 }
 
 export type Row = Record<string, unknown>
@@ -28,17 +106,22 @@ export type Row = Record<string, unknown>
 export async function makeRow(d: Deps, sid: string, ev: string, fields: Fields, actor = 'main'): Promise<Row> {
   const now = await d.now()
   const s = d.state
+  // The state is read at `now`, before the zone lookup awaits its file check: a turn starting
+  // during that check does not lend this row its turn_seq.
+  const pid = s.ident?.pid ?? null
+  const ccVersion = s.ccVersion
+  const turnSeq = s.turnSeq
   return {
     v: 1,
-    ts: isoLocal(now),
+    ts: await stamp(d, now),
     ev,
     sid,
     actor,
     writer: 'mod',
-    pid: s.ident?.pid ?? null,
+    pid,
     plugin_version: PLUGIN_VERSION,
-    cc_version: s.ccVersion,
-    turn_seq: s.turnSeq,
+    cc_version: ccVersion,
+    turn_seq: turnSeq,
     ...fields,
   }
 }

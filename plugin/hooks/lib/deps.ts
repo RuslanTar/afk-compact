@@ -10,6 +10,7 @@ import type { Lane, LaneFacts, LaneResult } from './lane'
 import type { RestartEnv, RestartReport, RestartRun, RestartSetting } from './restart'
 import { optionEnv, parseOptions, paths } from './config'
 import { launchDir } from './launch.gen'
+import { zoneOfPath } from './log'
 
 export type RunResult = {
   /** True when the command ran and exited 0. */
@@ -227,6 +228,13 @@ export interface Deps {
   /** `$.store.delete`: removes the key (a tombstone past its life, idle.ts). */
   storeDelete(key: string): Promise<void>
   now(): Promise<number>
+  /**
+   * 0.1.2 log-tz: the system's IANA zone now, read again at each call (the engine keeps the zone
+   * it read at load, stale once the system zone changes under a running session). Undefined, or
+   * absent, means the engine's own zone: `TZ` set, even empty (UTC; the engine and every helper
+   * read that), or no `/etc/localtime` leading into a zoneinfo tree the engine knows.
+   */
+  zone?(): Promise<string | undefined>
   after(ms: number, fn: () => void): { cancel: () => void }
   toast(text: string): void
   /** `$.ui.toast` for the one-time notice: shown whatever `warn_ui` says (W-BETA A). */
@@ -820,6 +828,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
     storeSet: (key, value) => $.store.set(key, value),
     storeDelete: key => $.store.delete(key),
     now: () => $.clock.now(),
+    async zone() {
+      try {
+        if ((await $.env.get('TZ')) !== undefined) return undefined
+        return zoneOfPath((await $.fs.stat('/etc/localtime', { resolve: true })).realPath)
+      } catch {
+        return undefined
+      }
+    },
     after: (ms, fn) => $.clock.after(ms, fn),
     toast(text) {
       if (cfg.warn_ui) $.ui.toast(text)

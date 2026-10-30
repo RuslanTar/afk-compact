@@ -1,0 +1,66 @@
+{
+ "id": "V012-log-tz-restamp",
+ "note": "0.1.2 log-tz: the mod's engine keeps the local zone it read at load, so after the system zone changes (seen 2026-10-30: /etc/localtime moved between Europe/UTC+2 zone and Etc/GMT-1 while sessions ran) the mod stamped its rows +02:00 while every fresh helper process stamped +01:00 for the same instants. `log` (mod and paths streams) now writes each row's `ts` at the helper's own local offset of that instant, the instant and its milliseconds kept and every other byte of the row as given. Across the 2026-10-25 change in Etc/GMT-1 (01:00Z): 00:30Z is 02:30+02:00 and 01:30Z is 02:30+01:00, the same wall clock with two offsets; a stamp already in the helper's zone is unchanged, and a ts that is not an ISO stamp is left alone",
+ "tz": "Etc/GMT-1",
+ "steps": [
+  {
+   "name": "a stale +03:00 stamp before the change becomes +02:00",
+   "argv": ["log", "--sid", "$SID", "--json", "{\"v\":1,\"ts\":\"2026-10-25T03:30:00.250+03:00\",\"ev\":\"t1\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\",\"n\":1}"],
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [{"file": "$WATCH/$SID.jsonl", "ev": "t1", "fields": {"ts": "2026-10-25T02:30:00.250+02:00", "n": 1, "writer": "mod"}}],
+    "files": [{"path": "$WATCH/$SID.jsonl", "has": ["^\\{\"v\":1,\"ts\":\"2026-10-25T02:30:00\\.250\\+02:00\",\"ev\":\"t1\",\"sid\":\"[^\"]+\",\"actor\":\"main\",\"writer\":\"mod\",\"n\":1\\}$"]}]
+   }
+  },
+  {
+   "name": "an hour later the same wall clock carries +01:00",
+   "argv": ["log", "--sid", "$SID", "--json", "{\"v\":1,\"ts\":\"2026-10-25T04:30:00.000+03:00\",\"ev\":\"t2\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}"],
+   "expect": {
+    "exit": 0,
+    "rows": [{"file": "$WATCH/$SID.jsonl", "ev": "t2", "fields": {"ts": "2026-10-25T02:30:00.000+01:00"}}]
+   }
+  },
+  {
+   "name": "a stale +02:00 stamp after the change, no milliseconds",
+   "argv": ["log", "--sid", "$SID", "--json", "{\"v\":1,\"ts\":\"2026-10-30T11:21:06+02:00\",\"ev\":\"t3\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}"],
+   "expect": {
+    "exit": 0,
+    "rows": [{"file": "$WATCH/$SID.jsonl", "ev": "t3", "fields": {"ts": "2026-10-30T10:21:06+01:00"}}]
+   }
+  },
+  {
+   "name": "a Z stamp takes the local offset (the row grows by 5 bytes)",
+   "argv": ["log", "--sid", "$SID", "--json", "{\"v\":1,\"ts\":\"2026-10-30T10:21:06.007Z\",\"ev\":\"t3z\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}"],
+   "expect": {
+    "exit": 0,
+    "rows": [{"file": "$WATCH/$SID.jsonl", "ev": "t3z", "fields": {"ts": "2026-10-30T11:21:06.007+01:00"}}]
+   }
+  },
+  {
+   "name": "a stamp already in the helper's zone, and a ts that is no stamp, stay as given",
+   "argv": ["log", "--sid", "$SID", "--stdin"],
+   "stdin_text": "{\"v\":1,\"ts\":\"2026-10-30T10:21:06.007+01:00\",\"ev\":\"t4\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}\n{\"v\":1,\"ts\":\"later\",\"ev\":\"t5\",\"sid\":\"$SID\",\"actor\":\"main\",\"writer\":\"mod\"}\n",
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {"file": "$WATCH/$SID.jsonl", "ev": "t4", "fields": {"ts": "2026-10-30T10:21:06.007+01:00"}},
+     {"file": "$WATCH/$SID.jsonl", "ev": "t5", "fields": {"ts": "later"}}
+    ]
+   }
+  },
+  {
+   "name": "the paths stream: spaced JSON, summer to winter",
+   "argv": ["log", "--sid", "$SID", "--stream", "paths", "--stdin"],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-10-24T23:59:59.999+03:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/a.log\", \"tool\": \"Bash\"}\n{\"v\": 1, \"ts\": \"2026-10-26T00:00:00.000+02:00\", \"ev\": \"path\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"path\": \"$TMP/b.log\", \"tool\": \"Bash\"}\n",
+   "expect": {
+    "exit": 0,
+    "rows": [
+     {"file": "$WATCH/$SID/paths.jsonl", "ev": "path", "fields": {"path": "$TMP/a.log", "ts": "2026-10-24T22:59:59.999+02:00"}},
+     {"file": "$WATCH/$SID/paths.jsonl", "ev": "path", "fields": {"path": "$TMP/b.log", "ts": "2026-10-25T23:00:00.000+01:00"}}
+    ],
+    "files": [{"path": "$WATCH/$SID/paths.jsonl", "has": ["^\\{\"v\": 1, \"ts\": \"2026-10-24T22:59:59\\.999\\+02:00\", \"ev\": \"path\", "]}]
+   }
+  }
+ ]
+}

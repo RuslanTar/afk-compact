@@ -15,7 +15,7 @@ import type { RaceBlock } from './handoff-turn'
 import { raceBlock, racedTurn } from './handoff-turn'
 import type { HandoffState } from './helper'
 import { checkpoint, dispatch, failClass, handoffState, handoffTurnSupersede, prevCopy, saveCopy, sweep } from './helper'
-import { escalate, helperMissing, isoLocal, log, skipClass, toastOnce, vettedWatch } from './log'
+import { escalate, helperMissing, log, skipClass, stamp, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
 import { carriedQuestion } from './question'
 import { byteLength, sha8 } from './normalize'
@@ -176,7 +176,7 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
       idle: r.idle !== undefined, idle_gap_s: r.idle !== undefined ? r.idle.gapS : null,
       tags: r.tags, instructions_sha8: instrSha8, instructions_bytes: instrBytes,
       cc_version: s.ccVersion, cc_version_src: s.ccVersion !== null && s.ccVersion !== '' ? 'mod' : null,
-      load_id: s.loadId, pid: s.ident?.pid ?? null, pid_lstart: s.ident?.pid_lstart ?? null, ts: isoLocal(await d.now(), false),
+      load_id: s.loadId, pid: s.ident?.pid ?? null, pid_lstart: s.ident?.pid_lstart ?? null, ts: await stamp(d, await d.now(), false),
       ...(r.handoffHt !== undefined ? { handoff_ht: r.handoffHt } : {}),
       ...(model !== undefined ? { model } : {}),
     }
@@ -207,7 +207,7 @@ export async function mainText(
   if (measured !== null) tags.push('measured')
   if (d.cfg.queue_cmd !== '') tags.push('queue')
   const runtime = {
-    nonce, previous_copy: prev, measured_at: isoLocal(await d.now(), false), measured_facts: measured ?? undefined, handoff_path: handoffPath,
+    nonce, previous_copy: prev, measured_at: await stamp(d, await d.now(), false), measured_facts: measured ?? undefined, handoff_path: handoffPath,
   }
   return { text: assemble(d.name, 'handoff-instructions', tags, runtime), tags }
 }

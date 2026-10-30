@@ -16,6 +16,7 @@ import type { Deps } from '../../hooks/lib/deps'
 import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
 import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { isoLocal, makeRow, stamp, zoneOfPath } from '../../hooks/lib/log'
 
 const NAME = 'x'.repeat(14)
 
@@ -642,4 +643,89 @@ test('AT-GR-08: keepGsdLines keeps replacement patterns in a stored GSD line lit
   const out = keepGsdLines(fresh, `Git: main @ 3f9c2e1\n${gsd}\nIn flight: none listed`)
   expect(out).toBe(`Git: main @ 9e9e9e9\n${gsd}\nIn flight: none listed`)
   expect(keepGsdLines(fresh, undefined)).toBe(fresh)
+})
+
+// 0.1.2 log-tz: each stamp carries the offset of its own instant, on both sides of a DST
+// change (EU 2026-03-29 and 2026-10-25 at 01:00Z, US 2026-03-08 and 2026-11-01), whatever zone
+// the engine runs in. The zone itself is the engine's from load; the helper's `log` writes a
+// mod row's ts at its own offset (tests/helper/cases/core/V012-log-tz-restamp).
+test('isoLocal: the offset of each instant across a DST change; the stamp reads back as the same instant', () => {
+  const at = [Date.UTC(2026, 2, 29, 0, 59, 59, 999), Date.UTC(2026, 2, 29, 1, 0, 0, 0),
+    Date.UTC(2026, 9, 25, 0, 30, 0, 250), Date.UTC(2026, 9, 25, 1, 30, 0, 0),
+    Date.UTC(2026, 2, 8, 6, 59, 59, 0), Date.UTC(2026, 2, 8, 11, 0, 0, 0),
+    Date.UTC(2026, 10, 1, 5, 59, 59, 0), Date.UTC(2026, 10, 1, 10, 0, 0, 0)]
+  for (const ms of at) {
+    const s = isoLocal(ms)
+    expect(s).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}[+-]\d\d:\d\d$/)
+    expect(Date.parse(s)).toBe(ms)
+    const off = -new Date(ms).getTimezoneOffset()
+    const m = /([+-])(\d\d):(\d\d)$/.exec(s)
+    expect(m === null ? NaN : (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]))).toBe(off)
+    const short = isoLocal(ms, false)
+    expect(short).toBe(s.slice(0, 19) + s.slice(23))
+    expect(Date.parse(short)).toBe(Math.floor(ms / 1000) * 1000)
+  }
+})
+
+// 0.1.2 log-tz at the source: a stamp is made in the system zone as it stands at that stamp
+// (Deps.zone, read again each time), not the zone the engine read at load; the engine's own
+// zone only when none is known. Seen 2026-10-30: /etc/localtime moved from Europe/UTC+2 zone to
+// Etc/GMT-1 under running sessions, and the mod went on stamping +02:00.
+test('isoLocal in a named zone: the offset of each instant across a DST change, whatever the engine zone', () => {
+  const at = (z: string, ms: number) => isoLocal(ms, true, z)
+  expect(at('Etc/GMT-1', Date.UTC(2026, 9, 25, 0, 30, 0, 250))).toBe('2026-10-25T02:30:00.250+02:00')
+  expect(at('Etc/GMT-1', Date.UTC(2026, 9, 25, 1, 30, 0, 0))).toBe('2026-10-25T02:30:00.000+01:00')
+  expect(at('Europe/UTC+2 zone', Date.UTC(2026, 9, 30, 10, 49, 12, 7))).toBe('2026-10-30T12:49:12.007+02:00')
+  expect(at('Etc/GMT-1', Date.UTC(2026, 9, 30, 10, 49, 12, 7))).toBe('2026-10-30T11:49:12.007+01:00')
+  expect(at('America/New_York', Date.UTC(2026, 2, 8, 6, 59, 59, 0))).toBe('2026-03-08T01:59:59.000-05:00')
+  expect(at('America/New_York', Date.UTC(2026, 2, 8, 7, 0, 0, 0))).toBe('2026-03-08T03:00:00.000-04:00')
+  expect(at('Asia/Kolkata', Date.UTC(2026, 0, 1, 0, 0, 0, 999))).toBe('2026-01-01T05:30:00.999+05:30')
+  expect(at('UTC', Date.UTC(2026, 11, 31, 23, 59, 59, 1))).toBe('2026-12-31T23:59:59.001+00:00')
+  expect(isoLocal(Date.UTC(2026, 9, 25, 0, 30, 0, 250), false, 'Etc/GMT-1')).toBe('2026-10-25T02:30:00+02:00')
+  // A zone the engine does not know falls back to the engine's own.
+  const ms = Date.UTC(2026, 9, 30, 10, 0, 0, 0)
+  expect(isoLocal(ms, true, 'Nowhere/Atlantis')).toBe(isoLocal(ms))
+})
+
+test('zoneOfPath: the IANA name where /etc/localtime leads, only a zone the engine knows', () => {
+  expect(zoneOfPath('/private/var/db/timezone/tz/2026a.1.0/zoneinfo/Etc/GMT-1')).toBe('Etc/GMT-1')
+  expect(zoneOfPath('/usr/share/zoneinfo/America/Argentina/Buenos_Aires')).toBe('America/Argentina/Buenos_Aires')
+  expect(zoneOfPath('/usr/share/zoneinfo/posix/Asia/Kolkata')).toBe('Asia/Kolkata')
+  expect(zoneOfPath('/usr/share/zoneinfo/UTC')).toBe('UTC')
+  // macOS: /var/db/timezone/zoneinfo may lead to the shipped copy instead of a downloaded tz tree.
+  expect(zoneOfPath('/usr/share/zoneinfo.default/Etc/GMT-1')).toBe('Etc/GMT-1')
+  expect(zoneOfPath('/usr/share/zoneinfo.default/posix/America/New_York')).toBe('America/New_York')
+  expect(zoneOfPath('/usr/share/zoneinfo/Nowhere/Atlantis')).toBeUndefined()
+  expect(zoneOfPath('/etc/localtime')).toBeUndefined()
+  expect(zoneOfPath('/usr/share/zoneinfo/../../etc/passwd')).toBeUndefined()
+  expect(zoneOfPath(undefined)).toBeUndefined()
+})
+
+test('stamp: each stamp reads the system zone again; a zone switch under a running load shows at the next stamp', async () => {
+  const zones: (string | undefined)[] = ['Europe/UTC+2 zone', 'Etc/GMT-1', undefined]
+  const d = { zone: async () => zones.shift() } as unknown as Deps
+  const ms = Date.UTC(2026, 9, 30, 11, 21, 6, 0)
+  expect(await stamp(d, ms, false)).toBe('2026-10-30T13:21:06+02:00')
+  expect(await stamp(d, ms, false)).toBe('2026-10-30T12:21:06+01:00')
+  expect(await stamp(d, ms, false)).toBe(isoLocal(ms, false))
+  const failing = { zone: async () => { throw new Error('no fs') } } as unknown as Deps
+  expect(await stamp(failing, ms)).toBe(isoLocal(ms))
+  expect(await stamp({} as unknown as Deps, ms)).toBe(isoLocal(ms))
+})
+
+test('makeRow: ts is stamped in the system zone; the row fields are the state at now, not after the zone lookup', async () => {
+  const state = { turnSeq: 7, ccVersion: '9.9.9', ident: { pid: 4242 } }
+  const ms = Date.UTC(2026, 9, 30, 11, 21, 6, 5)
+  const d = {
+    state,
+    now: async () => ms,
+    // A turn starting while the lookup's file check runs: the row keeps the turn it was made in.
+    zone: async () => { state.turnSeq = 8; return 'Etc/GMT-1' },
+  } as unknown as Deps
+  const row = await makeRow(d, 'sid-1', 'probe', { k: 1 })
+  expect(row['ts']).toBe('2026-10-30T12:21:06.005+01:00')
+  expect(row['turn_seq']).toBe(7)
+  expect(row['cc_version']).toBe('9.9.9')
+  expect(row['pid']).toBe(4242)
+  expect(row['k']).toBe(1)
 })
