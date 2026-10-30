@@ -182,7 +182,7 @@ sub smoke_lines {
             . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05');
 }
 
-# The refused private-store roots, one line each (unsafe roots, D-12). For roots in a git work tree
+# The refused roots of the private store, one line each (unsafe roots, D-12). For roots in a git work tree
 # and not ignored, one more line per folder to ignore: the roots, their work tree, and the two ways out
 # (ignore the folder there, or set the key to a folder outside any work tree). A root under the state
 # folder (~/.local/state/<plugin>, STATE-ROOT), which holds every default root, names that folder: a
