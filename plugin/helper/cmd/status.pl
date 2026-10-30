@@ -196,7 +196,7 @@ sub store_lines {
     push @out, prod_lines();
     push @out, protected_lines();
     push @out, regex_lines($classic);
-    push @out, idle_lines($headless, $mod), settings_keys_line();
+    push @out, idle_lines($headless, $mod), keep_warm_lines($headless, $sid, $mod), settings_keys_line();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`. Without a
     # session id that outcome is not read, so `on` says so (CW-1 review 2)
@@ -761,6 +761,32 @@ sub idle_lines {
                . "Claude Code's own back on in this session." if $row && $native eq 'on' && $user_vetoed;
     push @out, "idle timers: test scale, cache $cache s (STORE_TEST_IDLE_CACHE_S)" if defined $cache && !ref $cache && $cache =~ /\A[0-9]{1,6}\z/;
     return @out;
+}
+
+# Keep-warm (D-14, 2026-10-30; the mod's keepwarm.ts): on or off by keep_warm_hours (0 = off), and,
+# with a session id, this session's current idle gap from its last keep_warm_start, keep_warm_ping
+# and keep_warm_stop rows: warming with the pings that kept the cache warm so far, or not warming
+# (with the last warmed gap's pings and its stop reason). A headless session never warms.
+sub keep_warm_lines {
+    my ($headless, $sid, $mod) = @_;
+    my ($h) = eval { settings::num_clamped('keep_warm_hours') };
+    $h = 6 unless defined $h;
+    return ('keep-warm: off (keep_warm_hours: 0)') unless $h > 0;
+    my $on = "keep-warm: on (up to $h h of an idle gap, only while this session's own background jobs run, on the one-hour cache)";
+    return ("$on; not in a headless session") if $headless;
+    return ($on) unless defined $sid && ref $mod eq 'ARRAY';
+    my ($pings, $state, $why) = (0, 'none', undef);
+    for my $r (@$mod) {
+        my $ev = $r->{ev} // '';
+        if ($ev eq 'keep_warm_start') { ($pings, $state, $why) = (0, 'warming', undef) }
+        elsif ($ev eq 'keep_warm_ping') { $pings++ if $state eq 'warming' && ($r->{result} // '') eq 'warm' }
+        elsif ($ev eq 'keep_warm_stop' && $state eq 'warming') { ($state, $why) = ('stopped', $r->{why}) }
+    }
+    my $n = $pings == 1 ? '1 ping' : "$pings pings";
+    return ("$on · this gap: warming, $n so far") if $state eq 'warming';
+    $why = 'other' unless defined $why && !ref $why && $why =~ /\A[a-z0-9-]{1,24}\z/;
+    return ("$on · this gap: not warming (the last warmed gap: $n, stopped: $why)") if $state eq 'stopped';
+    return ("$on · this gap: not warming");
 }
 
 # SK-7 (owner xxxxxxxx-12/-13/-14): the six 2026-10-23 keys as values the user can check, never
