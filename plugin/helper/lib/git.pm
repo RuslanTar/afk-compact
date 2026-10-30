@@ -56,7 +56,7 @@ sub check_ignore {
 # cannot move a field; -n prints empty fields for a path no pattern matches. With -v git also
 # names a negated last match (`!x`); that path is not ignored. Paths read from --stdin are not
 # turned into NFC the way command-line paths are (core.precomposeUnicode on macOS), so callers
-# pass ASCII paths only (roots::_ignored).
+# pass `./`-relative ASCII paths only (roots::_ignored).
 sub check_ignore_forms {
     my ($wt, $paths, $timeout_ms) = @_;
     my $r = cmd($wt, ['check-ignore', '-v', '-n', '-z', '--stdin', '--no-index'], $timeout_ms // 2000,

@@ -43,15 +43,22 @@ sub _time_left {
 #   below would be wrong here: inside an existing folder `*/` (or `**/`, `wlogs//`, `/`) also
 #   matches the empty entry, so `*/` with `!wlogs/` would read as ignored though git shows the
 #   folder's files.
-# - A path with a non-ASCII byte: asked the same way, on the command line. On macOS git
-#   (core.precomposeUnicode, set by git init) turns command-line paths and the folder names it
-#   reads into NFC, but not paths read from --stdin: a decomposed (NFD) `Café`, as Finder
-#   stores it, would then miss a `!Café/` written NFC, or die with "Invalid path" under a work
-#   tree whose own path is NFD. -z needs --stdin, so this form stays one plain -q call; the
-#   cost is that such a root not made yet, ignored only by a folder-only pattern on itself, is
-#   refused until it is made.
-# - Not made yet (all ASCII): git cannot know it will be a folder, so a folder-only pattern (`wlogs/`)
-#   misses the path as written and a folder-only negation (`!wlogs/`) is skipped. Asked with a
+# - Not made yet: the path is sent relative to the work tree, with `./` in front (a bare
+#   relative `:(top)x` would be read as pathspec magic). On macOS git (core.precomposeUnicode,
+#   set by git init) turns command-line paths and the folder names it reads into NFC, but not
+#   paths read from --stdin; an absolute stdin path under a work tree whose own path is NFD
+#   dies with "Invalid path". The relative part has no work-tree folders in it, so a non-ASCII
+#   work tree (`~/Café/proj`, `~/Проекты/app`) is asked like an ASCII one.
+# - Not made yet, with a non-ASCII byte in the relative part: asked on the command line,
+#   which git precomposes (a decomposed `Café`, as Finder stores it, would miss a `!Café/`
+#   written NFC on stdin). Telling an NFC-stable name (`Café` written NFC, Cyrillic) from one
+#   NFC would change needs Unicode::Normalize, which is not on the perl-base floor, so every
+#   such name takes this form. -z needs --stdin, so it stays one plain -q call; the cost is
+#   that such a root, ignored only by a folder-only pattern on itself, is refused until it is
+#   made, and one under `*` with `!Café/` counts as ignored until it is made.
+# - Not made yet, relative part all ASCII: git cannot know it will be a folder, so a
+#   folder-only pattern (`wlogs/`) misses the path as written and a folder-only negation
+#   (`!wlogs/`) is skipped. Asked with a
 #   trailing slash, git checks each folder on the path (the root included) and then an
 #   empty-named entry inside the root, which `wlogs/*` or `*` also match although the folder
 #   itself is not ignored (`wlogs/*` with `!wlogs/*.jsonl` brings the plugin's files back).
@@ -60,15 +67,20 @@ sub _time_left {
 #   `/` (a folder-only one, which cannot match the empty entry) -> 1; else only when the path
 #   as written is ignored by that same pattern (same source, line and pattern): a pattern
 #   that ignores the folder matches it in both forms, while one that only matched the empty
-#   entry differs. Known limit: a pattern matching both (`*`) followed by `!wlogs/` and a
-#   re-include of the plugin's files counts as ignored until the folder is made.
+#   entry differs. Known limit: a pattern matching both (`*`) followed by a folder re-include
+#   (`!wlogs/`, or the whitelist style `!*/`) and a re-include of the plugin's files
+#   (`!*.jsonl`, `!*.md`) counts as ignored until the folder is made.
 # Either way one git process per root, so the hook paths (PreCompact's 500 ms) pay one call.
 sub _ignored {
     my ($wt, $real) = @_;
     my $t = _time_left();
     return -1 if $t < 50;
-    return git::check_ignore($wt, $real, $t) if -d $real || $real =~ /[^\x00-\x7f]/;
-    my $a = git::check_ignore_forms($wt, [$real, ($real =~ m{/\z} ? $real : "$real/")], $t);
+    return git::check_ignore($wt, $real, $t) if -d $real;
+    my $top = $wt eq '/' ? '/' : "$wt/";
+    return undef unless index($real, $top) == 0 && length($real) > length($top);
+    my $rel = substr($real, length($top));
+    return git::check_ignore($wt, $real, $t) if $rel =~ /[^\x00-\x7f]/;
+    my $a = git::check_ignore_forms($wt, ["./$rel", "./$rel/"], $t);
     return $a unless ref $a eq 'ARRAY';
     my ($aw, $awm) = @{ $a->[0] };
     my ($sl, $slm) = @{ $a->[1] };
