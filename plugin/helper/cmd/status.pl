@@ -214,7 +214,8 @@ sub root_lines {
         my $line = (index($real, $top) == 0 && length($real) > length($top))
                  ? ' (the line /' . util::text(substr($real, length($top))) . '/ in ' . _home_form("$top.gitignore") . ')' : '';
         my @keys = @{ $f->{keys} || [] };
-        my $set = @keys ? ', or set ' . join(' and ', @keys) . ' in /config to a folder outside any git work tree' : '';
+        my $set = @keys ? ', or set ' . join(' and ', @keys) . ' in /config to ' . (@keys > 1 ? 'folders' : 'a folder')
+                          . ' outside any git work tree' : '';
         push @out, '  in git, not ignored: ' . join(', ', map { util::abbrev($_) } @{ $f->{paths} })
                    . ' (work tree ' . _home_form($f->{wt}) . '); to fix, ignore ' . util::abbrev($dir) . "/ there$line$set";
     }

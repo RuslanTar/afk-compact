@@ -42,7 +42,7 @@ my $made;
         $E->ok(scalar($fix =~ m{ \(work tree ~\); }), "the fix line names the home work tree: $fix");
         $E->ok(scalar($fix =~ m{; to fix, ignore ~/\.local/state/$b/ there \(the line /\.local/state/$b/ in ~/\.gitignore\)}),
                "the fix line says to ignore ~/.local/state/<plugin>/: $fix");
-        $E->ok(scalar($fix =~ m{, or set handoff_root\b[^,]* in /config to a folder outside any git work tree$}),
+        $E->ok(scalar($fix =~ m{, or set handoff_root\b[^,]* in /config to (?:a folder|folders) outside any git work tree$}),
                "the fix line says to set handoff_root: $fix");
         $E->ok(scalar($fix !~ /\blog_dir\b/), "log_dir (unset, it follows handoff_root) is not a key to set: $fix");
         $E->is($made, 0, "the refused root is not made");
