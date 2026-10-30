@@ -697,7 +697,8 @@ sub _idle_waits {
     return resumeblock::waits($sid_dir, $nonce);
 }
 
-# Nonces the mod closed with compacted {skip: native-ran} (DP-29), whose call Claude Code
+# Nonces the mod closed with compacted {skip: native-ran} (DP-29) or {skip: user-first} (a
+# person's turn or prompt came after the record was written), whose call Claude Code
 # rejected as headless (compact_rejected {error_class: headless}, 2026-10-27 headless probe), or
 # whose headless `/compact` the host cannot run (compact_command {error_class: no-command or
 # input-ended}), read from the mod stream (the same rows postcompact::_mod_closed reads; only
@@ -708,7 +709,7 @@ sub _native_ran {
     for my $row (@{ rollup::stream_rows(rc::stream_path('mod'), evs => [qw(compacted compact_rejected compact_command)]) }) {
         my $ev = $row->{ev} // '';
         next unless defined $row->{nonce} && !ref $row->{nonce};
-        $c{ $row->{nonce} } = 1 if ($ev eq 'compacted' && ($row->{skip} // '') eq 'native-ran')
+        $c{ $row->{nonce} } = 1 if ($ev eq 'compacted' && ($row->{skip} // '') =~ /\A(?:native-ran|user-first)\z/)
                                 || ($ev eq 'compact_rejected' && ($row->{error_class} // '') eq 'headless')
                                 || ($ev eq 'compact_command' && $HOST_CANNOT{ $row->{error_class} // '' });
     }

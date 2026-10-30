@@ -181,12 +181,16 @@ async function userFirst($: Engine, w: World, meanwhile: () => Promise<void>): P
 const PERSON = 'stop, use the staging database instead'
 const isCont = (t: string) => t.includes(CONT)
 
-test('AF-C1: a person\'s prompt entering before the continue: no continue, the block stays for that prompt\'s turn', async ($, on) => {
+test('AF-C1: a person\'s prompt entering during the compaction, before the continue: no continue, the block stays for that prompt\'s turn', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
+  let open!: () => void
   const nonce = await userFirst($, w, async () => {
-    await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+    w.compactGate = new Promise<void>(r => { open = r })
   })
+  await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+  open()
+  await w.settle()
   expect(w.submits.filter(isCont)).toEqual([])
   expect(w.rowsOf('continue').map(r => r.result)).toEqual(['skipped:user-first'])
   expect(w.storeGet(`cont:${SID_A}`) ?? []).toEqual([])
@@ -253,6 +257,52 @@ test('AF-C2: refuseOwnSubmit covers the continue: refused while a main turn runs
   s.contSubmitting = false
   expect(refuseOwnSubmit(s)).toBe(false)
 })
+
+/**
+ * The boundary 500 ms after a nudged turn's end, held inside the helper call `at` (the checkpoint
+ * runs before the dispatch record is written, the dispatch call writes it); `meanwhile` runs there.
+ */
+async function heldBoundary($: Engine, w: World, at: 'checkpoint' | 'dispatch', meanwhile: () => Promise<void>): Promise<void> {
+  let release: (() => void) | undefined
+  w.atHelper = async sub => {
+    if (sub === at && release === undefined) await new Promise<void>(r => { release = r })
+  }
+  await w.userTurn($)
+  w.tokens = 610000
+  await w.tool($)
+  await w.turnEnd($, 'Checkpoint: clean · Step 1: run the tests')
+  await w.advance(500)
+  expect(release).toBeDefined()
+  await meanwhile()
+  release?.()
+  await w.settle()
+}
+
+for (const at of ['checkpoint', 'dispatch'] as const) {
+  test(`AF-D1: a person's prompt entering during the ${at} call: no compaction in front of it, no continue`, async ($, on) => {
+    const w = new World().install(on)
+    await w.start($)
+    await heldBoundary($, w, at, async () => {
+      await $.prompt.submit({ text: PERSON, origin: { kind: 'composer' } } as never)
+    })
+    expect(w.compacts.length).toBe(0)
+    expect(w.submits.filter(isCont)).toEqual([])
+    const records = w.callsOf('dispatch').map(c => w.flag(c, '--nonce'))
+    // Stopped before the record when it can; a record already written is closed by its own row.
+    expect(records.length).toBe(at === 'checkpoint' ? 0 : 1)
+    expect(w.rowsOf('compacted').map(r => [r.nonce, r.skip])).toEqual(at === 'checkpoint' ? [] : [[records[0], 'user-first']])
+  })
+
+  test(`AF-D1: a main turn that starts during the ${at} call: no compaction`, async ($, on) => {
+    const w = new World().install(on)
+    await w.start($)
+    await heldBoundary($, w, at, async () => {
+      await w.turnStart($, PERSON)
+    })
+    expect(w.compacts.length).toBe(0)
+    expect(w.rowsOf('compact_rejected').length).toBe(0)
+  })
+}
 
 test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped at its nudged turn end, then the handoff turn, then one compaction, no continue', { options: { max_auto_continues_per_hour: 3 } }, async ($, on) => {
   const w = new World().install(on)
