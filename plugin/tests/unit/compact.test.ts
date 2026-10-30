@@ -1,6 +1,6 @@
 // U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
 import { expect, test } from 'claude-code/testing'
-import { compactLine } from '../../hooks/lib/compact'
+import { COMPACT_LINE_DELAY_MS, compactLine } from '../../hooks/lib/compact'
 import { detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
 import { AGENT, KEPT, ROOT, SID_A, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
@@ -436,10 +436,12 @@ test('compaction line: ok main compaction: one line, copy saved, running jobs co
   await w.start($)
   w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight (sidecar 2026-10-30 07:35 +0200):\n  b1 · workflow · running\n  b2 · shell · running\n  b3 · shell · completed\nEvidence: none'
   await raiseCompact($, { trigger: 'auto' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines).toEqual([`${w.name}: compaction ok · copy saved · 2 jobs running`])
   // Nothing in flight: no count; a manual compaction gets its line too.
   w.measureBlock = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight: none listed\nEvidence: none'
   await raiseCompact($, { trigger: 'manual' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines[1]).toBe(`${w.name}: compaction ok · copy saved`)
   // The model never reads it: the resume block does not carry it.
   const ctx = await $.prompt.context({ blocks: [] })
@@ -451,14 +453,17 @@ test('compaction line: not in handoff format, and no summary at all: NOT, the ve
   await w.start($)
   w.summaryMode = 'unshaped'
   await raiseCompact($, { trigger: 'auto' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines).toEqual([`${w.name}: compaction NOT in handoff format (unshaped) · copy saved · see /${w.name}:status`])
   w.summaryMode = 'missing'
   await raiseCompact($, { trigger: 'auto' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines[1]).toBe(`${w.name}: compaction NOT in handoff format (unshaped) · copy NOT saved (summary-not-found) · see /${w.name}:status`)
   // An ok summary whose copy was refused still says so.
   w.summaryMode = 'ok'
   w.saveLine = 'REFUSED: root-in-git'
   await raiseCompact($, { trigger: 'auto' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines[2]).toBe(`${w.name}: compaction ok · copy NOT saved (root-in-git) · see /${w.name}:status`)
 })
 
@@ -472,6 +477,7 @@ test('compaction line: none for a subagent compaction, a precompute or a skipped
   w.compactMode = { skip: 'nothing to compact' }
   await raiseCompact($, { trigger: 'manual' })
   expect(w.rowsOf('compacted').map(r => r.skip)).toEqual([null, 'other'])
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines).toEqual([])
 })
 
@@ -491,6 +497,9 @@ test('compaction line: an after-step that failed says so', async ($, on) => {
   // The kit hands a hook's throw back as its own error class.
   const rows = w.rowsOf('watch_error').map(r => [r.stage, r.error_class])
   expect(rows).toEqual([['after-step', 'HooksError']])
+  // Held until the hook has returned, as the ok line is.
+  expect(w.compactLines).toEqual([])
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines).toEqual([`${w.name}: compaction done · plugin step failed (HooksError) · see /${w.name}:status`])
 })
 
@@ -499,6 +508,7 @@ test('compaction line: warn_ui false shows none', { options: { warn_ui: false } 
   await w.start($)
   await raiseCompact($, { trigger: 'auto' })
   expect(w.rowsOf('compacted').length).toBe(1)
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines).toEqual([])
 })
 
@@ -508,4 +518,72 @@ test('compactLine: a published handoff by file name, a cut-off handoff turn, one
     .toBe('p: compaction ok · copy saved · handoff 2026-10-30_07-35-23_ab_x.md · 1 job running')
   expect(compactLine('p', { ...base, running: 0, handoff: { draft: true, finish: 'fin' } })).toBe('p: compaction ok · copy saved · handoff cut off (draft present)')
   expect(compactLine('p', { ...base, running: 0, handoff: { draft: true, finish: null } })).toBe('p: compaction ok · copy saved · handoff cut off (draft absent)')
+})
+
+// Review of the second build, finding 1: Claude Code installs the hook's result (and the
+// compaction boundary) once the hook has returned, so a native compaction's line is logged
+// COMPACT_LINE_DELAY_MS after it, never inside the hook.
+test('compaction line: a native compaction logs it after the hook has returned, not inside it', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.compactLines).toEqual([])
+  await w.advance(COMPACT_LINE_DELAY_MS - 1)
+  expect(w.compactLines).toEqual([])
+  await w.advance(1)
+  expect(w.compactLines).toEqual([`${w.name}: compaction ok · copy saved`])
+  await w.advance(60000)
+  expect(w.compactLines.length).toBe(1)
+})
+
+// Review of the second build, finding 4: the plugin's own compaction (boundary.ts settleSelf)
+// gets the step-failed line too, once, right after `$.session.compact` resolved.
+test('compaction line: a plugin compaction whose after-step failed says so, once', { options: { precompact_turn: 'code' } }, async ($, on) => {
+  let down = false
+  on('store.set', { key: 'idle_seen:' + SID_A }, (_$, e, next) => {
+    if (down) throw new TypeError('store down')
+    return next(e)
+  })
+  const w = new World().install(on)
+  await w.start($)
+  await w.turnStart($)
+  w.tokens = 410000
+  await w.turnEnd($)
+  down = true
+  await w.advance(2000)
+  expect(w.compacts.length).toBe(1)
+  expect(w.flag(w.callsOf('dispatch')[0], '--channel')).toBe('mod-self')
+  expect(w.rowsOf('watch_error').map(r => [r.stage, r.error_class])).toEqual([['after-step', 'HooksError']])
+  expect(w.compactLines).toEqual([`${w.name}: compaction done · plugin step failed (HooksError) · see /${w.name}:status`])
+  down = false
+  await w.advance(60000)
+  expect(w.compactLines.length).toBe(1)
+})
+
+// Review of the second build, finding 4: a subagent's after-step that fails (here the first
+// clock read after its summary stash) logs its error row and shows no line.
+test('compaction line: none for a subagent compaction whose after-step failed', async ($, on) => {
+  let armed = false
+  let boom = false
+  // Outside the World's hooks (first is outermost): the stash write arms one failing clock read.
+  on('fs.write', {}, (_$, e, next) => {
+    if (armed && e.path.endsWith('.mod.md')) {
+      armed = false
+      boom = true
+    }
+    return next(e)
+  })
+  on('clock.now', {}, (_$, e, next) => {
+    if (!boom) return next(e)
+    boom = false
+    throw new Error('clock unreadable')
+  })
+  const w = new World().install(on)
+  await w.start($)
+  armed = true
+  await raiseCompact($, { trigger: 'auto', agentId: AGENT })
+  expect(armed).toBe(false)
+  expect(w.rowsOf('watch_error').map(r => [r.stage, r.error_class])).toEqual([['after-step', 'HooksError']])
+  await w.advance(COMPACT_LINE_DELAY_MS)
+  expect(w.compactLines).toEqual([])
 })

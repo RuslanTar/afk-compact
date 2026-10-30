@@ -9,6 +9,7 @@ import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset, hasTag, leftovers } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import { DEFAULTS } from '../../hooks/lib/config'
+import { COMPACT_LINE_DELAY_MS } from '../../hooks/lib/compact'
 import { continueLine, lastCycleOf } from '../../hooks/lib/cont'
 import type { Deps } from '../../hooks/lib/deps'
 import { claimTurn, isOurText, isOwnOrigin, newState, promptEntering, promptNotEntered, refuseOwnSubmit, storeWord, submitPending } from '../../hooks/lib/deps'
@@ -436,7 +437,36 @@ test('native auto during the handoff turn after its publish: [handoff] and [hand
   const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
   expect(block).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
   if (hasTag('resume-context', 'handoff-ack')) expect(block).toContain(ACK)
+  await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines.length).toBe(1)
+})
+
+// Review of the second build, finding 5: the race compaction's block carried the ack; when the
+// raced turn ends and a native idle auto follows, its block has [handoff] but not the ack again.
+test('race after the publish, turn end, native idle auto: [handoff] again, the ack only once', { options: CAP3 }, async ($, on) => {
+  const w = new World().install(on, CAPPED)
+  await w.start($)
+  await lastCycleTurn($, w)
+  if (!TURN) return
+  await w.advance(2000)
+  await handoffTurnStarts($, w)
+  const ht = w.lastHt() ?? ''
+  w.publish(ht, PUBLISHED)
+  w.tokens = 700000
+  await raiseCompact($, { trigger: 'auto' })
+  const first = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  if (hasTag('resume-context', 'handoff-ack')) expect(first).toContain(ACK)
+  w.tokens = 60000
+  await w.turnEnd($, 'Done.')
+  await w.advance(60000)
+  expect(w.rowsOf('handoff_turn_end').map(r => r.handoff_turn)).toEqual(['race'])
+  await raiseCompact($, { trigger: 'auto' })
+  const d = w.callsOf('dispatch').slice(-1)[0]
+  expect(w.flag(d, '--handoff-ht')).toBe(ht)
+  expect(w.flag(d, '--tags')?.split(',')).toContain('handoff')
+  const second = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+  expect(second).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
+  expect(second).not.toContain('Handoff saved')
 })
 
 test('AT-LT-12, AT-LT-13: a second last cycle gets a new ht (first file unchanged); a third within 60 min: why=cap', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
@@ -481,8 +511,14 @@ test('AT-LT-14: a precompute during the handoff turn: [midturn], no [handoff], h
   expect(w.rowsOf('handoff_race').length).toBe(0)
 })
 
-for (const reason of ['2-nonok'] as const) {
-  test(`AT-LT-17 (${reason}): published, then no plugin compaction; the toast names the reason; halt stays (DP-4)`, async ($, on) => {
+// Review of the second build, finding 2: the native idle auto after the publish gets the ack only
+// when the turn's answer did not carry the report (compact.ts onCompact, `after.reported`).
+const AT_LT_17: { reason: '2-nonok'; answer: string; sent: boolean }[] = [
+  { reason: '2-nonok', answer: 'Handoff written.', sent: false },
+  { reason: '2-nonok', answer: 'Wrote handoff to: ' + PUBLISHED, sent: true },
+]
+for (const { reason, answer, sent } of AT_LT_17) {
+  test(`AT-LT-17 (${reason}${sent ? ', report sent' : ''}): published, then no plugin compaction; the toast names the reason; halt stays (DP-4)`, async ($, on) => {
     const w = new World().install(on)
     await w.start($)
     await haltTwoNonOk($, w)
@@ -501,7 +537,7 @@ for (const reason of ['2-nonok'] as const) {
     await handoffTurnStarts($, w)
     const ht = w.lastHt() ?? ''
     w.publish(ht, PUBLISHED)
-    await w.turnEnd($, 'Handoff written.')
+    await w.turnEnd($, answer)
     await w.advance(60000)
     expect(w.compacts.length).toBe(0)
     expect(w.toasts.filter(t => t.includes(SHOWN) && t.includes(HALT_REASON_TEXT[reason])).length).toBe(1)
@@ -512,6 +548,10 @@ for (const reason of ['2-nonok'] as const) {
     const d = w.callsOf('dispatch').slice(-1)[0]
     expect(w.flag(d, '--handoff-ht')).toBe(ht)
     expect(w.flag(d, '--tags')?.split(',')).toContain('handoff')
+    const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
+    expect(block).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
+    if (sent) expect(block).not.toContain('Handoff saved')
+    else if (hasTag('resume-context', 'handoff-ack')) expect(block).toContain(ACK)
   })
 }
 

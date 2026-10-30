@@ -47,6 +47,16 @@ export type DispatchRecord = {
 export const IDLE_GAP_MS = 1500000
 
 /**
+ * Review of the second build: Claude Code installs what a `session.compact` hook hands up (the
+ * kept messages, and with them the compaction boundary) once the hook has returned, and a
+ * `$.ui.log` line is a transcript row at the next frame; logged inside the hook, the compaction
+ * line would likely land above the boundary, among the rows the compaction hides. So a native
+ * compaction's line waits this long after the hook ends (the plugin's own compactions log theirs
+ * after `$.session.compact` resolved: boundary.ts settleSelf). Pending until a live check.
+ */
+export const COMPACT_LINE_DELAY_MS = 1000
+
+/**
  * IC-1 D1 (MOD-SPEC §2.5 idle rule): a main `auto` dispatch is idle when no main turn runs, no
  * prompt is entering (CR-F17 counter), no plugin compaction is in flight, and the last main turn
  * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`. `trigger` is the one
@@ -317,14 +327,20 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     })
     block = await raceBlock(d, raceState)
   }
+  // The compaction line is held here and logged once this hook has returned (COMPACT_LINE_DELAY_MS).
+  const lines: string[] = []
+  const hold = (t: string): void => {
+    lines.push(t)
+  }
   const failed = await guarded(d, sid, 'after-step', () => afterStep(d, {
     sid, nonce, agentId, midturn, resumePref: 'prompt.context', messages: r.messages, tokensBefore: r.tokensBefore, tokensAfter: r.tokensAfter,
     ...(block !== undefined ? { handoff: block } : after !== undefined ? { handoff: { published: after.path, ...(after.reported ? {} : { ack: true }) } } : {}),
     ...(raced && raced.ht !== null && block !== undefined ? { stats: { handoff_turn: 'race', handoff_ht: raced.ht } } : {}),
     ...(prodConsent !== undefined ? { prodConsent } : {}),
     ...(idle ? { idle: true } : {}),
+    uiLine: hold,
   }))
-  if (main && failed !== undefined) stepFailedLine(d, failed)
+  if (main && failed !== undefined) stepFailedLine(d, failed, hold)
   // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
   // nothing running gets its digest turn right away with `idle_digest: submit` (`off`, the default
   // of this version by owner rule (c), and `return` log the skip and submit nothing).
@@ -332,6 +348,11 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   // SESSION-RESTART D2 (b): right after Claude Code's own idle compaction; nothing is submitted
   // after it (the new load waits at the prompt with its block, as after any idle compaction).
   if (main && idle) await guarded(d, sid, 'restart', () => restartMoment(d, sid, { cont: false }))
+  if (lines.length > 0) {
+    d.after(COMPACT_LINE_DELAY_MS, () => {
+      for (const t of lines) d.uiLog(t)
+    })
+  }
   return r
 }
 
@@ -353,9 +374,10 @@ export async function guarded(d: Deps, sid: string, stage: string, fn: () => Pro
 /**
  * Review of the first build (owner 2026-10-30 07:52): a main after-step that threw never reached
  * its compaction line, so the user still gets one, with the error class and the status pointer.
+ * `sink` takes the line in place of `d.uiLog` (a native compaction holds it: COMPACT_LINE_DELAY_MS).
  */
-export function stepFailedLine(d: Deps, cls: string): void {
-  if (d.cfg.warn_ui) d.uiLog(`${d.name}: compaction done · plugin step failed (${cls}) · see /${d.name}:status`)
+export function stepFailedLine(d: Deps, cls: string, sink: (text: string) => void = t => d.uiLog(t)): void {
+  if (d.cfg.warn_ui) sink(`${d.name}: compaction done · plugin step failed (${cls}) · see /${d.name}:status`)
 }
 
 export type AfterArgs = {
@@ -375,6 +397,8 @@ export type AfterArgs = {
   prodConsent?: string
   /** An idle dispatch: the resume block gets `[idle]` (IC-1 D3). */
   idle?: boolean
+  /** Takes the compaction line in place of `d.uiLog` (a native compaction holds it: COMPACT_LINE_DELAY_MS). */
+  uiLine?: (text: string) => void
 }
 
 export const SUMMARY_PREFIX = 'This session is being continued'
@@ -499,7 +523,9 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   // Built from what this step already measured: no new I/O.
   if (d.cfg.warn_ui) {
     const running = built.running ?? new Set([...s.agentTurns, ...measuredRunning(built.remeasure)]).size
-    d.uiLog(compactLine(d.name, { ok: isOk(verdict), verdict, savedCopy, notSaved, handoff: a.handoff, running }))
+    const line = compactLine(d.name, { ok: isOk(verdict), verdict, savedCopy, notSaved, handoff: a.handoff, running })
+    if (a.uiLine !== undefined) a.uiLine(line)
+    else d.uiLog(line)
   }
   return { verdict }
 }

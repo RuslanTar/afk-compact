@@ -269,11 +269,13 @@ describe('AT-P-07 assembler (14-character name)', () => {
     // Without either tag, no ack rule.
     expect(assembleText(text('resume-context'), ['prod-forbid'], WORST)).not.toContain('Handoff saved')
   })
-  test('the summary instructions exempt a saved handoff\'s report from the pending answer "in full": its one ack line with the path', () => {
+  test('the summary instructions exempt a saved handoff\'s report from the pending answer "in full": its one ack line with the path and the Needs you count', () => {
     for (const tags of [[], ['handoff'], ['midturn', 'chain', 'measured', 'handoff', 'queue']] as Tag[][]) {
       const s = assembleText(text('handoff-instructions'), tags, WORST)
       const next = s.split('\n').find(l => l.startsWith('## Next steps: ')) ?? ''
-      expect(next.endsWith('pending answer: <in full>, unless shown sent (a saved handoff\'s report: `✓ Handoff saved: <path>`)')).toBe(true)
+      // Review of the second build: the short form carries the Needs you count, and stands after a
+      // semicolon, not as an example of a report already shown sent.
+      expect(next.endsWith('pending answer: <in full>, unless shown sent; a saved handoff\'s report: only `✓ Handoff saved: <path>` (+ ` · Needs you: <n> questions`)')).toBe(true)
     }
   })
 })
