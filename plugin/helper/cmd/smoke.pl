@@ -8,9 +8,9 @@
 # C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14; F2-9).
 # C9 reads --types FILE, else the file the running Claude Code wrote when its built-in
 # plugin-authoring skill loaded (bundled_types): no version writes declarations into an
-# installed plugin, so <plugin>/.claude-plugin/types is not read. That folder is new per
-# process and swept, so the missing-declarations message says how to write them in this
-# session.
+# installed plugin, so <plugin>/.claude-plugin/types is not read. That folder is swept a
+# few days later, so the missing-declarations message says to load the skill once and
+# run smoke again while that session is open.
 # --skip-cli (tests) skips the checks that run or read the claude binary: validate,
 # test and C8.
 use strict;
@@ -48,7 +48,7 @@ sub bundled_types {
     return undef unless defined $ver && $ver =~ /^\d+\.\d+\.\d+/ && $ver !~ m{/};
     my $tmp = $ENV{CLAUDE_CODE_TMPDIR};
     $tmp = '/tmp' unless defined $tmp && $tmp ne '';
-    my $base = util::real_path("$tmp/claude-$<") // return undef;
+    my $base = util::real_path("$tmp/claude-$<") // "$tmp/claude-$<";
     my $dir = "$base/bundled-skills/$ver";
     my $head = "// Written by Claude Code $ver.";
     my ($best, $best_m);
@@ -164,8 +164,7 @@ sub run {
         my $traw = defined $tf && -f $tf ? util::read_file($tf) : undef;
         if (!defined $traw) {
             $check->('c9', 0, defined $opt->{types} ? "no type declarations at $opt->{types}"
-                : $known ? "no type declarations for Claude Code $ver; in this session type /plugin-authoring, then run smoke again (or pass --types FILE)"
-                : 'no type declarations: the Claude Code version is unknown; pass --types FILE');
+                : "no type declarations for Claude Code $ver: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE");
         }
         else {
             my @tl = split /\n/, $traw;
@@ -176,7 +175,7 @@ sub run {
                 push @diff, $spec->{name} unless defined $h && $h eq ($base->{c9}{hashes}{ $spec->{name} } // '');
             }
             $check->('c9', @diff ? 0 : 1, @diff ? 'changed: ' . join(', ', @diff)
-                : scalar(@{ $base->{c9}{specs} || [] }) . ' declarations' . (defined $tv ? ", types $tv" : ''));
+                : scalar(@{ $base->{c9}{specs} || [] }) . ' declarations' . (defined $tv ? "; Claude Code $tv types" : ''));
         }
     }
     args::out(@lines);
