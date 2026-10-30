@@ -1,0 +1,362 @@
+{
+ "id": "AT-M3-14b-bundled-types",
+ "needs": [
+  "types"
+ ],
+ "note": "AT-M3-14 (F), the C9 source: without --types smoke reads the declarations Claude Code <version> wrote when its built-in plugin-authoring skill loaded, realpath(<CLAUDE_CODE_TMPDIR or /tmp>)/claude-<uid>/bundled-skills/<version>/<per-process folder>/plugin-authoring/types/claude-code.d.ts whose line 1 is `// Written by Claude Code <version>.`, the newest by mtime; a root with a space and glob characters works; another version's folder or header and the old <plugin>/.claude-plugin/types path (staged here with valid declarations) are not read; --types wins. The fake binary 2.1.999 (smoke takes a version-named binary's name) keeps every step off the real temp folder's files",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "CLAUDE_CODE_TMPDIR": "$TMP/cc t [x]*"
+ },
+ "stage_overlay": {
+  ".claude-plugin/types/claude-code.d.ts": "$TYPES"
+ },
+ "steps": [
+  {
+   "name": "(a) the running version's declarations in its bundled-skills folder: C9 passes, smokeDue cleared",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    },
+    {
+     "write": "$TMP/v/2.1.999",
+     "content": "#!/bin/sh\nexit 0\n",
+     "mode": "0755"
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cc t [x]*",
+    "2.1.999",
+    "1f60531e296ca255cadf5ff37c5cb65f",
+    "2.1.999",
+    "$TYPES",
+    "1761000000"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^skip c8 \\(skipped by flag\\)$",
+     "^ok c9 \\(6 declarations; Claude Code 2\\.1\\.999 types\\)$",
+     "^SMOKE PASS 2\\.1\\.999\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "keys_absent": [
+       "smokeDue"
+      ],
+      "json": {
+       "lastSmokePass": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_pass",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) two per-process folders: the newer by mtime is read, not the last by name",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    },
+    {
+     "copy": "$TYPES",
+     "to": "$TMP/types/claude-code.d.ts"
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "-pi",
+    "-e",
+    "s/^(\\s*export type SessionCompactInput = \\{)$/$1 altered_by_test?: 1;/",
+    "$TMP/types/claude-code.d.ts"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cct-b",
+    "2.1.999",
+    "ffffffffffffffffffffffffffffffff",
+    "2.1.999",
+    "$TYPES",
+    "1761000000"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cct-b",
+    "2.1.999",
+    "00000000000000000000000000000000",
+    "2.1.999",
+    "$TMP/types/claude-code.d.ts",
+    "1761000100"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999"
+   ],
+   "env": {
+    "CLAUDE_CODE_TMPDIR": "$TMP/cct-b"
+   },
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(changed: SessionCompactInput\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 1,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(c) a file in the version's folder headed by another version: not read, C9 fails",
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cct-c",
+    "2.1.999",
+    "1f60531e296ca255cadf5ff37c5cb65f",
+    "2.1.305",
+    "$TYPES",
+    "1761000000"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999"
+   ],
+   "env": {
+    "CLAUDE_CODE_TMPDIR": "$TMP/cct-c"
+   },
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations for Claude Code 2\\.1\\.999: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 2,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(d) only another version's folder: C9 fails naming the running version",
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/bundled-types.pl",
+    "$TMP/cct-d",
+    "2.1.998",
+    "1f60531e296ca255cadf5ff37c5cb65f",
+    "2.1.998",
+    "$TYPES",
+    "1761000000"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999"
+   ],
+   "env": {
+    "CLAUDE_CODE_TMPDIR": "$TMP/cct-d"
+   },
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations for Claude Code 2\\.1\\.999: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 3,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TMP/types/claude-code.d.ts"
+   ],
+   "name": "(e) --types wins over a valid bundled file",
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(changed: SessionCompactInput\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 4,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--claude",
+    "$TMP/v/2.1.999"
+   ],
+   "env": {
+    "CLAUDE_CODE_TMPDIR": "$TMP/cct-f"
+   },
+   "name": "(f) declarations only at the old <plugin>/.claude-plugin/types path: not read, C9 fails",
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c9 \\(no type declarations for Claude Code 2\\.1\\.999: type /plugin-authoring once in any Claude Code session, then run smoke again while it is open; or pass --types FILE\\)$",
+     "^SMOKE FAIL c9\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 5,
+      "fields": {
+       "check": "c9"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

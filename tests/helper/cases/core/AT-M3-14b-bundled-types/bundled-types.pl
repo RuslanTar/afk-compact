@@ -1,4 +1,4 @@
-# AT-M3-14 setup: write a type-declaration file where Claude Code puts it when its built-in
+# AT-M3-14b-bundled-types setup: write a type-declaration file where Claude Code puts it when its built-in
 # plugin-authoring skill loads, as `perl bundled-types.pl TMPROOT VER NONCE HEADER_VER SRC EPOCH`:
 # TMPROOT/claude-<uid>/bundled-skills/VER/NONCE/plugin-authoring/types/claude-code.d.ts,
 # line 1 `// Written by Claude Code HEADER_VER.`, then SRC without its own line 1; mtime EPOCH.
