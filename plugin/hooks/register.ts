@@ -195,9 +195,10 @@ export const register: Register = (on, options) => {
     if (entering && r.drop !== undefined) {
       promptNotEntered(state, kind)
       // No turn starts, so the idle timer (§9.4) and keep-warm's ping timer (D-14) cancelled above
-      // run again: the idle record stays in the store, and keep-warm hands over to it.
-      await resumeIdle(realDeps($, options, state))
-      await resumeKeepWarm(realDeps($, options, state))
+      // run again: the idle record stays in the store, and keep-warm hands over to it. Each is
+      // guarded as on the throw path: a store read that fails in one still lets the other run.
+      await resumeIdle(realDeps($, options, state)).catch(() => undefined)
+      await resumeKeepWarm(realDeps($, options, state)).catch(() => undefined)
     }
     // A prompt queued while a turn runs may start its own turn after it: its origin kind decides
     // there whether halt clears, as for one entering an idle session.
