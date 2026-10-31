@@ -1540,6 +1540,11 @@ sub u06_check {
     my $bound = int(($lim + 0.7) * 1000);    # one stopped pattern: its limit, the fork and the kill
     my $long = ('a' x 100_000) . 'b';         # (a+)+$ backtracks quadratically from every a: minutes
     my $timed = sub { my $t0 = util::clock_ms(); my @r = $_[0]->(); return (util::clock_ms() - $t0, @r) };
+    # $cpu_timed->(code) -> (the CPU ms this process and its reaped children used in code, what
+    # code returns): the upper bound on work done in this process, which a busy machine stretches
+    # in real time without adding to it (U-06 under load: a 202-character name took 706 ms of
+    # real time against the 500 ms allowed); a pattern that backtracks spends it on the CPU
+    my $cpu_timed = sub { my @c0 = times; my @r = $_[0]->(); my @c1 = times; my $c = 0; $c += $c1[$_] - $c0[$_] for 0 .. 3; return (int(1000 * $c), @r) };
     my $stopped = sub { join(' ', map { join(':', @$_) } @userre::STOPPED) };
     my $want_stopped = sub { my ($w) = @_; return $stopped->() eq $w ? () : ('stopped [' . $stopped->() . "], want [$w]") };
     # $ran->(code) -> ([the `at` of each entry code handed to a pattern child], what code returns);
@@ -1549,34 +1554,51 @@ sub u06_check {
     # (a busy machine stretched a call that ran nothing slow past the 300 ms such checks allowed),
     # and the children's time is theirs alone, without the caller's own work around them
     # @child_res: what each pattern child of the last $ran call gave back (why it stopped, if it
-    # did), with u06_ready: 1 once the child sent its ready line
+    # did), with u06 => {ms, late: its real time and late wake-ups; cap: the budget the helper gave
+    # it; ready: when the helper read its ready line (undef: never); waits: [called, returned, 1
+    # when it found something to read] for each of the helper's waits; line: when the helper took
+    # each line it read}, in real ms from the child's start, on the test's own clock (the helper's
+    # may be the one without Time::HiRes, whole seconds)
+    my $hr = eval { require Time::HiRes; 1 } ? 1 : 0;
+    my $rms = sub { return $hr ? Time::HiRes::time() * 1000 : time() * 1000 };
     my ($child_ms, $late_ms, @child_res) = (0, 0);
     my $ran = sub {
         my ($code) = @_;
         my @at;
         ($child_ms, $late_ms, @child_res) = (0, 0);
         no warnings 'redefine';
-        my ($real, $real_watch, $seen) = (\&userre::_child, \&userre::_watch, 0);
+        my ($real, $real_watch, $cur) = (\&userre::_child, \&userre::_watch);
         local *userre::_child = sub {
             my ($ents, $from, $to) = @_;
             push @at, map { $ents->[$_]{at} } $from .. $to;
             my $t0 = util::clock_ms();
-            $seen = 0;
+            $cur = { t0 => $rms->(), late => 0, cap => $_[6], waits => [], line => [] };
             my $c = $real->(@_);
             $child_ms += util::clock_ms() - $t0;
-            push @child_res, { %$c, u06_ready => $seen };
+            $cur->{ms} = $rms->() - $cur->{t0};
+            push @child_res, { %$c, u06 => $cur };
             return $c;
         };
         local *userre::_watch = sub {
             my $sw = $real_watch->();
-            my $wait = $sw->{wait};
+            my ($wait, $floor, $el, $me, $data, $line) = (@$sw{qw(wait floor el)}, $cur, 0, 0);
             $sw->{wait} = sub {
-                my $t0 = util::clock_ms();
+                my ($t0, $r0) = (util::clock_ms(), $rms->());
                 my ($n, @r) = $wait->(@_);
-                my $more = util::clock_ms() - $t0 - int($_[1] * 1000);
+                my ($more, $r1) = (util::clock_ms() - $t0 - int($_[1] * 1000), $rms->());
                 $late_ms += $more if defined $n && $n == 0 && $more > 0;
-                $seen = 1 if defined $n && $n > 0;
+                $me->{late} += $r1 - $r0 - $_[1] * 1000 if defined $n && $n == 0 && $r1 - $r0 > $_[1] * 1000;
+                $data = defined $n && $n > 0 ? 1 : 0;
+                push @{ $me->{waits} }, [$r0 - $me->{t0}, $r1 - $me->{t0}, $data];
                 return ($n, @r);
+            };
+            # the helper takes a line it read (its ready line first, then each answer) with floor,
+            # then reads its clock: the ready time is the helper's own, read just before ours
+            $sw->{floor} = sub { $line = $data; return $floor->(@_) };
+            $sw->{el} = sub {
+                my $v = $el->();
+                if ($line) { $line = 0; push @{ $me->{line} }, $rms->() - $me->{t0}; $me->{ready} //= $me->{line}[0] }
+                return $v;
             };
             return $sw;
         };
@@ -1592,18 +1614,51 @@ sub u06_check {
         my $ms = $pat_ms->();
         return $ms > $bound ? (sprintf('%s took %d ms in its child (and %d ms of late wake-ups), over the bound of %d ms', $what, $ms, $late_ms, $bound)) : ();
     };
-    # $busy->(key:at, limit) -> `load` or `unready` when the one stop of the last $ran call was a
-    # busy machine's, else '': `load` (the pattern got little CPU, by the helper's own count) after
-    # both tries had their whole time, start or limit, in real time in the children (a clock that
-    # read too much, or a limit that did not grow, stops sooner); `unready` when no child ever
-    # sent its ready line (the pattern never ran: it says nothing of the pattern). The checks that
-    # want a normal pattern run to the end take the real CPU share and run such a call again: the
-    # design gives a busy machine the safe side for that call
+    # $late->(child, limit, budget) -> 1 when the helper read the child's ready line so late (or
+    # never) that the budget's end came before the limit's: ready + limit > budget + the free part
+    # of the start. A first try cut by the budget is a busy machine's only then (U-06 review: a
+    # helper that ignored the limit passed `budget` as a busy machine 3 times running)
+    my $late = sub {
+        my ($c, $limit, $budget) = @_;
+        my $r = $c->{u06}{ready};
+        return 1 unless defined $r;
+        my $free = 1000 * ($have ? $userre::FREE_S : 0.05);
+        return $r + 1000 * $limit + 1 > 1000 * $budget + ($r < $free ? $r : $free) ? 1 : 0;
+    };
+    # $busy->(key:at, limit[, budget]) -> why the one stop of the last $ran call was a busy
+    # machine's, else ''. First, each stopped child ran, in real time less its late wake-ups, to
+    # its limit (the test's: a limit that did not grow stops sooner), to the start's end if the
+    # helper never read its ready line, or to the end of the budget it was given, whichever came
+    # first (a clock that read too much stops sooner; U-06 review: 2 s in all, whatever the limit,
+    # let a limit grown a third pass). Then: `unready` when no child sent its ready line (the
+    # pattern never ran); `load` (the pattern got little CPU, by the helper's own count); with
+    # budget (the test's, grown with the text), `budget` when the first try's child started so
+    # late that the budget ended before its limit, and it ran the whole budget (U-06 review: on
+    # 10 MB a child ready after 0.2 s was cut at 3.1 s, and failed; a budget that did not grow
+    # stops at 0.4 s). The checks that want a normal pattern run to the end take the real CPU
+    # share and run such a call again: the design gives a busy machine the safe side for that call
     my $busy = sub {
-        my ($ka, $limit) = @_;
-        my $try = 1000 * ($have && $userre::START_S < $limit ? $userre::START_S : $limit);
-        return 'unready' if @userre::STOPPED && @child_res && !grep { $_->{u06_ready} } @child_res;
-        return $stopped->() eq "$ka:load" && $child_ms >= 2 * $try ? 'load' : '';
+        my ($ka, $limit, $budget) = @_;
+        return '' unless @userre::STOPPED && @child_res;
+        my $start = $have ? $userre::START_S : 1;
+        my $ran_ms = sub { return $_[0]{u06}{ms} - $_[0]{u06}{late} };
+        for my $c (grep { defined $_->{why} } @child_res) {
+            my $want = defined $c->{u06}{ready} ? $limit : $start;
+            $want = $c->{u06}{cap} if defined $c->{u06}{cap} && $c->{u06}{cap} < $want;
+            return '' if $ran_ms->($c) < 1000 * $want - 5;
+        }
+        return 'unready' unless grep { defined $_->{u06}{ready} } @child_res;
+        # the stop of this key and position (ticket-own-time spends the budget on another key first)
+        my $st = join(' ', map { $_->[2] } grep { "$_->[0]:$_->[1]" eq $ka } @userre::STOPPED);
+        return 'load' if $st eq 'load';
+        return '' unless defined $budget && $st eq 'budget' && @child_res == 1;
+        return $late->($child_res[0], $limit, $budget) && $ran_ms->($child_res[0]) >= 1000 * $budget - 5 ? 'budget' : '';
+    };
+    # $kids->() -> the last $ran call's children, for a message: why each stopped, its real time
+    # less its late wake-ups, and when the helper read its ready line
+    my $kids = sub {
+        return join(', ', map { sprintf('%s after %d ms, ready at %s', $_->{why} // 'done', $_->{u06}{ms} - $_->{u06}{late},
+                                        defined $_->{u06}{ready} ? int($_->{u06}{ready}) . ' ms' : 'never') } @child_res);
     };
     # $starts->(file) -> a pattern that backtracks like (a+)+$ and, in its child, first writes the
     # child's pid to file, once: the child has let go of the helper's descriptors by then. Checks
@@ -1726,22 +1781,35 @@ sub u06_check {
     }
     if ($check eq 'ticket') {
         # the subject is cut to 256 characters, so the catastrophic pattern is exponential: (a{1,30}){1,30}$
-        my (undef, $tk) = $ran->(sub { settings::ticket(('a' x 250) . 'b', { values => { ticket_pattern => '(a{1,30}){1,30}$' } }) });
-        push @e, "a stopped ticket pattern gave '$tk', want no ticket" if defined $tk;
-        push @e, $over->('the catastrophic pattern'), $want_stopped->('ticket_pattern:1:timeout');
+        # A child that starts late on a busy machine (the helper read its ready line after 0.4 s,
+        # or never) lets the ticket's own time cut it first (`budget`, no ticket either, as
+        # designed): that call runs again, up to 3 times ($busy); a cut after an earlier start fails
+        my ($tl, $tr) = $have ? ($userre::KEY_LIMIT_S{ticket_pattern}, $userre::RESERVE_S{ticket_pattern}) : (0.25, 0.6);
+        for my $t (1 .. 3) {
+            userre::clear() if $have;
+            my (undef, $tk) = $ran->(sub { settings::ticket(('a' x 250) . 'b', { values => { ticket_pattern => '(a{1,30}){1,30}$' } }) });
+            my $cut = $stopped->() eq 'ticket_pattern:1:budget' && $busy->('ticket_pattern:1', $tl, $tr) =~ /\A(?:budget|unready)\z/;
+            next if $cut && $t < 3;
+            push @e, "a stopped ticket pattern gave '$tk', want no ticket" if defined $tk;
+            push @e, $over->('the catastrophic pattern');
+            push @e, $cut ? '# U-06 ticket: its own time cut the catastrophic pattern 3 times (a busy machine)' : $want_stopped->('ticket_pattern:1:timeout');
+            last;
+        }
         for my $c (['feature/lab_77-x', '(lab_[0-9]+)', 'lab_77'], ['feature/LAB-7-retry', 'LAB-[0-9]+', 'LAB-7'],
                    ['main', '(lab_[0-9]+)', undef], ['feature/x/../y', 'feature/(x/\.\./y)', undef],
                    ['feature/LAB-7-retry', '[A-Z][A-Z0-9]+-[0-9]+', 'LAB-7']) {
             # normal patterns, with the real CPU share: a busy machine may stop both tries as
-            # `load` after their whole time, which gives no ticket, as designed: that call runs
-            # again, up to 3 times
+            # `load` after their whole time, or a child that starts late may let the ticket's own
+            # time cut the first, which gives no ticket, as designed: that call runs again, up to
+            # 3 times
             $userre::CPU_SHARE = 0.5;
             my $g;
             for my $t (1 .. 3) {
                 userre::clear() if $have;
                 (undef, $g) = $ran->(sub { settings::ticket($c->[0], { values => { ticket_pattern => $c->[1] } }) });
                 last if ($g // '') eq ($c->[2] // '');
-                last unless $t < 3 && $busy->('ticket_pattern:1', $have ? $userre::KEY_LIMIT_S{ticket_pattern} : 0.25);
+                last unless $t < 3 && $busy->('ticket_pattern:1', $have ? $userre::KEY_LIMIT_S{ticket_pattern} : 0.25,
+                                               $have ? $userre::RESERVE_S{ticket_pattern} : 0.6);
             }
             push @e, "ticket '$c->[0]' /$c->[1]/: " . ($g // 'none') . ', want ' . ($c->[2] // 'none') . (@userre::STOPPED ? ' (stopped [' . $stopped->() . '])' : '')
                 unless ($g // '') eq ($c->[2] // '');
@@ -1777,8 +1845,8 @@ sub u06_check {
     if ($check eq 'name-glob') {
         # a NAME glob compiles to a regex that cannot backtrack: no time bound needed
         local %rc::R = (settings => { values => { secret_extra_rules => 'NAME:*a*a*a*a*a*a*a*a*a*a?' } });
-        my ($ms, $d) = $timed->(sub { secrets::denied_name('/tmp/u06-none/' . ('a' x 200) . '!b') });
-        push @e, "a 202-character name took $ms ms (the glob backtracks)" if $ms > 500;
+        my ($ms, $d) = $cpu_timed->(sub { secrets::denied_name('/tmp/u06-none/' . ('a' x 200) . '!b') });
+        push @e, "a 202-character name took $ms ms of CPU (the glob backtracks)" if $ms > 500;
         push @e, 'a name the glob does not match is denied' if $d;
         push @e, 'a name the glob matches is not denied' unless secrets::denied_name('/tmp/u06-none/' . ('a' x 20) . 'c');
         push @e, 'stopped [' . $stopped->() . '] (a glob needs no bound)' if @userre::STOPPED;
@@ -1832,13 +1900,18 @@ sub u06_check {
         # after this process spent its budget in pattern children, the rest take the safe side unrun
         my $rl = settings::relaunch({ values => { relaunch_allow => '^(a+)+$;^(a{1,30}){1,30}$;^a' } });
         # the first is stopped at its limit; the second at what is left of the budget; the third
-        # is not run. A child that starts late on a busy machine lets the budget cut the first
-        # (all three `budget`, as designed): that call runs again, up to 3 times
+        # is not run. A child that starts late on a busy machine (the helper read its ready line
+        # after 0.25 s, or never) lets the budget cut the first (all three `budget`, as designed):
+        # that call runs again, up to 3 times. A cut after an earlier start fails
         for my $t (1 .. 3) {
             userre::clear() if $have;
             userre::limits(0.3, 0.5) if $have;
             my (undef, $ok) = $ran->(sub { $allowed->($long, $rl) });
             my $first_cut = $stopped->() eq 'relaunch_allow:1:budget relaunch_allow:2:budget relaunch_allow:3:budget';
+            if ($first_cut && @child_res && !$late->($child_res[0], 0.3, 0.5)) {
+                push @e, sprintf('the budget cut the first pattern, its child ready after %d ms: its 0.3 s limit ends first', $child_res[0]{u06}{ready});
+                last;
+            }
             next if $first_cut && $t < 3;
             push @e, 'allowlisted after the time ran out (the job must ask)' if $ok;
             push @e, sprintf('took %d ms in pattern children (and %d ms of late wake-ups), over 1600', $pat_ms->(), $late_ms) if $pat_ms->() > 1600;
@@ -1967,13 +2040,18 @@ sub u06_check {
         ($ms) = $timed->(sub { userre::first('prod_patterns', $nap, ['echo x2'], 'match') });
         push @e, "the next call did not run the pattern again ($ms ms): a busy machine marked it slow" if $ms < $lim * 1000;
         # the first try stops at its 0.25 s limit, the second at what is left of the 0.4 s budget.
-        # A child that starts late on a busy machine lets the budget cut the first try (one try,
-        # `budget`, as designed): that call runs again, up to 3 times. Two tries read `load`.
+        # A child that starts late on a busy machine (ready after 0.2 s, or never) lets the budget
+        # cut the first try (one try, `budget`, as designed): that call runs again, up to 3 times;
+        # a cut after an earlier start fails. Two tries read `load`.
         for my $t (1 .. 3) {
             userre::clear() if $have;
             userre::limits(0.25, 0.4) if $have;
             my ($at) = $ran->(sub { userre::first('prod_patterns', $nap, ["echo x3.$t"], 'match') });
             my $first_cut = @$at == 1 && $stopped->() eq 'prod_patterns:1:budget';
+            if ($first_cut && !$late->($child_res[0], 0.25, 0.4)) {
+                push @e, sprintf('the budget cut the first try, its child ready after %d ms: its 0.25 s limit ends first', $child_res[0]{u06}{ready});
+                last;
+            }
             next if $first_cut && $t < 3;
             if ($first_cut) { push @e, '# U-06 load: the budget cut the first try 3 times (a busy machine); the cut second try was not seen'; last }
             push @e, 'the second try, cut by the budget: ' . $stopped->() . ', want prod_patterns:1:load' unless $stopped->() eq 'prod_patterns:1:load';
@@ -2043,31 +2121,41 @@ sub u06_check {
         my $took = (util::clock_ms() - $t0) / 1000;
         my $base = $took / 2 < 0.25 ? $took / 2 : 0.25;
         # with the real CPU share: a busy machine may stop the rule as `load` once both tries had
-        # their whole time (its CPU did not fit in its grown limit); that call runs again, in a
-        # fresh session, up to 3 times. A limit that did not grow stops it sooner, or as `timeout`
+        # their whole time (its CPU did not fit in its grown limit), or a child ready after about
+        # 0.2 s lets the grown budget (0.4 s and 0.3 s per MiB) end before the grown limit and
+        # cut it as `budget`; that call runs again, in a fresh session, up to 3 times ($busy). A
+        # limit or a budget that did not grow stops it sooner, or as `timeout`
         $userre::CPU_SHARE = 0.5;
-        my $grown = $base + ($have ? $userre::PER_MB_S : 0.3) * int(length($text) / (1 << 20));
-        my ($cl, $tries) = ('', 0);
+        my $mb = int(length($text) / (1 << 20));
+        my $per = $have ? $userre::PER_MB_S : 0.3;
+        my ($grown, $gbudget) = ($base + $per * $mb, 0.4 + $per * $mb);
+        my ($cl, $tries, $why) = ('', 0, '');
         for my $t (1 .. 3) {
             $tries = $t;
             userre::clear() if $have;
             userre::limits($base, 0.4, 100) if $have;
             unlink glob("$once/*");
             (undef, $cl) = $ran->(sub { secrets::classify_file("$dir/big.txt") });
-            last if $cl eq 'copy' || !$busy->('secret_extra_rules:1', $grown);
+            $why = $cl eq 'copy' ? '' : $busy->('secret_extra_rules:1', $grown, $gbudget);
+            last unless $why;
         }
         my @m = glob("$once/regex_slow.*");
         my $ms = $child_ms;
-        if ($cl eq 'copy' || $busy->('secret_extra_rules:1', $grown) ne 'load') {
-            push @e, sprintf('a plain rule (%.2f s in process) on 10 MB, base limit %.2f s: %s after %d ms in children, want copy; stopped [%s]', $took, $base, $cl, $ms, $stopped->())
-                unless $cl eq 'copy';
-            push @e, 'a marker after a plain rule on a big file: ' . join(' ', map { util::basename($_) } @m) if @m;
-        } else {
+        if ($why eq 'load') {
             # stopped by load each time: its stops are remembered by their CPU, short of its limit
             my $cpu = 0;
             for my $f (@m) { my $s = util::read_file($f) // ''; $cpu += $1 while $s =~ /^[0-9]+ ([0-9]+)$/mg }
             push @e, sprintf('a plain rule stopped by load on 10 MB is marked slow: its stops used %d ms of its %.2f s', $cpu, $grown) if $cpu >= int($grown * 1000);
             push @e, sprintf('# U-06 big-linear: stopped by load %d times after %d ms (a busy machine); its stops used %d ms of its %.2f s', $tries, $ms, $cpu, $grown);
+        } elsif ($why eq 'budget') {
+            # cut by the budget each time, its child ready late: a cut is not remembered
+            push @e, 'a marker after a plain rule cut by the budget: ' . join(' ', map { util::basename($_) } @m) if @m;
+            push @e, sprintf('# U-06 big-linear: cut by the %.2f s budget %d times after %d ms (a busy machine: its child ready after %s ms)',
+                             $gbudget, $tries, $ms, int($child_res[0]{u06}{ready} // -1));
+        } else {
+            push @e, sprintf('a plain rule (%.2f s in process) on 10 MB, base limit %.2f s: %s after %d ms in children (%s), want copy; stopped [%s]', $took, $base, $cl, $ms, $kids->(), $stopped->())
+                unless $cl eq 'copy';
+            push @e, 'a marker after a plain rule on a big file: ' . join(' ', map { util::basename($_) } @m) if @m;
         }
         $userre::CPU_SHARE = $o->{cpu_share} // 0;
         push @e, sprintf('# U-06 big-linear: the rule took %.2f s in process; base limit %.2f s', $took, $base);
@@ -2115,7 +2203,7 @@ sub u06_check {
         # a wildcard property runs while the pattern compiles, in the helper, unbounded (perl 5.30
         # and later; 5.28 refuses the syntax): every pattern key refuses it at load
         my $w = '\p{name=/^(?:(\w+)\s?)+\1[^\w\s]/}';
-        my ($ms) = $timed->(sub {
+        my ($ms) = $cpu_timed->(sub {
             push @e, 'pattern_ok took a wildcard property' if settings::pattern_ok($w);
             push @e, 'pattern_ok took \P{gc:/L/}' if settings::pattern_ok('\P{gc:/L/}');
             my $x = settings::secret_extra({ values => { secret_extra_rules => "HARD:$w;WARN:$w;HARD:ok" } });
@@ -2126,7 +2214,7 @@ sub u06_check {
             my $p = settings::prod({ values => { prod_patterns => $w } });
             push @e, 'prod_patterns took a wildcard property' unless @{ $p->{invalid} } == 1 && !$p->{user};
         });
-        push @e, "refusing took $ms ms" if $ms > 2000;
+        push @e, "refusing took $ms ms of CPU" if $ms > 2000;
         for my $ok ('\p{L}+', '\p{Script=Latin}', '\p{name: LATIN SMALL LETTER A}', '\pN') {
             push @e, "pattern_ok refused $ok" unless settings::pattern_ok($ok);
         }
@@ -2136,24 +2224,24 @@ sub u06_check {
         # a setting is split and trimmed before any cap: the trim must be linear (U-06 review:
         # s/^\s+|\s+$//g took 0.5 s on 40,000 inner spaces, 43 s on 400,000)
         my $v = 'a' . (' ' x 400_000) . 'b; c ';
-        my ($ms, @l) = $timed->(sub { settings::list($v) });
-        push @e, "settings::list took $ms ms on 400,000 inner spaces" if $ms > 500;
+        my ($ms, @l) = $cpu_timed->(sub { settings::list($v) });
+        push @e, "settings::list took $ms ms of CPU on 400,000 inner spaces" if $ms > 500;
         push @e, 'settings::list: [' . join('|', map { length } @l) . '], want [400002|1]' unless "@{[map { length } @l]}" eq '400002 1';
-        ($ms) = $timed->(sub { settings::trim(' x' . (' ' x 400_000) . 'y ') });
-        push @e, "settings::trim took $ms ms" if $ms > 500;
+        ($ms) = $cpu_timed->(sub { settings::trim(' x' . (' ' x 400_000) . 'y ') });
+        push @e, "settings::trim took $ms ms of CPU" if $ms > 500;
         push @e, 'settings::trim kept the ends' unless settings::trim("  x y \n") eq 'x y';
         # the watcher reads `watcher` and `handoff_turn` itself (U-06 review: both kept the
         # quadratic form, 2.5 s and 1.8 s on 100,000 inner spaces)
         require watch::ctx;
         my $w = ' shadow' . (' ' x 400_000) . 'x ';
         my ($wv, $wu);
-        ($ms) = $timed->(sub { ($wv, $wu) = watch::ctx::_watcher_value({ watcher => $w }) });
-        push @e, "watch::ctx::_watcher_value took $ms ms on 400,000 inner spaces" if $ms > 500;
+        ($ms) = $cpu_timed->(sub { ($wv, $wu) = watch::ctx::_watcher_value({ watcher => $w }) });
+        push @e, "watch::ctx::_watcher_value took $ms ms of CPU on 400,000 inner spaces" if $ms > 500;
         push @e, "watch::ctx::_watcher_value: $wv/$wu, want shadow/1" unless "$wv/$wu" eq 'shadow/1';
         push @e, 'watch::ctx::_watcher_value: " OFF " is not off' unless (watch::ctx::_watcher_value({ watcher => " OFF \n" }))[0] eq 'off';
         my $s;
-        ($ms) = $timed->(sub { $s = watch::ctx::_settings({ settings => { values => { handoff_turn => $w } } }) });
-        push @e, "watch::ctx::_settings (handoff_turn) took $ms ms on 400,000 inner spaces" if $ms > 500;
+        ($ms) = $cpu_timed->(sub { $s = watch::ctx::_settings({ settings => { values => { handoff_turn => $w } } }) });
+        push @e, "watch::ctx::_settings (handoff_turn) took $ms ms of CPU on 400,000 inner spaces" if $ms > 500;
         push @e, 'watch::ctx::_settings: " Off " is not off' unless watch::ctx::_settings({ settings => { values => { handoff_turn => " Off " } } })->{handoff_turn} eq 'off';
         return @e;
     }
@@ -2222,7 +2310,7 @@ sub u06_check {
                 my $got = join(',', map { "$_->{rule}/$_->{count}" } @$h);
                 last if $got eq 'user-warn-1/60000' && !@userre::STOPPED;
                 next if $try < 3 && $busy->('secret_extra_rules:1', $lim);
-                push @e, "round $i: scan [$got] after $child_ms ms in children, stopped [" . $stopped->() . "], want [user-warn-1/60000] unstopped" . ($try > 1 ? " ($try tries)" : '')
+                push @e, "round $i: scan [$got] after $child_ms ms in children (" . $kids->() . "), stopped [" . $stopped->() . "], want [user-warn-1/60000] unstopped" . ($try > 1 ? " ($try tries)" : '')
                     if $bad++ < 3;
                 last;
             }
@@ -2311,14 +2399,23 @@ sub u06_check {
     if ($check eq 'ticket-own-time') {
         # ticket_pattern has time of its own: a process whose budget a stopped pattern spent still
         # gives the branch its ticket, and the ticket takes nothing from the budget (U-06 review:
-        # it gave none, and the copy went under repo/<topic> instead of repo/<ticket>)
-        userre::limits(0.25, 0.25) if $have;
-        settings::prod_class("echo $long", settings::prod({ values => { prod_patterns => '(a+)+$' } }));
-        my $spent = $userre::SPENT;
-        push @e, sprintf('the stopped prod pattern left %.3f s of the budget, want none (the check needs it spent)', 0.25 - $spent) if 0.25 - $spent > 0.01;
-        my $tk = settings::ticket('feature/lab_77-x', { values => { ticket_pattern => '(lab_[0-9]+)' } });
-        push @e, 'a spent budget: ticket ' . ($tk // 'none') . ', want lab_77; stopped [' . $stopped->() . ']' unless ($tk // '') eq 'lab_77';
-        push @e, sprintf('the ticket took %.3f s from the budget', $userre::SPENT - $spent) if $userre::SPENT != $spent;
+        # it gave none, and the copy went under repo/<topic> instead of repo/<ticket>). A busy
+        # machine may stop the ticket's two tries as `load` after their whole time, or let its own
+        # time cut a child that started late, which gives no ticket, as designed: the check runs
+        # again, in a fresh process, up to 3 times ($busy)
+        for my $t (1 .. 3) {
+            userre::clear() if $have;
+            userre::limits(0.25, 0.25) if $have;
+            settings::prod_class("echo $long", settings::prod({ values => { prod_patterns => '(a+)+$' } }));
+            my $spent = $userre::SPENT;
+            my (undef, $tk) = $ran->(sub { settings::ticket('feature/lab_77-x', { values => { ticket_pattern => '(lab_[0-9]+)' } }) });
+            next if ($tk // '') ne 'lab_77' && $t < 3 && $busy->('ticket_pattern:1', $have ? $userre::KEY_LIMIT_S{ticket_pattern} : 0.25,
+                                                                  $have ? $userre::RESERVE_S{ticket_pattern} : 0.6);
+            push @e, sprintf('the stopped prod pattern left %.3f s of the budget, want none (the check needs it spent)', 0.25 - $spent) if 0.25 - $spent > 0.01;
+            push @e, 'a spent budget: ticket ' . ($tk // 'none') . ', want lab_77; stopped [' . $stopped->() . ']' unless ($tk // '') eq 'lab_77';
+            push @e, sprintf('the ticket took %.3f s from the budget', $userre::SPENT - $spent) if $userre::SPENT != $spent;
+            last;
+        }
         return @e;
     }
     if ($check eq 'manifest-reserve') {
@@ -2342,33 +2439,56 @@ sub u06_check {
     }
     if ($check eq 'answer-not-limit') {
         # a pattern that matched at once but answers with very many numbers: sending the answer
-        # does not count against its limit (the child's `D` line; a09efae). The pattern's own work
-        # is making the numbers (and the helper taking them as a list); sending them takes about
-        # 20 times that. The limit is 4 times what making them takes here, now (at least 0.2 s),
-        # so a busy machine moves the limit with the work (a fixed 0.2 s missed the making 6 times
-        # running under load). With the real CPU share a stop inside the limit is `load` (the call
-        # runs again, up to 3 times); a stop that counted the sending is `timeout`, or `load` on
-        # every try
-        $userre::CPU_SHARE = 0.5;
+        # does not count against its limit (the child's `D` line; a09efae). Sending them (the
+        # child joining them, the helper reading them) takes about 6 times making them, not 20:
+        # a limit of 4 times the making missed a helper that counted the sending by 5 to 10 %, and
+        # let it pass under load (U-06 review). So each try is judged by where its limit fell, in
+        # the helper's own waits (from when it read the ready line):
+        # - the whole answer, its last read waited for after 1.1 times the limit: a helper that
+        #   counted the sending would have stopped it there; the check passes
+        # - a stop (not the budget's) after the helper read the D line and waited on: the sending
+        #   counted; the check fails
+        # - a stop before (the making did not fit: a busy machine) or the whole answer within the
+        #   limit proves nothing: the next try doubles the limit, or sets it to half that answer's
+        #   time, up to 5 tries; then the check fails, as it cannot tell the two apart
+        # The first limit is twice what making the numbers takes here, now
         my $want = $o->{numbers} // 3_000_000;
-        my ($ms, $got, $tries, $limit) = (0, 0, 0, 0.2);
-        for my $t (1 .. 3) {
-            $tries = $t;
-            my $t0 = util::clock_ms();
-            { my @made = (1 .. $want) }
-            $limit = 4 * (util::clock_ms() - $t0) / 1000;
-            $limit = 0.2 if $limit < 0.2;
+        my $m0 = $rms->();
+        { my @made = (1 .. $want) }
+        my $limit = 2 * ($rms->() - $m0) / 1000;
+        my ($tries, $proof, @seen) = (0, '');
+        while (!$proof && !@e && $tries < 5) {
+            $tries++;
+            $limit = 0.02 if $limit < 0.02;
             userre::clear() if $have;
             userre::limits($limit, 30, 30) if $have;
-            my ($res, $st);
-            ($ms, $res, $st) = $timed->(sub { userre::run('prod_patterns', [{ re => qr/x/, at => 1 }], sub { return (1 .. $want) }) });
-            $got = $res->[0] ? scalar @{ $res->[0] } : 0;
-            last if $got == $want && !@$st;
-            last unless $stopped->() eq 'prod_patterns:1:load';
+            my (undef, $res) = $ran->(sub { userre::run('prod_patterns', [{ re => qr/x/, at => 1 }], sub { return (1 .. $want) }) });
+            my $got = $res->[0] ? scalar @{ $res->[0] } : 0;
+            for my $c (grep { defined $_->{why} && $_->{why} ne 'budget' && defined $_->{u06}{ready} } @child_res) {
+                my ($r, $w) = ($c->{u06}{ready}, $c->{u06}{waits});
+                my ($k) = grep { $w->[$_][2] && $w->[$_][1] > $r } 0 .. $#$w;
+                push @e, sprintf('an answer of %d numbers: stopped [%s] while it was sent (the D line read %d ms after the ready line, %d ms waited after it) at a %.3f s limit (try %d)',
+                                 $want, $c->{why}, $w->[$k][1] - $r, $w->[-1][1] - $w->[$k][1], $limit, $tries) if defined $k && $k < $#$w;
+            }
+            last if @e;
+            my ($c) = grep { $_->{got}{0} } @child_res;
+            if ($got == $want && !@userre::STOPPED && $c && defined $c->{u06}{ready} && defined $c->{u06}{line}[1]) {
+                my ($r, $ans) = ($c->{u06}{ready}, $c->{u06}{line}[1]);
+                # the answer's reads, the D line's first: the last one's wait began where a helper
+                # that counted the sending checked its limit last
+                my @rd = grep { $_->[2] && $_->[1] > $r && $_->[1] <= $ans } @{ $c->{u06}{waits} };
+                my ($d, $span) = @rd ? ($rd[0][1] - $r, $rd[-1][0] - $r) : (0, 0);
+                push @seen, sprintf('try %d: the whole answer, the D line at %d ms, the last read waited for at %d ms, the limit %.3f s', $tries, $d, $span, $limit);
+                $proof = sprintf('%d numbers: the D line at %d ms, the last read waited for at %d ms, %.1f times the %.3f s limit (try %d)', $want, $d, $span, $span / (1000 * $limit), $limit, $tries)
+                    if $span >= 1100 * $limit;
+                $limit = $span / 2000 if @rd;
+                next;
+            }
+            push @seen, sprintf('try %d: %d back, stopped [%s] (%s) at a %.3f s limit', $tries, $got, $stopped->(), $kids->(), $limit);
+            $limit *= 2;
         }
-        push @e, sprintf('an answer of %d numbers: %d back, stopped [%s] after %d ms at a %.2f s limit, want all of it%s', $want, $got, $stopped->(), $ms, $limit, $tries > 1 ? " ($tries tries)" : '')
-            unless $got == $want && !@userre::STOPPED;
-        push @e, sprintf('# U-06 answer-not-limit: %d numbers in %d ms at a %.2f s limit%s', $want, $ms, $limit, $tries > 1 ? " (try $tries)" : '');
+        push @e, "an answer of $want numbers: no try told making it from sending it (" . join('; ', @seen) . ')' if !$proof && !@e;
+        push @e, "# U-06 answer-not-limit: $proof" if $proof;
         return @e;
     }
     if ($check eq 'ceiling') {
@@ -2390,8 +2510,9 @@ sub u06_check {
     if ($check eq 'load-no-time') {
         # a `load` stop that leaves no budget for the second try: the pattern ran once, so it
         # reads `load`, not `budget` ("not run (the time for your patterns was used up)")
-        # A child that starts late (after 55 ms) on a busy machine lets the budget cut the first
-        # try, as designed (`budget`): that call runs again, up to 3 times
+        # A child that starts late (ready after 55 ms, or never) on a busy machine lets the budget
+        # cut the first try, as designed (`budget`): that call runs again, up to 3 times; a cut
+        # after an earlier start fails
         $userre::CPU_SHARE = 0.5;
         my $nap = [{ re => qr/(?{ select(undef, undef, undef, 30) })/, at => 1 }];
         for my $t (1 .. 3) {
@@ -2400,6 +2521,10 @@ sub u06_check {
             my (undef, $k) = $ran->(sub { userre::first('prod_patterns', $nap, ["echo x5.$t"], 'match') });
             push @e, 'a pattern stopped as load did not count as a match' unless defined $k && $k == 0;
             my $cut = @child_res && ($child_res[0]{why} // '') eq 'budget';
+            if ($cut && !$late->($child_res[0], 0.25, 0.255)) {
+                push @e, sprintf('the budget cut the first try, its child ready after %d ms: its 0.25 s limit ends first', $child_res[0]{u06}{ready});
+                last;
+            }
             next if $cut && $t < 3 && !@e;
             if ($cut) { push @e, '# U-06 load-no-time: the budget cut the first try 3 times (a busy machine)'; last }
             push @e, $want_stopped->('prod_patterns:1:load');
