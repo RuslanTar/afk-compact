@@ -1,7 +1,7 @@
 {
  "id": "AT-SW-01 (settings writer: settings set, dry run and apply)",
  "owner": "core",
- "note": "0.1.2 settings writer (owner 2026-10-30, helper writer for the non-consent keys): `settings set <key>=<value>...` is a dry run unless --apply; it lists each change as old -> new and the --plan of the file. The apply edits exactly those members of pluginConfigs[\"<plugin>@<marketplace>\"].options by a text splice (a value replaced, a member inserted after the last one with its spacing, a member removed), so every other key keeps its bytes (and so its meaning: env, permissions, another plugin's options, an unknown option key, numbers written 2.50, a \\u escape, non-ASCII text). A value equal to its default (or empty) removes the member, so a default is never written. It saves the whole file as settings.json.<plugin>-<stamp>.bak next to it (mode 0600; -2 for a second one in the same second), keeps the file's mode and writes through a symbolic link. A missing options object, plugin entry or pluginConfigs is created, the key taken from the one enabledPlugins entry of the plugin (or its installed folder); the file's indent (tabs here) and line break (CRLF) are kept. A number the clamp lowers once the change is in (a target over two thirds of the soft max, a soft max or target over what a configured window allows) is written as given with a note in the dry run and the apply; one the clamp leaves gets none.",
+ "note": "0.1.2 settings writer (owner 2026-10-30, helper writer for the non-consent keys): `settings set <key>=<value>...` is a dry run unless --apply; it lists each change as old -> new and the --plan of the file. The apply edits exactly those members of pluginConfigs[\"<plugin>@<marketplace>\"].options by a text splice (a value replaced, a member inserted after the last one with its spacing, a member removed), so every other key keeps its bytes (and so its meaning: env, permissions, another plugin's options, an unknown option key, numbers written 2.50, a \\u escape, non-ASCII text). A value equal to its default (or empty) removes the member, so a default is never written. It saves the whole file as settings.json.<plugin>-<stamp>.bak next to it (mode 0600; -2 for a second one in the same second), keeps the file's mode and writes through a symbolic link. A missing options object, plugin entry or pluginConfigs is created, the key taken from the one enabledPlugins entry of the plugin (or its installed folder); the file's indent (tabs here) and line break (CRLF) are kept. A number the clamp lowers once the change is in (a target over two thirds of the soft max, a soft max or target over what a configured window allows) is written as given with a note in the dry run and the apply (a removal: put back to its default; a key the plan does not touch: not changed); one the clamp leaves gets none.",
  "now": "2026-10-30T09:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -537,6 +537,40 @@
    }
   },
   {
+   "name": "a target the clamp already lowered that the plan changes (5000000 -> 4000000): still a note",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=4000000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 5000000 -> 4000000$",
+     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ]
+   }
+  },
+  {
+   "name": "with triggers off the plugin does not compact, so no two-thirds note",
+   "argv": [
+    "settings",
+    "set",
+    "triggers=false",
+    "compact_target_tokens=4000000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change triggers: default true -> false$",
+     "^  would change compact_target_tokens: 5000000 -> 4000000$"
+    ],
+    "stdout_lacks": [
+     "note:"
+    ]
+   }
+  },
+  {
    "name": "a target within what the soft max allows: no note",
    "argv": [
     "settings",
@@ -573,11 +607,106 @@
     "exit": 0,
     "stdout_has": [
      "^  would change native_window_tokens: ",
-     "^  note: compact_target_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
-     "^  note: compact_soft_max_tokens: written as given, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+     "^  note: compact_target_tokens: not changed, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$",
+     "^  note: compact_soft_max_tokens: not changed, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
     ],
     "stdout_lacks": [
-     "note: native_window_tokens"
+     "note: native_window_tokens",
+     "written as given"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"watcher\": \"off\",\n        \"native_window_tokens\": 700000,\n        \"compact_target_tokens\": 200000\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "a reset puts back a target that a set window now clamps: the note says put back to its default",
+   "argv": [
+    "settings",
+    "reset",
+    "compact_target_tokens"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 200000 -> default 400000 \\(removed\\)$",
+     "^  note: compact_target_tokens: put back to its default, but with these settings the plugin's clamp lowers it \\(the target to at most two thirds of the soft max, both below what the window allows\\); /$BRAND:status shows the value it uses$"
+    ],
+    "stdout_lacks": [
+     "not changed",
+     "written as given"
+    ]
+   }
+  },
+  {
+   "name": "set to its default: the same removal, the same note",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens=400000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 200000 -> default 400000 \\(removed\\)$",
+     "^  note: compact_target_tokens: put back to its default, but "
+    ],
+    "stdout_lacks": [
+     "not changed",
+     "written as given"
+    ]
+   }
+  },
+  {
+   "name": "set empty: the same removal, the same note",
+   "argv": [
+    "settings",
+    "set",
+    "compact_target_tokens="
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 200000 -> default 400000 \\(removed\\)$",
+     "^  note: compact_target_tokens: put back to its default, but "
+    ],
+    "stdout_lacks": [
+     "not changed",
+     "written as given"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"watcher\": \"off\",\n        \"native_window_tokens\": 700000,\n        \"compact_target_tokens\": 450000\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "a reset of a target the clamp lowers before and after (450000 -> default 400000): still a note",
+   "argv": [
+    "settings",
+    "reset",
+    "compact_target_tokens"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change compact_target_tokens: 450000 -> default 400000 \\(removed\\)$",
+     "^  note: compact_target_tokens: put back to its default, but "
+    ],
+    "stdout_lacks": [
+     "not changed",
+     "written as given"
     ]
    }
   }
