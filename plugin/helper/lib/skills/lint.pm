@@ -138,16 +138,7 @@ sub lint {
     if ($rh && $ns) {
         my ($s1) = map { $_->[1] =~ /\A\s*Step 1:\s*(.*)\z/ ? $1 : () } @{ $rh->{body} };
         my ($n1) = map { $_->[1] =~ /\A\s*1\.\s+(.*)\z/ ? $1 : () } @{ $ns->{body} };
-        if (defined $s1) {
-            $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
-            $s1 =~ s/\s*\|?\s*proposed\s*\z//;
-            $s1 =~ s/\A\s+|\s+\z//g;
-        }
-        if (defined $n1) {
-            $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
-            $n1 =~ s/\A\s+|\s+\z//g;
-        }
-        push @block, [ 'step1-mismatch', "line $rh->{line}" ] if !defined $s1 || !defined $n1 || $s1 ne $n1;
+        push @block, [ 'step1-mismatch', "line $rh->{line}" ] unless _step1_same($s1, $n1);
     }
 
     # ---- none-sections need content or their none-form
@@ -279,10 +270,49 @@ sub lint {
         }
     }
 
-    # ---- id ranges (the spec's id_range_re)
+    # ---- id ranges (the spec's id_range_re). 0.1.2 handoff-lint: a range blocks
+    # - on a ledger pointer line (one naming ledger.md or inflight.md, which lists each moved id,
+    #   or §7's fold line `D-1, X-2 settled; full text in <path>`);
+    # - when it covers a chain id (one a ledger line or table row of the draft itself, the base,
+    #   the own previous file or the stage's ledger.md / inflight.md defines) that the draft never
+    #   names alone;
+    # - when it leads the line (the line's first ids, after a bullet, a list number, a table bar
+    #   or bold marks) and one of its ids is never named alone, if the line is ledger-shaped (the
+    #   ids end in `:`, `|` or ` · `, or end the line: `- D-1..D-6: settled`, `| B-1..B-2 | …`)
+    #   or the range covers a chain id (`D-1..D-3 settled` under `- D-1: …`, `- D-2: …`).
+    # A range of ids the chain never defines (another register's D-1255..D-1268, also leading a
+    # line of prose), one reaching past chain ids the draft names alone (`- D-1289: register
+    # rows D-1289..D-1301 …`) and a summary of ids the draft lists one by one (the B- rows of the
+    # In flight table) lose no id. Ids compare without leading zeros (D-01 is D-1).
     if (my $idr = skills::spec::id_range_re()) {
+        # Read through exists: a slice of $in->{extra} would create the keys, and publish files
+        # every key of extra into evidence/.
+        my $ex = $in->{extra} || {};
+        my $chain = _defined_ids(join "\n", grep { defined } $body, $in->{previous}, $in->{own_previous},
+                                 map { exists $ex->{$_} ? $ex->{$_} : undef } qw(ledger.md inflight.md));
+        my $alone = _alone_ids($body, $idr);
+        my $tok = qr/(?:$idr|\b[UDXQB]-[0-9]+\b)/;
+        my $mk = qr/[*_`]*/;
+        my $lead_re = qr/\A\s*(?:[-*+]\s+|[0-9]+[.)]\s+|\|\s*)?$mk$tok(?:$mk\s*(?:,|\band\b)\s*$mk$tok)*$mk/;
         for my $i (0 .. $#lines) {
-            push @block, [ 'id-range', 'line ' . ($i + 1) ] if $lines[$i] =~ $idr;
+            my $l = $lines[$i];
+            my ($lead_end, $shaped) = (-1, 0);
+            if ($l =~ $lead_re) {
+                $lead_end = $+[0];
+                $shaped = substr($l, $lead_end) =~ /\A\s*(?:[:|\x{b7}]|\z)/ ? 1 : 0;
+            }
+            my $hit = 0;
+            while (!$hit && $l =~ /($idr)/g) {
+                my ($r, $lead) = ($1, $-[1] < $lead_end);
+                my $ids = _range_ids($r);
+                $hit = 1 if !$ids || $l =~ /\b(?:ledger|inflight)\.md\b|;\s*full text in\b/;
+                next if $hit;
+                my @unnamed = grep { !$alone->{$_} } @$ids;
+                my $touch = grep { $chain->{$_} } @$ids;
+                $hit = 1 if grep { $chain->{$_} } @unnamed;
+                $hit = 1 if $lead && @unnamed && ($shaped || $touch);
+            }
+            push @block, [ 'id-range', 'line ' . ($i + 1) ] if $hit;
         }
     }
 
@@ -294,7 +324,7 @@ sub lint {
         for my $l (split /\n/, $t) {
             $n++;
             push @block, [ 'recipe-placeholder', "restart/$name:$n" ]
-                if $l =~ /<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/ || $l =~ /\b(?:TODO|TBD|FIXME)\b/;
+                if _placeholder($l) || $l =~ /\b(?:TODO|TBD|FIXME)\b/;
             if ($l =~ /\A\s*script:\s*(\S+)/) {
                 my $sp = $1;
                 next if $sp =~ /\Anone\z/i;
@@ -458,6 +488,128 @@ sub _foreign_carried {
 }
 
 sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
+
+# step1-mismatch (0.1.2 handoff-lint): Step 1 and Next steps item 1 name the same command or
+# edit. Two texts that are the same (backticks and white space aside) always match. Else the
+# "— for …" and "— done when …" tails and a proposed mark on either side (`| proposed`,
+# `— proposed`, `as proposed`, `| as proposed`, `— as proposed` or a bare trailing
+# `proposed`, each with an optional trailing `(…)` note) do not count, and the texts are equal,
+# or item 1 is Step 1 followed by ` — ` and detail. A Step 1 that is one backticked command,
+# alone or followed by ` — ` and detail, also matches an item 1 that is that command
+# (backticks do not count), alone or followed by ` — ` and detail. Detail is
+# prose: a backticked command in it (a span with white space inside, such as a second command
+# riding along) blocks, while a one-word span (an identifier, a path, a file name) is prose. A
+# proposed mark's `(…)` note holding such a command is compared too. Anything else after the
+# command on either side (an extra argument, a glued word, other words) is compared as text,
+# so it blocks unless both sides say the same.
+sub _step1_same {
+    my ($s1, $n1) = @_;
+    return 0 unless defined $s1 && defined $n1;
+    my $flat = sub { my ($t) = @_; $t =~ s/`//g; $t =~ s/\s+/ /g; $t =~ s/\A | \z//g; return $t };
+    my $cmd = sub { my ($t) = @_; while ($t =~ /`([^`]*)`/g) { return 1 if $1 =~ /\S\s+\S/ } return 0 };
+    return 0 if $flat->($s1) eq '';
+    return 1 if $flat->($s1) eq $flat->($n1);
+    $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
+    $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
+    for my $t ($s1, $n1) {
+        next unless $t =~ /\s*(?:(?:\||\x{2014})\s*)?(?:\bas\s+)?proposed(\s*\([^()]*\))?\s*\z/;
+        my ($at, $note) = ($-[0], $1);
+        next if defined $note && $cmd->($note);
+        substr($t, $at) = '';
+    }
+    my ($fs, $fn) = ($flat->($s1), $flat->($n1));
+    return 0 if $fs eq '';
+    return 1 if $fs eq $fn;
+    # $raw is $head (flattened), then ` — ` and detail with no backticked command.
+    my $detail = sub {
+        my ($raw, $head) = @_;
+        while ($raw =~ /\s+\x{2014}\s+/g) {
+            my ($x, $y) = ($-[0], $+[0]);
+            next unless $flat->(substr($raw, 0, $x)) eq $head;
+            return $cmd->(substr($raw, $y)) ? 0 : 1;
+        }
+        return 0;
+    };
+    return 1 if $detail->($n1, $fs);
+    if ($s1 =~ /\A\s*`([^`]+)`/) {
+        my $c = $flat->($1);
+        return 1 if ($fs eq $c || $detail->($s1, $c)) && ($fn eq $c || $detail->($n1, $c));
+    }
+    return 0;
+}
+
+# recipe-placeholder (0.1.2 handoff-lint): a `<…>` stand-in in a recipe line, except
+# - the note after `script: none`;
+# - in `expected outputs:`, a value the job prints: a `<…>` right after `=` or `-`
+#   (`EXIT=<n>`, `server=<pid>`, `run-<n>`) with no `/` after it; any other `<…>` there, one
+#   in a path (`<scratch>/out.md`, `run-<n>/log`) and a pointer still count;
+# - the words of an agent prompt after a `prompt=` / `prompt:` argument (not a CLI flag such as
+#   `--prompt=`): they are the spawned agent's own text, unless the `<…>` is the whole prompt
+#   value (`prompt="<the brief above>"`), a pointer or part of a path (`<scratch>/out.md`,
+#   `$TMP/<name>.md`).
+# A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
+# (`<the brief above>`, `<same path>`, `<that copy>`).
+sub _placeholder {
+    my ($l) = @_;
+    my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
+    my $pointer = sub {
+        my ($t) = @_;
+        while ($t =~ /($ph)/g) {
+            return 1 if $1 =~ /\b(?:above|below|earlier|previous|prior|same|that|those|its|said|verbatim)\b/i;
+        }
+        return 0;
+    };
+    return 0 if $l =~ /\A\s*script:\s*none\b/i;
+    if ($l =~ /\A\s*expected outputs:/i) {
+        while ($l =~ /$ph/g) {
+            my ($x, $y) = ($-[0], $+[0]);
+            my $before = $x > 0 ? substr($l, $x - 1, 1) : '';
+            my $after = $y < length($l) ? substr($l, $y, 1) : '';
+            return 1 if ($before ne '=' && $before ne '-') || $after eq q{/} || $pointer->(substr($l, $x, $y - $x));
+        }
+        return 0;
+    }
+    if ($l =~ /(?<![-\w])prompt\s*[=:]\s*["'`]?/g) {
+        my $at = pos($l);
+        my $tail = substr($l, $at);
+        return 1 if $tail =~ /\A$ph["'`]?\s*(?:[),;]|\z)/ || $pointer->($tail) || $tail =~ m{$ph/|/$ph};
+        return substr($l, 0, $at) =~ $ph ? 1 : 0;
+    }
+    return $l =~ $ph ? 1 : 0;
+}
+
+# An id without leading zeros in its number (D-01 is D-1).
+sub _idn { my ($k, $n) = @_; return $k . '-' . ($n + 0) }
+
+# {id => 1} for the ids a ledger line (`- U-3: …`) or a table row (`| Q-2 | …`, `| B-1 · …`)
+# defines, and every id on a ledger pointer line (one naming ledger.md).
+sub _defined_ids {
+    my ($t) = @_;
+    my %d;
+    for my $l (split /\n/, $t // '') {
+        if ($l =~ /\A\s*(?:[-*]\s+)?([UDX])-([0-9]+):/ || $l =~ /\A\s*\|\s*([QB])-([0-9]+)\b/) { $d{ _idn($1, $2) } = 1 }
+        if ($l =~ /\bledger\.md\b/) { $d{ _idn($1, $2) } = 1 while $l =~ /\b([UDXQB])-([0-9]+)\b/g }
+    }
+    return \%d;
+}
+
+# {id => 1} for the ids the text names by themselves, outside any id range.
+sub _alone_ids {
+    my ($t, $idr) = @_;
+    $t =~ s/$idr/ /g;
+    my %got;
+    $got{ _idn($1, $2) } = 1 while $t =~ /\b([UDXQB])-([0-9]+)\b/g;
+    return \%got;
+}
+
+# The ids an id range covers ([U-1, U-2, U-3] for `U-1..U-3`), or undef when the two ends
+# differ in kind, run backwards or span more than 1000 ids (such a range always blocks).
+sub _range_ids {
+    my ($r) = @_;
+    my ($k, $x, $k2, $y) = $r =~ /\A([UDXQB])-([0-9]+)\D+?(?:([UDXQB])-)?([0-9]+)\z/ or return undef;
+    return undef if (defined $k2 && $k2 ne $k) || $y < $x || $y - $x > 1000;
+    return [ map { _idn($k, $_) } $x .. $y ];
+}
 
 sub _covered {
     my ($p, $cov) = @_;
