@@ -11,7 +11,7 @@ import type { Due } from '../../hooks/lib/idle'
 import { hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import { newState } from '../../hooks/lib/deps'
-import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION, resumeIdle, schedule } from '../../hooks/lib/idle'
+import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION, cancelIdleTimer, resumeIdle, schedule } from '../../hooks/lib/idle'
 import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_PING_MS, forkOutcome } from '../../hooks/lib/keepwarm'
 import { SID_A, SID_B, T0, World } from './harness.test'
 
@@ -1690,16 +1690,17 @@ test('AT-KW-51: native on, warming, the check record cleared by another process 
 // keep-warm's no-idle-path check never reads a record with no fire behind it, and its hand-over
 // has a taker.
 for (const c of [
-  { name: 'a hook drops it', how: (w: World) => { w.dropIf = () => 'a peer dropped it' } },
-  { name: 'its submit throws', how: (w: World) => { w.atSubmit = async () => { throw new Error('submit failed') } } },
+  { name: 'a hook drops it', at: 30, how: (w: World) => { w.dropIf = () => 'a peer dropped it' } },
+  { name: 'its submit throws', at: 30, how: (w: World) => { w.atSubmit = async () => { throw new Error('submit failed') } } },
+  { name: 'a hook drops it while the compaction is held', at: 70, how: (w: World) => { w.dropIf = () => 'a peer dropped it' } },
 ]) {
-  test(`AT-KW-54: vetoed, a prompt at 30 min that starts no turn (${c.name}): the 54-min compaction still waits, pings at 50 and 100, at the cutoff it runs while warm`, { options: ON }, async ($, on) => {
+  test(`AT-KW-54: vetoed, a prompt at ${c.at} min that starts no turn (${c.name}): the 54-min compaction waits once, pings at 50 and 100, at the cutoff it runs while warm`, { options: ON }, async ($, on) => {
     const w = world(on)
     const f = forks(on, w)
     await w.start($)
     const t0 = await humanTurn($, w)
     f.t0 = t0
-    await until(w, t0, 30)
+    await until(w, t0, c.at)
     c.how(w)
     await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never).catch(() => undefined)
     await w.settle()
@@ -1774,6 +1775,42 @@ test('AT-KW-54: a prompt that starts no turn while the idle fire reads its recor
   await state.inflight
   expect([state.idleFiring, waits]).toEqual([0, [0]])
 })
+
+for (const c of [
+  { name: 'a record keep-warm holds (no timer of this load runs for it)', stored: { held: { start: T0, pings: 1 } } },
+  { name: 'a record another load adopted', stored: { load: 'load-2' } },
+  { name: 'a tombstone', stored: { cancelled: true } },
+  { name: 'a turn starting while it reads the store', stored: {}, cancel: true },
+]) {
+  test(`AT-KW-54: resumeIdle arms no timer for ${c.name}`, async () => {
+    const waits: number[] = []
+    const state = newState('load-1')
+    const rec = {
+      due: T0 + 54 * MIN, sid: SID_A, episode: null, kind: 'compact', end: T0, answer: true, published: false, load: 'load-1',
+      anchor: T0, tokens: 260000, ttl: '1h', pct: 30, cc: null, model: null, ...c.stored,
+    }
+    const d = {
+      state, cfg: DEFAULTS,
+      after: (ms: number) => {
+        waits.push(ms)
+        return { cancel: () => undefined }
+      },
+      now: async () => T0 + 40 * MIN,
+      storeGet: async () => {
+        if (c.cancel === true) cancelIdleTimer(d)
+        return rec
+      },
+    } as unknown as Deps
+    state.idleDueSid = SID_A
+    await resumeIdle(d)
+    expect([waits, state.idleTimer]).toEqual([[], undefined])
+    // The control: a plain record of this load, undisturbed, is armed again at its due.
+    if (c.cancel === true) return
+    Object.assign(rec, { load: 'load-1', held: undefined, cancelled: undefined })
+    await resumeIdle(d)
+    expect(waits).toEqual([60000])
+  })
+}
 
 // The idle fire's record counts as an idle path only while that fire asks keep-warm (`incoming`):
 // once a prompt arriving during that check moved the gap and the fire skipped busy (a tombstone in
