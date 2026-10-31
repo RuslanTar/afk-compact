@@ -111,6 +111,13 @@ export class World {
   atSubmit: ((text: string) => Promise<void>) | undefined
   /** After `atSubmit`: `{ drop }` with the reason this returns for the text (a hook beneath that refuses one prompt). */
   dropIf: ((text: string) => string | undefined) | undefined
+  /** `$.store.get` of a key rejects while this returns true for it (an unreadable store file). */
+  storeGetFails: ((key: string) => boolean) | undefined
+  /**
+   * `$.clock.now` rejects while this returns true (the clock not readable): the one way a row's
+   * write rejects (log.ts `makeRow`; the helper call and the fallback file never throw).
+   */
+  nowFails: (() => boolean) | undefined
   /** A peer hook beneath the plugin that rewrites the text (`next({ ...e, text })`). */
   rewrite: ((text: string) => string | undefined) | undefined
   /** The origin of every `prompt.submit` that reached the bottom. */
@@ -176,11 +183,25 @@ export class World {
   /** Registers every engine-side hook; call before the first `$` call of the test. */
   install(on: On, store: Record<string, unknown> = {}): this {
     const world = this
-    this.clock = mock.clock(on, { now: T0 })
+    // `clock.now` takes one hook only (no matcher): mock.clock's is wrapped for `nowFails`.
+    const tap = ((ev: string, ...rest: unknown[]) => {
+      const h = rest[rest.length - 1]
+      if (ev === 'clock.now' && typeof h === 'function') {
+        rest[rest.length - 1] = (...a: unknown[]) => {
+          if (world.nowFails?.() === true) throw new Error('clock unreadable')
+          return (h as (...b: unknown[]) => unknown)(...a)
+        }
+      }
+      return (on as unknown as (...b: unknown[]) => unknown)(ev, ...rest)
+    }) as unknown as On
+    this.clock = mock.clock(tap, { now: T0 })
     // The plugin's store, kept here as mock.store keeps it (JSON values), so a test can write a key
     // as another process would (`storeSet`) and read what it holds (`storeGet`).
     for (const [k, v] of Object.entries(store)) this.storeMem.set(k, json(v))
-    on('store.get', (_$, e) => ({ value: json(this.storeMem.get(e.key)) }))
+    on('store.get', (_$, e) => {
+      if (this.storeGetFails?.(e.key) === true) throw new Error('store unreadable')
+      return { value: json(this.storeMem.get(e.key)) }
+    })
     on('store.set', (_$, e) => {
       this.storeMem.set(e.key, json(e.value))
       return { value: undefined }

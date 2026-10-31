@@ -367,6 +367,36 @@ test('H1: the note of a later result turn goes beside its prompt (prompt.submit 
   expect((await resultTurn($, w, notif('a9'))).ctx).toBe('')
 })
 
+test('H1: a recheck whose lane_outcome row cannot be written still puts its note beside the prompt, once; the episode marks it told', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = HARD
+  w.agents = [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'running' }]
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  if (!HAS) return
+  w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
+  await resultTurn($, w, notif('a1'))
+  await w.turnEnd($)
+  // The recheck reads the agent list last before its row: the next clock read (that row's
+  // stamp) rejects, once.
+  const list = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
+  let armed = false
+  Object.defineProperty(w, 'agents', { configurable: true, get: () => ((armed = true), list) })
+  w.nowFails = () => {
+    const f = armed
+    armed = false
+    return f
+  }
+  const second = await resultTurn($, w, notif('a2')).catch((e: unknown) => ({ ctx: 'threw: ' + String(e), block: undefined }))
+  w.nowFails = undefined
+  expect(second.ctx).toContain('code reads the work lane as hard-blocked')
+  expect(w.rowsOf('lane_outcome').filter(r => r.at === 'recheck')).toEqual([])
+  // Told once: a later result turn of the episode gets no second note.
+  await w.turnEnd($)
+  expect((await resultTurn($, w, notif('a9'))).ctx).toBe('')
+})
+
 test('H2: Status working at the compaction (agents ran then); every step marked done, Step 1 none; the last agent ends: the digest, not [idle]', async ($, on) => {
   const w = new World().install(on)
   w.resumeHere = 'Status: working · Acuity: watch · State: waits for B-1, B-2 (checkpoint: clean)\nStep 1: none\n## Next steps\n1. read the B-1 and B-2 results — done when read · done\n'
