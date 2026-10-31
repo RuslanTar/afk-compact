@@ -384,7 +384,7 @@ sub _deny_bash {
     }
     my ($s, $q) = _deny_mask($whole);
     my @q = @$q;
-    my (@parts, @out, @run_words, $read);
+    my (@parts, @out, @run_words);
     for my $p (grep { /\S/ } split /&&|\|\||[;|&\n]/, $s) {
         (my $bare = $p) =~ s/\x01\d+\x01/ /g;
         push @parts, $bare;
@@ -397,14 +397,13 @@ sub _deny_bash {
             my ($t, $w) = _deny_bash($q[$n]);
             push @out, $t;
             push @run_words, $w;
-            $ran = $read = 1;
+            $ran = 1;
         }
         if ($ran) { push @run_words, $bare; next }
         my $at = _deny_outward_at($bare);
         next unless defined $at;
         push @run_words, substr($bare, 0, $at);
         push @out, substr($bare, $at);
-        $read = 1;
     }
     for my $r (@run) {
         my ($runner, $body) = @$r;
@@ -413,9 +412,8 @@ sub _deny_bash {
         my ($t, $bw) = _deny_bash($body);
         push @out, $t;
         push @run_words, $bw, $w;
-        $read = 1;
     }
-    return (join(' ', @out), join(' ', @run_words)) if $read;
+    return (join(' ', @out), join(' ', @run_words)) if @out;
     # Outward only inside quotes no shell runs (a commit message, a title): no token, the class
     # covers (fail closed; review 4 finding 1).
     return ('', '') if _deny_outward($whole);
@@ -447,7 +445,7 @@ sub _deny_keys {
     my $ctext = $c->{text} // '';
     my ($text, $runner) = $tool eq 'Bash' ? _deny_bash($ctext) : ($ctext, '');
     $tok{$_} = 1 for _deny_tokens($text);
-    $run{$_} = 1 for grep { !$tok{$_} } _deny_tokens($runner);
+    $run{$_} = 1 for _deny_tokens($runner);
     if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
         for my $w (map { lc } map { split /(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+/ } $1, $2) {
             $word{$w} = 1 if length($w) >= 3 && $w =~ /[a-z]/ && !$DENY_STOP{$w};
