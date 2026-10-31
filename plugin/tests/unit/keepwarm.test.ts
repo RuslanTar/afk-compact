@@ -1623,3 +1623,44 @@ test('AT-KW-52: native on, no job open at a ping (150K, below Claude Code\'s idl
   if (IDLE) expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 1])
   else expect(skips(w)).toEqual([['keep-warm', 'check'], ['no-asset', 'check']])
 })
+
+// The 49-min fire and the first ping decide one gap at once (a gate holds the first `session.usage` read from `from` on until 50:30).
+for (const c of [
+  { name: 'the first ping first', endAfter: 61000, from: 50 },
+  { name: 'the 49-min fire first', endAfter: 59000, from: 49 + 59 / 60 },
+]) {
+  test(`AT-KW-51: triggers off, ${c.name}, both refusing beside each other: one no-idle-path row for the gap, no fork; the fire skips triggers-off`, { options: { ...ON, triggers: false } }, async ($, on0) => {
+    let from = Infinity
+    let n = 0
+    let release: () => void = () => undefined
+    const gate = new Promise<void>(r => { release = r })
+    let wref: World | undefined
+    const on = ((name: string, h: (...a: unknown[]) => unknown) => on0(name as never, (name === 'session.usage'
+      ? async (...a: unknown[]) => {
+        if (wref && wref.clock.now() >= from && ++n === 1) await gate
+        return h(...a)
+      }
+      : h) as never)) as unknown as On
+    const w = world(on, { autoCompactEnabled: false })
+    wref = w
+    const f = forks(on0, w)
+    await w.start($)
+    await w.userTurn($)
+    await w.step($)
+    const t0 = w.clock.now()
+    f.t0 = t0
+    from = t0 + c.from * MIN
+    await w.advance(c.endAfter)
+    w.tokens = 260000
+    await w.turnEnd($)
+    await until(w, t0, 50.5)
+    release()
+    await w.settle()
+    await until(w, t0, 160)
+    expect(f.at).toEqual([])
+    expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_ping').length]).toEqual([0, 0])
+    expect(stops(w)).toEqual([['no-idle-path', false, 0]])
+    expect(skips(w)).toEqual([['triggers-off', 'turn']])
+    expect(w.submits.length).toBe(0)
+  })
+}
