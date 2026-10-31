@@ -1664,3 +1664,19 @@ for (const c of [
     expect(w.submits.length).toBe(0)
   })
 }
+
+test('AT-KW-51: native on, warming, the check record cleared by another process before it fires (its tombstone): the next ping stops no-idle-path, no fork after it', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 52)
+  expect(f.at).toEqual([50])
+  const rec = w.storeGet(KEY) as Record<string, unknown>
+  w.storeSet(KEY, { cancelled: true, sid: SID_A, load: 'other', due: rec.due, at: w.clock.now() })
+  await until(w, t0, 240)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-idle-path', false, 1]])
+  expect([skips(w), ic(w).length, selfCompacts(w)]).toEqual([[], 0, 0])
+})
