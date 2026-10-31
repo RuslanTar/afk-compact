@@ -107,20 +107,16 @@ require "sha.pm";
 # HOME-GUARD (0.1.2): no case and no child of this runner reaches the owner's real HOME or
 # Claude Code config folder (a kit test elsewhere ran a planted hook with the real HOME and
 # wiped ~/.claude/settings.json to "{}"; lib/settings_write.pm writes
-# ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json). The real ones are read once, here, before
-# anything is localised: HOME as given and the account's home (getpwuid), each by real path, and
-# the CLAUDE_CONFIG_DIR given. Once its run dir exists the runner itself runs with a temp HOME
-# ($RUN_TMP/home) and no CLAUDE_CONFIG_DIR, each case with its own $HOME (run_case), and
-# home_guard() checks the environment of every child it starts before the fork.
-my $REAL_HOME = $ENV{HOME};
-my $REAL_CONFIG_DIR = $ENV{CLAUDE_CONFIG_DIR};
-my $ACCOUNT_HOME = (getpwuid($<))[7];
-my %REAL_HOMES = map { (util::real_path($_) => 1) } grep { defined && m{\A/} } ($REAL_HOME, $ACCOUNT_HOME);
-# the real config folders (real paths): each real home's .claude and the CLAUDE_CONFIG_DIR given
-my %REAL_CONFIGS = map { (util::real_path($_) => 1) } ((map { "$_/.claude" } keys %REAL_HOMES), grep { defined && m{\A/} } $REAL_CONFIG_DIR);
-# the temp folders a case's HOME and CLAUDE_CONFIG_DIR may lie under (real paths): the system
-# temp folder as given at start, /tmp, and the repo's tmp/ (tmp_base "repo"; --repo-tmp)
-my $START_TMPDIR = $ENV{TMPDIR};
+# ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json). The guard is tests/helper/homeguard.pm,
+# shared with the watch driver; the real ones are read once, here, before anything is localised:
+# HOME as given and the account's home (getpwuid), each by real path, and the CLAUDE_CONFIG_DIR
+# given. Once its run dir exists the runner itself runs with a temp HOME ($RUN_TMP/home) and no
+# CLAUDE_CONFIG_DIR, each case with its own $HOME (run_case), and home_guard() checks the
+# environment of every child it starts before the fork.
+require "$HERE/homeguard.pm";
+homeguard::init();
+my ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME, %REAL_HOMES);
+{ no warnings q(once); ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME) = ($homeguard::REAL_HOME, $homeguard::REAL_CONFIG_DIR, $homeguard::ACCOUNT_HOME); %REAL_HOMES = %homeguard::REAL_HOMES }
 
 # DP-12: messages hold characters (decoded case text and helper output); raw bytes are
 # decoded before they are printed (see say_raw), so nothing prints "Wide character".
@@ -170,6 +166,9 @@ while (@ARGV) {
 $REPO_TMP_BASE //= "$REPO/tmp";
 $FIXTURES_DIR //= "$REPO/tests/fixtures";
 $REPO_TMP_BASE =~ s{/+$}{};
+# HOME-GUARD: a case's HOME and CLAUDE_CONFIG_DIR may also lie under the repo's tmp/ (tmp_base
+# "repo"; --repo-tmp), beside the system temp folder as given at start and /tmp
+homeguard::add_temp_root($REPO_TMP_BASE);
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
 # The launcher folder (PKG-RUNTIME A.1): one constant, as in tools/build, deps.ts and ctx.pm.
@@ -1385,49 +1384,15 @@ sub stdin_of {
 }
 
 # ---------------------------------------------------------------- HOME-GUARD
-# under_temp(path) -> 1 when the path's real path lies strictly under a temp folder: the system
-# temp folder the runner started with ($TMPDIR), /tmp, or the repo's tmp/ (--repo-tmp).
-my @TEMP_ROOTS;
-sub under_temp {
-    my ($p) = @_;
-    my $r = util::real_path($p) // return 0;
-    @TEMP_ROOTS = grep { $_ ne '' } map { (my $t = util::real_path($_) // '') =~ s{/+\z}{}; $t }
-                  grep { defined && m{\A/} } ($START_TMPDIR, '/tmp', $REPO_TMP_BASE) unless @TEMP_ROOTS;
-    return (grep { index($r, "$_/") == 0 } @TEMP_ROOTS) ? 1 : 0;
-}
-
-# home_guard(env, what): dies before `what` starts when its environment (a hash: the whole
-# environment the child gets) could reach the owner's real HOME or config folder: HOME unset or
-# empty (the helper would use the account's home, util::home), HOME the real HOME or the
-# account's home (by real path: a link to it is refused too) or not under a temp folder;
-# CLAUDE_CONFIG_DIR set and not under a temp folder (a leading ~ read as the child's HOME), or at
-# or under a real home's .claude or the config folder the runner started with (by real path:
-# TMPDIR=$HOME puts the real ~/.claude under a "temp" folder).
-sub home_guard {
-    my ($env, $what) = @_;
-    my $h = $env->{HOME};
-    die "HOME-GUARD: $what: no HOME (the helper would use the account's home); not started\n" unless defined $h && $h ne '';
-    my $rh = util::real_path($h) // '';
-    die "HOME-GUARD: $what: HOME $h is the real home; not started\n" if $REAL_HOMES{$rh};
-    die "HOME-GUARD: $what: HOME $h is not under a temp folder; not started\n" unless under_temp($h);
-    my $c = $env->{CLAUDE_CONFIG_DIR};
-    if (defined $c && $c ne '') {
-        (my $x = $c) =~ s{\A~(?=/|\z)}{$h};
-        my $rc = $x =~ m{\A/} ? util::real_path($x) // '' : '';
-        die "HOME-GUARD: $what: CLAUDE_CONFIG_DIR $c is the real config folder; not started\n"
-            if grep { $rc eq $_ || index($rc, "$_/") == 0 } keys %REAL_CONFIGS;
-        die "HOME-GUARD: $what: CLAUDE_CONFIG_DIR $c is not under a temp folder; not started\n" unless $x =~ m{\A/} && under_temp($x);
-    }
-    return 1;
-}
-
-# case_home(path) -> the path, for a builtin's declared "home": dies unless a child given it as
-# HOME passes home_guard (a temp folder, never the real home).
-sub case_home {
-    my ($h) = @_;
-    home_guard({ HOME => $h }, 'declared home');
-    return $h;
-}
+# The guard itself is tests/helper/homeguard.pm (shared with the watch driver). under_temp(path):
+# 1 when the path's real path lies strictly under a temp folder (the system temp folder the
+# runner started with, /tmp, or the repo's tmp/). home_guard(env, what): dies before `what`
+# starts when its environment (a hash: the whole environment the child gets) could reach the
+# owner's real HOME or config folder (homeguard::check). case_home(path) -> the path, for a
+# builtin's declared "home": dies unless a child given it as HOME passes home_guard.
+sub under_temp { return homeguard::under_temp(@_) }
+sub home_guard { return homeguard::check(@_) }
+sub case_home { return homeguard::case_home(@_) }
 
 # run_cmd(argv, util::run options): util::run (whose child inherits this process's environment,
 # with `env` laid over it) once home_guard passes that environment.
@@ -3116,12 +3081,10 @@ sub builtin {
         # a runner started with TMPDIR=$HOME: the real ~/.claude lies under a "temp" folder and is
         # still refused (the temp folders put back after)
         {
-            (undef) = under_temp($th);
-            my @was = @TEMP_ROOTS;
-            @TEMP_ROOTS = (util::real_path($acct));
+            no warnings q(once);
+            local @homeguard::TEMP_ROOTS = (util::real_path($acct));
             my $ok = eval { home_guard({ HOME => "$acct/home-guard-none", CLAUDE_CONFIG_DIR => "$acct/.claude" }, 'TMPDIR at home'); 1 };
             my $err = $@;
-            @TEMP_ROOTS = @was;
             push @e, "TMPDIR the account's home: CLAUDE_CONFIG_DIR at its .claude was taken" if $ok;
             push @e, "TMPDIR the account's home: died with '$err', want the real config folder" if !$ok && $err !~ /\AHOME-GUARD: .* is the real config folder; /;
         }

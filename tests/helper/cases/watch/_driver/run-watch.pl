@@ -15,6 +15,12 @@
 # not on PATH (`needs => ["cmd:<name>"]`) prints `not ok - <id> # TODO not run: needs <name>
 # ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
+# HOME-GUARD (0.1.2; the guard is tests/helper/homeguard.pm, shared with the core case runner):
+# the driver itself runs with a temp HOME and no CLAUDE_CONFIG_DIR, each case with its own $HOME
+# (a `cli` step's env may set a CLAUDE_CONFIG_DIR of its own under a temp folder), and every
+# child it starts (a `cli` step, T::_git) and every in-process step is checked first: the real
+# HOME, the account's home or a CLAUDE_CONFIG_DIR at a real config folder or outside the temp
+# folders dies with a `HOME-GUARD:` line and nothing starts (AT-RN-07-watch-home-guard).
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
 # core `hook` dispatcher and the shared watcher fixtures are other work
@@ -40,6 +46,15 @@ use watch;
 use watch::json;
 use watch::io;
 use watch::alerts;
+
+# HOME-GUARD: the real HOME and config folder are read once, here, before anything is
+# localised; from here on the driver's own HOME is a temp folder and no CLAUDE_CONFIG_DIR is set.
+require "$REPO/tests/helper/homeguard.pm";
+homeguard::init();
+my $DRIVER_HOME = File::Temp::tempdir('watchdriver-XXXXXX', TMPDIR => 1, CLEANUP => 1) . '/home';
+watch::io::mkdir_p($DRIVER_HOME);
+$ENV{HOME} = $DRIVER_HOME;
+delete $ENV{CLAUDE_CONFIG_DIR};
 
 $ENV{TZ} = 'Etc/GMT-3';
 POSIX::tzset();
@@ -170,6 +185,23 @@ sub cli_launcher {
     return $l;
 }
 
+# run_child(argv, stdin text, what) -> {exit, stdout, stderr}: argv run through the shell with
+# this process's environment (a `cli` step's env laid over it), stdin from a file, stdout and
+# stderr captured. HOME-GUARD: homeguard::check refuses, before the shell starts, an environment
+# that could reach the real home or config folder.
+sub run_child {
+    my ($argv, $stdin, $what) = @_;
+    homeguard::check(\%ENV, $what);
+    my $inf = File::Temp->new;
+    print $inf $stdin;
+    close $inf;
+    my $of = File::Temp->new;
+    my $ef = File::Temp->new;
+    my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } @$argv);
+    system("$cmd < '" . $inf->filename . "' > '" . $of->filename . "' 2> '" . $ef->filename . "'");
+    return { exit => $? >> 8, stdout => watch::io::slurp($of->filename), stderr => watch::io::slurp($ef->filename) };
+}
+
 sub capture {
     my ($code) = @_;
     my $tmp = File::Temp->new;
@@ -220,7 +252,11 @@ sub run_case {
     $v{WATCH} = "$v{ROOT}/.watch";
     $v{PROJ} = "$v{HOME}/.claude/projects/-synthetic-proj";
     watch::io::mkdir_p($v{HOME});
+    # the driver's own HOME, outside the case (AT-RN-07 reads it: a temp folder)
+    $v{DRIVER_HOME} = $ENV{HOME} // '';
     local $ENV{HOME} = $v{HOME};
+    # HOME-GUARD: no CLAUDE_CONFIG_DIR a step set leaks into the next case
+    delete local $ENV{CLAUDE_CONFIG_DIR};
     local $ENV{STORE_TEST_MODE} = '1';
     # A plugin root of our own: manifest + spec-literals for the test (the
     # real assets are generated from WP-text's handoff-spec.md).
@@ -249,6 +285,10 @@ sub run_case {
                        settings => { %{ $case->{settings} || {} } }, now => $now, pid => 4242,
                        pid_lstart => 'Tue Oct 21 13:00:00 2026', cc_version => '2.1.306');
         my $payload_tp = $s->{transcript} ? sub_vars($s->{transcript}, \%v) : $tpath;
+        # HOME-GUARD: an in-process step runs the watcher's code here, which may start children of
+        # its own (git), and a `code` step may start one itself; a `cli` step is checked again
+        # with its env (run_child)
+        homeguard::check(\%ENV, "step $s->{call}");
         my ($out, $err, $ret);
         if ($s->{call} eq 'hook') {
             my $payload = { session_id => $T::SID, transcript_path => $payload_tp, cwd => "$v{HOME}/work",
@@ -290,16 +330,9 @@ sub run_case {
             local @ENV{ keys %env } = map { sub_vars($_, \%v) } values %env;
             my $stdin = defined $s->{stdin} ? $s->{stdin} : '';
             $stdin = sub_vars($stdin, \%v) if $s->{stdin_vars};
-            my $inf = File::Temp->new;
-            print $inf $stdin;
-            close $inf;
-            my $of = File::Temp->new;
-            my $ef = File::Temp->new;
-            my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } (cli_launcher(), @argv));
-            system("$cmd < '" . $inf->filename . "' > '" . $of->filename . "' 2> '" . $ef->filename . "'");
-            my $code = $? >> 8;
-            $out = watch::io::slurp($of->filename);
-            $err = watch::io::slurp($ef->filename);
+            my $r = run_child([cli_launcher(), @argv], $stdin, "cli $argv[0]");
+            my $code = $r->{exit};
+            ($out, $err) = ($r->{stdout}, $r->{stderr});
             push @outputs, { exit => $code, stdout => $out, stderr => $err };
             push @errs, "cli @argv: exit $code, want " . ($s->{exit} // 0) if $code != ($s->{exit} // 0);
             if (defined $s->{stdout_re}) {
