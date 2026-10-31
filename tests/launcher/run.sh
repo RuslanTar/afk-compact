@@ -200,7 +200,8 @@ run_launcher() {
   [ -z "$r_os" ] || r_path=$here/stub-os:$r_path
   {
     printf 'cd %s || exit 99\n' "$(q "$C/work")"
-    printf 'unset CLAUDECODE XDG_RUNTIME_DIR XDG_CACHE_HOME %s\n' "$envname"
+    # HOME-GUARD: no CLAUDE_CONFIG_DIR of the caller's reaches the launcher or its claude
+    printf 'unset CLAUDECODE CLAUDE_CONFIG_DIR XDG_RUNTIME_DIR XDG_CACHE_HOME %s\n' "$envname"
     printf 'export PATH=%s:"$PATH" TMPDIR=%s HOME=%s STUB_DIR=%s STUB_LAUNCH_ENV=%s STUB_NOTES=%s\n' \
       "$(q "$r_path")" "$(q "$C/tmp")" "$(q "$C/home")" "$(q "$C")" "$envname" "$(q "$here/notes")"
     printf '%s\n' "$r_env"
