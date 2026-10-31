@@ -2101,6 +2101,24 @@ sub u06_check {
             userre::first('prod_patterns', $e1, ["$subj $p"], 'match');
             push @e, "tight process $p: stopped [" . $stopped->() . '], want prod_patterns:1:budget' if $stopped->() ne 'prod_patterns:1:budget' && $bad++ < 2;
         }
+        {
+            # the same cut in a process that wakes late (a busy machine): the child ended by its own
+            # alarm (here at once) while the wait for the budget's end overslept, so its end is all
+            # there is to read; the stop is still the budget's (it read `timeout`: remembered)
+            no warnings 'redefine';
+            my $real = \&userre::_watch;
+            local *userre::_watch = sub {
+                my $sw = $real->();
+                my ($wait, $n) = ($sw->{wait}, 0);
+                # the second wait, after the ready line: sleep past its end, then look
+                $sw->{wait} = sub { return $wait->(@_) if $n++ != 1; util::sleep_ms(int($_[1] * 1000) + 50); return $wait->($_[0], 0) };
+                return $sw;
+            };
+            userre::clear() if $have;
+            userre::limits(1, 0.6) if $have;
+            userre::first('prod_patterns', [{ re => qr/(?{ kill 'ALRM', $$ })/, at => 1 }], ['echo late'], 'match');
+            push @e, 'a process that woke late: stopped [' . $stopped->() . '], want prod_patterns:1:budget' if $stopped->() ne 'prod_patterns:1:budget';
+        }
         my @m = glob("$once/regex_slow.*");
         push @e, 'markers after cuts by the budget only: ' . join(' ', map { util::basename($_) . ' (' . (util::read_file($_) // '') =~ tr/\n// . ' runs)' } @m) if @m;
         userre::clear() if $have;    # a process with room
