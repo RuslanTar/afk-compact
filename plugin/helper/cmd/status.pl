@@ -185,15 +185,25 @@ sub smoke_lines {
 # The refused roots of the private store, one line each (unsafe roots, D-12). For roots in a git work tree
 # and not ignored, one more line per folder to ignore: the roots, their work tree, and the two ways out
 # (ignore the folder there, or set the key to a folder outside any work tree). A root under the state
-# folder (~/.local/state/<plugin>, STATE-ROOT), which holds every default root, names that folder: a
-# home folder that is a git work tree (a dotfiles repository) refuses all of them until it is ignored.
-# log_dir is named as a key only when it is set (unset, it follows handoff_root).
+# folder (~/.local/state/<plugin>, STATE-ROOT), which holds every default root, names that folder when it
+# lies strictly inside the work tree: a home folder that is a git work tree (a dotfiles repository)
+# refuses all of them until it is ignored. A work tree at or under the state folder (git init there)
+# names the root's own path, joined by a later root under it in the same work tree (.watch under the
+# handoff root); a root that is itself its work tree's top has nothing to ignore it in, so only the key
+# to set. log_dir is named as a key only when it is set (unset, it follows handoff_root), unless it is
+# the only key a line has.
 sub root_lines {
     my @out;
     my $p = rc::paths() || {};
     my %path = (handoff_root => $p->{root}, log_dir => $p->{watch}, disposable_root => $p->{disposable});
     my $state = eval { util::dirname(paths::state_default()) };
-    my (@dirs, %fix);
+    $state = undef if defined $state && $state eq '/';
+    my $inside = sub {
+        my ($real, $wt) = @_;
+        my $top = $wt eq '/' ? '/' : "$wt/";
+        return index($real, $top) == 0 && length($real) > length($top);
+    };
+    my @fix;
     for my $key (qw(handoff_root log_dir disposable_root)) {
         next if rc::root_ok($key);
         my $why = rc::root_reason($key);
@@ -201,23 +211,29 @@ sub root_lines {
         next unless ($why // '') eq 'root-in-git' && defined $path{$key};
         my $wt = roots::check_path($path{$key})->{worktree};
         next unless defined $wt;
-        my $dir = (defined $state && $state ne '/' && index("$path{$key}/", "$state/") == 0) ? $state : $path{$key};
-        push @dirs, $dir unless $fix{$dir};
-        $fix{$dir}{wt} //= $wt;
-        push @{ $fix{$dir}{paths} }, $path{$key};
-        push @{ $fix{$dir}{keys} }, $key unless $key eq 'log_dir' && (rc::val('log_dir') // '') eq '';
+        my $at = $path{$key};
+        my $dir = (defined $state && index("$at/", "$state/") == 0 && $inside->(util::real_path($state) // $state, $wt))
+                ? $state : $at;
+        my ($f) = grep { $_->{wt} eq $wt && index("$dir/", "$_->{dir}/") == 0 } @fix;
+        push @fix, $f = { dir => $dir, wt => $wt } unless $f;
+        push @{ $f->{paths} }, $at;
+        push @{ $f->{all} }, $key;
+        push @{ $f->{keys} }, $key unless $key eq 'log_dir' && (rc::val('log_dir') // '') eq '';
     }
-    for my $dir (@dirs) {
-        my $f = $fix{$dir};
-        my $real = util::real_path($dir) // $dir;
-        my $top = $f->{wt} eq '/' ? '/' : "$f->{wt}/";
-        my $line = (index($real, $top) == 0 && length($real) > length($top))
-                 ? ' (the line /' . util::text(substr($real, length($top))) . '/ in ' . _home_form("$top.gitignore") . ')' : '';
+    my $set = sub { 'set ' . join(' and ', @_) . ' in /config to ' . (@_ > 1 ? 'folders' : 'a folder') . ' outside any git work tree' };
+    for my $f (@fix) {
+        my $real = util::real_path($f->{dir}) // $f->{dir};
         my @keys = @{ $f->{keys} || [] };
-        my $set = @keys ? ', or set ' . join(' and ', @keys) . ' in /config to ' . (@keys > 1 ? 'folders' : 'a folder')
-                          . ' outside any git work tree' : '';
-        push @out, '  in git, not ignored: ' . join(', ', map { util::abbrev($_) } @{ $f->{paths} })
-                   . ' (work tree ' . _home_form($f->{wt}) . '); to fix, ignore ' . util::abbrev($dir) . "/ there$line$set";
+        my $head = '  in git, not ignored: ' . join(', ', map { util::abbrev($_) } @{ $f->{paths} })
+                 . ' (work tree ' . _home_form($f->{wt}) . '); to fix, ';
+        if ($real eq $f->{wt}) {
+            push @out, $head . $set->(@keys ? @keys : @{ $f->{all} });
+            next;
+        }
+        my $top = $f->{wt} eq '/' ? '/' : "$f->{wt}/";
+        my $line = $inside->($real, $f->{wt})
+                 ? ' (the line /' . util::text(substr($real, length($top))) . '/ in ' . _home_form("$top.gitignore") . ')' : '';
+        push @out, $head . 'ignore ' . util::abbrev($f->{dir}) . "/ there$line" . (@keys ? ', or ' . $set->(@keys) : '');
     }
     return @out;
 }
