@@ -156,18 +156,21 @@ export const register: Register = (on, options) => {
       cancelIdleTimer(realDeps($, options, state))
       cancelKeepWarmTimer(realDeps($, options, state))
       // SESSION-RESTART §2.2 step 4, §3.4 step 3: a prompt entering stops a restart under way.
-      if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state))
+      // Guarded: the run is ended before its first await, and a failure in its notes or rows
+      // must not skip `next` below, nor the resumes there for a prompt that then does not enter.
+      if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state)).catch(() => undefined)
     }
     // The shadow trial's M1 moment for this plugin's typed handoff command, before its turn
-    // starts; off (one cheap test) without the local trial config.
+    // starts; off (one cheap test) without the local trial config. Never throws (as againFor).
     if (!own && e.command?.name === $.plugin.name + ':handoff') {
       await shadowOwnerHandoff(realDeps($, options, state), e.command.args, e.text)
     }
     // Away digest phase 1: a later prompt of an open idle episode, not a person's, carries the lane
     // note beside it when the lane turned finished or hard-blocked (prompt.context is asked once per
     // conversation, so it cannot carry one); a person's prompt closes the episode. A note whose
-    // prompt does not enter goes back to the episode for the next turn.
-    const note = own ? undefined : await laneRecheck(realDeps($, options, state), kind, e.text)
+    // prompt does not enter goes back to the episode for the next turn. A recheck that fails (the
+    // session id, a row) adds no note, and the prompt goes on as the restart's does above.
+    const note = own ? undefined : await laneRecheck(realDeps($, options, state), kind, e.text).catch(() => undefined)
     // Owner xxxxxxxx-37: a person back after a background result's turn took an idle block gets
     // the whole block again beside their prompt, for the same reason; one that does not enter
     // hands it back for their next prompt.
@@ -196,7 +199,7 @@ export const register: Register = (on, options) => {
       promptNotEntered(state, kind)
       // No turn starts, so the idle timer (§9.4) and keep-warm's ping timer (D-14) cancelled above
       // run again: the idle record stays in the store, and keep-warm hands over to it. Each is
-      // guarded as on the throw path: a store read that fails in one still lets the other run.
+      // guarded as on the throw path: resumeIdle's store read that fails still lets keep-warm's run.
       await resumeIdle(realDeps($, options, state)).catch(() => undefined)
       await resumeKeepWarm(realDeps($, options, state)).catch(() => undefined)
     }
