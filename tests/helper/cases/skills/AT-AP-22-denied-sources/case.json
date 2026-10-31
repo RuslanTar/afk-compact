@@ -891,6 +891,68 @@
    }
   },
   {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"h0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/q-1 to origin\"}}\n{\"type\": \"user\", \"uuid\": \"h1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"publish the q-2 docs\"}}\n{\"type\": \"user\", \"uuid\": \"h2\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"call the retry webhook\"}}\n{\"type\": \"assistant\", \"uuid\": \"aq0\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_q0\", \"name\": \"Bash\", \"input\": {\"command\": \"bash -c \\\"ssh prod-9 'git push'\\\"\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uq0\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_q0\", \"is_error\": true, \"content\": \"Permission to use Bash with command bash -c \\\"ssh prod-9 'git push'\\\" has been denied.\"}]}}\n{\"type\": \"assistant\", \"uuid\": \"aq1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"isSidechain\": false, \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_q1\", \"name\": \"Bash\", \"input\": {\"command\": \"DEPLOY_ENV=st-3 npm publish\"}}]}}\n{\"type\": \"user\", \"uuid\": \"uq1\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_q1\", \"is_error\": true, \"content\": \"Permission to use Bash with command DEPLOY_ENV=st-3 npm publish has been denied.\"}]}}\n"
+  },
+  {
+   "name": "begin (Q)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGEQ": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (Q)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGEQ"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGEQ/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/q-1 to origin\" — action git push origin feat/q-1 · targets branch feat/q-1 @ 1a2b3c4 · once · not yet used\n- U-3: approval \"publish the q-2 docs\" — action npm publish q-2-docs · targets package q-2-docs @ v1 · once · not yet used\n- U-4: approval \"call the retry webhook\" — action call the retry webhook · targets the retry webhook @ v1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "the ssh host of a quote inside a quote only matches, so the bare push still covers the push approval by class; the outward command starts at its class, so an assignment before it (DEPLOY_ENV=st-3) only matches and the publish class covers q-2; the webhook shares no class (review 6 finding 1)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGEQ",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-denied line 10$",
+     "^LINT approval-denied line 11$",
+     "^REFUSED: lint \\(2 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "LINT approval-denied line 12$",
+     "approval-shape"
+    ]
+   }
+  },
+  {
    "name": "canary: no tool input or approval text in any watch row",
    "expect": {
     "files": [
@@ -963,7 +1025,11 @@
        "feat/q-8",
        "cs-2-docs",
        "cs-1",
-       "prod-9"
+       "prod-9",
+       "feat/q-1",
+       "q-2-docs",
+       "DEPLOY_ENV",
+       "st-3"
       ]
      }
     ]
