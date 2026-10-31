@@ -9,7 +9,7 @@
 package settings;
 use strict; use warnings;
 use skills::util;
-my %DEF = (handoff_root => '~/.local/state/afk-compact/handoffs', log_dir => '', disposable_root => '~/.claude/trash-staging',
+my %DEF = (handoff_root => '~/.local/state/@BRAND@/handoffs', log_dir => '', disposable_root => '~/.claude/trash-staging',
            disposable_keep_days => 0, evidence_quota_mb => 500, queue_cmd => '', watcher => 'shadow', auto_evidence => 1);
 sub resolve {
     my ($f) = @_;

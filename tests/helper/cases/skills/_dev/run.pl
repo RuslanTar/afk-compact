@@ -73,7 +73,7 @@ sub build_plugin {
     File::Path::make_path("$dst/assets");
     (my $spec = skills::util::read_file("$HERE/handoff-spec.json")) =~ s/\@BRAND\@/$brand/g;
     write_file("$dst/assets/handoff-spec.json", $spec);
-    my $d = skills::util::read_file("$HERE/doubles/doubles.pl");
+    (my $d = skills::util::read_file("$HERE/doubles/doubles.pl")) =~ s/\@BRAND\@/$brand/g;   # STATE-ROOT default names the plugin
     for my $blk (split /^#### /m, $d) {
         next unless $blk =~ /\A(\S+\.pm)\n(.*)\z/s;
         write_file("$dst/helper/lib/$1", $2);
