@@ -293,11 +293,11 @@ sub _child {
     local $SIG{HUP} = sub { kill 'KILL', $pid; POSIX::_exit(128 + 1) };
     local $SIG{INT} = sub { kill 'KILL', $pid; POSIX::_exit(128 + 2) };
     my @t0 = times;
-    my (%got, $why, $eof, $ended, $since, $ready, $sent, $t_last);
+    my (%got, $why, $eof, $ended, $since, $ready, $sent, $t_last, $end, $what);
     my ($buf, $scan, $rin, $cpu_at, $cpu_r) = ('', 0, '', 0, 0);
     vec($rin, fileno($r), 1) = 1;
     while (1) {
-        my ($end, $what) = !defined $since ? ($START_S, 'load') : $sent ? (9**9**9, 'budget') : ($since + $limit, 'timeout');
+        ($end, $what) = !defined $since ? ($START_S, 'load') : $sent ? (9**9**9, 'budget') : ($since + $limit, 'timeout');
         my $bend = $cap + (defined $ready ? $free->($ready) : $FREE_S);
         ($end, $what) = ($bend, 'budget') if $bend < $end;
         my $left = $end - $sw->{el}->();
@@ -345,6 +345,11 @@ sub _child {
     return $res if $ended;
     my ($miss) = grep { !$got{$_} } $from .. $to;
     return $res unless defined $miss;
+    # the child's own alarm while this process slept past its own deadline (a busy machine: the
+    # wait returned late, and the child's end was all there was to read): the stop is that
+    # deadline's, as if this process had woken on time. A budget cut read `timeout` and was
+    # remembered against the pattern (U-06 under load)
+    $why //= $what if $eof && ($status & 127) == 14 && defined $end && $el >= $end;
     # the child's own alarm (the helper's clock read short of the limit): a timeout
     $why //= ($eof && ($status & 127) == 14) ? 'timeout' : 'error';
     my $cpu = $cpu_all - $cpu_at / 1000;
