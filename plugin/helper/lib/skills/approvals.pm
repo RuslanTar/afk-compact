@@ -309,19 +309,21 @@ my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 my $DENY_HEREDOC_SCAN = qr/\G(?:
     ( \$?\(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\)
     | "(?:[^"\\]|\\.)*"
-    | '[^']*'
-    | \\. )
+    | '[^']*' )
   | (?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))
   | (\n)
   | (&&|\|\||[;|&])
   | (.)
 )/xs;
+# A shell's option: `-l`, `-o pipefail`, `--norc`.
+my $DENY_SH_OPT = qr{(?:[-+]\w*o\s+\w+|--?[\w-]+)};
 # The text before a quoted command a shell runs, within its part: `[path/]sh -c`, `bash -lc`,
 # `zsh -c`, `sh -o pipefail -c`, `bash --norc -c`, `ssh [options] host`, `eval`.
-my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:(?:[-+]\w*o\s+\w+|--?[\w-]+)\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
-# The text before a heredoc a shell runs, within its part: `[path/]bash`, `sh -s`, `ssh [options]
-# host [command]`; not a shell with `-c` (the heredoc then feeds that command).
-my $DENY_RUNNER = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh(?:\s+(?:[-+][abd-zA-Z0-9]*o\s+\w+|--[\w-]*|-[abd-zA-Z0-9]+))*|(?:\S*/)?ssh\s.*?)\s*\z}s;
+my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:$DENY_SH_OPT\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
+# The text before a heredoc a shell runs, within its part: `[path/]bash`, `sh -s`, `bash -o
+# pipefail`, `ssh [options] host [command]`. A shell given a command (`bash -c "…" <<EOF`) is
+# none: the heredoc feeds that command.
+my $DENY_RUNNER = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh(?:\s+$DENY_SH_OPT)*|(?:\S*/)?ssh\s.*?)\s*\z}s;
 
 # _deny_mask(text) -> (masked text, [quoted texts]): quoted text holding a space becomes a
 # numbered mark; quoted text with none stays, unquoted.
@@ -380,8 +382,6 @@ sub _deny_bash {
     for my $p (grep { /\S/ } split /&&|\|\||[;|&\n]/, $s) {
         (my $bare = $p) =~ s/\x01\d+\x01/ /g;
         push @parts, $bare;
-        my $outward = _deny_outward($bare);
-        push @out, $bare if $outward;
         my (@marks, $ran);
         while ($p =~ /\x01(\d+)\x01/g) { push @marks, [ $1, substr($p, 0, $-[0]) ] }
         for my $m (@marks) {
@@ -391,7 +391,7 @@ sub _deny_bash {
             push @out, _deny_bash($q[$n]);
             $ran = 1;
         }
-        push @out, $bare if $ran && !$outward;
+        push @out, $bare if $ran || _deny_outward($bare);
     }
     for my $r (@run) {
         my ($runner, $body) = @$r;
