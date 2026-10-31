@@ -1718,6 +1718,36 @@ for (const c of [
   })
 }
 
+// The drop path guards both resumes as the throw path does: a store read in resumeIdle that
+// rejects leaves keep-warm's ping timer to resume all the same.
+test('AT-KW-54: a prompt a hook drops at 70 min while the compaction is held, and resumeIdle\'s store read rejects: keep-warm still resumes, pings at 100, at the cutoff it runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 70)
+  let failed = 0
+  w.dropIf = () => {
+    // Armed at the bottom, so only the reads after the drop (resumeIdle's) reject, once.
+    w.storeGetFails = k => k === KEY && failed++ === 0
+    return 'a peer dropped it'
+  }
+  await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never).catch(() => undefined)
+  await w.settle()
+  w.dropIf = undefined
+  w.storeGetFails = undefined
+  expect(failed).toBeGreaterThan(0)
+  await until(w, t0, 149)
+  expect(f.at).toEqual([50, 100])
+  expect(skips(w)).toEqual([['keep-warm', 'compact']])
+  expect(selfCompacts(w)).toBe(0)
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  expect(selfCompacts(w)).toBe(1)
+})
+
 test('AT-KW-54: native on, a prompt a hook drops at 30 min: the 55.5-min check is held, and at the cutoff it compacts while warm (agents 1)', { options: ON }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w)
