@@ -36,7 +36,7 @@ IFS=" $_tab$_nl"
 _self0=$0
 _me=afk-compact
 _proto=1
-_launcher_version='0.1.1'
+_launcher_version='0.1.2'
 _via=
 _ld=
 
