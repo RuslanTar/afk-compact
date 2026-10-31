@@ -18,7 +18,7 @@
    "invalid": ["protected_branches:1", "protected_branches:2", "protected_branches:3", "protected_branches:4", "protected_branches:5", "protected_branches:6", "protected_branches:7", "protected_branches:8", "protected_branches:9", "protected_branches:10", "protected_branches:11", "protected_branches:12", "protected_branches:13"]}},
   {"name": "the 33rd entry is ignored", "lib": "settings_protected", "args": {"values": {"protected_branches": "b1;b2;b3;b4;b5;b6;b7;b8;b9;b10;b11;b12;b13;b14;b15;b16;b17;b18;b19;b20;b21;b22;b23;b24;b25;b26;b27;b28;b29;b30;b31;b32;b33"},
    "user": 32, "matches": {"b32": "user-branch-32", "b1": "user-branch-1", "b33": null}, "invalid": ["protected_branches:33"]}},
-  {"name": "export: the entry count only", "lib": "settings_export", "args": {"home": "/Users/someone",
+  {"name": "export: the entry count only", "lib": "settings_export", "args": {"home": "$TMP/someone",
    "values": {"protected_branches": "qa-env;uat/*;!main"}, "want": {"protected_branches": 3}}},
   {"name": "status: default",
    "argv": ["status", "--sid", "$SID"],

@@ -1,0 +1,22 @@
+{
+ "id": "AT-SW-05 (settings writer: set and reset land in the case's temp HOME)",
+ "owner": "core",
+ "note": "HOME-GUARD (0.1.2): `settings set --apply` and `settings reset --apply` write ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json; under this runner that is the case's temp $HOME/.claude/settings.json, with no CLAUDE_CONFIG_DIR. The real settings files (the real HOME's and the account's ~/.claude/settings.json, and the CLAUDE_CONFIG_DIR one the runner started with) keep their sha256, or stay absent, across both writes, and the runner's own temp HOME gets no .claude",
+ "steps": [
+  {"name": "the real settings before", "lib": "real_settings", "args": {"save": "REAL_BEFORE"}},
+  {"setup": [{"write": "$HOME/.claude/settings.json", "mode": "0644",
+              "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 300000\n      }\n    }\n  }\n}\n"}]},
+  {"name": "set: the write lands in the temp HOME",
+   "argv": ["settings", "set", "triggers=false", "--apply"],
+   "expect": {"exit": 0,
+              "stdout_has": ["^  triggers: default true -> false$", "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-"],
+              "files": [{"path": "$HOME/.claude/settings.json", "has": ["\"triggers\": false", "\"compact_target_tokens\": 300000"]}]}},
+  {"name": "the real settings after the set", "lib": "real_settings", "args": {"same_as": "REAL_BEFORE"}},
+  {"name": "reset: the member goes from the temp HOME's file",
+   "argv": ["settings", "reset", "triggers", "--apply"],
+   "expect": {"exit": 0,
+              "stdout_has": ["^settings reset: removed triggers from ~/\\.claude/settings\\.json ", "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-"],
+              "files": [{"path": "$HOME/.claude/settings.json", "has": ["\"compact_target_tokens\": 300000"], "lacks": ["triggers"]}]}},
+  {"name": "the real settings after the reset", "lib": "real_settings", "args": {"same_as": "REAL_BEFORE"}}
+ ]
+}

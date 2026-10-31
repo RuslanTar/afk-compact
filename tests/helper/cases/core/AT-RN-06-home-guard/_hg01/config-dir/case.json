@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-06-inner-config-dir",
+ "note": "run by AT-RN-06 only (discovery skips _ folders): a helper call whose CLAUDE_CONFIG_DIR lies outside the temp folders must be refused before it starts, so this case fails",
+ "env": {"CLAUDE_CONFIG_DIR": "/nonexistent-home-guard-cfg"},
+ "exec": ["/bin/sh", "-c", "exit 0"],
+ "expect": {"exit": 0}
+}

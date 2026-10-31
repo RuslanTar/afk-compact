@@ -104,6 +104,24 @@ require "util.pm";
 require "jsonc.pm";
 require "sha.pm";
 
+# HOME-GUARD (0.1.2): no case and no child of this runner reaches the owner's real HOME or
+# Claude Code config folder (a kit test elsewhere ran a planted hook with the real HOME and
+# wiped ~/.claude/settings.json to "{}"; lib/settings_write.pm writes
+# ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json). The real ones are read once, here, before
+# anything is localised: HOME as given and the account's home (getpwuid), each by real path, and
+# the CLAUDE_CONFIG_DIR given. Once its run dir exists the runner itself runs with a temp HOME
+# ($RUN_TMP/home) and no CLAUDE_CONFIG_DIR, each case with its own $HOME (run_case), and
+# home_guard() checks the environment of every child it starts before the fork.
+my $REAL_HOME = $ENV{HOME};
+my $REAL_CONFIG_DIR = $ENV{CLAUDE_CONFIG_DIR};
+my $ACCOUNT_HOME = (getpwuid($<))[7];
+my %REAL_HOMES = map { (util::real_path($_) => 1) } grep { defined && m{\A/} } ($REAL_HOME, $ACCOUNT_HOME);
+# the real config folders (real paths): each real home's .claude and the CLAUDE_CONFIG_DIR given
+my %REAL_CONFIGS = map { (util::real_path($_) => 1) } ((map { "$_/.claude" } keys %REAL_HOMES), grep { defined && m{\A/} } $REAL_CONFIG_DIR);
+# the temp folders a case's HOME and CLAUDE_CONFIG_DIR may lie under (real paths): the system
+# temp folder as given at start, /tmp, and the repo's tmp/ (tmp_base "repo"; --repo-tmp)
+my $START_TMPDIR = $ENV{TMPDIR};
+
 # DP-12: messages hold characters (decoded case text and helper output); raw bytes are
 # decoded before they are printed (see say_raw), so nothing prints "Wide character".
 binmode(STDOUT, ':encoding(UTF-8)');
@@ -167,7 +185,10 @@ sub types_file {
 }
 
 sub find_claude_bin {
-    my $vdir = util::home() . '/.local/share/claude/versions';
+    # the real home's install (read only; HOME-GUARD: the cases' HOME is a temp folder), else the
+    # account's (a child run of this runner starts with a case's temp HOME)
+    my ($vdir) = grep { -d } map { "$_/.local/share/claude/versions" } grep { defined && $_ ne '' } ($REAL_HOME, $ACCOUNT_HOME);
+    return '' unless defined $vdir;
     my @v = sort { my @x = split /\./, $a; my @y = split /\./, $b; $x[0] <=> $y[0] || $x[1] <=> $y[1] || $x[2] <=> $y[2] }
             grep { /^\d+\.\d+\.\d+$/ } util::list_dir($vdir);
     return @v ? "$vdir/$v[-1]" : '';
@@ -181,6 +202,12 @@ $RUN_TMP = do {
     util::mkdir_p($d);
     $d;
 };
+# HOME-GUARD: from here on the runner's own HOME is a temp folder of its run dir and no
+# CLAUDE_CONFIG_DIR is set, so a child started outside a case (staging, a needs check) and any
+# helper code run in-process get no real home either; run_case gives each case its own $HOME.
+util::mkdir_p("$RUN_TMP/home");
+$ENV{HOME} = "$RUN_TMP/home";
+delete $ENV{CLAUDE_CONFIG_DIR};
 my %STAGE_INFO;
 my $STAGE = stage_plugin("$RUN_TMP/stage/plugin");
 sub repo_tmp {
@@ -213,7 +240,7 @@ sub lstart_in {
     my $key = "$pid " . (defined $tz ? "=$tz" : '-');
     return $LSTART{$key} if defined $LSTART{$key};
     for my $try (1, 2) {
-        my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
+        my $r = run_cmd(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
         (my $v = $r->{out} // '') =~ s/\s+/ /g;
         $v =~ s/\A | \z//g;
         $v = proc_lstart($pid, $tz) // '' unless $v =~ $LSTART_RE;
@@ -376,7 +403,7 @@ sub stage_plugin {
     if (!-f "$dst/assets/canary-baseline.json") {
         my $types = $ENV{CC_TYPES_DIR} ? "$ENV{CC_TYPES_DIR}/claude-code.d.ts" : "$REPO/.types/claude-code.d.ts";
         if (-f $types && -x "$REPO/tools/canary-baseline") {
-            my $r = util::run(["$REPO/tools/canary-baseline", '--types', $types, '--out', "$dst/assets/canary-baseline.json"],
+            my $r = run_cmd(["$REPO/tools/canary-baseline", '--types', $types, '--out', "$dst/assets/canary-baseline.json"],
                               timeout_ms => 120000);
             $STAGE_INFO{baseline} = $r->{exit} == 0 ? 'generated' : 'unavailable';
         } else {
@@ -633,6 +660,10 @@ sub run_case {
     # "tmp_norm": false (a JSON false; any other value keeps the count)
     $V{TMP_NORM} = $tb eq 'repo' || (jsonc::is_bool($case->{tmp_norm}) && !$case->{tmp_norm}) ? 0 : 1;
     $V{HOME} = "$V{TMP}/home";
+    # HOME-GUARD: the case's temp HOME for everything the case runs, in-process (builtins) or as
+    # a child (a helper call gets it through child_env; git, ps and child runs inherit it)
+    local $ENV{HOME} = $V{HOME};
+    delete local $ENV{CLAUDE_CONFIG_DIR};
     $V{SID} = $case->{sid} // $DEFAULT_SID;
     $V{SID8} = substr($V{SID}, 0, 8);
     $V{PLUGIN} = $STAGE;
@@ -859,7 +890,7 @@ sub git_env {
 sub git_run {
     my ($dir, $V, @a) = @_;
     my $git = util::which('git') // '/usr/bin/git';
-    my $r = util::run([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
+    my $r = run_cmd([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
     die "git @a failed in $dir\n" unless $r->{exit} == 0;
     return $r->{out};
 }
@@ -1006,7 +1037,7 @@ sub fixture_repo {
         @env{qw(GIT_AUTHOR_DATE GIT_COMMITTER_DATE)} = ($au->{date}) x 2 if $au->{date};
     }
     my $git = util::which('git') // '/usr/bin/git';
-    my $g = sub { my $r = util::run([$git, '-C', $at, @_], timeout_ms => 20000, env => \%env); die "git @_ failed in $at\n" unless $r->{exit} == 0 };
+    my $g = sub { my $r = run_cmd([$git, '-C', $at, @_], timeout_ms => 20000, env => \%env); die "git @_ failed in $at\n" unless $r->{exit} == 0 };
     my @ign = sort keys %{ $rc->{ignored_files} || {} };
     if (!defined $rc->{git} || $rc->{git}) {
         $g->('init', '-q', '-b', $rc->{branch} // 'main');
@@ -1217,7 +1248,7 @@ sub setup {
     if (exists $s->{repo} && ref $s->{repo} eq 'HASH') { make_repo($s->{repo}, $s->{at}, $V); return }
     if (exists $s->{git}) {
         my $dir = $s->{cwd} // $V->{TMP};
-        my $r = util::run([util::which('git') // '/usr/bin/git', @{ $s->{git} }], timeout_ms => 20000, cwd => $dir,
+        my $r = run_cmd([util::which('git') // '/usr/bin/git', @{ $s->{git} }], timeout_ms => 20000, cwd => $dir,
                           env => { %{ git_env($V) }, %{ $s->{env} || {} } });
         die "git @{ $s->{git} }: exit $r->{exit}\n" unless $r->{exit} == 0;
         if ($s->{var}) { (my $o = $r->{out}) =~ s/\s+\z//; $V->{ $s->{var} } = $o }
@@ -1353,9 +1384,65 @@ sub stdin_of {
     return '';
 }
 
+# ---------------------------------------------------------------- HOME-GUARD
+# under_temp(path) -> 1 when the path's real path lies strictly under a temp folder: the system
+# temp folder the runner started with ($TMPDIR), /tmp, or the repo's tmp/ (--repo-tmp).
+my @TEMP_ROOTS;
+sub under_temp {
+    my ($p) = @_;
+    my $r = util::real_path($p) // return 0;
+    @TEMP_ROOTS = grep { $_ ne '' } map { (my $t = util::real_path($_) // '') =~ s{/+\z}{}; $t }
+                  grep { defined && m{\A/} } ($START_TMPDIR, '/tmp', $REPO_TMP_BASE) unless @TEMP_ROOTS;
+    return (grep { index($r, "$_/") == 0 } @TEMP_ROOTS) ? 1 : 0;
+}
+
+# home_guard(env, what): dies before `what` starts when its environment (a hash: the whole
+# environment the child gets) could reach the owner's real HOME or config folder: HOME unset or
+# empty (the helper would use the account's home, util::home), HOME the real HOME or the
+# account's home (by real path: a link to it is refused too) or not under a temp folder;
+# CLAUDE_CONFIG_DIR set and not under a temp folder (a leading ~ read as the child's HOME), or at
+# or under a real home's .claude or the config folder the runner started with (by real path:
+# TMPDIR=$HOME puts the real ~/.claude under a "temp" folder).
+sub home_guard {
+    my ($env, $what) = @_;
+    my $h = $env->{HOME};
+    die "HOME-GUARD: $what: no HOME (the helper would use the account's home); not started\n" unless defined $h && $h ne '';
+    my $rh = util::real_path($h) // '';
+    die "HOME-GUARD: $what: HOME $h is the real home; not started\n" if $REAL_HOMES{$rh};
+    die "HOME-GUARD: $what: HOME $h is not under a temp folder; not started\n" unless under_temp($h);
+    my $c = $env->{CLAUDE_CONFIG_DIR};
+    if (defined $c && $c ne '') {
+        (my $x = $c) =~ s{\A~(?=/|\z)}{$h};
+        my $rc = $x =~ m{\A/} ? util::real_path($x) // '' : '';
+        die "HOME-GUARD: $what: CLAUDE_CONFIG_DIR $c is the real config folder; not started\n"
+            if grep { $rc eq $_ || index($rc, "$_/") == 0 } keys %REAL_CONFIGS;
+        die "HOME-GUARD: $what: CLAUDE_CONFIG_DIR $c is not under a temp folder; not started\n" unless $x =~ m{\A/} && under_temp($x);
+    }
+    return 1;
+}
+
+# case_home(path) -> the path, for a builtin's declared "home": dies unless a child given it as
+# HOME passes home_guard (a temp folder, never the real home).
+sub case_home {
+    my ($h) = @_;
+    home_guard({ HOME => $h }, 'declared home');
+    return $h;
+}
+
+# run_cmd(argv, util::run options): util::run (whose child inherits this process's environment,
+# with `env` laid over it) once home_guard passes that environment.
+sub run_cmd {
+    my ($argv, %o) = @_;
+    my %env = %ENV;
+    for my $k (keys %{ $o{env} || {} }) { if (defined $o{env}{$k}) { $env{$k} = $o{env}{$k} } else { delete $env{$k} } }
+    home_guard(\%env, $argv->[0]);
+    return util::run($argv, %o);
+}
+
 # Start one helper process; returns {pid, out_r}
 sub spawn {
     my ($argv, $env, $stdin, $outf, $errf, $cwd) = @_;
+    home_guard($env, "helper $argv->[0]");
     my $pid = fork();
     die "fork: $!\n" unless defined $pid;
     if ($pid == 0) {
@@ -1456,7 +1543,7 @@ sub docker_image {
     my ($ref) = @_;
     return $DOCKER_IMAGE{$ref} if exists $DOCKER_IMAGE{$ref};
     my $docker = util::which('docker');
-    my $r = $docker ? util::run([$docker, 'image', 'inspect', '--format', '{{.Id}}', $ref], timeout_ms => 20000) : { exit => 1 };
+    my $r = $docker ? run_cmd([$docker, 'image', 'inspect', '--format', '{{.Id}}', $ref], timeout_ms => 20000) : { exit => 1 };
     return $DOCKER_IMAGE{$ref} = $r->{exit} == 0 ? 1 : 0;
 }
 
@@ -1473,6 +1560,7 @@ sub u06_within {
     my $cpu_timer = eval { require Time::HiRes; die "no setitimer\n" unless defined &Time::HiRes::setitimer; Time::HiRes::ITIMER_PROF(); 1 } ? 1 : 0;
     my $wall = $cpu_timer ? 6 * $secs : $secs;
     pipe(my $r, my $w) or return ("pipe: $!");
+    home_guard(\%ENV, 'u06 check child');
     my $pid = fork();
     return ("fork: $!") unless defined $pid;
     if ($pid == 0) {
@@ -1933,6 +2021,7 @@ sub u06_check {
             userre::limits($sig eq 'TERM' ? 2 : 1, 5) if $have;
             unlink $pidf;
             my $ents = [{ re => $starts->($pidf), at => 1 }];
+            home_guard(\%ENV, 'u06 orphan child');
             my $g0 = util::clock_ms();
             my $pid = fork();
             return ("fork: $!") unless defined $pid;
@@ -1960,6 +2049,7 @@ sub u06_check {
         # go of the lock (a fixed 300 ms on a busy machine), the lock was still held, rightly
         my $f = "$RUN_TMP/u06-lock-$$";
         my $ents = [{ re => $starts->("$f.pid"), at => 1 }];
+        home_guard(\%ENV, 'u06 lock child');
         my $t0 = util::clock_ms();
         my $pid = fork();
         return ("fork: $!") unless defined $pid;
@@ -2574,6 +2664,9 @@ sub claude_pid_walk_chains {
 sub builtin {
     my ($name, $a, $cdir) = @_;
     _libs();
+    # HOME-GUARD: a builtin runs the helper's code in this process, which may start children of
+    # its own (git, a pattern child); a declared "home" goes through case_home
+    home_guard(\%ENV, "builtin $name");
     my @e;
     if ($name eq 'detect_tsv') {
         my $tsv = src_file($a->{tsv}, $cdir);
@@ -2901,7 +2994,7 @@ sub builtin {
             my $td = ($a->{tmp} // die "runner_cleanup: no tmp\n") . "/childtmp-$t->[0]";
             util::mkdir_p($td);
             my %before = map { ($_ => 1) } $dirs->($base);
-            my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", "$cdir/_$t->[0]"], timeout_ms => 180000,
+            my $r = run_cmd(['/usr/bin/perl', "$HERE/run.pl", "$cdir/_$t->[0]"], timeout_ms => 180000,
                               env => { TMPDIR => $td });
             my @new_repo = grep { !$before{$_} } $dirs->($base);
             my @new_tmp = $dirs->($td);
@@ -2940,7 +3033,7 @@ sub builtin {
         my $V = $_[3];
         for my $p ([LSTART1 => 1], [RUNNER_LSTART => $$]) {
             my ($n, $pid) = @$p;
-            my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C' });
+            my $r = run_cmd(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C' });
             (my $want = $r->{out} // '') =~ s/\s+/ /g;
             $want =~ s/\A | \z//g;
             $want = proc_lstart($pid, $ENV{TZ}) // '' unless $want =~ $LSTART_RE;
@@ -2963,7 +3056,7 @@ sub builtin {
         my @targets = @cases ? (map { "$HERE/cases/$_" } @cases) : ("$cdir/$dir");
         my $td = $a->{tmpdir} // (($a->{tmp} // die "runner_child: no tmp\n") . '/child-' . util::rand_hex(4));
         util::mkdir_p($td);
-        my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", @targets], timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { TMPDIR => $td });
+        my $r = run_cmd(['/usr/bin/perl', "$HERE/run.pl", @targets], timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { TMPDIR => $td });
         my $out = chars($r->{out} // '');
         if (defined $a->{tmpdir}) {
             my ($kept) = $out =~ /^# kept: ([^\n]*)$/m;
@@ -2972,6 +3065,85 @@ sub builtin {
         }
         push @e, "child run of $dir: exit $r->{exit}, want " . ($a->{exit} // 0) . ': ' . substr($out, -600) if $r->{exit} != ($a->{exit} // 0);
         for my $re (@{ $a->{stdout_has} || [] }) { push @e, "child run of $dir: output has no /$re/: " . substr($out, -600) unless $out =~ /$re/m }
+        return @e;
+    }
+    if ($name eq 'home_guard') {
+        # AT-RN-06 (HOME-GUARD): inside a case this runner's own HOME is the case's $HOME and no
+        # CLAUDE_CONFIG_DIR is set; home_guard refuses, before the fork, a helper call (spawn) and
+        # a command (run_cmd) whose environment could reach the real home or config folder: the
+        # real HOME, the account's home, a link to it, no HOME, an empty HOME, a HOME outside the
+        # temp folders, a CLAUDE_CONFIG_DIR at the real ~/.claude or not absolute; a declared home
+        # (case_home) at the account's home; with TMPDIR at the account's home, a CLAUDE_CONFIG_DIR
+        # at its .claude. The child is `true`, so a guard that lets one through starts nothing
+        # that reads or writes a home. A temp HOME, with or without a CLAUDE_CONFIG_DIR under it,
+        # starts.
+        my $V = $_[3];
+        my $tmp = $a->{tmp} // die "home_guard: no tmp\n";
+        push @e, "runner HOME is " . ($ENV{HOME} // '(unset)') . ", want the case's $V->{HOME}" unless ($ENV{HOME} // '') eq $V->{HOME};
+        push @e, "runner HOME $ENV{HOME} is a real home" if defined $ENV{HOME} && $REAL_HOMES{ util::real_path($ENV{HOME}) // '' };
+        push @e, "runner CLAUDE_CONFIG_DIR is set ($ENV{CLAUDE_CONFIG_DIR})" if defined $ENV{CLAUDE_CONFIG_DIR};
+        my $acct = $ACCOUNT_HOME // die "home_guard: no account home\n";
+        symlink($acct, "$tmp/link-home") or die "home_guard: symlink: $!\n" unless -l "$tmp/link-home";
+        my $th = $V->{HOME};
+        my $true = -x '/usr/bin/true' ? '/usr/bin/true' : '/bin/true';
+        my @bad = (["the account's home", { HOME => $acct }], ['a link to the account home', { HOME => "$tmp/link-home" }],
+                   ['no HOME', { HOME => undef }], ['an empty HOME', { HOME => '' }],
+                   ['a HOME outside the temp folders', { HOME => '/nonexistent-home-guard' }],
+                   ['CLAUDE_CONFIG_DIR at the real ~/.claude', { HOME => $th, CLAUDE_CONFIG_DIR => "$acct/.claude" }],
+                   ['a relative CLAUDE_CONFIG_DIR', { HOME => $th, CLAUDE_CONFIG_DIR => 'cfg' }]);
+        unshift @bad, ['the real HOME', { HOME => $REAL_HOME }] if defined $REAL_HOME && $REAL_HOME =~ m{\A/} && $REAL_HOMES{ util::real_path($REAL_HOME) };
+        my $n = 0;
+        for my $b (@bad, map { [$_->[0], $_->[1], 'ok'] } (['a temp HOME', { HOME => $th }], ['a CLAUDE_CONFIG_DIR under the temp HOME', { HOME => $th, CLAUDE_CONFIG_DIR => '~/.claude' }])) {
+            my ($what, $over, $ok) = @$b;
+            my %env = (PATH => '/usr/bin:/bin', TMPDIR => "$tmp/tmpdir", %$over);
+            delete $env{$_} for grep { !defined $env{$_} } keys %env;
+            $n++;
+            my $pid = eval { spawn([$true], \%env, '', "$tmp/hg-out-$n", "$tmp/hg-err-$n", $tmp) };
+            my $err = $@;
+            if ($pid) { waitpid($pid, 0); delete $KIDS{$pid} }
+            my $r = eval { run_cmd([$true], env => { HOME => undef, CLAUDE_CONFIG_DIR => undef, %$over }) };
+            my $rerr = $@;
+            if ($ok) {
+                push @e, "$what: the helper call was refused: $err" if $err;
+                push @e, "$what: the command was refused: $rerr" if $rerr;
+                next;
+            }
+            push @e, "$what: the helper call started (pid $pid), want HOME-GUARD" if $pid;
+            push @e, "$what: the helper call died with '$err', want HOME-GUARD" if !$pid && $err !~ /\AHOME-GUARD: /;
+            push @e, "$what: the command ran (exit $r->{exit}), want HOME-GUARD" if $r;
+            push @e, "$what: the command died with '$rerr', want HOME-GUARD" if !$r && $rerr !~ /\AHOME-GUARD: /;
+        }
+        # a runner started with TMPDIR=$HOME: the real ~/.claude lies under a "temp" folder and is
+        # still refused (the temp folders put back after)
+        {
+            (undef) = under_temp($th);
+            my @was = @TEMP_ROOTS;
+            @TEMP_ROOTS = (util::real_path($acct));
+            my $ok = eval { home_guard({ HOME => "$acct/home-guard-none", CLAUDE_CONFIG_DIR => "$acct/.claude" }, 'TMPDIR at home'); 1 };
+            my $err = $@;
+            @TEMP_ROOTS = @was;
+            push @e, "TMPDIR the account's home: CLAUDE_CONFIG_DIR at its .claude was taken" if $ok;
+            push @e, "TMPDIR the account's home: died with '$err', want the real config folder" if !$ok && $err !~ /\AHOME-GUARD: .* is the real config folder; /;
+        }
+        push @e, "a declared home at the account's home was taken" if eval { case_home($acct); 1 };
+        push @e, "a declared home under the case was refused: $@" unless eval { case_home("$tmp/h1"); 1 };
+        return @e;
+    }
+    if ($name eq 'real_settings') {
+        # AT-SW-05 (HOME-GUARD): the real settings files, the real HOME's and the account's
+        # ~/.claude/settings.json and the CLAUDE_CONFIG_DIR one the runner started with, by sha256
+        # ("absent" for a missing one), never written: "save" keeps their state in a case var,
+        # "same_as" compares it with such a var. The runner's own temp HOME holds no .claude.
+        my $V = $_[3];
+        my %f = map { ($_ => 1) } grep { defined } ((map { defined && m{\A/} ? "$_/.claude/settings.json" : undef } ($REAL_HOME, $ACCOUNT_HOME)),
+                                                     (defined $REAL_CONFIG_DIR && $REAL_CONFIG_DIR ne '' ? "$REAL_CONFIG_DIR/settings.json" : undef));
+        my $state = join("\n", map { my $d = -e $_ ? sha::hex256_file($_) : 'absent'; "$_ " . ($d // 'unreadable') } sort keys %f);
+        if (defined $a->{save}) { $V->{ $a->{save} } = $state }
+        if (defined $a->{same_as}) {
+            my $was = $V->{ $a->{same_as} } // return ("real_settings: no saved $a->{same_as}");
+            push @e, "real settings changed: was [$was], now [$state]" if $was ne $state;
+        }
+        push @e, "the runner's temp HOME holds $RUN_TMP/home/.claude" if -e "$RUN_TMP/home/.claude";
         return @e;
     }
     if ($name eq 'runner_hygiene') {
@@ -2986,7 +3158,7 @@ sub builtin {
         my $work = sub { my ($d) = @_; return map { "$d/$_" } grep { /\Astore-h-\d+-[0-9a-f]{6}\z/ } util::list_dir($d) };
         my $child = sub {
             my (@extra) = @_;
-            return util::run(['/usr/bin/perl', "$HERE/run.pl", '--repo-tmp', $rt, @extra], timeout_ms => 180000, env => { TMPDIR => $td });
+            return run_cmd(['/usr/bin/perl', "$HERE/run.pl", '--repo-tmp', $rt, @extra], timeout_ms => 180000, env => { TMPDIR => $td });
         };
         if ($which eq '01') {
             my $r = $child->("$cdir/_rn01");
@@ -3007,6 +3179,7 @@ sub builtin {
             remove_tree($_, $td) for @w;
         } elsif ($which eq '03') {
             for my $keep (0, 1) {
+                home_guard({ %ENV, TMPDIR => $td }, 'child run');
                 my $pid = fork();
                 die "fork: $!\n" unless defined $pid;
                 if ($pid == 0) {
@@ -3226,7 +3399,7 @@ sub builtin {
         # one row per manifest userConfig key and no other, each in exactly one section's key
         # list, with the manifest's title, default, min and max (read here from the staged
         # plugin.json, not through settings.pm); `unsectioned` is empty.
-        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        local $ENV{HOME} = case_home($a->{home}) if defined $a->{home};
         local $ENV{CLAUDE_CONFIG_DIR};
         local $ENV{CLAUDE_PLUGIN_ROOT};
         delete local @ENV{ grep { /^CLAUDE_PLUGIN_OPTION_/ } keys %ENV };
@@ -3270,7 +3443,7 @@ sub builtin {
         # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).
         my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };
         push @e, 'keys without an export class: ' . join(', ', map { $_->[0] } @none) if @none;
-        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        local $ENV{HOME} = case_home($a->{home}) if defined $a->{home};
         # "noarg": export_view() with no argument (the watcher's report call, W2C-2). With
         # "values" the run context holds them; without, there is no run context (no rc::init)
         # and the view must still be the resolved settings, not empty values.
@@ -3357,6 +3530,7 @@ sub builtin {
         # whose parent is the runner, and the child sends its errors back on a pipe.
         if (getppid() <= 1) {
             pipe(my $rd, my $wr) or return ("claude_pid_walk: pipe: $!");
+            home_guard(\%ENV, 'claude_pid_walk child');
             my $kid = fork;
             return ("claude_pid_walk: fork: $!") unless defined $kid;
             if (!$kid) {
@@ -3399,9 +3573,9 @@ sub builtin {
                    '--read-only', '--tmpfs', '/tmp', '-e', 'LC_ALL=C', '-e', 'TZ=UTC', '-v', "$helper:/w/helper:ro",
                    $a->{image}, 'perl', '-', $a->{mb} // 32, $a->{steps} // 3);
         # docker's own errors (no such image, a path Docker cannot share) go to stdout too
-        my $r = util::run(['/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @run], stdin => $probe, timeout_ms => ($a->{timeout_s} // 120) * 1000);
+        my $r = run_cmd(['/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @run], stdin => $probe, timeout_ms => ($a->{timeout_s} // 120) * 1000);
         if ($r->{timed_out}) {
-            util::run([$docker, 'rm', '-f', $cname], timeout_ms => 30000);
+            run_cmd([$docker, 'rm', '-f', $cname], timeout_ms => 30000);
             push @e, "$a->{image}: timed out after " . ($a->{timeout_s} // 120) . ' s';
         }
         my $out = $r->{out} // '';
@@ -3545,7 +3719,7 @@ sub builtin {
         for my $c (@{ $a->{roots} || [] }) {
             delete local $ENV{XDG_STATE_HOME};
             $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
-            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            local $ENV{HOME} = defined $c->{home} ? case_home($c->{home}) : $ENV{HOME};
             my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'flag' } };
             my $p = paths::for($s, 'x');
             my $id = $c->{id} // ($c->{value} // 'unset');
@@ -3567,7 +3741,7 @@ sub builtin {
         for my $c (@{ $a->{disposable} || [] }) {
             delete local $ENV{XDG_STATE_HOME};
             $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
-            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            local $ENV{HOME} = defined $c->{home} ? case_home($c->{home}) : $ENV{HOME};
             my $s = { values => { handoff_root => $c->{handoff_root} // "/x/hr", log_dir => '', disposable_root => $c->{value} },
                       source => { handoff_root => 'flag', disposable_root => $c->{source} // 'flag' } };
             my $p = paths::for($s, 'x');
@@ -3614,7 +3788,7 @@ sub builtin {
         # its parent: a home reached through a symlink) reads as its copy under the new root
         for my $c (@{ $a->{follow} || [] }) {
             delete local $ENV{XDG_STATE_HOME};
-            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            local $ENV{HOME} = defined $c->{home} ? case_home($c->{home}) : $ENV{HOME};
             my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'default' } };
             my $got = paths::follow(paths::for($s, 'x')->{moved}, $c->{path});
             push @e, "$c->{id}: follow " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};
