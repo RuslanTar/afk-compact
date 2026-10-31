@@ -396,8 +396,9 @@ sub _clamp_flags {
 }
 
 # clamp_notes(plan) -> a note per number the clamp lowers once the plan's changes are in place
-# and did not before, or that the plan changes: the value is still written as given (the plugin
-# reads it so, and its clamp works the threshold out), never refused here.
+# and did not before, or that the plan changes (set: written as given; removed: put back to its
+# default): the value is still written so (the plugin reads it so, and its clamp works the
+# threshold out), never refused here.
 sub clamp_notes {
     my ($p) = @_;
     my $r = eval { settings::resolve({}) };
@@ -409,12 +410,12 @@ sub clamp_notes {
         my $raw = $c->{kind} eq 'remove' ? $r->{defaults}{ $c->{key} } : $c->{data};
         my $x = defined $raw ? settings::_coerce($c->{key}, $raw) : undef;
         $after{ $c->{key} } = $x if defined $x;
-        $changed{ $c->{key} } = 1 if $c->{kind} eq 'set';
+        $changed{ $c->{key} } = $c->{kind};
     }
     my $before = _clamp_flags($r, $r->{values}, $spec);
     my $now = _clamp_flags($r, \%after, $spec);
     my @k = grep { $now->{$_} && ($changed{$_} || !$before->{$_}) && ($settings::EXPORT{$_} // '') eq 'num' } map { $_->[0] } @settings::KEYS;
-    return map { "  note: $_: " . ($changed{$_} ? 'written as given' : 'not changed') . ", but with these settings the plugin's clamp lowers it (the target to at most two thirds of the soft max, both below what the window allows); /"
+    return map { "  note: $_: " . (!$changed{$_} ? 'not changed' : $changed{$_} eq 'remove' ? 'put back to its default' : 'written as given') . ", but with these settings the plugin's clamp lowers it (the target to at most two thirds of the soft max, both below what the window allows); /"
                  . ctx::brand() . ':status shows the value it uses' } @k;
 }
 
