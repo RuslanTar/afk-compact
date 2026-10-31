@@ -2501,6 +2501,15 @@ sub builtin {
         local *assemble::asset = sub { my ($n, $tags, $rt) = @_; @seen = @{ $tags || [] };
                                        return ('P' x ($a->{protocol_chars} // 3000)) . "\n" . ('F' x ($a->{frame_chars} // 300)) . "\n" . ($rt->{remeasure} // '') };
         local %rc::R = (settings => { values => { unattended_prod_reads => $a->{reads} // 'forbid' } });
+        # D-22: a main Stop of this session (restart::note_stop, as on_Stop keeps it) in stop_mode,
+        # from a subagent when stop_agent is set; the block reads its mode for [auto-mode].
+        if (defined $a->{stop_mode}) {
+            require "restart.pm";
+            my $w = $a->{tmp} // die "resume_block: stop_mode needs tmp\n";
+            util::mkdir_p("$w/x");
+            restart::note_stop("$w/x", { permission_mode => $a->{stop_mode}, ($a->{stop_agent} ? (agent_id => 'a1') : ()) });
+            @rc::R{qw(watch sid)} = ($w, 'x');
+        }
         my $n = int(($a->{remeasure_bytes} // 3000) / 100);
         my $re = join("\n", map { sprintf('%-99s', "fact $_") } 1 .. $n);
         my $t = resumeblock::build(sid => 'x', midturn => $a->{midturn}, nonok => $a->{nonok}, saved_copy => 'p', measured_at => 'now', remeasure => $re);

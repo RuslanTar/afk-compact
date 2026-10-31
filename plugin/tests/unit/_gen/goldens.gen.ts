@@ -38,4 +38,4 @@ export type Golden = { asset: string; tags: readonly string[]; parts: readonly s
 
 export const GOLDENS: readonly Golden[] = [...ROWS_1, ...ROWS_2, ...ROWS_3, ...ROWS_4, ...ROWS_5]
 
-export const GOLDEN_COUNT = 327
+export const GOLDEN_COUNT = 331

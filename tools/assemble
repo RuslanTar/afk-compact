@@ -143,9 +143,11 @@ FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
 # 0.1.2: resume-context gains [question] (question carry, investigation wf_c3788b4f-00e fix 1: the
 # question a main turn ended on that no person's turn has followed yet; beside any other tag), last
 # in the list so older golden names stay.
+# 2026-10-31: resume-context gains [auto-mode] (D-22, root: in auto permission mode the classifier
+# blocks a gated outward action a carried approval covers, so the block asks first), last in the list.
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
         "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
-                "idle-done", "idle-off", "idle-done-off", "handoff-ack", "question"],
+                "idle-done", "idle-off", "idle-done-off", "handoff-ack", "question", "auto-mode"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
@@ -369,12 +371,14 @@ def combos(asset):
 # Owner rule (c): [idle-off] and [idle-done-off] likewise (4 goldens each).
 # Owner 2026-10-30 07:49: [handoff-ack] only beside [handoff] and a prod line (2 goldens).
 # 0.1.2 [question]: only beside [prod-forbid] (1 golden: goldens.gen.ts had 13 KB left under the 1 MiB).
+# D-22 [auto-mode]: only beside a prod line and [midturn] (4 goldens).
 GOLDEN_SPARSE = {"res": {"handoff-ack": {"handoff", "prod-forbid", "prod-allow"},
                          "question": {"prod-forbid"},
                          "driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
                          "idle-done": {"prod-forbid", "prod-allow", "idle-again"},
                          "idle-off": {"prod-forbid", "prod-allow", "idle-again"},
-                         "idle-done-off": {"prod-forbid", "prod-allow", "idle-again"}}}
+                         "idle-done-off": {"prod-forbid", "prod-allow", "idle-again"},
+                         "auto-mode": {"prod-forbid", "prod-allow", "midturn"}}}
 
 
 def golden_combos(asset):
@@ -808,7 +812,9 @@ PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "
 PROTOCOL_ROWS += tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
 # 0.1.2 question carry: [question] can join any block, so every row is checked again with it.
 PROTOCOL_ROWS += tuple(b + ["question"] for b in PROTOCOL_ROWS)
-for base in PROTOCOL_ROWS:
+# D-22 [auto-mode] can join any block too (the mod saw auto permission mode), so every row is
+# checked again with it.
+for base in PROTOCOL_ROWS + tuple(b + ["auto-mode"] for b in PROTOCOL_ROWS):
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
     bad |= check(f"resume protocol {res_label(tags)}", s, "resume protocol")
 RUNTIME["remeasure"] = BLOCK
@@ -820,7 +826,7 @@ TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["i
 TOTAL_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"))
 TOTAL_ROWS += tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
 TOTAL_ROWS += tuple(b + ["question"] for b in TOTAL_ROWS)
-for base in TOTAL_ROWS:
+for base in TOTAL_ROWS + tuple(b + ["auto-mode"] for b in TOTAL_ROWS):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")
     bad |= check(f"  same vs SessionStart cutoff", resume_total, "sessionstart cutoff")

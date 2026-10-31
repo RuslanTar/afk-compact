@@ -59,6 +59,12 @@ export type BlockArgs = {
    * has followed yet, on one line within QUESTION_MAX: `[question]` quotes it.
    */
   question?: string
+  /**
+   * D-22 (root 2026-10-31): the newest main permission_mode the mod saw when the compaction built
+   * this block was `auto`. A build with no mode seen in its load (a block restored after
+   * `claude --resume`, before the first turn) reads this; else the load's own (`autoModeOf`).
+   */
+  autoMode?: boolean
 }
 
 /** The helper's `Active driver:` line (lib/gsd.pm) in a re-measure: `[driver]` is kept. */
@@ -91,6 +97,19 @@ export const REMEASURE_HELPER_MS = REMEASURE_MS - 300
  * checkpoint of this nonce (`consent.unattended_prod_reads`, the helper's settings-file value)
  * both say `allow`; the stricter view wins, so a missing checkpoint keeps `[prod-forbid]`.
  */
+/**
+ * D-22 (root 2026-10-31, 0.1.2 classifier probe): in auto permission mode the classifier blocks a
+ * gated outward action (push, destructive git, external write, deploy) that a carried approval
+ * covers, as with none, and passes the user's fresh yes; so the block keeps `[auto-mode]`, which
+ * asks first. The mode is the newest a main hook input carried in this load (Stop,
+ * UserPromptSubmit, PermissionRequest: restart.ts `noteMode`, D10); with none seen yet, the one
+ * the building compaction recorded. No new probe.
+ */
+export function autoModeOf(d: Pick<Deps, 'state'>, a: Pick<BlockArgs, 'autoMode'>): boolean {
+  const seen = d.state.modeSeen
+  return seen !== undefined ? seen.mode === 'auto' : a.autoMode === true
+}
+
 export function prodAllowed(option: string, consent: string | undefined): boolean {
   return option === 'allow' && consent === 'allow'
 }
@@ -151,6 +170,8 @@ export async function buildBlockWith(
   if (idle && a.again !== undefined) tags.push('idle-again')
   // Exactly one of the two step-4 lines (BLD-04 exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
+  // D-22: in auto mode a carried approval does not pass the classifier; ask first.
+  if (autoModeOf(d, a)) tags.push('auto-mode')
   // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver,
   // never in a halted idle block ([idle-halt] stops and waits for the user; EXCLUSIVE in tools/assemble).
   // A measured driver keeps the lane working (lane.ts), so it never meets [idle-done] (or its off

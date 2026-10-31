@@ -130,7 +130,7 @@ const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
   'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done',
-    'idle-off', 'idle-done-off', 'handoff-ack', 'question'],
+    'idle-off', 'idle-done-off', 'handoff-ack', 'question', 'auto-mode'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
   'trial-old-handoff': ['trial-tail'],
@@ -200,11 +200,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // step-5 digest carries the code-rendered Basis line too, owner 2026-10-27 22:32; 4,657 since
   // release-0.1.0's [driver] line names the workflow file a GSD loop command loads; 4,907 since
   // [handoff-ack] and [handoff-partial] carry the one-line handoff ack, owner 2026-10-30 07:49; 5,373
-  // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars).
-  test('resume protocol ≤5,373 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars;
+  // 5,580 since D-22's [auto-mode] line, root 2026-10-31).
+  test('resume protocol ≤5,580 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 5373).toBe(true)
+      expect(s.length <= 5580).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

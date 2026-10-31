@@ -25,12 +25,15 @@ import type { AssetName } from './assets.gen'
  * compaction": a published handoff whose report was not sent gets one ack line; only with `handoff`).
  * 0.1.2: the resume block's `question` (question carry, investigation wf_c3788b4f-00e fix 1: the
  * question a main turn ended on that no person's turn has followed yet; beside any other tag).
+ * 2026-10-31: the resume block's `auto-mode` (D-22, root: in auto permission mode the classifier
+ * blocks a gated outward action a carried approval covers, so the block asks first; kept only
+ * when the mod saw auto as the newest main permission mode, `autoModeOf` in resume.ts).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
-  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off' | 'handoff-ack' | 'question'
+  | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off' | 'handoff-ack' | 'question' | 'auto-mode'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
