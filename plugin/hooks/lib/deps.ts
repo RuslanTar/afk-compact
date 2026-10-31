@@ -420,6 +420,10 @@ export type LoadState = {
    * reading the clock when a turn started, a prompt entered or the session ended re-arms nothing.
    */
   idleGen: number
+  /** The `atLoad` of the timer `schedule` armed last (§3.4): a prompt a hook drops re-arms it alike (`resumeIdle`). */
+  idleAtLoad: boolean
+  /** Fires of this load's idle timer under way (a count): `resumeIdle` arms no second timer beside one. */
+  idleFiring: number
   /**
    * The sid whose `idle_due` this load wrote or re-armed and has not cleared yet. Kept apart
    * from `idleTimer`: the hooks cancel the timer synchronously before `cancelIdle` runs.
@@ -703,6 +707,8 @@ export function newState(loadId: string): LoadState {
     idleEnvMemo: undefined,
     idleTimer: undefined,
     idleGen: 0,
+    idleAtLoad: false,
+    idleFiring: 0,
     idleDueSid: undefined,
     idleTombDeletes: new Map(),
     idleEpisode: undefined,

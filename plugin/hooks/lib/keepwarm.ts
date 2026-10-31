@@ -58,7 +58,9 @@
 // - `keepWarmGen` counts what disturbs a gap (a turn or prompt, the session's end, a new gap, a
 //   stop); the ping timer's own re-arm does not bump it. Every step that awaits takes it first and
 //   returns where it changed, and a gap's stop row waits for its start row. A prompt a hook drops
-//   re-arms the timer (`resumeKeepWarm`), or, while a tick runs, leaves the gap to that tick.
+//   re-arms the timer (`resumeKeepWarm`), or, while a tick runs, leaves the gap to that tick; the
+//   idle timer it cancelled runs again too (idle.ts `resumeIdle`), so the record `no-idle-path`
+//   reads in the store still has its fire, and the hand-over a taker.
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
 // the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
 // since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover}` per gap

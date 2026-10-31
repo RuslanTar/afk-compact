@@ -6,9 +6,12 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
+import type { Deps } from '../../hooks/lib/deps'
+import type { Due } from '../../hooks/lib/idle'
 import { hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
-import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION } from '../../hooks/lib/idle'
+import { newState } from '../../hooks/lib/deps'
+import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION, resumeIdle, schedule } from '../../hooks/lib/idle'
 import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_PING_MS, forkOutcome } from '../../hooks/lib/keepwarm'
 import { SID_A, SID_B, T0, World } from './harness.test'
 
@@ -1679,4 +1682,124 @@ test('AT-KW-51: native on, warming, the check record cleared by another process 
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['no-idle-path', false, 1]])
   expect([skips(w), ic(w).length, selfCompacts(w)]).toEqual([[], 0, 0])
+})
+
+// ---- A prompt that enters and starts no turn leaves the idle timer running (round 7, fix 2).
+
+// The idle timer the entering prompt cancelled runs again for the record still in the store, so
+// keep-warm's no-idle-path check never reads a record with no fire behind it, and its hand-over
+// has a taker.
+for (const c of [
+  { name: 'a hook drops it', how: (w: World) => { w.dropIf = () => 'a peer dropped it' } },
+  { name: 'its submit throws', how: (w: World) => { w.atSubmit = async () => { throw new Error('submit failed') } } },
+]) {
+  test(`AT-KW-54: vetoed, a prompt at 30 min that starts no turn (${c.name}): the 54-min compaction still waits, pings at 50 and 100, at the cutoff it runs while warm`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w)
+    f.t0 = t0
+    await until(w, t0, 30)
+    c.how(w)
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never).catch(() => undefined)
+    await w.settle()
+    w.dropIf = undefined
+    w.atSubmit = undefined
+    await until(w, t0, 149)
+    expect(f.at).toEqual([50, 100])
+    expect(skips(w)).toEqual([['keep-warm', 'compact']])
+    expect(selfCompacts(w)).toBe(0)
+    await until(w, t0, 150)
+    expect(stops(w)).toEqual([['cutoff', true, 2]])
+    expect(ic(w).map(r => r.at)).toEqual(['timer'])
+    expect(selfCompacts(w)).toBe(1)
+    expect(refusals(w)).toEqual([])
+  })
+}
+
+test('AT-KW-54: native on, a prompt a hook drops at 30 min: the 55.5-min check is held, and at the cutoff it compacts while warm (agents 1)', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 30)
+  w.dropIf = () => 'a peer dropped it'
+  const r = await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never)
+  expect(r.drop).toBe('a peer dropped it')
+  w.dropIf = undefined
+  await until(w, t0, 240)
+  expect(f.at).toEqual([50, 100])
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-54: a prompt that starts no turn while the idle fire reads its record arms no second timer beside that fire (resumeIdle)', async () => {
+  const waits: number[] = []
+  const fns: (() => void)[] = []
+  let hold: (() => void) | undefined
+  let reads = 0
+  const state = newState('load-1')
+  const rec: Due = {
+    due: T0 + 54 * MIN, sid: SID_A, episode: null, kind: 'compact', end: T0, answer: true, published: false, load: 'load-1',
+    anchor: T0, tokens: 260000, ttl: '1h', pct: 30, cc: null, model: null,
+  }
+  const d = {
+    state, cfg: DEFAULTS,
+    after: (ms: number, fn: () => void) => {
+      waits.push(ms)
+      fns.push(fn)
+      return { cancel: () => undefined }
+    },
+    now: async () => T0 + 54 * MIN,
+    storeGet: async () => {
+      reads++
+      if (reads > 1) return rec
+      await new Promise<void>(r => { hold = r })
+      return undefined
+    },
+  } as unknown as Deps
+  state.idleDueSid = SID_A
+  schedule(d, rec, T0 + 54 * MIN)
+  expect(waits).toEqual([0])
+  fns[0]?.()
+  for (let i = 0; i < 50 && hold === undefined; i++) await Promise.resolve()
+  // The fire's own read of the record is out: a prompt dropped now re-arms nothing and reads nothing.
+  expect([state.idleFiring, reads]).toEqual([1, 1])
+  await resumeIdle(d)
+  expect([waits, reads, state.idleTimer]).toEqual([[0], 1, undefined])
+  hold?.()
+  await state.inflight
+  expect([state.idleFiring, waits]).toEqual([0, [0]])
+})
+
+// The idle fire's record counts as an idle path only while that fire asks keep-warm (`incoming`):
+// once a prompt arriving during that check moved the gap and the fire skipped busy (a tombstone in
+// the store), the gap a hook's drop resumes has no idle path, and its first ping refuses.
+test('AT-KW-55: the 49-min fire\'s check meets a prompt that enters (busy skip) and a hook then drops: the resumed gap refuses no-idle-path at 50, no fork', { options: ON }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  const f = forks(on, w)
+  const pp = pendingPrompt($, w)
+  let armed = false
+  const agents = w.agents
+  Object.defineProperty(w, 'agents', { configurable: true, get() { if (armed) pp.send(); return agents }, set() {} })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 48.9)
+  armed = true
+  await until(w, t0, 49.5)
+  armed = false
+  expect(pp.sent()).toBe(true)
+  expect(skips(w)).toEqual([['busy', 'turn']])
+  expect((w.storeGet(KEY) as Record<string, unknown>).cancelled).toBe(true)
+  await pp.drop()
+  await until(w, t0, 240)
+  expect(f.at).toEqual([])
+  expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_ping').length]).toEqual([0, 0])
+  expect(refusals(w)).toEqual([[0, 3000, false]])
+  expect(w.submits).toEqual(['hello'])
+  expect(skips(w)).toEqual([['busy', 'turn']])
 })

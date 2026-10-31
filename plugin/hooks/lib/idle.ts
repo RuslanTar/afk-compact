@@ -275,15 +275,42 @@ export async function cancelIdle(d: Deps, sid: string): Promise<void> {
 export function schedule(d: Deps, rec: Due, now: number, atLoad = false): void {
   cancelIdleTimer(d)
   const gen = d.state.idleGen
+  d.state.idleAtLoad = atLoad
   d.state.idleTimer = d.after(Math.max(0, Math.min(rec.due - now, IDLE_TICK_MS)), () => {
     d.state.idleTimer = undefined
     d.state.inflight = (async () => {
       const t = await d.now()
       if (d.state.idleGen !== gen) return
       if (t < rec.due) return schedule(d, rec, t, atLoad)
-      await fire(d, rec, t, atLoad)
+      d.state.idleFiring++
+      try {
+        await fire(d, rec, t, atLoad)
+      } finally {
+        d.state.idleFiring--
+      }
     })().catch(() => undefined)
   })
+}
+
+/**
+ * A prompt entering that started no turn (a hook dropped it, or its submit threw): the idle timer
+ * `prompt.submit` cancelled runs again for the record this load still has in the store, as it was
+ * armed (its due, its `atLoad`). Without it the record would stay there with no timer behind it:
+ * keep-warm would read an idle path that never comes, and its hand-over would be lost. Nothing for
+ * a record keep-warm holds (no timer of this load runs for it), one cleared or held by another
+ * load, or while a fire of this load runs (it takes the record); a turn, a prompt or an arm that
+ * comes during the read decides instead.
+ */
+export async function resumeIdle(d: Deps): Promise<void> {
+  const s = d.state
+  const sid = s.idleDueSid
+  if (sid === undefined || s.idleTimer !== undefined || s.idleFiring > 0) return
+  const gen = s.idleGen
+  const v = readStored(await d.storeGet(dueKey(sid)))
+  if (v === 'missing' || v === 'tombstone' || v.sid !== sid || v.load !== s.loadId || v.held !== undefined) return
+  const now = await d.now()
+  if (s.idleGen !== gen || s.idleTimer !== undefined || s.idleFiring > 0 || s.idleDueSid !== sid) return
+  schedule(d, v, now, s.idleAtLoad)
 }
 
 async function persist(d: Deps, rec: Due): Promise<void> {

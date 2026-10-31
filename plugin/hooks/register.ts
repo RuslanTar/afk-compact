@@ -11,7 +11,7 @@ import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
-import { cancelIdle, cancelIdleTimer } from './lib/idle'
+import { cancelIdle, cancelIdleTimer, resumeIdle } from './lib/idle'
 import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
 import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
@@ -182,6 +182,7 @@ export const register: Register = (on, options) => {
       if (again !== undefined) againLost(state, again)
       if (entering) {
         promptNotEntered(state, kind)
+        await resumeIdle(realDeps($, options, state)).catch(() => undefined)
         await resumeKeepWarm(realDeps($, options, state)).catch(() => undefined)
       }
       throw err
@@ -193,7 +194,9 @@ export const register: Register = (on, options) => {
     }
     if (entering && r.drop !== undefined) {
       promptNotEntered(state, kind)
-      // Keep-warm (D-14): no turn starts, so the ping timer cancelled above runs again for the gap.
+      // No turn starts, so the idle timer (§9.4) and keep-warm's ping timer (D-14) cancelled above
+      // run again: the idle record stays in the store, and keep-warm hands over to it.
+      await resumeIdle(realDeps($, options, state))
       await resumeKeepWarm(realDeps($, options, state))
     }
     // A prompt queued while a turn runs may start its own turn after it: its origin kind decides
