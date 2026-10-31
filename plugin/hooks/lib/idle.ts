@@ -42,7 +42,9 @@
 // follow it (DP-4; PR-2 P-56 is not reviewed); at most one per idle episode.
 // Keep-warm (D-14, keepwarm.ts): while the gap warms (a background job of this session open, the
 // one-hour cache), every kind's fire waits (`keep-warm`) and its record goes back here when warming
-// stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`).
+// stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`). A gap with no
+// record armed or held (both paths off, or no kind at this size) or with `triggers` off never warms
+// (`no-idle-path`): no path here would take it over after the pings.
 import type { CacheTtl, Deps, IdleEnv, NativeIdle, Usage } from './deps'
 import type { Effective } from './config'
 import type { BoundaryResult } from './boundary'
@@ -331,6 +333,15 @@ export async function holdIdle(d: Deps, rec: Due, h: { due: number; warm: number
 export async function heldHere(d: Deps, sid: string): Promise<Due | undefined> {
   const v = readStored(await d.storeGet(dueKey(sid)))
   return v !== 'missing' && v !== 'tombstone' && v.held !== undefined && v.load === d.state.loadId ? v : undefined
+}
+
+/**
+ * Keep-warm (D-14): an idle record of `sid` is in the store, armed or held (not a tombstone), so an
+ * idle path (the handoff turn, the plugin's compaction or the 55.5-min check) can take the gap over.
+ */
+export async function idleArmed(d: Deps, sid: string): Promise<boolean> {
+  const v = readStored(await d.storeGet(dueKey(sid)))
+  return v !== 'missing' && v !== 'tombstone' && v.sid === sid
 }
 
 /**

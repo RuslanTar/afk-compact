@@ -1495,3 +1495,131 @@ test('AT-KW-47: a fork-miss holds back only its own session: after /clear the ne
   expect(f.at.length).toBe(2)
   expect(pings(w)).toEqual([['fork-miss', 0], ['warm', 1]])
 })
+
+// ---- No idle path (round 7): keep-warm only warms a gap an idle path can take over after it (the
+// handoff turn, the plugin's compaction, the 55.5-min check); else pings could run to the cutoff
+// with nothing compacting after them.
+
+const refusals = (w: World) => w.rowsOf('keep_warm_stop').filter(r => r.why === 'no-idle-path').map(r => [r.pings, r.gap_s, r.handover])
+
+test('AT-KW-51: native on, both idle paths off, an agent running: no idle record, so no fork and no ping row; one no-idle-path row per gap', { options: { ...ON, idle_handoff_turn: 'off', idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 240)
+  expect(f.at).toEqual([])
+  expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_ping').length]).toEqual([0, 0])
+  expect(stops(w)).toEqual([['no-idle-path', false, 0]])
+  expect(refusals(w)).toEqual([[0, 3000, false]])
+  expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
+  // The next gap logs its own one row.
+  const t1 = await humanTurn($, w)
+  await until(w, t1, 120)
+  expect([f.at.length, refusals(w).length, w.rowsOf('keep_warm_start').length]).toEqual([0, 2, 0])
+})
+
+test('AT-KW-51: native on, triggers off: the check record is armed, but every idle path refuses: no fork, one no-idle-path row; the check skips triggers-off', { options: { ...ON, triggers: false } }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 120)
+  expect(f.at).toEqual([])
+  expect(stops(w)).toEqual([['no-idle-path', false, 0]])
+  expect(w.rowsOf('keep_warm_ping').length).toBe(0)
+  expect(skips(w)).toEqual([['triggers-off', 'check']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-51: automatic compaction off, triggers off: the 49-min fire refuses first and the 50-min ping writes no second row', { options: { ...ON, triggers: false } }, async ($, on) => {
+  const w = world(on, { autoCompactEnabled: false })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 49.5)
+  expect(refusals(w)).toEqual([[0, 2940, false]])
+  expect(skips(w)).toEqual([['triggers-off', 'turn']])
+  await until(w, t0, 120)
+  expect(f.at).toEqual([])
+  expect(stops(w)).toEqual([['no-idle-path', false, 0]])
+  expect(w.submits.length).toBe(0)
+})
+
+test('AT-KW-51: only the handoff turn on (native on): the check record is armed, so the gap warms as before', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50, 100])
+  expect(refusals(w)).toEqual([])
+})
+
+// ---- Native idle on: after keep-warm stops, the 55.5-min check takes over (round 7).
+
+test('AT-KW-52: native on, the first ping misses the main prefix: nothing held, so the 55.5-min check logs idle_silent and compacts (agents 1)', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 120)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect(skips(w)).toEqual([])
+  expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.tokens, r.agents])).toEqual([[3330, 260000, 1]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 3330, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-52: native on, a later ping misses the main prefix: the held check goes back and compacts while warm (agents 1)', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 1 ? COLD : WARM }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 240)
+  expect(f.at).toEqual([50, 100])
+  expect(stops(w)).toEqual([['fork-miss', true, 1]])
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
+  expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.agents])).toEqual([[6000, 1]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 6000, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-52: native on, no job open at a ping (260K): stop no-jobs, the held check compacts at once with agents 0', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.agents = [{ id: 'sub-1', status: 'completed' }]
+  await until(w, t0, 240)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents, r.tokens])).toEqual([['check', 6000, 0, 260000]])
+  expect(selfCompacts(w)).toBe(1)
+  expect(w.submits.length).toBe(0)
+})
+
+test('AT-KW-52: native on, no job open at a ping (150K, below Claude Code\'s idle minimum): stop no-jobs, the held check runs the handoff turn (or no-asset), no compaction', { options: { ...ON, idle_handoff_min_tokens: 100000 } }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.agents = [{ id: 'sub-1', status: 'completed' }]
+  await until(w, t0, 240)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect([ic(w).length, selfCompacts(w), w.rowsOf('idle_silent').length]).toEqual([0, 0, 0])
+  if (IDLE) expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 1])
+  else expect(skips(w)).toEqual([['keep-warm', 'check'], ['no-asset', 'check']])
+})

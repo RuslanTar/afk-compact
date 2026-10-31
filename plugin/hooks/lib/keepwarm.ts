@@ -18,7 +18,11 @@
 //   own TTL switch, else a five-hour or seven-day plan window reported: the idle path's reading,
 //   so never the five-minute cache, whose break-even is under 2 h), and below 90% of every usage
 //   window it can read (none reported: that guard is skipped). Plain user absence never warms
-//   anything (IC-1 objection: "spend usage on every absence").
+//   anything (IC-1 objection: "spend usage on every absence"). Nor a gap no idle path can take
+//   over (`no-idle-path`): no idle record armed or held for the session (`idle_handoff_turn` and
+//   `idle_compact` both off, or no kind at this context size), or `triggers` off (every idle path
+//   refuses then); warming would run to the cutoff with nothing compacting after it. That reason,
+//   unlike the others, logs one stop row for a gap that never warmed (`refuse`, once per gap).
 // - While it warms, the idle timer's handoff turn (49 min), its compaction (54 min) and the
 //   55.5-min check wait (one `handoff_skipped {why: keep-warm}` row; idle.ts `fire`); the record
 //   comes back to the idle path when warming stops with the cache still warm (`handOverIdle`).
@@ -47,7 +51,7 @@
 //   Code version changed since the gap began (`prefix-changed`: `/model` sends no request, and a
 //   ping on the new prefix would write it all again), a usage window reached 90% (`near-limit`),
 //   or the cutoff came (`cutoff`: `keep_warm_hours` of cache hours since the gap began; a gap past
-//   it before its first ping never warms). Those but `turn`, `session-end`, `session-changed`,
+//   it before its first ping never warms), or no idle path is left (`no-idle-path`). Those but `turn`, `session-end`, `session-changed`,
 //   `compacted`, `missed` (past the 58-minute bound: a sleep, or the session busy to the end; or a
 //   fork back past the held record's deadline) and
 //   `held-elsewhere` (another load adopted the record) hand the deferred idle record back.
@@ -58,14 +62,14 @@
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
 // the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
 // since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover}` per gap
-// that warmed. The ping state lives in this load; the idle record it holds stays in the store
+// that warmed or that `no-idle-path` refused before warming. The ping state lives in this load; the idle record it holds stays in the store
 // (idle.ts `holdIdle`), so a load that adopts it after a reload ends the warming (`reload`) and
 // fires it at the next ping's due, while the cache is still warm.
 import type { Deps, RequestUsage } from './deps'
 import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
-import { IDLE_CACHE_MS, IDLE_TICK_MS, NEAR_LIMIT_PCT, handOverIdle, heldDeadline, heldHere, holdIdle, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
+import { IDLE_CACHE_MS, IDLE_TICK_MS, NEAR_LIMIT_PCT, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
 import { notifiedTasks } from './lane'
 import { log } from './log'
 
@@ -116,6 +120,13 @@ export type KeepWarm = {
   running?: boolean
   /** The `keepWarmGen` a prompt a hook dropped left while a tick ran: that tick goes on with the gap. */
   resumed?: number
+  /** This gap's one `keep_warm_stop {why: no-idle-path}` row before warming is written (`refuse`). */
+  refused?: boolean
+  /**
+   * The idle timer's record while its fire asks `keepWarmHolds` (a tombstone in the store by then):
+   * a ping beside that fire still finds an idle path (`blocked`).
+   */
+  incoming?: Due
 }
 
 /** The background tasks of the main session's last Stop (`background_tasks`), by id. */
@@ -274,7 +285,7 @@ async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
  * Why this gap may not warm now, or undefined. `handover`: the cache is still warm, so a deferred
  * idle record goes back to the idle path.
  */
-async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: string; handover: boolean } | undefined> {
+async function blocked(d: Deps, kw: KeepWarm, now: number, rec?: Due): Promise<{ why: string; handover: boolean } | undefined> {
   const s = d.state
   const env = await d.idleEnv()
   const scale = scaleOf(env)
@@ -301,7 +312,26 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
   // A window at the limit share or more; none reported (or no reading): this guard is skipped.
   if ((u?.rateLimits ?? []).some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { why: 'near-limit', handover: true }
   if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) return { why: 'cutoff', handover: true }
+  // No idle path would take the gap over after the pings: no idle record armed or held for the
+  // session (`rec`: the one the idle timer's fire passes here, already a tombstone in the store),
+  // or `triggers` off, which every idle path refuses. Pings then could run to the cutoff with no
+  // compaction or handoff turn behind them (and, native idle on, may keep Claude Code's own from firing).
+  if (!d.cfg.triggers || ((rec ?? kw.incoming ?? kw.deferred) === undefined && !(await idleArmed(d, kw.sid)))) {
+    return { why: 'no-idle-path', handover: true }
+  }
   return undefined
+}
+
+/**
+ * The gap may not warm for want of an idle path (`no-idle-path`): it turns `off` with one
+ * `keep_warm_stop {why: no-idle-path, pings: 0, handover: false}` row (no start row before it),
+ * written once per gap, unlike the other reasons a gap that never warmed logs nothing for.
+ */
+async function refuse(d: Deps, kw: KeepWarm, now: number): Promise<void> {
+  kw.phase = 'off'
+  if (kw.refused) return
+  kw.refused = true
+  await log(d, kw.sid, 'keep_warm_stop', { why: 'no-idle-path', pings: 0, gap_s: secs(now - kw.start), handover: false })
 }
 
 /**
@@ -343,18 +373,32 @@ async function begin(d: Deps, kw: KeepWarm, now: number): Promise<boolean> {
  * warming, and the idle path reads it as it does today (`native-fired`, `compacted`).
  */
 export async function keepWarmHolds(d: Deps, rec: Due, now: number): Promise<boolean> {
+  const kw = d.state.keepWarm
+  if (!kw || kw.sid !== rec.sid) return false
+  // While this decides, the record is an idle path a ping beside it sees (`no-idle-path` reads it);
+  // once it returns the record is held here (`deferred`) or the idle path runs it now.
+  kw.incoming = rec
+  try {
+    return await holds(d, kw, rec, now)
+  } finally {
+    if (kw.incoming === rec) kw.incoming = undefined
+  }
+}
+
+async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<boolean> {
   const s = d.state
   const gen = s.keepWarmGen
-  const kw = s.keepWarm
-  if (!kw || kw.sid !== rec.sid) return false
   // A turn or prompt that came during a check (or a stop): nothing is held, and the idle path reads the session as it is (busy).
   const moved = (): boolean => s.keepWarmGen !== gen || s.keepWarm !== kw
   if (kw.phase === 'armed') {
-    const b = await blocked(d, kw, now)
+    const b = await blocked(d, kw, now, rec)
     if (moved()) return false
     if (b !== undefined) {
       // The first ping may have begun warming meanwhile: its own next checks stop it, with its row.
-      if (kw.phase === 'armed') kw.phase = 'off'
+      if (kw.phase === 'armed') {
+        if (b.why === 'no-idle-path') await refuse(d, kw, now)
+        else kw.phase = 'off'
+      }
       return false
     }
     // Begun by the first ping meanwhile: held as well (begin waits for its start row).
@@ -456,6 +500,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   if (busy && (b === undefined || b.handover)) return again(d, kw, now, scale)
   if (kw.phase === 'armed') {
     if (b !== undefined) {
+      if (b.why === 'no-idle-path') return refuse(d, kw, now)
       kw.phase = 'off'
       return
     }
