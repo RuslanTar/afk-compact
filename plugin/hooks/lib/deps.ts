@@ -5,6 +5,7 @@ import type { EngineInterface, PluginOptions, SessionCompactResult } from 'claud
 import type { ResumePref } from './compact'
 import type { Config, Effective, Paths } from './config'
 import type { HandoffTurn, HaltReason, Published } from './handoff-turn'
+import type { BgTasks, KeepWarm } from './keepwarm'
 import type { BlockArgs } from './resume'
 import type { Lane, LaneFacts, LaneResult } from './lane'
 import type { RestartEnv, RestartReport, RestartRun, RestartSetting } from './restart'
@@ -276,7 +277,7 @@ export interface Deps {
   /**
    * `$.model.fork({ prompt })`, the shadow trial's one model call (TRIAL-DUAL-HANDOFF §4.1): the
    * engine's answer as given; rejects on a hook's `{ deny }`. Called only while the user's local
-   * trial config is on (shadow.ts).
+   * trial config is on (shadow.ts), and for keep-warm's ping (keepwarm.ts, D-14).
    */
   fork(prompt: string): Promise<unknown>
   /**
@@ -413,6 +414,8 @@ export type LoadState = {
   lastTurnAnswer: boolean
   /** When the last main-thread model request (`turn.step`) started: the idle compaction's anchor (D3). */
   lastMainReqAt: number | undefined
+  /** How many main-thread model requests (`turn.step`) this load has seen: keep-warm's fork-miss reads a new one. */
+  mainReqs: number
   /**
    * D11: the last sign of a person at the prompt (a `prompt.edit`, a `prompt.change` of theirs, an
    * interactive `session.start`); the idle compaction skips `present` for a minute after it.
@@ -433,6 +436,10 @@ export type LoadState = {
    * reading the clock when a turn started, a prompt entered or the session ended re-arms nothing.
    */
   idleGen: number
+  /** The `atLoad` of the timer `schedule` armed last (§3.4): a prompt a hook drops re-arms it alike (`resumeIdle`). */
+  idleAtLoad: boolean
+  /** Fires of this load's idle timer under way (a count): `resumeIdle` arms no second timer beside one. */
+  idleFiring: number
   /**
    * The sid whose `idle_due` this load wrote or re-armed and has not cleared yet. Kept apart
    * from `idleTimer`: the hooks cancel the timer synchronously before `cancelIdle` runs.
@@ -535,6 +542,22 @@ export type LoadState = {
   lastMainTurnAt: number | undefined
   /** D10: when this load's `session.start` ran (once per load; never for a `/clear`). */
   sessionStartAt: number | undefined
+  /** Keep-warm (D-14, keepwarm.ts): the current idle gap's warming, undefined between a turn start and the next turn end. */
+  keepWarm: KeepWarm | undefined
+  /** The ping timer, and its generation (bumped by every cancel, as `idleGen`). */
+  keepWarmTimer: { cancel: () => void } | undefined
+  keepWarmGen: number
+  /** The last gap handed over to the idle path: no warming until a turn not of the plugin's own starts. */
+  keepWarmSpent: boolean
+  /**
+   * A keep-warm ping that missed the main prefix (keepwarm.ts `fork-miss`): no ping for this session
+   * until a main request after `reqs` (the `mainReqs` before that fork).
+   */
+  keepWarmForkMiss: { sid: string; reqs: number } | undefined
+  /** The background tasks the main session's last Stop listed as in flight (Monitors and crons left out). */
+  bgTasks: BgTasks | undefined
+  /** Task ids a background-task notification reported ended (keepwarm.ts `noteEndedTasks`); cleared at session end. */
+  endedTasks: Set<string>
 }
 
 /**
@@ -694,6 +717,7 @@ export function newState(loadId: string): LoadState {
     lastTurnEndAt: undefined,
     lastTurnAnswer: false,
     lastMainReqAt: undefined,
+    mainReqs: 0,
     lastInputAt: undefined,
     idleCompactFails: 0,
     idleCompactOff: undefined,
@@ -701,6 +725,8 @@ export function newState(loadId: string): LoadState {
     idleEnvMemo: undefined,
     idleTimer: undefined,
     idleGen: 0,
+    idleAtLoad: false,
+    idleFiring: 0,
     idleDueSid: undefined,
     idleTombDeletes: new Map(),
     idleEpisode: undefined,
@@ -727,6 +753,13 @@ export function newState(loadId: string): LoadState {
     modeSeen: undefined,
     lastMainTurnAt: undefined,
     sessionStartAt: undefined,
+    keepWarm: undefined,
+    keepWarmTimer: undefined,
+    keepWarmGen: 0,
+    keepWarmSpent: false,
+    keepWarmForkMiss: undefined,
+    bgTasks: undefined,
+    endedTasks: new Set(),
   }
 }
 

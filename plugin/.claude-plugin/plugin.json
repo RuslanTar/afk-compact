@@ -225,6 +225,14 @@
       "description": "Values: submit, return or off. off (the default in this version): when a session compacted while you were away has finished its work or is only waiting on you, the plugin sends no turn of its own and asks for no summary; the next reply starts nothing new and says in one line where the work stands, then what needs you. submit: with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; return sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (any other value counts as off).",
       "default": "off"
     },
+    "keep_warm_hours": {
+      "type": "number",
+      "title": "Keep the cache warm while background jobs run (hours)",
+      "description": "How many hours the plugin keeps an idle session's one-hour prompt cache (the stored conversation that keeps the next request cheap) warm while one of that session's own background jobs (an agent, a workflow or a background shell) is still running: about every 50 minutes it sends one small hidden request that reads the cache and adds nothing to the conversation, so the turn the job's result opens does not read the whole conversation again at full price. When that time is up and a job is still running, the plugin compacts the session (or runs the handoff-when-idle turn) while the cache is still warm. It never runs while you are simply away with nothing running, nor with the five-minute cache, and stops when a usage limit reaches 90% or a turn starts. Default 6 (allowed 0 to 24); 0 turns it off, which saves those requests (each one counts toward your usage limits as a cached read of the conversation).",
+      "default": 6,
+      "min": 0,
+      "max": 24
+    },
     "ticket_pattern": {
       "type": "string",
       "title": "Ticket id pattern [default [A-Z][A-Z0-9]+-[0-9]+]",

@@ -17,7 +17,7 @@ use warnings;
 use utf8;
 require "userre.pm";    # U-06: the time bound for the user's own patterns
 
-# The keys of MOD-SPEC §1.2 (44 with idle_digest, restart_on_update and idle_handoff_near_limit): type; fallback (used only when the manifest lacks the key:
+# The keys of MOD-SPEC §1.2 (45 with idle_digest, restart_on_update, idle_handoff_near_limit and keep_warm_hours): type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
@@ -70,6 +70,9 @@ our @KEYS = (
     # idle compaction of a finished or blocked lane (`submit`), or none until the next turn
     # (`return`); `off` (owner rule (c), 2026-10-28: on only after a live PASS) asks for no digest
     [idle_digest                 => 'str',  'off',                     'enum'],
+    # keep-warm (D-14, 2026-10-30): while this session's own background jobs run, the plugin keeps
+    # the one-hour prompt cache warm for up to this many hours of an idle gap; 0 = off
+    [keep_warm_hours             => 'num',  6,                         'num'],
     # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
     [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
     [secret_extra_rules          => 'str',  '',                        'list'],
@@ -208,10 +211,8 @@ sub _coerce {
         return $v ? 1 : 0 if ref $v;
         return ($v =~ /^(1|true|yes|on)$/i) ? 1 : 0;
     }
-    if ($t eq 'num') {
-        return undef unless defined $v && "$v" =~ /^-?[0-9]+(\.[0-9]+)?$/;
-        return 0 + $v;
-    }
+    # A number as the plugin's Number() reads one (`.5`, `5.`, a sign, an exponent, blanks around, `0x10`).
+    return _decimal($v) if $t eq 'num';
     if ($t eq 'dir' || $t eq 'file') { return util::expand_tilde(util::to_bytes("$v")) }
     return util::text("$v");    # a text value is characters (§2.6); paths above stay bytes (SR 1.1)
 }
@@ -541,7 +542,10 @@ sub whole {
 
 # num_clamped(key[, resolved]) -> (value, clamped 0|1): a number key within the manifest's
 # min/max (S-SETTINGS E4-E6: handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
-# watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback.
+# watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback. A number reads as the
+# plugin's `Number()` reads a decimal (config.ts `num`): a sign, `.5`, `5.`, an exponent and
+# surrounding blanks are accepted, and an unsigned 0x, 0o or 0b integer (keep_warm_hours `.5` is 0.5
+# and `0x10` is 16 on both sides).
 sub num_clamped {
     my ($key, $r) = @_;
     $r //= _current();
@@ -550,12 +554,35 @@ sub num_clamped {
     my $fb = $row ? $row->[2] : undef;
     my $uc = eval { ctx::user_config()->{$key} };
     $fb = $uc->{default} if ref $uc eq 'HASH' && defined $uc->{default} && !ref $uc->{default};
-    $v = $fb unless defined $v && !ref $v && "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/;
+    $v = _decimal($v) // _decimal($fb);
     return (undef, 0) unless defined $v;
     $v = whole($key, $v);
     my ($lo, $hi) = eval { limits($key) };
     my $used = (defined $lo && $v < $lo) ? $lo : (defined $hi && $v > $hi) ? $hi : 0 + $v;
     return ($used, $used == $v ? 0 : 1);
+}
+
+# A number as the plugin's Number() reads a string (config.ts `num`): a decimal, or an unsigned
+# 0x, 0o or 0b integer (`0x10` is 16 on both sides); else undef.
+sub _decimal {
+    my ($v) = @_;
+    return undef unless defined $v && !ref $v;
+    my $t = "$v";
+    $t =~ s/\A\s+//;
+    $t =~ s/\s+\z//;
+    my $n;
+    if ($t =~ /\A0([xXoObB])([0-9a-fA-F]+)\z/) {
+        my ($p, $d) = (lc $1, $2);
+        return undef if ($p eq 'o' && $d =~ /[^0-7]/) || ($p eq 'b' && $d =~ /[^01]/);
+        no warnings qw(overflow portable);
+        $n = $p eq 'x' ? hex($d) : $p eq 'o' ? oct($d) : oct("0b$d");
+    } else {
+        return undef unless $t =~ /\A[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?\z/;
+        $n = 0 + $t;
+    }
+    # Not finite (an exponent, or 0x digits, past the double range): the plugin keeps its default too.
+    return undef if $n - $n != 0;
+    return $n;
 }
 
 # The resolved settings of this run (rc), else a fresh resolve.

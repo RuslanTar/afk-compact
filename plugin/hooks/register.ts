@@ -12,7 +12,8 @@ import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
 import { noteDialog, personAnswered } from './lib/question'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
-import { cancelIdle, cancelIdleTimer } from './lib/idle'
+import { cancelIdle, cancelIdleTimer, resumeIdle } from './lib/idle'
+import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
 import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
@@ -48,6 +49,7 @@ export const register: Register = (on, options) => {
   // disk for a resume of the same session id) and closes an open handoff turn.
   on('session.end', async ($, e, next) => {
     cancelIdleTimer(realDeps($, options, state))
+    cancelKeepWarmTimer(realDeps($, options, state))
     await onSessionEnd(realDeps($, options, state), e.sessionId, e.reason)
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -92,9 +94,11 @@ export const register: Register = (on, options) => {
   // Nothing after the stream may throw: a failure there would hand the step to `.catch`.
   // The shadow trial stamps a main step's start for its cold rule (nothing without its config).
   // The start of every main-thread request anchors the idle compaction (D3): the prompt cache is
-  // refreshed when a request reads it, not at the turn end.
+  // refreshed when a request reads it, not at the turn end. Its count lets keep-warm ping again
+  // after a fork-miss (keepwarm.ts).
   on('turn.step', async function* ($, e, next) {
     if (e.agentId === undefined) {
+      state.mainReqs++
       try {
         state.lastMainReqAt = await $.clock.now()
       } catch {
@@ -145,23 +149,29 @@ export const register: Register = (on, options) => {
     const entering = e.turnId === undefined && !own
     // IC-1 D6: the entering prompt's origin kind decides at its turn.start whether halt clears.
     const kind = e.origin.kind
+    // Keep-warm (D-14): a task a notification reports ended is not an open job any more.
+    if (!own) noteEndedTasks(state, kind, e.text)
     if (entering) {
       promptEntering(state, kind, e.text)
-      // §9.4: a prompt entering cancels the pre-idle timer.
+      // §9.4: a prompt entering cancels the pre-idle timer, and keep-warm's ping timer (D-14).
       cancelIdleTimer(realDeps($, options, state))
+      cancelKeepWarmTimer(realDeps($, options, state))
       // SESSION-RESTART §2.2 step 4, §3.4 step 3: a prompt entering stops a restart under way.
-      if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state))
+      // Guarded: the run is ended before its first await, and a failure in its notes or rows
+      // must not skip `next` below, nor the resumes there for a prompt that then does not enter.
+      if (state.restart !== undefined) await restartInterrupt(realDeps($, options, state)).catch(() => undefined)
     }
     // The shadow trial's M1 moment for this plugin's typed handoff command, before its turn
-    // starts; off (one cheap test) without the local trial config.
+    // starts; off (one cheap test) without the local trial config. Never throws (as againFor).
     if (!own && e.command?.name === $.plugin.name + ':handoff') {
       await shadowOwnerHandoff(realDeps($, options, state), e.command.args, e.text)
     }
     // Away digest phase 1: a later prompt of an open idle episode, not a person's, carries the lane
     // note beside it when the lane turned finished or hard-blocked (prompt.context is asked once per
     // conversation, so it cannot carry one); a person's prompt closes the episode. A note whose
-    // prompt does not enter goes back to the episode for the next turn.
-    const note = own ? undefined : await laneRecheck(realDeps($, options, state), kind, e.text)
+    // prompt does not enter goes back to the episode for the next turn. A recheck that fails (the
+    // session id, a row) adds no note, and the prompt goes on as the restart's does above.
+    const note = own ? undefined : await laneRecheck(realDeps($, options, state), kind, e.text).catch(() => undefined)
     // Owner xxxxxxxx-37: a person back after a background result's turn took an idle block gets
     // the whole block again beside their prompt, for the same reason; one that does not enter
     // hands it back for their next prompt.
@@ -174,7 +184,11 @@ export const register: Register = (on, options) => {
     } catch (err) {
       if (note !== undefined) laneNoteLost(state, note)
       if (again !== undefined) againLost(state, again)
-      if (entering) promptNotEntered(state, kind)
+      if (entering) {
+        promptNotEntered(state, kind)
+        await resumeIdle(realDeps($, options, state)).catch(() => undefined)
+        await resumeKeepWarm(realDeps($, options, state)).catch(() => undefined)
+      }
       throw err
     }
     if (note !== undefined && r.drop !== undefined) laneNoteLost(state, note)
@@ -182,7 +196,14 @@ export const register: Register = (on, options) => {
       if (r.drop !== undefined) againLost(state, again)
       else await againSent(realDeps($, options, state), again)
     }
-    if (entering && r.drop !== undefined) promptNotEntered(state, kind)
+    if (entering && r.drop !== undefined) {
+      promptNotEntered(state, kind)
+      // No turn starts, so the idle timer (§9.4) and keep-warm's ping timer (D-14) cancelled above
+      // run again: the idle record stays in the store, and keep-warm hands over to it. Each is
+      // guarded as on the throw path: resumeIdle's store read that fails still lets keep-warm's run.
+      await resumeIdle(realDeps($, options, state)).catch(() => undefined)
+      await resumeKeepWarm(realDeps($, options, state)).catch(() => undefined)
+    }
     // A prompt queued while a turn runs may start its own turn after it: its origin kind decides
     // there whether halt clears, as for one entering an idle session.
     if (!own && e.turnId !== undefined && r.drop === undefined) promptQueued(state, kind, r.text, e.turnId)
@@ -258,8 +279,14 @@ export const register: Register = (on, options) => {
 
   // SESSION-RESTART D10: the permission mode of every main Stop, UserPromptSubmit and
   // PermissionRequest input (observe only; nothing awaited before `next`).
+  // Keep-warm (D-14): the main Stop's in-flight background tasks (`background_tasks`), read at its ping.
   on('classic.Stop', async ($, e, next) => {
     void $.clock.now().then(t => noteMode({ state }, e, t), () => undefined)
+    try {
+      noteBackground(state, e)
+    } catch {
+      // no list: keep-warm counts the agents only
+    }
     return next(e)
   }).catch(($, e, next) => next(e))
   on('classic.UserPromptSubmit', async ($, e, next) => {

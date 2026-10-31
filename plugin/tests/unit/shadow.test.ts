@@ -185,7 +185,9 @@ test('AT-DH-07: M3 for the plugin\'s own compaction with no handoff turn: two fo
 
 // The plugin's own idle compaction is the idle moment (m3-idle), as Claude Code's is: under
 // "idleCompaction": false it takes native's place at the same moment; trigger plugin says who.
-test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoed) is an m3-idle moment with trigger plugin, not m3-plugin; so is the 55.5-min check\'s', { options: { precompact_turn: 'code' } }, async ($, on) => {
+// keep_warm_hours 0: this test's fork hook answers every fork, keep-warm's ping too (D-14), and
+// keep-warm would hold the check while the agent runs (keepwarm.test.ts covers that path).
+test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoed) is an m3-idle moment with trigger plugin, not m3-plugin; so is the 55.5-min check\'s', { options: { precompact_turn: 'code', keep_warm_hours: 0 } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   w.policy = { idleCompaction: false }

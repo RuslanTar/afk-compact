@@ -309,6 +309,37 @@ test('AT-RS-05: a prompt entering during the grace stops it at once; no continue
   expect(w.submits.length).toBe(0)
 })
 
+// Round 9: the interrupt is guarded in prompt.submit. Its outcome read rejects after the carry
+// note went out: the run is still over, the prompt goes on once, and when a hook beneath drops it
+// no prompt stays counted entering, so Claude Code's own compaction 1,600 s later is an idle
+// dispatch (its block's lane row). No idle timer or keep-warm is armed after a compaction, so
+// this count is what the drop path must still put back.
+test('AT-RS-05: a prompt entering during the grace whose interrupt fails (the tried record unreadable), then dropped beneath: no exit, the prompt goes on once, a later native compaction is idle', async ($, on) => {
+  const w = await session($, on)
+  await nudgedTurn($, w)
+  const n = { reads: 0, rejected: 0 }
+  w.storeGetFails = k => {
+    if (k !== `restart_tried:${SID_A}` || n.reads++ > 0) return false
+    n.rejected++
+    return true
+  }
+  w.dropIf = () => 'a peer dropped it'
+  const r = await $.prompt.submit({ text: 'actually, one more thing', origin: { kind: 'composer' } } as never)
+  w.storeGetFails = undefined
+  w.dropIf = undefined
+  expect(r.drop).toBe('a peer dropped it')
+  expect(n.rejected).toBe(1)
+  expect(w.submits.length).toBe(1)
+  expect(states(w)).toEqual(['cancelled'])
+  await w.advance(RESTART_GRACE_MS)
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
+  w.tokens = 150000
+  await w.advance(1600 * 1000)
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('lane_outcome').map(r => r.at)).toEqual(['build'])
+  expect(w.submits.length).toBe(1)
+})
+
 test('AT-RS-06: no own veto: an /exit of our own origin that reaches our hook (a later engine) passes untouched; the notes stay exiting', async ($, on) => {
   const w = await session($, on)
   w.exitGate = new Promise(() => undefined)

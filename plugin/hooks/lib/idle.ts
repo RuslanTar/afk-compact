@@ -40,6 +40,11 @@
 // fires it late only within a bound (§3.4). When the turn's checks pass, one plugin-submitted
 // handoff turn runs on the D-18 machinery (handoff-turn.ts); no plugin compaction and no continue
 // follow it (DP-4; PR-2 P-56 is not reviewed); at most one per idle episode.
+// Keep-warm (D-14, keepwarm.ts): while the gap warms (a background job of this session open, the
+// one-hour cache), every kind's fire waits (`keep-warm`) and its record goes back here when warming
+// stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`). A gap with no
+// record armed or held (both paths off, or no kind at this size) or with `triggers` off never warms
+// (`no-idle-path`): no path here would take it over after the pings.
 import type { CacheTtl, Deps, IdleEnv, NativeIdle, Usage } from './deps'
 import type { Effective } from './config'
 import type { BoundaryResult } from './boundary'
@@ -47,6 +52,7 @@ import { boundary } from './boundary'
 import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { cacheTtlOf } from './deps'
+import { keepWarmHolds } from './keepwarm'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
 import { log } from './log'
 
@@ -121,7 +127,13 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * caching off, else `1h` when a plan window was reported, D15) and the highest window share at
  * arm, which a new process reads before its first request reports any (G10-G12); `spct` the
  * highest spend-limit share at arm (null: none reported), for `idle_handoff_near_limit: skip-spend`;
- * `cc` and `model` are the Claude Code version and main model at arm (G3a).
+ * `cc` and `model` are the Claude Code version and main model at arm (G3a). `warm` is the start of
+ * the last keep-warm ping of a record handed back by keep-warm (`handOverIdle`): the cache counts
+ * from there, not from the turn end, for the turn's 55.5-min bound and the check re-armed after it.
+ * `held` marks a record keep-warm holds while the gap warms (`holdIdle`: due at its next ping,
+ * anchored at the last warm one, with the gap's start and its warm pings so far); no timer of the
+ * holding load runs for it, and a load that adopts it (a reload while warming) ends that warming
+ * (`keep_warm_stop {why: reload}`) and fires it at that due, while the cache is still warm.
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
@@ -135,6 +147,8 @@ export type Due = {
   answer: boolean; published: boolean
   load: string | null; anchor: number | null; tokens: number | null
   ttl: '1h' | '5m' | null; pct: number | null; spct: number | null; cc: string | null; model: string | null
+  warm?: number | null
+  held?: { start: number; pings: number }
 }
 
 /** Every clear of a record (§3.1): which load cleared which due, and when. */
@@ -164,7 +178,22 @@ function readDue(v: unknown): Due | undefined {
     load: strOrNull(o.load), anchor: numOrNull(o.anchor), tokens: numOrNull(o.tokens),
     ttl: o.ttl === '1h' || o.ttl === '5m' ? o.ttl : null, pct: numOrNull(o.pct), spct: numOrNull(o.spct),
     cc: strOrNull(o.cc), model: strOrNull(o.model),
+    ...(numOrNull(o.warm) !== null ? { warm: numOrNull(o.warm) } : {}),
+    ...(readHeld(o.held) ?? {}),
   }
+}
+
+function readHeld(v: unknown): { held: { start: number; pings: number } } | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const h = v as Record<string, unknown>
+  const start = numOrNull(h.start)
+  const pings = numOrNull(h.pings)
+  return start !== null && pings !== null ? { held: { start, pings } } : undefined
+}
+
+/** The moment a record's turn-time bounds count from: its last keep-warm ping, else its turn end. */
+function baseOf(rec: Due): number | null {
+  return rec.warm ?? rec.end
 }
 
 /** G1's reading of the store: nothing there (a lost write), a tombstone, or a record. */
@@ -176,7 +205,7 @@ function readStored(v: unknown): 'missing' | 'tombstone' | Due {
 const secs = (ms: number): number => Math.round(ms / 1000)
 
 /** D10: the test seam's scale for every cache-derived time (1 without it). */
-function scaleOf(env: IdleEnv): number {
+export function scaleOf(env: IdleEnv): number {
   return env.cacheS === undefined ? 1 : env.cacheS / 3600
 }
 
@@ -255,23 +284,114 @@ export async function cancelIdle(d: Deps, sid: string): Promise<void> {
 export function schedule(d: Deps, rec: Due, now: number, atLoad = false): void {
   cancelIdleTimer(d)
   const gen = d.state.idleGen
+  d.state.idleAtLoad = atLoad
   d.state.idleTimer = d.after(Math.max(0, Math.min(rec.due - now, IDLE_TICK_MS)), () => {
     d.state.idleTimer = undefined
     d.state.inflight = (async () => {
       const t = await d.now()
       if (d.state.idleGen !== gen) return
       if (t < rec.due) return schedule(d, rec, t, atLoad)
-      await fire(d, rec, t, atLoad)
+      d.state.idleFiring++
+      try {
+        await fire(d, rec, t, atLoad)
+      } finally {
+        d.state.idleFiring--
+      }
     })().catch(() => undefined)
   })
 }
 
+/**
+ * A prompt entering that started no turn (a hook dropped it, or its submit threw): the idle timer
+ * `prompt.submit` cancelled runs again for the record this load still has in the store, as it was
+ * armed (its due, its `atLoad`). Without it the record would stay there with no timer behind it:
+ * keep-warm would read an idle path that never comes, and its hand-over would be lost. Nothing for
+ * a record keep-warm holds (no timer of this load runs for it), one cleared or held by another
+ * load, or while a fire of this load runs (it takes the record); a turn, a prompt or an arm that
+ * comes during the read decides instead.
+ */
+export async function resumeIdle(d: Deps): Promise<void> {
+  const s = d.state
+  const sid = s.idleDueSid
+  if (sid === undefined || s.idleTimer !== undefined || s.idleFiring > 0) return
+  const gen = s.idleGen
+  const v = readStored(await d.storeGet(dueKey(sid)))
+  if (v === 'missing' || v === 'tombstone' || v.sid !== sid || v.load !== s.loadId || v.held !== undefined) return
+  const now = await d.now()
+  if (s.idleGen !== gen || s.idleTimer !== undefined || s.idleFiring > 0 || s.idleDueSid !== sid) return
+  schedule(d, v, now, s.idleAtLoad)
+}
+
 async function persist(d: Deps, rec: Due): Promise<void> {
-  const own: Due = { ...rec, load: d.state.loadId }
+  const { held: _held, ...plain } = rec
+  const own: Due = { ...plain, load: d.state.loadId }
   await d.storeSet(dueKey(own.sid), own)
   dropTombDelete(d, own.sid)
   d.state.idleDueSid = own.sid
   schedule(d, own, await d.now())
+}
+
+/**
+ * Keep-warm (D-14) hands the record it held back to the idle path with the cache still warm: due
+ * now, anchored at the start of the last warm ping (`anchor` for the compaction's lapse guard,
+ * `warm` for the turn's), with the episode, the turn's end and the published flag as they are now.
+ */
+export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number): Promise<void> {
+  const s = d.state
+  await persist(d, { ...rec, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman })
+}
+
+/**
+ * Keep-warm (D-14): the latest moment a record it holds still fires on the idle path once handed
+ * back anchored at `warm`: the turn's 55.5-min bound (`fire`), else the compaction's lapse guard
+ * (G3, 58 min; the check compacts by the same guards).
+ */
+export function heldDeadline(rec: Due, warm: number, scale: number): number {
+  return warm + (rec.kind === 'turn' ? IDLE_CHECK_MS : IDLE_LAPSE_FRACTION * IDLE_CACHE_MS) * scale
+}
+
+/**
+ * Keep-warm (D-14) holds the record while its gap warms: it stays in the store (not a tombstone),
+ * due at the next ping and anchored at the last warm request, so a load that adopts it after a
+ * reload (a hot reload, `claude respawn`, a supervisor move, SessionEnd `other`) still fires it
+ * while the cache is warm. No timer of this load runs for it: keep-warm hands it back
+ * (`handOverIdle`) or releases it (`releaseHeld`).
+ */
+export async function holdIdle(d: Deps, rec: Due, h: { due: number; warm: number; start: number; pings: number }): Promise<void> {
+  const s = d.state
+  const own: Due = { ...rec, due: h.due, anchor: h.warm, warm: h.warm, load: s.loadId, held: { start: h.start, pings: h.pings } }
+  await d.storeSet(dueKey(rec.sid), own)
+  dropTombDelete(d, rec.sid)
+  s.idleDueSid = rec.sid
+}
+
+/** The record keep-warm holds for `sid` in the store, when this load still holds it (G1's reading). */
+export async function heldHere(d: Deps, sid: string): Promise<Due | undefined> {
+  const v = readStored(await d.storeGet(dueKey(sid)))
+  return v !== 'missing' && v !== 'tombstone' && v.held !== undefined && v.load === d.state.loadId ? v : undefined
+}
+
+/**
+ * Keep-warm (D-14): an idle record of `sid` is in the store, armed or held (not a tombstone), so an
+ * idle path (the handoff turn, the plugin's compaction or the 55.5-min check) can take the gap over.
+ */
+export async function idleArmed(d: Deps, sid: string): Promise<boolean> {
+  const v = readStored(await d.storeGet(dueKey(sid)))
+  return v !== 'missing' && v !== 'tombstone' && v.sid === sid
+}
+
+/**
+ * Keep-warm stopped with no hand-over: the record it held is cleared (a tombstone), or with `keep`
+ * (SessionEnd `other`, whose next process resumes the session) left for that process as a plain
+ * record due at the next ping. Nothing when another load holds it now.
+ */
+export async function releaseHeld(d: Deps, sid: string, keep: boolean): Promise<void> {
+  const v = await heldHere(d, sid)
+  if (!v) return
+  if (d.state.idleDueSid === sid) d.state.idleDueSid = undefined
+  if (!keep) return writeTombstone(d, sid, v.due)
+  const { held: _held, ...plain } = v
+  await d.storeSet(dueKey(sid), plain)
 }
 
 /** The policy at this moment (§1.2): Claude Code's own idle compaction and the plugin's paths. */
@@ -415,7 +535,8 @@ function lateFireOk(rec: Due, now: number, scale: number): boolean {
   }
   if (rec.kind === 'check') return now - rec.due <= IDLE_LATE_MS
   // A handoff turn up to minute 55.5 is accepted practice: the check runs one there.
-  return rec.end !== null && now <= rec.end + IDLE_CHECK_MS * scale
+  const base = baseOf(rec)
+  return base !== null && now <= base + IDLE_CHECK_MS * scale
 }
 
 /**
@@ -442,6 +563,9 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   if (rec.due <= now) {
     if (rec.end === null) return
     if (!lateFireOk(rec, now, scaleOf(p.env))) {
+      if (rec.held !== undefined && rec.load !== s.loadId) {
+        await log(d, sid, 'keep_warm_stop', { why: 'reload', pings: rec.held.pings, gap_s: secs(now - rec.held.start), handover: false })
+      }
       await idleSkip(d, sid, 'lapsed', rec.kind, secs(now - rec.due))
       await writeTombstone(d, sid, rec.due, now)
       return
@@ -455,7 +579,13 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
     if (rec.published) s.publishedSinceHuman = true
   }
   s.idleAdopted = rec.load !== s.loadId
-  const own: Due = { ...rec, load: s.loadId }
+  // Keep-warm (D-14): a record its gap held while warming in another load ends that warming here
+  // (the load that pinged is gone), and goes on as a plain record at the due it holds.
+  const { held, ...plain } = rec
+  if (held !== undefined && rec.load !== s.loadId) {
+    await log(d, sid, 'keep_warm_stop', { why: 'reload', pings: held.pings, gap_s: secs(now - held.start), handover: true })
+  }
+  const own: Due = { ...plain, load: s.loadId }
   await d.storeSet(dueKey(sid), own)
   s.idleDueSid = sid
   schedule(d, own, now, rec.due <= now)
@@ -478,6 +608,17 @@ async function ttl5m(d: Deps, env: IdleEnv, u: Use, rec: Due): Promise<boolean> 
   if (set !== undefined) return set === '5m'
   if (planOf(u).length > 0) return false
   return !(d.state.idleAdopted && rec.ttl === '1h')
+}
+
+/**
+ * Keep-warm (D-14): the main conversation's cache is the one-hour one: caching on, and Claude
+ * Code's own TTL switch says `1h`, or none is set and the usage reports a plan window (D15).
+ */
+export async function oneHourCache(d: Deps, env: IdleEnv, u: Use): Promise<boolean> {
+  if (env.cacheOff) return false
+  const set = await explicitTtl(d, env)
+  if (set !== undefined) return set === '1h'
+  return planOf(u).length > 0
 }
 
 /**
@@ -516,7 +657,7 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   return { tokens, allowance, native: eff.native_trigger, calls: c }
 }
 
-function isBusy(s: Deps['state']): boolean {
+export function isBusy(s: Deps['state']): boolean {
   return s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.handoffTurn !== undefined || s.ourSubmitPending
 }
 
@@ -625,6 +766,9 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   if (!d.cfg.triggers) return 'triggers-off'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'
+  // Keep-warm (D-14): a record handed back anchored at its last warm request submits no turn past
+  // the 58-minute lapse bound from it (the cache may have lapsed), as its compaction (G3) does not.
+  if (typeof rec.warm === 'number' && now > rec.warm + IDLE_LAPSE_FRACTION * IDLE_CACHE_MS * scale) return 'lapsed'
   return laterChecks(d, sid, eff, u, rec)
 }
 
@@ -710,6 +854,8 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   }
   await writeTombstone(d, sid, rec.due, now)
   if ((await d.sessionId()) !== sid) return skip('session-changed')
+  // Keep-warm (D-14): while the gap warms, the record waits there (no turn, no compaction yet).
+  if (await keepWarmHolds(d, rec, now)) return skip('keep-warm')
   if (rec.kind === 'compact') return fireCompact(d, rec, now, out)
   // The check writes no `idle_mode` row at its fire: it keeps its policy as armed and reads again
   // only automatic compaction (G0b, checkBlocked) before it compacts; the turn reads the full
@@ -726,7 +872,8 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
       return
     }
     // §3.4: a turn starting after minute 55.5 (a late timer, a sleep) is lapsed.
-    if (rec.end !== null && now > rec.end + IDLE_CHECK_MS * scale) return skip('lapsed', secs(now - rec.due))
+    const base = baseOf(rec)
+    if (base !== null && now > base + IDLE_CHECK_MS * scale) return skip('lapsed', secs(now - rec.due))
   }
   const b = rec.kind === 'check' ? await checkBlocked(d, sid, rec, now, scale, atLoad) : await turnBlocked(d, sid, rec, now, atLoad)
   if (typeof b === 'string') return skip(b, b === 'lapsed' ? secs(now - rec.due) : undefined)
@@ -782,7 +929,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
  * turn or, lane B, the plugin's compaction at it).
  */
 async function rearmCheck(d: Deps, rec: Due, now: number, scale: number): Promise<void> {
-  const end = rec.end
+  const end = baseOf(rec)
   if (end === null || end + IDLE_CHECK_MS * scale <= now) return
   await persist(d, { ...rec, due: end + IDLE_CHECK_MS * scale, kind: 'check', episode: d.state.idleEpisode ?? null, answer: d.state.lastTurnAnswer, published: d.state.publishedSinceHuman })
 }

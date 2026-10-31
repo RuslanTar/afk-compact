@@ -1263,6 +1263,18 @@ test('AT-IC-C33 (§3.4, G7): the same record when a person resumes the session (
   expect(w.submits.length).toBe(0)
 })
 
+test('AT-IC-C33 (§3.4, G7): the same, with a prompt a hook drops before that late fire runs: the timer runs again as armed (at load), so still [present, turn]', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  const w = world(on, { tokens: 260000 }, turnRec(52))
+  await w.start($)
+  expect(w.rowsOf('handoff_skipped').length).toBe(0)
+  w.dropIf = () => 'a peer dropped it'
+  const r = await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never)
+  expect(r.drop).toBe('a peer dropped it')
+  await w.settle()
+  expect(w.rowsOf('handoff_skipped').map(r => [r.why, r.kind])).toEqual([['present', 'turn']])
+  expect(w.submits).toEqual(['hello'])
+})
+
 /** A 55.5-min check record 30 s past at T0 (armed 56 min before T0), native idle on. */
 const checkRec = () => ({
   [KEY]: { kind: 'check', due: T0 - 30 * 1000, sid: SID_A, end: T0 - 56 * MIN, answer: true, published: false, episode: { since: T0 - 56 * MIN, done: false } },

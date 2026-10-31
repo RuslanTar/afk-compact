@@ -111,6 +111,10 @@ export class World {
   atSubmit: ((text: string) => Promise<void>) | undefined
   /** After `atSubmit`: `{ drop }` with the reason this returns for the text (a hook beneath that refuses one prompt). */
   dropIf: ((text: string) => string | undefined) | undefined
+  /** `$.store.get` of a key rejects while this returns true for it (an unreadable store file). */
+  storeGetFails: ((key: string) => boolean) | undefined
+  /** `$.session.id` rejects while this returns true (the session not readable). */
+  sessionIdFails: (() => boolean) | undefined
   /** A peer hook beneath the plugin that rewrites the text (`next({ ...e, text })`). */
   rewrite: ((text: string) => string | undefined) | undefined
   /** The origin of every `prompt.submit` that reached the bottom. */
@@ -180,7 +184,10 @@ export class World {
     // The plugin's store, kept here as mock.store keeps it (JSON values), so a test can write a key
     // as another process would (`storeSet`) and read what it holds (`storeGet`).
     for (const [k, v] of Object.entries(store)) this.storeMem.set(k, json(v))
-    on('store.get', (_$, e) => ({ value: json(this.storeMem.get(e.key)) }))
+    on('store.get', (_$, e) => {
+      if (this.storeGetFails?.(e.key) === true) throw new Error('store unreadable')
+      return { value: json(this.storeMem.get(e.key)) }
+    })
     on('store.set', (_$, e) => {
       this.storeMem.set(e.key, json(e.value))
       return { value: undefined }
@@ -192,7 +199,10 @@ export class World {
     on('store.keys', () => ({ value: [...this.storeMem.keys()] }))
     // The environment the plugin reads: HOME, and the test's own variables, read when asked.
     on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? HOME : this.env[e.name] }))
-    on('session.id', () => ({ value: this.sid }))
+    on('session.id', () => {
+      if (this.sessionIdFails?.() === true) throw new Error('no session id')
+      return { value: this.sid }
+    })
     on('session.usage', () => ({ value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window } } }))
     on('session.version', () => ({ value: this.version }))
     on('session.cwd', () => ({ value: this.cwd }))
