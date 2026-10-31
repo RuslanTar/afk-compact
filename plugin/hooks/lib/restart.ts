@@ -586,8 +586,14 @@ export async function onCommandRun(d: Deps, e: { command: string; origin: { kind
     run.timer?.cancel()
     run.phase = 'done'
     await setNotes(d, run, 'cancelled')
-    await noteOutcome(d, run.sid, run.to, 'busy')
-    await log(d, run.sid, 'refresh_skipped', { why: 'busy', route: 'fg', to: run.to })
+    // As in `restartInterrupt`: the row is written even when noting the tried count fails, so
+    // status's last restart reads this cancel, not the refresh_start before it. The failure
+    // still reaches the caller.
+    try {
+      await noteOutcome(d, run.sid, run.to, 'busy')
+    } finally {
+      await log(d, run.sid, 'refresh_skipped', { why: 'busy', route: 'fg', to: run.to })
+    }
   }
   return undefined
 }
