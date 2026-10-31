@@ -489,10 +489,11 @@ sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
 # step1-mismatch (0.1.2 handoff-lint): Step 1 and Next steps item 1 name the same command or
 # edit. Two texts that are the same (backticks and white space aside) always match. Else the
 # "— for …" and "— done when …" tails and a proposed mark on either side (`| proposed`,
-# `— proposed`, `as proposed`, each with an optional trailing `(…)` note) do not count, and
-# the texts are equal, or item 1 is Step 1 followed by ` — ` and detail. A Step 1 that is one
-# backticked command, alone or followed by ` — ` and detail, also matches an item 1 that is
-# that command (backticks do not count), alone or followed by ` — ` and detail. Detail is
+# `— proposed`, `as proposed`, `| as proposed`, `— as proposed` or a bare trailing
+# `proposed`, each with an optional trailing `(…)` note) do not count, and the texts are equal,
+# or item 1 is Step 1 followed by ` — ` and detail. A Step 1 that is one backticked command,
+# alone or followed by ` — ` and detail, also matches an item 1 that is that command
+# (backticks do not count), alone or followed by ` — ` and detail. Detail is
 # prose: a backticked command in it (a span with white space inside, such as a second command
 # riding along) blocks, while a one-word span (an identifier, a path, a file name) is prose. A
 # proposed mark's `(…)` note holding such a command is compared too. Anything else after the
@@ -508,7 +509,7 @@ sub _step1_same {
     $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
     $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
     for my $t ($s1, $n1) {
-        next unless $t =~ /\s*(?:\||\x{2014}|\bas)?\s*proposed(\s*\([^()]*\))?\s*\z/;
+        next unless $t =~ /\s*(?:(?:\||\x{2014})\s*)?(?:\bas\s+)?proposed(\s*\([^()]*\))?\s*\z/;
         my ($at, $note) = ($-[0], $1);
         next if defined $note && $cmd->($note);
         substr($t, $at) = '';
