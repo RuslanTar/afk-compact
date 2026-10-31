@@ -422,14 +422,18 @@ sub _deny_bash {
 
 sub _deny_outward { return defined _deny_outward_at($_[0]) ? 1 : 0 }
 
-# _deny_outward_at(text) -> the offset of the word where the text's first outward command starts
-# (an outward class or action word), else undef.
+# _deny_outward_at(text) -> the offset of the word where the text's first outward command starts,
+# else undef: the first hit of an outward class (a command: `kubectl exec web-5 -- git push` and
+# `DEPLOY_ENV=st-3 npm publish` start at `git` and `npm`), else of an action word.
 sub _deny_outward_at {
     my ($p) = @_;
     my $at;
-    for my $re ((map { $_->{re} } @{ (eval { skills::spec::outward_classes() }) || [] }), (map { $_->[1] } @ACTION_WORDS)) {
-        next unless $p =~ $re;
-        $at = $-[0] if !defined $at || $-[0] < $at;
+    for my $set ([ map { $_->{re} } @{ (eval { skills::spec::outward_classes() }) || [] } ], [ map { $_->[1] } @ACTION_WORDS ]) {
+        for my $re (@$set) {
+            next unless $p =~ $re;
+            $at = $-[0] if !defined $at || $-[0] < $at;
+        }
+        last if defined $at;
     }
     return undef unless defined $at;
     # Back to the start of that word (`https://x/deploy` is one word).
