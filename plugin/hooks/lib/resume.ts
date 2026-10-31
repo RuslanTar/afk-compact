@@ -372,11 +372,16 @@ export async function laneRecheck(d: Deps, kind: string, text: string): Promise<
   if (r.byResult === true) l.unblocked = true
   if (r.lane === l.shown) return undefined
   const was = l.shown
-  l.shown = r.lane
-  await logLane(d, l.sid, l.nonce, l.facts, r, 'recheck', running)
-  if (r.lane !== 'finished' && r.lane !== 'hard-blocked') return undefined
   const digested = l.digested
-  l.digested = true
+  const tell = r.lane === 'finished' || r.lane === 'hard-blocked'
+  // The episode's new state commits in one step, with no await between its two marks; the
+  // returned note is what lets `laneNoteLost` undo it if the prompt does not enter.
+  l.shown = r.lane
+  if (tell) l.digested = true
+  // The row is a record of the note, not the note: a row that cannot be written (log.ts falls
+  // back to an event file, so only a failed clock read gets here) never costs the episode its note.
+  await logLane(d, l.sid, l.nonce, l.facts, r, 'recheck', running).catch(() => undefined)
+  if (!tell) return undefined
   // The git facts are the stored measure's (no helper call here): the Basis says when it was taken.
   const asOf = l.measuredAt !== undefined ? (await stamp(d, l.measuredAt, false)).slice(11, 16) : undefined
   const basis = laneBasis(l.facts, running, l.remeasure, asOf)

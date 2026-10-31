@@ -367,6 +367,83 @@ test('H1: the note of a later result turn goes beside its prompt (prompt.submit 
   expect((await resultTurn($, w, notif('a9'))).ctx).toBe('')
 })
 
+test('H1: a recheck whose lane_outcome row cannot be written still puts its note beside the prompt, once; a later result turn of the episode gets no second note', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = HARD
+  w.agents = [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'running' }]
+  await w.start($)
+  await idleCompaction($, w)
+  await w.advance(5000)
+  if (!HAS) return
+  w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
+  await resultTurn($, w, notif('a1'))
+  await w.turnEnd($)
+  // The recheck reads the agent list last before its row: the next clock read (that row's
+  // stamp) rejects, once.
+  const list = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
+  let armed = false
+  Object.defineProperty(w, 'agents', { configurable: true, get: () => ((armed = true), list) })
+  w.nowFails = () => {
+    const f = armed
+    armed = false
+    return f
+  }
+  const second = await resultTurn($, w, notif('a2')).catch((e: unknown) => ({ ctx: 'threw: ' + String(e), block: undefined }))
+  w.nowFails = undefined
+  expect(second.ctx).toContain('code reads the work lane as hard-blocked')
+  expect(w.rowsOf('lane_outcome').filter(r => r.at === 'recheck')).toEqual([])
+  // Told once: a later result turn of the episode gets no second note.
+  await w.turnEnd($)
+  expect((await resultTurn($, w, notif('a9'))).ctx).toBe('')
+})
+
+for (const rowFails of [false, true]) {
+  test(`H1: a recheck that tells the first digest of the episode marks it given${rowFails ? ' (its lane_outcome row cannot be written)' : ''}: after a turn back to working, the next finished note asks for one line, not a second digest`, async ($, on) => {
+    const w = new World().install(on)
+    w.resumeHere = FINISHED
+    w.agents = [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'running' }]
+    await w.start($)
+    await idleCompaction($, w)
+    await w.advance(5000)
+    if (!HAS) return
+    // The first result turn takes the block while a2 runs: working, no digest yet.
+    w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
+    const first = (await resultTurn($, w, notif('a1'))).block ?? ''
+    expect(first).toContain(head(w, 'idle') ?? '')
+    expect(first).not.toContain(head(w, 'idle-done') ?? '')
+    await w.turnEnd($)
+    // a2 ends: the recheck tells finished with the full digest (none went out before).
+    const list = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
+    let armed = false
+    if (rowFails) {
+      // The recheck reads the agent list last before its row: the next clock read (that row's stamp) rejects, once.
+      Object.defineProperty(w, 'agents', { configurable: true, get: () => ((armed = true), list) })
+      w.nowFails = () => {
+        const f = armed
+        armed = false
+        return f
+      }
+    } else w.agents = list
+    const told = (await resultTurn($, w, notif('a2'))).ctx
+    w.nowFails = undefined
+    Object.defineProperty(w, 'agents', { configurable: true, writable: true, value: list })
+    expect(told).toContain('code reads the work lane as finished')
+    expect(told).toContain('print the away digest')
+    expect(w.rowsOf('lane_outcome').filter(r => r.at === 'recheck').length).toBe(rowFails ? 0 : 1)
+    await w.turnEnd($)
+    // A new job runs: the next turn not of a person's reads working (no note).
+    w.agents = [...list, { id: 'a3', status: 'running' }]
+    expect((await resultTurn($, w, 'A scheduled check ran.')).ctx).toBe('')
+    await w.turnEnd($)
+    // It ends: finished again, and the digest went out already, so one line on the new state.
+    w.agents = [...list, { id: 'a3', status: 'completed' }]
+    const again = (await resultTurn($, w, notif('a3'))).ctx
+    expect(again).toContain('code reads the work lane as finished')
+    expect(again).toContain('the away digest went out already: say in one line')
+    expect(again).not.toContain('print the away digest')
+  })
+}
+
 test('H2: Status working at the compaction (agents ran then); every step marked done, Step 1 none; the last agent ends: the digest, not [idle]', async ($, on) => {
   const w = new World().install(on)
   w.resumeHere = 'Status: working · Acuity: watch · State: waits for B-1, B-2 (checkpoint: clean)\nStep 1: none\n## Next steps\n1. read the B-1 and B-2 results — done when read · done\n'

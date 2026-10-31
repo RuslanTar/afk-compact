@@ -340,6 +340,32 @@ test('AT-RS-05: a prompt entering during the grace whose interrupt fails (the tr
   expect(w.submits.length).toBe(1)
 })
 
+test('AT-RS-05: a prompt entering during the grace while the tried counts cannot be read: still cancelled and still the refresh_skipped busy row (status reads its last restart from it)', async ($, on) => {
+  const w = await session($, on)
+  await nudgedTurn($, w)
+  w.storeGetFails = k => k.startsWith('restart_tried:')
+  // The prompt hook guards the failed interrupt (keep-warm round 9); the row comes from restartInterrupt itself.
+  await w.userTurn($, 'actually, one more thing').catch(() => undefined)
+  w.storeGetFails = undefined
+  expect(states(w)).toEqual(['cancelled'])
+  expect(whys(w, 'refresh_skipped')).toEqual(['busy'])
+  await w.advance(RESTART_GRACE_MS)
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBe(0)
+})
+
+test('AT-RS-06: a /exit of another origin while armed and the tried counts cannot be read: still cancelled and still the refresh_skipped busy row (status reads its last restart from it)', async ($, on) => {
+  const w = await session($, on)
+  await nudgedTurn($, w)
+  w.storeGetFails = k => k.startsWith('restart_tried:')
+  // The failure still reaches the command hook's caller.
+  await (w.engine as unknown as { command: { run: (e: unknown) => Promise<unknown> } }).command.run({ command: 'exit', args: '', origin: { kind: 'composer' } }).catch(() => undefined)
+  w.storeGetFails = undefined
+  expect(states(w)).toEqual(['cancelled'])
+  expect(whys(w, 'refresh_skipped')).toEqual(['busy'])
+  await w.advance(RESTART_GRACE_MS)
+  expect(w.commandRuns.filter(c => c.command === 'exit').length).toBeLessThanOrEqual(1)
+})
+
 test('AT-RS-06: no own veto: an /exit of our own origin that reaches our hook (a later engine) passes untouched; the notes stay exiting', async ($, on) => {
   const w = await session($, on)
   w.exitGate = new Promise(() => undefined)
